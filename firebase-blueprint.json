@@ -1,0 +1,99 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user including admins, managers, quality analysts, techinicians, and assistants",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "gestor", "analista", "tecnico", "assistente"] },
+        "teamId": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "A support ticket to be audited",
+      "type": "object",
+      "properties": {
+        "externalId": { "type": "string" },
+        "subject": { "type": "string" },
+        "channel": { "type": "string" },
+        "agentId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "ticketDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["externalId", "agentId"]
+    },
+    "EvaluationForm": {
+      "title": "EvaluationForm",
+      "description": "Template for quality monitoring",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "teamId": { "type": "string" },
+        "sections": { "type": "array" },
+        "active": { "type": "boolean" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "sections"]
+    },
+    "Monitoria": {
+      "title": "Monitoria",
+      "description": "A completed quality evaluation",
+      "type": "object",
+      "properties": {
+        "ticketId": { "type": "string" },
+        "auditorId": { "type": "string" },
+        "agentId": { "type": "string" },
+        "formId": { "type": "string" },
+        "scores": { "type": "object" },
+        "finalScore": { "type": "number" },
+        "feedback": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ticketId", "auditorId", "agentId", "formId", "status"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "A group of agents managed by a leader",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/tickets/{ticketId}": {
+      "schema": "Ticket",
+      "description": "Tickets available for audit"
+    },
+    "/forms/{formId}": {
+      "schema": "EvaluationForm",
+      "description": "Monitoring form templates"
+    },
+    "/monitorias/{monitoriaId}": {
+      "schema": "Monitoria",
+      "description": "Quality evaluations"
+    },
+    "/teams/{teamId}": {
+      "schema": "Team",
+      "description": "Teams for organizational structure"
+    }
+  }
+}
