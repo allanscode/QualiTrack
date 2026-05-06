@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { User, Team, EvaluationForm, AccessRequest } from '../types';
-import { Users, Layout, ClipboardList, Plus, Trash2, Edit2, Shield, UserPlus, Save, X, Check, X as XIcon, Settings, RefreshCw } from 'lucide-react';
+import { Users, Layout, ClipboardList, Plus, Trash2, Edit2, Shield, UserPlus, Save, X, Check, X as XIcon, Settings, RefreshCw, Key, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -93,45 +93,60 @@ function SubNavItem({ active, onClick, icon, label }: { active: boolean, onClick
 function UsersManagement({ users, teams, loadData }: { users: User[], teams: Team[], loadData: () => void }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
-  const [editingUser, setEditingUser] = useState<{name: string, email: string, role: string, team_id: string, id?: string}>({ name: '', email: '', role: 'tecnico', team_id: '' });
+  const [editingUser, setEditingUser] = useState<{name: string, email: string, role: string, team_ids: string[], id?: string}>({ name: '', email: '', role: 'suporte', team_ids: [] });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredUsers = showInactive ? users : users.filter(u => u.active !== false);
+  const filteredUsers = (showInactive ? users : users.filter(u => u.active !== false))
+    .filter(u => 
+      u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      u.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
   const handleSaveUser = async () => {
     if (!editingUser.name || !editingUser.email) return;
     setSaving(true);
     try {
       const emailLower = editingUser.email.toLowerCase();
-      const payload: any = {
+      const basePayload: any = {
         name: editingUser.name,
         email: emailLower,
         role: editingUser.role,
-        team_id: editingUser.team_id || null,
         active: true,
       };
-      
+      // Try with team_ids; if Supabase rejects (column missing), retry without it
+      const payloadWithTeams = { ...basePayload, team_ids: editingUser.team_ids || [] };
+
       if (!supabase) {
         if (editingUser.id) {
-          await mockDb.update('users', editingUser.id, payload);
+          await mockDb.update('users', editingUser.id, payloadWithTeams);
         } else {
-          await mockDb.insert('users', { ...payload, id: emailLower });
+          await mockDb.insert('users', { ...payloadWithTeams, id: emailLower });
         }
       } else {
-        const { error } = await supabase.from('users').upsert([
-          { ...(editingUser.id ? { id: editingUser.id } : {}), ...payload }
-        ]);
+        let error: any;
+        if (editingUser.id) {
+          ({ error } = await supabase.from('users').update(payloadWithTeams).eq('id', editingUser.id));
+          if (error?.message?.includes('team_ids')) {
+            ({ error } = await supabase.from('users').update(basePayload).eq('id', editingUser.id));
+          }
+        } else {
+          ({ error } = await supabase.from('users').insert([payloadWithTeams]));
+          if (error?.message?.includes('team_ids')) {
+            ({ error } = await supabase.from('users').insert([basePayload]));
+          }
+        }
         if (error) throw error;
       }
 
       toast.success(editingUser.id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!');
       setIsModalOpen(false);
-      setEditingUser({ name: '', email: '', role: 'tecnico', team_id: '' });
+      setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [] });
       loadData();
-    } catch (error) {
+    } catch (error: any) {
        console.error(error);
-       toast.error("Erro ao salvar usuário");
+       toast.error('Erro ao salvar usuário: ' + (error.message || JSON.stringify(error)));
     } finally {
       setSaving(false);
     }
@@ -178,7 +193,30 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
       loadData();
     } catch (e) {
       console.error(e);
-      toast.error('Erro ao excluir usuário');
+      toast.error('Erro ao desativar usuário');
+    }
+  };
+
+  const handleActivateUser = async (id: string) => {
+    try {
+      const userToActivate = users.find(u => u.id === id);
+      if (!userToActivate) return;
+      
+      const emailInUse = users.some(u => u.active !== false && u.email === userToActivate.email && u.id !== id);
+      if (emailInUse) {
+        return toast.error('Não é possível reativar: este e-mail já está sendo usado por outro usuário ativo.');
+      }
+
+      if (!supabase) {
+        await mockDb.update('users', id, { active: true });
+      } else {
+        await supabase.from('users').update({ active: true }).eq('id', id);
+      }
+      toast.success('Usuário reativado com sucesso!');
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao reativar usuário');
     }
   };
 
@@ -188,7 +226,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
       name: u.name,
       email: u.email,
       role: u.role,
-      team_id: u.team_id || ''
+      team_ids: u.team_ids || []
     });
     setIsModalOpen(true);
   };
@@ -198,9 +236,19 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
       <div className="flex justify-between items-center px-2">
         <div className="flex flex-col gap-1">
           <h3 className="text-2xl font-bold text-[#2D3A3A]">Gerenciamento de Usuários</h3>
-          <p className="text-sm text-[#7A7D71]">Total: {users.length} usuários cadastrados.</p>
+          <p className="text-sm text-[#7A7D71]">Total: {filteredUsers.length} {filteredUsers.length === 1 ? 'usuário exibido' : 'usuários exibidos'}.</p>
         </div>
         <div className="flex items-center gap-4">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#7A7D71]" />
+            <input 
+              type="text"
+              placeholder="Buscar por nome ou e-mail..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="bg-white border border-[#E2E4D8] rounded-xl py-2 pl-9 pr-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none w-64 text-[#2D3A3A] placeholder-[#7A7D71]"
+            />
+          </div>
           <label className="flex items-center gap-2 cursor-pointer bg-white border border-[#E2E4D8] px-4 py-2 rounded-xl text-xs font-bold text-[#7A7D71]">
             <input 
               type="checkbox" 
@@ -212,7 +260,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
           </label>
           <button 
             onClick={() => {
-              setEditingUser({ name: '', email: '', role: 'tecnico', team_id: '' });
+              setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [] });
               setIsModalOpen(true);
             }}
             className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all">
@@ -237,9 +285,9 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
               {filteredUsers.map(u => (
                 <tr key={u.id} className={`border-b border-[#F0F1E8] hover:bg-[#F9F9F6] transition-colors ${u.active === false ? 'opacity-50 bg-[#F9F9F6]' : ''}`}>
                   <td className="px-8 py-4">
-                    <div className="flex flex-col">
+                    <div className="flex flex-col items-start gap-1">
                       <span className="font-semibold text-[#2D3A3A]">{u.name}</span>
-                      {u.active === false && <span className="text-[9px] text-red-500 font-bold uppercase">Desativado</span>}
+                      {u.active === false && <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-bold uppercase tracking-widest w-max">Desativado</span>}
                     </div>
                   </td>
                   <td className="px-8 py-4 text-[#7A7D71]">{u.email}</td>
@@ -249,7 +297,9 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                     </span>
                   </td>
                   <td className="px-8 py-4 text-[#7A7D71] text-xs">
-                    {u.team_id ? teams.find(t => t.id === u.team_id)?.name : ''}
+                    {u.team_ids && u.team_ids.length > 0 
+                      ? u.team_ids.map(id => teams.find(t => t.id === id)?.name).filter(Boolean).join(', ') 
+                      : 'Nenhuma equipe'}
                   </td>
                   <td className="px-8 py-4 text-right">
                     <div className="flex justify-end gap-2">
@@ -258,10 +308,18 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                           <button onClick={() => handleDeleteUser(u.id)} className="px-3 py-1 bg-red-500 text-white text-[10px] uppercase font-bold tracking-widest rounded-lg hover:bg-red-600 transition-colors">Confirmar</button>
                           <button onClick={() => setDeleteConfirmId(null)} className="px-3 py-1 bg-[#E2E4D8] text-[#2D3A3A] text-[10px] uppercase font-bold tracking-widest rounded-lg hover:bg-[#D0D3C5] transition-colors">Cancelar</button>
                         </>
+                      ) : u.active === false ? (
+                        <button 
+                          onClick={() => handleActivateUser(u.id)}
+                          className="p-2.5 rounded-xl hover:bg-[#E2E4D8] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors"
+                          title="Reativar"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </button>
                       ) : (
                         <>
                           <button onClick={() => openEdit(u)} className="p-2.5 rounded-xl hover:bg-[#E2E4D8] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors" title="Editar"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => handleResetPassword(u)} className="p-2.5 rounded-xl hover:bg-yellow-50 text-yellow-600 transition-colors" title="Resetar Senha"><RefreshCw className="w-4 h-4" /></button>
+                          <button onClick={() => handleResetPassword(u)} className="p-2.5 rounded-xl hover:bg-yellow-50 text-yellow-600 transition-colors" title="Resetar Senha"><Key className="w-4 h-4" /></button>
                           <button onClick={() => setDeleteConfirmId(u.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                         </>
                       )}
@@ -303,7 +361,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                   <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">E-mail (Google)</label>
+                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">E-mail</label>
                   <input type="email" disabled={!!editingUser.id} className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({...editingUser, email: e.target.value.toLowerCase()})} />
                 </div>
                 <div>
@@ -314,25 +372,33 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                     onChange={e => setEditingUser({...editingUser, role: e.target.value as any})}
                   >
                     <option value="admin">Administrador (Acesso Total)</option>
-                    <option value="gestor">Gestor</option>
-                    <option value="analista">Analista de Qualidade</option>
-                    <option value="tecnico">Técnico</option>
-                    <option value="assistente">Assistente</option>
+                    <option value="gestor_suporte">Gestor de Suporte</option>
+                    <option value="gestor_qualidade">Gestor de Qualidade</option>
+                    <option value="qualidade">Qualidade (Auditor)</option>
+                    <option value="suporte">Suporte (Auditado)</option>
                   </select>
                 </div>
                 
                 <div>
-                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Equipe</label>
-                  <select 
-                    className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none appearance-none"
-                    value={editingUser.team_id}
-                    onChange={e => setEditingUser({...editingUser, team_id: e.target.value})}
-                  >
-                    <option value="">Nenhuma Equipe</option>
+                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Equipes (Múltipla Escolha)</label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl p-3">
                     {teams.filter(t => t.active !== false).map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                      <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[#E2E4D8] p-2 rounded-xl transition-colors">
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
+                          checked={editingUser.team_ids?.includes(t.id) || false}
+                          onChange={(e) => {
+                            const newIds = e.target.checked 
+                              ? [...(editingUser.team_ids || []), t.id]
+                              : (editingUser.team_ids || []).filter(id => id !== t.id);
+                            setEditingUser({...editingUser, team_ids: newIds});
+                          }}
+                        />
+                        <span className="truncate">{t.name}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
                 <div className="pt-4">
@@ -359,7 +425,11 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const activeTeams = teams.filter(t => t.active !== false);
+  const [showInactive, setShowInactive] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredTeams = (showInactive ? teams : teams.filter(t => t.active !== false))
+    .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleSaveTeam = async () => {
     if (!editingTeam.name) return toast.error('O nome da equipe é obrigatório.');
@@ -402,7 +472,22 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
       loadData();
     } catch (e) {
       console.error(e);
-      toast.error('Erro ao excluir equipe');
+      toast.error('Erro ao desativar equipe');
+    }
+  };
+
+  const handleActivateTeam = async (id: string) => {
+    try {
+      if (!supabase) {
+        await mockDb.update('teams', id, { active: true });
+      } else {
+        await supabase.from('teams').update({ active: true }).eq('id', id);
+      }
+      toast.success('Equipe reativada com sucesso!');
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao reativar equipe');
     }
   };
 
@@ -417,28 +502,63 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
       <div className="flex justify-between items-center px-2">
-        <h3 className="text-2xl font-bold text-[#2D3A3A]">Estrutura de Equipes</h3>
-        <button 
-          onClick={() => {
-            setEditingTeam({ name: '' });
-            setIsModalOpen(true);
-          }}
-          className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all"
-        >
-          <Plus className="w-4 h-4" /> Nova Equipe
-        </button>
+        <div className="flex flex-col gap-1">
+          <h3 className="text-2xl font-bold text-[#2D3A3A]">Estrutura de Equipes</h3>
+          <p className="text-sm text-[#7A7D71]">Total: {filteredTeams.length} {filteredTeams.length === 1 ? 'equipe exibida' : 'equipes exibidas'}.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#7A7D71]" />
+            <input 
+              type="text"
+              placeholder="Buscar por nome..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="bg-white border border-[#E2E4D8] rounded-xl py-2 pl-9 pr-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none w-64 text-[#2D3A3A] placeholder-[#7A7D71]"
+            />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer bg-white border border-[#E2E4D8] px-4 py-2 rounded-xl text-xs font-bold text-[#7A7D71]">
+            <input 
+              type="checkbox" 
+              checked={showInactive} 
+              onChange={e => setShowInactive(e.target.checked)}
+              className="w-4 h-4 rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
+            />
+            Mostrar Desativados
+          </label>
+          <button 
+            onClick={() => {
+              setEditingTeam({ name: '' });
+              setIsModalOpen(true);
+            }}
+            className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all"
+          >
+            <Plus className="w-4 h-4" /> Nova Equipe
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {activeTeams.map(t => (
-          <div key={t.id} className="bg-white rounded-3xl border border-[#E2E4D8] p-6 shadow-sm group hover:shadow-md transition-shadow">
+        {filteredTeams.map(t => (
+          <div key={t.id} className={`bg-white rounded-3xl border border-[#E2E4D8] p-6 shadow-sm group hover:shadow-md transition-shadow ${t.active === false ? 'opacity-60 bg-[#F9F9F6]' : ''}`}>
             <div className="flex justify-between items-start mb-4">
-              <h4 className="font-bold text-xl text-[#2D3A3A]">{t.name}</h4>
+              <div className="flex flex-col items-start gap-2">
+                <h4 className="font-bold text-xl text-[#2D3A3A]">{t.name}</h4>
+                {t.active === false && <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-bold uppercase tracking-widest w-max">Desativada</span>}
+              </div>
               <div className="flex gap-1.5">
                 {deleteConfirmId === t.id ? (
                   <>
                     <button onClick={() => handleDeleteTeam(t.id)} className="px-2 py-1 bg-red-500 text-white text-[10px] uppercase font-bold tracking-widest rounded transition-colors">Confirmar</button>
                     <button onClick={() => setDeleteConfirmId(null)} className="px-2 py-1 bg-[#E2E4D8] text-[#2D3A3A] text-[10px] uppercase font-bold tracking-widest rounded transition-colors">Cancelar</button>
                   </>
+                ) : t.active === false ? (
+                  <button 
+                    onClick={() => handleActivateTeam(t.id)}
+                    className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors"
+                    title="Reativar"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
                 ) : (
                   <>
                     <button onClick={() => openEdit(t)} className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors">
@@ -456,7 +576,7 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
             </div>
           </div>
         ))}
-        {activeTeams.length === 0 && (
+        {filteredTeams.length === 0 && (
           <div className="col-span-full p-16 text-center bg-[#FBFBF9] rounded-[40px] border border-[#E2E4D8] shadow-sm">
             <Shield className="w-12 h-12 mx-auto mb-4 text-[#A7C0A5]" />
             <p className="text-sm font-semibold tracking-wider text-[#7A7D71] uppercase">Nenhuma equipe cadastrada</p>
@@ -521,7 +641,16 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
   });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const activeForms = forms.filter(f => f.active !== false);
+  const [showInactive, setShowInactive] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredForms = (showInactive ? forms : forms.filter(f => f.active !== false))
+    .filter(f => {
+      const matchName = f.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const teamName = f.team_id ? teams.find(t => t.id === f.team_id)?.name : 'Geral';
+      const matchTeam = teamName?.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchName || matchTeam;
+    });
 
   const fetchForms = async () => {
     try {
@@ -562,15 +691,28 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
 
   const handleUpdateSection = (sectionId: string, field: string, value: string | number) => {
     setEditingForm(prev => {
+      let finalValue = value;
+      if (field === 'weight') {
+        const numValue = Number(value) || 0;
+        const otherSectionsWeight = (prev.sections || []).reduce((acc, s) => s.id === sectionId ? acc : acc + (Number(s.weight) || 0), 0);
+        if (otherSectionsWeight + numValue > 100) {
+          finalValue = 100 - otherSectionsWeight;
+        } else if (numValue < 0) {
+          finalValue = 0;
+        }
+      }
       const newSections = (prev.sections || []).map(s => {
         if (s.id === sectionId) {
-          return { ...s, [field]: value };
+          return { ...s, [field]: finalValue };
         }
         return s;
       });
       return { ...prev, sections: newSections };
     });
   };
+
+  const totalWeight = editingForm.sections?.reduce((sum, s) => sum + (Number(s.weight) || 0), 0) || 0;
+  const remainingWeight = Math.max(0, 100 - totalWeight);
 
   const handleUpdateQuestion = (sectionId: string, questionId: string, text: string) => {
     setEditingForm(prev => {
@@ -620,7 +762,24 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
       loadData();
     } catch (e) {
       console.error(e);
-      toast.error('Erro ao excluir formulário');
+      toast.error('Erro ao desativar formulário');
+    }
+  };
+
+  const handleActivateForm = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      if (!supabase) {
+        await mockDb.update('forms', id, { active: true });
+      } else {
+        await supabase.from('forms').update({ active: true }).eq('id', id);
+      }
+      toast.success('Formulário reativado com sucesso!');
+      fetchForms();
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao reativar formulário');
     }
   };
 
@@ -655,9 +814,9 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
       setEditingForm({ title: '', description: '', team_id: '', sections: [] });
       fetchForms();
       loadData();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast.error('Erro ao salvar formulário');
+      toast.error('Erro ao salvar formulário: ' + (e.message || JSON.stringify(e)));
     } finally {
       setSaving(false);
     }
@@ -666,26 +825,58 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
       <div className="flex justify-between items-center px-2">
-        <h3 className="text-2xl font-bold text-[#2D3A3A]">Modelos de Avaliação</h3>
-        <button 
-          onClick={() => {
-            setEditingForm({ title: '', description: '', team_id: '', sections: [] });
-            setIsModalOpen(true);
-          }}
-          className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all">
-          <Plus className="w-4 h-4" /> Novo Formulário
-        </button>
+        <div className="flex flex-col gap-1">
+          <h3 className="text-2xl font-bold text-[#2D3A3A]">Modelos de Avaliação</h3>
+          <p className="text-sm text-[#7A7D71]">Total: {filteredForms.length} {filteredForms.length === 1 ? 'formulário exibido' : 'formulários exibidos'}.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="relative hidden md:block">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#7A7D71]" />
+            <input 
+              type="text"
+              placeholder="Buscar formulário ou equipe..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="bg-white border border-[#E2E4D8] rounded-xl py-2 pl-9 pr-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none w-64 text-[#2D3A3A] placeholder-[#7A7D71]"
+            />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer bg-white border border-[#E2E4D8] px-4 py-2 rounded-xl text-xs font-bold text-[#7A7D71]">
+            <input 
+              type="checkbox" 
+              checked={showInactive} 
+              onChange={e => setShowInactive(e.target.checked)}
+              className="w-4 h-4 rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
+            />
+            Mostrar Desativados
+          </label>
+          <button 
+            onClick={() => {
+              setEditingForm({ title: '', description: '', team_id: '', sections: [] });
+              setIsModalOpen(true);
+            }}
+            className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all">
+            <Plus className="w-4 h-4" /> Novo Formulário
+          </button>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {activeForms.map(f => (
-          <div key={f.id} className="bg-white rounded-3xl border border-[#E2E4D8] p-6 shadow-sm group hover:shadow-md transition-shadow cursor-pointer relative" onClick={() => { setEditingForm(f); setIsModalOpen(true); }}>
+        {filteredForms.map(f => (
+          <div key={f.id} className={`bg-white rounded-3xl border border-[#E2E4D8] p-6 shadow-sm group hover:shadow-md transition-shadow cursor-pointer relative flex flex-col ${f.active === false ? 'opacity-60 bg-[#F9F9F6]' : ''}`} onClick={() => { setEditingForm(f); setIsModalOpen(true); }}>
             <div className="absolute top-4 right-4 flex gap-1.5 transition-opacity">
               {deleteConfirmId === f.id ? (
                 <>
                   <button onClick={(e) => handleDeleteForm(e, f.id)} className="px-2 py-1 bg-red-500 text-white text-[10px] uppercase font-bold tracking-widest rounded transition-colors relative z-10">Confirmar</button>
                   <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="px-2 py-1 bg-[#E2E4D8] text-[#2D3A3A] text-[10px] uppercase font-bold tracking-widest rounded transition-colors relative z-10">Cancelar</button>
                 </>
+              ) : f.active === false ? (
+                <button 
+                  onClick={(e) => handleActivateForm(e, f.id)}
+                  className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors relative z-10"
+                  title="Reativar"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
               ) : (
                 <>
                   <button 
@@ -703,8 +894,11 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                 </>
               )}
             </div>
-            <h4 className="font-bold text-xl text-[#2D3A3A] mb-2 pr-16">{f.title}</h4>
-            <p className="text-sm text-[#7A7D71] mb-4">{f.description}</p>
+            <div className="flex flex-col items-start gap-2 mb-2 pr-16">
+              <h4 className="font-bold text-xl text-[#2D3A3A] leading-tight">{f.title}</h4>
+              {f.active === false && <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-bold uppercase tracking-widest w-max">Desativado</span>}
+            </div>
+            <p className="text-sm text-[#7A7D71] mb-4 flex-1">{f.description}</p>
             <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-[#7A7D71]">
               <span>{f.sections.length} Pilares</span>
               {f.team_id && <span>{teams.find(t => t.id === f.team_id)?.name || 'Geral'}</span>}
@@ -713,7 +907,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
         ))}
       </div>
 
-      {activeForms.length === 0 && (
+      {filteredForms.length === 0 && (
         <div className="p-16 text-center bg-[#FBFBF9] rounded-[40px] border border-[#E2E4D8] shadow-sm">
           <ClipboardList className="w-12 h-12 mx-auto mb-4 text-[#A7C0A5]" />
           <p className="text-sm font-semibold tracking-wider text-[#7A7D71] uppercase">Nenhum formulário cadastrado</p>
@@ -721,23 +915,24 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/40 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/40 backdrop-blur-sm">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-white rounded-[32px] p-8 w-full max-w-4xl shadow-2xl relative my-8"
+            className="bg-white rounded-[32px] flex flex-col w-full max-w-4xl max-h-[90vh] shadow-2xl overflow-hidden"
           >
-            <button 
-              onClick={() => setIsModalOpen(false)}
-              className="absolute right-6 top-6 p-2 rounded-xl text-[#7A7D71] hover:bg-[#F0F1E8] transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="p-8 pb-6 border-b border-[#E2E4D8] flex-shrink-0 relative">
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="absolute right-6 top-6 p-2 rounded-xl text-[#7A7D71] hover:bg-[#F0F1E8] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h3 className="text-2xl font-bold text-[#2D3A3A]">{editingForm.id ? 'Editar Formulário' : 'Novo Formulário'}</h3>
+            </div>
             
-            <h3 className="text-2xl font-bold text-[#2D3A3A] mb-6">{editingForm.id ? 'Editar Formulário' : 'Novo Formulário'}</h3>
-            
-            <div className="space-y-6">
+            <div className="p-8 overflow-y-auto flex-1 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Título do Formulário</label>
@@ -759,8 +954,14 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-4 mt-8">
-                  <h4 className="text-lg font-bold text-[#2D3A3A]">Pilares de Avaliação</h4>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 mt-8 gap-4">
+                  <div>
+                    <h4 className="text-lg font-bold text-[#2D3A3A]">Pilares de Avaliação</h4>
+                    <p className="text-sm font-semibold mt-1 flex items-center gap-2">
+                      <span className={totalWeight === 100 ? "text-green-600" : "text-amber-600"}>Peso Total: {totalWeight}%</span>
+                      <span className="text-[#7A7D71] text-xs">(Restante: {remainingWeight}%)</span>
+                    </p>
+                  </div>
                   <button onClick={handleAddSection} className="text-sm font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors flex items-center gap-1"><Plus className="w-4 h-4"/> Adicionar Pilar</button>
                 </div>
 
@@ -786,28 +987,34 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                           <span className="text-xs font-bold uppercase tracking-widest text-[#7A7D71]">Critérios</span>
                           <button onClick={() => handleAddQuestion(section.id)} className="text-xs font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors flex items-center gap-1"><Plus className="w-3 h-3"/> Novo Critério</button>
                         </div>
-                        {section.questions.map((q, qIdx) => (
-                          <div key={q.id} className="flex items-center gap-2">
-                            <input type="text" className="flex-1 bg-white border border-[#E2E4D8] rounded-xl py-2 px-3 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={q.text} onChange={e => handleUpdateQuestion(section.id, q.id, e.target.value)} placeholder="Ex: Investigação de Histórico e Contexto" />
-                            <div className="px-3 py-2 bg-[#F0F1E8] rounded-xl text-xs font-bold text-[#7A7D71]">SIM/NÃO/N/A</div>
-                            <button onClick={() => handleRemoveQuestion(section.id, q.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        ))}
+                        {section.questions.map((q, qIdx) => {
+                          const criteriaWeight = section.questions.length > 0 ? (Number(section.weight) || 0) / section.questions.length : 0;
+                          return (
+                            <div key={q.id} className="flex items-center gap-2">
+                              <input type="text" className="flex-1 bg-white border border-[#E2E4D8] rounded-xl py-2 px-3 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={q.text} onChange={e => handleUpdateQuestion(section.id, q.id, e.target.value)} placeholder="Ex: Investigação de Histórico e Contexto" />
+                              <div className="px-3 py-2 bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl text-[11px] font-bold text-[#7A7D71] whitespace-nowrap" title={`Representa ${criteriaWeight.toFixed(1)}% do pilar`}>
+                                {criteriaWeight.toFixed(1)}% do pilar
+                              </div>
+                              <div className="px-3 py-2 bg-[#F0F1E8] rounded-xl text-xs font-bold text-[#7A7D71]">SIM/NÃO/N/A</div>
+                              <button onClick={() => handleRemoveQuestion(section.id, q.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              
-              <div className="pt-6 border-t border-[#E2E4D8]">
-                <button 
-                  onClick={handleSaveForm}
-                  disabled={saving}
-                  className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                >
-                  <Save className="w-4 h-4"/> {saving ? 'Salvando...' : 'Salvar Formulário'}
-                </button>
-              </div>
+            </div>
+
+            <div className="p-6 border-t border-[#E2E4D8] flex-shrink-0 bg-white">
+              <button 
+                onClick={handleSaveForm}
+                disabled={saving || totalWeight > 100}
+                className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4"/> {saving ? 'Salvando...' : 'Salvar Formulário'}
+              </button>
             </div>
           </motion.div>
         </div>
@@ -827,12 +1034,12 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
 
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
   const [approvingReq, setApprovingReq] = useState<any>(null);
-  const [approveData, setApproveData] = useState({ name: '', email: '', role: 'tecnico', team_id: '' });
+  const [approveData, setApproveData] = useState<{name: string, email: string, role: string, team_ids: string[]}>({ name: '', email: '', role: 'suporte', team_ids: [] });
   const [saving, setSaving] = useState(false);
 
   const openApprove = (req: any) => {
     setApprovingReq(req);
-    setApproveData({ name: req.name, email: req.email, role: 'tecnico', team_id: '' });
+    setApproveData({ name: req.name, email: req.email, role: 'suporte', team_ids: [] });
     setIsApproveModalOpen(true);
   };
 
@@ -846,7 +1053,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
         email: approveData.email,
         password: initialPassword, 
         role: approveData.role,
-        team_id: approveData.team_id || null,
+        team_ids: approveData.team_ids || [],
         active: true,
         must_change_password: true,
         reset_token: token
@@ -911,7 +1118,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
       <div className="flex justify-between items-center px-2">
         <div className="flex flex-col gap-1">
           <h3 className="text-2xl font-bold text-[#2D3A3A]">Solicitações de Acesso</h3>
-          <p className="text-sm text-[#7A7D71]">Gerencie quem pode acessar o sistema.</p>
+          <p className="text-sm text-[#7A7D71]">Total: {pendingRequests.length} {pendingRequests.length === 1 ? 'solicitação pendente' : 'solicitações pendentes'}.</p>
         </div>
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 cursor-pointer bg-white border border-[#E2E4D8] px-4 py-2 rounded-xl text-xs font-bold text-[#7A7D71]">
@@ -966,7 +1173,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
         <div className="space-y-4">
           <h3 className="text-xl font-bold text-[#2D3A3A]">Histórico de Solicitações</h3>
           {pastRequests.map(req => (
-            <div key={req.id} className="bg-[#F9F9F6] rounded-2xl border border-[#E2E4D8] p-4 flex justify-between items-center opacity-75 grayscale">
+            <div key={req.id} className="bg-[#F9F9F6] rounded-2xl border border-[#E2E4D8] p-4 flex justify-between items-center opacity-80">
               <div>
                 <div className="font-bold text-sm text-[#3D4035]">{req.name} <span className="font-normal text-[#7A7D71]">({req.email})</span></div>
               </div>
@@ -1025,18 +1232,33 @@ function ApprovalModal({ isOpen, onClose, data, onConfirm, teams, saving }: any)
               <div>
                 <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Perfil</label>
                 <select className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
-                  <option value="tecnico">Técnico</option>
-                  <option value="analista">Analista</option>
-                  <option value="gestor">Gestor</option>
-                  <option value="admin">Administrador</option>
+                  <option value="admin">Administrador (Acesso Total)</option>
+                  <option value="gestor_suporte">Gestor de Suporte</option>
+                  <option value="gestor_qualidade">Gestor de Qualidade</option>
+                  <option value="qualidade">Qualidade (Auditor)</option>
+                  <option value="suporte">Suporte (Auditado)</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Equipe</label>
-                <select className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.team_id} onChange={e => setFormData({...formData, team_id: e.target.value})}>
-                  <option value="">Nenhuma</option>
-                  {teams.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Equipes</label>
+                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl p-3">
+                  {teams.filter((t: any) => t.active !== false).map((t: any) => (
+                    <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[#E2E4D8] p-2 rounded-xl transition-colors">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
+                        checked={formData.team_ids?.includes(t.id) || false}
+                        onChange={(e) => {
+                          const newIds = e.target.checked 
+                            ? [...(formData.team_ids || []), t.id]
+                            : (formData.team_ids || []).filter((id: string) => id !== t.id);
+                          setFormData({...formData, team_ids: newIds});
+                        }}
+                      />
+                      <span className="truncate">{t.name}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
 

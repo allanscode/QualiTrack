@@ -608,6 +608,16 @@ export default function App() {
 function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setActiveTab, userData, handleLogout, isFormOpen, setIsFormOpen }: any) {
   return (
     <div className="h-screen w-screen flex bg-[#F9F9F6] text-[#3D4035] font-sans selection:bg-[#A7C0A5] selection:text-[#2D3A3A] overflow-hidden">
+      {/* Global Monitoria Form Overlay — renders above everything */}
+      <AnimatePresence>
+        {isFormOpen && (
+          <MonitoriaForm
+            user={userData}
+            onCancel={() => setIsFormOpen(false)}
+            onSaved={() => { setIsFormOpen(false); setActiveTab('monitorias'); }}
+          />
+        )}
+      </AnimatePresence>
       <motion.aside 
         initial={false}
         animate={{ width: isSidebarOpen ? 256 : 80 }}
@@ -698,7 +708,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
             <p className="text-[#7A7D71] text-sm mt-1">Conectado como {userData?.name}</p>
           </div>
           <div className="flex items-center gap-4">
-            {(activeTab === 'monitorias' || activeTab === 'dashboard') && ['admin', 'gestor', 'analista'].includes(userData?.role || '') && (
+            {(activeTab === 'monitorias' || activeTab === 'dashboard') && ['admin', 'gestor_qualidade', 'qualidade'].includes(userData?.role || '') && (
               <button 
                 onClick={() => setIsFormOpen(true)}
                 className="bg-[#2D3A3A] text-white px-6 py-2 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all flex items-center gap-2"
@@ -711,34 +721,23 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
 
         <div className="flex-1 overflow-auto p-8 pt-2">
           <AnimatePresence mode="wait">
-            {isFormOpen ? (
-              <motion.div 
-                key="form"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-              >
-                <MonitoriaForm user={userData} onCancel={() => setIsFormOpen(false)} />
-              </motion.div>
-            ) : (
-              <>
-                {activeTab === 'dashboard' && (
-                  <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                    <Dashboard user={userData} />
-                  </motion.div>
-                )}
-                {activeTab === 'monitorias' && (
-                  <motion.div key="monitorias" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                    <MonitoriaList user={userData} />
-                  </motion.div>
-                )}
-                {activeTab === 'admin' && (
-                  <motion.div key="admin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                    <AdminPanel user={userData} />
-                  </motion.div>
-                )}
-              </>
-            )}
+            <>
+              {activeTab === 'dashboard' && (
+                <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <Dashboard user={userData} />
+                </motion.div>
+              )}
+              {activeTab === 'monitorias' && (
+                <motion.div key="monitorias" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} />
+                </motion.div>
+              )}
+              {activeTab === 'admin' && (
+                <motion.div key="admin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <AdminPanel user={userData} />
+                </motion.div>
+              )}
+            </>
           </AnimatePresence>
         </div>
       </main>

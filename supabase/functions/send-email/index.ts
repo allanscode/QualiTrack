@@ -26,7 +26,7 @@ serve(async (req: Request) => {
     console.log(`[LOG] Iniciando envio de e-mail tipo: ${type} para: ${email}`);
 
     const client = new SmtpClient();
-    
+
     console.log(`[LOG] Conectando ao smtp.gmail.com...`);
     await client.connectTLS({
       hostname: "smtp.gmail.com",
@@ -36,7 +36,7 @@ serve(async (req: Request) => {
     });
 
     const resetLink = `http://localhost:3001/setup-password?token=${token}`;
-    
+
     let subject = "";
     let htmlContent = "";
 
