@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Users, ClipboardCheck, AlertCircle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { User, Monitoria } from '../types';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { supabase, mockDb } from '../lib/supabase';
 
 export default function Dashboard({ user }: { user: User | null }) {
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
@@ -12,16 +11,37 @@ export default function Dashboard({ user }: { user: User | null }) {
   useEffect(() => {
     const fetchMonitorias = async () => {
       try {
-        const q = query(collection(db, 'monitorias'), orderBy('createdAt', 'desc'));
-        const snapshot = await getDocs(q);
+        let docs: Monitoria[] = [];
         
-        let docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Monitoria));
+        if (!supabase) {
+          const res = await mockDb.get('monitorias');
+          docs = res.data;
+        } else {
+          const { data, error } = await supabase
+            .from('monitorias')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          
+          docs = data.map((m: any) => ({
+            id: m.id,
+            ticket_id: m.ticket_id,
+            evaluated_id: m.evaluated_id,
+            evaluator_id: m.evaluator_id,
+            form_id: m.form_id,
+            score: m.score,
+            status: m.status,
+            created_at: m.created_at,
+            updated_at: m.updated_at,
+            answers: m.answers
+          }));
+        }
         
         // Filter by user role if not admin/gestor
         if (user?.role === 'tecnico' || user?.role === 'assistente') {
-          docs = docs.filter(m => m.agentId === user.id);
+          docs = docs.filter(m => m.evaluated_id === user.id || m.evaluated_id === user.email);
         } else if (user?.role === 'analista') {
-          docs = docs.filter(m => m.auditorId === user.id);
+          docs = docs.filter(m => m.evaluator_id === user.id || m.evaluator_id === user.email);
         }
 
         setMonitorias(docs);
@@ -46,7 +66,7 @@ export default function Dashboard({ user }: { user: User | null }) {
     : '0';
 
   const criticalCount = completedMonitorias.filter(m => m.finalScore < 70).length;
-  const activeAgents = new Set(completedMonitorias.map(m => m.agentId)).size;
+  const activeAgents = new Set(completedMonitorias.map(m => m.evaluated_id)).size;
 
   // Chart Logic (Scores by Day - grouping last 5 days)
   const chartData = [];
@@ -59,11 +79,11 @@ export default function Dashboard({ user }: { user: User | null }) {
     const dayStr = d.toLocaleDateString('pt-BR', { weekday: 'short' });
     const fullDate = d.toISOString().split('T')[0];
     daysMap[fullDate] = { total: 0, count: 0 };
-    chartData.push({ name: dayStr, fullDate, score: 0 });
+    chartData.push({ name: dayStr, fullDate, finalScore: 0 });
   }
 
   completedMonitorias.forEach(m => {
-    const d = new Date(m.createdAt).toISOString().split('T')[0];
+    const d = new Date(m.created_at).toISOString().split('T')[0];
     if (daysMap[d]) {
       daysMap[d].total += m.finalScore;
       daysMap[d].count++;
@@ -73,26 +93,26 @@ export default function Dashboard({ user }: { user: User | null }) {
   chartData.forEach(cd => {
     const day = daysMap[cd.fullDate];
     if (day && day.count > 0) {
-      cd.score = Math.round(day.total / day.count);
+      cd.finalScore = Math.round(day.total / day.count);
     }
   });
 
   // Top Agents
   const agentScores: Record<string, { total: number, count: number }> = {};
   completedMonitorias.forEach(m => {
-    if (!agentScores[m.agentId]) {
-      agentScores[m.agentId] = { total: 0, count: 0 };
+    if (!agentScores[m.evaluated_id]) {
+      agentScores[m.evaluated_id] = { total: 0, count: 0 };
     }
-    agentScores[m.agentId].total += m.finalScore;
-    agentScores[m.agentId].count++;
+    agentScores[m.evaluated_id].total += m.finalScore;
+    agentScores[m.evaluated_id].count++;
   });
 
   const topAgents = Object.entries(agentScores)
     .map(([email, stats]) => ({
       name: email, // Since we don't have the user collection fetched here, using email as name
-      score: Math.round(stats.total / stats.count)
+      finalScore: Math.round(stats.total / stats.count)
     }))
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => b.finalScore - a.finalScore)
     .slice(0, 5);
 
   if (loading) {
@@ -174,7 +194,7 @@ export default function Dashboard({ user }: { user: User | null }) {
                     fontWeight: 'bold'
                   }}
                 />
-                <Bar dataKey="score" fill="#A7C0A5" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="finalScore" fill="#A7C0A5" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -186,7 +206,7 @@ export default function Dashboard({ user }: { user: User | null }) {
           <div className="space-y-4">
             {topAgents.length > 0 ? (
               topAgents.map((agent, idx) => (
-                <AgentRow key={agent.name} name={agent.name} score={agent.score} rank={idx + 1} />
+                <AgentRow key={agent.name} name={agent.name} finalScore={agent.finalScore} rank={idx + 1} />
               ))
             ) : (
               <div className="text-center text-sm text-[#7A7D71] py-8">Nenhum dado suficiente</div>
@@ -216,12 +236,12 @@ export default function Dashboard({ user }: { user: User | null }) {
               {monitorias.slice(0, 5).map(m => (
                 <ActivityRow 
                   key={m.id}
-                  ticket={`#${m.ticketId}`} 
-                  agent={m.agentId} 
-                  auditor={m.auditorId} 
-                  score={m.finalScore} 
+                  ticket={`#${m.ticket_id}`} 
+                  agent={m.evaluated_id} 
+                  auditor={m.evaluator_id} 
+                  finalScore={m.finalScore} 
                   status={m.status} 
-                  date={new Date(m.createdAt).toLocaleDateString()} 
+                  date={new Date(m.created_at).toLocaleDateString()} 
                 />
               ))}
               {monitorias.length === 0 && (
@@ -255,7 +275,7 @@ function StatCard({ title, value, trend, trendUp, icon }: { title: string, value
   );
 }
 
-function AgentRow({ name, score, rank }: { name: string, score: number, rank: number }) {
+function AgentRow({ name, finalScore, rank }: { name: string, finalScore: number, rank: number }) {
   return (
     <div className="flex items-center justify-between group cursor-pointer hover:bg-[#F9F9F6] p-3 -mx-3 rounded-2xl transition-colors">
       <div className="flex items-center gap-3">
@@ -264,23 +284,23 @@ function AgentRow({ name, score, rank }: { name: string, score: number, rank: nu
       </div>
       <div className="flex items-center gap-3">
         <div className="w-24 h-2 bg-[#F0F1E8] rounded-full overflow-hidden">
-          <div className="h-full bg-[#A7C0A5]" style={{ width: `${score}%` }}></div>
+          <div className="h-full bg-[#A7C0A5]" style={{ width: `${finalScore}%` }}></div>
         </div>
-        <span className="text-xs font-bold text-[#2D3A3A] w-8 text-right">{score}%</span>
+        <span className="text-xs font-bold text-[#2D3A3A] w-8 text-right">{finalScore}%</span>
       </div>
     </div>
   );
 }
 
-function ActivityRow({ ticket, agent, auditor, score, status, date }: { ticket: string, agent: string, auditor: string, score: number, status: string, date: string }) {
+function ActivityRow({ ticket, agent, auditor, finalScore, status, date }: { ticket: string, agent: string, auditor: string, finalScore: number, status: string, date: string }) {
   return (
     <tr className="border-b border-[#F0F1E8] hover:bg-[#F9F9F6] transition-colors">
       <td className="px-8 py-4 font-mono font-bold">{ticket}</td>
       <td className="px-8 py-4 font-medium">{agent}</td>
       <td className="px-8 py-4 text-[#7A7D71] text-sm">{auditor}</td>
       <td className="px-8 py-4">
-        <span className={`px-3 py-1 rounded-full text-xs font-bold ${score >= 90 ? 'bg-green-100 text-green-800' : score >= 80 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
-          {score} pts
+        <span className={`px-3 py-1 rounded-full text-xs font-bold ${finalScore >= 90 ? 'bg-green-100 text-green-800' : finalScore >= 80 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
+          {finalScore} pts
         </span>
       </td>
       <td className="px-8 py-4">

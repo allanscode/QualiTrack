@@ -1,23 +1,24 @@
 export type UserRole = 'admin' | 'gestor' | 'analista' | 'tecnico' | 'assistente';
 
 export interface User {
-  id: string; // will be email
+  id: string;
   name: string;
   email: string;
   role: UserRole;
-  teamId?: string;
+  team_id?: string;
   active: boolean;
-  createdAt: string;
+  must_change_password?: boolean;
+  created_at: string;
 }
 
 export interface Ticket {
   id: string;
-  externalId: string;
+  external_id: string;
   subject: string;
   channel: string;
-  agentId: string;
-  customerName: string;
-  ticketDate: string;
+  agent_id: string;
+  customer_name: string;
+  ticket_date: string;
   status: string;
 }
 
@@ -39,31 +40,32 @@ export interface EvaluationForm {
   id: string;
   title: string;
   description: string;
-  teamId: string; // Linked to a specific team
+  team_id: string; 
   sections: FormSection[];
   active: boolean;
   createdBy: string;
-  createdAt: string;
+  created_at: string;
 }
 
 export interface Monitoria {
   id: string;
-  ticketId: string;
-  auditorId: string;
-  agentId: string;
-  formId: string;
-  scores: { [questionId: string]: number | string | boolean };
-  finalScore: number;
+  ticket_id: string;
+  evaluator_id: string;
+  evaluated_id: string;
+  form_id: string;
+  answers: { [questionId: string]: number | string | boolean };
+  score: number;
   feedback: string;
   status: 'draft' | 'completed';
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Team {
   id: string;
   name: string;
   active: boolean;
+  description?: string;
 }
 
 export interface AccessRequest {
@@ -71,5 +73,5 @@ export interface AccessRequest {
   name: string;
   email: string;
   status: 'pending' | 'approved' | 'rejected';
-  createdAt: string;
+  created_at: string;
 }

@@ -1,26 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, doc, setDoc, deleteDoc, getDocs, where } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { User, Team, EvaluationForm } from '../types';
-import { Users, Layout, ClipboardList, Plus, Trash2, Edit2, Shield, UserPlus, Save, X } from 'lucide-react';
+import { supabase, mockDb } from '../lib/supabase';
+import { User, Team, EvaluationForm, AccessRequest } from '../types';
+import { Users, Layout, ClipboardList, Plus, Trash2, Edit2, Shield, UserPlus, Save, X, Check, X as XIcon, Settings, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
-export default function AdminPanel({ user }: { user: User | null }) {
+export default function AdminPanel({ user: currentUser }: { user: User | null }) {
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [forms, setForms] = useState<EvaluationForm[]>([]);
+  const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
-    });
-    const unsubTeams = onSnapshot(collection(db, 'teams'), (snapshot) => {
-      setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+  const loadAllData = async () => {
+    try {
+      if (!supabase) {
+        const [u, t, f, r] = await Promise.all([
+          mockDb.get('users'),
+          mockDb.get('teams'),
+          mockDb.get('forms'),
+          mockDb.get('access_requests')
+        ]);
+        setUsers(u.data || []);
+        setTeams(t.data || []);
+        setForms(f.data || []);
+        setRequests(r.data || []);
+      } else {
+        const [u, t, f, r] = await Promise.all([
+          supabase.from('users').select('*'),
+          supabase.from('teams').select('*'),
+          supabase.from('forms').select('*'),
+          supabase.from('access_requests').select('*')
+        ]);
+        setUsers(u.data || []);
+        setTeams(t.data || []);
+        setForms(f.data || []);
+        setRequests(r.data || []);
+      }
+    } catch (e) {
+      console.error("Error loading admin data:", e);
+    } finally {
       setLoading(false);
-    });
-    return () => { unsubUsers(); unsubTeams(); };
+    }
+  };
+
+  useEffect(() => {
+    loadAllData();
+  }, [activeSubTab]);
+
+  useEffect(() => {
+    // Auto-refresh data every 10s in mock mode to sync tabs
+    let interval: any;
+    if (!supabase) {
+      interval = setInterval(loadAllData, 10000);
+    }
+    return () => interval && clearInterval(interval);
   }, []);
 
   return (
@@ -34,10 +69,10 @@ export default function AdminPanel({ user }: { user: User | null }) {
       </div>
 
       <AnimatePresence mode="wait">
-        {activeSubTab === 'users' && <UsersManagement users={users} teams={teams} key="users" />}
-        {activeSubTab === 'teams' && <TeamsManagement teams={teams} users={users} key="teams" />}
-        {activeSubTab === 'forms' && <FormsManagement user={user} teams={teams} key="forms" />}
-        {activeSubTab === 'requests' && <RequestsManagement key="requests" users={users} teams={teams} />}
+        {activeSubTab === 'users' && <UsersManagement users={users} teams={teams} loadData={loadAllData} key="users" />}
+        {activeSubTab === 'teams' && <TeamsManagement teams={teams} users={users} loadData={loadAllData} key="teams" />}
+        {activeSubTab === 'forms' && <FormsManagement currentUser={currentUser} teams={teams} loadData={loadAllData} key="forms" />}
+        {activeSubTab === 'requests' && <RequestsManagement key="requests" requests={requests} users={users} teams={teams} loadData={loadAllData} />}
       </AnimatePresence>
     </div>
   );
@@ -55,13 +90,14 @@ function SubNavItem({ active, onClick, icon, label }: { active: boolean, onClick
   );
 }
 
-function UsersManagement({ users, teams }: { users: User[], teams: Team[] }) {
+function UsersManagement({ users, teams, loadData }: { users: User[], teams: Team[], loadData: () => void }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<{name: string, email: string, role: string, teamId: string, id?: string}>({ name: '', email: '', role: 'tecnico', teamId: '' });
+  const [showInactive, setShowInactive] = useState(false);
+  const [editingUser, setEditingUser] = useState<{name: string, email: string, role: string, team_id: string, id?: string}>({ name: '', email: '', role: 'tecnico', team_id: '' });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const activeUsers = users.filter(u => u.active !== false);
+  const filteredUsers = showInactive ? users : users.filter(u => u.active !== false);
 
   const handleSaveUser = async () => {
     if (!editingUser.name || !editingUser.email) return;
@@ -72,16 +108,27 @@ function UsersManagement({ users, teams }: { users: User[], teams: Team[] }) {
         name: editingUser.name,
         email: emailLower,
         role: editingUser.role,
-        teamId: editingUser.teamId || null,
+        team_id: editingUser.team_id || null,
         active: true,
       };
-      if (!editingUser.id) {
-        payload.createdAt = new Date().toISOString();
+      
+      if (!supabase) {
+        if (editingUser.id) {
+          await mockDb.update('users', editingUser.id, payload);
+        } else {
+          await mockDb.insert('users', { ...payload, id: emailLower });
+        }
+      } else {
+        const { error } = await supabase.from('users').upsert([
+          { ...(editingUser.id ? { id: editingUser.id } : {}), ...payload }
+        ]);
+        if (error) throw error;
       }
-      await setDoc(doc(db, 'users', emailLower), payload, { merge: true });
+
       toast.success(editingUser.id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!');
       setIsModalOpen(false);
-      setEditingUser({ name: '', email: '', role: 'tecnico', teamId: '' });
+      setEditingUser({ name: '', email: '', role: 'tecnico', team_id: '' });
+      loadData();
     } catch (error) {
        console.error(error);
        toast.error("Erro ao salvar usuário");
@@ -90,21 +137,45 @@ function UsersManagement({ users, teams }: { users: User[], teams: Team[] }) {
     }
   };
 
+  const handleResetPassword = async (user: User) => {
+    try {
+      const token = Math.random().toString(36).substr(2, 10);
+      
+      if (!supabase) {
+        await mockDb.update('users', user.id, { reset_token: token });
+      } else {
+        // Gera o token no banco, mas NÃO mexe na senha atual
+        const { error: updateError } = await supabase.from('users').update({ reset_token: token }).eq('id', user.id);
+        if (updateError) throw updateError;
+
+        // Chama a Edge Function para enviar o e-mail de redefinição
+        const { error: funcError } = await supabase.functions.invoke('send-email', {
+          body: { email: user.email, name: user.name, type: 'reset', token }
+        });
+
+        if (funcError) throw funcError;
+      }
+
+      toast.success(`E-mail de recuperação enviado para ${user.email}`, {
+        duration: 5000,
+      });
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao enviar e-mail de redefinição');
+    }
+  };
+
   const handleDeleteUser = async (id: string) => {
     try {
-      const agentQuery = await getDocs(query(collection(db, 'monitorias'), where('agentId', '==', id)));
-      const auditorQuery = await getDocs(query(collection(db, 'monitorias'), where('auditorId', '==', id)));
-      
-      if (!agentQuery.empty || !auditorQuery.empty) {
-        // Soft delete para manter a integridade das monitorias
-        await setDoc(doc(db, 'users', id), { active: false }, { merge: true });
-        toast.success('Usuário desativado com sucesso. Ele foi mantido no sistema para preservar o histórico de monitorias.');
+      if (!supabase) {
+        await mockDb.update('users', id, { active: false });
       } else {
-        // Hard delete
-        await deleteDoc(doc(db, 'users', id));
-        toast.success('Usuário excluído com sucesso.');
+        await supabase.from('users').update({ active: false }).eq('id', id);
       }
+      toast.success('Usuário desativado com sucesso.');
       setDeleteConfirmId(null);
+      loadData();
     } catch (e) {
       console.error(e);
       toast.error('Erro ao excluir usuário');
@@ -117,7 +188,7 @@ function UsersManagement({ users, teams }: { users: User[], teams: Team[] }) {
       name: u.name,
       email: u.email,
       role: u.role,
-      teamId: u.teamId || ''
+      team_id: u.team_id || ''
     });
     setIsModalOpen(true);
   };
@@ -125,15 +196,29 @@ function UsersManagement({ users, teams }: { users: User[], teams: Team[] }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
       <div className="flex justify-between items-center px-2">
-        <h3 className="text-2xl font-bold text-[#2D3A3A]">Gerenciamento de Usuários</h3>
-        <button 
-          onClick={() => {
-            setEditingUser({ name: '', email: '', role: 'tecnico', teamId: '' });
-            setIsModalOpen(true);
-          }}
-          className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all">
-          <UserPlus className="w-4 h-4" /> Adicionar Usuário
-        </button>
+        <div className="flex flex-col gap-1">
+          <h3 className="text-2xl font-bold text-[#2D3A3A]">Gerenciamento de Usuários</h3>
+          <p className="text-sm text-[#7A7D71]">Total: {users.length} usuários cadastrados.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer bg-white border border-[#E2E4D8] px-4 py-2 rounded-xl text-xs font-bold text-[#7A7D71]">
+            <input 
+              type="checkbox" 
+              checked={showInactive} 
+              onChange={e => setShowInactive(e.target.checked)}
+              className="w-4 h-4 rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
+            />
+            Mostrar Desativados
+          </label>
+          <button 
+            onClick={() => {
+              setEditingUser({ name: '', email: '', role: 'tecnico', team_id: '' });
+              setIsModalOpen(true);
+            }}
+            className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all">
+            <UserPlus className="w-4 h-4" /> Adicionar Usuário
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-[40px] border border-[#E2E4D8] shadow-sm overflow-hidden flex flex-col">
@@ -149,9 +234,14 @@ function UsersManagement({ users, teams }: { users: User[], teams: Team[] }) {
               </tr>
             </thead>
             <tbody className="text-sm text-[#3D4035]">
-              {activeUsers.map(u => (
-                <tr key={u.id} className="border-b border-[#F0F1E8] hover:bg-[#F9F9F6] transition-colors">
-                  <td className="px-8 py-4 font-semibold text-[#2D3A3A]">{u.name}</td>
+              {filteredUsers.map(u => (
+                <tr key={u.id} className={`border-b border-[#F0F1E8] hover:bg-[#F9F9F6] transition-colors ${u.active === false ? 'opacity-50 bg-[#F9F9F6]' : ''}`}>
+                  <td className="px-8 py-4">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-[#2D3A3A]">{u.name}</span>
+                      {u.active === false && <span className="text-[9px] text-red-500 font-bold uppercase">Desativado</span>}
+                    </div>
+                  </td>
                   <td className="px-8 py-4 text-[#7A7D71]">{u.email}</td>
                   <td className="px-8 py-4">
                     <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-[#E2E4D8] text-[#2D3A3A] rounded-full">
@@ -159,7 +249,7 @@ function UsersManagement({ users, teams }: { users: User[], teams: Team[] }) {
                     </span>
                   </td>
                   <td className="px-8 py-4 text-[#7A7D71] text-xs">
-                    {u.teamId ? teams.find(t => t.id === u.teamId)?.name : ''}
+                    {u.team_id ? teams.find(t => t.id === u.team_id)?.name : ''}
                   </td>
                   <td className="px-8 py-4 text-right">
                     <div className="flex justify-end gap-2">
@@ -170,17 +260,18 @@ function UsersManagement({ users, teams }: { users: User[], teams: Team[] }) {
                         </>
                       ) : (
                         <>
-                          <button onClick={() => openEdit(u)} className="p-2.5 rounded-xl hover:bg-[#E2E4D8] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => setDeleteConfirmId(u.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          <button onClick={() => openEdit(u)} className="p-2.5 rounded-xl hover:bg-[#E2E4D8] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                          <button onClick={() => handleResetPassword(u)} className="p-2.5 rounded-xl hover:bg-yellow-50 text-yellow-600 transition-colors" title="Resetar Senha"><RefreshCw className="w-4 h-4" /></button>
+                          <button onClick={() => setDeleteConfirmId(u.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                         </>
                       )}
                     </div>
                   </td>
                 </tr>
               ))}
-              {activeUsers.length === 0 && (
+              {filteredUsers.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-8 py-12 text-center text-[#7A7D71]">Nenhum usuário ativo</td>
+                  <td colSpan={5} className="px-8 py-12 text-center text-[#7A7D71]">Nenhum usuário encontrado</td>
                 </tr>
               )}
             </tbody>
@@ -234,8 +325,8 @@ function UsersManagement({ users, teams }: { users: User[], teams: Team[] }) {
                   <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Equipe</label>
                   <select 
                     className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none appearance-none"
-                    value={editingUser.teamId}
-                    onChange={e => setEditingUser({...editingUser, teamId: e.target.value})}
+                    value={editingUser.team_id}
+                    onChange={e => setEditingUser({...editingUser, team_id: e.target.value})}
                   >
                     <option value="">Nenhuma Equipe</option>
                     {teams.filter(t => t.active !== false).map(t => (
@@ -262,7 +353,7 @@ function UsersManagement({ users, teams }: { users: User[], teams: Team[] }) {
   );
 }
 
-function TeamsManagement({ teams, users }: { teams: Team[], users: User[] }) {
+function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: User[], loadData: () => void }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<{name: string, id?: string}>({ name: '' });
   const [saving, setSaving] = useState(false);
@@ -274,14 +365,23 @@ function TeamsManagement({ teams, users }: { teams: Team[], users: User[] }) {
     if (!editingTeam.name) return toast.error('O nome da equipe é obrigatório.');
     setSaving(true);
     try {
-      const teamRef = editingTeam.id ? doc(db, 'teams', editingTeam.id) : doc(collection(db, 'teams'));
-      await setDoc(teamRef, {
-        name: editingTeam.name,
-        active: true
-      }, { merge: true });
+      const payload = { name: editingTeam.name, active: true };
+      if (!supabase) {
+        if (editingTeam.id) {
+          await mockDb.update('teams', editingTeam.id, payload);
+        } else {
+          await mockDb.insert('teams', payload);
+        }
+      } else {
+        const { error } = await supabase.from('teams').upsert([
+          { ...(editingTeam.id ? { id: editingTeam.id } : {}), ...payload }
+        ]);
+        if (error) throw error;
+      }
       toast.success(editingTeam.id ? 'Equipe atualizada com sucesso!' : 'Equipe criada com sucesso!');
       setIsModalOpen(false);
       setEditingTeam({ name: '' });
+      loadData();
     } catch (e) {
       console.error(e);
       toast.error('Erro ao salvar equipe');
@@ -292,18 +392,14 @@ function TeamsManagement({ teams, users }: { teams: Team[], users: User[] }) {
 
   const handleDeleteTeam = async (id: string) => {
     try {
-      const hasUsers = users.some(u => u.teamId === id);
-      const formsSnapshot = await getDocs(query(collection(db, 'forms'), where('teamId', '==', id)));
-      
-      if (hasUsers || !formsSnapshot.empty) {
-        toast.error('Não é possível excluir esta equipe pois ela ainda possui usuários ou formulários vinculados. Desvincule-os primeiro.');
-        setDeleteConfirmId(null);
-        return;
+      if (!supabase) {
+        await mockDb.update('teams', id, { active: false });
+      } else {
+        await supabase.from('teams').update({ active: false }).eq('id', id);
       }
-
-      await deleteDoc(doc(db, 'teams', id));
-      toast.success('Equipe excluída com sucesso.');
+      toast.success('Equipe desativada com sucesso.');
       setDeleteConfirmId(null);
+      loadData();
     } catch (e) {
       console.error(e);
       toast.error('Erro ao excluir equipe');
@@ -417,44 +513,35 @@ function TeamsManagement({ teams, users }: { teams: Team[], users: User[] }) {
   );
 }
 
-function FormsManagement({ user, teams }: { user: User | null, teams: Team[] }) {
+function FormsManagement({ currentUser, teams, loadData }: { currentUser: User | null, teams: Team[], loadData: () => void }) {
   const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingForm, setEditingForm] = useState<Partial<EvaluationForm>>({
-    title: '', description: '', teamId: '', sections: []
+    title: '', description: '', team_id: '', sections: []
   });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const activeForms = forms.filter(f => f.active !== false);
 
-  const handleDeleteForm = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const fetchForms = async () => {
     try {
-      const monitoriasQuery = await getDocs(query(collection(db, 'monitorias'), where('formId', '==', id)));
-      
-      if (!monitoriasQuery.empty) {
-        // Soft delete para manter a integridade
-        await setDoc(doc(db, 'forms', id), { active: false }, { merge: true });
-        toast.success('Formulário desativado com sucesso. Ele foi mantido no sistema para preservar a integridade das monitorias.');
+      let data: EvaluationForm[] = [];
+      if (!supabase) {
+        const res = await mockDb.get('forms');
+        data = res.data;
       } else {
-        // Hard delete
-        await deleteDoc(doc(db, 'forms', id));
-        toast.success('Formulário excluído com sucesso.');
+        const { data: res } = await supabase.from('forms').select('*');
+        data = res || [];
       }
-      setDeleteConfirmId(null);
+      setForms(data);
     } catch (e) {
       console.error(e);
-      toast.error('Erro ao excluir formulário');
     }
   };
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'forms'), (snapshot) => {
-      setForms(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EvaluationForm)));
-    });
-    return () => unsub();
+    fetchForms();
   }, []);
-
 
   const handleAddSection = () => {
     const newSection = { id: Date.now().toString(), title: '', weight: 0, questions: [] };
@@ -519,23 +606,55 @@ function FormsManagement({ user, teams }: { user: User | null, teams: Team[] }) 
     }));
   };
 
+  const handleDeleteForm = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      if (!supabase) {
+        await mockDb.update('forms', id, { active: false });
+      } else {
+        await supabase.from('forms').update({ active: false }).eq('id', id);
+      }
+      toast.success('Formulário desativado com sucesso.');
+      setDeleteConfirmId(null);
+      fetchForms();
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao excluir formulário');
+    }
+  };
+
   const handleSaveForm = async () => {
     if (!editingForm.title || !editingForm.sections?.length) return toast.error('Preencha título e adicione pelo menos um pilar.');
     setSaving(true);
     try {
-      const formId = editingForm.id || Date.now().toString();
-      await setDoc(doc(db, 'forms', formId), {
+      const payload = {
         title: editingForm.title,
         description: editingForm.description || '',
-        teamId: editingForm.teamId || '',
+        team_id: editingForm.team_id || null,
         sections: editingForm.sections,
         active: true,
-        createdBy: user?.email || '',
-        createdAt: editingForm.createdAt || new Date().toISOString()
-      });
+        created_by: currentUser?.email || 'admin@exemplo.com'
+      };
+
+      if (!supabase) {
+        if (editingForm.id) {
+          await mockDb.update('forms', editingForm.id, payload);
+        } else {
+          await mockDb.insert('forms', payload);
+        }
+      } else {
+        const { error } = await supabase.from('forms').upsert([
+          { ...(editingForm.id ? { id: editingForm.id } : {}), ...payload }
+        ]);
+        if (error) throw error;
+      }
+
       toast.success(editingForm.id ? 'Formulário atualizado com sucesso!' : 'Formulário criado com sucesso!');
       setIsModalOpen(false);
-      setEditingForm({ title: '', description: '', teamId: '', sections: [] });
+      setEditingForm({ title: '', description: '', team_id: '', sections: [] });
+      fetchForms();
+      loadData();
     } catch (e) {
       console.error(e);
       toast.error('Erro ao salvar formulário');
@@ -550,7 +669,7 @@ function FormsManagement({ user, teams }: { user: User | null, teams: Team[] }) 
         <h3 className="text-2xl font-bold text-[#2D3A3A]">Modelos de Avaliação</h3>
         <button 
           onClick={() => {
-            setEditingForm({ title: '', description: '', teamId: '', sections: [] });
+            setEditingForm({ title: '', description: '', team_id: '', sections: [] });
             setIsModalOpen(true);
           }}
           className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all">
@@ -588,7 +707,7 @@ function FormsManagement({ user, teams }: { user: User | null, teams: Team[] }) 
             <p className="text-sm text-[#7A7D71] mb-4">{f.description}</p>
             <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-[#7A7D71]">
               <span>{f.sections.length} Pilares</span>
-              {f.teamId && <span>{teams.find(t => t.id === f.teamId)?.name || 'Geral'}</span>}
+              {f.team_id && <span>{teams.find(t => t.id === f.team_id)?.name || 'Geral'}</span>}
             </div>
           </div>
         ))}
@@ -628,8 +747,8 @@ function FormsManagement({ user, teams }: { user: User | null, teams: Team[] }) 
                   <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Equipe (Opcional)</label>
                   <select 
                     className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none appearance-none"
-                    value={editingForm.teamId || ''}
-                    onChange={e => setEditingForm({...editingForm, teamId: e.target.value})}
+                    value={editingForm.team_id || ''}
+                    onChange={e => setEditingForm({...editingForm, team_id: e.target.value})}
                   >
                     <option value="">Todas as Equipes (Geral)</option>
                     {teams.filter(t => t.active !== false).map(t => (
@@ -697,37 +816,122 @@ function FormsManagement({ user, teams }: { user: User | null, teams: Team[] }) 
   );
 }
 
-function RequestsManagement({ users, teams }: { users: User[], teams: Team[] }) {
-  const [requests, setRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+function RequestsManagement({ requests: initialRequests, users, teams, loadData }: { requests: AccessRequest[], users: User[], teams: Team[], loadData: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [requests, setRequests] = useState<AccessRequest[]>(initialRequests);
+  const [pendingOnly, setPendingOnly] = useState(true);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'accessRequests'), (snapshot) => {
-      setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'accessRequests');
-    });
-    return () => unsub();
-  }, []);
+    setRequests(initialRequests);
+  }, [initialRequests]);
 
-  const handleStatus = async (id: string, status: 'approved' | 'rejected') => {
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [approvingReq, setApprovingReq] = useState<any>(null);
+  const [approveData, setApproveData] = useState({ name: '', email: '', role: 'tecnico', team_id: '' });
+  const [saving, setSaving] = useState(false);
+
+  const openApprove = (req: any) => {
+    setApprovingReq(req);
+    setApproveData({ name: req.name, email: req.email, role: 'tecnico', team_id: '' });
+    setIsApproveModalOpen(true);
+  };
+
+  const handleApprove = async () => {
+    setSaving(true);
     try {
-      await setDoc(doc(db, 'accessRequests', id), { status }, { merge: true });
-      toast.success(status === 'approved' ? 'Solicitação aprovada. Para efetivar, crie o usuário na aba Usuários.' : 'Solicitação rejeitada com sucesso.');
+      const token = Math.random().toString(36).substr(2, 10);
+      const initialPassword = Math.random().toString(36).substr(2, 15); // Senha invisível apenas para criação
+      const userPayload = {
+        name: approveData.name,
+        email: approveData.email,
+        password: initialPassword, 
+        role: approveData.role,
+        team_id: approveData.team_id || null,
+        active: true,
+        must_change_password: true,
+        reset_token: token
+      };
+
+      if (!supabase) {
+        await mockDb.update('access_requests', approvingReq.id, { status: 'approved' });
+        await mockDb.insert('users', { id: approveData.email, ...userPayload });
+      } else {
+        await supabase.from('access_requests').update({ status: 'approved' }).eq('id', approvingReq.id);
+        
+        // Criar ou atualizar o usuário no banco (onConflict: email garante que não dê erro 409)
+        const { error: userError } = await supabase.from('users').upsert([userPayload], { onConflict: 'email' });
+        if (userError) throw userError;
+
+        // Chama a Edge Function para enviar o e-mail de boas-vindas
+        const { data: funcData, error: funcError } = await supabase.functions.invoke('send-email', {
+          body: { email: userPayload.email, name: userPayload.name, type: 'welcome', token }
+        });
+
+        if (funcError) {
+          console.error('Erro na Edge Function:', funcError);
+          throw new Error('Falha ao enviar e-mail de boas-vindas.');
+        }
+      }
+
+      toast.success('Solicitação aprovada! E-mail de boas-vindas enviado com o link de acesso.');
+      setIsApproveModalOpen(false);
+      loadData();
     } catch (e) {
-      toast.error('Erro ao atualizar solicitação.');
-      handleFirestoreError(e, OperationType.UPDATE, 'accessRequests');
+      toast.error('Erro ao aprovar solicitação');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      if (!supabase) {
+        await mockDb.update('access_requests', id, { status: 'rejected' });
+      } else {
+        await supabase.from('access_requests').update({ status: 'rejected' }).eq('id', id);
+      }
+      toast.success('Solicitação rejeitada.');
+      loadData();
+    } catch (e) {
+      toast.error('Erro ao rejeitar solicitação');
     }
   };
 
   if (loading) return <div className="text-sm font-medium text-[#7A7D71]">Carregando solicitações...</div>;
 
-  const pendingRequests = requests.filter(r => r.status === 'pending');
-  const pastRequests = requests.filter(r => r.status !== 'pending').sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const filteredRequests = pendingOnly 
+    ? requests.filter(r => r.status === 'pending')
+    : requests;
+
+  const pendingRequests = filteredRequests.filter(r => r.status === 'pending');
+  const pastRequests = filteredRequests.filter(r => r.status !== 'pending').sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
+      <div className="flex justify-between items-center px-2">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-2xl font-bold text-[#2D3A3A]">Solicitações de Acesso</h3>
+          <p className="text-sm text-[#7A7D71]">Gerencie quem pode acessar o sistema.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer bg-white border border-[#E2E4D8] px-4 py-2 rounded-xl text-xs font-bold text-[#7A7D71]">
+            <input 
+              type="checkbox" 
+              checked={pendingOnly} 
+              onChange={e => setPendingOnly(e.target.checked)}
+              className="w-4 h-4 rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
+            />
+            Apenas Pendentes
+          </label>
+          <button 
+            onClick={loadData}
+            className="text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors p-2 rounded-xl flex items-center gap-2 text-sm font-bold"
+          >
+            <RefreshCw className="w-4 h-4" /> Atualizar
+          </button>
+        </div>
+      </div>
+
       {pendingRequests.length === 0 && pastRequests.length === 0 ? (
         <div className="bg-white rounded-3xl border border-[#E2E4D8] p-12 text-center text-[#7A7D71]">
           Nenhuma solicitação de acesso no momento.
@@ -743,14 +947,14 @@ function RequestsManagement({ users, teams }: { users: User[], teams: Team[] }) 
               <div>
                 <h4 className="font-bold text-lg text-[#2D3A3A]">{req.name}</h4>
                 <div className="text-sm text-[#7A7D71] mt-1">{req.email}</div>
-                <div className="text-xs text-[#A7C0A5] mt-1">Solicitado em: {new Date(req.createdAt).toLocaleString()}</div>
+                <div className="text-xs text-[#A7C0A5] mt-1">Solicitado em: {new Date(req.created_at).toLocaleString()}</div>
               </div>
               <div className="flex gap-2 w-full md:w-auto">
-                <button onClick={() => handleStatus(req.id, 'rejected')} className="flex-1 md:flex-none px-6 py-2.5 bg-white border border-[#E2E4D8] rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 transition-colors">
+                <button onClick={() => handleReject(req.id)} className="flex-1 md:flex-none px-6 py-2.5 bg-white border border-[#E2E4D8] rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 transition-colors">
                   Recusar
                 </button>
-                <button onClick={() => handleStatus(req.id, 'approved')} className="flex-1 md:flex-none px-6 py-2.5 bg-[#A7C0A5] text-[#2D3A3A] rounded-xl text-sm font-bold hover:bg-[#8da38b] transition-colors">
-                  Aprovar
+                <button onClick={() => openApprove(req)} className="flex-1 md:flex-none px-6 py-2.5 bg-[#A7C0A5] text-[#2D3A3A] rounded-xl text-sm font-bold hover:bg-[#8da38b] transition-colors">
+                  Aprovar...
                 </button>
               </div>
             </div>
@@ -773,6 +977,87 @@ function RequestsManagement({ users, teams }: { users: User[], teams: Team[] }) 
           ))}
         </div>
       )}
+      <ApprovalModal 
+        isOpen={isApproveModalOpen} 
+        onClose={() => setIsApproveModalOpen(false)} 
+        data={approveData} 
+        onConfirm={handleApprove}
+        teams={teams}
+        saving={saving}
+      />
     </motion.div>
+  );
+}
+
+function ApprovalModal({ isOpen, onClose, data, onConfirm, teams, saving }: any) {
+  const [formData, setFormData] = useState(data);
+  
+  useEffect(() => {
+    setFormData(data);
+  }, [data]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-[#2D3A3A]/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl overflow-hidden border border-[#E2E4D8]">
+        <div className="p-8">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-2xl font-bold text-[#2D3A3A]">Finalizar Aprovação</h3>
+            <button onClick={onClose} className="p-2 hover:bg-[#F9F9F6] rounded-xl transition-colors">
+              <XIcon className="w-5 h-5 text-[#7A7D71]" />
+            </button>
+          </div>
+
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Nome</label>
+                <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">E-mail</label>
+                <input type="email" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Perfil</label>
+                <select className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
+                  <option value="tecnico">Técnico</option>
+                  <option value="analista">Analista</option>
+                  <option value="gestor">Gestor</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Equipe</label>
+                <select className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.team_id} onChange={e => setFormData({...formData, team_id: e.target.value})}>
+                  <option value="">Nenhuma</option>
+                  {teams.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-[#F9F9F6] p-4 rounded-2xl border border-blue-100 flex gap-3 items-start">
+              <Shield className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700 leading-relaxed">
+                Ao aprovar, o usuário receberá um e-mail com um link seguro para definir sua senha de acesso.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button onClick={onClose} className="flex-1 px-6 py-4 border border-[#E2E4D8] rounded-2xl text-sm font-bold text-[#7A7D71] hover:bg-[#F9F9F6] transition-colors">
+                Cancelar
+              </button>
+              <button onClick={() => onConfirm(formData)} disabled={saving} className="flex-1 px-6 py-4 bg-[#2D3A3A] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:opacity-50 transition-all">
+                {saving ? 'Aprovando...' : 'Confirmar Aprovação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
   );
 }

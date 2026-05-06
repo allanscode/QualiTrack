@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { supabase, mockDb } from '../lib/supabase';
 import { Monitoria, User } from '../types';
 import { Filter, Search, MoreHorizontal, Eye, FileEdit, Trash2, Calendar, User as UserIcon, Ticket as TicketIcon } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -12,24 +11,49 @@ export default function MonitoriaList({ user }: { user: User | null }) {
   useEffect(() => {
     if (!user) return;
 
-    const path = 'monitorias';
-    let q = query(collection(db, path), orderBy('createdAt', 'desc'));
+    const fetchMonitorias = async () => {
+      try {
+        let docs: Monitoria[] = [];
+        
+        if (!supabase) {
+          const res = await mockDb.get('monitorias');
+          docs = res.data;
+        } else {
+          const { data, error } = await supabase
+            .from('monitorias')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          
+          // Map snake_case
+          docs = data.map((m: any) => ({
+            id: m.id,
+            ticket_id: m.ticket_id,
+            evaluated_id: m.evaluated_id,
+            evaluator_id: m.evaluator_id,
+            form_id: m.form_id,
+            score: m.score,
+            status: m.status,
+            created_at: m.created_at,
+            updated_at: m.updated_at,
+            answers: m.answers
+          }));
+        }
 
-    if (user.role === 'tecnico' || user.role === 'assistente') {
-      q = query(collection(db, path), where('agentId', '==', user.id), orderBy('createdAt', 'desc'));
-    } else if (user.role === 'analista') {
-      q = query(collection(db, path), where('auditorId', '==', user.id), orderBy('createdAt', 'desc'));
-    }
+        if (user.role === 'tecnico' || user.role === 'assistente') {
+          docs = docs.filter(m => m.evaluated_id === user.id || m.evaluated_id === user.email);
+        } else if (user.role === 'analista') {
+          docs = docs.filter(m => m.evaluator_id === user.id || m.evaluator_id === user.email);
+        }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Monitoria));
-      setMonitorias(data);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
-    });
+        setMonitorias(docs);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching monitorias:", error);
+      }
+    };
 
-    return unsubscribe;
+    fetchMonitorias();
   }, [user]);
 
   if (loading) {
@@ -81,36 +105,36 @@ export default function MonitoriaList({ user }: { user: User | null }) {
               className="group bg-white rounded-[32px] border border-[#E2E4D8] shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
             >
               <div className="flex items-stretch">
-                <div className={`w-3 ${m.finalScore >= 90 ? 'bg-[#A7C0A5]' : m.finalScore >= 75 ? 'bg-amber-400' : 'bg-[#D4A373]'}`}></div>
+                <div className={`w-3 ${m.score >= 90 ? 'bg-[#A7C0A5]' : m.score >= 75 ? 'bg-amber-400' : 'bg-[#D4A373]'}`}></div>
                 <div className="flex-1 p-6 grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-6 items-center">
                   
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest text-[#7A7D71] uppercase">
                       <TicketIcon className="w-3 h-3" /> Ticket
                     </div>
-                    <span className="font-mono text-sm font-bold text-[#2D3A3A]">#{m.ticketId}</span>
+                    <span className="font-mono text-sm font-bold text-[#2D3A3A]">#{m.ticket_id}</span>
                   </div>
 
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest text-[#7A7D71] uppercase">
                       <UserIcon className="w-3 h-3" /> Agente
                     </div>
-                    <span className="text-sm font-semibold text-[#3D4035]">{m.agentId}</span>
+                    <span className="text-sm font-semibold text-[#3D4035]">{m.evaluated_id}</span>
                   </div>
 
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest text-[#7A7D71] uppercase">
                       <Calendar className="w-3 h-3" /> Data
                     </div>
-                    <span className="text-sm text-[#7A7D71]">{new Date(m.createdAt).toLocaleDateString()}</span>
+                    <span className="text-sm text-[#7A7D71]">{new Date(m.created_at).toLocaleDateString()}</span>
                   </div>
 
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest text-[#7A7D71] uppercase">
                       Score
                     </div>
-                    <span className={`text-xl font-bold font-mono ${m.finalScore >= 90 ? 'text-[#2D3A3A]' : m.finalScore >= 75 ? 'text-amber-600' : 'text-[#D4A373]'}`}>
-                      {m.finalScore}%
+                    <span className={`text-xl font-bold font-mono ${m.score >= 90 ? 'text-[#2D3A3A]' : m.score >= 75 ? 'text-amber-600' : 'text-[#D4A373]'}`}>
+                      {m.score}%
                     </span>
                   </div>
 

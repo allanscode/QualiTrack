@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, addDoc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import { supabase, mockDb } from '../lib/supabase';
 import { EvaluationForm, Monitoria, User } from '../types';
 import { ChevronRight, Save, X, AlertOctagon, Info } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -11,7 +10,7 @@ export default function MonitoriaForm({ user, onCancel }: { user: User | null, o
   const [ticketInfo, setTicketInfo] = useState({
     externalId: '',
     canal: 'Chat',
-    agentId: '',
+    agent_id: '',
     customer: ''
   });
 
@@ -25,19 +24,61 @@ export default function MonitoriaForm({ user, onCancel }: { user: User | null, o
   });
 
   useEffect(() => {
-    // Carregar formulários e agentes
-    const unsubForms = onSnapshot(collection(db, 'forms'), (snapshot) => {
-      const allForms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EvaluationForm));
-      setForms(allForms.filter(f => f.active !== false));
-    });
-    
-    // Buscar apenas os usuários que são "tecnico" ou "assistente"
-    const unsubAgents = onSnapshot(query(collection(db, 'users'), where('role', 'in', ['tecnico', 'assistente'])), (snapshot) => {
-      const allAgents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-      setAgents(allAgents.filter(a => a.active !== false));
-    });
+    const loadData = async () => {
+      try {
+        let formsList: EvaluationForm[] = [];
+        let agentsList: User[] = [];
 
-    return () => { unsubForms(); unsubAgents(); };
+        if (!supabase) {
+          const fRes = await mockDb.get('forms');
+          formsList = fRes.data;
+          
+          // Seed mock form if empty
+          if (formsList.length === 0) {
+            const defaultForm = {
+              id: 'form-1',
+              title: 'Qualidade Padrão QualiTrack',
+              active: true,
+              sections: [
+                { id: 's1', title: 'Comunicação e Postura', weight: 40, questions: [
+                  { id: 'q1', text: 'O agente foi cordial e educado?' },
+                  { id: 'q2', text: 'Utilizou a norma culta da língua?' }
+                ]},
+                { id: 's2', title: 'Conhecimento Técnico', weight: 60, questions: [
+                  { id: 'q3', text: 'A solução apresentada foi correta?' },
+                  { id: 'q4', text: 'Seguiu todos os procedimentos internos?' }
+                ]}
+              ]
+            };
+            await mockDb.insert('forms', defaultForm);
+            formsList = [defaultForm as any];
+          }
+
+          const aRes = await mockDb.get('users');
+          agentsList = aRes.data.filter((a: User) => ['tecnico', 'assistente'].includes(a.role));
+          
+          // Seed mock agent if empty
+          if (agentsList.length === 0) {
+            const defaultAgent = { id: 'agent-1', name: 'Agente Exemplo', email: 'agente@webposto.com.br', role: 'tecnico', active: true };
+            await mockDb.insert('users', defaultAgent);
+            agentsList = [defaultAgent as any];
+          }
+        } else {
+          const { data: fData } = await supabase.from('forms').select('*').eq('active', true);
+          formsList = fData || [];
+
+          const { data: aData } = await supabase.from('users').select('*').in('role', ['tecnico', 'assistente']).eq('active', true);
+          agentsList = aData || [];
+        }
+
+        setForms(formsList);
+        setAgents(agentsList);
+      } catch (e) {
+        console.error("Error loading form data:", e);
+      }
+    };
+
+    loadData();
   }, []);
 
   const selectedForm = forms.find(f => f.id === selectedFormId);
@@ -82,32 +123,36 @@ export default function MonitoriaForm({ user, onCancel }: { user: User | null, o
 
   const handleSave = async (status: 'draft' | 'completed') => {
     if (!user) return;
-    if (!selectedFormId || !ticketInfo.agentId) {
+    if (!selectedFormId || !ticketInfo.agent_id) {
       toast.error("Preencha todos os dados obrigatórios primeiro.");
       return;
     }
 
     const finalScore = calculateScore();
-    const monitoria: Omit<Monitoria, 'id'> = {
-      ticketId: ticketInfo.externalId,
-      agentId: ticketInfo.agentId,
-      auditorId: user.email, // using email as ID
-      formId: selectedFormId,
-      scores,
-      finalScore,
-      feedback: '',
+    const monitoria: any = {
+      ticket_id: ticketInfo.externalId,
+      evaluated_id: ticketInfo.agent_id,
+      evaluator_id: user.id, // Usar ID uuid se possível, ou email
+      form_id: selectedFormId,
+      answers: scores,
+      score: finalScore,
       status,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
     try {
-      await addDoc(collection(db, 'monitorias'), monitoria);
+      if (!supabase) {
+        await mockDb.insert('monitorias', monitoria);
+      } else {
+        const { error } = await supabase.from('monitorias').insert([monitoria]);
+        if (error) throw error;
+      }
       toast.success(status === 'completed' ? 'Monitoria salva com sucesso!' : 'Rascunho salvo!');
       onCancel();
     } catch (e) {
+      console.error(e);
       toast.error('Erro ao salvar monitoria.');
-      handleFirestoreError(e, OperationType.CREATE, 'monitorias');
     }
   };
 
@@ -147,8 +192,8 @@ export default function MonitoriaForm({ user, onCancel }: { user: User | null, o
                 <label className="text-xs font-bold tracking-widest text-[#7A7D71] uppercase">Técnico / Assistente Avaliado</label>
                 <select 
                   className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none appearance-none"
-                  value={ticketInfo.agentId}
-                  onChange={e => setTicketInfo({...ticketInfo, agentId: e.target.value})}
+                  value={ticketInfo.agent_id}
+                  onChange={e => setTicketInfo({...ticketInfo, agent_id: e.target.value})}
                 >
                   <option value="">Selecione o agente...</option>
                   {agents.map(a => (
@@ -176,7 +221,7 @@ export default function MonitoriaForm({ user, onCancel }: { user: User | null, o
             </div>
             <button 
               onClick={() => {
-                if (!selectedFormId || !ticketInfo.agentId || !ticketInfo.externalId) {
+                if (!selectedFormId || !ticketInfo.agent_id || !ticketInfo.externalId) {
                   toast.error("Preencha todos os dados!");
                   return;
                 }
