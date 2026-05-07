@@ -42,6 +42,7 @@ export interface EvaluationForm {
   description: string;
   team_id: string; 
   sections: FormSection[];
+  critical_errors?: Question[];
   active: boolean;
   createdBy: string;
   created_at: string;
@@ -52,7 +53,10 @@ export type MonitoriaStatus =
   | 'em_contestacao'
   | 'aguardando_gestor_suporte'
   | 'aguardando_gestor_qualidade'
-  | 'concluida';
+  | 'concluida'
+  | 'contestacao_aceita'
+  | 'contestacao_negada'
+  | 'finalizada_alterada';
 
 export interface MonitoriaHistoryEntry {
   action: string;
@@ -78,6 +82,16 @@ export interface Monitoria {
   status: MonitoriaStatus;
   contestation_reason?: string;
   deadline_at?: string;
+  evaluator_note?: string;
+  client_contact_log?: string;
+  client_contact_success?: boolean;
+  question_observations?: Record<string, string>;
+  critical_error_observations?: Record<string, string>;
+  team_id?: string;
+  satisfaction_record_text?: string;
+  selected_critical_errors?: string[];
+  active?: boolean;
+  display_id?: number;
   history: MonitoriaHistoryEntry[];
   created_at: string;
   updated_at: string;

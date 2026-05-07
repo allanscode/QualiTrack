@@ -218,6 +218,7 @@ export default function App() {
           }
           setCurrentUser(user);
           setUserData(user);
+          setActiveTab('dashboard');
           localStorage.setItem('qualitrack_mock_user', JSON.stringify(user));
           toast.success(`Bem-vindo, ${user.name}!`);
         } else {
@@ -247,6 +248,7 @@ export default function App() {
 
         setCurrentUser(user);
         setUserData(user);
+        setActiveTab('dashboard');
         toast.success(`Bem-vindo, ${user.name}!`);
       }
     } catch (e: any) {
@@ -606,6 +608,24 @@ export default function App() {
 }
 
 function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setActiveTab, userData, handleLogout, isFormOpen, setIsFormOpen }: any) {
+  const [teams, setTeams] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    const loadTeams = async () => {
+      if (!supabase) {
+        const { data } = await mockDb.get('teams');
+        setTeams(data || []);
+      } else {
+        const { data } = await supabase.from('teams').select('*');
+        setTeams(data || []);
+      }
+    };
+    loadTeams();
+  }, []);
+
+  const userTeams = teams.filter(t => (userData?.team_ids || []).includes(t.id));
+  const teamNames = userTeams.map(t => t.name).join(', ');
+
   return (
     <div className="h-screen w-screen flex bg-[#F9F9F6] text-[#3D4035] font-sans selection:bg-[#A7C0A5] selection:text-[#2D3A3A] overflow-hidden">
       {/* Global Monitoria Form Overlay — renders above everything */}
@@ -686,6 +706,9 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold truncate text-white">{userData?.name}</p>
                 <p className="text-[10px] font-bold tracking-widest text-[#A7C0A5] uppercase opacity-80">{userData?.role}</p>
+                {teamNames && (
+                  <p className="text-[9px] font-medium truncate text-white/40 mt-0.5">{teamNames}</p>
+                )}
               </div>
             )}
             <button 

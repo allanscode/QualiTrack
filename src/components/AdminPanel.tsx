@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { User, Team, EvaluationForm, AccessRequest } from '../types';
-import { Users, Layout, ClipboardList, Plus, Trash2, Edit2, Shield, UserPlus, Save, X, Check, X as XIcon, Settings, RefreshCw, Key, Search } from 'lucide-react';
+import { Users, Layout, ClipboardList, Plus, Trash2, Edit2, Shield, UserPlus, Save, X, Check, X as XIcon, Settings, RefreshCw, Key, Search, AlertOctagon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -92,15 +92,16 @@ function SubNavItem({ active, onClick, icon, label }: { active: boolean, onClick
 
 function UsersManagement({ users, teams, loadData }: { users: User[], teams: Team[], loadData: () => void }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [showInactive, setShowInactive] = useState(false);
-  const [editingUser, setEditingUser] = useState<{name: string, email: string, role: string, team_ids: string[], id?: string}>({ name: '', email: '', role: 'suporte', team_ids: [] });
+  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
+  const [editingUser, setEditingUser] = useState<{name: string, email: string, role: string, team_ids: string[], password?: string, id?: string}>({ name: '', email: '', role: 'suporte', team_ids: [], password: '' });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredUsers = (showInactive ? users : users.filter(u => u.active !== false))
-    .filter(u => 
-      u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredUsers = users
+    .filter(u => statusFilter === 'active' ? u.active !== false : u.active === false)
+    .filter(u =>
+      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -114,6 +115,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
         email: emailLower,
         role: editingUser.role,
         active: true,
+        ...(editingUser.password ? { password: editingUser.password } : {})
       };
       // Try with team_ids; if Supabase rejects (column missing), retry without it
       const payloadWithTeams = { ...basePayload, team_ids: editingUser.team_ids || [] };
@@ -142,7 +144,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
 
       toast.success(editingUser.id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!');
       setIsModalOpen(false);
-      setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [] });
+      setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' });
       loadData();
     } catch (error: any) {
        console.error(error);
@@ -226,7 +228,8 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
       name: u.name,
       email: u.email,
       role: u.role,
-      team_ids: u.team_ids || []
+      team_ids: u.team_ids || [],
+      password: u.password || ''
     });
     setIsModalOpen(true);
   };
@@ -249,18 +252,17 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
               className="bg-white border border-[#E2E4D8] rounded-xl py-2 pl-9 pr-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none w-64 text-[#2D3A3A] placeholder-[#7A7D71]"
             />
           </div>
-          <label className="flex items-center gap-2 cursor-pointer bg-white border border-[#E2E4D8] px-4 py-2 rounded-xl text-xs font-bold text-[#7A7D71]">
-            <input 
-              type="checkbox" 
-              checked={showInactive} 
-              onChange={e => setShowInactive(e.target.checked)}
-              className="w-4 h-4 rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
-            />
-            Mostrar Desativados
-          </label>
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value as any)}
+            className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-semibold text-[#7A7D71] focus:border-[#A7C0A5] focus:outline-none"
+          >
+            <option value="active">Ativos</option>
+            <option value="inactive">Desativados</option>
+          </select>
           <button 
             onClick={() => {
-              setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [] });
+              setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' });
               setIsModalOpen(true);
             }}
             className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all">
@@ -378,6 +380,17 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                     <option value="suporte">Suporte (Auditado)</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Senha de Acesso</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" 
+                    value={editingUser.password} 
+                    onChange={e => setEditingUser({...editingUser, password: e.target.value})}
+                    placeholder={editingUser.id ? "Deixe em branco para manter" : "Defina uma senha"}
+                  />
+                </div>
                 
                 <div>
                   <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Equipes (Múltipla Escolha)</label>
@@ -404,8 +417,8 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                 <div className="pt-4">
                   <button 
                     onClick={handleSaveUser}
-                    disabled={saving}
-                    className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                    disabled={saving || !editingUser.name || !editingUser.email}
+                    className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:bg-[#7A7D71] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
                   >
                     {saving ? 'Salvando...' : editingUser.id ? 'Salvar Alterações' : 'Cadastrar Usuário'}
                   </button>
@@ -425,10 +438,11 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const [showInactive, setShowInactive] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredTeams = (showInactive ? teams : teams.filter(t => t.active !== false))
+  const filteredTeams = teams
+    .filter(t => statusFilter === 'active' ? t.active !== false : t.active === false)
     .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleSaveTeam = async () => {
@@ -517,15 +531,14 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
               className="bg-white border border-[#E2E4D8] rounded-xl py-2 pl-9 pr-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none w-64 text-[#2D3A3A] placeholder-[#7A7D71]"
             />
           </div>
-          <label className="flex items-center gap-2 cursor-pointer bg-white border border-[#E2E4D8] px-4 py-2 rounded-xl text-xs font-bold text-[#7A7D71]">
-            <input 
-              type="checkbox" 
-              checked={showInactive} 
-              onChange={e => setShowInactive(e.target.checked)}
-              className="w-4 h-4 rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
-            />
-            Mostrar Desativados
-          </label>
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value as any)}
+            className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-semibold text-[#7A7D71] focus:border-[#A7C0A5] focus:outline-none"
+          >
+            <option value="active">Ativas</option>
+            <option value="inactive">Desativadas</option>
+          </select>
           <button 
             onClick={() => {
               setEditingTeam({ name: '' });
@@ -618,8 +631,8 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
                 <div className="pt-4">
                   <button 
                     onClick={handleSaveTeam}
-                    disabled={saving}
-                    className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                    disabled={saving || !editingTeam.name}
+                    className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:bg-[#7A7D71] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
                   >
                     {saving ? 'Salvando...' : editingTeam.id ? 'Salvar Alterações' : 'Cadastrar Equipe'}
                   </button>
@@ -637,14 +650,15 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
   const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingForm, setEditingForm] = useState<Partial<EvaluationForm>>({
-    title: '', description: '', team_id: '', sections: []
+    title: '', description: '', team_id: '', sections: [], critical_errors: []
   });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [showInactive, setShowInactive] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredForms = (showInactive ? forms : forms.filter(f => f.active !== false))
+  const filteredForms = forms
+    .filter(f => statusFilter === 'active' ? f.active !== false : f.active === false)
     .filter(f => {
       const matchName = f.title.toLowerCase().includes(searchTerm.toLowerCase());
       const teamName = f.team_id ? teams.find(t => t.id === f.team_id)?.name : 'Geral';
@@ -783,8 +797,35 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
     }
   };
 
+  const handleAddCriticalError = () => {
+    setEditingForm(prev => ({
+      ...prev,
+      critical_errors: [...(prev.critical_errors || []), { id: Date.now().toString() + Math.random(), text: '', type: 'yes_no_na' }]
+    }));
+  };
+
+  const handleUpdateCriticalError = (id: string, text: string) => {
+    setEditingForm(prev => ({
+      ...prev,
+      critical_errors: (prev.critical_errors || []).map(q => q.id === id ? { ...q, text } : q)
+    }));
+  };
+
+  const handleRemoveCriticalError = (id: string) => {
+    setEditingForm(prev => ({
+      ...prev,
+      critical_errors: (prev.critical_errors || []).filter(q => q.id !== id)
+    }));
+  };
+
   const handleSaveForm = async () => {
     if (!editingForm.title || !editingForm.sections?.length) return toast.error('Preencha título e adicione pelo menos um pilar.');
+    
+    const zeroWeightSection = editingForm.sections.find(s => (Number(s.weight) || 0) <= 0);
+    if (zeroWeightSection) return toast.error(`O pilar "${zeroWeightSection.title || 'Sem Nome'}" não pode ter peso 0%.`);
+
+    if (totalWeight !== 100) return toast.error(`O peso total deve ser exatamente 100%. Falta distribuir ${remainingWeight}%.`);
+
     setSaving(true);
     try {
       const payload = {
@@ -792,6 +833,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
         description: editingForm.description || '',
         team_id: editingForm.team_id || null,
         sections: editingForm.sections,
+        critical_errors: editingForm.critical_errors || [],
         active: true,
         created_by: currentUser?.email || 'admin@exemplo.com'
       };
@@ -840,18 +882,17 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
               className="bg-white border border-[#E2E4D8] rounded-xl py-2 pl-9 pr-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none w-64 text-[#2D3A3A] placeholder-[#7A7D71]"
             />
           </div>
-          <label className="flex items-center gap-2 cursor-pointer bg-white border border-[#E2E4D8] px-4 py-2 rounded-xl text-xs font-bold text-[#7A7D71]">
-            <input 
-              type="checkbox" 
-              checked={showInactive} 
-              onChange={e => setShowInactive(e.target.checked)}
-              className="w-4 h-4 rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
-            />
-            Mostrar Desativados
-          </label>
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value as any)}
+            className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-semibold text-[#7A7D71] focus:border-[#A7C0A5] focus:outline-none"
+          >
+            <option value="active">Ativos</option>
+            <option value="inactive">Desativados</option>
+          </select>
           <button 
             onClick={() => {
-              setEditingForm({ title: '', description: '', team_id: '', sections: [] });
+              setEditingForm({ title: '', description: '', team_id: '', sections: [], critical_errors: [] });
               setIsModalOpen(true);
             }}
             className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all">
@@ -1004,14 +1045,49 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                     </div>
                   ))}
                 </div>
+
+                {/* Seção de Erros Críticos */}
+                <div className="pt-8 border-t border-[#E2E4D8] mt-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 className="text-lg font-bold text-red-600">Erros Críticos</h4>
+                      <p className="text-sm text-red-400">Critérios que zeram a nota automaticamente se marcados.</p>
+                    </div>
+                    <button onClick={handleAddCriticalError} className="text-sm font-bold text-red-400 hover:text-red-600 transition-colors flex items-center gap-1">
+                      <Plus className="w-4 h-4"/> Adicionar Erro Crítico
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {(editingForm.critical_errors || []).map((q) => (
+                      <div key={q.id} className="flex items-center gap-2 bg-red-50/50 p-3 rounded-2xl border border-red-100">
+                        <AlertOctagon className="w-4 h-4 text-red-400 flex-shrink-0" />
+                        <input 
+                          type="text" 
+                          className="flex-1 bg-white border border-red-100 rounded-xl py-2 px-3 text-sm focus:border-red-300 focus:ring-1 focus:ring-red-300 focus:outline-none" 
+                          value={q.text} 
+                          onChange={e => handleUpdateCriticalError(q.id, e.target.value)} 
+                          placeholder="Ex: Falha Ética ou de Segurança" 
+                        />
+                        <button onClick={() => handleRemoveCriticalError(q.id)} className="p-2 text-red-400 hover:bg-red-100 rounded-lg">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {(editingForm.critical_errors || []).length === 0 && (
+                      <p className="text-center text-xs text-[#7A7D71] py-4 bg-[#F9F9F6] rounded-2xl border border-dashed border-[#E2E4D8]">
+                        Nenhum erro crítico configurado para este formulário.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="p-6 border-t border-[#E2E4D8] flex-shrink-0 bg-white">
               <button 
                 onClick={handleSaveForm}
-                disabled={saving || totalWeight > 100}
-                className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                disabled={saving || totalWeight !== 100 || !editingForm.title || !editingForm.sections?.length || (editingForm.sections || []).some(s => (Number(s.weight) || 0) <= 0)}
+                className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:bg-[#7A7D71] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
               >
                 <Save className="w-4 h-4"/> {saving ? 'Salvando...' : 'Salvar Formulário'}
               </button>
@@ -1026,7 +1102,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
 function RequestsManagement({ requests: initialRequests, users, teams, loadData }: { requests: AccessRequest[], users: User[], teams: Team[], loadData: () => void }) {
   const [loading, setLoading] = useState(false);
   const [requests, setRequests] = useState<AccessRequest[]>(initialRequests);
-  const [pendingOnly, setPendingOnly] = useState(true);
+  const [requestStatusFilter, setRequestStatusFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
 
   useEffect(() => {
     setRequests(initialRequests);
@@ -1106,9 +1182,11 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
 
   if (loading) return <div className="text-sm font-medium text-[#7A7D71]">Carregando solicitações...</div>;
 
-  const filteredRequests = pendingOnly 
+  const filteredRequests = requestStatusFilter === 'pending'
     ? requests.filter(r => r.status === 'pending')
-    : requests;
+    : requestStatusFilter === 'approved'
+    ? requests.filter(r => r.status === 'approved')
+    : requests.filter(r => r.status === 'rejected');
 
   const pendingRequests = filteredRequests.filter(r => r.status === 'pending');
   const pastRequests = filteredRequests.filter(r => r.status !== 'pending').sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -1121,15 +1199,15 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
           <p className="text-sm text-[#7A7D71]">Total: {pendingRequests.length} {pendingRequests.length === 1 ? 'solicitação pendente' : 'solicitações pendentes'}.</p>
         </div>
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 cursor-pointer bg-white border border-[#E2E4D8] px-4 py-2 rounded-xl text-xs font-bold text-[#7A7D71]">
-            <input 
-              type="checkbox" 
-              checked={pendingOnly} 
-              onChange={e => setPendingOnly(e.target.checked)}
-              className="w-4 h-4 rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
-            />
-            Apenas Pendentes
-          </label>
+          <select
+            value={requestStatusFilter}
+            onChange={e => setRequestStatusFilter(e.target.value as any)}
+            className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-semibold text-[#7A7D71] focus:border-[#A7C0A5] focus:outline-none"
+          >
+            <option value="pending">Pendentes</option>
+            <option value="approved">Aprovadas</option>
+            <option value="rejected">Recusadas</option>
+          </select>
           <button 
             onClick={loadData}
             className="text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors p-2 rounded-xl flex items-center gap-2 text-sm font-bold"

@@ -22,6 +22,42 @@ const INITIAL_DATA: { [key: string]: any[] } = {
       role: 'admin', 
       active: true,
       createdAt: new Date().toISOString() 
+    },
+    { 
+      id: 'suporte@teste.com', 
+      name: 'João Suporte (Auditado)', 
+      email: 'suporte@teste.com', 
+      password: '123',
+      role: 'suporte', 
+      active: true,
+      createdAt: new Date().toISOString() 
+    },
+    { 
+      id: 'auditor@teste.com', 
+      name: 'Maria Auditora', 
+      email: 'auditor@teste.com', 
+      password: '123',
+      role: 'qualidade', 
+      active: true,
+      createdAt: new Date().toISOString() 
+    },
+    { 
+      id: 'gestor.suporte@teste.com', 
+      name: 'Carlos Gestor Suporte', 
+      email: 'gestor.suporte@teste.com', 
+      password: '123',
+      role: 'gestor_suporte', 
+      active: true,
+      createdAt: new Date().toISOString() 
+    },
+    { 
+      id: 'gestor.qualidade@teste.com', 
+      name: 'Ana Gestora Qualidade', 
+      email: 'gestor.qualidade@teste.com', 
+      password: '123',
+      role: 'gestor_qualidade', 
+      active: true,
+      createdAt: new Date().toISOString() 
     }
   ],
   forms: [],
@@ -30,26 +66,21 @@ const INITIAL_DATA: { [key: string]: any[] } = {
   access_requests: []
 };
 
-// Initialize localStorage if empty or ensure admin exists
+// Initialize localStorage if empty or ensure test users exist
 if (typeof window !== 'undefined') {
   Object.keys(INITIAL_DATA).forEach(key => {
     const existing = localStorage.getItem(`${DB_PREFIX}${key}`);
     if (!existing) {
       localStorage.setItem(`${DB_PREFIX}${key}`, JSON.stringify(INITIAL_DATA[key]));
     } else if (key === 'users') {
-      // Especial: Garantir que o admin padrão sempre exista e tenha senha
       const users = JSON.parse(existing);
-      const adminExists = users.some((u: any) => u.email === 'marcospaulo@webposto.com.br');
-      if (!adminExists) {
-        users.push(INITIAL_DATA.users[0]);
-        localStorage.setItem(`${DB_PREFIX}users`, JSON.stringify(users));
-      } else {
-        // Atualizar senha se necessário
-        const updatedUsers = users.map((u: any) => 
-          u.email === 'marcospaulo@webposto.com.br' ? { ...u, password: 'admin', role: 'admin', active: true } : u
-        );
-        localStorage.setItem(`${DB_PREFIX}users`, JSON.stringify(updatedUsers));
-      }
+      INITIAL_DATA.users.forEach(defaultUser => {
+        const exists = users.some((u: any) => u.email === defaultUser.email);
+        if (!exists) {
+          users.push(defaultUser);
+        }
+      });
+      localStorage.setItem(`${DB_PREFIX}users`, JSON.stringify(users));
     }
   });
 }
