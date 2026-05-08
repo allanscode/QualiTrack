@@ -55,7 +55,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
   const [statusFilter, setStatusFilter] = useState<'active' | 'removed'>('active');
   const [teamFilter, setTeamFilter] = useState<string>('');
   const [dateType, setDateType] = useState<'analysis' | 'ticket'>('analysis');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(new Date(Date.now() - 7 * 24 * 3600000).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actionModal, setActionModal] = useState<{ id: string; type: 'aceitar' | 'contestar' | 'manter' | 'aprovar' | 'escalar' | 'excluir' | 'reavaliar' | 'devolver' } | null>(null);
@@ -161,17 +161,16 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     return false;
   });
 
-  const filtered = baseFiltered
+  const listWithFiltersExceptTab = baseFiltered
     .filter(m => statusFilter === 'active' ? (m.active !== false) : (m.active === false))
-    .filter(m => tab === 'todas' || m.status === tab)
     .filter(m => {
       if (!startDate && !endDate) return true;
       const targetDate = dateType === 'analysis' ? (m.analysis_date || m.created_at) : m.ticket_date;
       if (!targetDate) return true;
       const d = new Date(targetDate).getTime();
-      if (startDate && d < new Date(startDate).getTime()) return false;
-      if (endDate && d > new Date(endDate + 'T23:59:59').getTime()) return false;
-      return true;
+      const startD = startDate ? new Date(startDate).getTime() : 0;
+      const endD = endDate ? new Date(endDate + 'T23:59:59').getTime() : Infinity;
+      return d >= startD && d <= endD;
     })
     .filter(m => {
       if (!search) return true;
@@ -187,6 +186,8 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       );
     })
     .filter(m => !teamFilter || m.team_id === teamFilter);
+
+  const filtered = listWithFiltersExceptTab.filter(m => tab === 'todas' || m.status === tab);
 
   const getUrgentMonitoria = () => {
     if (!user) return null;
@@ -306,7 +307,8 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
 
   const visibleTabs = getVisibleTabs();
   const today = new Date().toLocaleDateString('sv-SE');
-  const hasFilters = search.length > 0 || startDate !== today || endDate !== today || teamFilter !== '';
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000).toLocaleDateString('sv-SE');
+  const hasFilters = search.length > 0 || startDate !== sevenDaysAgo || endDate !== today || teamFilter !== '';
 
   return (
     <div className="space-y-6">
@@ -349,7 +351,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
             </select>
             {hasFilters && (
               <button
-                onClick={() => { setStartDate(today); setEndDate(today); setSearch(''); setDateType('analysis'); setTeamFilter(''); }}
+                onClick={() => { setStartDate(sevenDaysAgo); setEndDate(today); setSearch(''); setDateType('analysis'); setTeamFilter(''); }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-100 bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors"
               >
                 <XCircle className="w-3.5 h-3.5" /> Limpar
@@ -396,7 +398,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                 {t.label}
                 {t.key !== 'todas' && (
                   <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[9px] ${tab === t.key ? 'bg-white/20' : 'bg-[#E2E4D8]'}`}>
-                    {baseFiltered.filter(m => m.status === t.key && (m.active !== false)).length}
+                    {listWithFiltersExceptTab.filter(m => m.status === t.key).length}
                   </span>
                 )}
               </button>
@@ -470,7 +472,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                     <div>
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-bold ${m.active === false ? 'bg-gray-100 text-gray-500' : cfg.bg + ' ' + cfg.color}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${m.active === false ? 'bg-gray-400' : cfg.dot}`} />
-                        {m.active === false ? 'REMOVIDA' : cfg.label}
+                        {m.active === false ? 'Removida' : cfg.label}
                       </span>
                       {m.active !== false && <CountdownTimer deadline={m.deadline_at} status={m.status} />}
                     </div>
@@ -580,12 +582,13 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                         )}
 
                         {(() => {
-                          const lastNote = [...(m.history || [])].reverse().find(h => h.note)?.note;
-                          if (!lastNote || lastNote === m.contestation_reason) return null;
+                          const lastEntry = [...(m.history || [])].reverse().find(h => h.note);
+                          if (!lastEntry || lastEntry.note === m.contestation_reason) return null;
                           return (
                             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
                               <p className="text-[10px] font-bold text-blue-700 uppercase mb-1">Última Justificativa / Parecer</p>
-                              <p className="text-sm text-blue-900 font-medium italic">"{lastNote}"</p>
+                              <p className="text-[10px] font-bold text-blue-600 mb-1">Por: {lastEntry.by_name}</p>
+                              <p className="text-sm text-blue-900 font-medium italic">"{lastEntry.note}"</p>
                             </div>
                           );
                         })()}
@@ -639,14 +642,14 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
               <h3 className="text-xl font-bold text-[#2D3A3A] mb-2">
-                {actionModal.type === 'reavaliar' && '📝 Reavaliar Auditoria'}
-                {actionModal.type === 'devolver' && '↩️ Devolver para Auditor'}
-                {actionModal.type === 'manter' && '🛡️ Manter Decisão'}
-                {actionModal.type === 'aceitar' && '✅ Aceitar Auditoria'}
-                {actionModal.type === 'contestar' && '⚠️ Contestar Monitoria'}
-                {actionModal.type === 'aprovar' && '✅ Aprovar Monitoria'}
-                {actionModal.type === 'escalar' && '📤 Escalar para Gestor de Qualidade'}
-                {actionModal.type === 'excluir' && '🗑️ Desativar Avaliação'}
+                {actionModal.type === 'reavaliar' && 'Reavaliar auditoria'}
+                {actionModal.type === 'devolver' && 'Devolver para auditor'}
+                {actionModal.type === 'manter' && 'Manter decisão'}
+                {actionModal.type === 'aceitar' && 'Aceitar auditoria'}
+                {actionModal.type === 'contestar' && 'Contestar monitoria'}
+                {actionModal.type === 'aprovar' && 'Aprovar monitoria'}
+                {actionModal.type === 'escalar' && 'Escalar para Gest. Qualidade'}
+                {actionModal.type === 'excluir' && 'Desativar avaliação'}
               </h3>
               <p className="text-sm text-[#7A7D71] mb-6">
                 {actionModal.type === 'aceitar' && 'Você confirma que concorda com a avaliação recebida. Esta ação finalizará o fluxo.'}

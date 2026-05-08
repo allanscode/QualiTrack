@@ -11,7 +11,7 @@ import { Toaster, toast } from 'sonner';
 import { User } from './types';
 
 // Components
-import Dashboard from './components/Dashboard';
+import DashboardMain from './components/dashboard/DashboardMain';
 import MonitoriaList from './components/MonitoriaList';
 import MonitoriaForm from './components/MonitoriaForm';
 import AdminPanel from './components/AdminPanel';
@@ -386,7 +386,7 @@ export default function App() {
                     <h3 className="text-xl font-bold text-[#2D3A3A] text-center mb-6">Acesse sua Conta</h3>
                     <form onSubmit={handleLogin} className="space-y-4">
                       <div>
-                        <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">E-mail Corporativo</label>
+                        <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">E-mail corporativo</label>
                         <input 
                           type="email" 
                           required
@@ -398,7 +398,7 @@ export default function App() {
                       </div>
                       <div>
                         <div className="flex justify-between mb-2">
-                          <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71]">Senha</label>
+                          <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Senha</label>
                           <button type="button" onClick={() => setAuthView('forgot-password')} className="text-[10px] font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors">Esqueci minha senha</button>
                         </div>
                         <input 
@@ -434,7 +434,7 @@ export default function App() {
                   </div>
                   <form onSubmit={handleRequestAccess} className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Nome Completo</label>
+                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nome completo</label>
                       <input 
                         type="text" 
                         required
@@ -445,7 +445,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">E-mail Corporativo</label>
+                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">E-mail corporativo</label>
                       <input 
                         type="email" 
                         required
@@ -492,12 +492,12 @@ export default function App() {
               {authView === 'change-password' && (
                 <motion.div key="change" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
                   <div className="text-center mb-6">
-                    <h3 className="text-xl font-bold text-[#2D3A3A]">Troca de Senha Obrigatória</h3>
-                    <p className="text-sm text-[#7A7D71]">Para sua segurança, defina uma nova senha de acesso.</p>
+                    <h3 className="text-xl font-bold text-[#2D3A3A]">Defina sua nova senha</h3>
+                    <p className="text-sm text-[#7A7D71]">Para sua segurança, crie uma senha de acesso exclusiva.</p>
                   </div>
                   <form onSubmit={handleUpdatePassword} className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Nova Senha</label>
+                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nova senha</label>
                       <input 
                         type="password" 
                         required
@@ -521,7 +521,7 @@ export default function App() {
                   </div>
                   <form onSubmit={handleSetupPassword} className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Nova Senha</label>
+                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nova senha</label>
                       <input 
                         type="password" 
                         required
@@ -532,7 +532,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Confirmar Senha</label>
+                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Confirmar senha</label>
                       <input 
                         type="password" 
                         required
@@ -556,7 +556,7 @@ export default function App() {
                   </div>
                   <form onSubmit={handleForgotPassword} className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">E-mail</label>
+                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">E-mail cadastrado</label>
                       <input 
                         type="email" 
                         required
@@ -705,7 +705,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
             {isSidebarOpen && (
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold truncate text-white">{userData?.name}</p>
-                <p className="text-[10px] font-bold tracking-widest text-[#A7C0A5] uppercase opacity-80">{userData?.role}</p>
+                <p className="text-[10px] font-semibold tracking-widest text-[#A7C0A5] uppercase opacity-80">{({'admin':'Administrador','qualidade':'Auditor','gestor_qualidade':'Gest. Qualidade','gestor_suporte':'Gest. Suporte','suporte':'Agente'} as any)[userData?.role] || userData?.role}</p>
                 {teamNames && (
                   <p className="text-[9px] font-medium truncate text-white/40 mt-0.5">{teamNames}</p>
                 )}
@@ -726,7 +726,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
         <header className="flex-shrink-0 px-8 py-6 flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-bold text-[#2D3A3A]">
-              {activeTab === 'dashboard' ? 'Visão Geral da Qualidade' : activeTab === 'monitorias' ? 'Auditoria e Avaliações' : 'Painel de Administração'}
+              {activeTab === 'dashboard' ? 'Visão Geral da Qualidade' : activeTab === 'monitorias' ? 'Auditoria e Avaliações' : 'Configurações'}
             </h2>
             <p className="text-[#7A7D71] text-sm mt-1">Conectado como {userData?.name}</p>
           </div>
@@ -747,7 +747,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
             <>
               {activeTab === 'dashboard' && (
                 <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <Dashboard user={userData} />
+                  <DashboardMain user={userData} />
                 </motion.div>
               )}
               {activeTab === 'monitorias' && (

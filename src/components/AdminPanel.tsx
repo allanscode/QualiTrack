@@ -80,7 +80,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
 
 function SubNavItem({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all relative ${active ? 'text-[#2D3A3A]' : 'text-[#7A7D71] hover:text-[#2D3A3A]'}`}
     >
@@ -93,7 +93,7 @@ function SubNavItem({ active, onClick, icon, label }: { active: boolean, onClick
 function UsersManagement({ users, teams, loadData }: { users: User[], teams: Team[], loadData: () => void }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
-  const [editingUser, setEditingUser] = useState<{name: string, email: string, role: string, team_ids: string[], password?: string, id?: string}>({ name: '', email: '', role: 'suporte', team_ids: [], password: '' });
+  const [editingUser, setEditingUser] = useState<{ name: string, email: string, role: string, team_ids: string[], password?: string, id?: string }>({ name: '', email: '', role: 'suporte', team_ids: [], password: '' });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -147,8 +147,8 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
       setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' });
       loadData();
     } catch (error: any) {
-       console.error(error);
-       toast.error('Erro ao salvar usuário: ' + (error.message || JSON.stringify(error)));
+      console.error(error);
+      toast.error('Erro ao salvar usuário: ' + (error.message || JSON.stringify(error)));
     } finally {
       setSaving(false);
     }
@@ -157,7 +157,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
   const handleResetPassword = async (user: User) => {
     try {
       const token = Math.random().toString(36).substr(2, 10);
-      
+
       if (!supabase) {
         await mockDb.update('users', user.id, { reset_token: token });
       } else {
@@ -203,7 +203,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
     try {
       const userToActivate = users.find(u => u.id === id);
       if (!userToActivate) return;
-      
+
       const emailInUse = users.some(u => u.active !== false && u.email === userToActivate.email && u.id !== id);
       if (emailInUse) {
         return toast.error('Não é possível reativar: este e-mail já está sendo usado por outro usuário ativo.');
@@ -244,7 +244,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#7A7D71]" />
-            <input 
+            <input
               type="text"
               placeholder="Buscar por nome ou e-mail..."
               value={searchTerm}
@@ -260,7 +260,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
             <option value="active">Ativos</option>
             <option value="inactive">Desativados</option>
           </select>
-          <button 
+          <button
             onClick={() => {
               setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' });
               setIsModalOpen(true);
@@ -278,7 +278,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
               <tr>
                 <th className="px-8 py-4">Nome</th>
                 <th className="px-8 py-4">Email</th>
-                <th className="px-8 py-4">Cargo</th>
+                <th className="px-8 py-4">Perfil</th>
                 <th className="px-8 py-4">Equipe</th>
                 <th className="px-8 py-4 text-right">Ações</th>
               </tr>
@@ -295,23 +295,23 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                   <td className="px-8 py-4 text-[#7A7D71]">{u.email}</td>
                   <td className="px-8 py-4">
                     <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-[#E2E4D8] text-[#2D3A3A] rounded-full">
-                      {u.role}
+                      {({ 'admin': 'Administrador', 'qualidade': 'Auditor', 'gestor_qualidade': 'Gest. Qualidade', 'gestor_suporte': 'Gest. Suporte', 'suporte': 'Agente' } as any)[u.role] || u.role}
                     </span>
                   </td>
                   <td className="px-8 py-4 text-[#7A7D71] text-xs">
-                    {u.team_ids && u.team_ids.length > 0 
-                      ? u.team_ids.map(id => teams.find(t => t.id === id)?.name).filter(Boolean).join(', ') 
+                    {u.team_ids && u.team_ids.length > 0
+                      ? u.team_ids.map(id => teams.find(t => t.id === id)?.name).filter(Boolean).join(', ')
                       : 'Nenhuma equipe'}
                   </td>
                   <td className="px-8 py-4 text-right">
                     <div className="flex justify-end gap-2">
-                       {deleteConfirmId === u.id ? (
+                      {deleteConfirmId === u.id ? (
                         <>
                           <button onClick={() => handleDeleteUser(u.id)} className="px-3 py-1 bg-red-500 text-white text-[10px] uppercase font-bold tracking-widest rounded-lg hover:bg-red-600 transition-colors">Confirmar</button>
                           <button onClick={() => setDeleteConfirmId(null)} className="px-3 py-1 bg-[#E2E4D8] text-[#2D3A3A] text-[10px] uppercase font-bold tracking-widest rounded-lg hover:bg-[#D0D3C5] transition-colors">Cancelar</button>
                         </>
                       ) : u.active === false ? (
-                        <button 
+                        <button
                           onClick={() => handleActivateUser(u.id)}
                           className="p-2.5 rounded-xl hover:bg-[#E2E4D8] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors"
                           title="Reativar"
@@ -342,70 +342,70 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/40 backdrop-blur-sm">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl relative"
             >
-              <button 
+              <button
                 onClick={() => setIsModalOpen(false)}
                 className="absolute right-6 top-6 p-2 rounded-xl text-[#7A7D71] hover:bg-[#F0F1E8] transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
-              
+
               <h3 className="text-2xl font-bold text-[#2D3A3A] mb-6">{editingUser.id ? 'Editar Usuário' : 'Novo Usuário'}</h3>
-              
+
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Nome Completo</label>
-                  <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} />
+                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nome completo</label>
+                  <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">E-mail</label>
-                  <input type="email" disabled={!!editingUser.id} className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({...editingUser, email: e.target.value.toLowerCase()})} />
+                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">E-mail</label>
+                  <input type="email" disabled={!!editingUser.id} className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Perfil de Acesso</label>
-                  <select 
+                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Perfil de acesso</label>
+                  <select
                     className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none appearance-none"
                     value={editingUser.role}
-                    onChange={e => setEditingUser({...editingUser, role: e.target.value as any})}
+                    onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}
                   >
-                    <option value="admin">Administrador (Acesso Total)</option>
-                    <option value="gestor_suporte">Gestor de Suporte</option>
-                    <option value="gestor_qualidade">Gestor de Qualidade</option>
-                    <option value="qualidade">Qualidade (Auditor)</option>
-                    <option value="suporte">Suporte (Auditado)</option>
+                    <option value="admin">Administrador</option>
+                    <option value="gestor_suporte">Gest. Suporte</option>
+                    <option value="gestor_qualidade">Gest. Qualidade</option>
+                    <option value="qualidade">Auditor</option>
+                    <option value="suporte">Agente</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Senha de Acesso</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" 
-                    value={editingUser.password} 
-                    onChange={e => setEditingUser({...editingUser, password: e.target.value})}
+                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Senha de acesso</label>
+                  <input
+                    type="text"
+                    className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none"
+                    value={editingUser.password}
+                    onChange={e => setEditingUser({ ...editingUser, password: e.target.value })}
                     placeholder={editingUser.id ? "Deixe em branco para manter" : "Defina uma senha"}
                   />
                 </div>
-                
+
                 <div>
-                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Equipes (Múltipla Escolha)</label>
+                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Equipes</label>
                   <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl p-3">
                     {teams.filter(t => t.active !== false).map(t => (
                       <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[#E2E4D8] p-2 rounded-xl transition-colors">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           className="rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
                           checked={editingUser.team_ids?.includes(t.id) || false}
                           onChange={(e) => {
-                            const newIds = e.target.checked 
+                            const newIds = e.target.checked
                               ? [...(editingUser.team_ids || []), t.id]
                               : (editingUser.team_ids || []).filter(id => id !== t.id);
-                            setEditingUser({...editingUser, team_ids: newIds});
+                            setEditingUser({ ...editingUser, team_ids: newIds });
                           }}
                         />
                         <span className="truncate">{t.name}</span>
@@ -415,7 +415,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                 </div>
 
                 <div className="pt-4">
-                  <button 
+                  <button
                     onClick={handleSaveUser}
                     disabled={saving || !editingUser.name || !editingUser.email}
                     className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:bg-[#7A7D71] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
@@ -434,7 +434,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
 
 function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: User[], loadData: () => void }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTeam, setEditingTeam] = useState<{name: string, id?: string}>({ name: '' });
+  const [editingTeam, setEditingTeam] = useState<{ name: string, id?: string }>({ name: '' });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -523,7 +523,7 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#7A7D71]" />
-            <input 
+            <input
               type="text"
               placeholder="Buscar por nome..."
               value={searchTerm}
@@ -539,7 +539,7 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
             <option value="active">Ativas</option>
             <option value="inactive">Desativadas</option>
           </select>
-          <button 
+          <button
             onClick={() => {
               setEditingTeam({ name: '' });
               setIsModalOpen(true);
@@ -565,7 +565,7 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
                     <button onClick={() => setDeleteConfirmId(null)} className="px-2 py-1 bg-[#E2E4D8] text-[#2D3A3A] text-[10px] uppercase font-bold tracking-widest rounded transition-colors">Cancelar</button>
                   </>
                 ) : t.active === false ? (
-                  <button 
+                  <button
                     onClick={() => handleActivateTeam(t.id)}
                     className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors"
                     title="Reativar"
@@ -577,7 +577,7 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
                     <button onClick={() => openEdit(t)} className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors">
                       <Edit2 className="w-4 h-4" />
                     </button>
-                    <button 
+                    <button
                       onClick={() => setDeleteConfirmId(t.id)}
                       className="p-2 rounded-lg hover:bg-red-50 text-[#7A7D71] hover:text-red-500 transition-colors"
                     >
@@ -600,36 +600,36 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/40 backdrop-blur-sm">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl relative"
             >
-              <button 
+              <button
                 onClick={() => setIsModalOpen(false)}
                 className="absolute right-6 top-6 p-2 rounded-xl text-[#7A7D71] hover:bg-[#F0F1E8] transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
-              
-              <h3 className="text-2xl font-bold text-[#2D3A3A] mb-2">{editingTeam.id ? 'Editar Equipe' : 'Nova Equipe'}</h3>
-              <p className="text-sm text-[#7A7D71] mb-6">Crie ou gerencie uma equipe.</p>
-              
+
+              <h3 className="text-2xl font-bold text-[#2D3A3A] mb-2">{editingTeam.id ? 'Editar equipe' : 'Nova equipe'}</h3>
+              <p className="text-sm text-[#7A7D71] mb-6">Dados da equipe.</p>
+
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Nome da Equipe</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" 
-                    value={editingTeam.name} 
-                    onChange={e => setEditingTeam({...editingTeam, name: e.target.value})} 
-                    placeholder="Ex: Suporte N1" 
+                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nome da equipe</label>
+                  <input
+                    type="text"
+                    className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none"
+                    value={editingTeam.name}
+                    onChange={e => setEditingTeam({ ...editingTeam, name: e.target.value })}
+                    placeholder="Ex: Suporte N1"
                   />
                 </div>
 
                 <div className="pt-4">
-                  <button 
+                  <button
                     onClick={handleSaveTeam}
                     disabled={saving || !editingTeam.name}
                     className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:bg-[#7A7D71] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
@@ -820,7 +820,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
 
   const handleSaveForm = async () => {
     if (!editingForm.title || !editingForm.sections?.length) return toast.error('Preencha título e adicione pelo menos um pilar.');
-    
+
     const zeroWeightSection = editingForm.sections.find(s => (Number(s.weight) || 0) <= 0);
     if (zeroWeightSection) return toast.error(`O pilar "${zeroWeightSection.title || 'Sem Nome'}" não pode ter peso 0%.`);
 
@@ -874,7 +874,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
         <div className="flex items-center gap-4">
           <div className="relative hidden md:block">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#7A7D71]" />
-            <input 
+            <input
               type="text"
               placeholder="Buscar formulário ou equipe..."
               value={searchTerm}
@@ -890,7 +890,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
             <option value="active">Ativos</option>
             <option value="inactive">Desativados</option>
           </select>
-          <button 
+          <button
             onClick={() => {
               setEditingForm({ title: '', description: '', team_id: '', sections: [], critical_errors: [] });
               setIsModalOpen(true);
@@ -900,7 +900,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
           </button>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredForms.map(f => (
           <div key={f.id} className={`bg-white rounded-3xl border border-[#E2E4D8] p-6 shadow-sm group hover:shadow-md transition-shadow cursor-pointer relative flex flex-col ${f.active === false ? 'opacity-60 bg-[#F9F9F6]' : ''}`} onClick={() => { setEditingForm(f); setIsModalOpen(true); }}>
@@ -911,7 +911,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                   <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="px-2 py-1 bg-[#E2E4D8] text-[#2D3A3A] text-[10px] uppercase font-bold tracking-widest rounded transition-colors relative z-10">Cancelar</button>
                 </>
               ) : f.active === false ? (
-                <button 
+                <button
                   onClick={(e) => handleActivateForm(e, f.id)}
                   className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors relative z-10"
                   title="Reativar"
@@ -920,13 +920,13 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                 </button>
               ) : (
                 <>
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); setEditingForm(f); setIsModalOpen(true); }}
                     className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors relative z-10"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(f.id); }}
                     className="p-2 rounded-lg hover:bg-red-50 text-[#7A7D71] hover:text-red-500 transition-colors relative z-10"
                   >
@@ -957,14 +957,14 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/40 backdrop-blur-sm">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-[32px] flex flex-col w-full max-w-4xl max-h-[90vh] shadow-2xl overflow-hidden"
           >
             <div className="p-8 pb-6 border-b border-[#E2E4D8] flex-shrink-0 relative">
-              <button 
+              <button
                 onClick={() => setIsModalOpen(false)}
                 className="absolute right-6 top-6 p-2 rounded-xl text-[#7A7D71] hover:bg-[#F0F1E8] transition-colors"
               >
@@ -972,19 +972,19 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
               </button>
               <h3 className="text-2xl font-bold text-[#2D3A3A]">{editingForm.id ? 'Editar Formulário' : 'Novo Formulário'}</h3>
             </div>
-            
+
             <div className="p-8 overflow-y-auto flex-1 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Título do Formulário</label>
-                  <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={editingForm.title} onChange={e => setEditingForm({...editingForm, title: e.target.value})} placeholder="Ex: Avaliação de Suporte Técnico" />
+                  <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={editingForm.title} onChange={e => setEditingForm({ ...editingForm, title: e.target.value })} placeholder="Ex: Avaliação de Suporte Técnico" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Equipe (Opcional)</label>
-                  <select 
+                  <select
                     className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none appearance-none"
                     value={editingForm.team_id || ''}
-                    onChange={e => setEditingForm({...editingForm, team_id: e.target.value})}
+                    onChange={e => setEditingForm({ ...editingForm, team_id: e.target.value })}
                   >
                     <option value="">Todas as Equipes (Geral)</option>
                     {teams.filter(t => t.active !== false).map(t => (
@@ -1003,7 +1003,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                       <span className="text-[#7A7D71] text-xs">(Restante: {remainingWeight}%)</span>
                     </p>
                   </div>
-                  <button onClick={handleAddSection} className="text-sm font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors flex items-center gap-1"><Plus className="w-4 h-4"/> Adicionar Pilar</button>
+                  <button onClick={handleAddSection} className="text-sm font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors flex items-center gap-1"><Plus className="w-4 h-4" /> Adicionar Pilar</button>
                 </div>
 
                 <div className="space-y-6">
@@ -1026,7 +1026,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                       <div className="pl-4 border-l-2 border-[#E2E4D8] space-y-3 mt-4">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-bold uppercase tracking-widest text-[#7A7D71]">Critérios</span>
-                          <button onClick={() => handleAddQuestion(section.id)} className="text-xs font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors flex items-center gap-1"><Plus className="w-3 h-3"/> Novo Critério</button>
+                          <button onClick={() => handleAddQuestion(section.id)} className="text-xs font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors flex items-center gap-1"><Plus className="w-3 h-3" /> Novo Critério</button>
                         </div>
                         {section.questions.map((q, qIdx) => {
                           const criteriaWeight = section.questions.length > 0 ? (Number(section.weight) || 0) / section.questions.length : 0;
@@ -1054,19 +1054,19 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                       <p className="text-sm text-red-400">Critérios que zeram a nota automaticamente se marcados.</p>
                     </div>
                     <button onClick={handleAddCriticalError} className="text-sm font-bold text-red-400 hover:text-red-600 transition-colors flex items-center gap-1">
-                      <Plus className="w-4 h-4"/> Adicionar Erro Crítico
+                      <Plus className="w-4 h-4" /> Adicionar Erro Crítico
                     </button>
                   </div>
                   <div className="space-y-3">
                     {(editingForm.critical_errors || []).map((q) => (
                       <div key={q.id} className="flex items-center gap-2 bg-red-50/50 p-3 rounded-2xl border border-red-100">
                         <AlertOctagon className="w-4 h-4 text-red-400 flex-shrink-0" />
-                        <input 
-                          type="text" 
-                          className="flex-1 bg-white border border-red-100 rounded-xl py-2 px-3 text-sm focus:border-red-300 focus:ring-1 focus:ring-red-300 focus:outline-none" 
-                          value={q.text} 
-                          onChange={e => handleUpdateCriticalError(q.id, e.target.value)} 
-                          placeholder="Ex: Falha Ética ou de Segurança" 
+                        <input
+                          type="text"
+                          className="flex-1 bg-white border border-red-100 rounded-xl py-2 px-3 text-sm focus:border-red-300 focus:ring-1 focus:ring-red-300 focus:outline-none"
+                          value={q.text}
+                          onChange={e => handleUpdateCriticalError(q.id, e.target.value)}
+                          placeholder="Ex: Falha Ética ou de Segurança"
                         />
                         <button onClick={() => handleRemoveCriticalError(q.id)} className="p-2 text-red-400 hover:bg-red-100 rounded-lg">
                           <Trash2 className="w-4 h-4" />
@@ -1084,12 +1084,12 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
             </div>
 
             <div className="p-6 border-t border-[#E2E4D8] flex-shrink-0 bg-white">
-              <button 
+              <button
                 onClick={handleSaveForm}
                 disabled={saving || totalWeight !== 100 || !editingForm.title || !editingForm.sections?.length || (editingForm.sections || []).some(s => (Number(s.weight) || 0) <= 0)}
                 className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:bg-[#7A7D71] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
               >
-                <Save className="w-4 h-4"/> {saving ? 'Salvando...' : 'Salvar Formulário'}
+                <Save className="w-4 h-4" /> {saving ? 'Salvando...' : 'Salvar Formulário'}
               </button>
             </div>
           </motion.div>
@@ -1110,7 +1110,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
 
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
   const [approvingReq, setApprovingReq] = useState<any>(null);
-  const [approveData, setApproveData] = useState<{name: string, email: string, role: string, team_ids: string[]}>({ name: '', email: '', role: 'suporte', team_ids: [] });
+  const [approveData, setApproveData] = useState<{ name: string, email: string, role: string, team_ids: string[] }>({ name: '', email: '', role: 'suporte', team_ids: [] });
   const [saving, setSaving] = useState(false);
 
   const openApprove = (req: any) => {
@@ -1127,7 +1127,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
       const userPayload = {
         name: approveData.name,
         email: approveData.email,
-        password: initialPassword, 
+        password: initialPassword,
         role: approveData.role,
         team_ids: approveData.team_ids || [],
         active: true,
@@ -1140,7 +1140,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
         await mockDb.insert('users', { id: approveData.email, ...userPayload });
       } else {
         await supabase.from('access_requests').update({ status: 'approved' }).eq('id', approvingReq.id);
-        
+
         // Criar ou atualizar o usuário no banco (onConflict: email garante que não dê erro 409)
         const { error: userError } = await supabase.from('users').upsert([userPayload], { onConflict: 'email' });
         if (userError) throw userError;
@@ -1185,11 +1185,11 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
   const filteredRequests = requestStatusFilter === 'pending'
     ? requests.filter(r => r.status === 'pending')
     : requestStatusFilter === 'approved'
-    ? requests.filter(r => r.status === 'approved')
-    : requests.filter(r => r.status === 'rejected');
+      ? requests.filter(r => r.status === 'approved')
+      : requests.filter(r => r.status === 'rejected');
 
   const pendingRequests = filteredRequests.filter(r => r.status === 'pending');
-  const pastRequests = filteredRequests.filter(r => r.status !== 'pending').sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const pastRequests = filteredRequests.filter(r => r.status !== 'pending').sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
@@ -1208,7 +1208,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
             <option value="approved">Aprovadas</option>
             <option value="rejected">Recusadas</option>
           </select>
-          <button 
+          <button
             onClick={loadData}
             className="text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors p-2 rounded-xl flex items-center gap-2 text-sm font-bold"
           >
@@ -1239,7 +1239,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
                   Recusar
                 </button>
                 <button onClick={() => openApprove(req)} className="flex-1 md:flex-none px-6 py-2.5 bg-[#A7C0A5] text-[#2D3A3A] rounded-xl text-sm font-bold hover:bg-[#8da38b] transition-colors">
-                  Aprovar...
+                  Revisar e aprovar
                 </button>
               </div>
             </div>
@@ -1262,10 +1262,10 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
           ))}
         </div>
       )}
-      <ApprovalModal 
-        isOpen={isApproveModalOpen} 
-        onClose={() => setIsApproveModalOpen(false)} 
-        data={approveData} 
+      <ApprovalModal
+        isOpen={isApproveModalOpen}
+        onClose={() => setIsApproveModalOpen(false)}
+        data={approveData}
         onConfirm={handleApprove}
         teams={teams}
         saving={saving}
@@ -1276,7 +1276,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
 
 function ApprovalModal({ isOpen, onClose, data, onConfirm, teams, saving }: any) {
   const [formData, setFormData] = useState(data);
-  
+
   useEffect(() => {
     setFormData(data);
   }, [data]);
@@ -1288,7 +1288,7 @@ function ApprovalModal({ isOpen, onClose, data, onConfirm, teams, saving }: any)
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl overflow-hidden border border-[#E2E4D8]">
         <div className="p-8">
           <div className="flex justify-between items-center mb-8">
-            <h3 className="text-2xl font-bold text-[#2D3A3A]">Finalizar Aprovação</h3>
+            <h3 className="text-2xl font-bold text-[#2D3A3A]">Aprovar solicitação</h3>
             <button onClick={onClose} className="p-2 hover:bg-[#F9F9F6] rounded-xl transition-colors">
               <XIcon className="w-5 h-5 text-[#7A7D71]" />
             </button>
@@ -1297,40 +1297,40 @@ function ApprovalModal({ isOpen, onClose, data, onConfirm, teams, saving }: any)
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Nome</label>
-                <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nome completo</label>
+                <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">E-mail</label>
-                <input type="email" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">E-mail</label>
+                <input type="email" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Perfil</label>
-                <select className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
-                  <option value="admin">Administrador (Acesso Total)</option>
-                  <option value="gestor_suporte">Gestor de Suporte</option>
-                  <option value="gestor_qualidade">Gestor de Qualidade</option>
-                  <option value="qualidade">Qualidade (Auditor)</option>
-                  <option value="suporte">Suporte (Auditado)</option>
+                <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Perfil de acesso</label>
+                <select className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
+                  <option value="admin">Administrador</option>
+                  <option value="gestor_suporte">Gest. Suporte</option>
+                  <option value="gestor_qualidade">Gest. Qualidade</option>
+                  <option value="qualidade">Auditor</option>
+                  <option value="suporte">Agente</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-[#7A7D71] mb-2">Equipes</label>
+                <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Equipes</label>
                 <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl p-3">
                   {teams.filter((t: any) => t.active !== false).map((t: any) => (
                     <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[#E2E4D8] p-2 rounded-xl transition-colors">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         className="rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
                         checked={formData.team_ids?.includes(t.id) || false}
                         onChange={(e) => {
-                          const newIds = e.target.checked 
+                          const newIds = e.target.checked
                             ? [...(formData.team_ids || []), t.id]
                             : (formData.team_ids || []).filter((id: string) => id !== t.id);
-                          setFormData({...formData, team_ids: newIds});
+                          setFormData({ ...formData, team_ids: newIds });
                         }}
                       />
                       <span className="truncate">{t.name}</span>
@@ -1352,7 +1352,7 @@ function ApprovalModal({ isOpen, onClose, data, onConfirm, teams, saving }: any)
                 Cancelar
               </button>
               <button onClick={() => onConfirm(formData)} disabled={saving} className="flex-1 px-6 py-4 bg-[#2D3A3A] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:opacity-50 transition-all">
-                {saving ? 'Aprovando...' : 'Confirmar Aprovação'}
+                {saving ? 'Aprovando...' : 'Confirmar aprovação'}
               </button>
             </div>
           </div>
