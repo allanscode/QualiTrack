@@ -73,6 +73,9 @@ export function DashboardProvider({ user, children }: { user: User | null, child
         formDocs = (fRes.data || []) as EvaluationForm[];
       }
 
+      // Always exclude deactivated monitorias from dashboard
+      docs = docs.filter(m => m.active !== false);
+
       // Base RBAC for raw data (RLS should handle this in Supabase, but we do it here for mockDb and extra safety)
       if (user.role === 'suporte') {
         docs = docs.filter(m => m.evaluated_id === user.id);

@@ -1,24 +1,56 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useDashboard } from '../DashboardContext';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import DistributionChart from '../widgets/DistributionChart';
 import RankingWidget from '../widgets/RankingWidget';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, ClipboardCheck, RotateCcw, BarChart3 } from 'lucide-react';
+import { Target, ClipboardCheck, Users, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle } from 'lucide-react';
+import Card from '../../ui/Card';
 
 export default function QualityManagerDashboard() {
   const { user, monitorias, users } = useDashboard();
 
-  if (!user) return null;
+  const completed = useMemo(() => monitorias.filter(m => ['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(m.status)), [monitorias]);
+  const avgScore = useMemo(() => completed.length > 0 ? (completed.reduce((a, m) => a + (m.score || 0), 0) / completed.length) : 0, [completed]);
+  const pendingValidation = useMemo(() => monitorias.filter(m => m.status === 'pendente_validacao').length, [monitorias]);
+  const criticalErrors = useMemo(() => completed.filter(m => m.score < 75).length, [completed]);
 
-  const completed = monitorias.filter(m => ['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(m.status));
-  const totalAudits = monitorias.length;
-  const avgScore = completed.length > 0 ? (completed.reduce((a, m) => a + (m.score || 0), 0) / completed.length) : 0;
-  
-  const contestations = monitorias.filter(m => m.history.some(h => h.action.includes('Contestação'))).length;
-  const reversed = monitorias.filter(m => m.status === 'contestacao_aceita' || m.status === 'finalizada_alterada').length;
-  const reversalRate = contestations > 0 ? (reversed / contestations) * 100 : 0;
+  const totalContestations = useMemo(() => monitorias.filter(m => m.history.some(h => h.action.includes('Contestação'))).length, [monitorias]);
+  const reavAccepted = useMemo(() => monitorias.filter(m => m.status === 'contestacao_aceita' || m.status === 'finalizada_alterada').length, [monitorias]);
+  const reavRejected = useMemo(() => monitorias.filter(m => m.status === 'contestacao_negada').length, [monitorias]);
+  const reversalRate = useMemo(() => totalContestations > 0 ? (reavAccepted / totalContestations) * 100 : 0, [totalContestations, reavAccepted]);
+
+  // Trend Data Calculation
+  const trendData = useMemo(() => {
+    const days: Record<string, { totalScore: number, count: number }> = {};
+    completed.forEach(m => {
+      const date = new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      if (!days[date]) days[date] = { totalScore: 0, count: 0 };
+      days[date].totalScore += m.score || 0;
+      days[date].count += 1;
+    });
+
+    return Object.entries(days).map(([name, data]) => ({
+      name,
+      ScoreMedio: Math.round(data.totalScore / data.count)
+    })).sort((a, b) => {
+      const [da, ma] = a.name.split('/').map(Number);
+      const [db, mb] = b.name.split('/').map(Number);
+      return ma !== mb ? ma - mb : da - db;
+    });
+  }, [completed]);
+
+  // Trend Percentage
+  const trendPercentage = useMemo(() => {
+    if (trendData.length < 2) return 0;
+    const mid = Math.floor(trendData.length / 2);
+    const firstHalf = trendData.slice(0, mid);
+    const secondHalf = trendData.slice(mid);
+    const avgFirst = firstHalf.reduce((a, b) => a + b.ScoreMedio, 0) / (firstHalf.length || 1);
+    const avgSecond = secondHalf.reduce((a, b) => a + b.ScoreMedio, 0) / (secondHalf.length || 1);
+    return avgFirst > 0 ? ((avgSecond / avgFirst) - 1) * 100 : 0;
+  }, [trendData]);
 
   // Grade Distribution
   const gradeDistribution = [
@@ -28,121 +60,126 @@ export default function QualityManagerDashboard() {
     { name: 'Crítico (< 75%)', value: completed.filter(m => m.score < 75).length, color: '#ef4444' },
   ].filter(d => d.value > 0);
 
-  // Trend Chart
-  const chartDataMap: Record<string, { total: number, count: number }> = {};
-  completed.forEach(m => {
-    const key = new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-    if (!chartDataMap[key]) chartDataMap[key] = { total: 0, count: 0 };
-    chartDataMap[key].total += m.score || 0;
-    chartDataMap[key].count++;
-  });
+  // Auditor Ranking
+  const auditorRanking = useMemo(() => {
+    const map: Record<string, { total: number; count: number }> = {};
+    monitorias.forEach(m => {
+      const id = m.evaluator_id;
+      if (!map[id]) map[id] = { total: 0, count: 0 };
+      map[id].total += m.score || 0;
+      map[id].count++;
+    });
+    return Object.entries(map)
+      .map(([id, s]) => ({ 
+        id, 
+        name: users.find(u => u.id === id)?.name || id, 
+        score: Math.round(s.total / s.count), 
+        count: s.count 
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [monitorias, users]);
 
-  const chartData = Object.entries(chartDataMap)
-    .map(([date, d]) => ({ name: date, MediaGlobal: Math.round(d.total / d.count) }))
-    .reverse();
-
-  // Auditor Efficiency Ranking
-  const auditorMap: Record<string, { total: number; count: number }> = {};
-  monitorias.forEach(m => {
-    const id = m.evaluator_id;
-    if (!auditorMap[id]) auditorMap[id] = { total: 0, count: 0 };
-    auditorMap[id].total += m.score || 0; // Using score as placeholder for auditor efficiency metric, could be adapted later
-    auditorMap[id].count++;
-  });
-
-  const auditorRanking = Object.entries(auditorMap)
-    .map(([id, s]) => ({ 
-      id, 
-      name: users.find(u => u.id === id)?.name || id, 
-      score: Math.round(s.total / s.count), 
-      count: s.count 
-    }))
-    .sort((a, b) => b.count - a.count); // Rank by volume
-
-  const topAuditors = auditorRanking.slice(0, 5);
-
-  // Agent Rankings
-  const agentMap: Record<string, { total: number; count: number }> = {};
-  completed.forEach(m => {
-    const id = m.evaluated_id;
-    if (!agentMap[id]) agentMap[id] = { total: 0, count: 0 };
-    agentMap[id].total += m.score || 0;
-    agentMap[id].count++;
-  });
-
-  const agentRankingData = Object.entries(agentMap)
-    .map(([id, s]) => ({ 
-      id, 
-      name: users.find(u => u.id === id)?.name || id, 
-      score: Math.round(s.total / s.count), 
-      count: s.count 
-    }))
-    .sort((a, b) => b.score - a.score);
-
-  const topAgents = agentRankingData.slice(0, 5);
-  const bottomAgents = [...agentRankingData].filter(a => a.score < 100).sort((a, b) => a.score - b.score).slice(0, 5);
-
+  if (!user) return null;
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="space-y-6 animate-fade-in">
+      <header>
+        <h1 className="text-2xl font-black text-brand-primary tracking-tight uppercase">Gestão da Qualidade</h1>
+        <p className="text-brand-muted text-sm font-medium mt-1">Visão estratégica e controle da operação de qualidade.</p>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          title="Média Global" 
+          title="Média Geral" 
           value={`${avgScore.toFixed(1)}%`} 
-          sub={avgScore >= 75 ? 'Qualidade sustentada' : 'Abaixo da meta'} 
-          good={avgScore >= 75} 
+          sub={avgScore >= 85 ? 'Meta atingida' : 'Abaixo da meta'} 
+          good={avgScore >= 85} 
           icon={<Target className="w-5 h-5" />} 
-          accent={avgScore >= 75 ? 'text-emerald-600' : 'text-red-600'} 
+          accent="text-brand-accent" 
         />
         <StatCard 
-          title="Volume Auditado" 
-          value={totalAudits} 
-          sub="auditorias no período" 
-          good={true} 
-          icon={<ClipboardCheck className="w-5 h-5" />} 
+          title="Pendentes" 
+          value={pendingValidation} 
+          sub="Validação Gestor" 
+          good={pendingValidation === 0} 
+          icon={<Users className="w-5 h-5" />} 
           accent="text-blue-600" 
         />
         <StatCard 
-          title="Taxa de Reversão Global" 
-          value={`${reversalRate.toFixed(1)}%`} 
-          sub="sobre o total de contestações" 
-          good={reversalRate <= 20} 
-          icon={<RotateCcw className="w-5 h-5" />} 
-          accent={reversalRate <= 20 ? 'text-emerald-600' : 'text-red-600'} 
+          title="Alertas Críticos" 
+          value={criticalErrors} 
+          sub="Monitorias < 75%" 
+          good={criticalErrors === 0} 
+          icon={<AlertTriangle className="w-5 h-5" />} 
+          accent="text-error" 
         />
         <StatCard 
-          title="Consistência" 
-          value={`${gradeDistribution.find(d => d.name.includes('Excelente')) ? Math.round((gradeDistribution.find(d => d.name.includes('Excelente'))!.value / (completed.length || 1)) * 100) : 0}%`} 
-          sub="avaliações com nota 100" 
+          title="Tendência" 
+          value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(1)}%`} 
+          sub="Evolução do score" 
+          good={trendPercentage >= 0} 
+          icon={<TrendingUp className="w-5 h-5" />} 
+          accent="text-brand-highlight" 
+        />
+      </div>
+
+      {/* Volumetria de Reavaliação Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard 
+          title="Taxa de Reversão" 
+          value={`${reversalRate.toFixed(1)}%`} 
+          sub="Notas alteradas global" 
+          good={reversalRate <= 15} 
+          icon={<RotateCcw className="w-5 h-5" />} 
+          accent="text-brand-highlight" 
+        />
+        <StatCard 
+          title="Reav. Solicitadas" 
+          value={totalContestations} 
+          sub="Volume total de contestações" 
           good={true} 
-          icon={<BarChart3 className="w-5 h-5" />} 
-          accent="text-indigo-600" 
+          icon={<AlertTriangle className="w-5 h-5" />} 
+          accent="text-info" 
+        />
+        <StatCard 
+          title="Reav. Aceitas" 
+          value={reavAccepted} 
+          sub="Procedentes" 
+          good={true} 
+          icon={<CheckCircle2 className="w-5 h-5" />} 
+          accent="text-success" 
+        />
+        <StatCard 
+          title="Reav. Recusadas" 
+          value={reavRejected} 
+          sub="Improcedentes" 
+          good={true} 
+          icon={<XCircle className="w-5 h-5" />} 
+          accent="text-error" 
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 h-[340px]">
           <TrendChart 
-            title="Evolução da Qualidade (Global)" 
-            subtitle="Nota média de todas as operações por dia" 
-            data={chartData} 
-            dataKeys={[
-              { key: 'MediaGlobal', name: 'Média Global', color: '#6366f1' }
-            ]} 
+            title="Evolução da Qualidade" 
+            subtitle="Média global de score por dia"
+            data={trendData} 
+            dataKeys={[{ key: 'ScoreMedio', name: 'Média Global', color: '#6366f1' }]} 
           />
         </div>
-        <div>
+        <div className="space-y-6 h-[340px] overflow-y-auto no-scrollbar">
           <DistributionChart 
-            title="Distribuição de Qualidade" 
+            title="Curva de Qualidade" 
             data={gradeDistribution} 
           />
+          <RankingWidget 
+            title="Ranking de Auditores" 
+            subtitle="Por volume de auditorias"
+            data={auditorRanking} 
+          />
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <RankingWidget title="Produtividade (Auditores)" items={topAuditors} type="top" />
-        <RankingWidget title="Top Agentes" items={topAgents} type="top" />
-        <RankingWidget title="Oportunidades de Melhoria (Agentes)" items={bottomAgents} type="bottom" />
       </div>
 
       <RecentAuditsTable monitorias={monitorias} users={users} />

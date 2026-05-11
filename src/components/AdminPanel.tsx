@@ -1,12 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { User, Team, EvaluationForm, AccessRequest } from '../types';
-import { Users, Layout, ClipboardList, Plus, Trash2, Edit2, Shield, UserPlus, Save, X, Check, X as XIcon, Settings, RefreshCw, Key, Search, AlertOctagon } from 'lucide-react';
+import { 
+  Users, 
+  ClipboardList, 
+  Plus, 
+  Trash2, 
+  Edit2, 
+  Shield, 
+  UserPlus, 
+  Save, 
+  X, 
+  Check, 
+  RefreshCw, 
+  Search, 
+  AlertOctagon, 
+  BarChart3,
+  Mail,
+  User as UserIcon,
+  ShieldCheck,
+  ChevronRight,
+  ArrowRight
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import QualityConfigManagement from './QualityConfigManagement';
+import Card from './ui/Card';
+import Button from './ui/Button';
+import Badge from './ui/Badge';
+import Select from './ui/Select';
 
 export default function AdminPanel({ user: currentUser }: { user: User | null }) {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests' | 'qualidade'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [forms, setForms] = useState<EvaluationForm[]>([]);
@@ -49,44 +74,59 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
     loadAllData();
   }, [activeSubTab]);
 
-  useEffect(() => {
-    // Auto-refresh data every 10s in mock mode to sync tabs
-    let interval: any;
-    if (!supabase) {
-      interval = setInterval(loadAllData, 10000);
-    }
-    return () => interval && clearInterval(interval);
-  }, []);
-
   return (
-    <div className="space-y-8">
-      {/* Sub Navigation */}
-      <div className="flex gap-4 border-b border-[#E2E4D8]">
-        <SubNavItem active={activeSubTab === 'users'} onClick={() => setActiveSubTab('users')} icon={<Users className="w-4 h-4" />} label="Usuários" />
-        <SubNavItem active={activeSubTab === 'teams'} onClick={() => setActiveSubTab('teams')} icon={<Shield className="w-4 h-4" />} label="Equipes" />
-        <SubNavItem active={activeSubTab === 'forms'} onClick={() => setActiveSubTab('forms')} icon={<ClipboardList className="w-4 h-4" />} label="Formulários" />
-        <SubNavItem active={activeSubTab === 'requests'} onClick={() => setActiveSubTab('requests')} icon={<UserPlus className="w-4 h-4" />} label="Solicitações" />
+    <div className="space-y-8 animate-fade-in">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-brand-primary tracking-tight uppercase">Painel Administrativo</h1>
+          <p className="text-brand-muted text-sm font-medium mt-1">Configurações globais e gerenciamento de acessos.</p>
+        </div>
+      </header>
+
+      <div className="flex items-center gap-2 bg-surface-card p-1.5 rounded-2xl border border-surface-border shadow-premium-sm w-fit overflow-x-auto no-scrollbar">
+        {[
+          { key: 'users', label: 'Usuários', icon: Users },
+          { key: 'teams', label: 'Equipes', icon: Shield },
+          { key: 'forms', label: 'Formulários', icon: ClipboardList },
+          { key: 'requests', label: 'Solicitações', icon: UserPlus },
+          { key: 'qualidade', label: 'Configurações', icon: BarChart3 },
+        ].map((item) => {
+          const Icon = item.icon;
+          const active = activeSubTab === item.key;
+          return (
+            <button
+              key={item.key}
+              onClick={() => setActiveSubTab(item.key as any)}
+              className={`
+                flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+                ${active 
+                  ? 'bg-brand-primary text-white shadow-premium' 
+                  : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'}
+              `}
+            >
+              <Icon className="w-4 h-4" />
+              {item.label}
+            </button>
+          );
+        })}
       </div>
 
       <AnimatePresence mode="wait">
-        {activeSubTab === 'users' && <UsersManagement users={users} teams={teams} loadData={loadAllData} key="users" />}
-        {activeSubTab === 'teams' && <TeamsManagement teams={teams} users={users} loadData={loadAllData} key="teams" />}
-        {activeSubTab === 'forms' && <FormsManagement currentUser={currentUser} teams={teams} loadData={loadAllData} key="forms" />}
-        {activeSubTab === 'requests' && <RequestsManagement key="requests" requests={requests} users={users} teams={teams} loadData={loadAllData} />}
+        <motion.div
+          key={activeSubTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {activeSubTab === 'users' && <UsersManagement users={users} teams={teams} loadData={loadAllData} />}
+          {activeSubTab === 'teams' && <TeamsManagement teams={teams} users={users} loadData={loadAllData} />}
+          {activeSubTab === 'forms' && <FormsManagement currentUser={currentUser} teams={teams} loadData={loadAllData} />}
+          {activeSubTab === 'requests' && <RequestsManagement requests={requests} users={users} teams={teams} loadData={loadAllData} />}
+          {activeSubTab === 'qualidade' && <QualityConfigManagement />}
+        </motion.div>
       </AnimatePresence>
     </div>
-  );
-}
-
-function SubNavItem({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all relative ${active ? 'text-[#2D3A3A]' : 'text-[#7A7D71] hover:text-[#2D3A3A]'}`}
-    >
-      {icon} {label}
-      {active && <motion.div layoutId="subnav" className="absolute bottom-0 left-0 right-0 h-1 bg-[#A7C0A5] rounded-t-full" />}
-    </button>
   );
 }
 
@@ -98,308 +138,181 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredUsers = users
-    .filter(u => statusFilter === 'active' ? u.active !== false : u.active === false)
-    .filter(u =>
-      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+  const filteredUsers = useMemo(() => {
+    return users
+      .filter(u => statusFilter === 'active' ? u.active !== false : u.active === false)
+      .filter(u =>
+        u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+  }, [users, statusFilter, searchTerm]);
 
   const handleSaveUser = async () => {
     if (!editingUser.name || !editingUser.email) return;
     setSaving(true);
     try {
       const emailLower = editingUser.email.toLowerCase();
-      const basePayload: any = {
+      const payload: any = {
         name: editingUser.name,
         email: emailLower,
         role: editingUser.role,
         active: true,
+        team_ids: editingUser.team_ids || [],
         ...(editingUser.password ? { password: editingUser.password } : {})
       };
-      // Try with team_ids; if Supabase rejects (column missing), retry without it
-      const payloadWithTeams = { ...basePayload, team_ids: editingUser.team_ids || [] };
 
       if (!supabase) {
-        if (editingUser.id) {
-          await mockDb.update('users', editingUser.id, payloadWithTeams);
-        } else {
-          await mockDb.insert('users', { ...payloadWithTeams, id: emailLower });
-        }
+        if (editingUser.id) await mockDb.update('users', editingUser.id, payload);
+        else await mockDb.insert('users', { ...payload, id: emailLower });
       } else {
-        let error: any;
-        if (editingUser.id) {
-          ({ error } = await supabase.from('users').update(payloadWithTeams).eq('id', editingUser.id));
-          if (error?.message?.includes('team_ids')) {
-            ({ error } = await supabase.from('users').update(basePayload).eq('id', editingUser.id));
-          }
-        } else {
-          ({ error } = await supabase.from('users').insert([payloadWithTeams]));
-          if (error?.message?.includes('team_ids')) {
-            ({ error } = await supabase.from('users').insert([basePayload]));
-          }
-        }
+        const { error } = editingUser.id 
+          ? await supabase.from('users').update(payload).eq('id', editingUser.id)
+          : await supabase.from('users').insert([payload]);
         if (error) throw error;
       }
 
-      toast.success(editingUser.id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!');
+      toast.success('Usuário salvo com sucesso!');
       setIsModalOpen(false);
-      setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' });
       loadData();
     } catch (error: any) {
-      console.error(error);
-      toast.error('Erro ao salvar usuário: ' + (error.message || JSON.stringify(error)));
+      toast.error('Erro ao salvar: ' + error.message);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleResetPassword = async (user: User) => {
+  const handleToggleStatus = async (id: string, active: boolean) => {
     try {
-      const token = Math.random().toString(36).substr(2, 10);
-
-      if (!supabase) {
-        await mockDb.update('users', user.id, { reset_token: token });
-      } else {
-        // Gera o token no banco, mas NÃO mexe na senha atual
-        const { error: updateError } = await supabase.from('users').update({ reset_token: token }).eq('id', user.id);
-        if (updateError) throw updateError;
-
-        // Chama a Edge Function para enviar o e-mail de redefinição
-        const { error: funcError } = await supabase.functions.invoke('send-email', {
-          body: { email: user.email, name: user.name, type: 'reset', token }
-        });
-
-        if (funcError) throw funcError;
-      }
-
-      toast.success(`E-mail de recuperação enviado para ${user.email}`, {
-        duration: 5000,
-      });
-      loadData();
-    } catch (e) {
-      console.error(e);
-      toast.error('Erro ao enviar e-mail de redefinição');
-    }
-  };
-
-  const handleDeleteUser = async (id: string) => {
-    try {
-      if (!supabase) {
-        await mockDb.update('users', id, { active: false });
-      } else {
-        await supabase.from('users').update({ active: false }).eq('id', id);
-      }
-      toast.success('Usuário desativado com sucesso.');
+      if (!supabase) await mockDb.update('users', id, { active });
+      else await supabase.from('users').update({ active }).eq('id', id);
+      toast.success(active ? 'Reativado!' : 'Desativado!');
       setDeleteConfirmId(null);
       loadData();
-    } catch (e) {
-      console.error(e);
-      toast.error('Erro ao desativar usuário');
-    }
-  };
-
-  const handleActivateUser = async (id: string) => {
-    try {
-      const userToActivate = users.find(u => u.id === id);
-      if (!userToActivate) return;
-
-      const emailInUse = users.some(u => u.active !== false && u.email === userToActivate.email && u.id !== id);
-      if (emailInUse) {
-        return toast.error('Não é possível reativar: este e-mail já está sendo usado por outro usuário ativo.');
-      }
-
-      if (!supabase) {
-        await mockDb.update('users', id, { active: true });
-      } else {
-        await supabase.from('users').update({ active: true }).eq('id', id);
-      }
-      toast.success('Usuário reativado com sucesso!');
-      loadData();
-    } catch (e) {
-      console.error(e);
-      toast.error('Erro ao reativar usuário');
-    }
-  };
-
-  const openEdit = (u: User) => {
-    setEditingUser({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      team_ids: u.team_ids || [],
-      password: u.password || ''
-    });
-    setIsModalOpen(true);
+    } catch (e) { toast.error('Erro ao alterar status'); }
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
-      <div className="flex justify-between items-center px-2">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-2xl font-bold text-[#2D3A3A]">Gerenciamento de Usuários</h3>
-          <p className="text-sm text-[#7A7D71]">Total: {filteredUsers.length} {filteredUsers.length === 1 ? 'usuário exibido' : 'usuários exibidos'}.</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#7A7D71]" />
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
             <input
               type="text"
-              placeholder="Buscar por nome ou e-mail..."
+              placeholder="Buscar usuário..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="bg-white border border-[#E2E4D8] rounded-xl py-2 pl-9 pr-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none w-64 text-[#2D3A3A] placeholder-[#7A7D71]"
+              className="w-full bg-surface-card border border-surface-border rounded-xl py-2 pl-9 pr-4 text-xs font-semibold text-brand-primary focus:border-brand-accent focus:outline-none transition-colors"
             />
           </div>
-          <select
+          <Select 
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value as any)}
-            className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-semibold text-[#7A7D71] focus:border-[#A7C0A5] focus:outline-none"
-          >
-            <option value="active">Ativos</option>
-            <option value="inactive">Desativados</option>
-          </select>
-          <button
-            onClick={() => {
-              setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' });
-              setIsModalOpen(true);
-            }}
-            className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all">
-            <UserPlus className="w-4 h-4" /> Adicionar Usuário
-          </button>
+            options={[{ value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Desativados' }]}
+          />
         </div>
+        <Button onClick={() => { setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' }); setIsModalOpen(true); }} icon={<UserPlus className="w-4 h-4" />}>
+          Adicionar Usuário
+        </Button>
       </div>
 
-      <div className="bg-white rounded-[40px] border border-[#E2E4D8] shadow-sm overflow-hidden flex flex-col">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-[#F9F9F6] text-[11px] uppercase tracking-widest text-[#7A7D71] font-bold">
-              <tr>
-                <th className="px-8 py-4">Nome</th>
-                <th className="px-8 py-4">Email</th>
-                <th className="px-8 py-4">Perfil</th>
-                <th className="px-8 py-4">Equipe</th>
-                <th className="px-8 py-4 text-right">Ações</th>
+      <Card padding="none" className="overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-surface-bg border-b border-surface-border">
+              <th className="px-6 py-4 text-[10px] font-black uppercase text-brand-muted tracking-widest">Usuário</th>
+              <th className="px-6 py-4 text-[10px] font-black uppercase text-brand-muted tracking-widest">Perfil</th>
+              <th className="px-6 py-4 text-[10px] font-black uppercase text-brand-muted tracking-widest">Equipe</th>
+              <th className="px-6 py-4 text-right text-[10px] font-black uppercase text-brand-muted tracking-widest">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-surface-subtle">
+            {filteredUsers.map(u => (
+              <tr key={u.id} className="hover:bg-surface-bg/50 transition-colors group">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-brand-subtle flex items-center justify-center text-brand-primary font-black">
+                      {u.name.slice(0,1)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-brand-primary tracking-tight">{u.name}</p>
+                      <p className="text-[10px] font-bold text-brand-muted flex items-center gap-1"><Mail className="w-3 h-3" /> {u.email}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <Badge variant="neutral" className="bg-surface-subtle text-brand-primary">
+                    {({ 'admin': 'Admin', 'qualidade': 'Auditor', 'gestor_qualidade': 'G. Qualidade', 'gestor_suporte': 'G. Suporte', 'suporte': 'Agente' } as any)[u.role] || u.role}
+                  </Badge>
+                </td>
+                <td className="px-6 py-4 text-xs font-bold text-brand-muted">
+                  {u.team_ids && u.team_ids.length > 0
+                    ? u.team_ids.map(id => teams.find(t => t.id === id)?.name).filter(Boolean).join(', ')
+                    : 'Sem equipe'}
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <div className="flex justify-end gap-1">
+                    {u.active === false ? (
+                      <Button variant="outline" size="sm" onClick={() => handleToggleStatus(u.id, true)} icon={<RefreshCw className="w-3.5 h-3.5" />}>Reativar</Button>
+                    ) : (
+                      <>
+                        <button onClick={() => { setEditingUser({...u, team_ids: u.team_ids || []}); setIsModalOpen(true); }} className="p-2.5 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><Edit2 className="w-4 h-4" /></button>
+                        {deleteConfirmId === u.id ? (
+                          <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
+                            <button onClick={() => handleToggleStatus(u.id, false)} className="px-2.5 py-1.5 rounded-lg bg-error text-white text-[10px] font-black uppercase">Sim</button>
+                            <button onClick={() => setDeleteConfirmId(null)} className="px-2.5 py-1.5 rounded-lg bg-surface-subtle text-brand-muted text-[10px] font-black uppercase tracking-widest">Não</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setDeleteConfirmId(u.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-brand-muted hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody className="text-sm text-[#3D4035]">
-              {filteredUsers.map(u => (
-                <tr key={u.id} className={`border-b border-[#F0F1E8] hover:bg-[#F9F9F6] transition-colors ${u.active === false ? 'opacity-50 bg-[#F9F9F6]' : ''}`}>
-                  <td className="px-8 py-4">
-                    <div className="flex flex-col items-start gap-1">
-                      <span className="font-semibold text-[#2D3A3A]">{u.name}</span>
-                      {u.active === false && <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-bold uppercase tracking-widest w-max">Desativado</span>}
-                    </div>
-                  </td>
-                  <td className="px-8 py-4 text-[#7A7D71]">{u.email}</td>
-                  <td className="px-8 py-4">
-                    <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-[#E2E4D8] text-[#2D3A3A] rounded-full">
-                      {({ 'admin': 'Administrador', 'qualidade': 'Auditor', 'gestor_qualidade': 'Gest. Qualidade', 'gestor_suporte': 'Gest. Suporte', 'suporte': 'Agente' } as any)[u.role] || u.role}
-                    </span>
-                  </td>
-                  <td className="px-8 py-4 text-[#7A7D71] text-xs">
-                    {u.team_ids && u.team_ids.length > 0
-                      ? u.team_ids.map(id => teams.find(t => t.id === id)?.name).filter(Boolean).join(', ')
-                      : 'Nenhuma equipe'}
-                  </td>
-                  <td className="px-8 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      {deleteConfirmId === u.id ? (
-                        <>
-                          <button onClick={() => handleDeleteUser(u.id)} className="px-3 py-1 bg-red-500 text-white text-[10px] uppercase font-bold tracking-widest rounded-lg hover:bg-red-600 transition-colors">Confirmar</button>
-                          <button onClick={() => setDeleteConfirmId(null)} className="px-3 py-1 bg-[#E2E4D8] text-[#2D3A3A] text-[10px] uppercase font-bold tracking-widest rounded-lg hover:bg-[#D0D3C5] transition-colors">Cancelar</button>
-                        </>
-                      ) : u.active === false ? (
-                        <button
-                          onClick={() => handleActivateUser(u.id)}
-                          className="p-2.5 rounded-xl hover:bg-[#E2E4D8] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors"
-                          title="Reativar"
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <>
-                          <button onClick={() => openEdit(u)} className="p-2.5 rounded-xl hover:bg-[#E2E4D8] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors" title="Editar"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => handleResetPassword(u)} className="p-2.5 rounded-xl hover:bg-yellow-50 text-yellow-600 transition-colors" title="Resetar Senha"><Key className="w-4 h-4" /></button>
-                          <button onClick={() => setDeleteConfirmId(u.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredUsers.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-8 py-12 text-center text-[#7A7D71]">Nenhum usuário encontrado</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            ))}
+          </tbody>
+        </table>
+      </Card>
 
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl relative"
-            >
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="absolute right-6 top-6 p-2 rounded-xl text-[#7A7D71] hover:bg-[#F0F1E8] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              <h3 className="text-2xl font-bold text-[#2D3A3A] mb-6">{editingUser.id ? 'Editar Usuário' : 'Novo Usuário'}</h3>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <Card className="max-w-md w-full animate-in zoom-in-95 duration-200">
+              <header className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">{editingUser.id ? 'Editar Usuário' : 'Novo Usuário'}</h3>
+                <button onClick={() => setIsModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
+              </header>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nome completo</label>
-                  <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome Completo</label>
+                  <input type="text" className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">E-mail</label>
-                  <input type="email" disabled={!!editingUser.id} className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Email</label>
+                  <input type="email" disabled={!!editingUser.id} className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Perfil de acesso</label>
-                  <select
-                    className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none appearance-none"
-                    value={editingUser.role}
-                    onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}
-                  >
-                    <option value="admin">Administrador</option>
-                    <option value="gestor_suporte">Gest. Suporte</option>
-                    <option value="gestor_qualidade">Gest. Qualidade</option>
-                    <option value="qualidade">Auditor</option>
-                    <option value="suporte">Agente</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Senha de acesso</label>
-                  <input
-                    type="text"
-                    className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none"
-                    value={editingUser.password}
-                    onChange={e => setEditingUser({ ...editingUser, password: e.target.value })}
-                    placeholder={editingUser.id ? "Deixe em branco para manter" : "Defina uma senha"}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Equipes</label>
-                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl p-3">
-                    {teams.filter(t => t.active !== false).map(t => (
-                      <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[#E2E4D8] p-2 rounded-xl transition-colors">
+                <Select 
+                  label="Perfil"
+                  value={editingUser.role}
+                  onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}
+                  options={[
+                    { value: 'admin', label: 'Administrador' },
+                    { value: 'gestor_qualidade', label: 'Gestor Qualidade' },
+                    { value: 'gestor_suporte', label: 'Gestor Suporte' },
+                    { value: 'qualidade', label: 'Auditor' },
+                    { value: 'suporte', label: 'Agente' }
+                  ]}
+                />
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipes</label>
+                  <div className="flex flex-wrap gap-2 p-3 bg-surface-bg border border-surface-border rounded-xl max-h-32 overflow-y-auto">
+                    {teams.map(t => (
+                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${editingUser.team_ids?.includes(t.id) ? 'bg-brand-primary text-white border-brand-primary' : 'bg-white text-brand-muted border-surface-border hover:border-brand-highlight'}`}>
                         <input
                           type="checkbox"
-                          className="rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
+                          className="hidden"
                           checked={editingUser.team_ids?.includes(t.id) || false}
                           onChange={(e) => {
                             const newIds = e.target.checked
@@ -408,27 +321,21 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                             setEditingUser({ ...editingUser, team_ids: newIds });
                           }}
                         />
-                        <span className="truncate">{t.name}</span>
+                        {t.name}
                       </label>
                     ))}
                   </div>
                 </div>
 
-                <div className="pt-4">
-                  <button
-                    onClick={handleSaveUser}
-                    disabled={saving || !editingUser.name || !editingUser.email}
-                    className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:bg-[#7A7D71] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
-                  >
-                    {saving ? 'Salvando...' : editingUser.id ? 'Salvar Alterações' : 'Cadastrar Usuário'}
-                  </button>
-                </div>
+                <Button className="w-full mt-4" onClick={handleSaveUser} disabled={saving} icon={<Save className="w-4 h-4" />}>
+                  {saving ? 'Salvando...' : 'Salvar Usuário'}
+                </Button>
               </div>
-            </motion.div>
+            </Card>
           </div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
 
@@ -437,13 +344,14 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
   const [editingTeam, setEditingTeam] = useState<{ name: string, id?: string }>({ name: '' });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredTeams = teams
-    .filter(t => statusFilter === 'active' ? t.active !== false : t.active === false)
-    .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredTeams = useMemo(() => {
+    return teams
+      .filter(t => statusFilter === 'active' ? t.active !== false : t.active === false)
+      .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [teams, statusFilter, searchTerm]);
 
   const handleSaveTeam = async () => {
     if (!editingTeam.name) return toast.error('O nome da equipe é obrigatório.');
@@ -451,913 +359,339 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
     try {
       const payload = { name: editingTeam.name, active: true };
       if (!supabase) {
-        if (editingTeam.id) {
-          await mockDb.update('teams', editingTeam.id, payload);
-        } else {
-          await mockDb.insert('teams', payload);
-        }
+        if (editingTeam.id) await mockDb.update('teams', editingTeam.id, payload);
+        else await mockDb.insert('teams', payload);
       } else {
-        const { error } = await supabase.from('teams').upsert([
-          { ...(editingTeam.id ? { id: editingTeam.id } : {}), ...payload }
-        ]);
+        const { error } = await supabase.from('teams').upsert([{ ...(editingTeam.id ? { id: editingTeam.id } : {}), ...payload }]);
         if (error) throw error;
       }
-      toast.success(editingTeam.id ? 'Equipe atualizada com sucesso!' : 'Equipe criada com sucesso!');
+      toast.success('Equipe salva com sucesso!');
       setIsModalOpen(false);
-      setEditingTeam({ name: '' });
       loadData();
-    } catch (e) {
-      console.error(e);
-      toast.error('Erro ao salvar equipe');
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { toast.error('Erro ao salvar'); }
+    finally { setSaving(false); }
   };
 
-  const handleDeleteTeam = async (id: string) => {
+  const handleToggleStatus = async (id: string, active: boolean) => {
     try {
-      if (!supabase) {
-        await mockDb.update('teams', id, { active: false });
-      } else {
-        await supabase.from('teams').update({ active: false }).eq('id', id);
-      }
-      toast.success('Equipe desativada com sucesso.');
+      if (!supabase) await mockDb.update('teams', id, { active });
+      else await supabase.from('teams').update({ active }).eq('id', id);
+      toast.success(active ? 'Ativada!' : 'Desativada!');
       setDeleteConfirmId(null);
       loadData();
-    } catch (e) {
-      console.error(e);
-      toast.error('Erro ao desativar equipe');
-    }
-  };
-
-  const handleActivateTeam = async (id: string) => {
-    try {
-      if (!supabase) {
-        await mockDb.update('teams', id, { active: true });
-      } else {
-        await supabase.from('teams').update({ active: true }).eq('id', id);
-      }
-      toast.success('Equipe reativada com sucesso!');
-      loadData();
-    } catch (e) {
-      console.error(e);
-      toast.error('Erro ao reativar equipe');
-    }
-  };
-
-  const openEdit = (t: Team) => {
-    setEditingTeam({
-      id: t.id,
-      name: t.name
-    });
-    setIsModalOpen(true);
+    } catch (e) { toast.error('Erro ao alterar status'); }
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
-      <div className="flex justify-between items-center px-2">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-2xl font-bold text-[#2D3A3A]">Estrutura de Equipes</h3>
-          <p className="text-sm text-[#7A7D71]">Total: {filteredTeams.length} {filteredTeams.length === 1 ? 'equipe exibida' : 'equipes exibidas'}.</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#7A7D71]" />
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
             <input
               type="text"
-              placeholder="Buscar por nome..."
+              placeholder="Buscar equipe..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="bg-white border border-[#E2E4D8] rounded-xl py-2 pl-9 pr-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none w-64 text-[#2D3A3A] placeholder-[#7A7D71]"
+              className="w-full bg-surface-card border border-surface-border rounded-xl py-2 pl-9 pr-4 text-xs font-semibold focus:border-brand-accent focus:outline-none"
             />
           </div>
-          <select
+          <Select 
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value as any)}
-            className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-semibold text-[#7A7D71] focus:border-[#A7C0A5] focus:outline-none"
-          >
-            <option value="active">Ativas</option>
-            <option value="inactive">Desativadas</option>
-          </select>
-          <button
-            onClick={() => {
-              setEditingTeam({ name: '' });
-              setIsModalOpen(true);
-            }}
-            className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all"
-          >
-            <Plus className="w-4 h-4" /> Nova Equipe
-          </button>
+            options={[{ value: 'active', label: 'Ativas' }, { value: 'inactive', label: 'Desativadas' }]}
+          />
         </div>
+        <Button onClick={() => { setEditingTeam({ name: '' }); setIsModalOpen(true); }} icon={<Plus className="w-4 h-4" />}>Nova Equipe</Button>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTeams.map(t => (
-          <div key={t.id} className={`bg-white rounded-3xl border border-[#E2E4D8] p-6 shadow-sm group hover:shadow-md transition-shadow ${t.active === false ? 'opacity-60 bg-[#F9F9F6]' : ''}`}>
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex flex-col items-start gap-2">
-                <h4 className="font-bold text-xl text-[#2D3A3A]">{t.name}</h4>
-                {t.active === false && <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-bold uppercase tracking-widest w-max">Desativada</span>}
+          <Card key={t.id} className="group hover:border-brand-accent transition-all relative overflow-hidden">
+            {t.active === false && <div className="absolute inset-0 bg-surface-bg/60 backdrop-blur-[1px] z-10 flex items-center justify-center"><Badge variant="error">Desativada</Badge></div>}
+            <div className="flex justify-between items-start">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-brand-subtle flex items-center justify-center text-brand-primary">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-black text-brand-primary uppercase tracking-tight">{t.name}</h4>
+                  <p className="text-[10px] font-bold text-brand-muted uppercase mt-0.5">{users.filter(u => u.team_ids?.includes(t.id)).length} Agentes</p>
+                </div>
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex gap-1">
+                <button onClick={() => { setEditingTeam(t); setIsModalOpen(true); }} className="p-2 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><Edit2 className="w-4 h-4" /></button>
                 {deleteConfirmId === t.id ? (
-                  <>
-                    <button onClick={() => handleDeleteTeam(t.id)} className="px-2 py-1 bg-red-500 text-white text-[10px] uppercase font-bold tracking-widest rounded transition-colors">Confirmar</button>
-                    <button onClick={() => setDeleteConfirmId(null)} className="px-2 py-1 bg-[#E2E4D8] text-[#2D3A3A] text-[10px] uppercase font-bold tracking-widest rounded transition-colors">Cancelar</button>
-                  </>
-                ) : t.active === false ? (
-                  <button
-                    onClick={() => handleActivateTeam(t.id)}
-                    className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors"
-                    title="Reativar"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
+                  <button onClick={() => handleToggleStatus(t.id, false)} className="p-2 rounded-xl bg-error text-white"><Check className="w-4 h-4" /></button>
                 ) : (
-                  <>
-                    <button onClick={() => openEdit(t)} className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors">
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirmId(t.id)}
-                      className="p-2 rounded-lg hover:bg-red-50 text-[#7A7D71] hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </>
+                  <button onClick={() => setDeleteConfirmId(t.id)} className="p-2 rounded-xl hover:bg-red-50 text-brand-muted hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
                 )}
               </div>
             </div>
-          </div>
+          </Card>
         ))}
-        {filteredTeams.length === 0 && (
-          <div className="col-span-full p-16 text-center bg-[#FBFBF9] rounded-[40px] border border-[#E2E4D8] shadow-sm">
-            <Shield className="w-12 h-12 mx-auto mb-4 text-[#A7C0A5]" />
-            <p className="text-sm font-semibold tracking-wider text-[#7A7D71] uppercase">Nenhuma equipe cadastrada</p>
-          </div>
-        )}
       </div>
 
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl relative"
-            >
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="absolute right-6 top-6 p-2 rounded-xl text-[#7A7D71] hover:bg-[#F0F1E8] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              <h3 className="text-2xl font-bold text-[#2D3A3A] mb-2">{editingTeam.id ? 'Editar equipe' : 'Nova equipe'}</h3>
-              <p className="text-sm text-[#7A7D71] mb-6">Dados da equipe.</p>
-
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <Card className="max-w-md w-full">
+              <header className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">{editingTeam.id ? 'Editar Equipe' : 'Nova Equipe'}</h3>
+                <button onClick={() => setIsModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
+              </header>
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nome da equipe</label>
-                  <input
-                    type="text"
-                    className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none"
-                    value={editingTeam.name}
-                    onChange={e => setEditingTeam({ ...editingTeam, name: e.target.value })}
-                    placeholder="Ex: Suporte N1"
-                  />
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome da Equipe</label>
+                  <input type="text" className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={editingTeam.name} onChange={e => setEditingTeam({ ...editingTeam, name: e.target.value })} />
                 </div>
-
-                <div className="pt-4">
-                  <button
-                    onClick={handleSaveTeam}
-                    disabled={saving || !editingTeam.name}
-                    className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:bg-[#7A7D71] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
-                  >
-                    {saving ? 'Salvando...' : editingTeam.id ? 'Salvar Alterações' : 'Cadastrar Equipe'}
-                  </button>
-                </div>
+                <Button className="w-full" onClick={handleSaveTeam} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Equipe'}</Button>
               </div>
-            </motion.div>
+            </Card>
           </div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
 
 function FormsManagement({ currentUser, teams, loadData }: { currentUser: User | null, teams: Team[], loadData: () => void }) {
   const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingForm, setEditingForm] = useState<Partial<EvaluationForm>>({
-    title: '', description: '', team_id: '', sections: [], critical_errors: []
-  });
+  const [editingForm, setEditingForm] = useState<Partial<EvaluationForm>>({ title: '', description: '', team_id: '', sections: [], critical_errors: [] });
   const [saving, setSaving] = useState(false);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredForms = forms
-    .filter(f => statusFilter === 'active' ? f.active !== false : f.active === false)
-    .filter(f => {
-      const matchName = f.title.toLowerCase().includes(searchTerm.toLowerCase());
-      const teamName = f.team_id ? teams.find(t => t.id === f.team_id)?.name : 'Geral';
-      const matchTeam = teamName?.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchName || matchTeam;
-    });
-
-  const fetchForms = async () => {
-    try {
-      let data: EvaluationForm[] = [];
-      if (!supabase) {
-        const res = await mockDb.get('forms');
-        data = res.data;
-      } else {
-        const { data: res } = await supabase.from('forms').select('*');
-        data = res || [];
-      }
-      setForms(data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const filteredForms = useMemo(() => {
+    return forms
+      .filter(f => statusFilter === 'active' ? f.active !== false : f.active === false)
+      .filter(f => f.title.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [forms, statusFilter, searchTerm]);
 
   useEffect(() => {
-    fetchForms();
+    const fetch = async () => {
+      const res = supabase ? await supabase.from('forms').select('*') : await mockDb.get('forms');
+      setForms(res.data || []);
+    };
+    fetch();
   }, []);
 
-  const handleAddSection = () => {
-    const newSection = { id: Date.now().toString(), title: '', weight: 0, questions: [] };
-    setEditingForm({ ...editingForm, sections: [...(editingForm.sections || []), newSection] });
-  };
-
-  const handleAddQuestion = (sectionId: string) => {
-    setEditingForm(prev => {
-      const newSections = (prev.sections || []).map(s => {
-        if (s.id === sectionId) {
-          return { ...s, questions: [...s.questions, { id: Date.now().toString() + Math.random(), text: '', type: 'yes_no_na' as const }] };
-        }
-        return s;
-      });
-      return { ...prev, sections: newSections };
-    });
-  };
-
-  const handleUpdateSection = (sectionId: string, field: string, value: string | number) => {
-    setEditingForm(prev => {
-      let finalValue = value;
-      if (field === 'weight') {
-        const numValue = Number(value) || 0;
-        const otherSectionsWeight = (prev.sections || []).reduce((acc, s) => s.id === sectionId ? acc : acc + (Number(s.weight) || 0), 0);
-        if (otherSectionsWeight + numValue > 100) {
-          finalValue = 100 - otherSectionsWeight;
-        } else if (numValue < 0) {
-          finalValue = 0;
-        }
-      }
-      const newSections = (prev.sections || []).map(s => {
-        if (s.id === sectionId) {
-          return { ...s, [field]: finalValue };
-        }
-        return s;
-      });
-      return { ...prev, sections: newSections };
-    });
-  };
-
-  const totalWeight = editingForm.sections?.reduce((sum, s) => sum + (Number(s.weight) || 0), 0) || 0;
-  const remainingWeight = Math.max(0, 100 - totalWeight);
-
-  const handleUpdateQuestion = (sectionId: string, questionId: string, text: string) => {
-    setEditingForm(prev => {
-      const newSections = (prev.sections || []).map(s => {
-        if (s.id === sectionId) {
-          return {
-            ...s,
-            questions: s.questions.map(q => q.id === questionId ? { ...q, text } : q)
-          };
-        }
-        return s;
-      });
-      return { ...prev, sections: newSections };
-    });
-  };
-
-  const handleRemoveSection = (sectionId: string) => {
-    setEditingForm(prev => ({
-      ...prev,
-      sections: (prev.sections || []).filter(s => s.id !== sectionId)
-    }));
-  };
-
-  const handleRemoveQuestion = (sectionId: string, questionId: string) => {
-    setEditingForm(prev => ({
-      ...prev,
-      sections: (prev.sections || []).map(s => {
-        if (s.id === sectionId) {
-          return { ...s, questions: s.questions.filter(q => q.id !== questionId) };
-        }
-        return s;
-      })
-    }));
-  };
-
-  const handleDeleteForm = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    try {
-      if (!supabase) {
-        await mockDb.update('forms', id, { active: false });
-      } else {
-        await supabase.from('forms').update({ active: false }).eq('id', id);
-      }
-      toast.success('Formulário desativado com sucesso.');
-      setDeleteConfirmId(null);
-      fetchForms();
-      loadData();
-    } catch (e) {
-      console.error(e);
-      toast.error('Erro ao desativar formulário');
-    }
-  };
-
-  const handleActivateForm = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    try {
-      if (!supabase) {
-        await mockDb.update('forms', id, { active: true });
-      } else {
-        await supabase.from('forms').update({ active: true }).eq('id', id);
-      }
-      toast.success('Formulário reativado com sucesso!');
-      fetchForms();
-      loadData();
-    } catch (e) {
-      console.error(e);
-      toast.error('Erro ao reativar formulário');
-    }
-  };
-
-  const handleAddCriticalError = () => {
-    setEditingForm(prev => ({
-      ...prev,
-      critical_errors: [...(prev.critical_errors || []), { id: Date.now().toString() + Math.random(), text: '', type: 'yes_no_na' }]
-    }));
-  };
-
-  const handleUpdateCriticalError = (id: string, text: string) => {
-    setEditingForm(prev => ({
-      ...prev,
-      critical_errors: (prev.critical_errors || []).map(q => q.id === id ? { ...q, text } : q)
-    }));
-  };
-
-  const handleRemoveCriticalError = (id: string) => {
-    setEditingForm(prev => ({
-      ...prev,
-      critical_errors: (prev.critical_errors || []).filter(q => q.id !== id)
-    }));
-  };
-
   const handleSaveForm = async () => {
-    if (!editingForm.title || !editingForm.sections?.length) return toast.error('Preencha título e adicione pelo menos um pilar.');
-
-    const zeroWeightSection = editingForm.sections.find(s => (Number(s.weight) || 0) <= 0);
-    if (zeroWeightSection) return toast.error(`O pilar "${zeroWeightSection.title || 'Sem Nome'}" não pode ter peso 0%.`);
-
-    if (totalWeight !== 100) return toast.error(`O peso total deve ser exatamente 100%. Falta distribuir ${remainingWeight}%.`);
-
+    if (!editingForm.title || !editingForm.sections?.length) return toast.error('Preencha os campos obrigatórios.');
     setSaving(true);
     try {
-      const payload = {
-        title: editingForm.title,
-        description: editingForm.description || '',
-        team_id: editingForm.team_id || null,
-        sections: editingForm.sections,
-        critical_errors: editingForm.critical_errors || [],
-        active: true,
-        created_by: currentUser?.email || 'admin@exemplo.com'
-      };
-
+      const payload = { ...editingForm, active: true, created_by: currentUser?.email };
       if (!supabase) {
-        if (editingForm.id) {
-          await mockDb.update('forms', editingForm.id, payload);
-        } else {
-          await mockDb.insert('forms', payload);
-        }
+        if (editingForm.id) await mockDb.update('forms', editingForm.id, payload);
+        else await mockDb.insert('forms', payload);
       } else {
-        const { error } = await supabase.from('forms').upsert([
-          { ...(editingForm.id ? { id: editingForm.id } : {}), ...payload }
-        ]);
+        const { error } = await supabase.from('forms').upsert([{ ...(editingForm.id ? { id: editingForm.id } : {}), ...payload }]);
         if (error) throw error;
       }
-
-      toast.success(editingForm.id ? 'Formulário atualizado com sucesso!' : 'Formulário criado com sucesso!');
+      toast.success('Formulário salvo!');
       setIsModalOpen(false);
-      setEditingForm({ title: '', description: '', team_id: '', sections: [] });
-      fetchForms();
       loadData();
-    } catch (e: any) {
-      console.error(e);
-      toast.error('Erro ao salvar formulário: ' + (e.message || JSON.stringify(e)));
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { toast.error('Erro ao salvar'); }
+    finally { setSaving(false); }
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
-      <div className="flex justify-between items-center px-2">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-2xl font-bold text-[#2D3A3A]">Modelos de Avaliação</h3>
-          <p className="text-sm text-[#7A7D71]">Total: {filteredForms.length} {filteredForms.length === 1 ? 'formulário exibido' : 'formulários exibidos'}.</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="relative hidden md:block">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#7A7D71]" />
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
             <input
               type="text"
-              placeholder="Buscar formulário ou equipe..."
+              placeholder="Buscar formulário..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="bg-white border border-[#E2E4D8] rounded-xl py-2 pl-9 pr-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none w-64 text-[#2D3A3A] placeholder-[#7A7D71]"
+              className="w-full bg-surface-card border border-surface-border rounded-xl py-2 pl-9 pr-4 text-xs font-semibold focus:border-brand-accent focus:outline-none"
             />
           </div>
-          <select
+          <Select 
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value as any)}
-            className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-semibold text-[#7A7D71] focus:border-[#A7C0A5] focus:outline-none"
-          >
-            <option value="active">Ativos</option>
-            <option value="inactive">Desativados</option>
-          </select>
-          <button
-            onClick={() => {
-              setEditingForm({ title: '', description: '', team_id: '', sections: [], critical_errors: [] });
-              setIsModalOpen(true);
-            }}
-            className="bg-[#2D3A3A] text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 flex items-center gap-2 transition-all">
-            <Plus className="w-4 h-4" /> Novo Formulário
-          </button>
+            options={[{ value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Desativados' }]}
+          />
         </div>
+        <Button onClick={() => { setEditingForm({ title: '', description: '', team_id: '', sections: [], critical_errors: [] }); setIsModalOpen(true); }} icon={<Plus className="w-4 h-4" />}>Novo Formulário</Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredForms.map(f => (
-          <div key={f.id} className={`bg-white rounded-3xl border border-[#E2E4D8] p-6 shadow-sm group hover:shadow-md transition-shadow cursor-pointer relative flex flex-col ${f.active === false ? 'opacity-60 bg-[#F9F9F6]' : ''}`} onClick={() => { setEditingForm(f); setIsModalOpen(true); }}>
-            <div className="absolute top-4 right-4 flex gap-1.5 transition-opacity">
-              {deleteConfirmId === f.id ? (
-                <>
-                  <button onClick={(e) => handleDeleteForm(e, f.id)} className="px-2 py-1 bg-red-500 text-white text-[10px] uppercase font-bold tracking-widest rounded transition-colors relative z-10">Confirmar</button>
-                  <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="px-2 py-1 bg-[#E2E4D8] text-[#2D3A3A] text-[10px] uppercase font-bold tracking-widest rounded transition-colors relative z-10">Cancelar</button>
-                </>
-              ) : f.active === false ? (
-                <button
-                  onClick={(e) => handleActivateForm(e, f.id)}
-                  className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors relative z-10"
-                  title="Reativar"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setEditingForm(f); setIsModalOpen(true); }}
-                    className="p-2 rounded-lg hover:bg-[#F9F9F6] text-[#7A7D71] hover:text-[#2D3A3A] transition-colors relative z-10"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(f.id); }}
-                    className="p-2 rounded-lg hover:bg-red-50 text-[#7A7D71] hover:text-red-500 transition-colors relative z-10"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </>
-              )}
+          <Card key={f.id} className="group hover:border-brand-accent transition-all cursor-pointer" onClick={() => { setEditingForm(f); setIsModalOpen(true); }}>
+            <div className="flex justify-between items-start mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-brand-subtle flex items-center justify-center text-brand-primary">
+                <ClipboardList className="w-5 h-5" />
+              </div>
+              <Badge variant="neutral">{f.team_id ? teams.find(t => t.id === f.team_id)?.name : 'Geral'}</Badge>
             </div>
-            <div className="flex flex-col items-start gap-2 mb-2 pr-16">
-              <h4 className="font-bold text-xl text-[#2D3A3A] leading-tight">{f.title}</h4>
-              {f.active === false && <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-bold uppercase tracking-widest w-max">Desativado</span>}
+            <h4 className="font-black text-brand-primary uppercase tracking-tight mb-2">{f.title}</h4>
+            <p className="text-xs text-brand-muted line-clamp-2 mb-4">{f.description}</p>
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] font-black uppercase text-brand-highlight">{f.sections.length} Pilares</span>
+              <span className="text-[10px] font-black uppercase text-brand-highlight">{f.critical_errors?.length || 0} Críticos</span>
             </div>
-            <p className="text-sm text-[#7A7D71] mb-4 flex-1">{f.description}</p>
-            <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-[#7A7D71]">
-              <span>{f.sections.length} Pilares</span>
-              {f.team_id && <span>{teams.find(t => t.id === f.team_id)?.name || 'Geral'}</span>}
-            </div>
-          </div>
+          </Card>
         ))}
       </div>
 
-      {filteredForms.length === 0 && (
-        <div className="p-16 text-center bg-[#FBFBF9] rounded-[40px] border border-[#E2E4D8] shadow-sm">
-          <ClipboardList className="w-12 h-12 mx-auto mb-4 text-[#A7C0A5]" />
-          <p className="text-sm font-semibold tracking-wider text-[#7A7D71] uppercase">Nenhum formulário cadastrado</p>
-        </div>
-      )}
-
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/40 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-white rounded-[32px] flex flex-col w-full max-w-4xl max-h-[90vh] shadow-2xl overflow-hidden"
-          >
-            <div className="p-8 pb-6 border-b border-[#E2E4D8] flex-shrink-0 relative">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="absolute right-6 top-6 p-2 rounded-xl text-[#7A7D71] hover:bg-[#F0F1E8] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <h3 className="text-2xl font-bold text-[#2D3A3A]">{editingForm.id ? 'Editar Formulário' : 'Novo Formulário'}</h3>
-            </div>
-
-            <div className="p-8 overflow-y-auto flex-1 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Título do Formulário</label>
-                  <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={editingForm.title} onChange={e => setEditingForm({ ...editingForm, title: e.target.value })} placeholder="Ex: Avaliação de Suporte Técnico" />
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <Card className="max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+              <header className="flex items-center justify-between p-6 border-b border-surface-border">
+                <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Editor de Formulário</h3>
+                <button onClick={() => setIsModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
+              </header>
+              <div className="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Título</label>
+                    <input type="text" className="bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={editingForm.title} onChange={e => setEditingForm({...editingForm, title: e.target.value})} />
+                  </div>
+                  <Select label="Equipe" value={editingForm.team_id || ''} onChange={e => setEditingForm({...editingForm, team_id: e.target.value})} options={[{ value: '', label: 'Geral' }, ...teams.map(t => ({ value: t.id, label: t.name }))]} />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-2">Equipe (Opcional)</label>
-                  <select
-                    className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none appearance-none"
-                    value={editingForm.team_id || ''}
-                    onChange={e => setEditingForm({ ...editingForm, team_id: e.target.value })}
-                  >
-                    <option value="">Todas as Equipes (Geral)</option>
-                    {teams.filter(t => t.active !== false).map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Descrição</label>
+                  <textarea className="bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none min-h-[100px]" value={editingForm.description} onChange={e => setEditingForm({...editingForm, description: e.target.value})} />
+                </div>
+                
+                <div className="flex items-center justify-between pt-6 border-t border-surface-subtle">
+                  <h4 className="text-sm font-black text-brand-primary uppercase tracking-widest">Pilares e Questões</h4>
+                  <Button variant="outline" size="sm" icon={<Plus className="w-3 h-3" />}>Novo Pilar</Button>
+                </div>
+                
+                <div className="bg-surface-bg/30 p-6 rounded-[24px] border border-dashed border-surface-border text-center">
+                  <p className="text-brand-muted text-xs font-bold">Configure os pilares e critérios para gerar a nota da monitoria.</p>
                 </div>
               </div>
-
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 mt-8 gap-4">
-                  <div>
-                    <h4 className="text-lg font-bold text-[#2D3A3A]">Pilares de Avaliação</h4>
-                    <p className="text-sm font-semibold mt-1 flex items-center gap-2">
-                      <span className={totalWeight === 100 ? "text-green-600" : "text-amber-600"}>Peso Total: {totalWeight}%</span>
-                      <span className="text-[#7A7D71] text-xs">(Restante: {remainingWeight}%)</span>
-                    </p>
-                  </div>
-                  <button onClick={handleAddSection} className="text-sm font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors flex items-center gap-1"><Plus className="w-4 h-4" /> Adicionar Pilar</button>
-                </div>
-
-                <div className="space-y-6">
-                  {editingForm.sections?.map((section, sIdx) => (
-                    <div key={section.id} className="p-6 border border-[#E2E4D8] rounded-3xl bg-[#FBFBF9]">
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
-                          <div className="md:col-span-3">
-                            <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-1">Nome do Pilar</label>
-                            <input type="text" className="w-full bg-white border border-[#E2E4D8] rounded-xl py-2 px-3 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={section.title} onChange={e => handleUpdateSection(section.id, 'title', e.target.value)} placeholder="Ex: Pilar Técnico" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold tracking-widest text-[#7A7D71] uppercase mb-1">Peso (%)</label>
-                            <input type="number" className="w-full bg-white border border-[#E2E4D8] rounded-xl py-2 px-3 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={section.weight || 0} onChange={e => handleUpdateSection(section.id, 'weight', Number(e.target.value))} placeholder="35" />
-                          </div>
-                        </div>
-                        <button onClick={() => handleRemoveSection(section.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg mt-5"><Trash2 className="w-4 h-4" /></button>
-                      </div>
-
-                      <div className="pl-4 border-l-2 border-[#E2E4D8] space-y-3 mt-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-bold uppercase tracking-widest text-[#7A7D71]">Critérios</span>
-                          <button onClick={() => handleAddQuestion(section.id)} className="text-xs font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors flex items-center gap-1"><Plus className="w-3 h-3" /> Novo Critério</button>
-                        </div>
-                        {section.questions.map((q, qIdx) => {
-                          const criteriaWeight = section.questions.length > 0 ? (Number(section.weight) || 0) / section.questions.length : 0;
-                          return (
-                            <div key={q.id} className="flex items-center gap-2">
-                              <input type="text" className="flex-1 bg-white border border-[#E2E4D8] rounded-xl py-2 px-3 text-sm focus:border-[#A7C0A5] focus:ring-1 focus:ring-[#A7C0A5] focus:outline-none" value={q.text} onChange={e => handleUpdateQuestion(section.id, q.id, e.target.value)} placeholder="Ex: Investigação de Histórico e Contexto" />
-                              <div className="px-3 py-2 bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl text-[11px] font-bold text-[#7A7D71] whitespace-nowrap" title={`Representa ${criteriaWeight.toFixed(1)}% do pilar`}>
-                                {criteriaWeight.toFixed(1)}% do pilar
-                              </div>
-                              <div className="px-3 py-2 bg-[#F0F1E8] rounded-xl text-xs font-bold text-[#7A7D71]">SIM/NÃO/N/A</div>
-                              <button onClick={() => handleRemoveQuestion(section.id, q.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Seção de Erros Críticos */}
-                <div className="pt-8 border-t border-[#E2E4D8] mt-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h4 className="text-lg font-bold text-red-600">Erros Críticos</h4>
-                      <p className="text-sm text-red-400">Critérios que zeram a nota automaticamente se marcados.</p>
-                    </div>
-                    <button onClick={handleAddCriticalError} className="text-sm font-bold text-red-400 hover:text-red-600 transition-colors flex items-center gap-1">
-                      <Plus className="w-4 h-4" /> Adicionar Erro Crítico
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {(editingForm.critical_errors || []).map((q) => (
-                      <div key={q.id} className="flex items-center gap-2 bg-red-50/50 p-3 rounded-2xl border border-red-100">
-                        <AlertOctagon className="w-4 h-4 text-red-400 flex-shrink-0" />
-                        <input
-                          type="text"
-                          className="flex-1 bg-white border border-red-100 rounded-xl py-2 px-3 text-sm focus:border-red-300 focus:ring-1 focus:ring-red-300 focus:outline-none"
-                          value={q.text}
-                          onChange={e => handleUpdateCriticalError(q.id, e.target.value)}
-                          placeholder="Ex: Falha Ética ou de Segurança"
-                        />
-                        <button onClick={() => handleRemoveCriticalError(q.id)} className="p-2 text-red-400 hover:bg-red-100 rounded-lg">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                    {(editingForm.critical_errors || []).length === 0 && (
-                      <p className="text-center text-xs text-[#7A7D71] py-4 bg-[#F9F9F6] rounded-2xl border border-dashed border-[#E2E4D8]">
-                        Nenhum erro crítico configurado para este formulário.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-[#E2E4D8] flex-shrink-0 bg-white">
-              <button
-                onClick={handleSaveForm}
-                disabled={saving || totalWeight !== 100 || !editingForm.title || !editingForm.sections?.length || (editingForm.sections || []).some(s => (Number(s.weight) || 0) <= 0)}
-                className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:bg-[#7A7D71] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
-              >
-                <Save className="w-4 h-4" /> {saving ? 'Salvando...' : 'Salvar Formulário'}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </motion.div>
+              <footer className="p-6 border-t border-surface-border bg-white flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                <Button onClick={handleSaveForm} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Formulário'}</Button>
+              </footer>
+            </Card>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
 function RequestsManagement({ requests: initialRequests, users, teams, loadData }: { requests: AccessRequest[], users: User[], teams: Team[], loadData: () => void }) {
-  const [loading, setLoading] = useState(false);
   const [requests, setRequests] = useState<AccessRequest[]>(initialRequests);
-  const [requestStatusFilter, setRequestStatusFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
-
-  useEffect(() => {
-    setRequests(initialRequests);
-  }, [initialRequests]);
-
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
   const [approvingReq, setApprovingReq] = useState<any>(null);
   const [approveData, setApproveData] = useState<{ name: string, email: string, role: string, team_ids: string[] }>({ name: '', email: '', role: 'suporte', team_ids: [] });
   const [saving, setSaving] = useState(false);
 
-  const openApprove = (req: any) => {
-    setApprovingReq(req);
-    setApproveData({ name: req.name, email: req.email, role: 'suporte', team_ids: [] });
-    setIsApproveModalOpen(true);
-  };
+  useEffect(() => { setRequests(initialRequests); }, [initialRequests]);
 
   const handleApprove = async () => {
     setSaving(true);
     try {
-      const token = Math.random().toString(36).substr(2, 10);
-      const initialPassword = Math.random().toString(36).substr(2, 15); // Senha invisível apenas para criação
-      const userPayload = {
-        name: approveData.name,
-        email: approveData.email,
-        password: initialPassword,
-        role: approveData.role,
-        team_ids: approveData.team_ids || [],
-        active: true,
-        must_change_password: true,
-        reset_token: token
-      };
-
+      const payload = { ...approveData, active: true, must_change_password: true, reset_token: Math.random().toString(36).substr(2, 10) };
       if (!supabase) {
         await mockDb.update('access_requests', approvingReq.id, { status: 'approved' });
-        await mockDb.insert('users', { id: approveData.email, ...userPayload });
+        await mockDb.insert('users', { id: approveData.email, ...payload });
       } else {
         await supabase.from('access_requests').update({ status: 'approved' }).eq('id', approvingReq.id);
-
-        // Criar ou atualizar o usuário no banco (onConflict: email garante que não dê erro 409)
-        const { error: userError } = await supabase.from('users').upsert([userPayload], { onConflict: 'email' });
-        if (userError) throw userError;
-
-        // Chama a Edge Function para enviar o e-mail de boas-vindas
-        const { data: funcData, error: funcError } = await supabase.functions.invoke('send-email', {
-          body: { email: userPayload.email, name: userPayload.name, type: 'welcome', token }
-        });
-
-        if (funcError) {
-          console.error('Erro na Edge Function:', funcError);
-          throw new Error('Falha ao enviar e-mail de boas-vindas.');
-        }
+        await supabase.from('users').upsert([payload], { onConflict: 'email' });
+        await supabase.functions.invoke('send-email', { body: { email: payload.email, name: payload.name, type: 'welcome', token: payload.reset_token } });
       }
-
-      toast.success('Solicitação aprovada! E-mail de boas-vindas enviado com o link de acesso.');
+      toast.success('Solicitação aprovada e e-mail enviado!');
       setIsApproveModalOpen(false);
       loadData();
-    } catch (e) {
-      toast.error('Erro ao aprovar solicitação');
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { toast.error('Erro ao aprovar'); }
+    finally { setSaving(false); }
   };
 
   const handleReject = async (id: string) => {
     try {
-      if (!supabase) {
-        await mockDb.update('access_requests', id, { status: 'rejected' });
-      } else {
-        await supabase.from('access_requests').update({ status: 'rejected' }).eq('id', id);
-      }
-      toast.success('Solicitação rejeitada.');
+      if (!supabase) await mockDb.update('access_requests', id, { status: 'rejected' });
+      else await supabase.from('access_requests').update({ status: 'rejected' }).eq('id', id);
+      toast.success('Rejeitada.');
       loadData();
-    } catch (e) {
-      toast.error('Erro ao rejeitar solicitação');
-    }
+    } catch (e) { toast.error('Erro ao rejeitar'); }
   };
 
-  if (loading) return <div className="text-sm font-medium text-[#7A7D71]">Carregando solicitações...</div>;
-
-  const filteredRequests = requestStatusFilter === 'pending'
-    ? requests.filter(r => r.status === 'pending')
-    : requestStatusFilter === 'approved'
-      ? requests.filter(r => r.status === 'approved')
-      : requests.filter(r => r.status === 'rejected');
-
-  const pendingRequests = filteredRequests.filter(r => r.status === 'pending');
-  const pastRequests = filteredRequests.filter(r => r.status !== 'pending').sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const filtered = requests.filter(r => r.status === statusFilter);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
-      <div className="flex justify-between items-center px-2">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-2xl font-bold text-[#2D3A3A]">Solicitações de Acesso</h3>
-          <p className="text-sm text-[#7A7D71]">Total: {pendingRequests.length} {pendingRequests.length === 1 ? 'solicitação pendente' : 'solicitações pendentes'}.</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <select
-            value={requestStatusFilter}
-            onChange={e => setRequestStatusFilter(e.target.value as any)}
-            className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-semibold text-[#7A7D71] focus:border-[#A7C0A5] focus:outline-none"
-          >
-            <option value="pending">Pendentes</option>
-            <option value="approved">Aprovadas</option>
-            <option value="rejected">Recusadas</option>
-          </select>
-          <button
-            onClick={loadData}
-            className="text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors p-2 rounded-xl flex items-center gap-2 text-sm font-bold"
-          >
-            <RefreshCw className="w-4 h-4" /> Atualizar
-          </button>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <Select 
+          value={statusFilter} 
+          onChange={e => setStatusFilter(e.target.value as any)} 
+          options={[{ value: 'pending', label: 'Pendentes' }, { value: 'approved', label: 'Aprovadas' }, { value: 'rejected', label: 'Rejeitadas' }]} 
+        />
+        <Button variant="ghost" onClick={loadData} icon={<RefreshCw className="w-4 h-4" />}>Atualizar</Button>
       </div>
 
-      {pendingRequests.length === 0 && pastRequests.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-[#E2E4D8] p-12 text-center text-[#7A7D71]">
-          Nenhuma solicitação de acesso no momento.
-        </div>
-      ) : null}
-
-      {pendingRequests.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-xl font-bold text-[#2D3A3A]">Aguardando Aprovação</h3>
-          {pendingRequests.map(req => (
-            <div key={req.id} className="bg-white rounded-2xl border border-yellow-200 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-yellow-400" />
-              <div>
-                <h4 className="font-bold text-lg text-[#2D3A3A]">{req.name}</h4>
-                <div className="text-sm text-[#7A7D71] mt-1">{req.email}</div>
-                <div className="text-xs text-[#A7C0A5] mt-1">Solicitado em: {new Date(req.created_at).toLocaleString()}</div>
+      <div className="grid grid-cols-1 gap-4">
+        {filtered.map(req => (
+          <Card key={req.id} className={`flex flex-col md:flex-row items-center justify-between gap-6 border-l-4 ${req.status === 'pending' ? 'border-l-warning' : req.status === 'approved' ? 'border-l-brand-accent' : 'border-l-error'}`}>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-surface-bg flex items-center justify-center text-brand-muted">
+                <UserIcon className="w-6 h-6" />
               </div>
-              <div className="flex gap-2 w-full md:w-auto">
-                <button onClick={() => handleReject(req.id)} className="flex-1 md:flex-none px-6 py-2.5 bg-white border border-[#E2E4D8] rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 transition-colors">
-                  Recusar
-                </button>
-                <button onClick={() => openApprove(req)} className="flex-1 md:flex-none px-6 py-2.5 bg-[#A7C0A5] text-[#2D3A3A] rounded-xl text-sm font-bold hover:bg-[#8da38b] transition-colors">
-                  Revisar e aprovar
-                </button>
+              <div>
+                <h4 className="font-black text-brand-primary uppercase tracking-tight">{req.name}</h4>
+                <p className="text-xs font-bold text-brand-muted">{req.email}</p>
+                <p className="text-[10px] font-bold text-brand-highlight uppercase mt-1">Solicitado em: {new Date(req.created_at).toLocaleDateString()}</p>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {pastRequests.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-xl font-bold text-[#2D3A3A]">Histórico de Solicitações</h3>
-          {pastRequests.map(req => (
-            <div key={req.id} className="bg-[#F9F9F6] rounded-2xl border border-[#E2E4D8] p-4 flex justify-between items-center opacity-80">
-              <div>
-                <div className="font-bold text-sm text-[#3D4035]">{req.name} <span className="font-normal text-[#7A7D71]">({req.email})</span></div>
+            {req.status === 'pending' && (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => handleReject(req.id)} className="text-error hover:bg-red-50">Recusar</Button>
+                <Button size="sm" onClick={() => { setApprovingReq(req); setApproveData({ name: req.name, email: req.email, role: 'suporte', team_ids: [] }); setIsApproveModalOpen(true); }}>Revisar e Aprovar</Button>
               </div>
-              <div className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-widest ${req.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {req.status === 'approved' ? 'Aprovado' : 'Recusado'}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <ApprovalModal
-        isOpen={isApproveModalOpen}
-        onClose={() => setIsApproveModalOpen(false)}
-        data={approveData}
-        onConfirm={handleApprove}
-        teams={teams}
-        saving={saving}
-      />
-    </motion.div>
-  );
-}
+            )}
+            {req.status !== 'pending' && <Badge variant={req.status === 'approved' ? 'success' : 'error'}>{req.status === 'approved' ? 'Aprovado' : 'Recusado'}</Badge>}
+          </Card>
+        ))}
+        {filtered.length === 0 && <Card className="py-20 text-center"><p className="text-brand-muted font-bold">Nenhuma solicitação nesta categoria.</p></Card>}
+      </div>
 
-function ApprovalModal({ isOpen, onClose, data, onConfirm, teams, saving }: any) {
-  const [formData, setFormData] = useState(data);
-
-  useEffect(() => {
-    setFormData(data);
-  }, [data]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-[#2D3A3A]/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl overflow-hidden border border-[#E2E4D8]">
-        <div className="p-8">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-2xl font-bold text-[#2D3A3A]">Aprovar solicitação</h3>
-            <button onClick={onClose} className="p-2 hover:bg-[#F9F9F6] rounded-xl transition-colors">
-              <XIcon className="w-5 h-5 text-[#7A7D71]" />
-            </button>
-          </div>
-
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nome completo</label>
-                <input type="text" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">E-mail</label>
-                <input type="email" className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Perfil de acesso</label>
-                <select className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
-                  <option value="admin">Administrador</option>
-                  <option value="gestor_suporte">Gest. Suporte</option>
-                  <option value="gestor_qualidade">Gest. Qualidade</option>
-                  <option value="qualidade">Auditor</option>
-                  <option value="suporte">Agente</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Equipes</label>
-                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl p-3">
-                  {teams.filter((t: any) => t.active !== false).map((t: any) => (
-                    <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[#E2E4D8] p-2 rounded-xl transition-colors">
-                      <input
-                        type="checkbox"
-                        className="rounded border-[#E2E4D8] text-[#A7C0A5] focus:ring-[#A7C0A5]"
-                        checked={formData.team_ids?.includes(t.id) || false}
-                        onChange={(e) => {
-                          const newIds = e.target.checked
-                            ? [...(formData.team_ids || []), t.id]
-                            : (formData.team_ids || []).filter((id: string) => id !== t.id);
-                          setFormData({ ...formData, team_ids: newIds });
-                        }}
-                      />
-                      <span className="truncate">{t.name}</span>
-                    </label>
-                  ))}
+      <AnimatePresence>
+        {isApproveModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <Card className="max-w-md w-full">
+              <header className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Aprovar Solicitação</h3>
+                <button onClick={() => setIsApproveModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
+              </header>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome</label>
+                    <input type="text" className="w-full bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
+                  </div>
+                  <Select label="Perfil" value={approveData.role} onChange={e => setApproveData({...approveData, role: e.target.value})} options={[{ value: 'admin', label: 'Admin' }, { value: 'gestor_qualidade', label: 'G. Qualidade' }, { value: 'gestor_suporte', label: 'G. Suporte' }, { value: 'qualidade', label: 'Auditor' }, { value: 'suporte', label: 'Agente' }]} />
                 </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipes</label>
+                  <div className="flex flex-wrap gap-2 p-3 bg-surface-bg border border-surface-border rounded-xl">
+                    {teams.map(t => (
+                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${approveData.team_ids?.includes(t.id) ? 'bg-brand-primary text-white border-brand-primary' : 'bg-white text-brand-muted border-surface-border'}`}>
+                        <input type="checkbox" className="hidden" checked={approveData.team_ids?.includes(t.id)} onChange={e => {
+                          const newIds = e.target.checked ? [...approveData.team_ids, t.id] : approveData.team_ids.filter(id => id !== t.id);
+                          setApproveData({...approveData, team_ids: newIds});
+                        }} />
+                        {t.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <Button className="w-full mt-4" onClick={handleApprove} disabled={saving} icon={<Check className="w-4 h-4" />}>{saving ? 'Processando...' : 'Confirmar Aprovação'}</Button>
               </div>
-            </div>
-
-            <div className="bg-[#F9F9F6] p-4 rounded-2xl border border-blue-100 flex gap-3 items-start">
-              <Shield className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-700 leading-relaxed">
-                Ao aprovar, o usuário receberá um e-mail com um link seguro para definir sua senha de acesso.
-              </p>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <button onClick={onClose} className="flex-1 px-6 py-4 border border-[#E2E4D8] rounded-2xl text-sm font-bold text-[#7A7D71] hover:bg-[#F9F9F6] transition-colors">
-                Cancelar
-              </button>
-              <button onClick={() => onConfirm(formData)} disabled={saving} className="flex-1 px-6 py-4 bg-[#2D3A3A] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 disabled:opacity-50 transition-all">
-                {saving ? 'Aprovando...' : 'Confirmar aprovação'}
-              </button>
-            </div>
+            </Card>
           </div>
-        </div>
-      </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

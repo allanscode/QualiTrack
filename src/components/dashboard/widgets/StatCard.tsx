@@ -1,4 +1,5 @@
 import React from 'react';
+import Card from '../../ui/Card';
 
 interface StatCardProps {
   title: string;
@@ -12,16 +13,13 @@ interface StatCardProps {
 
 export default function StatCard({ title, value, sub, good, icon, accent, onClick }: StatCardProps) {
   return (
-    <div 
-      onClick={onClick}
-      className={`bg-white p-5 rounded-3xl border border-[#E2E4D8] shadow-sm transition-all ${onClick ? 'cursor-pointer hover:shadow-md hover:border-[#C5C7BB] active:scale-[0.98]' : 'hover:shadow-md'}`}
-    >
+    <Card onClick={onClick}>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[#7A7D71]">{title}</span>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-brand-muted">{title}</span>
         <div className={`${accent}`}>{icon}</div>
       </div>
-      <p className="text-3xl font-black text-[#2D3A3A] leading-none mb-1.5">{value}</p>
-      <p className={`text-xs font-semibold ${good ? 'text-[#7A7D71]' : 'text-red-500'}`}>{sub}</p>
-    </div>
+      <p className="text-3xl font-black text-brand-primary leading-none mb-1.5">{value}</p>
+      <p className={`text-xs font-semibold ${good ? 'text-brand-muted' : 'text-error'}`}>{sub}</p>
+    </Card>
   );
 }

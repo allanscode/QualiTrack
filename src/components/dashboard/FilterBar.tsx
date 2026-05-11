@@ -1,6 +1,8 @@
 import React from 'react';
 import { useDashboard } from './DashboardContext';
-import { Search, XCircle, Filter } from 'lucide-react';
+import { Filter, XCircle } from 'lucide-react';
+import Select from '../ui/Select';
+import Button from '../ui/Button';
 
 export default function FilterBar() {
   const { user, filters, setFilters, users, teams, forms } = useDashboard();
@@ -22,12 +24,10 @@ export default function FilterBar() {
 
   const hasFilters = filters.teamId || filters.agentId || filters.auditorId || filters.formId || filters.status || filters.channel;
 
-  // Filter visibility logic based on role
   const canFilterAgents = user.role !== 'suporte';
   const canFilterAuditors = user.role !== 'suporte' && user.role !== 'qualidade';
-  const canFilterTeams = user.role !== 'suporte';
+  const canFilterTeams = true;
 
-  // Available options
   const availableTeams = user.role === 'admin' || user.role === 'gestor_qualidade' || user.role === 'qualidade'
     ? teams 
     : teams.filter(t => user.team_ids?.includes(t.id));
@@ -41,104 +41,85 @@ export default function FilterBar() {
     : [];
 
   return (
-    <div className="bg-white p-4 rounded-3xl border border-[#E2E4D8] shadow-sm mb-6 flex flex-wrap items-center gap-2 lg:flex-nowrap lg:overflow-x-auto no-scrollbar">
+    <div className="bg-surface-card p-4 rounded-panel border border-surface-border shadow-premium mb-6 flex flex-wrap items-center gap-4 lg:flex-nowrap lg:overflow-x-auto no-scrollbar">
       <div className="flex items-center gap-2 mr-2">
-        <Filter className="w-4 h-4 text-[#7A7D71]" />
-        <span className="text-xs font-bold uppercase tracking-widest text-[#7A7D71]">Filtros</span>
+        <Filter className="w-4 h-4 text-brand-muted" />
+        <span className="text-xs font-bold uppercase tracking-widest text-brand-muted">Filtros</span>
       </div>
 
-      {/* Date Range */}
-      <div className="flex items-center gap-1.5 bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2">
+      <div className="flex items-center gap-1.5 bg-surface-bg border border-surface-border rounded-xl px-3 py-2">
         <input 
           type="date" 
           value={filters.startDate} 
           onChange={e => setFilters(f => ({ ...f, startDate: e.target.value }))} 
-          className="bg-transparent border-none p-0 text-xs font-medium text-[#2D3A3A] focus:ring-0 w-[110px]" 
+          className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary focus:ring-0 w-[110px]" 
         />
-        <span className="text-[#C5C7BB] text-xs">→</span>
+        <span className="text-brand-highlight text-xs">→</span>
         <input 
           type="date" 
           value={filters.endDate} 
           onChange={e => setFilters(f => ({ ...f, endDate: e.target.value }))} 
-          className="bg-transparent border-none p-0 text-xs font-medium text-[#2D3A3A] focus:ring-0 w-[110px]" 
+          className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary focus:ring-0 w-[110px]" 
         />
       </div>
 
-      {/* Team Filter */}
       {canFilterTeams && (
-        <select
+        <Select
           value={filters.teamId}
           onChange={e => setFilters(f => ({ ...f, teamId: e.target.value }))}
-          className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-medium text-[#2D3A3A] focus:border-[#A7C0A5] focus:outline-none"
-        >
-          <option value="">Todas as equipes</option>
-          {availableTeams.filter(t => t.active !== false).map(t => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
+          options={[
+            { value: '', label: 'Todas as equipes' },
+            ...availableTeams.filter(t => t.active !== false).map(t => ({ value: t.id, label: t.name }))
+          ]}
+        />
       )}
 
-      {/* Agent Filter */}
       {canFilterAgents && (
-        <select
+        <Select
           value={filters.agentId}
           onChange={e => setFilters(f => ({ ...f, agentId: e.target.value }))}
-          className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-medium text-[#2D3A3A] focus:border-[#A7C0A5] focus:outline-none"
-        >
-          <option value="">Todos os agentes</option>
-          {availableAgents.filter(u => u.active !== false).map(u => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
+          options={[
+            { value: '', label: 'Todos os agentes' },
+            ...availableAgents.filter(u => u.active !== false).map(u => ({ value: u.id, label: u.name }))
+          ]}
+        />
       )}
 
-      {/* Auditor Filter */}
       {canFilterAuditors && (
-        <select
+        <Select
           value={filters.auditorId}
           onChange={e => setFilters(f => ({ ...f, auditorId: e.target.value }))}
-          className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-medium text-[#2D3A3A] focus:border-[#A7C0A5] focus:outline-none"
-        >
-          <option value="">Todos os auditores</option>
-          {availableAuditors.filter(u => u.active !== false).map(u => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
+          options={[
+            { value: '', label: 'Todos os auditores' },
+            ...availableAuditors.filter(u => u.active !== false).map(u => ({ value: u.id, label: u.name }))
+          ]}
+        />
       )}
 
-      {/* Form (Operation) Filter */}
-      <select
-        value={filters.formId}
-        onChange={e => setFilters(f => ({ ...f, formId: e.target.value }))}
-        className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-medium text-[#2D3A3A] focus:border-[#A7C0A5] focus:outline-none max-w-[200px] truncate"
-      >
-        <option value="">Todos os formulários</option>
-        {forms.filter(form => form.active !== false).map(form => (
-          <option key={form.id} value={form.id}>{form.title}</option>
-        ))}
-      </select>
+      {/* Form filter removed as per user request */}
 
-      {/* Channel Filter */}
-      <select
+      <Select
         value={filters.channel}
         onChange={e => setFilters(f => ({ ...f, channel: e.target.value }))}
-        className="bg-[#F9F9F6] border border-[#E2E4D8] rounded-xl px-3 py-2 text-xs font-medium text-[#2D3A3A] focus:border-[#A7C0A5] focus:outline-none"
-      >
-        <option value="">Todos os canais</option>
-        <option value="Chat">Chat</option>
-        <option value="Email">Email</option>
-        <option value="Telefone">Telefone</option>
-        <option value="WhatsApp">WhatsApp</option>
-      </select>
+        options={[
+          { value: '', label: 'Todos os canais' },
+          { value: 'Chat', label: 'Chat' },
+          { value: 'Email', label: 'Email' },
+          { value: 'Telefone', label: 'Telefone' },
+          { value: 'WhatsApp', label: 'WhatsApp' }
+        ]}
+      />
 
-      {/* Clear Filters */}
       {hasFilters && (
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={handleClear}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-100 bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors ml-auto"
+          icon={<XCircle className="w-3.5 h-3.5" />}
+          className="ml-auto border-red-100 bg-red-50 text-red-600 hover:bg-red-100"
         >
-          <XCircle className="w-3.5 h-3.5" /> Limpar
-        </button>
+          Limpar
+        </Button>
       )}
     </div>
   );

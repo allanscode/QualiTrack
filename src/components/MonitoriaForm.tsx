@@ -1,9 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus } from '../types';
-import { ChevronRight, ChevronLeft, Save, X, AlertOctagon, Info, CheckCircle2, MessageSquare } from 'lucide-react';
+import { 
+  ChevronRight, 
+  ChevronLeft, 
+  Save, 
+  X, 
+  AlertOctagon, 
+  Info, 
+  CheckCircle2, 
+  MessageSquare, 
+  Hash,
+  Clock,
+  User as UserIcon,
+  Tag,
+  Calendar,
+  AlertTriangle,
+  History
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { addBusinessHours } from '../lib/businessHours';
+import Card from './ui/Card';
+import Button from './ui/Button';
+import Badge from './ui/Badge';
+import Select from './ui/Select';
 
 const CHANNELS = ['Chat', 'Email', 'Telefone', 'WhatsApp'] as const;
 
@@ -18,8 +39,10 @@ export default function MonitoriaForm({
   onSaved: () => void;
   initialData?: Monitoria;
 }) {
-  const isViewOnly = !!initialData && !(initialData as any)?._reevaluate;
+  const isAdmin = user?.role === 'admin';
+  const isViewOnly = !!initialData && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit;
   const isReevaluating = !!(initialData as any)?._reevaluate;
+  const isAdminEdit = !!(initialData as any)?._adminEdit;
   
   const [step, setStep] = useState(1);
   const [forms, setForms] = useState<EvaluationForm[]>([]);
@@ -27,7 +50,7 @@ export default function MonitoriaForm({
   const [teams, setTeams] = useState<Team[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const today = new Date().toLocaleDateString('sv-SE');
+  const today = new Date().toISOString().split('T')[0];
 
   const [header, setHeader] = useState({
     form_id: initialData?.form_id || '',
@@ -43,7 +66,7 @@ export default function MonitoriaForm({
     evaluator_note: initialData?.evaluator_note || '',
     client_contact_log: initialData?.client_contact_log || '',
     client_contact_success: initialData?.client_contact_success || false,
-    reevaluation_justification: '', // New field for reevaluation
+    reevaluation_justification: '',
   });
 
   const [scores, setScores] = useState<Record<string, 'SIM' | 'NAO' | 'NA'>>(initialData?.answers || {});
@@ -120,22 +143,28 @@ export default function MonitoriaForm({
     try {
       const nowTs = new Date().toISOString();
       const scoreNote = isReevaluating ? `[DE ${initialData?.score}% PARA ${score}%] ` : '';
+      let historyNote = isReevaluating ? `${scoreNote}${header.reevaluation_justification}` : undefined;
+      
+      if (isAdminEdit && initialData) {
+        const changes: string[] = [];
+        if (header.ticket_id !== initialData.ticket_id) changes.push(`Ticket: ${initialData.ticket_id} → ${header.ticket_id}`);
+        if (header.ticket_date !== initialData.ticket_date) changes.push(`Data do ticket: ${initialData.ticket_date} → ${header.ticket_date}`);
+        if (score !== initialData.score) changes.push(`Score: ${initialData.score}% → ${score}%`);
+        historyNote = changes.length > 0 ? changes.join(' | ') : 'Edição administrativa';
+      }
+
       const historyEntry: MonitoriaHistoryEntry = { 
-        action: isReevaluating ? 'Monitoria Reavaliada' : 'Monitoria Criada', 
+        action: isAdminEdit ? 'Edição pelo Administrador' : (isReevaluating ? 'Monitoria Reavaliada' : 'Monitoria Criada'), 
         by_id: user.id, 
         by_name: user.name, 
         at: nowTs,
-        note: isReevaluating ? `${scoreNote}${header.reevaluation_justification}` : undefined
+        note: historyNote
       };
       
       const getDeadline = () => {
-        const d = new Date();
-        if (isReevaluating) {
-          d.setHours(d.getHours() + 24); // 24h after reevaluation
-        } else {
-          d.setHours(d.getHours() + 48); // 48h for initial review
-        }
-        return d.toISOString();
+        const now = new Date();
+        if (isReevaluating) return addBusinessHours(now, 24).toISOString();
+        return addBusinessHours(now, 48).toISOString();
       };
 
       const payload = {
@@ -155,13 +184,13 @@ export default function MonitoriaForm({
         critical_error_observations: criticalErrorObservations,
         selected_critical_errors: Object.keys(criticalErrors).filter(id => criticalErrors[id]),
         score,
-        status: isReevaluating ? 'pendente_revisao' : (initialData?.status || 'pendente_revisao'),
+        status: isAdminEdit ? (initialData?.status || 'pendente_revisao') : (isReevaluating ? 'pendente_revisao' : (initialData?.status || 'pendente_revisao')),
         evaluator_note: header.evaluator_note,
         client_contact_log: header.client_contact_log,
         client_contact_success: header.client_contact_success,
         active: true,
         history: [...(initialData?.history || []), historyEntry],
-        deadline_at: initialData?.deadline_at && !isReevaluating ? initialData.deadline_at : getDeadline(),
+        deadline_at: (initialData?.deadline_at && !isReevaluating && !isAdminEdit) ? initialData.deadline_at : getDeadline(),
         updated_at: nowTs,
       };
 
@@ -181,234 +210,215 @@ export default function MonitoriaForm({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }}>
-        
-        {/* Header */}
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-          <div>
-            <h2 className="text-xl font-bold text-[#2D3A3A]">{isViewOnly ? 'Visualizar Monitoria' : isReevaluating ? 'Reavaliar Monitoria' : 'Nova Monitoria'}</h2>
-            {!isViewOnly && <p className="text-[10px] font-bold text-[#7A7D71] uppercase tracking-widest mt-1">Passo {step} de 3 — {step === 1 ? 'Identificação' : step === 2 ? 'Avaliação' : 'Encerramento'}</p>}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98, y: 10 }} 
+        animate={{ opacity: 1, scale: 1, y: 0 }} 
+        className="bg-surface-bg rounded-[32px] shadow-2xl w-full max-w-5xl flex flex-col overflow-hidden" 
+        style={{ maxHeight: '92vh' }}
+      >
+        {/* Top Header */}
+        <div className="p-6 border-b border-surface-border flex items-center justify-between bg-white">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-brand-subtle flex items-center justify-center text-brand-primary">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-brand-primary tracking-tight uppercase">
+                {isViewOnly ? 'Visualizar' : isAdminEdit ? 'Editar (Admin)' : isReevaluating ? 'Reavaliar' : 'Nova'} Monitoria
+              </h2>
+              {initialData?.display_id && <Badge variant="info" className="mt-1">Mon: {initialData.display_id}</Badge>}
+            </div>
           </div>
-          <button onClick={onCancel} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><X className="w-5 h-5 text-[#7A7D71]" /></button>
+          <button onClick={onCancel} className="p-2 hover:bg-surface-subtle rounded-xl transition-all text-brand-muted"><X className="w-6 h-6" /></button>
         </div>
 
-        {/* Stepper Progress */}
-        {!isViewOnly && (
-          <div className="px-10 py-4 flex gap-2 bg-white">
-            {[1, 2, 3].map(s => (
-              <div key={s} className={`h-1 flex-1 rounded-full transition-all ${s <= step ? 'bg-[#A7C0A5]' : 'bg-gray-100'}`} />
-            ))}
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar">
-          {initialData?.contestation_reason && (
-            <div className="bg-orange-50 border border-orange-100 p-5 rounded-xl">
-              <p className="text-[10px] font-bold text-orange-700 uppercase mb-1 flex items-center gap-2"><Info className="w-3 h-3" /> Motivo da Contestação</p>
-              <p className="text-sm text-orange-900 font-medium italic">"{initialData.contestation_reason}"</p>
+        {/* Form Content */}
+        <div className="flex-1 overflow-y-auto p-8 space-y-10 no-scrollbar">
+          {/* Stepper Progress */}
+          {!isViewOnly && (
+            <div className="flex items-center justify-center gap-10">
+              {[
+                { n: 1, label: 'Identificação' },
+                { n: 2, label: 'Avaliação' },
+                { n: 3, label: 'Fechamento' }
+              ].map(s => (
+                <div key={s.n} className="flex flex-col items-center gap-2 group">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black transition-all ${step >= s.n ? 'bg-brand-primary text-white' : 'bg-surface-subtle text-brand-muted'}`}>
+                    {s.n}
+                  </div>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted'}`}>{s.label}</span>
+                </div>
+              ))}
             </div>
           )}
 
           {step === 1 && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-              <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#7A7D71] uppercase tracking-wider">Ficha de Avaliação *</label>
-                  <select value={header.form_id} onChange={e => setHeader({...header, form_id: e.target.value})} disabled={isViewOnly || isReevaluating} className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm focus:outline-none focus:border-[#A7C0A5]">
-                    <option value="">Selecione...</option>
-                    {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#7A7D71] uppercase tracking-wider">Técnico Auditado *</label>
-                  <select value={header.evaluated_id} onChange={e => setHeader({...header, evaluated_id: e.target.value})} disabled={isViewOnly || isReevaluating} className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm focus:outline-none focus:border-[#A7C0A5]">
-                    <option value="">Selecione...</option>
-                    {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#7A7D71] uppercase tracking-wider">ID do Ticket *</label>
-                  <input type="text" value={header.ticket_id} onChange={e => setHeader({...header, ticket_id: e.target.value})} disabled={isViewOnly || isReevaluating} className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm focus:outline-none focus:border-[#A7C0A5]" placeholder="Ex: 123456" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#7A7D71] uppercase tracking-wider">Equipe *</label>
-                  <select value={header.team_id} onChange={e => setHeader({...header, team_id: e.target.value})} disabled={isViewOnly || isReevaluating} className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm focus:outline-none focus:border-[#A7C0A5] transition-all hover:border-gray-300">
-                    <option value="">Selecione...</option>
-                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#7A7D71] uppercase tracking-wider">Canal</label>
-                  <select value={header.channel} onChange={e => setHeader({...header, channel: e.target.value as any})} disabled={isViewOnly || isReevaluating} className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm focus:outline-none focus:border-[#A7C0A5] transition-all hover:border-gray-300">
-                    {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </section>
-
-              <section className="space-y-6">
-                <div className="space-y-4">
-                  <label className="text-xs font-bold text-[#7A7D71] uppercase tracking-wider">Pesquisa de Satisfação</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {(['Positiva', 'Negativa', 'Sem pesquisa'] as const).map(opt => (
-                      <button key={opt} onClick={() => !isViewOnly && !isReevaluating && setHeader({...header, satisfaction_result: opt})} className={`p-4 rounded-2xl border-2 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] ${header.satisfaction_result === opt ? 'bg-[#2D3A3A] border-[#2D3A3A] text-white shadow-lg shadow-black/10' : 'bg-white border-gray-100 text-[#7A7D71] hover:border-gray-200'}`} disabled={isViewOnly || isReevaluating}>
-                        {opt === 'Positiva' ? '😊 Positiva' : opt === 'Negativa' ? '😞 Negativa' : '🔇 Sem pesquisa'}
-                      </button>
-                    ))}
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
+              <Card className="md:col-span-2 bg-white/50 border-dashed">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Select 
+                    label="Ficha de Avaliação *"
+                    value={header.form_id} 
+                    onChange={e => setHeader({...header, form_id: e.target.value})} 
+                    disabled={isViewOnly || isReevaluating}
+                    options={[{ value: '', label: 'Selecione o formulário...' }, ...forms.map(f => ({ value: f.id, label: f.title }))]}
+                  />
+                  <Select 
+                    label="Técnico Auditado *"
+                    value={header.evaluated_id} 
+                    onChange={e => setHeader({...header, evaluated_id: e.target.value})} 
+                    disabled={isViewOnly || isReevaluating}
+                    options={[{ value: '', label: 'Selecione o agente...' }, ...agents.map(a => ({ value: a.id, label: a.name }))]}
+                  />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">ID do Ticket *</label>
+                    <input type="text" value={header.ticket_id} onChange={e => setHeader({...header, ticket_id: e.target.value})} disabled={isViewOnly || isReevaluating} className="bg-white border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" placeholder="Ex: 887234" />
                   </div>
+                  <Select 
+                    label="Equipe *"
+                    value={header.team_id} 
+                    onChange={e => setHeader({...header, team_id: e.target.value})} 
+                    disabled={isViewOnly || isReevaluating}
+                    options={[{ value: '', label: 'Selecione a equipe...' }, ...teams.map(t => ({ value: t.id, label: t.name }))]}
+                  />
                 </div>
+              </Card>
 
-                {header.satisfaction_result && header.satisfaction_result !== 'Sem pesquisa' && (
-                  <div className="space-y-4 bg-gray-50/50 p-6 rounded-2xl border border-gray-100 animate-in fade-in zoom-in-95">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-[#3D4035]">O cliente deixou algum registro?</p>
-                      <div className="flex gap-1 bg-white p-1 rounded-xl border border-gray-100">
-                        <button onClick={() => !isViewOnly && setHeader({...header, satisfaction_has_record: true})} className={`px-4 py-1 rounded-lg text-xs font-bold transition-all ${header.satisfaction_has_record ? 'bg-[#2D3A3A] text-white' : 'text-[#7A7D71]'}`} disabled={isViewOnly}>Sim</button>
-                        <button onClick={() => !isViewOnly && setHeader({...header, satisfaction_has_record: false})} className={`px-4 py-1 rounded-lg text-xs font-bold transition-all ${!header.satisfaction_has_record ? 'bg-[#2D3A3A] text-white' : 'text-[#7A7D71]'}`} disabled={isViewOnly}>Não</button>
-                      </div>
-                    </div>
-                    {header.satisfaction_has_record && (
-                      <textarea value={header.satisfaction_record_text} onChange={e => setHeader({...header, satisfaction_record_text: e.target.value})} placeholder="O que o cliente registrou..." className="w-full bg-white border border-gray-100 rounded-xl p-4 text-sm focus:outline-none focus:border-[#A7C0A5] transition-all" disabled={isViewOnly} />
-                    )}
-                  </div>
-                )}
-
-                {header.satisfaction_result === 'Negativa' && (
-                  <div className="space-y-4 bg-red-50/30 p-6 rounded-2xl border border-red-100 animate-in fade-in zoom-in-95">
-                    <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Tratativa de Feedback Negativo</p>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-red-900">Conseguiu contato para tratativa?</p>
-                      <div className="flex gap-1 bg-white p-1 rounded-xl border border-red-100">
-                        <button onClick={() => !isViewOnly && setHeader({...header, client_contact_success: true})} className={`px-4 py-1 rounded-lg text-xs font-bold transition-all ${header.client_contact_success ? 'bg-red-600 text-white' : 'text-red-400'}`} disabled={isViewOnly}>Sim</button>
-                        <button onClick={() => !isViewOnly && setHeader({...header, client_contact_success: false})} className={`px-4 py-1 rounded-lg text-xs font-bold transition-all ${!header.client_contact_success ? 'bg-red-600 text-white' : 'text-red-400'}`} disabled={isViewOnly}>Não</button>
-                      </div>
-                    </div>
-                    {header.client_contact_success && (
-                      <textarea value={header.client_contact_log} onChange={e => setHeader({...header, client_contact_log: e.target.value})} placeholder="Registro do contato com o cliente e resultado da tratativa..." className="w-full bg-white border border-red-100 rounded-xl p-4 text-sm focus:outline-none focus:border-red-400 transition-all animate-in fade-in zoom-in-95" disabled={isViewOnly} />
-                    )}
-                  </div>
-                )}
-              </section>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
-              <div className={`p-6 rounded-3xl flex items-center justify-between text-white shadow-xl transition-all duration-500 ${
-                score === 100 ? 'bg-gradient-to-r from-indigo-600 to-purple-600' :
-                score >= 75 ? 'bg-emerald-500' :
-                'bg-red-500'
-              }`}>
-                <div>
-                  <p className="text-[10px] font-bold opacity-60 uppercase tracking-[0.2em] mb-1">{isReevaluating ? 'Novo Score' : 'Score Atual'}</p>
-                  <div className="flex items-baseline gap-3">
-                    <p className="text-5xl font-black">{score}<span className="text-xl opacity-40">%</span></p>
-                    {isReevaluating && (
-                      <div className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold">
-                        Anterior: {initialData?.score}%
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold text-white/80">{score >= 90 ? 'Excelente' : score >= 70 ? 'Bom' : 'Abaixo da Meta'}</p>
+              <div className="space-y-4">
+                <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Pesquisa de Satisfação</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Positiva', 'Negativa', 'Sem pesquisa'] as const).map(opt => (
+                    <button key={opt} onClick={() => !isViewOnly && !isReevaluating && setHeader({...header, satisfaction_result: opt})} className={`p-4 rounded-2xl border-2 text-xs font-bold transition-all ${header.satisfaction_result === opt ? 'bg-brand-primary border-brand-primary text-white shadow-premium' : 'bg-white border-surface-border text-brand-muted hover:border-brand-highlight'}`} disabled={isViewOnly || isReevaluating}>
+                      {opt}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {selectedForm?.sections.map((section, sIdx) => (
-                <div key={section.id} className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-xs font-bold text-[#7A7D71]">{sIdx + 1}</div>
-                    <h3 className="text-lg font-bold text-[#2D3A3A]">{section.title} <span className="text-xs font-normal text-[#7A7D71] ml-2">({section.weight}%)</span></h3>
+              <div className="space-y-4">
+                <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Datas e Canal</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <Select value={header.channel} onChange={e => setHeader({...header, channel: e.target.value as any})} disabled={isViewOnly} options={CHANNELS.map(c => ({ value: c, label: c }))} />
+                  <div className="flex flex-col gap-1">
+                    <input type="date" value={header.ticket_date} onChange={e => setHeader({...header, ticket_date: e.target.value})} disabled={isViewOnly} className="bg-white border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" />
                   </div>
-                  <div className="space-y-4">
+                </div>
+              </div>
+            </section>
+          )}
+
+          {step === 2 && selectedForm && (
+            <section className="space-y-10 animate-fade-in">
+              <div className={`p-8 rounded-[32px] flex items-center justify-between text-white shadow-premium transition-all duration-700 ${score >= 85 ? 'bg-brand-accent' : score >= 75 ? 'bg-warning' : 'bg-error'}`}>
+                <div>
+                  <p className="text-[10px] font-black uppercase opacity-60 tracking-[0.2em] mb-1">Score da Monitoria</p>
+                  <p className="text-6xl font-black">{score}<span className="text-2xl opacity-40">%</span></p>
+                </div>
+                <div className="text-right">
+                  <Badge variant="secondary" size="md" className="bg-white/20 text-white border-none">{score >= 85 ? 'Meta Atingida' : 'Abaixo da Meta'}</Badge>
+                </div>
+              </div>
+
+              {selectedForm.sections.map((section, sIdx) => (
+                <div key={section.id} className="space-y-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-brand-primary text-white flex items-center justify-center font-black">{sIdx + 1}</div>
+                    <div>
+                      <h3 className="text-lg font-black text-brand-primary tracking-tight uppercase">{section.title}</h3>
+                      <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Peso desta seção: {section.weight}%</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4">
                     {section.questions.map(q => (
-                      <div key={q.id} className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100 space-y-4 transition-all hover:shadow-md hover:bg-white group">
-                        <div className="flex flex-col md:flex-row justify-between gap-4">
-                          <p className="text-sm font-bold text-[#3D4035] flex-1 group-hover:text-black transition-colors">{q.text}</p>
-                          <div className="flex gap-1 bg-white p-1 rounded-xl border border-gray-100 h-fit shadow-sm">
+                      <Card key={q.id} className="bg-white hover:border-brand-accent transition-all group">
+                        <div className="flex flex-col md:flex-row justify-between gap-6">
+                          <p className="text-sm font-bold text-brand-primary leading-relaxed flex-1">{q.text}</p>
+                          <div className="flex gap-1 bg-surface-bg p-1 rounded-2xl h-fit border border-surface-border">
                             {(['SIM', 'NAO', 'NA'] as const).map(opt => (
-                              <button key={opt} onClick={() => !isViewOnly && setScores({...scores, [q.id]: opt})} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${scores[q.id] === opt ? 'bg-[#2D3A3A] text-white shadow-md' : 'text-[#7A7D71] hover:bg-gray-50'}`} disabled={isViewOnly}>{opt}</button>
+                              <button key={opt} onClick={() => !isViewOnly && setScores({...scores, [q.id]: opt})} className={`px-5 py-2 rounded-xl text-xs font-black transition-all ${scores[q.id] === opt ? 'bg-brand-primary text-white shadow-premium' : 'text-brand-muted hover:bg-white'}`} disabled={isViewOnly}>{opt}</button>
                             ))}
                           </div>
                         </div>
-                        <textarea value={observations[q.id] || ''} onChange={e => !isViewOnly && setObservations({...observations, [q.id]: e.target.value})} placeholder="Observações (opcional)..." className="w-full bg-white border border-gray-100 rounded-xl p-3 text-xs focus:outline-none focus:border-[#A7C0A5] transition-all hover:border-gray-300" disabled={isViewOnly} />
-                      </div>
+                        <textarea value={observations[q.id] || ''} onChange={e => !isViewOnly && setObservations({...observations, [q.id]: e.target.value})} placeholder="Adicionar observação específica para este item..." className="w-full mt-4 bg-surface-bg border border-surface-border rounded-xl p-4 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all" disabled={isViewOnly} />
+                      </Card>
                     ))}
                   </div>
                 </div>
               ))}
 
-              {selectedForm?.critical_errors && selectedForm.critical_errors.length > 0 && (
-                <div className="space-y-6 pt-6 border-t border-red-100">
-                  <h3 className="text-lg font-bold text-red-600 flex items-center gap-2"><AlertOctagon className="w-5 h-5" /> Erros Críticos</h3>
-                  <div className="grid grid-cols-1 gap-4">
+              {selectedForm.critical_errors?.length > 0 && (
+                <div className="pt-10 border-t border-error/10">
+                  <h3 className="text-lg font-black text-error flex items-center gap-2 mb-6 uppercase tracking-tight"><AlertOctagon className="w-6 h-6" /> Itens Fatais (Erros Críticos)</h3>
+                  <div className="grid grid-cols-1 gap-6">
                     {selectedForm.critical_errors.map(ce => (
                       <div key={ce.id} className="space-y-3">
-                        <label className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${criticalErrors[ce.id] ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-transparent'}`}>
-                          <input type="checkbox" checked={!!criticalErrors[ce.id]} onChange={e => !isViewOnly && setCriticalErrors({...criticalErrors, [ce.id]: e.target.checked})} disabled={isViewOnly} className="w-5 h-5 rounded border-red-200 text-red-600" />
-                          <span className="text-sm font-bold text-red-900">{ce.text}</span>
+                        <label className={`flex items-center gap-4 p-5 rounded-[24px] border-2 transition-all cursor-pointer ${criticalErrors[ce.id] ? 'bg-red-50 border-error' : 'bg-white border-surface-border hover:border-error/30'}`}>
+                          <input type="checkbox" checked={!!criticalErrors[ce.id]} onChange={e => !isViewOnly && setCriticalErrors({...criticalErrors, [ce.id]: e.target.checked})} disabled={isViewOnly} className="w-6 h-6 rounded-lg text-error focus:ring-error" />
+                          <span className="text-sm font-black text-brand-primary uppercase tracking-tight">{ce.text}</span>
                         </label>
                         {criticalErrors[ce.id] && (
-                          <textarea value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa obrigatória do erro crítico..." className="w-full border-red-100 border rounded-xl p-3 text-xs focus:outline-none focus:border-red-300" disabled={isViewOnly} />
+                          <textarea value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa técnica obrigatória para a aplicação deste erro crítico..." className="w-full border-error/20 border-2 rounded-2xl p-4 text-sm font-medium focus:border-error focus:outline-none bg-red-50/20" disabled={isViewOnly} />
                         )}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-            </div>
+            </section>
           )}
 
           {step === 3 && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-              <section className="space-y-4">
-                <label className="text-xs font-bold text-[#7A7D71] uppercase tracking-wider">Considerações Finais</label>
-                <textarea value={header.evaluator_note} onChange={e => setHeader({...header, evaluator_note: e.target.value})} disabled={isViewOnly} className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-6 text-sm min-h-[140px] focus:outline-none focus:border-[#A7C0A5]" placeholder="Feedback para o técnico..." />
-              </section>
+            <section className="space-y-10 animate-fade-in max-w-3xl mx-auto w-full">
+              <div className="space-y-4">
+                <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Considerações e Feedback</p>
+                <textarea value={header.evaluator_note} onChange={e => setHeader({...header, evaluator_note: e.target.value})} disabled={isViewOnly} className="w-full bg-white border border-surface-border rounded-[24px] p-8 text-sm font-medium min-h-[200px] focus:border-brand-accent focus:outline-none shadow-premium-sm" placeholder="Escreva aqui o feedback construtivo para o técnico..." />
+              </div>
 
               {isReevaluating && (
-                <section className="space-y-4 bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
-                  <label className="text-xs font-bold text-blue-700 uppercase tracking-wider">Justificativa da Reavaliação *</label>
-                  <textarea value={header.reevaluation_justification} onChange={e => setHeader({...header, reevaluation_justification: e.target.value})} className="w-full bg-white border border-blue-100 rounded-xl p-4 text-sm focus:outline-none focus:border-blue-400" placeholder="Descreva por que a nota foi alterada ou mantida após reanálise..." />
-                </section>
+                <Card className="bg-brand-subtle border-brand-highlight">
+                  <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3">Justificativa da Reavaliação *</p>
+                  <textarea value={header.reevaluation_justification} onChange={e => setHeader({...header, reevaluation_justification: e.target.value})} className="w-full bg-white border border-surface-border rounded-2xl p-4 text-sm font-medium focus:border-brand-accent focus:outline-none" placeholder="Explique por que os itens foram alterados..." />
+                </Card>
               )}
 
-              {isViewOnly && initialData?.history && initialData.history.length > 0 && (
-                <section className="space-y-4 pt-6 border-t border-gray-100">
-                  <label className="text-xs font-bold text-[#7A7D71] uppercase tracking-wider">Histórico de Ações</label>
-                  <div className="space-y-3">
+              {initialData?.history && (
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1 flex items-center gap-2"><History className="w-3 h-3" /> Histórico da Avaliação</p>
+                  <div className="space-y-4">
                     {initialData.history.map((h, i) => (
-                      <div key={i} className="flex items-start gap-3 text-xs bg-gray-50/50 p-3 rounded-xl border border-gray-100">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#A7C0A5] mt-1.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="font-bold text-[#2D3A3A]">{h.action}</p>
-                          <p className="text-[#7A7D71] mt-0.5">{h.by_name} · {new Date(h.at).toLocaleString('pt-BR')}</p>
-                          {h.note && <p className="text-[#3D4035] mt-2 bg-white/60 p-2 rounded-lg italic">"{h.note}"</p>}
+                      <div key={i} className="flex items-start gap-4 bg-white p-5 rounded-2xl border border-surface-border shadow-premium-sm">
+                        <div className="w-8 h-8 rounded-xl bg-surface-subtle flex items-center justify-center flex-shrink-0 text-brand-muted">
+                          <UserIcon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-brand-primary uppercase tracking-tight">{h.action}</p>
+                          <p className="text-[10px] font-bold text-brand-muted uppercase mt-0.5">{h.by_name} • {new Date(h.at).toLocaleString('pt-BR')}</p>
+                          {h.note && <p className="text-sm text-brand-muted mt-3 italic font-medium">"{h.note}"</p>}
                         </div>
                       </div>
                     ))}
                   </div>
-                </section>
+                </div>
               )}
-            </div>
+            </section>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
-          <button onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} className="px-6 py-3 rounded-2xl font-bold text-[#7A7D71] disabled:opacity-30 flex items-center gap-2 hover:bg-gray-100 transition-colors">
-            <ChevronLeft className="w-4 h-4" /> Voltar
-          </button>
+        {/* Footer Actions */}
+        <div className="p-8 bg-white border-t border-surface-border flex items-center justify-between">
+          <Button variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4" />}>
+            Voltar
+          </Button>
           
-          <div className="flex gap-3">
+          <div className="flex gap-4">
             {step < 3 ? (
-              <button onClick={() => { if (step === 1 && !canProceed) { toast.error('Preencha os campos obrigatórios'); return; } setStep(s => Math.min(3, s + 1)); }} className="bg-[#2D3A3A] text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-black transition-colors shadow-lg shadow-black/5">
-                Próximo <ChevronRight className="w-4 h-4" />
-              </button>
+              <Button onClick={() => { if (step === 1 && !canProceed) { toast.error('Complete o cabeçalho'); return; } setStep(s => Math.min(3, s + 1)); }} icon={<ChevronRight className="w-4 h-4" />}>
+                Continuar
+              </Button>
             ) : (
-              <button onClick={handleSave} disabled={saving || isViewOnly} className="bg-[#A7C0A5] text-[#2D3A3A] px-10 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-[#96ae94] transition-all shadow-lg shadow-[#A7C0A5]/20">
-                {saving ? 'Salvando...' : <><Save className="w-4 h-4" /> Finalizar</>}
-              </button>
+              <Button onClick={handleSave} disabled={saving || isViewOnly} className="bg-brand-accent text-white px-12" icon={<Save className="w-4 h-4" />}>
+                {saving ? 'Processando...' : 'Finalizar Monitoria'}
+              </Button>
             )}
           </div>
         </div>
