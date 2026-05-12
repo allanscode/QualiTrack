@@ -10,20 +10,24 @@ interface RankingItem {
 
 interface RankingWidgetProps {
   title: string;
+  subtitle?: string;
   items: RankingItem[];
-  type: 'top' | 'bottom';
+  type?: 'top' | 'bottom';
 }
 
-export default function RankingWidget({ title, items, type }: RankingWidgetProps) {
+export default function RankingWidget({ title, subtitle, items, type = 'top' }: RankingWidgetProps) {
   const Icon = type === 'top' ? Award : AlertTriangle;
   const iconColor = type === 'top' ? 'text-[#A7C0A5]' : 'text-red-400';
   const barColor = type === 'top' ? 'bg-emerald-400' : 'bg-red-400';
 
   return (
     <div className="bg-white rounded-3xl border border-[#E2E4D8] p-6 shadow-sm">
-      <div className="flex items-center gap-2 mb-5">
-        <Icon className={`w-5 h-5 ${iconColor}`} />
-        <h3 className="font-bold text-[#2D3A3A] text-lg">{title}</h3>
+      <div className="flex items-start gap-2 mb-5">
+        <Icon className={`w-5 h-5 mt-0.5 ${iconColor}`} />
+        <div>
+          <h3 className="font-bold text-[#2D3A3A] text-lg leading-tight">{title}</h3>
+          {subtitle && <p className="text-xs text-[#7A7D71] mt-0.5">{subtitle}</p>}
+        </div>
       </div>
       <div className="space-y-3">
         {items.length > 0 ? items.map((item, idx) => {

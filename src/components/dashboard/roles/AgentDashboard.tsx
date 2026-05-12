@@ -32,10 +32,12 @@ export default function AgentDashboard() {
     });
   });
 
+  const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#8b5cf6', '#06b6d4'];
   const errorData = Object.entries(errorMap)
-    .map(([name, value]) => ({ name, value }))
+    .map(([name, value]) => ({ name, value, color: '' }))
     .sort((a, b) => b.value - a.value)
-    .slice(0, 5);
+    .slice(0, 5)
+    .map((item, i) => ({ ...item, color: COLORS[i] || '#94a3b8' }));
 
   // Group by day for trend
   const trendData = useMemo(() => {
@@ -95,7 +97,7 @@ export default function AgentDashboard() {
         <StatCard 
           title="Contestações" 
           value={contestations} 
-          sub="Procedentes: {reversed}" 
+          sub={`Procedentes: ${reversed}`} 
           good={true} 
           icon={<CheckCircle2 className="w-5 h-5" />} 
           accent="text-success" 

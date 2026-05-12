@@ -183,8 +183,8 @@ export default function SupportManagerDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RankingWidget title="Top Melhores Notas" data={topAgents} />
-        <RankingWidget title="Oportunidades de Melhoria" data={bottomAgents} />
+        <RankingWidget title="Top Melhores Notas" items={topAgents} type="top" />
+        <RankingWidget title="Oportunidades de Melhoria" items={bottomAgents} type="bottom" />
       </div>
 
       <RecentAuditsTable monitorias={teamMonitorias} users={users} />

@@ -177,7 +177,7 @@ export default function QualityManagerDashboard() {
           <RankingWidget 
             title="Ranking de Auditores" 
             subtitle="Por volume de auditorias"
-            data={auditorRanking} 
+            items={auditorRanking} 
           />
         </div>
       </div>
