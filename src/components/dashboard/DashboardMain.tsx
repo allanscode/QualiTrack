@@ -16,9 +16,9 @@ function DashboardRouter() {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <div key={i} className="h-28 bg-white rounded-3xl border border-[#E2E4D8] animate-pulse" />)}
+          {[1,2,3,4].map(i => <div key={i} className="h-28 bg-white rounded-3xl border border-surface-border animate-pulse" />)}
         </div>
-        <div className="h-72 bg-white rounded-3xl border border-[#E2E4D8] animate-pulse" />
+        <div className="h-72 bg-white rounded-3xl border border-surface-border animate-pulse" />
       </div>
     );
   }
@@ -38,7 +38,7 @@ function DashboardRouter() {
       return <QualityManagerDashboard />;
     default:
       return (
-        <div className="py-20 text-center text-[#7A7D71]">
+        <div className="py-20 text-center text-brand-muted text-xs font-bold uppercase tracking-widest">
           Dashboard não disponível para o seu perfil.
         </div>
       );

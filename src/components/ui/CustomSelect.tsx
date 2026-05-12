@@ -30,7 +30,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = '
   }, []);
 
   return (
-    <div className={`relative ${className}`} ref={containerRef}>
+    <div className={`relative min-w-[160px] ${className}`} ref={containerRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}

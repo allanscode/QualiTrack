@@ -98,8 +98,8 @@ export default function AgentDashboard() {
           value={myMonitorias.length} 
           sub="Total no período" 
           good={true} 
-          icon={<ClipboardCheck className="w-5 h-5" />} 
-          accent="text-blue-600" 
+          icon={<ClipboardCheck className="w-4 h-4" />} 
+          accent="text-info" 
         />
         <StatCard 
           title="Pendentes" 

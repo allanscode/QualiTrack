@@ -11,11 +11,9 @@ interface OfensoresChartProps {
 }
 
 export default function OfensoresChart({ monitorias, forms, limit = 8 }: OfensoresChartProps) {
-  // Build a map: questionId -> { text, naoCount, totalCount }
   const ofensores = useMemo(() => {
     const map: Record<string, { text: string; naoCount: number; totalAnswered: number }> = {};
 
-    // Index all questions from all forms
     forms.forEach(form => {
       form.sections?.forEach(section => {
         section.questions?.forEach(q => {
@@ -24,11 +22,10 @@ export default function OfensoresChart({ monitorias, forms, limit = 8 }: Ofensor
       });
     });
 
-    // Tally NAO answers across all monitorias
     monitorias.forEach(m => {
       if (!m.answers) return;
       Object.entries(m.answers).forEach(([qId, answer]) => {
-        if (!map[qId]) return; // question not found in any form
+        if (!map[qId]) return;
         if (answer === 'NAO') map[qId].naoCount++;
         if (answer === 'SIM' || answer === 'NAO') map[qId].totalAnswered++;
       });
@@ -39,7 +36,7 @@ export default function OfensoresChart({ monitorias, forms, limit = 8 }: Ofensor
       .sort((a, b) => b.naoCount - a.naoCount)
       .slice(0, limit)
       .map(o => ({
-        text: o.text.length > 30 ? o.text.slice(0, 28) + '…' : o.text,
+        text: o.text.length > 32 ? o.text.slice(0, 30) + '…' : o.text,
         fullText: o.text,
         naoCount: o.naoCount,
         taxaFalha: o.totalAnswered > 0 ? Math.round((o.naoCount / o.totalAnswered) * 10000) / 100 : 0,
@@ -50,28 +47,32 @@ export default function OfensoresChart({ monitorias, forms, limit = 8 }: Ofensor
     if (!active || !payload?.length) return null;
     const d = payload[0].payload;
     return (
-      <div className="bg-[#2D3A3A] text-white px-4 py-3 rounded-2xl shadow-xl text-xs max-w-[260px]">
+      <div className="bg-brand-primary text-white px-4 py-3 rounded-2xl shadow-xl text-xs max-w-[260px]">
         <p className="font-black mb-1">{d.fullText}</p>
-        <p className="text-amber-300 font-bold">{d.naoCount} ocorrência{d.naoCount !== 1 ? 's' : ''} de "NÃO"</p>
-        <p className="text-gray-300">Taxa de falha: {d.taxaFalha.toFixed(2)}%</p>
+        <p className="text-warning font-bold">{d.naoCount} ocorrência{d.naoCount !== 1 ? 's' : ''} de "NÃO"</p>
+        <p className="text-brand-highlight font-semibold">Taxa de falha: {d.taxaFalha.toFixed(1)}%</p>
       </div>
     );
   };
 
+  const Header = () => (
+    <div className="flex items-center gap-3 mb-5">
+      <div className="w-9 h-9 rounded-xl bg-error/10 flex items-center justify-center flex-shrink-0">
+        <AlertOctagon className="w-4 h-4 text-error" />
+      </div>
+      <div>
+        <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">Maiores Ofensores</h3>
+        <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">Critérios com mais falhas no período</p>
+      </div>
+    </div>
+  );
+
   if (ofensores.length === 0) {
     return (
       <Card padding="lg" className="h-full flex flex-col">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-2xl bg-red-50 flex items-center justify-center">
-            <AlertOctagon className="w-5 h-5 text-error" />
-          </div>
-          <div>
-            <h3 className="font-black text-brand-primary uppercase tracking-tight leading-tight">Maiores Ofensores</h3>
-            <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Critérios com mais falhas</p>
-          </div>
-        </div>
+        <Header />
         <div className="flex-1 flex items-center justify-center py-10 opacity-40">
-          <p className="text-xs font-bold uppercase tracking-widest text-brand-muted">Sem dados de falha no período</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Sem dados de falha no período</p>
         </div>
       </Card>
     );
@@ -79,15 +80,7 @@ export default function OfensoresChart({ monitorias, forms, limit = 8 }: Ofensor
 
   return (
     <Card padding="lg" className="h-full flex flex-col overflow-hidden">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-2xl bg-red-50 flex items-center justify-center">
-          <AlertOctagon className="w-5 h-5 text-error" />
-        </div>
-        <div>
-          <h3 className="font-black text-brand-primary uppercase tracking-tight leading-tight">Maiores Ofensores</h3>
-          <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Critérios com mais falhas no período</p>
-        </div>
-      </div>
+      <Header />
 
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
@@ -114,7 +107,7 @@ export default function OfensoresChart({ monitorias, forms, limit = 8 }: Ofensor
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(239,68,68,0.05)' }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(239,68,68,0.04)' }} />
             <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14}>
               {ofensores.map((entry, index) => {
                 const intensity = 1 - index / ofensores.length;
@@ -128,12 +121,12 @@ export default function OfensoresChart({ monitorias, forms, limit = 8 }: Ofensor
         </ResponsiveContainer>
       </div>
 
-      {/* Bottom legend — more compact */}
-      <div className="mt-4 pt-3 border-t border-surface-subtle space-y-1">
+      {/* Bottom legend */}
+      <div className="mt-4 pt-3 border-t border-surface-border/60 space-y-1.5">
         {ofensores.slice(0, 3).map((o, i) => (
           <div key={i} className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="text-[9px] font-black text-error bg-red-50 rounded px-1 py-0.5 flex-shrink-0">#{i + 1}</span>
+              <span className="text-[9px] font-black text-error bg-error/10 rounded px-1.5 py-0.5 flex-shrink-0">#{i + 1}</span>
               <span className="text-[9px] font-bold text-brand-primary truncate">{o.fullText}</span>
             </div>
             <span className="text-[9px] font-black text-error flex-shrink-0">{o.taxaFalha.toFixed(1)}% falha</span>

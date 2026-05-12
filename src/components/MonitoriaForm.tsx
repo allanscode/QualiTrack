@@ -21,6 +21,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { addBusinessHours } from '../lib/businessHours';
+import { useQualityConfig } from '../lib/useQualityConfig';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -39,6 +40,7 @@ export default function MonitoriaForm({
   onSaved: () => void;
   initialData?: Monitoria;
 }) {
+  const { config: qualityConfig } = useQualityConfig();
   const isAdmin = user?.role === 'admin';
   const isViewOnly = !!initialData && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit;
   const isReevaluating = !!(initialData as any)?._reevaluate;
@@ -186,8 +188,9 @@ export default function MonitoriaForm({
       
       const getDeadline = () => {
         const now = new Date();
-        if (isReevaluating) return addBusinessHours(now, 24).toISOString();
-        return addBusinessHours(now, 48).toISOString();
+        const sla = qualityConfig.sla;
+        if (isReevaluating) return addBusinessHours(now, sla?.auditorReevaluation || 24).toISOString();
+        return addBusinessHours(now, sla?.agentReview || 48).toISOString();
       };
 
       const payload = {
@@ -287,11 +290,11 @@ export default function MonitoriaForm({
                     options={[{ value: '', label: 'Selecione o formulário...' }, ...forms.map(f => ({ value: f.id, label: f.title }))]}
                   />
                   <Select 
-                    label="Técnico Auditado *"
+                    label="Suporte *"
                     value={header.evaluated_id} 
                     onChange={e => setHeader({...header, evaluated_id: e.target.value})} 
                     disabled={isViewOnly || isReevaluating}
-                    options={[{ value: '', label: 'Selecione o agente...' }, ...agents.map(a => ({ value: a.id, label: a.name }))]}
+                    options={[{ value: '', label: 'Selecione o suporte...' }, ...agents.map(a => ({ value: a.id, label: a.name }))]}
                   />
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">ID do Ticket *</label>

@@ -52,7 +52,7 @@ export default function QualityConfigManagement() {
       <div className="bg-white rounded-3xl border border-[#E2E4D8] p-8 shadow-sm">
         <h3 className="font-bold text-[#2D3A3A] text-lg mb-2">Meta de Desempenho</h3>
         <p className="text-sm text-[#7A7D71] mb-6">
-          Score minimo para o agente ser considerado dentro da meta. Usado nos rankings Top, Medianos e Oportunidades.
+          Score minimo para o suporte ser considerado dentro da meta. Usado nos rankings Top, Medianos e Oportunidades.
         </p>
         <div className="flex items-center gap-6 flex-wrap">
           <div className="flex-1 max-w-xs">
@@ -69,6 +69,68 @@ export default function QualityConfigManagement() {
           <div className={`px-6 py-4 rounded-2xl border-2 ${localConfig.targetScore >= 75 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
             <p className="text-xs font-bold uppercase tracking-wide mb-1">Meta atual</p>
             <p className="text-3xl font-black">{localConfig.targetScore}%</p>
+          </div>
+        </div>
+      </div>
+
+      {/* SLA Configuration */}
+      <div className="bg-white rounded-3xl border border-[#E2E4D8] p-8 shadow-sm">
+        <h3 className="font-bold text-[#2D3A3A] text-lg mb-2">Prazos de Atendimento (SLA)</h3>
+        <p className="text-sm text-[#7A7D71] mb-6">
+          Configure o tempo limite (em horas úteis) para cada ação no fluxo da monitoria.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div>
+            <label className="block text-xs font-bold text-[#7A7D71] uppercase tracking-wide mb-2">Ciência do Suporte</label>
+            <div className="relative">
+              <input
+                type="number"
+                min={1}
+                value={localConfig.sla?.agentReview || 48}
+                onChange={e => setLocalConfig(c => ({ ...c, sla: { ...c.sla, agentReview: Number(e.target.value) } }))}
+                className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-lg font-bold focus:border-[#A7C0A5] focus:outline-none pr-12"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand-muted uppercase tracking-widest">h</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-[#7A7D71] uppercase tracking-wide mb-2">Reanálise Qualidade</label>
+            <div className="relative">
+              <input
+                type="number"
+                min={1}
+                value={localConfig.sla?.auditorReevaluation || 24}
+                onChange={e => setLocalConfig(c => ({ ...c, sla: { ...c.sla, auditorReevaluation: Number(e.target.value) } }))}
+                className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-lg font-bold focus:border-[#A7C0A5] focus:outline-none pr-12"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand-muted uppercase tracking-widest">h</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-[#7A7D71] uppercase tracking-wide mb-2">Gestor Suporte</label>
+            <div className="relative">
+              <input
+                type="number"
+                min={1}
+                value={localConfig.sla?.managerSupport || 24}
+                onChange={e => setLocalConfig(c => ({ ...c, sla: { ...c.sla, managerSupport: Number(e.target.value) } }))}
+                className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-lg font-bold focus:border-[#A7C0A5] focus:outline-none pr-12"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand-muted uppercase tracking-widest">h</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-[#7A7D71] uppercase tracking-wide mb-2">Gestor Qualidade</label>
+            <div className="relative">
+              <input
+                type="number"
+                min={1}
+                value={localConfig.sla?.managerQuality || 24}
+                onChange={e => setLocalConfig(c => ({ ...c, sla: { ...c.sla, managerQuality: Number(e.target.value) } }))}
+                className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-lg font-bold focus:border-[#A7C0A5] focus:outline-none pr-12"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand-muted uppercase tracking-widest">h</span>
+            </div>
           </div>
         </div>
       </div>

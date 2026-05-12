@@ -197,7 +197,7 @@ export default function QualityManagerDashboard() {
           sub="Ações abertas no sistema"
           good={pendingActions === 0}
           icon={<Users className="w-5 h-5" />}
-          accent="text-blue-600"
+          accent="text-info"
         />
         <StatCard
           title="Monitorias"
@@ -277,7 +277,7 @@ export default function QualityManagerDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 h-[320px]">
           <RankingWidget
-            title="Ranking de Auditores"
+            title="Ranking de Qualidade"
             subtitle="Por volume de auditorias realizadas"
             data={auditorRanking}
             type="count"
@@ -301,14 +301,14 @@ export default function QualityManagerDashboard() {
         <div className="space-y-6">
           <div className="h-[200px]">
             <RankingWidget
-              title="Melhores Scores (Agentes)"
+              title="Melhores Scores (Suporte)"
               subtitle={`Acima da meta (${config.targetScore}%)`}
               data={topAgents}
             />
           </div>
           <div className="h-[200px]">
             <RankingWidget
-              title="Oportunidades (Agentes)"
+              title="Oportunidades (Suporte)"
               subtitle="Mais críticos primeiro"
               data={bottomAgents}
             />

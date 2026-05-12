@@ -34,8 +34,10 @@ import Card from './ui/Card';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
 import CustomSelect from './ui/CustomSelect'; 
+import { useQualityConfig } from '../lib/useQualityConfig';
 
 export default function MonitoriaList({ user, onNew }: { user: User | null; onNew: () => void }) {
+  const { config: qualityConfig } = useQualityConfig();
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -154,14 +156,14 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
 
     const now = new Date().toISOString();
     const actionDescriptions: Record<string, string> = {
-      'aceitar': 'Monitoria aceita pelo agente',
-      'contestar': 'Contestação realizada pelo agente',
-      'manter': 'Contestação mantida pelo Gestor de Suporte',
-      'aprovar': 'Monitoria aprovada pelo Gestor de Suporte',
+      'aceitar': 'Monitoria aceita pelo suporte',
+      'contestar': 'Contestação realizada pelo suporte',
+      'manter': 'Contestação mantida pelo Gestor Suporte',
+      'aprovar': 'Monitoria aprovada pelo Gestor Suporte',
       'escalar': 'Escalado para decisão da Qualidade',
       'excluir': 'Monitoria removida pelo Administrador',
-      'reavaliar': 'Reavaliação aceita pelo Gestor de Qualidade',
-      'devolver': 'Devolvido para reanálise do Auditor'
+      'reavaliar': 'Reavaliação aceita pelo Gestor Qual.',
+      'devolver': 'Devolvido para reanálise da Qualidade'
     };
 
     const historyEntry: MonitoriaHistoryEntry = { 
@@ -178,13 +180,24 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     else if (type === 'manter') nextStatus = 'aguardando_gestor_suporte';
     else if (type === 'escalar') nextStatus = 'aguardando_gestor_qualidade';
 
+    const getDeadlineHours = (status: MonitoriaStatus) => {
+      const sla = qualityConfig.sla;
+      switch (status) {
+        case 'pendente_revisao': return sla?.agentReview || 48;
+        case 'em_contestacao': return sla?.auditorReevaluation || 24;
+        case 'aguardando_gestor_suporte': return sla?.managerSupport || 24;
+        case 'aguardando_gestor_qualidade': return sla?.managerQuality || 24;
+        default: return 24;
+      }
+    };
+
     const update: any = type === 'excluir' 
       ? { active: false, history: [...(monitoria.history || []), historyEntry], updated_at: now }
       : {
           status: nextStatus,
           updated_at: now,
           history: [...(monitoria.history || []), historyEntry],
-          ...(nextStatus !== 'concluida' ? { deadline_at: addBusinessHours(new Date(), nextStatus === 'pendente_revisao' ? 48 : 24).toISOString() } : {}),
+          ...(nextStatus !== 'concluida' ? { deadline_at: addBusinessHours(new Date(), getDeadlineHours(nextStatus)).toISOString() } : {}),
           ...(type === 'contestar' ? { contestation_reason: actionNote } : {}),
         };
 
@@ -240,7 +253,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
               />
             </div>
 
-            <div className="w-40 h-10">
+            <div className="w-56 h-10">
               <CustomSelect 
                 value={teamFilter}
                 onChange={val => setTeamFilter(val)}
@@ -248,11 +261,11 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
               />
             </div>
 
-            <div className="w-40 h-10">
+            <div className="w-56 h-10">
               <CustomSelect 
                 value={auditorFilter}
                 onChange={val => setAuditorFilter(val)}
-                options={[{ value: '', label: 'Auditores' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
+                options={[{ value: '', label: 'Qualidade' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
               />
             </div>
 
@@ -278,7 +291,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
               </div>
             </div>
 
-            <div className="w-32 h-10">
+            <div className="w-44 h-10">
               <CustomSelect 
                 value={statusFilter}
                 onChange={val => setStatusFilter(val as any)}
@@ -366,7 +379,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-2">
                         <div className="space-y-6">
                           <div>
-                            <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-2 ml-1">Observações do Auditor</p>
+                            <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-2 ml-1">Observações da Qualidade</p>
                             <p className="text-sm text-brand-primary font-medium bg-surface-bg/50 p-4 rounded-3xl border border-surface-border/40 min-h-[80px] leading-relaxed italic">
                               "{m.evaluator_note || 'Nenhuma observação registrada.'}"
                             </p>

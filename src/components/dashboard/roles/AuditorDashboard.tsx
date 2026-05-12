@@ -79,10 +79,10 @@ export default function AuditorDashboard() {
     const colorMap: Record<string, string> = {
       'text-indigo-700': '#6366f1',
       'text-emerald-700': '#10b981',
-      'text-amber-700': '#f59e0b',
-      'text-red-700': '#ef4444',
-      'text-purple-700': '#a855f7',
-      'text-blue-700': '#3b82f6',
+      'text-amber-700':   '#f59e0b',
+      'text-red-700':     '#ef4444',
+      'text-purple-700':  '#a855f7',
+      'text-blue-700':    '#3b82f6',
     };
 
     return config.levels.map(level => ({
@@ -108,8 +108,8 @@ export default function AuditorDashboard() {
           value={myMonitorias.length} 
           sub="no período" 
           good={true} 
-          icon={<ClipboardCheck className="w-5 h-5" />} 
-          accent="text-blue-600" 
+          icon={<ClipboardCheck className="w-4 h-4" />} 
+          accent="text-info" 
         />
         <StatCard 
           title="Nota Média" 
@@ -171,7 +171,7 @@ export default function AuditorDashboard() {
 
           <div className="h-[400px]">
             <DistributionChart 
-              title="Precisão da Auditoria" 
+              title="Precisão da Qualidade" 
               data={[
                 { name: 'Estáveis', value: myMonitorias.length - totalReevaluated, color: '#6366f1' },
                 { name: 'Reavaliadas', value: totalReevaluated, color: '#f59e0b' }

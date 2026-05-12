@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
-import { User, Team, EvaluationForm, AccessRequest } from '../types';
+import { User, Team, EvaluationForm, AccessRequest, FormSection, Question } from '../types';
 import { 
   Users, 
   ClipboardList, 
@@ -22,7 +22,8 @@ import {
   ShieldCheck,
   ChevronRight,
   ArrowRight,
-  Pencil
+  Pencil,
+  Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -178,6 +179,22 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
     }
   };
 
+  const handleResetPassword = async (email: string) => {
+    try {
+      if (!supabase) {
+        toast.info(`[MOCK] Email de recuperação enviado para ${email}`);
+        return;
+      }
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast.success('Email de recuperação enviado!');
+    } catch (e: any) {
+      toast.error('Erro ao enviar email: ' + e.message);
+    }
+  };
+
   const handleToggleStatus = async (id: string, active: boolean) => {
     try {
       if (!supabase) await mockDb.update('users', id, { active });
@@ -207,7 +224,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
               value={statusFilter}
               onChange={val => setStatusFilter(val as any)}
               options={[{ value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Desativados' }]}
-              className="w-32"
+              className="w-44"
             />
           </div>
         </div>
@@ -235,14 +252,17 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                       {u.name.slice(0,1)}
                     </div>
                     <div>
-                      <p className="text-sm font-black text-brand-primary tracking-tight">{u.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className={`text-sm font-black tracking-tight ${u.active === false ? 'text-error' : 'text-brand-primary'}`}>{u.name}</p>
+                        {u.active === false && <Badge variant="error" className="scale-75 origin-left">Desativado</Badge>}
+                      </div>
                       <p className="text-[10px] font-bold text-brand-muted flex items-center gap-1"><Mail className="w-3 h-3" /> {u.email}</p>
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4">
                   <Badge variant="neutral" className="bg-surface-subtle text-brand-primary">
-                    {({ 'admin': 'Admin', 'qualidade': 'Auditor', 'gestor_qualidade': 'G. Qualidade', 'gestor_suporte': 'G. Suporte', 'suporte': 'Agente' } as any)[u.role] || u.role}
+                    {({ 'admin': 'Admin', 'qualidade': 'Qualidade', 'gestor_qualidade': 'Gestor Qual.', 'gestor_suporte': 'Gestor Suporte', 'suporte': 'Suporte' } as any)[u.role] || u.role}
                   </Badge>
                 </td>
                 <td className="px-6 py-4 text-xs font-bold text-brand-muted">
@@ -256,6 +276,13 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                       <Button variant="outline" size="sm" onClick={() => handleToggleStatus(u.id, true)} icon={<RefreshCw className="w-3.5 h-3.5" />}>Reativar</Button>
                     ) : (
                       <>
+                        <button 
+                          onClick={() => handleResetPassword(u.email)} 
+                          title="Reenviar Senha"
+                          className="p-2.5 rounded-xl hover:bg-brand-subtle text-brand-muted hover:text-brand-primary transition-all"
+                        >
+                          <Key className="w-4 h-4" />
+                        </button>
                         <button onClick={() => { setEditingUser({...u, team_ids: u.team_ids || []}); setIsModalOpen(true); }} className="p-2.5 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><Edit2 className="w-4 h-4" /></button>
                         {deleteConfirmId === u.id ? (
                           <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
@@ -299,10 +326,10 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                   onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}
                   options={[
                     { value: 'admin', label: 'Administrador' },
-                    { value: 'gestor_qualidade', label: 'Gestor Qualidade' },
+                    { value: 'gestor_qualidade', label: 'Gestor Qual.' },
                     { value: 'gestor_suporte', label: 'Gestor Suporte' },
-                    { value: 'qualidade', label: 'Auditor' },
-                    { value: 'suporte', label: 'Agente' }
+                    { value: 'qualidade', label: 'Qualidade' },
+                    { value: 'suporte', label: 'Suporte' }
                   ]}
                 />
                 <div className="flex flex-col gap-1">
@@ -404,7 +431,7 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
               value={statusFilter}
               onChange={val => setStatusFilter(val as any)}
               options={[{ value: 'active', label: 'Ativas' }, { value: 'inactive', label: 'Desativadas' }]}
-              className="w-32"
+              className="w-44"
             />
           </div>
         </div>
@@ -472,6 +499,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'geral' | 'pilares' | 'criticos'>('geral');
 
   const filteredForms = useMemo(() => {
     return forms
@@ -600,7 +628,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
               value={statusFilter}
               onChange={val => setStatusFilter(val as any)}
               options={[{ value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Desativados' }]}
-              className="w-32"
+              className="w-44"
             />
           </div>
         </div>
@@ -653,169 +681,228 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/60 backdrop-blur-md">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col bg-white rounded-[32px] shadow-2xl">
-              <header className="flex items-center justify-between p-8 border-b border-surface-border bg-white/50 backdrop-blur-sm sticky top-0 z-10">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
-                    <ClipboardList className="w-6 h-6" />
+              <header className="flex items-center justify-between p-8 border-b border-surface-border bg-white sticky top-0 z-10">
+                <div className="flex items-center gap-6">
+                  <div className="w-14 h-14 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
+                    <ClipboardList className="w-7 h-7" />
                   </div>
                   <div>
                     <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Editor de Formulário</h3>
-                    <p className="text-[10px] font-black text-brand-muted uppercase tracking-[0.2em] mt-1">Configuração de pontuação e critérios</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${totalWeight === 100 ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                        Peso Total: {totalWeight}% {totalWeight !== 100 && '(Incompleto)'}
+                      </span>
+                      <span className="text-brand-muted/30">•</span>
+                      <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">{editingForm.title || 'Novo Formulário'}</p>
+                    </div>
                   </div>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 rounded-xl hover:bg-surface-subtle text-brand-muted transition-all"><X className="w-6 h-6" /></button>
+                <button onClick={() => setIsModalOpen(false)} className="p-3 rounded-2xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><X className="w-6 h-6" /></button>
               </header>
 
-              <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-surface-bg/30">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Título do Formulário</label>
-                      <input type="text" className="bg-white border border-surface-border rounded-2xl px-5 py-3 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all" value={editingForm.title} onChange={e => setEditingForm({...editingForm, title: e.target.value})} placeholder="Ex: Monitoria de Atendimento Chat" />
-                    </div>
-                    <Select label="Equipe Vinculada" value={editingForm.team_id || ''} onChange={e => setEditingForm({...editingForm, team_id: e.target.value})} options={[{ value: '', label: 'Geral' }, ...teams.map(t => ({ value: t.id, label: t.name }))]} />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Descrição</label>
-                    <textarea className="bg-white border border-surface-border rounded-2xl px-5 py-3 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all min-h-[110px]" value={editingForm.description} onChange={e => setEditingForm({...editingForm, description: e.target.value})} placeholder="Descreva o propósito deste formulário..." />
-                  </div>
-                </div>
-                
-                <div className="pt-8 border-t border-surface-border/50">
-                  <div className="flex items-center justify-between mb-8">
-                    <div>
-                      <h4 className="text-sm font-black text-brand-primary uppercase tracking-widest flex items-center gap-2">
-                        Estrutura de Pilares
-                        <span className={`px-3 py-1 rounded-full text-[10px] ${totalWeight === 100 ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
-                          Peso Total: {totalWeight}% {totalWeight !== 100 && '(Deve ser 100%)'}
-                        </span>
-                      </h4>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={addSection} icon={<Plus className="w-4 h-4" />} className="rounded-2xl">Adicionar Pilar</Button>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    {editingForm.sections?.map((section, sIdx) => (
-                      <div key={section.id} className="bg-white rounded-[28px] border border-surface-border shadow-premium-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <div className="p-5 border-b border-surface-border bg-surface-subtle/20 flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-4 flex-1">
-                            <div className="w-8 h-8 rounded-xl bg-brand-primary text-white flex items-center justify-center text-xs font-black">{sIdx + 1}</div>
-                            <input 
-                              className="bg-transparent border-none p-0 text-sm font-black text-brand-primary uppercase tracking-tight focus:ring-0 w-full"
-                              value={section.title}
-                              onChange={e => updateSection(section.id, 'title', e.target.value)}
-                              placeholder="Nome do Pilar"
-                            />
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2 bg-white border border-surface-border rounded-xl px-3 py-1.5">
-                              <span className="text-[10px] font-black text-brand-muted uppercase">Peso:</span>
-                              <input 
-                                type="number" 
-                                className="w-12 bg-transparent border-none p-0 text-xs font-black text-brand-primary focus:ring-0 text-center"
-                                value={section.weight}
-                                onChange={e => updateSection(section.id, 'weight', parseInt(e.target.value) || 0)}
-                              />
-                              <span className="text-[10px] font-black text-brand-muted">%</span>
-                            </div>
-                            <button onClick={() => removeSection(section.id)} className="p-2 text-brand-muted hover:text-error transition-colors"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        </div>
-                        
-                        <div className="p-6 space-y-4">
-                          {section.questions.map((q, qIdx) => {
-                            const itemWeightInPilar = section.questions.length > 0 ? (100 / section.questions.length).toFixed(1) : 0;
-                            const itemImpactInTotal = section.questions.length > 0 ? ((section.weight || 0) / section.questions.length).toFixed(1) : 0;
+              <div className="flex border-b border-surface-border bg-surface-bg/30 px-8">
+                {[
+                  { id: 'geral', label: '1. Informações Gerais', icon: Shield },
+                  { id: 'pilares', label: '2. Estrutura de Pilares', icon: BarChart3 },
+                  { id: 'criticos', label: '3. Erros Críticos', icon: AlertOctagon },
+                ].map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id as any)}
+                    className={`flex items-center gap-2 px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all border-b-2 -mb-[1px] ${activeTab === t.id ? 'border-brand-primary text-brand-primary' : 'border-transparent text-brand-muted hover:text-brand-primary'}`}
+                  >
+                    <t.icon className="w-4 h-4" />
+                    {t.label}
+                  </button>
+                ))}
+              </div>
 
-                            return (
-                              <div key={q.id} className="flex items-center gap-4 p-4 rounded-2xl bg-surface-bg/40 border border-surface-border/40 group hover:bg-white hover:border-brand-accent/20 transition-all">
-                                <div className="flex-1">
-                                  <input 
-                                    className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary w-full focus:ring-0"
-                                    value={q.text}
-                                    onChange={e => updateQuestion(section.id, q.id, 'text', e.target.value)}
-                                    placeholder="Descreva o critério de avaliação..."
-                                  />
-                                  <div className="flex items-center gap-4 mt-1.5">
-                                    <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Peso no Pilar: {itemWeightInPilar}%</span>
-                                    <span className="text-brand-muted/20">•</span>
-                                    <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Impacto Global: {itemImpactInTotal}%</span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  <button onClick={() => removeQuestion(section.id, q.id)} className="p-2 text-brand-muted/40 hover:text-error transition-colors opacity-0 group-hover:opacity-100"><X className="w-4 h-4" /></button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          <button 
-                            onClick={() => addQuestion(section.id)}
-                            className="w-full py-3 rounded-2xl border-2 border-dashed border-surface-border/60 text-brand-muted text-[10px] font-black uppercase tracking-widest hover:border-brand-accent/40 hover:text-brand-accent transition-all flex items-center justify-center gap-2"
-                          >
-                            <Plus className="w-3 h-3" /> Adicionar Item ao Pilar
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
-                    {(!editingForm.sections || editingForm.sections.length === 0) && (
-                      <div className="bg-surface-bg/30 p-12 rounded-[32px] border-2 border-dashed border-surface-border/60 text-center">
-                        <div className="w-16 h-16 rounded-3xl bg-white shadow-premium flex items-center justify-center mx-auto mb-4">
-                          <Plus className="w-8 h-8 text-brand-muted" />
-                        </div>
-                        <p className="text-brand-primary font-black uppercase tracking-widest text-xs">Nenhum Pilar Configurado</p>
-                        <p className="text-brand-muted text-[10px] font-bold uppercase mt-2">Adicione pilares para começar a estruturar sua monitoria.</p>
-                        <Button variant="outline" size="sm" onClick={addSection} className="mt-6 rounded-2xl">Adicionar Primeiro Pilar</Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Seção de Erros Críticos */}
-                <div className="pt-10 border-t border-surface-border/50">
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h4 className="text-sm font-black text-error uppercase tracking-widest flex items-center gap-2">
-                        <AlertOctagon className="w-5 h-5" />
-                        Erros Críticos (Fatais)
-                      </h4>
-                      <p className="text-[10px] font-bold text-brand-muted uppercase mt-1">Itens que, se marcados, zeram a pontuação da monitoria.</p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={addCriticalError} icon={<Plus className="w-4 h-4" />} className="rounded-2xl border-error/30 text-error hover:bg-red-50 hover:border-error">Adicionar Erro Crítico</Button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {editingForm.critical_errors?.map((ce, idx) => (
-                      <div key={ce.id} className="flex items-center gap-4 p-5 rounded-2xl bg-red-50/30 border border-error/10 group hover:border-error/30 transition-all">
-                        <div className="w-8 h-8 rounded-xl bg-error text-white flex items-center justify-center text-[10px] font-black">{idx + 1}</div>
-                        <div className="flex-1">
+              <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-surface-bg/10">
+                {activeTab === 'geral' && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-8 py-4">
+                    <div className="grid grid-cols-1 gap-8">
+                      <div className="space-y-6">
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Título do Formulário</label>
                           <input 
-                            className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary w-full focus:ring-0"
-                            value={ce.text}
-                            onChange={e => updateCriticalError(ce.id, 'text', e.target.value)}
-                            placeholder="Descreva o erro fatal..."
+                            type="text" 
+                            className="w-full bg-white border border-surface-border rounded-2xl px-6 py-4 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all shadow-sm" 
+                            value={editingForm.title} 
+                            onChange={e => setEditingForm({...editingForm, title: e.target.value})} 
+                            placeholder="Ex: Monitoria de Atendimento Chat" 
                           />
                         </div>
-                        <button onClick={() => removeCriticalError(ce.id)} className="p-2 text-brand-muted/40 hover:text-error transition-colors opacity-0 group-hover:opacity-100"><X className="w-4 h-4" /></button>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipe Vinculada</label>
+                          <CustomSelect 
+                            value={editingForm.team_id || ''} 
+                            onChange={val => setEditingForm({...editingForm, team_id: val})} 
+                            options={[{ value: '', label: 'Geral (Todas as Equipes)' }, ...teams.map(t => ({ value: t.id, label: t.name }))]} 
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Descrição do Propósito</label>
+                          <textarea 
+                            className="w-full bg-white border border-surface-border rounded-3xl px-6 py-4 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all min-h-[150px] shadow-sm leading-relaxed" 
+                            value={editingForm.description} 
+                            onChange={e => setEditingForm({...editingForm, description: e.target.value})} 
+                            placeholder="Descreva detalhadamente o que este formulário avalia e quais os objetivos..." 
+                          />
+                        </div>
                       </div>
-                    ))}
-                    {(!editingForm.critical_errors || editingForm.critical_errors.length === 0) && (
-                      <div className="py-8 text-center border-2 border-dashed border-surface-border/40 rounded-[28px]">
-                        <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Nenhum erro crítico configurado</p>
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === 'pilares' && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-black text-brand-primary uppercase tracking-widest">Definição da Estrutura</h4>
+                        <p className="text-[10px] font-bold text-brand-muted uppercase mt-1">Crie os pilares de avaliação e distribua os pesos.</p>
                       </div>
-                    )}
-                  </div>
-                </div>
+                      <Button variant="outline" size="sm" onClick={addSection} icon={<Plus className="w-4 h-4" />} className="rounded-2xl border-brand-accent/30 text-brand-accent hover:bg-brand-accent/5">Novo Pilar</Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-6">
+                      {editingForm.sections?.map((section, sIdx) => (
+                        <div key={section.id} className="bg-white rounded-[32px] border border-surface-border shadow-premium-sm overflow-hidden border-l-8 border-l-brand-accent">
+                          <div className="p-6 border-b border-surface-border bg-surface-subtle/10 flex items-center justify-between gap-6">
+                            <div className="flex items-center gap-4 flex-1">
+                              <span className="text-[10px] font-black text-brand-muted/40 uppercase tracking-widest">#{sIdx + 1}</span>
+                              <input 
+                                className="bg-transparent border-none p-0 text-lg font-black text-brand-primary uppercase tracking-tight focus:ring-0 w-full placeholder:text-brand-muted/30"
+                                value={section.title}
+                                onChange={e => updateSection(section.id, 'title', e.target.value)}
+                                placeholder="NOME DO PILAR (Ex: QUALIDADE)"
+                              />
+                            </div>
+                            <div className="flex items-center gap-6">
+                              <div className="flex flex-col items-end">
+                                <label className="text-[8px] font-black text-brand-muted uppercase tracking-[0.2em] mb-1">Peso do Pilar</label>
+                                <div className="flex items-center gap-2 bg-white border border-surface-border rounded-xl px-3 py-1.5 shadow-sm">
+                                  <input 
+                                    type="number" 
+                                    className="w-10 bg-transparent border-none p-0 text-sm font-black text-brand-primary focus:ring-0 text-center"
+                                    value={section.weight}
+                                    onChange={e => updateSection(section.id, 'weight', parseInt(e.target.value) || 0)}
+                                  />
+                                  <span className="text-[10px] font-black text-brand-muted">%</span>
+                                </div>
+                              </div>
+                              <button onClick={() => removeSection(section.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-brand-muted/40 hover:text-error transition-all"><Trash2 className="w-5 h-5" /></button>
+                            </div>
+                          </div>
+                          
+                          <div className="p-6 bg-surface-bg/5 space-y-3">
+                            {section.questions.map((q, qIdx) => {
+                              const itemWeightInPilar = section.questions.length > 0 ? (100 / section.questions.length).toFixed(1) : 0;
+                              const itemImpactInTotal = section.questions.length > 0 ? ((section.weight || 0) / section.questions.length).toFixed(1) : 0;
+
+                              return (
+                                <div key={q.id} className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-surface-border group hover:border-brand-accent/40 transition-all shadow-sm">
+                                  <div className="w-8 h-8 rounded-lg bg-surface-subtle flex items-center justify-center text-[10px] font-black text-brand-muted">{qIdx + 1}</div>
+                                  <div className="flex-1">
+                                    <input 
+                                      className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary w-full focus:ring-0 placeholder:text-brand-muted/30"
+                                      value={q.text}
+                                      onChange={e => updateQuestion(section.id, q.id, 'text', e.target.value)}
+                                      placeholder="Ex: Utilizou a saudação padrão corretamente?"
+                                    />
+                                    <div className="flex items-center gap-4 mt-1.5 opacity-60">
+                                      <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Peso no Pilar: {itemWeightInPilar}%</span>
+                                      <span className="text-brand-muted/20">•</span>
+                                      <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Impacto Global: {itemImpactInTotal}%</span>
+                                    </div>
+                                  </div>
+                                  <button onClick={() => removeQuestion(section.id, q.id)} className="p-2 text-brand-muted/30 hover:text-error transition-colors opacity-0 group-hover:opacity-100"><X className="w-4 h-4" /></button>
+                                </div>
+                              );
+                            })}
+                            
+                            <button 
+                              onClick={() => addQuestion(section.id)}
+                              className="w-full py-4 rounded-2xl border-2 border-dashed border-surface-border/60 text-brand-muted text-[10px] font-black uppercase tracking-widest hover:border-brand-accent/40 hover:text-brand-accent hover:bg-brand-accent/5 transition-all flex items-center justify-center gap-2"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Adicionar Critério ao Pilar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                      {(!editingForm.sections || editingForm.sections.length === 0) && (
+                        <div className="bg-white/50 p-16 rounded-[40px] border-2 border-dashed border-surface-border text-center">
+                          <div className="w-20 h-20 rounded-[2.5rem] bg-white shadow-premium flex items-center justify-center mx-auto mb-6">
+                            <Plus className="w-10 h-10 text-brand-muted/40" />
+                          </div>
+                          <h5 className="text-brand-primary font-black uppercase tracking-widest text-sm">Nenhum Pilar Definido</h5>
+                          <p className="text-brand-muted text-[10px] font-bold uppercase mt-2">Clique no botão acima ou abaixo para começar a estruturar o formulário.</p>
+                          <Button variant="outline" onClick={addSection} className="mt-8 rounded-2xl">Criar Primeiro Pilar</Button>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === 'criticos' && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-black text-error uppercase tracking-widest flex items-center gap-2">
+                          <AlertOctagon className="w-5 h-5" />
+                          Erros Críticos (Zeradores)
+                        </h4>
+                        <p className="text-[10px] font-bold text-brand-muted uppercase mt-1">Itens que, se marcados como 'NÃO', zeram automaticamente a monitoria.</p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={addCriticalError} icon={<Plus className="w-4 h-4" />} className="rounded-2xl border-error/30 text-error hover:bg-red-50 hover:border-error">Novo Erro Crítico</Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      {editingForm.critical_errors?.map((ce, idx) => (
+                        <div key={ce.id} className="flex items-center gap-4 p-5 rounded-2xl bg-white border border-surface-border border-l-8 border-l-error group hover:border-error/20 transition-all shadow-sm">
+                          <div className="w-10 h-10 rounded-xl bg-error/5 text-error flex items-center justify-center text-[10px] font-black">{idx + 1}</div>
+                          <div className="flex-1">
+                            <input 
+                              className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary w-full focus:ring-0 placeholder:text-brand-muted/30"
+                              value={ce.text}
+                              onChange={e => updateCriticalError(ce.id, 'text', e.target.value)}
+                              placeholder="Ex: Fraude ou quebra de protocolo de segurança..."
+                            />
+                          </div>
+                          <button onClick={() => removeCriticalError(ce.id)} className="p-2 text-brand-muted/30 hover:text-error transition-colors opacity-0 group-hover:opacity-100"><X className="w-5 h-5" /></button>
+                        </div>
+                      ))}
+                      
+                      {(!editingForm.critical_errors || editingForm.critical_errors.length === 0) && (
+                        <div className="py-20 text-center border-2 border-dashed border-surface-border/40 rounded-[40px] bg-white/30">
+                          <AlertOctagon className="w-12 h-12 text-brand-muted/20 mx-auto mb-4" />
+                          <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Nenhum erro crítico foi configurado para este formulário</p>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
               </div>
               
-              <footer className="p-8 border-t border-surface-border bg-white flex items-center justify-between">
-                <p className="text-[10px] font-bold text-brand-muted uppercase">
-                  {totalWeight !== 100 && <span className="text-error flex items-center gap-2"><AlertTriangle className="w-3 h-3" /> A soma dos pesos deve ser exatamente 100%.</span>}
-                </p>
-                <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => setIsModalOpen(false)} className="rounded-[20px]">Cancelar</Button>
-                  <Button onClick={handleSaveForm} disabled={saving || totalWeight !== 100} className="rounded-[20px] px-8 bg-brand-primary">
-                    {saving ? 'Salvando...' : 'Publicar Formulário'}
+              <footer className="p-8 border-t border-surface-border bg-white flex items-center justify-between sticky bottom-0">
+                <div className="flex items-center gap-4">
+                  {totalWeight !== 100 && (
+                    <div className="flex items-center gap-2 text-error animate-pulse">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">O peso total deve ser 100% (Atual: {totalWeight}%)</span>
+                    </div>
+                  )}
+                  {totalWeight === 100 && (
+                    <div className="flex items-center gap-2 text-success">
+                      <Check className="w-4 h-4" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Estrutura de pesos válida</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-4">
+                  <Button variant="ghost" onClick={() => setIsModalOpen(false)} className="rounded-2xl px-6">Cancelar</Button>
+                  <Button onClick={handleSaveForm} disabled={saving || totalWeight !== 100} className="rounded-2xl px-10 shadow-premium shadow-brand-primary/20">
+                    {saving ? 'Publicando...' : (editingForm.id ? 'Salvar Alterações' : 'Publicar Formulário')}
                   </Button>
                 </div>
               </footer>
@@ -917,7 +1004,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome</label>
                     <input type="text" className="w-full bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
                   </div>
-                  <Select label="Perfil" value={approveData.role} onChange={e => setApproveData({...approveData, role: e.target.value})} options={[{ value: 'admin', label: 'Admin' }, { value: 'gestor_qualidade', label: 'G. Qualidade' }, { value: 'gestor_suporte', label: 'G. Suporte' }, { value: 'qualidade', label: 'Auditor' }, { value: 'suporte', label: 'Agente' }]} />
+                  <Select label="Perfil" value={approveData.role} onChange={e => setApproveData({...approveData, role: e.target.value})} options={[{ value: 'admin', label: 'Admin' }, { value: 'gestor_qualidade', label: 'Gestor Qual.' }, { value: 'gestor_suporte', label: 'Gestor Suporte' }, { value: 'qualidade', label: 'Qualidade' }, { value: 'suporte', label: 'Suporte' }]} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipes</label>

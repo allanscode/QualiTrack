@@ -165,9 +165,9 @@ export default function SupportManagerDashboard() {
           accent={getLevelForScore(avgScore).color}
         />
         <StatCard
-          title="Pendentes Agente"
+          title="Pendentes Suporte"
           value={pendingAgent}
-          sub="Aguardando ciência do agente"
+          sub="Aguardando ciência do suporte"
           good={pendingAgent === 0}
           icon={<Users className="w-5 h-5" />}
           accent="text-warning"
@@ -185,8 +185,8 @@ export default function SupportManagerDashboard() {
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`}
           sub="2ª metade vs 1ª metade do período"
           good={trendPercentage >= 0}
-          icon={<TrendingUp className="w-5 h-5" />}
-          accent="text-blue-600"
+          icon={<TrendingUp className="w-4 h-4" />}
+          accent="text-info"
         />
       </div>
 
@@ -250,12 +250,12 @@ export default function SupportManagerDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RankingWidget
           title="Top Melhores Notas"
-          subtitle={`Agentes acima da meta (${config.targetScore}%)`}
+          subtitle={`Suporte acima da meta (${config.targetScore}%)`}
           data={topAgents}
         />
         <RankingWidget
           title="Oportunidades de Melhoria"
-          subtitle={`Agentes abaixo da meta — mais críticos primeiro`}
+          subtitle={`Suporte abaixo da meta — mais críticos primeiro`}
           data={bottomAgents}
         />
       </div>

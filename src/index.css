@@ -7,6 +7,7 @@
   --color-brand-muted: #7A7D71;      /* Muted Sage / Secondary Text */
   --color-brand-accent: #A7C0A5;     /* Soft Green / Action */
   --color-brand-highlight: #C5C7BB;  /* Pale Sage / Border Accent */
+  --color-brand-subtle: #F0F1E8;     /* Alias: lightest sage (= surface-subtle) */
   
   /* ── Surface Colors ── */
   --color-surface-bg: #F9F9F6;      /* Off-white background */

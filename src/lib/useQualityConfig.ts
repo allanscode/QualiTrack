@@ -11,6 +11,12 @@ export interface QualityLevel {
 export interface QualityConfig {
   levels: QualityLevel[];
   targetScore: number; // The "meta" threshold, e.g. 75
+  sla: {
+    agentReview: number;
+    auditorReevaluation: number;
+    managerSupport: number;
+    managerQuality: number;
+  };
 }
 
 const DEFAULT_CONFIG: QualityConfig = {
@@ -19,7 +25,13 @@ const DEFAULT_CONFIG: QualityConfig = {
     { label: 'Excelente', minScore: 96, maxScore: 100, color: 'text-indigo-700', bgColor: 'bg-indigo-50' },
     { label: 'Aceitável', minScore: 75, maxScore: 95,  color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
     { label: 'Ruim',      minScore: 0,  maxScore: 74,  color: 'text-red-700',     bgColor: 'bg-red-50' },
-  ]
+  ],
+  sla: {
+    agentReview: 48,
+    auditorReevaluation: 24,
+    managerSupport: 24,
+    managerQuality: 24,
+  }
 };
 
 const STORAGE_KEY = 'qualitrack_quality_config';

@@ -72,28 +72,31 @@ export default function FilterBar() {
           value={filters.teamId}
           options={[{ value: '', label: 'Equipe' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
           onChange={(val: string) => setFilters({ ...filters, teamId: val, agentId: '' })}
+          className="w-48"
         />
 
         {/* Agent Select */}
         <CustomSelect 
           value={filters.agentId}
           options={[
-            { value: '', label: 'Agente' }, 
+            { value: '', label: 'Suporte' }, 
             ...activeAgents
               .filter(a => !filters.teamId || (a.team_ids && a.team_ids.includes(filters.teamId)))
               .map(a => ({ value: a.id, label: a.name }))
           ]}
           onChange={(val: string) => setFilters({ ...filters, agentId: val })}
+          className="w-64"
         />
 
         {/* Auditor Select */}
         <CustomSelect 
           value={filters.auditorId}
           options={[
-            { value: '', label: 'Auditores' },
+            { value: '', label: 'Qualidade' },
             ...activeAuditors.map(a => ({ value: a.id, label: a.name }))
           ]}
           onChange={(val: string) => setFilters({ ...filters, auditorId: val })}
+          className="w-48"
         />
 
         {/* Action Buttons */}
