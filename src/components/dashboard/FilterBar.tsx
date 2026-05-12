@@ -1,135 +1,174 @@
-import React from 'react';
-import { Search, Users, Calendar, Filter, X, RefreshCw } from 'lucide-react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { Calendar, X, RefreshCw, ChevronDown, UserCheck } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
 import Button from '../ui/Button';
+
+// Custom Select Component for a modern look
+function CustomSelect({ label, value, options, onChange, placeholder = "Selecionar..." }: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selectedOption = options.find((opt: any) => opt.value === value);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="flex flex-col min-w-[140px] relative" ref={containerRef}>
+      <span className="text-[10px] font-black text-brand-muted uppercase tracking-widest mb-1 ml-1">{label}</span>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-between bg-surface-subtle border border-surface-border rounded-xl px-3 py-2 text-sm font-bold text-brand-primary hover:border-brand-primary/20 transition-all"
+      >
+        <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
+        <ChevronDown className={`w-3.5 h-3.5 ml-2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-surface-border rounded-2xl shadow-xl z-50 max-h-60 overflow-auto py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          {options.map((opt: any) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left px-4 py-2 text-sm font-medium transition-colors hover:bg-brand-primary/5 ${value === opt.value ? 'text-brand-primary bg-brand-primary/5' : 'text-brand-muted'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function FilterBar() {
   const { filters, setFilters, users, teams, loading, refresh } = useDashboard();
 
+  const defaults = useMemo(() => ({
+    startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    teamId: '',
+    agentId: '',
+    auditorId: '',
+  }), []);
+
+  const hasChanged = useMemo(() => {
+    return filters.startDate !== defaults.startDate || 
+           filters.endDate !== defaults.endDate || 
+           filters.teamId !== defaults.teamId || 
+           filters.agentId !== defaults.agentId ||
+           filters.auditorId !== defaults.auditorId;
+  }, [filters, defaults]);
+
   const handleClear = () => {
-    setFilters({
-      search: '',
-      team: 'all',
-      agent: 'all',
-      status: 'all',
-      channel: 'all',
-      period: '30'
-    });
+    setFilters(prev => ({
+      ...prev,
+      startDate: defaults.startDate,
+      endDate: defaults.endDate,
+      teamId: '',
+      agentId: '',
+      auditorId: '',
+    }));
   };
 
-  const agents = users.filter(u => u.role === 'suporte');
-  
-  // Check if any filter is active (excluding the period which always has a value)
-  const hasFilters = filters.search !== '' || 
-                     filters.team !== 'all' || 
-                     filters.agent !== 'all' || 
-                     filters.status !== 'all' ||
-                     filters.channel !== 'all';
+  const activeTeams = useMemo(() => teams.filter(t => t.active !== false), [teams]);
+  const activeAgents = useMemo(() => users.filter(u => u.role === 'suporte' && u.active !== false), [users]);
+  const activeAuditors = useMemo(() => users.filter(u => (u.role === 'qualidade' || u.role === 'gestor_qualidade' || u.role === 'admin') && u.active !== false), [users]);
 
   return (
-    <div className="bg-white rounded-3xl border border-surface-border shadow-premium p-4">
-      <div className="flex flex-nowrap items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
-        {/* Search */}
-        <div className="relative flex-shrink-1 min-w-[200px] w-64">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
-          <input
-            type="text"
-            placeholder="Buscar..."
-            className="w-full pl-11 pr-4 py-2.5 bg-surface-subtle border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-brand-primary/20 transition-all outline-none"
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-          />
+    <div className="bg-white rounded-3xl border border-surface-border shadow-sm p-4">
+      <div className="flex flex-nowrap items-end gap-4">
+        
+        {/* Date Range Group */}
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black text-brand-muted uppercase tracking-widest mb-1 ml-1">Período</span>
+          <div className="flex items-center gap-3 bg-surface-subtle border border-surface-border rounded-xl px-4 py-1.5 h-[38px]">
+            <div className="flex items-center gap-2 relative">
+              <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
+              <input 
+                type="date" 
+                value={filters.startDate} 
+                onChange={e => setFilters({ ...filters, startDate: e.target.value })} 
+                className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary focus:ring-0 w-28 cursor-pointer relative z-0" 
+              />
+            </div>
+            <span className="text-brand-muted font-bold text-[10px] uppercase tracking-widest px-1">até</span>
+            <div className="flex items-center gap-2 relative">
+              <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
+              <input 
+                type="date" 
+                value={filters.endDate} 
+                onChange={e => setFilters({ ...filters, endDate: e.target.value })} 
+                className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary focus:ring-0 w-28 cursor-pointer relative z-0" 
+              />
+            </div>
+          </div>
         </div>
 
         {/* Team Select */}
-        <div className="flex items-center gap-2 flex-shrink-0 min-w-0">
-          <div className="w-10 h-10 rounded-2xl bg-surface-subtle flex items-center justify-center text-brand-muted flex-shrink-0">
-            <Users className="w-4 h-4" />
-          </div>
-          <select
-            className="bg-transparent border-none text-sm font-bold text-brand-primary outline-none focus:ring-0 cursor-pointer min-w-0"
-            value={filters.team}
-            onChange={(e) => setFilters({ ...filters, team: e.target.value, agent: 'all' })}
-          >
-            <option value="all">Todas Equipes</option>
-            {teams.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-        </div>
+        <CustomSelect 
+          label="Equipe"
+          value={filters.teamId}
+          options={[{ value: '', label: 'Todas' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
+          onChange={(val: string) => setFilters({ ...filters, teamId: val, agentId: '' })}
+        />
 
         {/* Agent Select */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <select
-            className="bg-transparent border-none text-sm font-bold text-brand-primary outline-none focus:ring-0 cursor-pointer min-w-[120px]"
-            value={filters.agent}
-            onChange={(e) => setFilters({ ...filters, agent: e.target.value })}
-          >
-            <option value="all">Todos Agentes</option>
-            {agents
-              .filter(a => filters.team === 'all' || (a.team_ids && a.team_ids.includes(filters.team)))
-              .map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))
-            }
-          </select>
-        </div>
+        <CustomSelect 
+          label="Agente"
+          value={filters.agentId}
+          options={[
+            { value: '', label: 'Todos' }, 
+            ...activeAgents
+              .filter(a => !filters.teamId || (a.team_ids && a.team_ids.includes(filters.teamId)))
+              .map(a => ({ value: a.id, label: a.name }))
+          ]}
+          onChange={(val: string) => setFilters({ ...filters, agentId: val })}
+        />
 
-        {/* Status Select */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-10 h-10 rounded-2xl bg-surface-subtle flex items-center justify-center text-brand-muted">
-            <Filter className="w-4 h-4" />
-          </div>
-          <select
-            className="bg-transparent border-none text-sm font-bold text-brand-primary outline-none focus:ring-0 cursor-pointer min-w-[120px]"
-            value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          >
-            <option value="all">Todos Status</option>
-            <option value="pendente_revisao">Aguardando Revisão</option>
-            <option value="em_contestacao">Em Reanálise</option>
-            <option value="aguardando_gestor_suporte">Aguardando Gestor</option>
-            <option value="concluida">Concluída</option>
-          </select>
-        </div>
-
-        {/* Period Select */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-10 h-10 rounded-2xl bg-surface-subtle flex items-center justify-center text-brand-muted">
-            <Calendar className="w-4 h-4" />
-          </div>
-          <select
-            className="bg-transparent border-none text-sm font-bold text-brand-primary outline-none focus:ring-0 cursor-pointer min-w-[120px]"
-            value={filters.period}
-            onChange={(e) => setFilters({ ...filters, period: e.target.value })}
-          >
-            <option value="7">Últimos 7 dias</option>
-            <option value="15">Últimos 15 dias</option>
-            <option value="30">Últimos 30 dias</option>
-            <option value="90">Últimos 90 dias</option>
-          </select>
-        </div>
+        {/* Auditor Select */}
+        <CustomSelect 
+          label="Auditores"
+          value={filters.auditorId}
+          options={[
+            { value: '', label: 'Todos' },
+            ...activeAuditors.map(a => ({ value: a.id, label: a.name }))
+          ]}
+          onChange={(val: string) => setFilters({ ...filters, auditorId: val })}
+        />
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 ml-auto flex-shrink-0 pl-4 border-l border-surface-border">
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0 pl-6 border-l border-surface-border self-center h-10">
           <Button
             variant="ghost"
             size="sm"
             onClick={refresh}
             loading={loading}
-            icon={<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />}
-            className="text-brand-muted hover:text-brand-primary"
+            icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
+            className="text-brand-muted hover:text-brand-primary uppercase text-[10px] tracking-widest font-black"
           >
             Atualizar
           </Button>
 
-          {hasFilters && (
+          {hasChanged && (
             <Button
               variant="ghost"
               size="sm"
               onClick={handleClear}
-              icon={<X className="w-4 h-4" />}
-              className="text-error hover:bg-error/5"
+              icon={<X className="w-3.5 h-3.5" />}
+              className="text-error hover:bg-error/5 uppercase text-[10px] tracking-widest font-black"
             >
               Limpar Filtros
             </Button>

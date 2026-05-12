@@ -83,10 +83,6 @@ export default function AgentDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
-      <header>
-        <h1 className="text-2xl font-black text-brand-primary tracking-tight uppercase">Meu Desempenho</h1>
-        <p className="text-brand-muted text-sm font-medium mt-1">Olá, {user.name}. Veja como está sua qualidade este mês.</p>
-      </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 

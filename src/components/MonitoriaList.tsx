@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
-import { Monitoria, MonitoriaStatus, User, Team, EvaluationForm } from '../types';
+import { Monitoria, MonitoriaStatus, User, Team, EvaluationForm, MonitoriaHistoryEntry } from '../types';
 import { 
   Search, 
   Eye, 
@@ -21,7 +21,8 @@ import {
   Tag,
   User as UserIcon,
   AlertTriangle,
-  X
+  X,
+  History
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -32,7 +33,7 @@ import { ptBR } from 'date-fns/locale';
 import Card from './ui/Card';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
-import Select from './ui/Select';
+import CustomSelect from './ui/Select'; 
 
 export default function MonitoriaList({ user, onNew }: { user: User | null; onNew: () => void }) {
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
@@ -44,6 +45,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'active' | 'removed'>('active');
   const [teamFilter, setTeamFilter] = useState<string>('');
+  const [auditorFilter, setAuditorFilter] = useState<string>('');
   const [dateType, setDateType] = useState<'analysis' | 'ticket'>('analysis');
   const [startDate, setStartDate] = useState(new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
@@ -87,27 +89,27 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
 
   const filtered = useMemo(() => {
     return monitorias.filter(m => {
-      // Role-based visibility
-      if (user?.role === 'suporte' && m.evaluated_id !== user.id) return false;
-      if (user?.role === 'qualidade' && m.evaluator_id !== user.id) return false;
-      
       // Active/Removed
       if (statusFilter === 'active' && m.active === false) return false;
       if (statusFilter === 'removed' && m.active !== false) return false;
 
+      // Role-based visibility
+      if (user?.role === 'suporte' && m.evaluated_id !== user.id) return false;
+      if (user?.role === 'qualidade' && m.evaluator_id !== user.id) return false;
+
       // Tab (navigation by status)
       if (tab !== 'todas' && m.status !== tab) return false;
 
-      // Team Filter
+      // Filters
       if (teamFilter && m.team_id !== teamFilter) return false;
+      if (auditorFilter && m.evaluator_id !== auditorFilter) return false;
 
-      // Search
+      // Search - Ticket ID or Monitoria ID only
       if (search) {
         const s = search.toLowerCase();
         const ticketId = m.ticket_id.toLowerCase();
         const displayId = (m.display_id || '').toString();
-        const agentName = getName(m.evaluated_id).toLowerCase();
-        if (!ticketId.includes(s) && !displayId.includes(s) && !agentName.includes(s)) return false;
+        if (!ticketId.includes(s) && !displayId.includes(s)) return false;
       }
 
       // Dates
@@ -117,15 +119,16 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
 
       return true;
     });
-  }, [monitorias, user, tab, search, statusFilter, teamFilter, dateType, startDate, endDate]);
+  }, [monitorias, user, tab, search, statusFilter, teamFilter, auditorFilter, dateType, startDate, endDate]);
 
   const hasActiveFilters = useMemo(() => {
-    return search !== '' || teamFilter !== '';
-  }, [search, teamFilter]);
+    return search !== '' || teamFilter !== '' || auditorFilter !== '';
+  }, [search, teamFilter, auditorFilter]);
 
   const clearFilters = () => {
     setSearch('');
     setTeamFilter('');
+    setAuditorFilter('');
   };
 
   const getStatusConfig = (status: MonitoriaStatus) => {
@@ -150,14 +153,19 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     if (!monitoria) return;
 
     const now = new Date().toISOString();
-    const historyEntry = { 
-        action: type === 'contestar' ? 'Contestação realizada' : 
-                type === 'manter' ? 'Decisão mantida' : 
-                type === 'escalar' ? 'Escalado para Qualidade' : 
-                type === 'excluir' ? 'Monitoria removida' : 
-                type === 'reavaliar' ? 'Reavaliação solicitada' :
-                type === 'devolver' ? 'Devolvido para reanálise do Auditor' :
-                'Ação realizada', 
+    const actionDescriptions: Record<string, string> = {
+      'aceitar': 'Monitoria aceita pelo agente',
+      'contestar': 'Contestação realizada pelo agente',
+      'manter': 'Contestação mantida pelo Gestor de Suporte',
+      'aprovar': 'Monitoria aprovada pelo Gestor de Suporte',
+      'escalar': 'Escalado para decisão da Qualidade',
+      'excluir': 'Monitoria removida pelo Administrador',
+      'reavaliar': 'Reavaliação aceita pelo Gestor de Qualidade',
+      'devolver': 'Devolvido para reanálise do Auditor'
+    };
+
+    const historyEntry: MonitoriaHistoryEntry = { 
+        action: actionDescriptions[type] || 'Ação realizada', 
         by_id: user.id, 
         by_name: user.name, 
         at: now, 
@@ -196,6 +204,9 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     } finally { setSubmitting(false); }
   };
 
+  const activeTeams = useMemo(() => teams.filter(t => t.active !== false), [teams]);
+  const activeAuditors = useMemo(() => users.filter(u => ['qualidade', 'gestor_qualidade', 'admin'].includes(u.role) && u.active !== false), [users]);
+
   if (loading) return (
     <div className="space-y-4">
       {[1,2,3].map(i => <div key={i} className="h-24 bg-white rounded-card border border-surface-border animate-pulse" />)}
@@ -214,144 +225,208 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-brand-primary tracking-tight">Monitorias</h1>
-          <p className="text-brand-muted text-sm font-medium mt-1">Acompanhe e gerencie a qualidade da operação.</p>
-        </div>
-        <Button onClick={onNew} icon={<ArrowRight className="w-4 h-4" />}>Nova Monitoria</Button>
-      </header>
-
-      <Card padding="none" className="overflow-hidden">
-        <div className="p-5 bg-surface-bg/30 border-b border-surface-border">
-          <div className="flex flex-wrap items-center gap-4">
+    <div className="space-y-4 animate-fade-in">
+      <Card padding="none" className="border-none shadow-premium-sm bg-white/50 backdrop-blur-md">
+        <div className="p-4 bg-white/40 border-b border-surface-border">
+          <div className="flex flex-nowrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
               <input 
                 type="text"
-                placeholder="Buscar ticket ou agente..."
+                placeholder="Buscar ticket ou monitoria..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full bg-white border border-surface-border rounded-xl py-2 pl-9 pr-4 text-xs font-semibold focus:border-brand-accent focus:outline-none"
+                className="w-full bg-white border border-surface-border rounded-2xl py-2 pl-9 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none"
               />
             </div>
 
-            <Select 
-              value={teamFilter}
-              onChange={e => setTeamFilter(e.target.value)}
-              className="w-40"
-              options={[{ value: '', label: 'Todas Equipes' }, ...teams.map(t => ({ value: t.id, label: t.name }))]}
-            />
-
-            <div className="flex items-center gap-2 bg-white border border-surface-border rounded-xl px-3 py-2">
-              <Calendar className="w-3.5 h-3.5 text-brand-muted" />
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent border-none p-0 text-[10px] font-bold w-24 focus:ring-0" />
-              <span className="text-brand-highlight">→</span>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent border-none p-0 text-[10px] font-bold w-24 focus:ring-0" />
+            <div className="w-40">
+              <CustomSelect 
+                value={teamFilter}
+                onChange={e => setTeamFilter(e.target.value)}
+                options={[{ value: '', label: 'Equipes' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
+              />
             </div>
 
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} icon={<X className="w-4 h-4" />} className="text-error hover:bg-red-50">
-                Limpar Filtros
-              </Button>
-            )}
+            <div className="w-40">
+              <CustomSelect 
+                value={auditorFilter}
+                onChange={e => setAuditorFilter(e.target.value)}
+                options={[{ value: '', label: 'Auditores' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
+              />
+            </div>
 
-            {user?.role === 'admin' && (
-              <Select 
+            <div className="flex items-center gap-2 bg-white border border-surface-border rounded-2xl px-3 py-1.5 shadow-sm group hover:border-brand-accent transition-colors relative">
+              <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative">
+                <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={e => setStartDate(e.target.value)} 
+                  className="bg-transparent border-none p-0 text-[11px] font-black w-[100px] focus:ring-0 cursor-pointer relative z-0" 
+                />
+              </div>
+              <span className="text-brand-muted/30 font-black text-[10px] uppercase tracking-widest mx-0.5">até</span>
+              <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative">
+                <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={e => setEndDate(e.target.value)} 
+                  className="bg-transparent border-none p-0 text-[11px] font-black w-[100px] focus:ring-0 cursor-pointer relative z-0" 
+                />
+              </div>
+            </div>
+
+            <div className="w-32">
+              <CustomSelect 
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value as any)}
                 options={[{ value: 'active', label: 'Ativas' }, { value: 'removed', label: 'Removidas' }]}
               />
+            </div>
+
+            {hasActiveFilters && (
+              <button 
+                onClick={clearFilters}
+                className="p-2.5 rounded-2xl bg-red-50 text-error hover:bg-error hover:text-white transition-all group"
+                title="Limpar Filtros"
+              >
+                <X className="w-4 h-4" />
+              </button>
             )}
           </div>
 
-          <div className="flex items-center gap-2 mt-4 overflow-x-auto no-scrollbar">
-            {['todas', 'pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'concluida'].map(t => (
-              <button
-                key={t}
-                onClick={() => setTab(t as any)}
-                className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === t ? 'bg-brand-primary text-white shadow-premium' : 'bg-white text-brand-muted hover:bg-surface-subtle'}`}
-              >
-                {t === 'todas' ? 'Tudo' : getStatusConfig(t as any).label}
-                <span className="ml-2 opacity-60">
-                  {monitorias.filter(m => t === 'todas' || m.status === t).length}
-                </span>
-              </button>
-            ))}
+          <div className="flex items-center gap-2 mt-4 overflow-x-auto no-scrollbar pb-1">
+            {['todas', 'pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'concluida'].map(t => {
+              const count = monitorias.filter(m => {
+                const matchesActiveStatus = statusFilter === 'active' ? m.active !== false : m.active === false;
+                const matchesTab = t === 'todas' || m.status === t;
+                return matchesActiveStatus && matchesTab;
+              }).length;
+
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTab(t as any)}
+                  className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 whitespace-nowrap ${tab === t ? 'bg-brand-primary text-white shadow-premium' : 'bg-white text-brand-muted hover:bg-surface-subtle hover:text-brand-primary'}`}
+                >
+                  {t === 'todas' ? 'Tudo' : getStatusConfig(t as any).label}
+                  <span className={`px-1.5 py-0.5 rounded-lg text-[9px] ${tab === t ? 'bg-white/20 text-white' : 'bg-surface-subtle text-brand-muted'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="divide-y divide-surface-subtle">
+        <div className="divide-y divide-surface-subtle bg-white">
           {filtered.length > 0 ? filtered.map(m => {
             const config = getStatusConfig(m.status);
             const isExpanded = expandedId === m.id;
             const scoreColor = m.score !== undefined ? (m.score >= 85 ? 'text-brand-accent' : m.score >= 75 ? 'text-warning' : 'text-error') : 'text-brand-muted';
 
             return (
-              <div key={m.id} className={`p-4 hover:bg-surface-bg/50 transition-all ${isExpanded ? 'bg-surface-bg/30' : ''}`}>
+              <div key={m.id} className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
                 <div className="flex items-center justify-between gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : m.id)}>
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 bg-surface-bg text-brand-muted group-hover:bg-brand-subtle`}>
+                    <div className={`w-11 h-11 rounded-[1.25rem] flex items-center justify-center flex-shrink-0 bg-surface-bg text-brand-muted shadow-sm`}>
                       <config.icon className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="info" size="xs">Mon: {m.display_id || m.id.slice(0,4)}</Badge>
-                        <span className="font-mono text-xs font-bold text-brand-primary">#{m.ticket_id}</span>
-                        <Badge variant={config.variant} size="xs">{config.label}</Badge>
+                        <span className="text-[10px] font-black text-brand-muted/70 uppercase tracking-widest">#{m.display_id || m.id.slice(0,4)}</span>
+                        <span className="text-brand-muted/30">•</span>
+                        <span className="font-mono text-xs font-black text-brand-primary tracking-tight">TICKET {m.ticket_id}</span>
+                        <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">{config.label}</Badge>
                       </div>
                       <div className="flex items-center gap-3 text-[10px] font-bold text-brand-muted uppercase tracking-tight">
-                        <span className="flex items-center gap-1"><UserIcon className="w-3 h-3" /> {getName(m.evaluated_id)}</span>
-                        <span className="text-brand-highlight">•</span>
-                        <span className="flex items-center gap-1"><Tag className="w-3 h-3" /> {teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
+                        <span className="flex items-center gap-1.5"><UserIcon className="w-3 h-3 text-brand-highlight" /> {getName(m.evaluated_id)}</span>
+                        <span className="text-brand-muted/20">•</span>
+                        <span className="flex items-center gap-1.5"><Tag className="w-3 h-3 text-brand-highlight" /> {teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-8">
                     <div className="text-right">
-                      <p className={`text-xl font-black ${scoreColor}`}>{m.score !== undefined ? `${m.score}%` : '—'}</p>
-                      <p className="text-[9px] font-bold text-brand-muted uppercase">{format(new Date(m.created_at), 'dd/MM/yyyy')}</p>
+                      <p className={`text-xl font-black ${scoreColor} tracking-tighter`}>{m.score !== undefined ? `${m.score}%` : '—'}</p>
+                      <p className="text-[9px] font-black text-brand-muted uppercase tracking-widest opacity-60 mt-0.5">{format(new Date(m.created_at), 'dd MMM yyyy', { locale: ptBR })}</p>
                     </div>
-                    {isExpanded ? <ChevronUp className="w-5 h-5 text-brand-highlight" /> : <ChevronDown className="w-5 h-5 text-brand-highlight" />}
+                    <div className={`p-2 rounded-xl transition-colors ${isExpanded ? 'bg-brand-primary/5 text-brand-primary' : 'text-brand-highlight'}`}>
+                      {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </div>
                   </div>
                 </div>
 
                 <AnimatePresence>
                   {isExpanded && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-t border-surface-subtle">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-t border-surface-border/50">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-2">
+                        <div className="space-y-6">
                           <div>
-                            <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest mb-1">Observações do Auditor</p>
-                            <p className="text-sm text-brand-primary font-medium bg-white p-3 rounded-xl border border-surface-border">{m.evaluator_note || 'Nenhuma observação registrada.'}</p>
+                            <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-2 ml-1">Observações do Auditor</p>
+                            <p className="text-sm text-brand-primary font-medium bg-surface-bg/50 p-4 rounded-3xl border border-surface-border/40 min-h-[80px] leading-relaxed italic">
+                              "{m.evaluator_note || 'Nenhuma observação registrada.'}"
+                            </p>
                           </div>
+                          
                           {m.history?.length > 0 && (
                             <div>
-                              <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest mb-2">Linha do Tempo</p>
-                              <div className="space-y-2">
+                              <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-3 ml-1 flex items-center gap-2">
+                                <History className="w-3 h-3" /> Linha do Tempo
+                              </p>
+                              <div className="space-y-4 ml-2 border-l-2 border-surface-border/60 pl-6 py-1">
                                 {m.history.map((h, i) => (
-                                  <div key={i} className="flex items-start gap-2 text-xs">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-brand-highlight mt-1.5" />
-                                    <span className="text-brand-muted"><strong className="text-brand-primary">{h.by_name}</strong>: {h.action} <span className="opacity-50">• {format(new Date(h.at), 'HH:mm')}</span></span>
+                                  <div key={i} className="relative">
+                                    <div className="absolute -left-[31px] top-1.5 w-2 h-2 rounded-full bg-brand-accent border-2 border-white shadow-sm" />
+                                    <div className="flex flex-col">
+                                      <span className="text-[11px] font-bold text-brand-primary leading-none">{h.action}</span>
+                                      <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70">
+                                        {h.by_name} <span className="mx-1">•</span> {format(new Date(h.at), 'HH:mm')}
+                                      </span>
+                                      {h.note && (
+                                        <div className="mt-2 text-[11px] text-brand-muted/80 bg-surface-subtle/50 p-2 rounded-xl border border-surface-border/30">
+                                          {h.note}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
                               </div>
                             </div>
                           )}
                         </div>
+
                         <div className="flex flex-col gap-3 justify-end items-end">
-                          <Button variant="outline" size="sm" onClick={() => setViewingMonitoria(m)} icon={<Eye className="w-3.5 h-3.5" />}>Ver Completa</Button>
-                          <div className="flex flex-wrap gap-2 justify-end">
+                          <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            onClick={() => setViewingMonitoria(m)} 
+                            icon={<Eye className="w-4 h-4" />}
+                            className="w-full md:w-auto shadow-sm"
+                          >
+                            Visualizar Avaliação Completa
+                          </Button>
+                          
+                          <div className="flex flex-wrap gap-2 justify-end w-full">
                             {user?.role === 'suporte' && m.status === 'pendente_revisao' && (
                               <>
-                                <Button variant="secondary" size="sm" onClick={() => setActionModal({ id: m.id, type: 'aceitar' })}>Aceitar</Button>
-                                <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'contestar' })}>Contestar</Button>
+                                <Button variant="secondary" size="sm" onClick={() => setActionModal({ id: m.id, type: 'aceitar' })} className="flex-1 md:flex-none">Aceitar</Button>
+                                <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'contestar' })} className="flex-1 md:flex-none">Contestar</Button>
                               </>
                             )}
-                            {user?.role === 'admin' && (
-                              <Button variant="ghost" size="sm" onClick={() => setActionModal({ id: m.id, type: 'excluir' })} className="text-error hover:bg-red-50">Excluir</Button>
+                            {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setActionModal({ id: m.id, type: 'excluir' })} 
+                                className="text-error hover:bg-red-50 w-full md:w-auto"
+                                icon={<Trash2 className="w-4 h-4" />}
+                              >
+                                Excluir Registro
+                              </Button>
                             )}
                           </div>
                         </div>
@@ -362,38 +437,56 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
               </div>
             );
           }) : (
-            <div className="py-20 text-center">
-              <p className="text-brand-muted font-bold">Nenhuma monitoria encontrada.</p>
+            <div className="py-24 text-center bg-surface-bg/10">
+              <div className="w-16 h-16 rounded-3xl bg-surface-subtle flex items-center justify-center mx-auto mb-4 opacity-50">
+                <Search className="w-8 h-8 text-brand-muted" />
+              </div>
+              <p className="text-brand-muted font-black uppercase tracking-[0.2em] text-xs">Nenhuma monitoria encontrada</p>
+              <p className="text-brand-muted/60 text-[10px] mt-2 font-bold uppercase">Ajuste os filtros ou o período de busca</p>
             </div>
           )}
         </div>
       </Card>
 
-      {/* Modals could be here - simplified for this refactor */}
       <AnimatePresence>
         {actionModal && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <Card className="max-w-md w-full">
-              <h3 className="text-lg font-black text-brand-primary mb-2 uppercase tracking-tight">Confirmar Ação</h3>
-              <p className="text-sm text-brand-muted mb-6">Deseja realmente realizar esta ação na monitoria #{monitorias.find(m => m.id === actionModal.id)?.ticket_id}?</p>
-              
-              {actionModal.type === 'contestar' && (
-                <textarea 
-                  className="w-full bg-surface-bg border border-surface-border rounded-xl p-3 text-sm mb-4 focus:outline-none focus:border-brand-accent"
-                  placeholder="Descreva o motivo da contestação..."
-                  rows={4}
-                  value={actionNote}
-                  onChange={e => setActionNote(e.target.value)}
-                />
-              )}
+          <div className="fixed inset-0 bg-[#2D3A3A]/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
+              <Card className="max-w-md w-full shadow-2xl border-none">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-brand-primary uppercase tracking-tight">Confirmar Ação</h3>
+                    <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Protocolo #{monitorias.find(m => m.id === actionModal.id)?.display_id || '---'}</p>
+                  </div>
+                </div>
 
-              <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setActionModal(null)}>Cancelar</Button>
-                <Button className="flex-1" onClick={handleAction} disabled={submitting}>
-                  {submitting ? 'Processando...' : 'Confirmar'}
-                </Button>
-              </div>
-            </Card>
+                <p className="text-sm text-brand-muted font-medium mb-6 leading-relaxed">
+                  Você está prestes a realizar a ação de <strong className="text-brand-primary underline underline-offset-4">{(actionModal.type === 'excluir' ? 'Exclusão' : actionModal.type).toUpperCase()}</strong> nesta monitoria. Esta operação ficará registrada no histórico.
+                </p>
+                
+                {(actionModal.type === 'contestar' || actionModal.type === 'excluir') && (
+                  <div className="mb-6">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 block">Justificativa / Motivo</label>
+                    <textarea 
+                      className="w-full bg-surface-bg border border-surface-border rounded-[24px] p-5 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all min-h-[120px]"
+                      placeholder="Descreva detalhadamente o motivo desta ação..."
+                      value={actionNote}
+                      onChange={e => setActionNote(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1 rounded-[20px]" onClick={() => setActionModal(null)}>Cancelar</Button>
+                  <Button className="flex-1 rounded-[20px] bg-brand-primary" onClick={handleAction} disabled={submitting}>
+                    {submitting ? 'Processando...' : 'Confirmar Ação'}
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

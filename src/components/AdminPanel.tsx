@@ -75,13 +75,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
   }, [activeSubTab]);
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-brand-primary tracking-tight uppercase">Painel Administrativo</h1>
-          <p className="text-brand-muted text-sm font-medium mt-1">Configurações globais e gerenciamento de acessos.</p>
-        </div>
-      </header>
+    <div className="space-y-6 animate-fade-in">
 
       <div className="flex items-center gap-2 bg-surface-card p-1.5 rounded-2xl border border-surface-border shadow-premium-sm w-fit overflow-x-auto no-scrollbar">
         {[

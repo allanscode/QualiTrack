@@ -180,10 +180,6 @@ export default function QualityManagerDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
-      <header>
-        <h1 className="text-2xl font-black text-brand-primary tracking-tight uppercase">Gestão da Qualidade</h1>
-        <p className="text-brand-muted text-sm font-medium mt-1">Visão estratégica e controle da operação de qualidade.</p>
-      </header>
 
       {/* Row 1 — Main KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -204,12 +200,12 @@ export default function QualityManagerDashboard() {
           accent="text-blue-600"
         />
         <StatCard
-          title="Minhas Ações"
-          value={pendingMyActions}
-          sub="Aguardando minha decisão"
-          good={pendingMyActions === 0}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-error"
+          title="Monitorias"
+          value={monitorias.length}
+          sub="Avaliações no período"
+          good={true}
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          accent="text-brand-accent"
         />
         <StatCard
           title="Tendência"
@@ -284,6 +280,7 @@ export default function QualityManagerDashboard() {
             title="Ranking de Auditores"
             subtitle="Por volume de auditorias realizadas"
             data={auditorRanking}
+            type="count"
           />
         </div>
         <div className="h-[320px]">

@@ -10,7 +10,7 @@ interface OfensoresChartProps {
   limit?: number;
 }
 
-export default function OfensoresChart({ monitorias, forms, limit = 10 }: OfensoresChartProps) {
+export default function OfensoresChart({ monitorias, forms, limit = 8 }: OfensoresChartProps) {
   // Build a map: questionId -> { text, naoCount, totalCount }
   const ofensores = useMemo(() => {
     const map: Record<string, { text: string; naoCount: number; totalAnswered: number }> = {};
@@ -39,7 +39,7 @@ export default function OfensoresChart({ monitorias, forms, limit = 10 }: Ofenso
       .sort((a, b) => b.naoCount - a.naoCount)
       .slice(0, limit)
       .map(o => ({
-        text: o.text.length > 40 ? o.text.slice(0, 38) + '…' : o.text,
+        text: o.text.length > 30 ? o.text.slice(0, 28) + '…' : o.text,
         fullText: o.text,
         naoCount: o.naoCount,
         taxaFalha: o.totalAnswered > 0 ? Math.round((o.naoCount / o.totalAnswered) * 10000) / 100 : 0,
@@ -78,8 +78,8 @@ export default function OfensoresChart({ monitorias, forms, limit = 10 }: Ofenso
   }
 
   return (
-    <Card padding="lg" className="h-full flex flex-col">
-      <div className="flex items-center gap-3 mb-6">
+    <Card padding="lg" className="h-full flex flex-col overflow-hidden">
+      <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-2xl bg-red-50 flex items-center justify-center">
           <AlertOctagon className="w-5 h-5 text-error" />
         </div>
@@ -89,33 +89,33 @@ export default function OfensoresChart({ monitorias, forms, limit = 10 }: Ofenso
         </div>
       </div>
 
-      <div className="flex-1" style={{ minHeight: 260 }}>
+      <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={ofensores}
             layout="vertical"
-            margin={{ top: 0, right: 40, left: 8, bottom: 0 }}
-            barCategoryGap="30%"
+            margin={{ top: 10, right: 40, left: 0, bottom: 25 }}
+            barCategoryGap="20%"
           >
             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F0F1E8" />
             <XAxis
               type="number"
-              tick={{ fontSize: 10, fontWeight: 700, fill: '#7A7D71' }}
+              tick={{ fontSize: 9, fontWeight: 700, fill: '#7A7D71' }}
               axisLine={false}
               tickLine={false}
               allowDecimals={false}
-              label={{ value: 'Qtd. de falhas (NÃO)', position: 'insideBottom', offset: -2, fontSize: 9, fill: '#7A7D71' }}
+              label={{ value: 'Qtd. de falhas (NÃO)', position: 'bottom', offset: 10, fontSize: 9, fontWeight: 800, fill: '#7A7D71' }}
             />
             <YAxis
               type="category"
               dataKey="text"
-              width={160}
-              tick={{ fontSize: 10, fontWeight: 700, fill: '#2D3A3A' }}
+              width={130}
+              tick={{ fontSize: 9, fontWeight: 700, fill: '#2D3A3A' }}
               axisLine={false}
               tickLine={false}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(239,68,68,0.05)' }} />
-            <Bar dataKey="naoCount" radius={[0, 6, 6, 0]} maxBarSize={18}>
+            <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14}>
               {ofensores.map((entry, index) => {
                 const intensity = 1 - index / ofensores.length;
                 const r = Math.round(239 * intensity + 180 * (1 - intensity));
@@ -128,15 +128,15 @@ export default function OfensoresChart({ monitorias, forms, limit = 10 }: Ofenso
         </ResponsiveContainer>
       </div>
 
-      {/* Bottom legend — top 3 */}
-      <div className="mt-4 space-y-1.5 border-t border-surface-subtle pt-4">
+      {/* Bottom legend — more compact */}
+      <div className="mt-4 pt-3 border-t border-surface-subtle space-y-1">
         {ofensores.slice(0, 3).map((o, i) => (
-          <div key={i} className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[10px] font-black text-error bg-red-50 rounded-lg px-1.5 py-0.5 flex-shrink-0">#{i + 1}</span>
-              <span className="text-[10px] font-bold text-brand-primary truncate">{o.fullText}</span>
+          <div key={i} className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <span className="text-[9px] font-black text-error bg-red-50 rounded px-1 py-0.5 flex-shrink-0">#{i + 1}</span>
+              <span className="text-[9px] font-bold text-brand-primary truncate">{o.fullText}</span>
             </div>
-            <span className="text-[10px] font-black text-error flex-shrink-0">{o.taxaFalha.toFixed(2)}% falha</span>
+            <span className="text-[9px] font-black text-error flex-shrink-0">{o.taxaFalha.toFixed(1)}% falha</span>
           </div>
         ))}
       </div>

@@ -725,13 +725,13 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
       <main className="flex-1 flex flex-col relative min-w-0 overflow-hidden">
         <header className="flex-shrink-0 px-8 py-6 flex items-center justify-between min-w-0">
           <div className="min-w-0 flex-1">
-            <h2 className="text-3xl font-bold text-[#2D3A3A] truncate">
-              {activeTab === 'dashboard' ? 'Visão Geral da Qualidade' : activeTab === 'monitorias' ? 'Auditoria e Avaliações' : 'Configurações'}
+            <h2 className="text-2xl font-black text-brand-primary tracking-tight">
+              {activeTab === 'dashboard' ? 'Visão Geral da Qualidade' : (activeTab === 'monitorias' ? 'Gestão de Monitorias' : 'Administração')}
             </h2>
-            <p className="text-[#7A7D71] text-sm mt-1 truncate">Conectado como {userData?.name}</p>
+            <p className="text-brand-muted text-sm font-medium mt-0.5">Conectado como <span className="text-brand-primary font-bold">{userData?.name}</span></p>
           </div>
           <div className="flex items-center gap-4 flex-shrink-0 ml-4">
-            {(activeTab === 'monitorias' || activeTab === 'dashboard') && ['gestor_qualidade', 'qualidade'].includes(userData?.role || '') && (
+            {(activeTab === 'monitorias' || activeTab === 'dashboard') && userData?.role === 'qualidade' && (
               <button 
                 onClick={() => setIsFormOpen(true)}
                 className="bg-[#2D3A3A] text-white px-6 py-2 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all flex items-center gap-2 whitespace-nowrap"

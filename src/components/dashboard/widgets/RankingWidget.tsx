@@ -14,9 +14,10 @@ interface RankingWidgetProps {
   title: string;
   subtitle?: string;
   data: RankingItem[];
+  type?: 'score' | 'count';
 }
 
-export default function RankingWidget({ title, subtitle, data }: RankingWidgetProps) {
+export default function RankingWidget({ title, subtitle, data, type = 'score' }: RankingWidgetProps) {
   const { getLevelForScore } = useQualityConfig();
 
   return (
@@ -34,6 +35,8 @@ export default function RankingWidget({ title, subtitle, data }: RankingWidgetPr
       <div className="flex-1 space-y-3 overflow-y-auto pr-1">
         {data.map((item, index) => {
           const level = getLevelForScore(item.score);
+          const isCount = type === 'count';
+
           return (
             <div 
               key={item.id} 
@@ -52,16 +55,20 @@ export default function RankingWidget({ title, subtitle, data }: RankingWidgetPr
 
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-brand-primary truncate text-sm">{item.name}</p>
-                <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">{item.count} monitoria{item.count !== 1 ? 's' : ''}</p>
+                {!isCount && (
+                  <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">{item.count} monitoria{item.count !== 1 ? 's' : ''}</p>
+                )}
               </div>
 
               <div className="text-right flex-shrink-0">
-                <div className={`text-sm font-black ${level.color}`}>
-                  {item.score.toFixed(2)}%
+                <div className={`text-sm font-black ${isCount ? 'text-brand-primary' : level.color}`}>
+                  {isCount ? `${item.count} Vol.` : `${item.score.toFixed(2)}%`}
                 </div>
-                <div className={`text-[8px] font-black uppercase tracking-widest ${level.color} opacity-70`}>
-                  {level.label}
-                </div>
+                {!isCount && (
+                  <div className={`text-[8px] font-black uppercase tracking-widest ${level.color} opacity-70`}>
+                    {level.label}
+                  </div>
+                )}
               </div>
             </div>
           );

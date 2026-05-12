@@ -53,11 +53,15 @@ body {
 
 /* ── Date input ── */
 input[type="date"]::-webkit-calendar-picker-indicator {
-  opacity: 0.4;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
   cursor: pointer;
-}
-input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 0.8;
+  opacity: 0; /* Totalmente invisível mas cobre a área */
 }
 
 /* ── Focus ring standardization ── */

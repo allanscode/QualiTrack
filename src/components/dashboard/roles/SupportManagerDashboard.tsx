@@ -153,10 +153,6 @@ export default function SupportManagerDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
-      <header>
-        <h1 className="text-2xl font-black text-brand-primary tracking-tight uppercase">Gestão de Operação</h1>
-        <p className="text-brand-muted text-sm font-medium mt-1">Olá, {user.name}. Acompanhe o desempenho das suas equipes.</p>
-      </header>
 
       {/* Row 1 — Main KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
