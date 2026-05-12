@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -28,7 +29,6 @@
   --shadow-premium-lg: 0 10px 15px -3px rgb(45 58 58 / 0.08), 0 4px 6px -4px rgb(45 58 58 / 0.08);
 }
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 /* ── Base ── */
 *, *::before, *::after { box-sizing: border-box; }

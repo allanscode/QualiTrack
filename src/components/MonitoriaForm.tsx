@@ -106,19 +106,42 @@ export default function MonitoriaForm({
   const selectedForm = forms.find(f => f.id === header.form_id);
 
   const calculateScore = () => {
-    if (Object.values(criticalErrors).some(v => v)) return 0;
-    if (!selectedForm?.sections?.length) return 0;
-    let totalReduction = 0;
-    selectedForm.sections.forEach(s => {
-      const sectionWeight = s.weight || 0;
-      const questionCount = s.questions.length;
-      if (questionCount === 0) return;
-      const weightPerQuestion = sectionWeight / questionCount;
+    // 1. Check for any failed critical questions (from the new system)
+    let anyCriticalFailed = false;
+    selectedForm?.sections?.forEach(s => {
       s.questions.forEach(q => {
-        if (scores[q.id] === 'NAO') totalReduction += weightPerQuestion;
+        if (q.is_critical && scores[q.id] === 'NAO') anyCriticalFailed = true;
       });
     });
-    return Math.max(0, Number((100 - totalReduction).toFixed(2)));
+    
+    // 2. Check for any checked items in the old critical errors list
+    if (Object.values(criticalErrors).some(v => v)) anyCriticalFailed = true;
+
+    if (anyCriticalFailed) return 0;
+    if (!selectedForm?.sections?.length) return 0;
+
+    let totalScore = 100;
+    
+    selectedForm.sections.forEach(s => {
+      const sectionWeight = s.weight || 0;
+      // We only consider questions that are NOT 'NA'
+      const activeQuestions = s.questions.filter(q => scores[q.id] !== 'NA');
+      
+      if (activeQuestions.length === 0) {
+        // If all questions in a section are NA, that section doesn't subtract anything from the 100.
+        // This is equivalent to redistributing the weight to the rest of the form.
+        return;
+      }
+      
+      const weightPerQuestion = sectionWeight / activeQuestions.length;
+      activeQuestions.forEach(q => {
+        if (scores[q.id] === 'NAO') {
+          totalScore -= weightPerQuestion;
+        }
+      });
+    });
+    
+    return Math.max(0, Number(totalScore.toFixed(2)));
   };
 
   const score = calculateScore();
@@ -330,12 +353,24 @@ export default function MonitoriaForm({
                   </div>
                   <div className="grid grid-cols-1 gap-4">
                     {section.questions.map(q => (
-                      <Card key={q.id} className="bg-white hover:border-brand-accent transition-all group">
+                      <Card key={q.id} className={`bg-white hover:border-brand-accent transition-all group ${q.is_critical && scores[q.id] === 'NAO' ? 'border-error ring-4 ring-error/5' : ''}`}>
                         <div className="flex flex-col md:flex-row justify-between gap-6">
-                          <p className="text-sm font-bold text-brand-primary leading-relaxed flex-1">{q.text}</p>
+                          <div className="flex-1">
+                            <div className="flex items-start gap-3">
+                              {q.is_critical && (
+                                <Badge variant="error" size="sm" className="mt-1 flex-shrink-0 animate-pulse">ERRO CRÍTICO</Badge>
+                              )}
+                              <p className="text-sm font-bold text-brand-primary leading-relaxed">{q.text}</p>
+                            </div>
+                            <div className="flex items-center gap-4 mt-2">
+                              <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">
+                                Impacto: {((section.weight || 0) / (section.questions.filter(qu => scores[qu.id] !== 'NA').length || section.questions.length)).toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
                           <div className="flex gap-1 bg-surface-bg p-1 rounded-2xl h-fit border border-surface-border">
                             {(['SIM', 'NAO', 'NA'] as const).map(opt => (
-                              <button key={opt} onClick={() => !isViewOnly && setScores({...scores, [q.id]: opt})} className={`px-5 py-2 rounded-xl text-xs font-black transition-all ${scores[q.id] === opt ? 'bg-brand-primary text-white shadow-premium' : 'text-brand-muted hover:bg-white'}`} disabled={isViewOnly}>{opt}</button>
+                              <button key={opt} onClick={() => !isViewOnly && setScores({...scores, [q.id]: opt})} className={`px-5 py-2 rounded-xl text-xs font-black transition-all ${scores[q.id] === opt ? (opt === 'NAO' && q.is_critical ? 'bg-error text-white shadow-premium' : 'bg-brand-primary text-white shadow-premium') : 'text-brand-muted hover:bg-white'}`} disabled={isViewOnly}>{opt}</button>
                             ))}
                           </div>
                         </div>

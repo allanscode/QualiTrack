@@ -33,7 +33,7 @@ import { ptBR } from 'date-fns/locale';
 import Card from './ui/Card';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
-import CustomSelect from './ui/Select'; 
+import CustomSelect from './ui/CustomSelect'; 
 
 export default function MonitoriaList({ user, onNew }: { user: User | null; onNew: () => void }) {
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
@@ -229,59 +229,59 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       <Card padding="none" className="border-none shadow-premium-sm bg-white/50 backdrop-blur-md">
         <div className="p-4 bg-white/40 border-b border-surface-border">
           <div className="flex flex-nowrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+            <div className="relative flex-1 min-w-[200px] h-10">
+              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
               <input 
                 type="text"
                 placeholder="Buscar ticket ou monitoria..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full bg-white border border-surface-border rounded-2xl py-2 pl-9 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none"
+                className="w-full h-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none"
               />
             </div>
 
-            <div className="w-40">
+            <div className="w-40 h-10">
               <CustomSelect 
                 value={teamFilter}
-                onChange={e => setTeamFilter(e.target.value)}
+                onChange={val => setTeamFilter(val)}
                 options={[{ value: '', label: 'Equipes' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
               />
             </div>
 
-            <div className="w-40">
+            <div className="w-40 h-10">
               <CustomSelect 
                 value={auditorFilter}
-                onChange={e => setAuditorFilter(e.target.value)}
+                onChange={val => setAuditorFilter(val)}
                 options={[{ value: '', label: 'Auditores' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
               />
             </div>
 
-            <div className="flex items-center gap-2 bg-white border border-surface-border rounded-2xl px-3 py-1.5 shadow-sm group hover:border-brand-accent transition-colors relative">
+            <div className="flex items-center gap-2 bg-white border border-surface-border rounded-2xl px-4 h-10 shadow-sm group hover:border-brand-accent transition-colors relative">
               <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative">
-                <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
+                <Calendar className="w-4 h-4 relative z-10 pointer-events-none" />
                 <input 
                   type="date" 
                   value={startDate} 
                   onChange={e => setStartDate(e.target.value)} 
-                  className="bg-transparent border-none p-0 text-[11px] font-black w-[100px] focus:ring-0 cursor-pointer relative z-0" 
+                  className="bg-transparent border-none p-0 text-xs font-bold w-[100px] focus:ring-0 cursor-pointer relative z-0" 
                 />
               </div>
-              <span className="text-brand-muted/30 font-black text-[10px] uppercase tracking-widest mx-0.5">até</span>
+              <span className="text-brand-muted/30 font-black text-[10px] uppercase tracking-widest mx-1">até</span>
               <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative">
-                <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
+                <Calendar className="w-4 h-4 relative z-10 pointer-events-none" />
                 <input 
                   type="date" 
                   value={endDate} 
                   onChange={e => setEndDate(e.target.value)} 
-                  className="bg-transparent border-none p-0 text-[11px] font-black w-[100px] focus:ring-0 cursor-pointer relative z-0" 
+                  className="bg-transparent border-none p-0 text-xs font-bold w-[100px] focus:ring-0 cursor-pointer relative z-0" 
                 />
               </div>
             </div>
 
-            <div className="w-32">
+            <div className="w-32 h-10">
               <CustomSelect 
                 value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value as any)}
+                onChange={val => setStatusFilter(val as any)}
                 options={[{ value: 'active', label: 'Ativas' }, { value: 'removed', label: 'Removidas' }]}
               />
             </div>

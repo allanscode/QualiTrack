@@ -27,6 +27,7 @@ export interface Question {
   text: string;
   type: 'yes_no_na';
   weight?: number;
+  is_critical?: boolean;
 }
 
 export interface FormSection {

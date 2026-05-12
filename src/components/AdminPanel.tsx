@@ -15,12 +15,14 @@ import {
   RefreshCw, 
   Search, 
   AlertOctagon, 
+  AlertTriangle,
   BarChart3,
   Mail,
   User as UserIcon,
   ShieldCheck,
   ChevronRight,
-  ArrowRight
+  ArrowRight,
+  Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -29,6 +31,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import Select from './ui/Select';
+import CustomSelect from './ui/CustomSelect';
 
 export default function AdminPanel({ user: currentUser }: { user: User | null }) {
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests' | 'qualidade'>('users');
@@ -189,21 +192,24 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="relative w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+          <div className="relative w-64 h-10">
+            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
             <input
               type="text"
               placeholder="Buscar usuário..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-surface-card border border-surface-border rounded-xl py-2 pl-9 pr-4 text-xs font-semibold text-brand-primary focus:border-brand-accent focus:outline-none transition-colors"
+              className="w-full h-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
             />
           </div>
-          <Select 
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value as any)}
-            options={[{ value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Desativados' }]}
-          />
+          <div className="h-10 flex items-center">
+            <CustomSelect 
+              value={statusFilter}
+              onChange={val => setStatusFilter(val as any)}
+              options={[{ value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Desativados' }]}
+              className="w-32"
+            />
+          </div>
         </div>
         <Button onClick={() => { setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' }); setIsModalOpen(true); }} icon={<UserPlus className="w-4 h-4" />}>
           Adicionar Usuário
@@ -301,9 +307,9 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                 />
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipes</label>
-                  <div className="flex flex-wrap gap-2 p-3 bg-surface-bg border border-surface-border rounded-xl max-h-32 overflow-y-auto">
-                    {teams.map(t => (
-                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${editingUser.team_ids?.includes(t.id) ? 'bg-brand-primary text-white border-brand-primary' : 'bg-white text-brand-muted border-surface-border hover:border-brand-highlight'}`}>
+                  <div className="flex flex-wrap gap-2 p-3 bg-surface-bg border border-surface-border rounded-xl max-h-32 overflow-y-auto no-scrollbar">
+                    {teams.filter(t => t.active !== false).map(t => (
+                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${editingUser.team_ids?.includes(t.id) ? 'bg-brand-primary text-white border-brand-primary shadow-sm' : 'bg-white text-brand-muted border-surface-border hover:border-brand-highlight'}`}>
                         <input
                           type="checkbox"
                           className="hidden"
@@ -318,6 +324,9 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                         {t.name}
                       </label>
                     ))}
+                    {teams.filter(t => t.active !== false).length === 0 && (
+                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2">Nenhuma equipe ativa cadastrada.</p>
+                    )}
                   </div>
                 </div>
 
@@ -380,21 +389,24 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="relative w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+          <div className="relative w-64 h-10">
+            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
             <input
               type="text"
               placeholder="Buscar equipe..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-surface-card border border-surface-border rounded-xl py-2 pl-9 pr-4 text-xs font-semibold focus:border-brand-accent focus:outline-none"
+              className="w-full h-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
             />
           </div>
-          <Select 
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value as any)}
-            options={[{ value: 'active', label: 'Ativas' }, { value: 'inactive', label: 'Desativadas' }]}
-          />
+          <div className="h-10 flex items-center">
+            <CustomSelect 
+              value={statusFilter}
+              onChange={val => setStatusFilter(val as any)}
+              options={[{ value: 'active', label: 'Ativas' }, { value: 'inactive', label: 'Desativadas' }]}
+              className="w-32"
+            />
+          </div>
         </div>
         <Button onClick={() => { setEditingTeam({ name: '' }); setIsModalOpen(true); }} icon={<Plus className="w-4 h-4" />}>Nova Equipe</Button>
       </div>
@@ -416,9 +428,12 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
               <div className="flex gap-1">
                 <button onClick={() => { setEditingTeam(t); setIsModalOpen(true); }} className="p-2 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><Edit2 className="w-4 h-4" /></button>
                 {deleteConfirmId === t.id ? (
-                  <button onClick={() => handleToggleStatus(t.id, false)} className="p-2 rounded-xl bg-error text-white"><Check className="w-4 h-4" /></button>
+                  <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
+                    <button onClick={() => handleToggleStatus(t.id, false)} className="px-2.5 py-1.5 rounded-lg bg-error text-white text-[10px] font-black uppercase">Sim</button>
+                    <button onClick={() => setDeleteConfirmId(null)} className="px-2.5 py-1.5 rounded-lg bg-surface-subtle text-brand-muted text-[10px] font-black uppercase tracking-widest">Não</button>
+                  </div>
                 ) : (
-                  <button onClick={() => setDeleteConfirmId(t.id)} className="p-2 rounded-xl hover:bg-red-50 text-brand-muted hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => setDeleteConfirmId(t.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-brand-muted hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
                 )}
               </div>
             </div>
@@ -456,6 +471,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [searchTerm, setSearchTerm] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const filteredForms = useMemo(() => {
     return forms
@@ -463,13 +479,24 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
       .filter(f => f.title.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [forms, statusFilter, searchTerm]);
 
+  const loadForms = async () => {
+    const res = supabase ? await supabase.from('forms').select('*') : await mockDb.get('forms');
+    setForms(res.data || []);
+  };
+
   useEffect(() => {
-    const fetch = async () => {
-      const res = supabase ? await supabase.from('forms').select('*') : await mockDb.get('forms');
-      setForms(res.data || []);
-    };
-    fetch();
+    loadForms();
   }, []);
+
+  const handleToggleStatus = async (id: string, active: boolean) => {
+    try {
+      if (!supabase) await mockDb.update('forms', id, { active });
+      else await supabase.from('forms').update({ active }).eq('id', id);
+      toast.success(active ? 'Ativado!' : 'Desativado!');
+      setDeleteConfirmId(null);
+      loadForms();
+    } catch (e) { toast.error('Erro ao alterar status'); }
+  };
 
   const handleSaveForm = async () => {
     if (!editingForm.title || !editingForm.sections?.length) return toast.error('Preencha os campos obrigatórios.');
@@ -485,48 +512,138 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
       }
       toast.success('Formulário salvo!');
       setIsModalOpen(false);
-      loadData();
+      loadForms();
     } catch (e) { toast.error('Erro ao salvar'); }
     finally { setSaving(false); }
   };
+
+  const addSection = () => {
+    const newSection: FormSection = { id: Math.random().toString(36).substr(2, 9), title: 'Novo Pilar', weight: 0, questions: [] };
+    setEditingForm({ ...editingForm, sections: [...(editingForm.sections || []), newSection] });
+  };
+
+  const removeSection = (id: string) => {
+    setEditingForm({ ...editingForm, sections: editingForm.sections?.filter(s => s.id !== id) });
+  };
+
+  const updateSection = (id: string, field: string, value: any) => {
+    setEditingForm({
+      ...editingForm,
+      sections: editingForm.sections?.map(s => s.id === id ? { ...s, [field]: value } : s)
+    });
+  };
+
+  const addQuestion = (sectionId: string) => {
+    const newQuestion: Question = { id: Math.random().toString(36).substr(2, 9), text: 'Novo Item', type: 'yes_no_na', is_critical: false };
+    setEditingForm({
+      ...editingForm,
+      sections: editingForm.sections?.map(s => s.id === sectionId ? { ...s, questions: [...s.questions, newQuestion] } : s)
+    });
+  };
+
+  const removeQuestion = (sectionId: string, qId: string) => {
+    setEditingForm({
+      ...editingForm,
+      sections: editingForm.sections?.map(s => s.id === sectionId ? { ...s, questions: s.questions.filter(q => q.id !== qId) } : s)
+    });
+  };
+
+  const addCriticalError = () => {
+    const newQuestion: Question = { id: Math.random().toString(36).substr(2, 9), text: 'Novo Erro Crítico', type: 'yes_no_na', is_critical: true };
+    setEditingForm({
+      ...editingForm,
+      critical_errors: [...(editingForm.critical_errors || []), newQuestion]
+    });
+  };
+
+  const removeCriticalError = (qId: string) => {
+    setEditingForm({
+      ...editingForm,
+      critical_errors: editingForm.critical_errors?.filter(q => q.id !== qId)
+    });
+  };
+
+  const updateCriticalError = (qId: string, field: string, value: any) => {
+    setEditingForm({
+      ...editingForm,
+      critical_errors: editingForm.critical_errors?.map(q => q.id === qId ? { ...q, [field]: value } : q)
+    });
+  };
+
+  const updateQuestion = (sectionId: string, qId: string, field: string, value: any) => {
+    setEditingForm({
+      ...editingForm,
+      sections: editingForm.sections?.map(s => s.id === sectionId ? { ...s, questions: s.questions.map(q => q.id === qId ? { ...q, [field]: value } : q) } : s)
+    });
+  };
+
+  const totalWeight = useMemo(() => {
+    return (editingForm.sections || []).reduce((acc, s) => acc + (Number(s.weight) || 0), 0);
+  }, [editingForm.sections]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="relative w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+          <div className="relative w-64 h-10">
+            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
             <input
               type="text"
               placeholder="Buscar formulário..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-surface-card border border-surface-border rounded-xl py-2 pl-9 pr-4 text-xs font-semibold focus:border-brand-accent focus:outline-none"
+              className="w-full h-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
             />
           </div>
-          <Select 
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value as any)}
-            options={[{ value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Desativados' }]}
-          />
+          <div className="h-10 flex items-center">
+            <CustomSelect 
+              value={statusFilter}
+              onChange={val => setStatusFilter(val as any)}
+              options={[{ value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Desativados' }]}
+              className="w-32"
+            />
+          </div>
         </div>
         <Button onClick={() => { setEditingForm({ title: '', description: '', team_id: '', sections: [], critical_errors: [] }); setIsModalOpen(true); }} icon={<Plus className="w-4 h-4" />}>Novo Formulário</Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredForms.map(f => (
-          <Card key={f.id} className="group hover:border-brand-accent transition-all cursor-pointer" onClick={() => { setEditingForm(f); setIsModalOpen(true); }}>
+          <Card key={f.id} className="group hover:border-brand-accent transition-all relative">
             <div className="flex justify-between items-start mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-brand-subtle flex items-center justify-center text-brand-primary">
-                <ClipboardList className="w-5 h-5" />
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-brand-subtle flex items-center justify-center text-brand-primary">
+                  <ClipboardList className="w-5 h-5" />
+                </div>
+                <div onClick={() => { setEditingForm(f); setIsModalOpen(true); }} className="cursor-pointer">
+                  <h4 className="font-black text-brand-primary uppercase tracking-tight">{f.title}</h4>
+                  <Badge variant="neutral">{f.team_id ? teams.find(t => t.id === f.team_id)?.name : 'Geral'}</Badge>
+                </div>
               </div>
-              <Badge variant="neutral">{f.team_id ? teams.find(t => t.id === f.team_id)?.name : 'Geral'}</Badge>
+              <div className="flex gap-1">
+                {statusFilter === 'inactive' ? (
+                  <Button variant="outline" size="sm" onClick={() => handleToggleStatus(f.id, true)} icon={<RefreshCw className="w-3.5 h-3.5" />}>Reativar</Button>
+                ) : (
+                  <>
+                    <button onClick={() => { setEditingForm(f); setIsModalOpen(true); }} className="p-2 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><Pencil className="w-4 h-4" /></button>
+                    {deleteConfirmId === f.id ? (
+                      <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
+                        <button onClick={(e) => { e.stopPropagation(); handleToggleStatus(f.id, false); }} className="px-2.5 py-1.5 rounded-lg bg-error text-white text-[10px] font-black uppercase">Sim</button>
+                        <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="px-2.5 py-1.5 rounded-lg bg-surface-subtle text-brand-muted text-[10px] font-black uppercase tracking-widest">Não</button>
+                      </div>
+                    ) : (
+                      <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(f.id); }} className="p-2.5 rounded-xl hover:bg-red-50 text-brand-muted hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-            <h4 className="font-black text-brand-primary uppercase tracking-tight mb-2">{f.title}</h4>
-            <p className="text-xs text-brand-muted line-clamp-2 mb-4">{f.description}</p>
-            <div className="flex items-center gap-4">
-              <span className="text-[10px] font-black uppercase text-brand-highlight">{f.sections.length} Pilares</span>
-              <span className="text-[10px] font-black uppercase text-brand-highlight">{f.critical_errors?.length || 0} Críticos</span>
+            <div onClick={() => { setEditingForm(f); setIsModalOpen(true); }} className="cursor-pointer">
+              <p className="text-xs text-brand-muted line-clamp-2 mb-4">{f.description}</p>
+              <div className="flex items-center gap-4">
+                <span className="text-[10px] font-black uppercase text-brand-highlight">{f.sections.length} Pilares</span>
+                <span className="text-[10px] font-black uppercase text-brand-highlight">Peso Total: {f.sections.reduce((acc, s) => acc + (s.weight || 0), 0)}%</span>
+              </div>
             </div>
           </Card>
         ))}
@@ -534,39 +651,175 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
 
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <Card className="max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-              <header className="flex items-center justify-between p-6 border-b border-surface-border">
-                <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Editor de Formulário</h3>
-                <button onClick={() => setIsModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
-              </header>
-              <div className="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Título</label>
-                    <input type="text" className="bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={editingForm.title} onChange={e => setEditingForm({...editingForm, title: e.target.value})} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/60 backdrop-blur-md">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col bg-white rounded-[32px] shadow-2xl">
+              <header className="flex items-center justify-between p-8 border-b border-surface-border bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
+                    <ClipboardList className="w-6 h-6" />
                   </div>
-                  <Select label="Equipe" value={editingForm.team_id || ''} onChange={e => setEditingForm({...editingForm, team_id: e.target.value})} options={[{ value: '', label: 'Geral' }, ...teams.map(t => ({ value: t.id, label: t.name }))]} />
+                  <div>
+                    <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Editor de Formulário</h3>
+                    <p className="text-[10px] font-black text-brand-muted uppercase tracking-[0.2em] mt-1">Configuração de pontuação e critérios</p>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Descrição</label>
-                  <textarea className="bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none min-h-[100px]" value={editingForm.description} onChange={e => setEditingForm({...editingForm, description: e.target.value})} />
+                <button onClick={() => setIsModalOpen(false)} className="p-2 rounded-xl hover:bg-surface-subtle text-brand-muted transition-all"><X className="w-6 h-6" /></button>
+              </header>
+
+              <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-surface-bg/30">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Título do Formulário</label>
+                      <input type="text" className="bg-white border border-surface-border rounded-2xl px-5 py-3 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all" value={editingForm.title} onChange={e => setEditingForm({...editingForm, title: e.target.value})} placeholder="Ex: Monitoria de Atendimento Chat" />
+                    </div>
+                    <Select label="Equipe Vinculada" value={editingForm.team_id || ''} onChange={e => setEditingForm({...editingForm, team_id: e.target.value})} options={[{ value: '', label: 'Geral' }, ...teams.map(t => ({ value: t.id, label: t.name }))]} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Descrição</label>
+                    <textarea className="bg-white border border-surface-border rounded-2xl px-5 py-3 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all min-h-[110px]" value={editingForm.description} onChange={e => setEditingForm({...editingForm, description: e.target.value})} placeholder="Descreva o propósito deste formulário..." />
+                  </div>
                 </div>
                 
-                <div className="flex items-center justify-between pt-6 border-t border-surface-subtle">
-                  <h4 className="text-sm font-black text-brand-primary uppercase tracking-widest">Pilares e Questões</h4>
-                  <Button variant="outline" size="sm" icon={<Plus className="w-3 h-3" />}>Novo Pilar</Button>
+                <div className="pt-8 border-t border-surface-border/50">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                      <h4 className="text-sm font-black text-brand-primary uppercase tracking-widest flex items-center gap-2">
+                        Estrutura de Pilares
+                        <span className={`px-3 py-1 rounded-full text-[10px] ${totalWeight === 100 ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                          Peso Total: {totalWeight}% {totalWeight !== 100 && '(Deve ser 100%)'}
+                        </span>
+                      </h4>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={addSection} icon={<Plus className="w-4 h-4" />} className="rounded-2xl">Adicionar Pilar</Button>
+                  </div>
+                  
+                  <div className="space-y-6">
+                    {editingForm.sections?.map((section, sIdx) => (
+                      <div key={section.id} className="bg-white rounded-[28px] border border-surface-border shadow-premium-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <div className="p-5 border-b border-surface-border bg-surface-subtle/20 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 flex-1">
+                            <div className="w-8 h-8 rounded-xl bg-brand-primary text-white flex items-center justify-center text-xs font-black">{sIdx + 1}</div>
+                            <input 
+                              className="bg-transparent border-none p-0 text-sm font-black text-brand-primary uppercase tracking-tight focus:ring-0 w-full"
+                              value={section.title}
+                              onChange={e => updateSection(section.id, 'title', e.target.value)}
+                              placeholder="Nome do Pilar"
+                            />
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2 bg-white border border-surface-border rounded-xl px-3 py-1.5">
+                              <span className="text-[10px] font-black text-brand-muted uppercase">Peso:</span>
+                              <input 
+                                type="number" 
+                                className="w-12 bg-transparent border-none p-0 text-xs font-black text-brand-primary focus:ring-0 text-center"
+                                value={section.weight}
+                                onChange={e => updateSection(section.id, 'weight', parseInt(e.target.value) || 0)}
+                              />
+                              <span className="text-[10px] font-black text-brand-muted">%</span>
+                            </div>
+                            <button onClick={() => removeSection(section.id)} className="p-2 text-brand-muted hover:text-error transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </div>
+                        
+                        <div className="p-6 space-y-4">
+                          {section.questions.map((q, qIdx) => {
+                            const itemWeightInPilar = section.questions.length > 0 ? (100 / section.questions.length).toFixed(1) : 0;
+                            const itemImpactInTotal = section.questions.length > 0 ? ((section.weight || 0) / section.questions.length).toFixed(1) : 0;
+
+                            return (
+                              <div key={q.id} className="flex items-center gap-4 p-4 rounded-2xl bg-surface-bg/40 border border-surface-border/40 group hover:bg-white hover:border-brand-accent/20 transition-all">
+                                <div className="flex-1">
+                                  <input 
+                                    className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary w-full focus:ring-0"
+                                    value={q.text}
+                                    onChange={e => updateQuestion(section.id, q.id, 'text', e.target.value)}
+                                    placeholder="Descreva o critério de avaliação..."
+                                  />
+                                  <div className="flex items-center gap-4 mt-1.5">
+                                    <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Peso no Pilar: {itemWeightInPilar}%</span>
+                                    <span className="text-brand-muted/20">•</span>
+                                    <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Impacto Global: {itemImpactInTotal}%</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                  <button onClick={() => removeQuestion(section.id, q.id)} className="p-2 text-brand-muted/40 hover:text-error transition-colors opacity-0 group-hover:opacity-100"><X className="w-4 h-4" /></button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <button 
+                            onClick={() => addQuestion(section.id)}
+                            className="w-full py-3 rounded-2xl border-2 border-dashed border-surface-border/60 text-brand-muted text-[10px] font-black uppercase tracking-widest hover:border-brand-accent/40 hover:text-brand-accent transition-all flex items-center justify-center gap-2"
+                          >
+                            <Plus className="w-3 h-3" /> Adicionar Item ao Pilar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {(!editingForm.sections || editingForm.sections.length === 0) && (
+                      <div className="bg-surface-bg/30 p-12 rounded-[32px] border-2 border-dashed border-surface-border/60 text-center">
+                        <div className="w-16 h-16 rounded-3xl bg-white shadow-premium flex items-center justify-center mx-auto mb-4">
+                          <Plus className="w-8 h-8 text-brand-muted" />
+                        </div>
+                        <p className="text-brand-primary font-black uppercase tracking-widest text-xs">Nenhum Pilar Configurado</p>
+                        <p className="text-brand-muted text-[10px] font-bold uppercase mt-2">Adicione pilares para começar a estruturar sua monitoria.</p>
+                        <Button variant="outline" size="sm" onClick={addSection} className="mt-6 rounded-2xl">Adicionar Primeiro Pilar</Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                
-                <div className="bg-surface-bg/30 p-6 rounded-[24px] border border-dashed border-surface-border text-center">
-                  <p className="text-brand-muted text-xs font-bold">Configure os pilares e critérios para gerar a nota da monitoria.</p>
+
+                {/* Seção de Erros Críticos */}
+                <div className="pt-10 border-t border-surface-border/50">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h4 className="text-sm font-black text-error uppercase tracking-widest flex items-center gap-2">
+                        <AlertOctagon className="w-5 h-5" />
+                        Erros Críticos (Fatais)
+                      </h4>
+                      <p className="text-[10px] font-bold text-brand-muted uppercase mt-1">Itens que, se marcados, zeram a pontuação da monitoria.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={addCriticalError} icon={<Plus className="w-4 h-4" />} className="rounded-2xl border-error/30 text-error hover:bg-red-50 hover:border-error">Adicionar Erro Crítico</Button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {editingForm.critical_errors?.map((ce, idx) => (
+                      <div key={ce.id} className="flex items-center gap-4 p-5 rounded-2xl bg-red-50/30 border border-error/10 group hover:border-error/30 transition-all">
+                        <div className="w-8 h-8 rounded-xl bg-error text-white flex items-center justify-center text-[10px] font-black">{idx + 1}</div>
+                        <div className="flex-1">
+                          <input 
+                            className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary w-full focus:ring-0"
+                            value={ce.text}
+                            onChange={e => updateCriticalError(ce.id, 'text', e.target.value)}
+                            placeholder="Descreva o erro fatal..."
+                          />
+                        </div>
+                        <button onClick={() => removeCriticalError(ce.id)} className="p-2 text-brand-muted/40 hover:text-error transition-colors opacity-0 group-hover:opacity-100"><X className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                    {(!editingForm.critical_errors || editingForm.critical_errors.length === 0) && (
+                      <div className="py-8 text-center border-2 border-dashed border-surface-border/40 rounded-[28px]">
+                        <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Nenhum erro crítico configurado</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-              <footer className="p-6 border-t border-surface-border bg-white flex justify-end gap-3">
-                <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                <Button onClick={handleSaveForm} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Formulário'}</Button>
+              
+              <footer className="p-8 border-t border-surface-border bg-white flex items-center justify-between">
+                <p className="text-[10px] font-bold text-brand-muted uppercase">
+                  {totalWeight !== 100 && <span className="text-error flex items-center gap-2"><AlertTriangle className="w-3 h-3" /> A soma dos pesos deve ser exatamente 100%.</span>}
+                </p>
+                <div className="flex gap-3">
+                  <Button variant="outline" onClick={() => setIsModalOpen(false)} className="rounded-[20px]">Cancelar</Button>
+                  <Button onClick={handleSaveForm} disabled={saving || totalWeight !== 100} className="rounded-[20px] px-8 bg-brand-primary">
+                    {saving ? 'Salvando...' : 'Publicar Formulário'}
+                  </Button>
+                </div>
               </footer>
-            </Card>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

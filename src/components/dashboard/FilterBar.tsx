@@ -1,57 +1,8 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Calendar, X, RefreshCw, ChevronDown, UserCheck } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
+import CustomSelect from '../ui/CustomSelect';
 import Button from '../ui/Button';
-
-// Custom Select Component for a modern look
-function CustomSelect({ label, value, options, onChange, placeholder = "Selecionar..." }: any) {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const selectedOption = options.find((opt: any) => opt.value === value);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  return (
-    <div className="flex flex-col min-w-[140px] relative" ref={containerRef}>
-      <span className="text-[10px] font-black text-brand-muted uppercase tracking-widest mb-1 ml-1">{label}</span>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between bg-surface-subtle border border-surface-border rounded-xl px-3 py-2 text-sm font-bold text-brand-primary hover:border-brand-primary/20 transition-all"
-      >
-        <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
-        <ChevronDown className={`w-3.5 h-3.5 ml-2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-surface-border rounded-2xl shadow-xl z-50 max-h-60 overflow-auto py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-          {options.map((opt: any) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                onChange(opt.value);
-                setIsOpen(false);
-              }}
-              className={`w-full text-left px-4 py-2 text-sm font-medium transition-colors hover:bg-brand-primary/5 ${value === opt.value ? 'text-brand-primary bg-brand-primary/5' : 'text-brand-muted'}`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function FilterBar() {
   const { filters, setFilters, users, teams, loading, refresh } = useDashboard();
@@ -93,15 +44,14 @@ export default function FilterBar() {
         
         {/* Date Range Group */}
         <div className="flex flex-col">
-          <span className="text-[10px] font-black text-brand-muted uppercase tracking-widest mb-1 ml-1">Período</span>
-          <div className="flex items-center gap-3 bg-surface-subtle border border-surface-border rounded-xl px-4 py-1.5 h-[38px]">
+          <div className="flex items-center gap-3 bg-white border border-surface-border rounded-2xl px-4 h-10 shadow-sm">
             <div className="flex items-center gap-2 relative">
               <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
               <input 
                 type="date" 
                 value={filters.startDate} 
                 onChange={e => setFilters({ ...filters, startDate: e.target.value })} 
-                className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary focus:ring-0 w-28 cursor-pointer relative z-0" 
+                className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary focus:ring-0 w-28 cursor-pointer relative z-0" 
               />
             </div>
             <span className="text-brand-muted font-bold text-[10px] uppercase tracking-widest px-1">até</span>
@@ -111,7 +61,7 @@ export default function FilterBar() {
                 type="date" 
                 value={filters.endDate} 
                 onChange={e => setFilters({ ...filters, endDate: e.target.value })} 
-                className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary focus:ring-0 w-28 cursor-pointer relative z-0" 
+                className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary focus:ring-0 w-28 cursor-pointer relative z-0" 
               />
             </div>
           </div>
@@ -119,18 +69,16 @@ export default function FilterBar() {
 
         {/* Team Select */}
         <CustomSelect 
-          label="Equipe"
           value={filters.teamId}
-          options={[{ value: '', label: 'Todas' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
+          options={[{ value: '', label: 'Equipe' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
           onChange={(val: string) => setFilters({ ...filters, teamId: val, agentId: '' })}
         />
 
         {/* Agent Select */}
         <CustomSelect 
-          label="Agente"
           value={filters.agentId}
           options={[
-            { value: '', label: 'Todos' }, 
+            { value: '', label: 'Agente' }, 
             ...activeAgents
               .filter(a => !filters.teamId || (a.team_ids && a.team_ids.includes(filters.teamId)))
               .map(a => ({ value: a.id, label: a.name }))
@@ -140,10 +88,9 @@ export default function FilterBar() {
 
         {/* Auditor Select */}
         <CustomSelect 
-          label="Auditores"
           value={filters.auditorId}
           options={[
-            { value: '', label: 'Todos' },
+            { value: '', label: 'Auditores' },
             ...activeAuditors.map(a => ({ value: a.id, label: a.name }))
           ]}
           onChange={(val: string) => setFilters({ ...filters, auditorId: val })}
