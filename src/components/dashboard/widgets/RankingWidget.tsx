@@ -1,5 +1,7 @@
 import React from 'react';
-import { Award, AlertTriangle } from 'lucide-react';
+import { User, Award, TrendingDown, Target } from 'lucide-react';
+import Card from '../../ui/Card';
+import { useQualityConfig } from '../../../lib/useQualityConfig';
 
 interface RankingItem {
   id: string;
@@ -11,48 +13,65 @@ interface RankingItem {
 interface RankingWidgetProps {
   title: string;
   subtitle?: string;
-  items: RankingItem[];
-  type?: 'top' | 'bottom';
+  data: RankingItem[];
 }
 
-export default function RankingWidget({ title, subtitle, items, type = 'top' }: RankingWidgetProps) {
-  const Icon = type === 'top' ? Award : AlertTriangle;
-  const iconColor = type === 'top' ? 'text-[#A7C0A5]' : 'text-red-400';
-  const barColor = type === 'top' ? 'bg-emerald-400' : 'bg-red-400';
+export default function RankingWidget({ title, subtitle, data }: RankingWidgetProps) {
+  const { getLevelForScore } = useQualityConfig();
 
   return (
-    <div className="bg-white rounded-3xl border border-[#E2E4D8] p-6 shadow-sm">
-      <div className="flex items-start gap-2 mb-5">
-        <Icon className={`w-5 h-5 mt-0.5 ${iconColor}`} />
+    <Card padding="lg" className="h-full flex flex-col">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="font-bold text-[#2D3A3A] text-lg leading-tight">{title}</h3>
-          {subtitle && <p className="text-xs text-[#7A7D71] mt-0.5">{subtitle}</p>}
+          <h3 className="font-black text-brand-primary uppercase tracking-tight leading-tight">{title}</h3>
+          {subtitle && <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>}
+        </div>
+        <div className="w-10 h-10 rounded-2xl bg-surface-subtle flex items-center justify-center">
+          <Award className="w-5 h-5 text-brand-primary" />
         </div>
       </div>
-      <div className="space-y-3">
-        {items.length > 0 ? items.map((item, idx) => {
-          const isTop = idx === 0 && type === 'top';
+
+      <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+        {data.map((item, index) => {
+          const level = getLevelForScore(item.score);
           return (
-            <div key={item.id} className={`flex items-center gap-3 p-3 rounded-2xl transition-colors hover:bg-[#F9F9F6] ${isTop ? 'bg-[#F9F9F6]' : ''}`}>
-              <span className={`text-xs font-black w-5 text-center ${isTop ? 'text-[#A7C0A5]' : 'text-[#C5C7BB]'}`}>#{idx + 1}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-[#2D3A3A] truncate">{item.name}</p>
-                <p className="text-[10px] text-[#7A7D71]">{item.count} monitoria{item.count > 1 ? 's' : ''}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-20 h-1.5 bg-[#F0F1E8] rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.max(0, Math.min(100, item.score))}%` }} />
+            <div 
+              key={item.id} 
+              className="group flex items-center gap-4 p-3 rounded-2xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle transition-all duration-300"
+            >
+              <div className="relative flex-shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-brand-primary text-white flex items-center justify-center font-black text-sm shadow-premium group-hover:scale-110 transition-transform">
+                  {index + 1}
                 </div>
-                <span className={`text-xs font-bold w-10 text-right ${item.score >= 75 ? 'text-emerald-600' : 'text-red-600'}`}>{item.score}%</span>
+                {index === 0 && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full border-2 border-white flex items-center justify-center">
+                    <Award className="w-2.5 h-2.5 text-white" />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-brand-primary truncate text-sm">{item.name}</p>
+                <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">{item.count} monitoria{item.count !== 1 ? 's' : ''}</p>
+              </div>
+
+              <div className="text-right flex-shrink-0">
+                <div className={`text-sm font-black ${level.color}`}>
+                  {item.score.toFixed(2)}%
+                </div>
+                <div className={`text-[8px] font-black uppercase tracking-widest ${level.color} opacity-70`}>
+                  {level.label}
+                </div>
               </div>
             </div>
           );
-        }) : (
-          <div className="text-center text-sm text-[#7A7D71] py-10">
-            Nenhum dado suficiente
+        })}
+        {data.length === 0 && (
+          <div className="h-full flex items-center justify-center py-8 opacity-40">
+            <p className="text-xs font-bold uppercase tracking-widest text-brand-muted">Nenhum dado para exibir</p>
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

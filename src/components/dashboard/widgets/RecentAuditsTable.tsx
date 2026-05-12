@@ -1,4 +1,6 @@
 import React from 'react';
+import { useDashboard } from '../DashboardContext';
+import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { Monitoria, User } from '../../../types';
 
 interface RecentAuditsTableProps {
@@ -20,7 +22,23 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 };
 
 export default function RecentAuditsTable({ monitorias, users, limit = 8, title = 'Monitorias Recentes' }: RecentAuditsTableProps) {
-  const getName = (id: string) => users.find(u => u.id === id)?.name || id;
+  const { user: currentUser } = useDashboard();
+  const { getLevelForScore } = useQualityConfig();
+  
+  const getName = (id: string) => {
+    const u = users.find(u => u.id === id);
+    if (!u) return id;
+
+    // Anonymize auditor for agents and support managers
+    const isProtectedRole = ['suporte', 'gestor_suporte'].includes(currentUser?.role || '');
+    const isAuditorRole = ['qualidade', 'gestor_qualidade', 'admin'].includes(u.role);
+    
+    if (isProtectedRole && isAuditorRole) {
+      return 'Análise da Qualidade';
+    }
+    
+    return u.name;
+  };
 
   const displayList = monitorias.slice(0, limit);
 
@@ -37,8 +55,8 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
           <thead className="bg-[#FAFAF8]">
             <tr className="text-[10px] uppercase tracking-widest text-[#7A7D71] font-bold">
               <th className="px-6 py-3">Ticket</th>
-              <th className="px-6 py-3">Auditado</th>
               <th className="px-6 py-3">Auditor</th>
+              <th className="px-6 py-3">Auditado</th>
               <th className="px-6 py-3">Score</th>
               <th className="px-6 py-3">Status</th>
               <th className="px-6 py-3">Data</th>
@@ -51,11 +69,11 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
               return (
                 <tr key={m.id} className="border-t border-[#F0F1E8] hover:bg-[#FAFAF8] transition-colors">
                   <td className="px-6 py-3.5 font-mono font-bold text-sm text-[#2D3A3A]">#{m.ticket_id}</td>
-                  <td className="px-6 py-3.5 text-sm font-medium text-[#3D4035]">{getName(m.evaluated_id)}</td>
-                  <td className="px-6 py-3.5 text-sm text-[#7A7D71]">{getName(m.evaluator_id)}</td>
+                  <td className="px-6 py-3.5 text-sm font-medium text-[#3D4035]">{getName(m.evaluator_id)}</td>
+                  <td className="px-6 py-3.5 text-sm text-[#7A7D71]">{getName(m.evaluated_id)}</td>
                   <td className="px-6 py-3.5">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${sc === 100 ? 'bg-indigo-50 text-indigo-700' : sc >= 75 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                      {sc}%
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${getLevelForScore(sc).bgColor} ${getLevelForScore(sc).color}`}>
+                      {sc.toFixed(2)}%
                     </span>
                   </td>
                   <td className="px-6 py-3.5">

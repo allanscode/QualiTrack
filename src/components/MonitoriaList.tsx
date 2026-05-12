@@ -20,7 +20,8 @@ import {
   Shield,
   Tag,
   User as UserIcon,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -94,10 +95,10 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       if (statusFilter === 'active' && m.active === false) return false;
       if (statusFilter === 'removed' && m.active !== false) return false;
 
-      // Tab
+      // Tab (navigation by status)
       if (tab !== 'todas' && m.status !== tab) return false;
 
-      // Team
+      // Team Filter
       if (teamFilter && m.team_id !== teamFilter) return false;
 
       // Search
@@ -117,6 +118,15 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       return true;
     });
   }, [monitorias, user, tab, search, statusFilter, teamFilter, dateType, startDate, endDate]);
+
+  const hasActiveFilters = useMemo(() => {
+    return search !== '' || teamFilter !== '';
+  }, [search, teamFilter]);
+
+  const clearFilters = () => {
+    setSearch('');
+    setTeamFilter('');
+  };
 
   const getStatusConfig = (status: MonitoriaStatus) => {
     switch (status) {
@@ -240,6 +250,12 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
               <span className="text-brand-highlight">→</span>
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent border-none p-0 text-[10px] font-bold w-24 focus:ring-0" />
             </div>
+
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} icon={<X className="w-4 h-4" />} className="text-error hover:bg-red-50">
+                Limpar Filtros
+              </Button>
+            )}
 
             {user?.role === 'admin' && (
               <Select 

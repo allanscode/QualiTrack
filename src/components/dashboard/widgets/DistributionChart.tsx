@@ -1,5 +1,5 @@
 import React from 'react';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface DistributionChartProps {
   title: string;
@@ -7,20 +7,29 @@ interface DistributionChartProps {
 }
 
 export default function DistributionChart({ title, data }: DistributionChartProps) {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const total = data.reduce((a, b) => a + b.value, 0);
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0].payload;
+    const percent = total > 0 ? ((d.value / total) * 100).toFixed(2) : 0;
+    return (
+      <div className="bg-[#2D3A3A] text-white px-3 py-2 rounded-xl shadow-xl text-xs font-bold">
+        <p className="mb-0.5">{d.name}</p>
+        <p className="text-brand-accent">{d.value} ocorrências ({percent}%)</p>
+      </div>
+    );
+  };
 
   return (
-    <div className="bg-white rounded-3xl border border-[#E2E4D8] p-6 shadow-sm flex flex-col h-full">
-      <h3 className="font-bold text-[#2D3A3A] text-lg mb-6">{title}</h3>
-      {total > 0 ? (
-        <div className="flex-1 flex flex-col justify-center">
-          <div className="min-h-[200px] flex-1">
+    <div className="bg-white rounded-3xl border border-[#E2E4D8] shadow-sm p-6 h-full flex flex-col">
+      <h3 className="font-bold text-[#2D3A3A] text-sm mb-4 uppercase tracking-wider">{title}</h3>
+      {data.length > 0 ? (
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#2D3A3A', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
-                  itemStyle={{ color: '#fff' }}
-                />
+                <Tooltip content={<CustomTooltip />} />
                 <Pie
                   data={data}
                   cx="50%"
@@ -37,18 +46,18 @@ export default function DistributionChart({ title, data }: DistributionChartProp
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex flex-wrap justify-center gap-3 mt-4">
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-4">
             {data.map((entry, index) => (
-              <div key={index} className="flex items-center gap-1.5 text-xs text-[#7A7D71] font-semibold">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+              <div key={index} className="flex items-center gap-1.5 text-[10px] text-[#7A7D71] font-black uppercase tracking-tight">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
                 {entry.name} ({entry.value})
               </div>
             ))}
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-sm text-[#7A7D71]">
-          Dados insuficientes
+        <div className="flex-1 flex items-center justify-center text-xs font-bold uppercase tracking-widest text-[#7A7D71] opacity-40">
+          Nenhum dado
         </div>
       )}
     </div>

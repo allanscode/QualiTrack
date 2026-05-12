@@ -627,7 +627,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
   const teamNames = userTeams.map(t => t.name).join(', ');
 
   return (
-    <div className="h-screen w-screen flex bg-[#F9F9F6] text-[#3D4035] font-sans selection:bg-[#A7C0A5] selection:text-[#2D3A3A] overflow-hidden">
+    <div className="h-screen w-full flex bg-[#F9F9F6] text-[#3D4035] font-sans selection:bg-[#A7C0A5] selection:text-[#2D3A3A] overflow-hidden">
       {/* Global Monitoria Form Overlay — renders above everything */}
       <AnimatePresence>
         {isFormOpen && (
@@ -693,12 +693,12 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
           )}
         </nav>
 
-        <div className="p-4 mt-auto">
-          <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/5">
+        <div className={`p-4 mt-auto transition-all ${!isSidebarOpen ? 'px-2' : ''}`}>
+          <div className={`flex items-center p-3 bg-white/5 rounded-2xl border border-white/5 transition-all ${isSidebarOpen ? 'gap-3' : 'flex-col gap-4 px-0 py-4'}`}>
             {currentUser.photoURL ? (
-              <img src={currentUser.photoURL} className="w-8 h-8 rounded-full border border-white/20" alt="" />
+              <img src={currentUser.photoURL} className="w-8 h-8 rounded-full border border-white/20 flex-shrink-0" alt="" />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-[#A7C0A5] flex items-center justify-center text-[#2D3A3A]">
+              <div className="w-8 h-8 rounded-full bg-[#A7C0A5] flex items-center justify-center text-[#2D3A3A] flex-shrink-0">
                 <UserIcon className="w-4 h-4" />
               </div>
             )}
@@ -713,7 +713,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
             )}
             <button 
               onClick={handleLogout}
-              className={`p-2 hover:bg-white/10 rounded-xl transition-colors text-[#A7C0A5] ${!isSidebarOpen && 'mx-auto'}`}
+              className={`p-2 hover:bg-white/10 rounded-xl transition-colors text-[#A7C0A5] flex-shrink-0 ${!isSidebarOpen ? 'mt-2' : ''}`}
               title="Sair do sistema"
             >
               <LogOut className="w-4 h-4" />
@@ -722,19 +722,19 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
         </div>
       </motion.aside>
 
-      <main className="flex-1 flex flex-col relative">
-        <header className="flex-shrink-0 px-8 py-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-[#2D3A3A]">
+      <main className="flex-1 flex flex-col relative min-w-0 overflow-hidden">
+        <header className="flex-shrink-0 px-8 py-6 flex items-center justify-between min-w-0">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-3xl font-bold text-[#2D3A3A] truncate">
               {activeTab === 'dashboard' ? 'Visão Geral da Qualidade' : activeTab === 'monitorias' ? 'Auditoria e Avaliações' : 'Configurações'}
             </h2>
-            <p className="text-[#7A7D71] text-sm mt-1">Conectado como {userData?.name}</p>
+            <p className="text-[#7A7D71] text-sm mt-1 truncate">Conectado como {userData?.name}</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-shrink-0 ml-4">
             {(activeTab === 'monitorias' || activeTab === 'dashboard') && ['gestor_qualidade', 'qualidade'].includes(userData?.role || '') && (
               <button 
                 onClick={() => setIsFormOpen(true)}
-                className="bg-[#2D3A3A] text-white px-6 py-2 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all flex items-center gap-2"
+                className="bg-[#2D3A3A] text-white px-6 py-2 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all flex items-center gap-2 whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" /> Nova Monitoria
               </button>
@@ -742,7 +742,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-8 pt-2">
+        <div className="flex-1 overflow-auto px-6 pb-8 pt-2 min-w-0">
           <AnimatePresence mode="wait">
             <>
               {activeTab === 'dashboard' && (

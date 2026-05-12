@@ -5,22 +5,36 @@ import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import SlaWidget from '../widgets/SlaWidget';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
-import { ClipboardCheck, Target, CheckCircle2, XCircle, TrendingUp, AlertCircle } from 'lucide-react';
-import { supabase, mockDb } from '../../../lib/supabase';
-import { Monitoria } from '../../../types';
-import Card from '../../ui/Card';
+import { ClipboardCheck, Target, CheckCircle2, XCircle } from 'lucide-react';
+import { useQualityConfig } from '../../../lib/useQualityConfig';
 
 export default function AuditorDashboard() {
-  const { user, monitorias, users, filters } = useDashboard();
+  const { user, monitorias, users } = useDashboard();
+  const { config, getLevelForScore, isAboveTarget } = useQualityConfig();
   const [comparativeData, setComparativeData] = useState<any[]>([]);
 
   const myMonitorias = useMemo(() => monitorias.filter(m => m.evaluator_id === user?.id), [monitorias, user]);
-  const completed = useMemo(() => myMonitorias.filter(m => ['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(m.status)), [myMonitorias]);
   
-  const avgScore = useMemo(() => completed.length > 0 ? (completed.reduce((a, m) => a + (m.score || 0), 0) / completed.length) : 0, [completed]);
+  const scoredMonitorias = useMemo(() => myMonitorias.filter(m => m.score !== undefined && m.score !== null), [myMonitorias]);
+  const avgScore = useMemo(() => scoredMonitorias.length > 0 ? (scoredMonitorias.reduce((a, m) => a + (m.score || 0), 0) / scoredMonitorias.length) : 0, [scoredMonitorias]);
   
-  const reavAccepted = useMemo(() => myMonitorias.filter(m => m.status === 'contestacao_aceita' || m.status === 'finalizada_alterada').length, [myMonitorias]);
-  const reavRejected = useMemo(() => myMonitorias.filter(m => m.status === 'contestacao_negada').length, [myMonitorias]);
+  const reavAccepted = useMemo(() => myMonitorias.filter(m =>
+    m.history?.some(h =>
+      h.action.includes('Procedente') ||
+      h.action.includes('Alterada') ||
+      h.action.toLowerCase().includes('aceita') ||
+      h.action.toLowerCase().includes('alterado')
+    )
+  ).length, [myMonitorias]);
+
+  const reavRejected = useMemo(() => myMonitorias.filter(m =>
+    m.history?.some(h =>
+      h.action.includes('Improcedente') ||
+      h.action.includes('Mantida') ||
+      h.action.toLowerCase().includes('negada') ||
+      h.action.toLowerCase().includes('recusada')
+    )
+  ).length, [myMonitorias]);
 
   useEffect(() => {
     async function calculateComparativeData() {
@@ -43,7 +57,7 @@ export default function AuditorDashboard() {
         const chartData = Object.entries(days).map(([name, data]) => ({
           name,
           meuVolume: data.meuVolume,
-          mediaEquipe: Number((data.teamTotal / auditorsCount).toFixed(1))
+          mediaEquipe: Number((data.teamTotal / auditorsCount).toFixed(2))
         })).sort((a, b) => {
           const [da, ma] = a.name.split('/').map(Number);
           const [db, mb] = b.name.split('/').map(Number);
@@ -60,16 +74,33 @@ export default function AuditorDashboard() {
 
   if (!user) return null;
 
-  // Grade Distribution for "My Audits"
-  const gradeDistribution = [
-    { name: '100%', value: completed.filter(m => m.score === 100).length, color: '#6366f1' },
-    { name: '90-99%', value: completed.filter(m => m.score >= 90 && m.score < 100).length, color: '#10b981' },
-    { name: '75-89%', value: completed.filter(m => m.score >= 75 && m.score < 90).length, color: '#f59e0b' },
-    { name: '< 75%', value: completed.filter(m => m.score < 75).length, color: '#ef4444' },
-  ].filter(d => d.value > 0);
+  // Grade Distribution (Dynamic from Config)
+  const gradeDistribution = useMemo(() => {
+    const colorMap: Record<string, string> = {
+      'text-indigo-700': '#6366f1',
+      'text-emerald-700': '#10b981',
+      'text-amber-700': '#f59e0b',
+      'text-red-700': '#ef4444',
+      'text-purple-700': '#a855f7',
+      'text-blue-700': '#3b82f6',
+    };
+
+    return config.levels.map(level => ({
+      name: `${level.label} (${level.minScore}-${level.maxScore}%)`,
+      value: myMonitorias.filter(m => m.score >= level.minScore && m.score <= level.maxScore).length,
+      color: colorMap[level.color] || '#94a3b8'
+    })).filter(d => d.value > 0);
+  }, [config.levels, myMonitorias]);
+
+  const totalReevaluated = useMemo(() => {
+    return myMonitorias.filter(m => 
+      ['contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(m.status) ||
+      m.history?.some(h => h.action.includes('Reavaliada') || h.action.includes('Contestação'))
+    ).length;
+  }, [myMonitorias]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
       <header>
         <h1 className="text-2xl font-black text-brand-primary tracking-tight uppercase">Painel do Auditor</h1>
         <p className="text-brand-muted text-sm font-medium mt-1">Olá, {user.name}. Acompanhe sua produtividade e qualidade.</p>
@@ -86,11 +117,11 @@ export default function AuditorDashboard() {
         />
         <StatCard 
           title="Nota Média" 
-          value={`${avgScore.toFixed(1)}%`} 
+          value={`${avgScore.toFixed(2)}%`} 
           sub="Média das notas aplicadas" 
-          good={avgScore >= 85} 
+          good={isAboveTarget(avgScore)} 
           icon={<Target className="w-5 h-5" />} 
-          accent="text-brand-accent" 
+          accent={getLevelForScore(avgScore).color} 
         />
         <StatCard 
           title="Reav. Aceitas" 
@@ -112,21 +143,17 @@ export default function AuditorDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Card className="h-[340px] flex flex-col">
-            <div className="mb-4">
-              <h3 className="font-black text-brand-primary uppercase tracking-tight">Volumetria Diária</h3>
-              <p className="text-[10px] font-bold text-brand-muted uppercase">Comparativo com a média da equipe</p>
-            </div>
-            <div className="flex-1">
-               <ComparativeBarChart 
-                data={comparativeData}
-                dataKeys={[
-                  { key: 'meuVolume', name: 'Meu Volume', color: '#6366f1' },
-                  { key: 'mediaEquipe', name: 'Média Equipe', color: '#e2e8f0' }
-                ]}
-              />
-            </div>
-          </Card>
+          <div className="h-[340px]">
+            <ComparativeBarChart 
+              title="Volumetria Diária"
+              subtitle="Comparativo com a média da equipe"
+              data={comparativeData}
+              dataKeys={[
+                { key: 'meuVolume', name: 'Meu Volume', color: '#6366f1' },
+                { key: 'mediaEquipe', name: 'Média Equipe', color: '#94a3b8' }
+              ]}
+            />
+          </div>
           
           <div className="h-[400px]">
             <SlaWidget 
@@ -139,20 +166,22 @@ export default function AuditorDashboard() {
         </div>
         
         <div className="space-y-6">
-          <Card className="h-[340px] flex flex-col">
+          <div className="h-[340px]">
             <DistributionChart 
               title="Minha Curva de Qualidade" 
               data={gradeDistribution} 
             />
-          </Card>
+          </div>
 
-          <Card className="p-6 bg-brand-primary text-white overflow-hidden relative group">
-            <div className="relative z-10">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-white/60 mb-1">Dica de Produtividade</h4>
-              <p className="text-sm font-bold leading-tight">Mantenha seu SLA de reavaliação abaixo de 24h para garantir a satisfação dos agentes.</p>
-            </div>
-            <TrendingUp className="absolute -right-4 -bottom-4 w-24 h-24 text-white/5 group-hover:scale-110 transition-transform duration-500" />
-          </Card>
+          <div className="h-[400px]">
+            <DistributionChart 
+              title="Precisão da Auditoria" 
+              data={[
+                { name: 'Estáveis', value: myMonitorias.length - totalReevaluated, color: '#6366f1' },
+                { name: 'Reavaliadas', value: totalReevaluated, color: '#f59e0b' }
+              ].filter(d => d.value > 0)} 
+            />
+          </div>
         </div>
       </div>
 

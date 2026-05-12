@@ -118,7 +118,7 @@ export default function MonitoriaForm({
         if (scores[q.id] === 'NAO') totalReduction += weightPerQuestion;
       });
     });
-    return Math.max(0, Math.round(100 - totalReduction));
+    return Math.max(0, Number((100 - totalReduction).toFixed(2)));
   };
 
   const score = calculateScore();
