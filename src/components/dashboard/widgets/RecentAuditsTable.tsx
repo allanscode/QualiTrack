@@ -3,6 +3,7 @@ import { useDashboard } from '../DashboardContext';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { Monitoria, User } from '../../../types';
 import Card from '../../ui/Card';
+import SLAClock from '../../ui/SLAClock';
 
 interface RecentAuditsTableProps {
   monitorias: Monitoria[];
@@ -60,11 +61,13 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
         <table className="w-full text-left">
           <thead className="bg-surface-subtle/20">
             <tr className="text-[10px] uppercase tracking-widest text-brand-muted font-black border-b border-surface-border">
+              <th className="px-6 py-3">#</th>
               <th className="px-6 py-3">Ticket</th>
               <th className="px-6 py-3">Qualidade</th>
               <th className="px-6 py-3">Suporte</th>
               <th className="px-6 py-3">Score</th>
               <th className="px-6 py-3">Status</th>
+              <th className="px-6 py-3">SLA</th>
               <th className="px-6 py-3">Data</th>
             </tr>
           </thead>
@@ -75,6 +78,7 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
               const level = getLevelForScore(sc);
               return (
                 <tr key={m.id} className="border-t border-surface-border/60 hover:bg-surface-subtle/30 transition-colors">
+                  <td className="px-6 py-3.5 font-mono font-black text-[10px] text-brand-muted">#{m.display_id || m.id.slice(0,4)}</td>
                   <td className="px-6 py-3.5 font-mono font-black text-sm text-brand-primary">#{m.ticket_id}</td>
                   <td className="px-6 py-3.5 text-sm font-semibold text-brand-primary">{getName(m.evaluator_id)}</td>
                   <td className="px-6 py-3.5 text-sm font-medium text-brand-muted">{getName(m.evaluated_id)}</td>
@@ -87,6 +91,9 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${cfg.bg} ${cfg.color}`}>
                       {cfg.label}
                     </span>
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <SLAClock deadlineAt={m.deadline_at} status={m.status} />
                   </td>
                   <td className="px-6 py-3.5 text-[10px] font-bold text-brand-muted uppercase tracking-wider">
                     {new Date(m.created_at).toLocaleDateString('pt-BR')}

@@ -1,91 +1,136 @@
-/**
- * Adds business hours to a given date.
- * Business hours: Monday–Friday, 08:00–17:00 (BRT).
- * If the start date is outside business hours, it snaps to the next open slot first.
- */
 
-// Static list of Brazilian national holidays (MM-DD format, updated annually)
-const HOLIDAYS_BR = [
-  '01-01', // Confraternização Universal
-  '04-21', // Tiradentes
-  '05-01', // Dia do Trabalho
-  '09-07', // Independência
-  '10-12', // Nossa Senhora Aparecida
-  '11-02', // Finados
-  '11-15', // Proclamação da República
-  '12-25', // Natal
-];
+export interface BusinessHoursConfig {
+  start: string;
+  end: string;
+  days: number[];
+  holidays: string[];
+}
 
-function isHoliday(date: Date): boolean {
+const DEFAULT_CONFIG: BusinessHoursConfig = {
+  start: '08:00',
+  end: '17:00',
+  days: [1, 2, 3, 4, 5],
+  holidays: ['01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12']
+};
+
+function parseTime(timeStr: string) {
+  if (!timeStr || !timeStr.includes(':')) return { h: 8, m: 0 };
+  const [h, m] = timeStr.split(':').map(Number);
+  return { h: isNaN(h) ? 8 : h, m: isNaN(m) ? 0 : m };
+}
+
+function isHoliday(date: Date, config: BusinessHoursConfig): boolean {
+  if (!config || !config.holidays || !Array.isArray(config.holidays)) return false;
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  return HOLIDAYS_BR.includes(`${month}-${day}`);
+  return config.holidays.includes(`${day}/${month}`);
 }
 
-function isBusinessDay(date: Date): boolean {
-  const dow = date.getDay(); // 0 = Sunday, 6 = Saturday
-  return dow >= 1 && dow <= 5 && !isHoliday(date);
+function isBusinessDay(date: Date, config: BusinessHoursConfig): boolean {
+  if (!config) return date.getDay() >= 1 && date.getDay() <= 5;
+  const dow = date.getDay();
+  const days = config.days || [1, 2, 3, 4, 5];
+  if (days.length === 0) return dow >= 1 && dow <= 5 && !isHoliday(date, config);
+  return days.includes(dow) && !isHoliday(date, config);
 }
 
-/**
- * Snaps a date to the next business hour start if it falls outside business hours.
- */
-function snapToBusinessHours(date: Date): Date {
+function snapToBusinessHours(date: Date, config: BusinessHoursConfig = DEFAULT_CONFIG): Date {
   const result = new Date(date);
+  const { h: startH, m: startM } = parseTime(config?.start || '08:00');
+  const { h: endH, m: endM } = parseTime(config?.end || '17:00');
 
-  // While not a business day, advance to the next day
-  while (!isBusinessDay(result)) {
+  let safety = 0;
+  while (!isBusinessDay(result, config) && safety < 365) {
     result.setDate(result.getDate() + 1);
-    result.setHours(8, 0, 0, 0);
+    result.setHours(startH, startM, 0, 0);
+    safety++;
   }
 
   const hours = result.getHours();
   const minutes = result.getMinutes();
+  const currentTimeInMinutes = hours * 60 + minutes;
+  const startTimeInMinutes = startH * 60 + startM;
+  const endTimeInMinutes = endH * 60 + endM;
 
-  // Before 08:00 → snap to 08:00
-  if (hours < 8) {
-    result.setHours(8, 0, 0, 0);
+  if (currentTimeInMinutes < startTimeInMinutes) {
+    result.setHours(startH, startM, 0, 0);
   }
 
-  // After 17:00 → snap to next business day 08:00
-  if (hours >= 17) {
+  if (currentTimeInMinutes >= endTimeInMinutes) {
     result.setDate(result.getDate() + 1);
-    result.setHours(8, 0, 0, 0);
-    // Re-check in case next day is a weekend/holiday
-    return snapToBusinessHours(result);
+    result.setHours(startH, startM, 0, 0);
+    // Recursion safety
+    if (startTimeInMinutes < endTimeInMinutes) {
+      return snapToBusinessHours(result, config);
+    }
   }
 
   return result;
 }
 
-/**
- * Adds a given number of business hours to a start date.
- * @param from - Start date
- * @param hours - Number of business hours to add
- * @returns New deadline date
- */
-export function addBusinessHours(from: Date, hours: number): Date {
-  let current = snapToBusinessHours(new Date(from));
-  let remaining = hours * 60; // Work in minutes for precision
+export function addBusinessHours(from: Date, hours: number, config: BusinessHoursConfig = DEFAULT_CONFIG): Date {
+  let current = snapToBusinessHours(new Date(from), config);
+  let remaining = (hours || 0) * 60;
+  const { h: startH, m: startM } = parseTime(config?.start || '08:00');
+  const { h: endH, m: endM } = parseTime(config?.end || '17:00');
 
-  while (remaining > 0) {
-    // Minutes until end of business day (17:00)
-    const endOfDay = new Date(current);
-    endOfDay.setHours(17, 0, 0, 0);
+  let safety = 0;
+  while (remaining > 0 && safety < 1000) {
+    const endOfCurrentDay = new Date(current);
+    endOfCurrentDay.setHours(endH, endM, 0, 0);
 
-    const minutesUntilEod = Math.floor((endOfDay.getTime() - current.getTime()) / 60000);
+    const minutesUntilEod = Math.floor((endOfCurrentDay.getTime() - current.getTime()) / 60000);
 
     if (remaining <= minutesUntilEod) {
       current = new Date(current.getTime() + remaining * 60000);
       remaining = 0;
     } else {
-      remaining -= minutesUntilEod;
-      // Move to next business day at 08:00
+      remaining -= Math.max(0, minutesUntilEod);
       current.setDate(current.getDate() + 1);
-      current.setHours(8, 0, 0, 0);
-      current = snapToBusinessHours(current);
+      current.setHours(startH, startM, 0, 0);
+      current = snapToBusinessHours(current, config);
     }
+    safety++;
   }
 
   return current;
+}
+
+export function getRemainingBusinessSeconds(start: Date, end: Date, config: BusinessHoursConfig = DEFAULT_CONFIG): number {
+  if (!start || !end || start >= end) return 0;
+  
+  let current = new Date(start);
+  const target = new Date(end);
+  let totalSeconds = 0;
+  let safety = 0;
+
+  const businessStart = snapToBusinessHours(new Date(start), config);
+  
+  if (current < businessStart) {
+    current = businessStart;
+  }
+
+  const { h: startH, m: startM } = parseTime(config?.start || '08:00');
+  const { h: endH, m: endM } = parseTime(config?.end || '17:00');
+
+  while (current < target && safety < 2000) {
+    const endOfCurrentDay = new Date(current);
+    endOfCurrentDay.setHours(endH, endM, 0, 0);
+
+    const endOfRange = target < endOfCurrentDay ? target : endOfCurrentDay;
+    const diffMs = endOfRange.getTime() - current.getTime();
+    
+    if (diffMs > 0) totalSeconds += Math.floor(diffMs / 1000);
+
+    if (target > endOfCurrentDay) {
+      current.setDate(current.getDate() + 1);
+      current.setHours(startH, startM, 0, 0);
+      current = snapToBusinessHours(current, config);
+    } else {
+      break;
+    }
+    safety++;
+  }
+
+  return totalSeconds;
 }

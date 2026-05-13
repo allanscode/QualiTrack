@@ -3,6 +3,7 @@ import { Clock, AlertCircle } from 'lucide-react';
 import { Monitoria, User } from '../../../types';
 import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
+import SLAClock from '../../ui/SLAClock';
 
 interface SlaWidgetProps {
   title: string;
@@ -43,21 +44,18 @@ export default function SlaWidget({ title, monitorias, users, targetStatus }: Sl
           const isCritical = days >= 2;
 
           return (
-            <div key={m.id} className={`flex items-center justify-between p-3.5 rounded-2xl border transition-colors ${isCritical ? 'border-error/20 bg-error/5' : 'border-surface-border hover:bg-surface-subtle/40'}`}>
+            <div key={m.id} className="flex items-center justify-between p-3.5 rounded-2xl border border-surface-border hover:bg-surface-subtle/40 transition-colors">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <Badge variant="info" size="xs">Mon: {m.display_id || m.id.slice(0, 4)}</Badge>
                   <span className="font-mono text-[10px] font-black text-brand-primary">#{m.ticket_id}</span>
-                  {isCritical && <AlertCircle className="w-3 h-3 text-error" />}
                 </div>
                 <p className="text-[10px] text-brand-muted truncate font-bold uppercase tracking-wider">
                   {m.status === 'pendente_revisao' ? `Qualidade: ${getName(m.evaluator_id)}` : `Suporte: ${getName(m.evaluated_id)}`}
                 </p>
               </div>
               <div className="text-right ml-3 flex-shrink-0">
-                <span className={`text-[10px] font-black uppercase tracking-wider ${isCritical ? 'text-error' : 'text-warning'}`}>
-                  {days === 0 ? 'Hoje' : `Há ${days} dia${days > 1 ? 's' : ''}`}
-                </span>
+                <SLAClock deadlineAt={m.deadline_at} status={m.status} />
               </div>
             </div>
           );

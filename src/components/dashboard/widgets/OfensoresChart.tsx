@@ -8,9 +8,11 @@ interface OfensoresChartProps {
   monitorias: Monitoria[];
   forms: EvaluationForm[];
   limit?: number;
+  title?: string;
+  subtitle?: string;
 }
 
-export default function OfensoresChart({ monitorias, forms, limit = 8 }: OfensoresChartProps) {
+export default function OfensoresChart({ monitorias, forms, limit = 8, title = 'Maiores Ofensores', subtitle = 'Critérios com mais falhas no período' }: OfensoresChartProps) {
   const ofensores = useMemo(() => {
     const map: Record<string, { text: string; naoCount: number; totalAnswered: number }> = {};
 
@@ -61,8 +63,8 @@ export default function OfensoresChart({ monitorias, forms, limit = 8 }: Ofensor
         <AlertOctagon className="w-4 h-4 text-error" />
       </div>
       <div>
-        <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">Maiores Ofensores</h3>
-        <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">Critérios com mais falhas no período</p>
+        <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">{title}</h3>
+        <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>
       </div>
     </div>
   );

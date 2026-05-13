@@ -5,7 +5,7 @@ import CustomSelect from '../ui/CustomSelect';
 import Button from '../ui/Button';
 
 export default function FilterBar() {
-  const { filters, setFilters, users, teams, loading, refresh } = useDashboard();
+  const { filters, setFilters, users, teams, loading, refresh, user } = useDashboard();
 
   const defaults = useMemo(() => ({
     startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0],
@@ -89,15 +89,17 @@ export default function FilterBar() {
         />
 
         {/* Auditor Select */}
-        <CustomSelect 
-          value={filters.auditorId}
-          options={[
-            { value: '', label: 'Qualidade' },
-            ...activeAuditors.map(a => ({ value: a.id, label: a.name }))
-          ]}
-          onChange={(val: string) => setFilters({ ...filters, auditorId: val })}
-          className="w-48"
-        />
+        {user?.role !== 'qualidade' && (
+          <CustomSelect 
+            value={filters.auditorId}
+            options={[
+              { value: '', label: 'Qualidade' },
+              ...activeAuditors.map(a => ({ value: a.id, label: a.name }))
+            ]}
+            onChange={(val: string) => setFilters({ ...filters, auditorId: val })}
+            className="w-48"
+          />
+        )}
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 ml-auto flex-shrink-0 pl-6 border-l border-surface-border self-center h-10">

@@ -1,21 +1,28 @@
 import { useState, useEffect } from 'react';
+import { supabase, mockDb } from './supabase';
 
 export interface QualityLevel {
   label: string;
-  minScore: number; // inclusive lower bound (0-100)
-  maxScore: number; // inclusive upper bound (0-100)
+  minScore: number;
+  maxScore: number;
   color: string;
   bgColor: string;
 }
 
 export interface QualityConfig {
   levels: QualityLevel[];
-  targetScore: number; // The "meta" threshold, e.g. 75
+  targetScore: number;
   sla: {
     agentReview: number;
     auditorReevaluation: number;
     managerSupport: number;
     managerQuality: number;
+  };
+  businessHours: {
+    start: string;
+    end: string;
+    days: number[];
+    holidays: string[]; // format "DD/MM"
   };
 }
 
@@ -27,10 +34,16 @@ const DEFAULT_CONFIG: QualityConfig = {
     { label: 'Ruim',      minScore: 0,  maxScore: 74,  color: 'text-red-700',     bgColor: 'bg-red-50' },
   ],
   sla: {
-    agentReview: 48,
-    auditorReevaluation: 24,
-    managerSupport: 24,
-    managerQuality: 24,
+    agentReview: 50,
+    auditorReevaluation: 25,
+    managerSupport: 25,
+    managerQuality: 25,
+  },
+  businessHours: {
+    start: '08:00',
+    end: '17:00',
+    days: [1, 2, 3, 4, 5],
+    holidays: ['01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12']
   }
 };
 
@@ -45,9 +58,44 @@ export function useQualityConfig() {
     return DEFAULT_CONFIG;
   });
 
-  const saveConfig = (newConfig: QualityConfig) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
+  useEffect(() => {
+    const fetchConfig = async () => {
+      if (supabase) {
+        const { data } = await supabase.from('quality_configs').select('*').single();
+        if (data) {
+          setConfig(data.config);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data.config));
+        }
+      } else {
+        const { data } = await mockDb.get('quality_configs');
+        if (data && data.length > 0) {
+          setConfig(data[0].config);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data[0].config));
+        }
+      }
+    };
+    fetchConfig();
+  }, []);
+
+  const saveConfig = async (newConfig: QualityConfig) => {
     setConfig(newConfig);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
+    
+    if (supabase) {
+      const { data: existing } = await supabase.from('quality_configs').select('id').single();
+      if (existing) {
+        await supabase.from('quality_configs').update({ config: newConfig }).eq('id', existing.id);
+      } else {
+        await supabase.from('quality_configs').insert({ config: newConfig });
+      }
+    } else {
+      const { data: existing } = await mockDb.get('quality_configs');
+      if (existing && existing.length > 0) {
+        await mockDb.update('quality_configs', existing[0].id, { config: newConfig });
+      } else {
+        await mockDb.insert('quality_configs', { config: newConfig });
+      }
+    }
   };
 
   const getLevelForScore = (score: number): QualityLevel => {

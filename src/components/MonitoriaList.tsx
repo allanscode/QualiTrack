@@ -34,10 +34,11 @@ import Card from './ui/Card';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
 import CustomSelect from './ui/CustomSelect'; 
+import SLAClock from './ui/SLAClock';
 import { useQualityConfig } from '../lib/useQualityConfig';
 
 export default function MonitoriaList({ user, onNew }: { user: User | null; onNew: () => void }) {
-  const { config: qualityConfig } = useQualityConfig();
+  const { config: qualityConfig, getLevelForScore } = useQualityConfig();
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -47,6 +48,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'active' | 'removed'>('active');
   const [teamFilter, setTeamFilter] = useState<string>('');
+  const [suporteFilter, setSuporteFilter] = useState<string>('');
   const [auditorFilter, setAuditorFilter] = useState<string>('');
   const [dateType, setDateType] = useState<'analysis' | 'ticket'>('analysis');
   const [startDate, setStartDate] = useState(new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0]);
@@ -104,6 +106,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
 
       // Filters
       if (teamFilter && m.team_id !== teamFilter) return false;
+      if (suporteFilter && m.evaluated_id !== suporteFilter) return false;
       if (auditorFilter && m.evaluator_id !== auditorFilter) return false;
 
       // Search - Ticket ID or Monitoria ID only
@@ -124,12 +127,13 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
   }, [monitorias, user, tab, search, statusFilter, teamFilter, auditorFilter, dateType, startDate, endDate]);
 
   const hasActiveFilters = useMemo(() => {
-    return search !== '' || teamFilter !== '' || auditorFilter !== '';
-  }, [search, teamFilter, auditorFilter]);
+    return search !== '' || teamFilter !== '' || suporteFilter !== '' || auditorFilter !== '';
+  }, [search, teamFilter, suporteFilter, auditorFilter]);
 
   const clearFilters = () => {
     setSearch('');
     setTeamFilter('');
+    setSuporteFilter('');
     setAuditorFilter('');
   };
 
@@ -183,11 +187,11 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     const getDeadlineHours = (status: MonitoriaStatus) => {
       const sla = qualityConfig.sla;
       switch (status) {
-        case 'pendente_revisao': return sla?.agentReview || 48;
-        case 'em_contestacao': return sla?.auditorReevaluation || 24;
-        case 'aguardando_gestor_suporte': return sla?.managerSupport || 24;
-        case 'aguardando_gestor_qualidade': return sla?.managerQuality || 24;
-        default: return 24;
+        case 'pendente_revisao': return sla?.agentReview || 50;
+        case 'em_contestacao': return sla?.auditorReevaluation || 25;
+        case 'aguardando_gestor_suporte': return sla?.managerSupport || 25;
+        case 'aguardando_gestor_qualidade': return sla?.managerQuality || 25;
+        default: return 25;
       }
     };
 
@@ -197,7 +201,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
           status: nextStatus,
           updated_at: now,
           history: [...(monitoria.history || []), historyEntry],
-          ...(nextStatus !== 'concluida' ? { deadline_at: addBusinessHours(new Date(), getDeadlineHours(nextStatus)).toISOString() } : {}),
+          ...(nextStatus !== 'concluida' ? { deadline_at: addBusinessHours(new Date(), getDeadlineHours(nextStatus), qualityConfig.businessHours).toISOString() } : {}),
           ...(type === 'contestar' ? { contestation_reason: actionNote } : {}),
         };
 
@@ -218,6 +222,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
   };
 
   const activeTeams = useMemo(() => teams.filter(t => t.active !== false), [teams]);
+  const activeSuportes = useMemo(() => users.filter(u => u.role === 'suporte' && u.active !== false), [users]);
   const activeAuditors = useMemo(() => users.filter(u => ['qualidade', 'gestor_qualidade', 'admin'].includes(u.role) && u.active !== false), [users]);
 
   if (loading) return (
@@ -263,11 +268,21 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
 
             <div className="w-56 h-10">
               <CustomSelect 
-                value={auditorFilter}
-                onChange={val => setAuditorFilter(val)}
-                options={[{ value: '', label: 'Qualidade' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
+                value={suporteFilter}
+                onChange={val => setSuporteFilter(val)}
+                options={[{ value: '', label: 'Suporte' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
               />
             </div>
+
+            {user?.role !== 'qualidade' && (
+              <div className="w-56 h-10">
+                <CustomSelect 
+                  value={auditorFilter}
+                  onChange={val => setAuditorFilter(val)}
+                  options={[{ value: '', label: 'Qualidade' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
+                />
+              </div>
+            )}
 
             <div className="flex items-center gap-2 bg-white border border-surface-border rounded-2xl px-4 h-10 shadow-sm group hover:border-brand-accent transition-colors relative">
               <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative">
@@ -338,7 +353,8 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
           {filtered.length > 0 ? filtered.map(m => {
             const config = getStatusConfig(m.status);
             const isExpanded = expandedId === m.id;
-            const scoreColor = m.score !== undefined ? (m.score >= 85 ? 'text-brand-accent' : m.score >= 75 ? 'text-warning' : 'text-error') : 'text-brand-muted';
+            const level = getLevelForScore(m.score || 0);
+            const scoreColor = m.score !== undefined ? level.color : 'text-brand-muted';
 
             return (
               <div key={m.id} className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
@@ -348,11 +364,18 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                       <config.icon className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-black text-brand-muted/70 uppercase tracking-widest">#{m.display_id || m.id.slice(0,4)}</span>
-                        <span className="text-brand-muted/30">•</span>
-                        <span className="font-mono text-xs font-black text-brand-primary tracking-tight">TICKET {m.ticket_id}</span>
-                        <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">{config.label}</Badge>
+                      <div className="flex items-center gap-4 mb-1">
+                        <div className="flex items-center gap-2 w-44">
+                          <span className="text-[10px] font-black text-brand-muted/70 uppercase tracking-widest">#{m.display_id || m.id.slice(0,4)}</span>
+                          <span className="text-brand-muted/30">•</span>
+                          <span className="font-mono text-xs font-black text-brand-primary tracking-tight">TICKET {m.ticket_id}</span>
+                        </div>
+                        <div className="w-48 flex justify-center">
+                          <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">{config.label}</Badge>
+                        </div>
+                        <div className="w-36">
+                          <SLAClock deadlineAt={m.deadline_at} status={m.status} />
+                        </div>
                       </div>
                       <div className="flex items-center gap-3 text-[10px] font-bold text-brand-muted uppercase tracking-tight">
                         <span className="flex items-center gap-1.5"><UserIcon className="w-3 h-3 text-brand-highlight" /> {getName(m.evaluated_id)}</span>

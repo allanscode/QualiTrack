@@ -5,11 +5,13 @@ import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import SlaWidget from '../widgets/SlaWidget';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
-import { ClipboardCheck, Target, CheckCircle2, XCircle } from 'lucide-react';
+import OfensoresChart from '../widgets/OfensoresChart';
+import { ClipboardCheck, Target, CheckCircle2, XCircle, AlertTriangle, History, Clock } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
+import Card from '../../ui/Card';
 
-export default function AuditorDashboard() {
-  const { user, monitorias, users } = useDashboard();
+export default function QualityDashboard() {
+  const { user, monitorias, users, forms } = useDashboard();
   const { config, getLevelForScore, isAboveTarget } = useQualityConfig();
   const [comparativeData, setComparativeData] = useState<any[]>([]);
 
@@ -41,7 +43,6 @@ export default function AuditorDashboard() {
       try {
         const days: Record<string, { meuVolume: number, teamTotal: number }> = {};
         
-        // Use all monitorias for team volume comparison
         monitorias.forEach(m => {
           const date = new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
           if (!days[date]) days[date] = { meuVolume: 0, teamTotal: 0 };
@@ -74,7 +75,6 @@ export default function AuditorDashboard() {
 
   if (!user) return null;
 
-  // Grade Distribution (Dynamic from Config)
   const gradeDistribution = useMemo(() => {
     const colorMap: Record<string, string> = {
       'text-indigo-700': '#6366f1',
@@ -99,10 +99,22 @@ export default function AuditorDashboard() {
     ).length;
   }, [myMonitorias]);
 
+  const pendingAuditsCount = useMemo(() => {
+    return myMonitorias.filter(m => 
+      m.active !== false && 
+      !['concluida', 'finalizada_alterada', 'contestacao_aceita', 'contestacao_negada'].includes(m.status)
+    ).length;
+  }, [myMonitorias]);
+
+  const pendingActions = useMemo(() => {
+    return myMonitorias.filter(m => m.status === 'em_contestacao').length;
+  }, [myMonitorias]);
+
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Row 1: Key Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard 
           title="Meu Volume" 
           value={myMonitorias.length} 
@@ -120,9 +132,21 @@ export default function AuditorDashboard() {
           accent={getLevelForScore(avgScore).color} 
         />
         <StatCard 
+          title="Pendente Ação" 
+          value={pendingActions} 
+          sub="Aguardando reanálise" 
+          good={pendingActions === 0} 
+          icon={<AlertTriangle className="w-5 h-5" />} 
+          accent="text-error" 
+        />
+      </div>
+
+      {/* Row 2: Reevaluation Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard 
           title="Reav. Aceitas" 
           value={reavAccepted} 
-          sub="Contestações procedentes" 
+          sub="Procedentes (Nota alterada)" 
           good={reavAccepted === 0} 
           icon={<CheckCircle2 className="w-5 h-5" />} 
           accent="text-success" 
@@ -130,13 +154,22 @@ export default function AuditorDashboard() {
         <StatCard 
           title="Reav. Recusadas" 
           value={reavRejected} 
-          sub="Contestações improcedentes" 
+          sub="Improcedentes (Nota mantida)" 
           good={true} 
           icon={<XCircle className="w-5 h-5" />} 
           accent="text-error" 
         />
+        <StatCard 
+          title="Total Reav Recebidas" 
+          value={reavAccepted + reavRejected} 
+          sub="Total de contestações" 
+          good={true} 
+          icon={<History className="w-4 h-4" />} 
+          accent="text-brand-highlight" 
+        />
       </div>
 
+      {/* Row 3: Middle Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="h-[340px]">
@@ -181,7 +214,55 @@ export default function AuditorDashboard() {
         </div>
       </div>
 
-      <RecentAuditsTable monitorias={myMonitorias} users={users} />
+      {/* Row 4: Ofensores + Pendentes (As requested) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 h-[380px]">
+          <OfensoresChart 
+            title="Maiores Ofensores"
+            subtitle="Itens que você mais despontuou"
+            monitorias={myMonitorias} 
+            forms={forms} 
+            limit={8} 
+          />
+        </div>
+        <div className="lg:col-span-1 h-[380px]">
+          <Card padding="lg" className="h-full flex flex-col">
+            {/* Standard Header Pattern */}
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 rounded-xl bg-brand-primary/10 flex items-center justify-center flex-shrink-0">
+                <Clock className="w-4 h-4 text-brand-primary" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">Auditorias Pendentes</h3>
+                <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">Aguardando Conclusão</p>
+              </div>
+            </div>
+            
+            {/* Standardized Content Area */}
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+              <div className="relative">
+                <p className="text-[100px] font-black text-brand-primary tracking-tighter tabular-nums leading-none">
+                  {pendingAuditsCount}
+                </p>
+                <div className="absolute -top-4 -right-8 w-10 h-10 bg-brand-primary/5 rounded-full blur-xl animate-pulse" />
+              </div>
+              
+              <div className="mt-8 px-6 py-2.5 bg-brand-primary/5 rounded-full border border-brand-primary/10">
+                <p className="text-[10px] font-black text-brand-muted uppercase tracking-[0.2em]">Total em Aberto</p>
+              </div>
+              
+              <p className="mt-4 text-[9px] font-bold text-brand-muted/60 uppercase tracking-widest max-w-[160px] mx-auto">
+                Inclui monitorias não finalizadas ou não removidas
+              </p>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Row 5: Recent Audits (Full Width) */}
+      <div className="overflow-hidden">
+        <RecentAuditsTable monitorias={myMonitorias} users={users} title="Minhas Auditorias Recentes" limit={10} />
+      </div>
     </div>
   );
 }

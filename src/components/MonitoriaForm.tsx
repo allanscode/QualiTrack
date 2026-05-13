@@ -16,7 +16,8 @@ import {
   Tag,
   Calendar,
   AlertTriangle,
-  History
+  History,
+  Target
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -26,6 +27,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import Select from './ui/Select';
+import CustomSelect from './ui/CustomSelect';
 
 const CHANNELS = ['Chat', 'Email', 'Telefone', 'WhatsApp'] as const;
 
@@ -40,7 +42,7 @@ export default function MonitoriaForm({
   onSaved: () => void;
   initialData?: Monitoria;
 }) {
-  const { config: qualityConfig } = useQualityConfig();
+  const { config: qualityConfig, getLevelForScore, isAboveTarget } = useQualityConfig();
   const isAdmin = user?.role === 'admin';
   const isViewOnly = !!initialData && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit;
   const isReevaluating = !!(initialData as any)?._reevaluate;
@@ -147,8 +149,6 @@ export default function MonitoriaForm({
   };
 
   const score = calculateScore();
-  const canProceed = header.form_id && header.evaluated_id && header.team_id && header.ticket_id && header.ticket_date;
-
   const isAllAnswered = () => {
     if (!selectedForm) return false;
     return selectedForm.sections.every(s => 
@@ -156,9 +156,41 @@ export default function MonitoriaForm({
     );
   };
 
+  const validateStep = (s: number) => {
+    if (s === 1) {
+      if (!header.form_id || !header.evaluated_id || !header.team_id || !header.ticket_id || !header.ticket_date || !header.channel) {
+        toast.error('Preencha todos os campos obrigatórios da Identificação.');
+        return false;
+      }
+    }
+    if (s === 2) {
+      if (!header.satisfaction_result) {
+        toast.error('Selecione o resultado da pesquisa de satisfação.');
+        return false;
+      }
+      if (header.satisfaction_result !== 'Sem pesquisa') {
+        if (header.satisfaction_has_record && !header.satisfaction_record_text.trim()) {
+          toast.error('Informe o registro deixado pelo cliente.');
+          return false;
+        }
+        if (header.satisfaction_result === 'Negativa' && !header.client_contact_log.trim()) {
+          toast.error('Informe o registro de contato para a pesquisa negativa.');
+          return false;
+        }
+      }
+    }
+    if (s === 3) {
+      if (!isAllAnswered()) {
+        toast.error('Responda todos os itens da avaliação antes de prosseguir.');
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleSave = async () => {
-    if (!user || !canProceed) { toast.error('Preencha os campos obrigatórios do cabeçalho.'); return; }
-    if (!isAllAnswered()) { toast.error('Preencha todos os itens da avaliação (Sim, Não ou N/A).'); return; }
+    if (!user) return;
+    if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
     if (isReevaluating && !header.reevaluation_justification.trim()) {
       toast.error('Informe a justificativa da reavaliação.');
       return;
@@ -189,8 +221,9 @@ export default function MonitoriaForm({
       const getDeadline = () => {
         const now = new Date();
         const sla = qualityConfig.sla;
-        if (isReevaluating) return addBusinessHours(now, sla?.auditorReevaluation || 24).toISOString();
-        return addBusinessHours(now, sla?.agentReview || 48).toISOString();
+        const bh = qualityConfig.businessHours;
+        if (isReevaluating) return addBusinessHours(now, sla?.auditorReevaluation || 25, bh).toISOString();
+        return addBusinessHours(now, sla?.agentReview || 50, bh).toISOString();
       };
 
       const payload = {
@@ -240,7 +273,7 @@ export default function MonitoriaForm({
         initial={{ opacity: 0, scale: 0.98, y: 10 }} 
         animate={{ opacity: 1, scale: 1, y: 0 }} 
         className="bg-surface-bg rounded-[32px] shadow-2xl w-full max-w-5xl flex flex-col overflow-hidden" 
-        style={{ maxHeight: '92vh' }}
+        style={{ height: '92vh' }}
       >
         {/* Top Header */}
         <div className="p-6 border-b border-surface-border flex items-center justify-between bg-white">
@@ -262,88 +295,218 @@ export default function MonitoriaForm({
         <div className="flex-1 overflow-y-auto p-8 space-y-10 no-scrollbar">
           {/* Stepper Progress */}
           {!isViewOnly && (
-            <div className="flex items-center justify-center gap-10">
+            <div className="flex items-center justify-center gap-6 md:gap-10">
               {[
                 { n: 1, label: 'Identificação' },
-                { n: 2, label: 'Avaliação' },
-                { n: 3, label: 'Fechamento' }
+                { n: 2, label: 'Pesquisa' },
+                { n: 3, label: 'Avaliação' },
+                { n: 4, label: 'Registro/Log' }
               ].map(s => (
                 <div key={s.n} className="flex flex-col items-center gap-2 group">
                   <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black transition-all ${step >= s.n ? 'bg-brand-primary text-white' : 'bg-surface-subtle text-brand-muted'}`}>
                     {s.n}
                   </div>
-                  <span className={`text-[10px] font-black uppercase tracking-widest ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted'}`}>{s.label}</span>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
                 </div>
               ))}
             </div>
           )}
 
           {step === 1 && (
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
-              <Card className="md:col-span-2 bg-white/50 border-dashed">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Select 
-                    label="Ficha de Avaliação *"
-                    value={header.form_id} 
-                    onChange={e => setHeader({...header, form_id: e.target.value})} 
-                    disabled={isViewOnly || isReevaluating}
-                    options={[{ value: '', label: 'Selecione o formulário...' }, ...forms.map(f => ({ value: f.id, label: f.title }))]}
-                  />
-                  <Select 
-                    label="Suporte *"
-                    value={header.evaluated_id} 
-                    onChange={e => setHeader({...header, evaluated_id: e.target.value})} 
-                    disabled={isViewOnly || isReevaluating}
-                    options={[{ value: '', label: 'Selecione o suporte...' }, ...agents.map(a => ({ value: a.id, label: a.name }))]}
-                  />
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">ID do Ticket *</label>
-                    <input type="text" value={header.ticket_id} onChange={e => setHeader({...header, ticket_id: e.target.value})} disabled={isViewOnly || isReevaluating} className="bg-white border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" placeholder="Ex: 887234" />
-                  </div>
-                  <Select 
-                    label="Equipe *"
-                    value={header.team_id} 
-                    onChange={e => setHeader({...header, team_id: e.target.value})} 
-                    disabled={isViewOnly || isReevaluating}
-                    options={[{ value: '', label: 'Selecione a equipe...' }, ...teams.map(t => ({ value: t.id, label: t.name }))]}
-                  />
-                </div>
-              </Card>
-
-              <div className="space-y-4">
-                <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Pesquisa de Satisfação</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['Positiva', 'Negativa', 'Sem pesquisa'] as const).map(opt => (
-                    <button key={opt} onClick={() => !isViewOnly && !isReevaluating && setHeader({...header, satisfaction_result: opt})} className={`p-4 rounded-2xl border-2 text-xs font-bold transition-all ${header.satisfaction_result === opt ? 'bg-brand-primary border-brand-primary text-white shadow-premium' : 'bg-white border-surface-border text-brand-muted hover:border-brand-highlight'}`} disabled={isViewOnly || isReevaluating}>
-                      {opt}
-                    </button>
-                  ))}
-                </div>
+            <section className="animate-fade-in space-y-8 max-w-4xl mx-auto">
+              <div className="text-center mb-8">
+                <h3 className="text-xl font-black text-brand-primary uppercase tracking-tight">Dados da Avaliação</h3>
+                <p className="text-xs font-bold text-brand-muted uppercase tracking-widest mt-1">Preencha as informações básicas do ticket</p>
               </div>
 
-              <div className="space-y-4">
-                <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Datas e Canal</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <Select value={header.channel} onChange={e => setHeader({...header, channel: e.target.value as any})} disabled={isViewOnly} options={CHANNELS.map(c => ({ value: c, label: c }))} />
-                  <div className="flex flex-col gap-1">
-                    <input type="date" value={header.ticket_date} onChange={e => setHeader({...header, ticket_date: e.target.value})} disabled={isViewOnly} className="bg-white border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Ficha de Avaliação *</label>
+                  <CustomSelect 
+                    value={header.form_id} 
+                    onChange={val => setHeader({...header, form_id: val})} 
+                    options={[{ value: '', label: 'Selecione a ficha...' }, ...forms.map(f => ({ value: f.id, label: f.title }))]}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Suporte *</label>
+                  <CustomSelect 
+                    value={header.evaluated_id} 
+                    onChange={val => setHeader({...header, evaluated_id: val})} 
+                    options={[{ value: '', label: 'Selecione o colaborador...' }, ...agents.map(a => ({ value: a.id, label: a.name }))]}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipe *</label>
+                  <CustomSelect 
+                    value={header.team_id} 
+                    onChange={val => setHeader({...header, team_id: val})} 
+                    options={[{ value: '', label: 'Selecione a equipe...' }, ...teams.map(t => ({ value: t.id, label: t.name }))]}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Número do Ticket *</label>
+                  <div className="relative">
+                    <Hash className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted/50" />
+                    <input 
+                      type="text" 
+                      value={header.ticket_id} 
+                      onChange={e => setHeader({...header, ticket_id: e.target.value})} 
+                      disabled={isViewOnly || isReevaluating} 
+                      className="w-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary placeholder:text-brand-muted/40 focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none" 
+                      placeholder="Digite o número do ticket" 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Canal *</label>
+                  <CustomSelect 
+                    value={header.channel} 
+                    onChange={val => setHeader({...header, channel: val as any})} 
+                    options={CHANNELS.map(c => ({ value: c, label: c }))}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Data do Ticket *</label>
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted/50" />
+                    <input 
+                      type="date" 
+                      value={header.ticket_date} 
+                      onChange={e => setHeader({...header, ticket_date: e.target.value})} 
+                      disabled={isViewOnly} 
+                      className="w-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none" 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 text-center block">Data Atual (Análise)</label>
+                  <div className="bg-brand-subtle/30 rounded-2xl py-3 text-center border border-brand-subtle">
+                    <span className="text-xs font-black text-brand-primary uppercase tracking-widest">
+                      {header.analysis_date.split('-').reverse().join('/')}
+                    </span>
                   </div>
                 </div>
               </div>
             </section>
           )}
 
-          {step === 2 && selectedForm && (
-            <section className="space-y-10 animate-fade-in">
-              <div className={`p-8 rounded-[32px] flex items-center justify-between text-white shadow-premium transition-all duration-700 ${score >= 85 ? 'bg-brand-accent' : score >= 75 ? 'bg-warning' : 'bg-error'}`}>
-                <div>
-                  <p className="text-[10px] font-black uppercase opacity-60 tracking-[0.2em] mb-1">Score da Monitoria</p>
-                  <p className="text-6xl font-black">{score}<span className="text-2xl opacity-40">%</span></p>
-                </div>
-                <div className="text-right">
-                  <Badge variant="secondary" size="md" className="bg-white/20 text-white border-none">{score >= 85 ? 'Meta Atingida' : 'Abaixo da Meta'}</Badge>
+          {step === 2 && (
+            <section className="animate-fade-in space-y-10 max-w-4xl mx-auto">
+              <div className="space-y-4">
+                <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1 text-center">Pesquisa de Satisfação</p>
+                <div className="grid grid-cols-3 gap-4">
+                  {(['Positiva', 'Negativa', 'Sem pesquisa'] as const).map(opt => (
+                    <button 
+                      key={opt} 
+                      onClick={() => !isViewOnly && !isReevaluating && setHeader({...header, satisfaction_result: opt})} 
+                      className={`p-6 rounded-[24px] border-2 flex flex-col items-center gap-3 transition-all ${header.satisfaction_result === opt ? 'bg-brand-primary border-brand-primary text-white shadow-premium' : 'bg-white border-surface-border text-brand-muted hover:border-brand-highlight'}`} 
+                      disabled={isViewOnly || isReevaluating}
+                    >
+                      <span className="text-sm font-black uppercase tracking-tight">{opt}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
+
+              {header.satisfaction_result && header.satisfaction_result !== 'Sem pesquisa' && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                  <Card className="bg-white p-8 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-bold text-brand-primary">O cliente deixou algum registro (elogio/reclamação)?</p>
+                      <div className="flex gap-2 bg-surface-bg p-1 rounded-xl border border-surface-border">
+                        {[true, false].map(v => (
+                          <button key={v ? 'y' : 'n'} onClick={() => !isViewOnly && setHeader({...header, satisfaction_has_record: v})} className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${header.satisfaction_has_record === v ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-muted hover:bg-white'}`} disabled={isViewOnly}>{v ? 'SIM' : 'NÃO'}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {header.satisfaction_has_record && (
+                      <div className="space-y-2 animate-fade-in">
+                        <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">Registro do Cliente</label>
+                        <textarea 
+                          value={header.satisfaction_record_text} 
+                          onChange={e => setHeader({...header, satisfaction_record_text: e.target.value})} 
+                          disabled={isViewOnly}
+                          className="w-full bg-surface-bg border border-surface-border rounded-2xl p-4 text-sm font-medium min-h-[100px] focus:border-brand-accent focus:outline-none" 
+                          placeholder="Transcreva aqui o comentário do cliente..."
+                        />
+                      </div>
+                    )}
+                  </Card>
+
+                  {header.satisfaction_result === 'Negativa' && (
+                    <Card className="bg-red-50/30 border-red-100 p-8 space-y-6">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-error">Conseguimos contato com o cliente?</p>
+                        <div className="flex gap-2 bg-white p-1 rounded-xl border border-red-100">
+                          {[true, false].map(v => (
+                            <button key={v ? 'y' : 'n'} onClick={() => !isViewOnly && setHeader({...header, client_contact_success: v})} className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${header.client_contact_success === v ? 'bg-error text-white shadow-sm' : 'text-brand-muted hover:bg-red-50'}`} disabled={isViewOnly}>{v ? 'SIM' : 'NÃO'}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">Registro de Contato/Tentativa</label>
+                        <textarea 
+                          value={header.client_contact_log} 
+                          onChange={e => setHeader({...header, client_contact_log: e.target.value})} 
+                          disabled={isViewOnly}
+                          className="w-full bg-white border border-red-100 rounded-2xl p-4 text-sm font-medium min-h-[100px] focus:border-error focus:outline-none" 
+                          placeholder="Descreva como foi o contato ou o motivo do insucesso..."
+                        />
+                      </div>
+                    </Card>
+                  )}
+                </motion.div>
+              )}
+            </section>
+          )}
+
+          {step === 3 && selectedForm && (
+            <section className="space-y-10 animate-fade-in max-w-4xl mx-auto">
+              {(() => {
+                const level = getLevelForScore(score);
+                const isTarget = isAboveTarget(score);
+                
+                // Mapeamento para cores sólidas vibrantes baseadas na configuração
+                const getSolidBg = (textColor: string) => {
+                  if (textColor.includes('indigo')) return 'bg-indigo-600';
+                  if (textColor.includes('emerald')) return 'bg-emerald-600';
+                  if (textColor.includes('amber')) return 'bg-amber-500';
+                  if (textColor.includes('red')) return 'bg-red-600';
+                  if (textColor.includes('purple')) return 'bg-purple-600';
+                  if (textColor.includes('blue')) return 'bg-blue-600';
+                  return 'bg-brand-primary';
+                };
+
+                return (
+                  <div className={`p-10 rounded-[40px] flex flex-col md:flex-row items-center justify-between text-white shadow-premium transition-all duration-700 relative overflow-hidden ${getSolidBg(level.color)}`}>
+                    <div className="absolute top-0 right-0 p-8 opacity-10">
+                      <Target className="w-32 h-32" />
+                    </div>
+                    <div className="relative z-10 text-center md:text-left mb-6 md:mb-0">
+                      <p className="text-[10px] font-black uppercase opacity-70 tracking-[0.3em] mb-2">{level.label}</p>
+                      <p className="text-7xl font-black tabular-nums">{score.toFixed(2)}<span className="text-2xl opacity-50 ml-1">%</span></p>
+                    </div>
+                    <div className="relative z-10 text-center md:text-right">
+                      <Badge variant="secondary" className="bg-white/20 text-white border-white/30 px-6 py-2 text-xs backdrop-blur-sm">
+                        {isTarget ? 'Meta Atingida' : 'Abaixo da Meta'}
+                      </Badge>
+                      <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mt-4">Calculado automaticamente</p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {selectedForm.sections.map((section, sIdx) => (
                 <div key={section.id} className="space-y-6">
@@ -405,33 +568,49 @@ export default function MonitoriaForm({
             </section>
           )}
 
-          {step === 3 && (
-            <section className="space-y-10 animate-fade-in max-w-3xl mx-auto w-full">
+          {step === 4 && (
+            <section className="space-y-10 animate-fade-in max-w-4xl mx-auto w-full">
               <div className="space-y-4">
-                <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Considerações e Feedback</p>
-                <textarea value={header.evaluator_note} onChange={e => setHeader({...header, evaluator_note: e.target.value})} disabled={isViewOnly} className="w-full bg-white border border-surface-border rounded-[24px] p-8 text-sm font-medium min-h-[200px] focus:border-brand-accent focus:outline-none shadow-premium-sm" placeholder="Escreva aqui o feedback construtivo para o técnico..." />
+                <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Registro do Auditor</p>
+                <textarea 
+                  value={header.evaluator_note} 
+                  onChange={e => setHeader({...header, evaluator_note: e.target.value})} 
+                  disabled={isViewOnly} 
+                  className="w-full bg-white border border-surface-border rounded-[24px] p-8 text-sm font-medium min-h-[200px] focus:border-brand-accent focus:outline-none shadow-premium-sm" 
+                  placeholder="Escreva aqui as observações gerais da auditoria..." 
+                />
               </div>
 
               {isReevaluating && (
-                <Card className="bg-brand-subtle border-brand-highlight">
+                <Card className="bg-brand-subtle border-brand-highlight p-6">
                   <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3">Justificativa da Reavaliação *</p>
                   <textarea value={header.reevaluation_justification} onChange={e => setHeader({...header, reevaluation_justification: e.target.value})} className="w-full bg-white border border-surface-border rounded-2xl p-4 text-sm font-medium focus:border-brand-accent focus:outline-none" placeholder="Explique por que os itens foram alterados..." />
                 </Card>
               )}
 
-              {initialData?.history && (
-                <div className="space-y-4">
-                  <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1 flex items-center gap-2"><History className="w-3 h-3" /> Histórico da Avaliação</p>
+              {initialData?.history && initialData.history.length > 0 && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 px-1">
+                    <History className="w-4 h-4 text-brand-primary" />
+                    <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">Histórico de Interações</h3>
+                  </div>
                   <div className="space-y-4">
                     {initialData.history.map((h, i) => (
-                      <div key={i} className="flex items-start gap-4 bg-white p-5 rounded-2xl border border-surface-border shadow-premium-sm">
-                        <div className="w-8 h-8 rounded-xl bg-surface-subtle flex items-center justify-center flex-shrink-0 text-brand-muted">
-                          <UserIcon className="w-4 h-4" />
+                      <div key={i} className="flex items-start gap-4 bg-white/60 p-6 rounded-[24px] border border-surface-border shadow-sm">
+                        <div className="w-10 h-10 rounded-2xl bg-surface-subtle flex items-center justify-center flex-shrink-0 text-brand-muted">
+                          <UserIcon className="w-5 h-5" />
                         </div>
-                        <div>
-                          <p className="text-xs font-black text-brand-primary uppercase tracking-tight">{h.action}</p>
-                          <p className="text-[10px] font-bold text-brand-muted uppercase mt-0.5">{h.by_name} • {new Date(h.at).toLocaleString('pt-BR')}</p>
-                          {h.note && <p className="text-sm text-brand-muted mt-3 italic font-medium">"{h.note}"</p>}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs font-black text-brand-primary uppercase tracking-tight">{h.action}</p>
+                            <p className="text-[10px] font-bold text-brand-muted uppercase">{new Date(h.at).toLocaleString('pt-BR')}</p>
+                          </div>
+                          <p className="text-[10px] font-bold text-brand-muted uppercase mb-3">{h.by_name}</p>
+                          {h.note && (
+                            <div className="bg-surface-bg/50 rounded-xl p-4 border border-surface-border/50">
+                              <p className="text-xs text-brand-primary font-medium italic leading-relaxed">"{h.note}"</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -449,8 +628,8 @@ export default function MonitoriaForm({
           </Button>
           
           <div className="flex gap-4">
-            {step < 3 ? (
-              <Button onClick={() => { if (step === 1 && !canProceed) { toast.error('Complete o cabeçalho'); return; } setStep(s => Math.min(3, s + 1)); }} icon={<ChevronRight className="w-4 h-4" />}>
+            {step < 4 ? (
+              <Button onClick={() => { if (validateStep(step)) setStep(s => Math.min(4, s + 1)); }} icon={<ChevronRight className="w-4 h-4" />}>
                 Continuar
               </Button>
             ) : (

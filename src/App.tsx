@@ -705,7 +705,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
             {isSidebarOpen && (
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold truncate text-white">{userData?.name}</p>
-                <p className="text-[10px] font-semibold tracking-widest text-[#A7C0A5] uppercase opacity-80">{({'admin':'Administrador','qualidade':'Auditor','gestor_qualidade':'Gest. Qualidade','gestor_suporte':'Gest. Suporte','suporte':'Agente'} as any)[userData?.role] || userData?.role}</p>
+                <p className="text-[10px] font-semibold tracking-widest text-[#A7C0A5] uppercase opacity-80">{({'admin':'Administrador','qualidade':'Qualidade','gestor_qualidade':'Gestor Qual.','gestor_suporte':'Gestor Suporte','suporte':'Suporte'} as any)[userData?.role] || userData?.role}</p>
                 {teamNames && (
                   <p className="text-[9px] font-medium truncate text-white/40 mt-0.5">{teamNames}</p>
                 )}

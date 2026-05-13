@@ -5,9 +5,10 @@ import FilterBar from './FilterBar';
 
 // We will import the specific role dashboards here
 import AgentDashboard from './roles/AgentDashboard';
-import AuditorDashboard from './roles/AuditorDashboard';
+import QualityDashboard from './roles/QualityDashboard';
 import SupportManagerDashboard from './roles/SupportManagerDashboard';
 import QualityManagerDashboard from './roles/QualityManagerDashboard';
+import AdminDashboard from './roles/AdminDashboard';
 
 function DashboardRouter() {
   const { user, loading } = useDashboard();
@@ -30,12 +31,13 @@ function DashboardRouter() {
     case 'suporte':
       return <AgentDashboard />;
     case 'qualidade':
-      return <AuditorDashboard />;
+      return <QualityDashboard />;
     case 'gestor_suporte':
       return <SupportManagerDashboard />;
     case 'gestor_qualidade':
-    case 'admin':
       return <QualityManagerDashboard />;
+    case 'admin':
+      return <AdminDashboard />;
     default:
       return (
         <div className="py-20 text-center text-brand-muted text-xs font-bold uppercase tracking-widest">

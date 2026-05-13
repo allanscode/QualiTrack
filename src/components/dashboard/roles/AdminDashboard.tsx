@@ -7,20 +7,18 @@ import RankingWidget from '../widgets/RankingWidget';
 import SlaWidget from '../widgets/SlaWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users } from 'lucide-react';
+import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, ShieldCheck, History } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 
-export default function QualityManagerDashboard() {
+export default function AdminDashboard() {
   const { user, monitorias, users, forms } = useDashboard();
   const { config, getLevelForScore, isAboveTarget } = useQualityConfig();
 
-  // --- Scored monitorias (have a score value)
   const scoredMonitorias = useMemo(() =>
     monitorias.filter(m => m.score !== undefined && m.score !== null),
     [monitorias]
   );
 
-  // --- Média Geral: average of all scored monitorias
   const avgScore = useMemo(() =>
     scoredMonitorias.length > 0
       ? scoredMonitorias.reduce((a, m) => a + (m.score || 0), 0) / scoredMonitorias.length
@@ -28,10 +26,6 @@ export default function QualityManagerDashboard() {
     [scoredMonitorias]
   );
 
-  // --- Monitorias com score abaixo de 75%
-  const criticalErrors = useMemo(() => scoredMonitorias.filter(m => (m.score || 0) < config.targetScore).length, [scoredMonitorias, config.targetScore]);
-
-  // --- Pendentes totais (all statuses requiring action)
   const pendingActions = useMemo(() =>
     monitorias.filter(m =>
       ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
@@ -39,13 +33,6 @@ export default function QualityManagerDashboard() {
     [monitorias]
   );
 
-  // --- Minhas Ações: awaiting quality manager decision
-  const pendingMyActions = useMemo(() =>
-    monitorias.filter(m => m.status === 'aguardando_gestor_qualidade').length,
-    [monitorias]
-  );
-
-  // --- Reevaluation metrics (consistent history-based logic)
   const totalContestations = useMemo(() =>
     monitorias.filter(m =>
       m.history?.some(h => h.action.includes('Contestação'))
@@ -77,13 +64,11 @@ export default function QualityManagerDashboard() {
     [monitorias]
   );
 
-  // Taxa de Reversão: % of contested that had the note changed
   const reversalRate = useMemo(() =>
     totalContestations > 0 ? (reavAccepted / totalContestations) * 100 : 0,
     [totalContestations, reavAccepted]
   );
 
-  // --- Trend Data (score per day, all scored monitorias)
   const trendData = useMemo(() => {
     const days: Record<string, { totalScore: number, count: number }> = {};
     scoredMonitorias.forEach(m => {
@@ -102,7 +87,6 @@ export default function QualityManagerDashboard() {
     });
   }, [scoredMonitorias]);
 
-  // --- Tendência: 2nd half avg vs 1st half avg of period
   const trendPercentage = useMemo(() => {
     if (trendData.length < 2) return 0;
     const mid = Math.floor(trendData.length / 2);
@@ -111,7 +95,6 @@ export default function QualityManagerDashboard() {
     return avgFirst > 0 ? ((avgSecond / avgFirst) - 1) * 100 : 0;
   }, [trendData]);
 
-  // --- Grade Distribution (by config levels)
   const colorMap: Record<string, string> = {
     'text-indigo-700': '#6366f1', 'text-emerald-700': '#10b981',
     'text-amber-700': '#f59e0b',  'text-red-700': '#ef4444',
@@ -128,7 +111,6 @@ export default function QualityManagerDashboard() {
     [config.levels, scoredMonitorias]
   );
 
-  // --- Auditor Ranking (by volume)
   const auditorRanking = useMemo(() => {
     const map: Record<string, { total: number; count: number }> = {};
     monitorias.forEach(m => {
@@ -149,7 +131,6 @@ export default function QualityManagerDashboard() {
       .slice(0, 5);
   }, [monitorias, users]);
 
-  // --- Agent Rankings (by avg score — same logic as Admin)
   const agentRanking = useMemo(() => {
     const map: Record<string, { total: number; count: number }> = {};
     scoredMonitorias.forEach(m => {
@@ -168,9 +149,7 @@ export default function QualityManagerDashboard() {
       .sort((a, b) => b.score - a.score);
   }, [scoredMonitorias, users]);
 
-  // Top = at or above target (best first)
   const topAgents = agentRanking.filter(a => a.score >= config.targetScore).slice(0, 5);
-  // Opportunities = below target, sorted from furthest to closest to target
   const bottomAgents = agentRanking
     .filter(a => a.score < config.targetScore)
     .sort((a, b) => a.score - b.score)
@@ -180,29 +159,27 @@ export default function QualityManagerDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
-
-      {/* Row 1 — Main KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Média Geral"
+          title="Média Geral (Admin)"
           value={`${avgScore.toFixed(2)}%`}
-          sub={isAboveTarget(avgScore) ? 'Meta atingida' : 'Abaixo da meta'}
+          sub="Performance global da operação"
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
           accent={getLevelForScore(avgScore).color}
         />
         <StatCard
-          title="Pendentes"
+          title="Total Pendentes"
           value={pendingActions}
-          sub="Ações abertas no sistema"
+          sub="Ações em todos os perfis"
           good={pendingActions === 0}
-          icon={<Users className="w-5 h-5" />}
-          accent="text-info"
+          icon={<AlertTriangle className="w-5 h-5" />}
+          accent="text-error"
         />
         <StatCard
           title="Monitorias"
           value={monitorias.length}
-          sub="Avaliações no período"
+          sub="Volume total acumulado"
           good={true}
           icon={<ClipboardCheck className="w-5 h-5" />}
           accent="text-brand-accent"
@@ -210,113 +187,80 @@ export default function QualityManagerDashboard() {
         <StatCard
           title="Tendência"
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`}
-          sub="2ª metade vs 1ª metade do período"
+          sub="Evolução global"
           good={trendPercentage >= 0}
           icon={<TrendingUp className="w-5 h-5" />}
           accent="text-brand-highlight"
         />
       </div>
 
-      {/* Row 2 — Reevaluation KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Taxa de Reversão"
+          title="Taxa Reversão"
           value={`${reversalRate.toFixed(2)}%`}
-          sub="Contestações com nota alterada"
+          sub="Qualidade das monitorias"
           good={reversalRate <= 15}
           icon={<RotateCcw className="w-5 h-5" />}
           accent="text-brand-highlight"
         />
         <StatCard
-          title="Reav. Solicitadas"
+          title="Reavaliações"
           value={totalContestations}
-          sub="Total de contestações abertas"
+          sub="Total de contestações"
           good={true}
-          icon={<AlertTriangle className="w-5 h-5" />}
+          icon={<History className="w-5 h-5" />}
           accent="text-info"
         />
         <StatCard
-          title="Reav. Aceitas"
-          value={reavAccepted}
-          sub="Nota alterada (procedentes)"
+          title="Usuários Ativos"
+          value={users.filter(u => u.active !== false).length}
+          sub="Cadastrados no sistema"
           good={true}
-          icon={<CheckCircle2 className="w-5 h-5" />}
+          icon={<Users className="w-5 h-5" />}
           accent="text-success"
         />
         <StatCard
-          title="Reav. Recusadas"
-          value={reavRejected}
-          sub="Nota mantida (improcedentes)"
+          title="Status Sistema"
+          value="Online"
+          sub="Operando normalmente"
           good={true}
-          icon={<XCircle className="w-5 h-5" />}
-          accent="text-error"
+          icon={<ShieldCheck className="w-5 h-5" />}
+          accent="text-emerald-500"
         />
       </div>
 
-      {/* Row 3 — Trend chart + Distribution + Auditor Ranking */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 h-[300px]">
           <TrendChart
-            title="Evolução da Qualidade"
-            subtitle="Média global de score por dia"
+            title="Performance Histórica"
+            subtitle="Visão administrativa de score global"
             data={trendData}
             dataKeys={[{ key: 'ScoreMedio', name: 'Média Global', color: '#6366f1' }]}
           />
         </div>
-        <div className="space-y-6">
-          <div className="h-[300px]">
-            <DistributionChart
-              title="Curva de Qualidade"
-              data={gradeDistribution}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Row 4 — Auditor Ranking + SLA Widget */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[320px]">
-          <RankingWidget
-            title="Ranking de Qualidade"
-            subtitle="Por volume de auditorias realizadas"
-            data={auditorRanking}
-            type="count"
-          />
-        </div>
-        <div className="h-[320px]">
-          <SlaWidget
-            title="Aguardando Minha Ação"
-            monitorias={monitorias}
-            users={users}
-            targetStatus="aguardando_gestor_qualidade"
+        <div className="h-[300px]">
+          <DistributionChart
+            title="Curva de Qualidade"
+            data={gradeDistribution}
           />
         </div>
       </div>
 
-      {/* Row 5 — Ofensores + Agent Rankings */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="h-[420px]">
           <OfensoresChart monitorias={monitorias} forms={forms} limit={8} />
         </div>
-        <div className="space-y-6">
-          <div className="h-[200px]">
-            <RankingWidget
-              title="Melhores Scores (Suporte)"
-              subtitle={`Acima da meta (${config.targetScore}%)`}
-              data={topAgents}
-            />
-          </div>
-          <div className="h-[200px]">
-            <RankingWidget
-              title="Oportunidades (Suporte)"
-              subtitle="Mais críticos primeiro"
-              data={bottomAgents}
-            />
-          </div>
+        <div className="h-[420px]">
+          <RankingWidget
+            title="Ranking Global de Qualidade"
+            subtitle="Volume por auditor"
+            data={auditorRanking}
+            type="count"
+          />
         </div>
       </div>
 
-      <RecentAuditsTable monitorias={monitorias} users={users} />
+      <RecentAuditsTable monitorias={monitorias} users={users} title="Últimas Auditorias do Sistema" />
     </div>
   );
 }
