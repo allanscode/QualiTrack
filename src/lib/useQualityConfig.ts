@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, mockDb } from './supabase';
+import { getRemainingBusinessSeconds, addBusinessHours } from './businessHours';
 
 export interface QualityLevel {
   label: string;
@@ -58,18 +59,22 @@ export function useQualityConfig() {
     return DEFAULT_CONFIG;
   });
 
+  const [oldConfig, setOldConfig] = useState<QualityConfig>(config);
+
   useEffect(() => {
     const fetchConfig = async () => {
       if (supabase) {
         const { data } = await supabase.from('quality_configs').select('*').single();
         if (data) {
           setConfig(data.config);
+          setOldConfig(data.config);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(data.config));
         }
       } else {
         const { data } = await mockDb.get('quality_configs');
         if (data && data.length > 0) {
           setConfig(data[0].config);
+          setOldConfig(data[0].config);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(data[0].config));
         }
       }
@@ -105,5 +110,50 @@ export function useQualityConfig() {
 
   const isAboveTarget = (score: number) => score >= config.targetScore;
 
-  return { config, saveConfig, getLevelForScore, isAboveTarget };
+  const recalculateActiveDeadlines = async (previousConfig: QualityConfig, newConfig: QualityConfig) => {
+    try {
+      let activeDocs: any[] = [];
+      if (supabase) {
+        // Fetch active monitorias not finalized and with a deadline
+        const { data } = await supabase.from('monitorias')
+          .select('id, updated_at, deadline_at')
+          .eq('active', true)
+          .not('deadline_at', 'is', null)
+          .not('status', 'in', '("concluida","finalizada_alterada")');
+        activeDocs = data || [];
+      } else {
+        const { data } = await mockDb.get('monitorias');
+        activeDocs = (data || []).filter((m: any) => m.active !== false && m.status !== 'concluida' && m.status !== 'finalizada_alterada' && m.deadline_at);
+      }
+
+      if (activeDocs.length === 0) return;
+
+      const updates = activeDocs.map(m => {
+        if (!m.deadline_at || !m.updated_at) return null;
+        
+        // Find original allocated business seconds using the old config
+        const remainingSeconds = getRemainingBusinessSeconds(new Date(m.updated_at), new Date(m.deadline_at), previousConfig.businessHours);
+        
+        // Re-apply the same business hours using the new config (which includes new holidays/times)
+        const newDeadline = addBusinessHours(new Date(m.updated_at), remainingSeconds / 3600, newConfig.businessHours).toISOString();
+        
+        return { id: m.id, deadline_at: newDeadline };
+      }).filter(Boolean);
+
+      // Bulk update
+      if (supabase) {
+        for (const update of updates) {
+          if(update) await supabase.from('monitorias').update({ deadline_at: update.deadline_at }).eq('id', update.id);
+        }
+      } else {
+        for (const update of updates) {
+          if(update) await mockDb.update('monitorias', update.id, { deadline_at: update.deadline_at });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to recalculate deadlines', e);
+    }
+  };
+
+  return { config, oldConfig, saveConfig, getLevelForScore, isAboveTarget, recalculateActiveDeadlines };
 }

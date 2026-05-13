@@ -14,7 +14,7 @@ const COLORS = [
 ];
 
 export default function QualityConfigManagement() {
-  const { config, saveConfig } = useQualityConfig();
+  const { config, oldConfig, saveConfig, recalculateActiveDeadlines } = useQualityConfig();
   const [localConfig, setLocalConfig] = React.useState(config);
   const [saving, setSaving] = React.useState(false);
 
@@ -24,7 +24,7 @@ export default function QualityConfigManagement() {
     setLocalConfig(c => ({ ...c, levels: newLevels }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
     const sorted = [...localConfig.levels].sort((a, b) => a.minScore - b.minScore);
     for (let i = 0; i < sorted.length - 1; i++) {
@@ -34,8 +34,21 @@ export default function QualityConfigManagement() {
         return;
       }
     }
-    saveConfig(localConfig);
-    toast.success('Configuracoes de qualidade salvas!');
+    
+    const holidaysChanged = JSON.stringify(oldConfig.businessHours.holidays) !== JSON.stringify(localConfig.businessHours.holidays);
+    const daysChanged = JSON.stringify(oldConfig.businessHours.days) !== JSON.stringify(localConfig.businessHours.days);
+    const hoursChanged = oldConfig.businessHours.start !== localConfig.businessHours.start || oldConfig.businessHours.end !== localConfig.businessHours.end;
+    
+    await saveConfig(localConfig);
+    
+    if (holidaysChanged || daysChanged || hoursChanged) {
+      toast.info('Recalculando prazos ativos por alteração no calendário...', { duration: 4000 });
+      await recalculateActiveDeadlines(oldConfig, localConfig);
+      toast.success('Prazos recalculados com sucesso!');
+    } else {
+      toast.success('Configuracoes de qualidade salvas!');
+    }
+    
     setSaving(false);
   };
 
