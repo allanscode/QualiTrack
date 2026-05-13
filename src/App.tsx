@@ -731,7 +731,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
             <p className="text-brand-muted text-sm font-medium mt-0.5">Conectado como <span className="text-brand-primary font-bold">{userData?.name}</span></p>
           </div>
           <div className="flex items-center gap-4 flex-shrink-0 ml-4">
-            {(activeTab === 'monitorias' || activeTab === 'dashboard') && userData?.role === 'qualidade' && (
+            {activeTab === 'monitorias' && (userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') && (
               <button 
                 onClick={() => setIsFormOpen(true)}
                 className="bg-[#2D3A3A] text-white px-6 py-2 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all flex items-center gap-2 whitespace-nowrap"

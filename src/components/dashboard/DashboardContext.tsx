@@ -23,6 +23,7 @@ interface DashboardContextType {
   teams: Team[];
   forms: EvaluationForm[];
   loading: boolean;
+  globalAvg: number;
   refresh: () => void;
 }
 
@@ -46,6 +47,7 @@ export function DashboardProvider({ user, children }: { user: User | null, child
   const [teams, setTeams] = useState<Team[]>([]);
   const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [loading, setLoading] = useState(true);
+  const [globalAvg, setGlobalAvg] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const loadData = useCallback(async () => {
@@ -77,6 +79,22 @@ export function DashboardProvider({ user, children }: { user: User | null, child
 
       // Always exclude deactivated monitorias from dashboard
       docs = docs.filter(m => m.active !== false);
+
+      // Calculate Global Average (filtered only by date/status/channel, not RBAC)
+      const globalFiltered = docs.filter(m => {
+        const targetDate = m.created_at;
+        if (!targetDate) return true;
+        const d = new Date(targetDate).getTime();
+        const startD = filters.startDate ? new Date(filters.startDate).getTime() : 0;
+        const endD = filters.endDate ? new Date(filters.endDate + 'T23:59:59').getTime() : Infinity;
+        
+        let pass = d >= startD && d <= endD;
+        if (filters.status) pass = pass && m.status === filters.status;
+        if (filters.channel) pass = pass && m.channel === filters.channel;
+        if (filters.formId) pass = pass && m.form_id === filters.formId;
+        return pass;
+      });
+      const gAvg = globalFiltered.length > 0 ? globalFiltered.reduce((acc, m) => acc + (m.score || 0), 0) / globalFiltered.length : 0;
 
       // Base RBAC for raw data (RLS should handle this in Supabase, but we do it here for mockDb and extra safety)
       if (user.role === 'suporte') {
@@ -121,6 +139,7 @@ export function DashboardProvider({ user, children }: { user: User | null, child
       setUsers(userDocs);
       setTeams(teamDocs);
       setForms(formDocs);
+      setGlobalAvg(gAvg);
     } catch (e) {
       console.error(e);
     } finally {
@@ -139,7 +158,7 @@ export function DashboardProvider({ user, children }: { user: User | null, child
   const refresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);
 
   return (
-    <DashboardContext.Provider value={{ user, filters, setFilters, monitorias, allMonitorias, users, teams, forms, loading, refresh }}>
+    <DashboardContext.Provider value={{ user, filters, setFilters, monitorias, allMonitorias, users, teams, forms, loading, globalAvg, refresh }}>
       {children}
     </DashboardContext.Provider>
   );

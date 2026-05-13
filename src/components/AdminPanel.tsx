@@ -267,7 +267,10 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                 </td>
                 <td className="px-6 py-4 text-xs font-bold text-brand-muted">
                   {u.team_ids && u.team_ids.length > 0
-                    ? u.team_ids.map(id => teams.find(t => t.id === id)?.name).filter(Boolean).join(', ')
+                    ? u.team_ids
+                        .map(id => teams.find(t => t.id === id && t.active !== false)?.name)
+                        .filter(Boolean)
+                        .join(', ') || 'Sem equipe'
                     : 'Sem equipe'}
                 </td>
                 <td className="px-6 py-4 text-right">
@@ -283,7 +286,17 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                         >
                           <Key className="w-4 h-4" />
                         </button>
-                        <button onClick={() => { setEditingUser({...u, team_ids: u.team_ids || []}); setIsModalOpen(true); }} className="p-2.5 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><Edit2 className="w-4 h-4" /></button>
+                        <button 
+                          onClick={() => { 
+                            // Only load active team IDs into the editor to avoid persisting ghost teams
+                            const activeTeamIds = u.team_ids?.filter(id => teams.find(t => t.id === id)?.active !== false) || [];
+                            setEditingUser({...u, team_ids: activeTeamIds}); 
+                            setIsModalOpen(true); 
+                          }} 
+                          className="p-2.5 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
                         {deleteConfirmId === u.id ? (
                           <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
                             <button onClick={() => handleToggleStatus(u.id, false)} className="px-2.5 py-1.5 rounded-lg bg-error text-white text-[10px] font-black uppercase">Sim</button>
@@ -403,6 +416,14 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
   };
 
   const handleToggleStatus = async (id: string, active: boolean) => {
+    // Validation: Prevent deactivating a team if it has active users
+    if (!active) {
+      const linkedUsers = users.filter(u => u.active !== false && u.team_ids?.includes(id));
+      if (linkedUsers.length > 0) {
+        return toast.error(`Não é possível desativar: ${linkedUsers.length} usuário(s) ativo(s) vinculado(s) a esta equipe. Desvincule-os primeiro.`);
+      }
+    }
+
     try {
       if (!supabase) await mockDb.update('teams', id, { active });
       else await supabase.from('teams').update({ active }).eq('id', id);

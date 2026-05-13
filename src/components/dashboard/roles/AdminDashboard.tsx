@@ -177,11 +177,11 @@ export default function AdminDashboard() {
           accent="text-error"
         />
         <StatCard
-          title="Monitorias"
-          value={monitorias.length}
-          sub="Volume total acumulado"
+          title="Usuários Ativos"
+          value={users.filter(u => u.active !== false).length}
+          sub="Cadastrados no sistema"
           good={true}
-          icon={<ClipboardCheck className="w-5 h-5" />}
+          icon={<Users className="w-5 h-5" />}
           accent="text-brand-accent"
         />
         <StatCard
@@ -196,14 +196,6 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Taxa Reversão"
-          value={`${reversalRate.toFixed(2)}%`}
-          sub="Qualidade das monitorias"
-          good={reversalRate <= 15}
-          icon={<RotateCcw className="w-5 h-5" />}
-          accent="text-brand-highlight"
-        />
-        <StatCard
           title="Reavaliações"
           value={totalContestations}
           sub="Total de contestações"
@@ -212,20 +204,28 @@ export default function AdminDashboard() {
           accent="text-info"
         />
         <StatCard
-          title="Usuários Ativos"
-          value={users.filter(u => u.active !== false).length}
-          sub="Cadastrados no sistema"
+          title="Taxa Reversão"
+          value={`${reversalRate.toFixed(2)}%`}
+          sub="Qualidade das monitorias"
+          good={reversalRate <= 15}
+          icon={<RotateCcw className="w-5 h-5" />}
+          accent="text-brand-highlight"
+        />
+        <StatCard
+          title="Reav. Aprovadas"
+          value={reavAccepted}
+          sub="Contestações procedentes"
           good={true}
-          icon={<Users className="w-5 h-5" />}
+          icon={<CheckCircle2 className="w-5 h-5" />}
           accent="text-success"
         />
         <StatCard
-          title="Status Sistema"
-          value="Online"
-          sub="Operando normalmente"
+          title="Reav. Recusadas"
+          value={reavRejected}
+          sub="Contestações improcedentes"
           good={true}
-          icon={<ShieldCheck className="w-5 h-5" />}
-          accent="text-emerald-500"
+          icon={<XCircle className="w-5 h-5" />}
+          accent="text-error"
         />
       </div>
 
@@ -246,18 +246,35 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="h-[420px]">
-          <OfensoresChart monitorias={monitorias} forms={forms} limit={8} />
-        </div>
-        <div className="h-[420px]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="h-[420px] lg:col-span-1">
           <RankingWidget
-            title="Ranking Global de Qualidade"
-            subtitle="Volume por auditor"
+            title="Melhores Suportes"
+            subtitle="Top 5 por score médio"
+            data={topAgents}
+            type="score"
+          />
+        </div>
+        <div className="h-[420px] lg:col-span-1">
+          <RankingWidget
+            title="Maiores Ofensores"
+            subtitle="Pontos de melhoria"
+            data={bottomAgents}
+            type="score"
+          />
+        </div>
+        <div className="h-[420px] lg:col-span-1">
+          <RankingWidget
+            title="Volume por Auditor"
+            subtitle="Engajamento na plataforma"
             data={auditorRanking}
             type="count"
           />
         </div>
+      </div>
+
+      <div className="h-[420px]">
+        <OfensoresChart monitorias={monitorias} forms={forms} limit={12} />
       </div>
 
       <RecentAuditsTable monitorias={monitorias} users={users} title="Últimas Auditorias do Sistema" />

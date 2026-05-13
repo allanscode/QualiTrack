@@ -31,23 +31,26 @@ export default function AgentDashboard() {
     let myTeamIds = myInfo?.team_ids || user?.team_ids || [];
     
     if (myTeamIds.length === 0) {
-      const fromRecords = monitorias.filter(m => m.evaluated_id === user?.id && m.team_id).map(m => m.team_id!);
+      const fromRecords = allMonitorias.filter(m => m.evaluated_id === user?.id && m.team_id).map(m => m.team_id!);
       myTeamIds = Array.from(new Set(fromRecords));
     }
 
     return monitorias.filter(m => m.team_id && myTeamIds.includes(m.team_id));
   }, [monitorias, user, users]);
 
-  // --- Main Calculations (All active monitorias)
+  // --- Minha Média (follows all filters)
   const avgScore = useMemo(() => 
     myMonitorias.length > 0 ? (myMonitorias.reduce((a, m) => a + (m.score || 0), 0) / myMonitorias.length) : 0, 
     [myMonitorias]
   );
 
+  // --- Média das Minhas Equipes (Follows filters, but specifically for teams the agent is part of)
   const teamAvgScore = useMemo(() => 
     teamMonitorias.length > 0 ? (teamMonitorias.reduce((a, m) => a + (m.score || 0), 0) / teamMonitorias.length) : 0, 
     [teamMonitorias]
   );
+
+  // --- Global Average is already provided by DashboardContext as globalAvg
 
   // --- Contestation Metrics
   const myContestations = useMemo(() => 
@@ -101,12 +104,13 @@ export default function AgentDashboard() {
     });
   }, [myMonitorias, teamMonitorias]);
 
+  const { globalAvg } = useDashboard();
   const level = getLevelForScore(avgScore);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Top Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Performance Benchmarks */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
           title="Minha Média"
           value={`${avgScore.toFixed(2)}%`}
@@ -116,28 +120,56 @@ export default function AgentDashboard() {
           accent={level.color}
         />
         <StatCard
-          title="Média da Equipe"
+          title="Média das Minhas Equipes"
           value={`${teamAvgScore.toFixed(2)}%`}
           sub={avgScore >= teamAvgScore ? 'Você está acima da média' : 'Você está abaixo da média'}
           good={avgScore >= teamAvgScore}
           icon={<Users className="w-5 h-5" />}
-          accent="text-brand-highlight"
+          accent="text-brand-accent"
         />
+        <StatCard
+          title="Média Global"
+          value={`${globalAvg.toFixed(2)}%`}
+          sub="Geral da Empresa"
+          good={avgScore >= globalAvg}
+          icon={<BarChart3 className="w-5 h-5" />}
+          accent="text-info"
+        />
+      </div>
+
+      {/* Overview Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Monitorias"
           value={myMonitorias.length.toString()}
           sub="Total no período"
           good={true}
           icon={<ClipboardCheck className="w-5 h-5" />}
-          accent="text-brand-accent"
+          accent="text-brand-muted"
         />
         <StatCard
-          title="Tendência"
-          value={`${reversalRate.toFixed(1)}%`}
-          sub="Taxa de Reversão"
+          title="Solicitadas"
+          value={myContestations.length.toString()}
+          sub="Total de Contestações"
           good={true}
-          icon={<TrendingUp className="w-5 h-5" />}
-          accent="text-info"
+          icon={<BarChart3 className="w-5 h-5" />}
+          accent="text-brand-muted"
+        />
+        <StatCard
+          title="Aprovadas"
+          value={contestationsApproved.toString()}
+          sub="Nota Alterada"
+          good={true}
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          accent="text-success"
+        />
+        <StatCard
+          title="Recusadas"
+          value={contestationsRejected.toString()}
+          sub="Nota Mantida"
+          good={false}
+          icon={<XCircle className="w-5 h-5" />}
+          accent="text-error"
         />
       </div>
 

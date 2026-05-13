@@ -338,8 +338,20 @@ export default function MonitoriaForm({
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Suporte *</label>
                   <CustomSelect 
                     value={header.evaluated_id} 
-                    onChange={val => setHeader({...header, evaluated_id: val})} 
-                    options={[{ value: '', label: 'Selecione o colaborador...' }, ...agents.map(a => ({ value: a.id, label: a.name }))]}
+                    onChange={val => {
+                      setHeader(prev => ({...prev, evaluated_id: val}));
+                      // Auto-select team if only one is available for this agent
+                      const agent = agents.find(a => a.id === val);
+                      if (agent?.team_ids?.length === 1 && !header.team_id) {
+                        setHeader(prev => ({...prev, team_id: agent.team_ids![0]}));
+                      }
+                    }} 
+                    options={[
+                      { value: '', label: 'Selecione o colaborador...' }, 
+                      ...agents
+                        .filter(a => !header.team_id || (a.team_ids && a.team_ids.includes(header.team_id)))
+                        .map(a => ({ value: a.id, label: a.name }))
+                    ]}
                     className="w-full"
                     disabled={isViewOnly || isReevaluating}
                   />
@@ -350,7 +362,16 @@ export default function MonitoriaForm({
                   <CustomSelect 
                     value={header.team_id} 
                     onChange={val => setHeader({...header, team_id: val})} 
-                    options={[{ value: '', label: 'Selecione a equipe...' }, ...teams.map(t => ({ value: t.id, label: t.name }))]}
+                    options={[
+                      { value: '', label: 'Selecione a equipe...' }, 
+                      ...teams
+                        .filter(t => {
+                          if (!header.evaluated_id) return true;
+                          const agent = agents.find(a => a.id === header.evaluated_id);
+                          return agent?.team_ids?.includes(t.id);
+                        })
+                        .map(t => ({ value: t.id, label: t.name }))
+                    ]}
                     className="w-full"
                     disabled={isViewOnly || isReevaluating}
                   />
