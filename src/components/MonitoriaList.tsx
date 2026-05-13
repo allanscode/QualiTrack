@@ -1,3 +1,4 @@
+// QualiTrack UI Refinement Session - 2026-05-13
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, User, Team, EvaluationForm, MonitoriaHistoryEntry } from '../types';
