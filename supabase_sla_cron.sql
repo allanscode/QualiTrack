@@ -1,68 +1,75 @@
--- Ativar a extensão pg_cron (caso ainda não esteja ativa no projeto Supabase)
-CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- Arquivo: supabase_sla_cron.sql
+-- Descrição: Função PL/pgSQL e job agendado via pg_cron para processar a perda de prazo (SLA) das monitorias no servidor do Supabase.
 
--- Função para processar monitorias com prazo vencido
+-- 1. Criação da Função de Processamento
 CREATE OR REPLACE FUNCTION process_sla_timeouts()
 RETURNS void AS $$
 DECLARE
-    m RECORD;
-    is_quality_turn BOOLEAN;
-    is_support_turn BOOLEAN;
-    new_score NUMERIC;
-    action_note TEXT;
-    history_entry JSONB;
+  v_monitoria RECORD;
+  v_new_score numeric;
+  v_note text;
+  v_is_quality_turn boolean;
+  v_is_support_turn boolean;
+  v_history_entry jsonb;
 BEGIN
-    -- Seleciona todas as monitorias ativas, não concluídas e com prazo estourado
-    FOR m IN 
-        SELECT id, status, score, history 
-        FROM public.monitorias 
-        WHERE active = true 
-          AND deadline_at < NOW()
-          AND status NOT IN ('concluida', 'finalizada_alterada', 'contestacao_aceita', 'contestacao_negada')
-    LOOP
-        -- Identifica de quem era a 'posse' da monitoria no momento do vencimento
-        is_quality_turn := m.status IN ('em_contestacao', 'aguardando_gestor_qualidade', 'reavaliacao_solicitada');
-        is_support_turn := m.status IN ('pendente_revisao', 'aguardando_gestor_suporte');
+  -- Percorre todas as monitorias ativas, com prazo vencido e que não estão finalizadas
+  FOR v_monitoria IN 
+    SELECT id, status, score, history 
+    FROM monitorias 
+    WHERE deadline_at < now() 
+      AND status NOT IN ('concluida', 'finalizada_alterada')
+      AND active = true
+  LOOP
+    
+    -- Verifica de quem é a posse atual da monitoria com base no status
+    v_is_quality_turn := v_monitoria.status IN ('em_contestacao', 'aguardando_gestor_qualidade', 'reavaliacao_solicitada');
+    v_is_support_turn := v_monitoria.status IN ('pendente_revisao', 'aguardando_gestor_suporte', 'contestacao_negada');
 
-        -- Se não pertencer a nenhum dos fluxos mapeados com SLA, ignora
-        IF NOT is_quality_turn AND NOT is_support_turn THEN
-            CONTINUE;
-        END IF;
+    -- Se por acaso estiver em um status desconhecido, ignora
+    IF NOT v_is_quality_turn AND NOT v_is_support_turn THEN
+      CONTINUE;
+    END IF;
 
-        -- Regras de negócio conforme solicitação
-        IF is_quality_turn THEN
-            new_score := 100;
-            action_note := 'Monitoria aprovada automaticamente (nota 100%) por perda de prazo da Equipe de Qualidade.';
-        ELSE
-            new_score := m.score;
-            action_note := 'Monitoria aprovada automaticamente por perda de prazo da Equipe de Suporte.';
-        END IF;
+    -- Aplica as regras de negócio de SLA
+    IF v_is_quality_turn THEN
+      v_new_score := 100;
+      v_note := 'Monitoria aprovada automaticamente (nota 100%) por perda de prazo da Equipe de Qualidade.';
+    ELSE
+      v_new_score := v_monitoria.score;
+      v_note := 'Monitoria aprovada automaticamente por perda de prazo da Equipe de Suporte.';
+    END IF;
 
-        -- Cria o objeto JSONB do histórico
-        history_entry := jsonb_build_object(
-            'action', 'Finalização Automática (SLA)',
-            'by_id', 'system',
-            'by_name', 'Sistema Automático',
-            'at', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
-            'note', action_note
-        );
+    -- Constrói a nova entrada de histórico no formato JSONB
+    v_history_entry := jsonb_build_object(
+      'action', 'Finalização Automática (SLA)',
+      'by_id', 'system',
+      'by_name', 'Sistema Automático',
+      'at', (now() AT TIME ZONE 'UTC')::text,
+      'note', v_note
+    );
 
-        -- Executa a atualização na tabela
-        UPDATE public.monitorias
-        SET 
-            status = 'concluida',
-            score = new_score,
-            updated_at = NOW(),
-            history = COALESCE(history, '[]'::jsonb) || jsonb_build_array(history_entry)
-        WHERE id = m.id;
+    -- Executa o UPDATE seguro no banco
+    UPDATE monitorias 
+    SET 
+      status = 'concluida',
+      score = v_new_score,
+      updated_at = now(),
+      -- Se history for nulo, transforma em array vazio e então adiciona o novo objeto
+      history = COALESCE(history, '[]'::jsonb) || jsonb_build_array(v_history_entry)
+    WHERE id = v_monitoria.id;
 
-    END LOOP;
+  END LOOP;
 END;
 $$ LANGUAGE plpgsql;
 
--- Agendar a função para rodar a cada 5 minutos
--- Limpa um agendamento anterior se existir, para evitar duplicação em execuções repetidas
-SELECT cron.unschedule('process-sla-timeouts-job');
-SELECT cron.schedule('process-sla-timeouts-job', '*/5 * * * *', 'SELECT process_sla_timeouts();');
+-- ==============================================================================
+-- 2. Agendamento do Job (pg_cron)
+-- IMPORTANTE: Para rodar este comando, certifique-se de habilitar a extensão pg_cron 
+-- no menu "Database > Extensions" do painel do seu Supabase.
+-- ==============================================================================
 
--- Comentário: Para testar imediatamente, você pode rodar 'SELECT process_sla_timeouts();' no console SQL.
+-- Remover job anterior (se existir) para evitar duplicidade
+-- SELECT cron.unschedule('process-sla-timeouts');
+
+-- Agendar para rodar a cada 5 minutos
+-- SELECT cron.schedule('process-sla-timeouts', '*/5 * * * *', 'SELECT process_sla_timeouts();');

@@ -17,9 +17,7 @@ export default function SLAClock({ deadlineAt, status }: SLAClockProps) {
   // Hide for final statuses
   const isFinalStatus = [
     'concluida', 
-    'finalizada_alterada', 
-    'contestacao_aceita', 
-    'contestacao_negada'
+    'finalizada_alterada'
   ].includes(status);
 
   useEffect(() => {
