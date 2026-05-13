@@ -57,7 +57,8 @@ export type MonitoriaStatus =
   | 'concluida'
   | 'contestacao_aceita'
   | 'contestacao_negada'
-  | 'finalizada_alterada';
+  | 'finalizada_alterada'
+  | 'reavaliacao_solicitada';
 
 export interface MonitoriaHistoryEntry {
   action: string;

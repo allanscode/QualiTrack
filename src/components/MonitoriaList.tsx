@@ -55,7 +55,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
   const [startDate, setStartDate] = useState(new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [actionModal, setActionModal] = useState<{ id: string; type: 'aceitar' | 'contestar' | 'manter' | 'aprovar' | 'escalar' | 'excluir' | 'reavaliar' | 'devolver' | 'editAdmin' } | null>(null);
+  const [actionModal, setActionModal] = useState<{ id: string; type: 'aceitar' | 'contestar' | 'manter' | 'aprovar' | 'escalar' | 'excluir' | 'reavaliar' | 'devolver' | 'editAdmin' | 'solicitar_reavaliacao' | 'recusar_agente' } | null>(null);
   const [viewingMonitoria, setViewingMonitoria] = useState<Monitoria | null>(null);
   const [actionNote, setActionNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -160,6 +160,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       case 'finalizada_alterada': return { label: 'Finalizada (Alterada)', variant: 'success' as const, icon: CheckCircle2 };
       case 'contestacao_aceita': return { label: 'Contestação Aceita', variant: 'success' as const, icon: CheckCircle2 };
       case 'contestacao_negada': return { label: 'Contestação Negada', variant: 'error' as const, icon: XCircle };
+      case 'reavaliacao_solicitada': return { label: 'Reavaliação Solicitada', variant: 'error' as const, icon: AlertTriangle };
       default: return { label: status, variant: 'neutral' as const, icon: AlertCircle };
     }
   };
@@ -180,6 +181,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       'escalar': 'Escalado para decisão da Qualidade',
       'excluir': 'Monitoria removida pelo Administrador',
       'reavaliar': 'Reavaliação aceita pelo Gestor Qual.',
+      'solicitar_reavaliacao': 'Reavaliação solicitada pelo Gestor',
       'devolver': 'Devolvido para reanálise da Qualidade',
       'recusar_agente': 'Contestação mantida pelo Agente (enviado ao Gestor)'
     };
@@ -198,12 +200,14 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     else if (type === 'manter') nextStatus = 'contestacao_negada'; // Volta para o suporte
     else if (type === 'recusar_agente') nextStatus = 'aguardando_gestor_suporte';
     else if (type === 'escalar') nextStatus = 'aguardando_gestor_qualidade';
+    else if (type === 'solicitar_reavaliacao') nextStatus = 'reavaliacao_solicitada';
 
     const getDeadlineHours = (status: MonitoriaStatus) => {
       const sla = qualityConfig.sla;
       switch (status) {
         case 'pendente_revisao': return sla?.agentReview || 50;
-        case 'em_contestacao': return sla?.auditorReevaluation || 25;
+        case 'em_contestacao': 
+        case 'reavaliacao_solicitada': return sla?.auditorReevaluation || 25;
         case 'aguardando_gestor_suporte': return sla?.managerSupport || 25;
         case 'aguardando_gestor_qualidade': return sla?.managerQuality || 25;
         default: return 25;
@@ -217,7 +221,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
           updated_at: now,
           history: [...(monitoria.history || []), historyEntry],
           ...(nextStatus !== 'concluida' ? { deadline_at: addBusinessHours(new Date(), getDeadlineHours(nextStatus), qualityConfig.businessHours).toISOString() } : {}),
-          ...(type === 'contestar' ? { contestation_reason: actionNote } : {}),
+          ...(type === 'contestar' || type === 'solicitar_reavaliacao' ? { contestation_reason: actionNote } : {}),
         };
 
     try {
@@ -530,10 +534,12 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                             )}
 
                             {/* Qualidade / Auditor Actions */}
-                            {(user?.role === 'qualidade' || user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'em_contestacao' && (
+                            {(user?.role === 'qualidade' || user?.role === 'gestor_qualidade' || user?.role === 'admin') && (m.status === 'em_contestacao' || m.status === 'reavaliacao_solicitada') && (
                               <>
                                 <Button variant="secondary" size="sm" onClick={() => setViewingMonitoria({ ...m, _reevaluate: true } as any)} icon={<Pencil className="w-4 h-4" />}>Reavaliar Monitoria</Button>
-                                <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'manter' })} icon={<XCircle className="w-4 h-4" />}>Manter Nota Original (Negar)</Button>
+                                {m.status === 'em_contestacao' && (
+                                  <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'manter' })} icon={<XCircle className="w-4 h-4" />}>Manter Nota Original (Negar)</Button>
+                                )}
                               </>
                             )}
 
@@ -541,7 +547,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                             {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'aguardando_gestor_qualidade' && (
                               <>
                                 <Button variant="secondary" size="sm" onClick={() => setActionModal({ id: m.id, type: 'aprovar' })} icon={<CheckCircle2 className="w-4 h-4" />}>Decisão Final: Aprovar</Button>
-                                <Button variant="outline" size="sm" onClick={() => setViewingMonitoria({ ...m, _reevaluate: true } as any)} icon={<Pencil className="w-4 h-4" />}>Decisão Final: Alterar Nota</Button>
+                                <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'solicitar_reavaliacao' })} icon={<Pencil className="w-4 h-4" />}>Solicitar Reavaliação</Button>
                               </>
                             )}
                           </div>
@@ -607,6 +613,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                     actionModal.type === 'aceitar' ? 'Aprovação/Aceite' : 
                     actionModal.type === 'recusar_agente' ? 'Manutenção de Contestação' :
                     actionModal.type === 'excluir' ? 'Exclusão' : 
+                    actionModal.type === 'solicitar_reavaliacao' ? 'Solicitação de Reavaliação' :
                     actionModal.type.toUpperCase()
                   }</strong> nesta monitoria.
                   <br /><br />
@@ -617,7 +624,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                   }
                 </p>
                 
-                {(actionModal.type === 'contestar' || actionModal.type === 'excluir') && (
+                {(actionModal.type === 'contestar' || actionModal.type === 'excluir' || actionModal.type === 'solicitar_reavaliacao') && (
                   <div className="mb-6">
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 block">Justificativa / Motivo</label>
                     <textarea 

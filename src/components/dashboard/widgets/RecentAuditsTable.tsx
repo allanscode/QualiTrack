@@ -42,7 +42,16 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
     return u.name;
   };
 
-  const displayList = monitorias.slice(0, limit);
+  const displayList = React.useMemo(() => {
+    return [...monitorias]
+      .filter(m => m.status !== 'concluida')
+      .sort((a, b) => {
+        const dateA = a.deadline_at ? new Date(a.deadline_at).getTime() : Infinity;
+        const dateB = b.deadline_at ? new Date(b.deadline_at).getTime() : Infinity;
+        return dateA - dateB;
+      })
+      .slice(0, limit);
+  }, [monitorias, limit]);
 
   return (
     <Card padding="none" className="overflow-hidden">

@@ -157,6 +157,77 @@ export function DashboardProvider({ user, children }: { user: User | null, child
 
   const refresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);
 
+  // SLA Timeout Processor
+  useEffect(() => {
+    if (loading || allMonitorias.length === 0) return;
+
+    const checkSLA = async () => {
+      const now = new Date().getTime();
+      const expired = allMonitorias.filter(m => {
+        if (!m.deadline_at) return false;
+        const isFinal = ['concluida', 'finalizada_alterada', 'contestacao_aceita', 'contestacao_negada'].includes(m.status);
+        if (isFinal) return false;
+        
+        const deadline = new Date(m.deadline_at).getTime();
+        return now > deadline;
+      });
+
+      if (expired.length === 0) return;
+
+      let hasUpdates = false;
+
+      for (const m of expired) {
+        const isQualityTurn = ['em_contestacao', 'aguardando_gestor_qualidade', 'reavaliacao_solicitada'].includes(m.status);
+        const isSupportTurn = ['pendente_revisao', 'aguardando_gestor_suporte'].includes(m.status);
+        
+        if (!isQualityTurn && !isSupportTurn) continue;
+
+        const newScore = isQualityTurn ? 100 : m.score;
+        const note = isQualityTurn 
+          ? 'Monitoria aprovada automaticamente (nota 100%) por perda de prazo da Equipe de Qualidade.'
+          : 'Monitoria aprovada automaticamente por perda de prazo da Equipe de Suporte.';
+          
+        const historyEntry = {
+          action: 'Finalização Automática (SLA)',
+          by_id: 'system',
+          by_name: 'Sistema Automático',
+          at: new Date().toISOString(),
+          note
+        };
+
+        const update = {
+          status: 'concluida' as const,
+          score: newScore,
+          updated_at: new Date().toISOString(),
+          history: [...(m.history || []), historyEntry]
+        };
+
+        try {
+          if (!supabase) {
+            await mockDb.update('monitorias', m.id, update);
+          } else {
+            await supabase.from('monitorias').update(update).eq('id', m.id);
+          }
+          hasUpdates = true;
+        } catch (e) {
+          console.error('Failed to auto-resolve SLA for monitoria', m.id, e);
+        }
+      }
+
+      if (hasUpdates) {
+        refresh();
+      }
+    };
+
+    const timerId = setTimeout(checkSLA, 5000); // Check 5s after load
+    const intervalId = setInterval(checkSLA, 60000); // And every minute
+
+    return () => {
+      clearTimeout(timerId);
+      clearInterval(intervalId);
+    };
+  }, [allMonitorias, loading, refresh]);
+
   return (
     <DashboardContext.Provider value={{ user, filters, setFilters, monitorias, allMonitorias, users, teams, forms, loading, globalAvg, refresh }}>
       {children}
