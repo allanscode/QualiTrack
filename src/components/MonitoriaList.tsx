@@ -89,7 +89,12 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
 
   useEffect(() => { load(); }, [load]);
 
-  const getName = (id: string) => users.find(u => u.id === id)?.name || id;
+  const getName = (id: string, isEvaluator?: boolean) => {
+    if (isEvaluator && (user?.role === 'suporte' || user?.role === 'gestor_suporte')) {
+      return 'Equipe de Qualidade';
+    }
+    return users.find(u => u.id === id)?.name || id;
+  };
 
   const filtered = useMemo(() => {
     return monitorias.filter(m => {
@@ -127,14 +132,19 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
   }, [monitorias, user, tab, search, statusFilter, teamFilter, auditorFilter, dateType, startDate, endDate]);
 
   const hasActiveFilters = useMemo(() => {
-    return search !== '' || teamFilter !== '' || suporteFilter !== '' || auditorFilter !== '';
-  }, [search, teamFilter, suporteFilter, auditorFilter]);
+    const isDefaultDate = startDate === new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0] && 
+                          endDate === new Date().toISOString().split('T')[0];
+    return search !== '' || teamFilter !== '' || suporteFilter !== '' || auditorFilter !== '' || !isDefaultDate || statusFilter !== 'active';
+  }, [search, teamFilter, suporteFilter, auditorFilter, startDate, endDate, statusFilter]);
 
   const clearFilters = () => {
     setSearch('');
     setTeamFilter('');
     setSuporteFilter('');
     setAuditorFilter('');
+    setStatusFilter('active');
+    setStartDate(new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0]);
+    setEndDate(new Date().toISOString().split('T')[0]);
   };
 
   const getStatusConfig = (status: MonitoriaStatus) => {
@@ -162,12 +172,13 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     const actionDescriptions: Record<string, string> = {
       'aceitar': 'Monitoria aceita pelo suporte',
       'contestar': 'Contestação realizada pelo suporte',
-      'manter': 'Contestação mantida pelo Gestor Suporte',
-      'aprovar': 'Monitoria aprovada pelo Gestor Suporte',
+      'manter': 'Contestação negada pela Qualidade',
+      'aprovar': 'Monitoria aprovada pelo Gestor',
       'escalar': 'Escalado para decisão da Qualidade',
       'excluir': 'Monitoria removida pelo Administrador',
       'reavaliar': 'Reavaliação aceita pelo Gestor Qual.',
-      'devolver': 'Devolvido para reanálise da Qualidade'
+      'devolver': 'Devolvido para reanálise da Qualidade',
+      'recusar_agente': 'Contestação mantida pelo Agente (enviado ao Gestor)'
     };
 
     const historyEntry: MonitoriaHistoryEntry = { 
@@ -181,7 +192,8 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     let nextStatus: MonitoriaStatus = monitoria.status;
     if (type === 'aceitar' || type === 'aprovar') nextStatus = 'concluida';
     else if (type === 'contestar' || type === 'devolver') nextStatus = 'em_contestacao';
-    else if (type === 'manter') nextStatus = 'aguardando_gestor_suporte';
+    else if (type === 'manter') nextStatus = 'contestacao_negada'; // Volta para o suporte
+    else if (type === 'recusar_agente') nextStatus = 'aguardando_gestor_suporte';
     else if (type === 'escalar') nextStatus = 'aguardando_gestor_qualidade';
 
     const getDeadlineHours = (status: MonitoriaStatus) => {
@@ -266,15 +278,17 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
               />
             </div>
 
-            <div className="w-56 h-10">
-              <CustomSelect 
-                value={suporteFilter}
-                onChange={val => setSuporteFilter(val)}
-                options={[{ value: '', label: 'Suporte' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
-              />
-            </div>
+            {user?.role !== 'suporte' && (
+              <div className="w-56 h-10">
+                <CustomSelect 
+                  value={suporteFilter}
+                  onChange={val => setSuporteFilter(val)}
+                  options={[{ value: '', label: 'Suporte' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
+                />
+              </div>
+            )}
 
-            {user?.role !== 'qualidade' && (
+            {user?.role !== 'suporte' && user?.role !== 'qualidade' && (
               <div className="w-56 h-10">
                 <CustomSelect 
                   value={auditorFilter}
@@ -311,6 +325,21 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                 value={statusFilter}
                 onChange={val => setStatusFilter(val as any)}
                 options={[{ value: 'active', label: 'Ativas' }, { value: 'removed', label: 'Removidas' }]}
+              />
+            </div>
+
+            <div className="w-56 h-10">
+              <CustomSelect 
+                value={tab}
+                onChange={val => setTab(val as any)}
+                options={[
+                  { value: 'todas', label: 'Todos os Status' },
+                  { value: 'pendente_revisao', label: 'Aguardando Revisão' },
+                  { value: 'em_contestacao', label: 'Em Reanálise' },
+                  { value: 'aguardando_gestor_suporte', label: 'Aguardando Gestor' },
+                  { value: 'concluida', label: 'Concluída' },
+                  { value: 'contestacao_negada', label: 'Contestação Negada' }
+                ]}
               />
             </div>
 
@@ -380,6 +409,8 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                       <div className="flex items-center gap-3 text-[10px] font-bold text-brand-muted uppercase tracking-tight">
                         <span className="flex items-center gap-1.5"><UserIcon className="w-3 h-3 text-brand-highlight" /> {getName(m.evaluated_id)}</span>
                         <span className="text-brand-muted/20">•</span>
+                        <span className="flex items-center gap-1.5"><Shield className="w-3 h-3 text-brand-highlight" /> {getName(m.evaluator_id, true)}</span>
+                        <span className="text-brand-muted/20">•</span>
                         <span className="flex items-center gap-1.5"><Tag className="w-3 h-3 text-brand-highlight" /> {teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
                       </div>
                     </div>
@@ -420,7 +451,12 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                                     <div className="flex flex-col">
                                       <span className="text-[11px] font-bold text-brand-primary leading-none">{h.action}</span>
                                       <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70">
-                                        {h.by_name} <span className="mx-1">•</span> {format(new Date(h.at), 'HH:mm')}
+                                        {(() => {
+                                          const actor = users.find(u => u.id === h.by_id);
+                                          const isSupportView = user?.role === 'suporte' || user?.role === 'gestor_suporte';
+                                          const isQualityActor = actor && ['qualidade', 'gestor_qualidade'].includes(actor.role);
+                                          return (isSupportView && isQualityActor) ? 'Equipe de Qualidade' : h.by_name;
+                                        })()} <span className="mx-1">•</span> {format(new Date(h.at), 'HH:mm')}
                                       </span>
                                       {h.note && (
                                         <div className="mt-2 text-[11px] text-brand-muted/80 bg-surface-subtle/50 p-2 rounded-xl border border-surface-border/30">
@@ -435,24 +471,80 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                           )}
                         </div>
 
-                        <div className="flex flex-col gap-3 justify-end items-end">
+                          <div className="flex flex-wrap gap-2 justify-end w-full">
+                            {/* Suporte Actions */}
+                            {user?.role === 'suporte' && (m.status === 'pendente_revisao' || m.status === 'contestacao_negada') && (
+                              <div className="flex gap-3 items-center">
+                                <Button 
+                                  variant="secondary" 
+                                  size="sm" 
+                                  onClick={() => setActionModal({ id: m.id, type: 'aceitar' })} 
+                                  icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                                  className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
+                                >
+                                  Aprovar
+                                </Button>
+                                {m.status === 'pendente_revisao' && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => setActionModal({ id: m.id, type: 'contestar' })} 
+                                    icon={<AlertTriangle className="w-3.5 h-3.5" />}
+                                    className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                                  >
+                                    Contestar
+                                  </Button>
+                                )}
+                                {m.status === 'contestacao_negada' && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => setActionModal({ id: m.id, type: 'recusar_agente' })} 
+                                    icon={<XCircle className="w-3.5 h-3.5" />}
+                                    className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                                  >
+                                    Enviar Gestor
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Gestor Suporte Actions */}
+                            {user?.role === 'gestor_suporte' && m.status === 'aguardando_gestor_suporte' && (
+                              <>
+                                <Button variant="secondary" size="sm" onClick={() => setActionModal({ id: m.id, type: 'aprovar' })} icon={<CheckCircle2 className="w-4 h-4" />}>Aprovar Monitoria</Button>
+                                <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'escalar' })} icon={<AlertTriangle className="w-4 h-4" />}>Escalar para Qualidade</Button>
+                              </>
+                            )}
+
+                            {/* Qualidade / Auditor Actions */}
+                            {(user?.role === 'qualidade' || user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'em_contestacao' && (
+                              <>
+                                <Button variant="secondary" size="sm" onClick={() => setViewingMonitoria({ ...m, _reevaluate: true } as any)} icon={<Pencil className="w-4 h-4" />}>Reavaliar Monitoria</Button>
+                                <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'manter' })} icon={<XCircle className="w-4 h-4" />}>Manter Nota Original (Negar)</Button>
+                              </>
+                            )}
+
+                            {/* Gestor Qualidade / Admin Final Actions */}
+                            {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'aguardando_gestor_qualidade' && (
+                              <>
+                                <Button variant="secondary" size="sm" onClick={() => setActionModal({ id: m.id, type: 'aprovar' })} icon={<CheckCircle2 className="w-4 h-4" />}>Decisão Final: Aprovar</Button>
+                                <Button variant="outline" size="sm" onClick={() => setViewingMonitoria({ ...m, _reevaluate: true } as any)} icon={<Pencil className="w-4 h-4" />}>Decisão Final: Alterar Nota</Button>
+                              </>
+                            )}
+                          </div>
+
                           <Button 
-                            variant="secondary" 
+                            variant="ghost" 
                             size="sm" 
                             onClick={() => setViewingMonitoria(m)} 
                             icon={<Eye className="w-4 h-4" />}
-                            className="w-full md:w-auto shadow-sm"
+                            className="w-full md:w-auto shadow-sm border border-surface-border/50"
                           >
                             Visualizar Avaliação Completa
                           </Button>
                           
                           <div className="flex flex-wrap gap-2 justify-end w-full">
-                            {user?.role === 'suporte' && m.status === 'pendente_revisao' && (
-                              <>
-                                <Button variant="secondary" size="sm" onClick={() => setActionModal({ id: m.id, type: 'aceitar' })} className="flex-1 md:flex-none">Aceitar</Button>
-                                <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'contestar' })} className="flex-1 md:flex-none">Contestar</Button>
-                              </>
-                            )}
                             {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
                               <Button 
                                 variant="ghost" 
@@ -465,7 +557,6 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                               </Button>
                             )}
                           </div>
-                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -500,7 +591,18 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                 </div>
 
                 <p className="text-sm text-brand-muted font-medium mb-6 leading-relaxed">
-                  Você está prestes a realizar a ação de <strong className="text-brand-primary underline underline-offset-4">{(actionModal.type === 'excluir' ? 'Exclusão' : actionModal.type).toUpperCase()}</strong> nesta monitoria. Esta operação ficará registrada no histórico.
+                  Você está prestes a realizar a ação de <strong className="text-brand-primary underline underline-offset-4">{
+                    actionModal.type === 'aceitar' ? 'Aprovação/Aceite' : 
+                    actionModal.type === 'recusar_agente' ? 'Manutenção de Contestação' :
+                    actionModal.type === 'excluir' ? 'Exclusão' : 
+                    actionModal.type.toUpperCase()
+                  }</strong> nesta monitoria.
+                  <br /><br />
+                  Esta operação ficará registrada no histórico e {
+                    (actionModal.type === 'aceitar' || actionModal.type === 'aprovar') 
+                    ? 'finalizará o processo deste ticket.' 
+                    : 'dará continuidade ao fluxo de revisão.'
+                  }
                 </p>
                 
                 {(actionModal.type === 'contestar' || actionModal.type === 'excluir') && (

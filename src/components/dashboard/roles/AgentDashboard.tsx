@@ -5,154 +5,223 @@ import TrendChart from '../widgets/TrendChart';
 import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import SlaWidget from '../widgets/SlaWidget';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp } from 'lucide-react';
+import OfensoresChart from '../widgets/OfensoresChart';
+import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, BarChart3, Users } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 
 export default function AgentDashboard() {
-  const { user, monitorias, users } = useDashboard();
+  const { user, monitorias, allMonitorias, users, forms } = useDashboard();
   const { config, getLevelForScore, isAboveTarget } = useQualityConfig();
 
+  // --- Only MY monitorias (for personal metrics) - FILTERED BY UI
   const myMonitorias = useMemo(() => 
     monitorias.filter(m => m.evaluated_id === user?.id), 
     [monitorias, user]
   );
-  
-  const completed = useMemo(() => 
-    myMonitorias.filter(m => ['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(m.status)), 
-    [myMonitorias]
+
+  // --- Only MY monitorias (for SlaWidget/Pendencies) - UNFILTERED BY UI
+  const myAllMonitorias = useMemo(() => 
+    allMonitorias.filter(m => m.evaluated_id === user?.id), 
+    [allMonitorias, user]
   );
   
+  // --- Team Data (for comparison)
+  const teamMonitorias = useMemo(() => {
+    const myInfo = users.find(u => u.id === user?.id);
+    let myTeamIds = myInfo?.team_ids || user?.team_ids || [];
+    
+    if (myTeamIds.length === 0) {
+      const fromRecords = monitorias.filter(m => m.evaluated_id === user?.id && m.team_id).map(m => m.team_id!);
+      myTeamIds = Array.from(new Set(fromRecords));
+    }
+
+    return monitorias.filter(m => m.team_id && myTeamIds.includes(m.team_id));
+  }, [monitorias, user, users]);
+
+  // --- Main Calculations (All active monitorias)
   const avgScore = useMemo(() => 
-    completed.length > 0 ? (completed.reduce((a, m) => a + (m.score || 0), 0) / completed.length) : 0, 
-    [completed]
-  );
-  
-  const pendingAction = useMemo(() => 
-    myMonitorias.filter(m => m.status === 'pendente_revisao').length, 
+    myMonitorias.length > 0 ? (myMonitorias.reduce((a, m) => a + (m.score || 0), 0) / myMonitorias.length) : 0, 
     [myMonitorias]
   );
 
-  // Trend Data
+  const teamAvgScore = useMemo(() => 
+    teamMonitorias.length > 0 ? (teamMonitorias.reduce((a, m) => a + (m.score || 0), 0) / teamMonitorias.length) : 0, 
+    [teamMonitorias]
+  );
+
+  // --- Contestation Metrics
+  const myContestations = useMemo(() => 
+    myMonitorias.filter(m => m.history?.some(h => h.action.includes('Contestação'))),
+    [myMonitorias]
+  );
+
+  const contestationsApproved = useMemo(() => 
+    myContestations.filter(m => m.status === 'contestacao_aceita' || m.status === 'finalizada_alterada').length,
+    [myContestations]
+  );
+
+  const contestationsRejected = useMemo(() => 
+    myContestations.filter(m => m.status === 'contestacao_negada').length,
+    [myContestations]
+  );
+
+  const reversalRate = useMemo(() => 
+    myContestations.length > 0 ? (contestationsApproved / myContestations.length) * 100 : 0,
+    [myContestations, contestationsApproved]
+  );
+
+  // --- Trend Data (Agent vs Team)
   const trendData = useMemo(() => {
-    const days: Record<string, { totalScore: number, count: number }> = {};
-    completed.forEach(m => {
+    const days: Record<string, { myTotal: number, myCount: number, teamTotal: number, teamCount: number }> = {};
+    
+    // Process My Scores
+    myMonitorias.forEach(m => {
       const date = new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      if (!days[date]) days[date] = { totalScore: 0, count: 0 };
-      days[date].totalScore += m.score || 0;
-      days[date].count += 1;
+      if (!days[date]) days[date] = { myTotal: 0, myCount: 0, teamTotal: 0, teamCount: 0 };
+      days[date].myTotal += m.score || 0;
+      days[date].myCount += 1;
+    });
+
+    // Process Team Scores
+    teamMonitorias.forEach(m => {
+      const date = new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      if (!days[date]) days[date] = { myTotal: 0, myCount: 0, teamTotal: 0, teamCount: 0 };
+      days[date].teamTotal += m.score || 0;
+      days[date].teamCount += 1;
     });
 
     return Object.entries(days).map(([name, data]) => ({
       name,
-      MeuScore: Math.round((data.totalScore / data.count) * 100) / 100
+      MeuScore: data.myCount > 0 ? Math.round((data.myTotal / data.myCount) * 100) / 100 : undefined,
+      MediaEquipe: data.teamCount > 0 ? Math.round((data.teamTotal / data.teamCount) * 100) / 100 : undefined
     })).sort((a, b) => {
       const [da, ma] = a.name.split('/').map(Number);
       const [db, mb] = b.name.split('/').map(Number);
       return ma !== mb ? ma - mb : da - db;
     });
-  }, [completed]);
+  }, [myMonitorias, teamMonitorias]);
 
-  const trendPercentage = useMemo(() => {
-    if (trendData.length < 2) return 0;
-    const mid = Math.floor(trendData.length / 2);
-    const firstHalf = trendData.slice(0, mid);
-    const secondHalf = trendData.slice(mid);
-    const avgFirst = firstHalf.reduce((a, b) => a + b.MeuScore, 0) / (firstHalf.length || 1);
-    const avgSecond = secondHalf.reduce((a, b) => a + b.MeuScore, 0) / (secondHalf.length || 1);
-    return avgFirst > 0 ? ((avgSecond / avgFirst) - 1) * 100 : 0;
-  }, [trendData]);
-
-  const classificationData = useMemo(() => {
-    const colorMap: Record<string, string> = {
-      'text-indigo-700': '#6366f1',
-      'text-emerald-700': '#10b981',
-      'text-amber-700': '#f59e0b',
-      'text-red-700': '#ef4444',
-      'text-purple-700': '#a855f7',
-      'text-blue-700': '#3b82f6',
-    };
-
-    return config.levels.map(level => ({
-      name: level.label,
-      value: myMonitorias.filter(m => m.score >= level.minScore && m.score <= level.maxScore).length,
-      color: colorMap[level.color] || '#94a3b8'
-    })).filter(d => d.value > 0);
-  }, [config.levels, myMonitorias]);
-
-  if (!user) return null;
+  const level = getLevelForScore(avgScore);
 
   return (
-    <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
+    <div className="space-y-6 animate-fade-in">
+      {/* Top Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Minha Média"
+          value={`${avgScore.toFixed(2)}%`}
+          sub={level.label}
+          good={isAboveTarget(avgScore)}
+          icon={<Target className="w-5 h-5" />}
+          accent={level.color}
+        />
+        <StatCard
+          title="Média da Equipe"
+          value={`${teamAvgScore.toFixed(2)}%`}
+          sub={avgScore >= teamAvgScore ? 'Você está acima da média' : 'Você está abaixo da média'}
+          good={avgScore >= teamAvgScore}
+          icon={<Users className="w-5 h-5" />}
+          accent="text-brand-highlight"
+        />
+        <StatCard
+          title="Monitorias"
+          value={myMonitorias.length.toString()}
+          sub="Total no período"
+          good={true}
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          accent="text-brand-accent"
+        />
+        <StatCard
+          title="Tendência"
+          value={`${reversalRate.toFixed(1)}%`}
+          sub="Taxa de Reversão"
+          good={true}
+          icon={<TrendingUp className="w-5 h-5" />}
+          accent="text-info"
+        />
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Minha Média" 
-          value={`${avgScore.toFixed(2)}%`} 
-          sub={isAboveTarget(avgScore) ? 'Acima da meta' : 'Abaixo da meta'} 
-          good={isAboveTarget(avgScore)} 
-          icon={<Target className="w-5 h-5" />} 
-          accent={getLevelForScore(avgScore).color} 
+      {/* Contestation Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Taxa de Reversão"
+          value={`${reversalRate.toFixed(1)}%`}
+          sub="Contestações Procedentes"
+          good={true}
+          icon={<RotateCcw className="w-5 h-5" />}
+          accent="text-brand-muted"
         />
-        <StatCard 
-          title="Monitorias" 
-          value={myMonitorias.length} 
-          sub="Total no período" 
-          good={true} 
-          icon={<ClipboardCheck className="w-4 h-4" />} 
-          accent="text-info" 
+        <StatCard
+          title="Solicitadas"
+          value={myContestations.length.toString()}
+          sub="Total de Contestações"
+          good={true}
+          icon={<BarChart3 className="w-5 h-5" />}
+          accent="text-brand-muted"
         />
-        <StatCard 
-          title="Pendentes" 
-          value={pendingAction} 
-          sub="Aguardando sua revisão" 
-          good={pendingAction === 0} 
-          icon={<AlertTriangle className="w-5 h-5" />} 
-          accent="text-error" 
+        <StatCard
+          title="Aprovadas"
+          value={contestationsApproved.toString()}
+          sub="Nota Alterada"
+          good={true}
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          accent="text-success"
         />
-        <StatCard 
-          title="Tendência" 
-          value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`} 
-          sub="Evolução do score" 
-          good={trendPercentage >= 0} 
-          icon={<TrendingUp className="w-5 h-5" />} 
-          accent="text-brand-highlight" 
+        <StatCard
+          title="Recusadas"
+          value={contestationsRejected.toString()}
+          sub="Nota Mantida"
+          good={false}
+          icon={<XCircle className="w-5 h-5" />}
+          accent="text-error"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="h-[340px]">
-            <TrendChart 
-              title="Minha Evolução" 
-              subtitle="Score médio por dia"
-              data={trendData} 
-              dataKeys={[{ key: 'MeuScore', name: 'Meu Score', color: '#6366f1' }]} 
-            />
-          </div>
-          
-          <div className="h-[400px]">
-            <SlaWidget 
-              title="Aguardando Minha Ciência"
-              monitorias={myMonitorias}
-              users={users}
-              targetStatus="pendente_revisao"
-            />
-          </div>
+        <div className="lg:col-span-2 h-[350px]">
+          <TrendChart 
+            data={trendData} 
+            title="Evolução Comparativa"
+            subtitle="Meu Score vs Média da Equipe"
+            dataKeys={[
+              { key: 'MeuScore', name: 'Meu Score', color: '#6366f1' },
+              { key: 'MediaEquipe', name: 'Média Equipe', color: '#10b981' }
+            ]}
+          />
         </div>
-        
-        <div className="space-y-6">
-          <div className="h-[340px]">
-            <DistributionChart 
-              title="Minha Classificação" 
-              data={classificationData} 
-            />
-          </div>
+        <div className="lg:col-span-1 h-[350px]">
+          <DistributionChart 
+            title="Minha Classificação"
+            data={config.levels.map(l => ({
+              name: l.label,
+              value: myMonitorias.filter(m => (m.score || 0) >= l.minScore && (m.score || 0) <= l.maxScore).length,
+              color: l.color.includes('emerald') ? '#10b981' : l.color.includes('amber') ? '#f59e0b' : l.color.includes('red') ? '#ef4444' : '#6366f1'
+            })).filter(d => d.value > 0)}
+          />
         </div>
       </div>
 
-      <div className="pt-4">
-        <RecentAuditsTable monitorias={myMonitorias} users={users} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 min-h-[400px]">
+          <OfensoresChart 
+            monitorias={myMonitorias}
+            forms={forms}
+            title="Meus Ofensores"
+            subtitle="Critérios onde você mais falhou"
+            limit={5}
+          />
+        </div>
+        <div className="lg:col-span-1">
+          <SlaWidget 
+            title="Aguardando Minha Ação"
+            monitorias={myAllMonitorias} 
+            users={users}
+            targetStatus={['pendente_revisao', 'contestacao_negada']}
+          />
+        </div>
       </div>
+
+      <RecentAuditsTable monitorias={myMonitorias} users={users} />
     </div>
   );
 }

@@ -37,7 +37,7 @@ export default function SlaWidget({ title, monitorias, users, targetStatus }: Sl
         </div>
       </div>
 
-      <div className="space-y-2.5 flex-1">
+      <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
         {pending.length > 0 ? pending.map((m) => {
           const hours = Math.floor((new Date().getTime() - new Date(m.deadline_at || m.created_at).getTime()) / (1000 * 3600));
           const days = Math.floor((new Date().getTime() - new Date(m.created_at).getTime()) / (1000 * 3600 * 24));

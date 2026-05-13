@@ -31,6 +31,7 @@ export default function FilterBar() {
       teamId: '',
       agentId: '',
       auditorId: '',
+      status: '',
     }));
   };
 
@@ -76,20 +77,22 @@ export default function FilterBar() {
         />
 
         {/* Agent Select */}
-        <CustomSelect 
-          value={filters.agentId}
-          options={[
-            { value: '', label: 'Suporte' }, 
-            ...activeAgents
-              .filter(a => !filters.teamId || (a.team_ids && a.team_ids.includes(filters.teamId)))
-              .map(a => ({ value: a.id, label: a.name }))
-          ]}
-          onChange={(val: string) => setFilters({ ...filters, agentId: val })}
-          className="w-64"
-        />
+        {user?.role !== 'suporte' && (
+          <CustomSelect 
+            value={filters.agentId}
+            options={[
+              { value: '', label: 'Suporte' }, 
+              ...activeAgents
+                .filter(a => !filters.teamId || (a.team_ids && a.team_ids.includes(filters.teamId)))
+                .map(a => ({ value: a.id, label: a.name }))
+            ]}
+            onChange={(val: string) => setFilters({ ...filters, agentId: val })}
+            className="w-64"
+          />
+        )}
 
         {/* Auditor Select */}
-        {user?.role !== 'qualidade' && (
+        {user?.role !== 'suporte' && user?.role !== 'qualidade' && (
           <CustomSelect 
             value={filters.auditorId}
             options={[
@@ -100,6 +103,21 @@ export default function FilterBar() {
             className="w-48"
           />
         )}
+
+        {/* Status Select */}
+        <CustomSelect 
+          value={filters.status}
+          options={[
+            { value: '', label: 'Status' },
+            { value: 'pendente_revisao', label: 'Aguardando Revisão' },
+            { value: 'em_contestacao', label: 'Em Reanálise' },
+            { value: 'aguardando_gestor_suporte', label: 'Aguardando Gestor' },
+            { value: 'concluida', label: 'Concluída' },
+            { value: 'contestacao_negada', label: 'Contestação Negada' }
+          ]}
+          onChange={(val: string) => setFilters({ ...filters, status: val })}
+          className="w-48"
+        />
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 ml-auto flex-shrink-0 pl-6 border-l border-surface-border self-center h-10">

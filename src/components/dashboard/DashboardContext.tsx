@@ -18,6 +18,7 @@ interface DashboardContextType {
   filters: DashboardFilters;
   setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
   monitorias: Monitoria[];
+  allMonitorias: Monitoria[];
   users: User[];
   teams: Team[];
   forms: EvaluationForm[];
@@ -40,6 +41,7 @@ export function DashboardProvider({ user, children }: { user: User | null, child
   });
 
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
+  const [allMonitorias, setAllMonitorias] = useState<Monitoria[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [forms, setForms] = useState<EvaluationForm[]>([]);
@@ -78,7 +80,15 @@ export function DashboardProvider({ user, children }: { user: User | null, child
 
       // Base RBAC for raw data (RLS should handle this in Supabase, but we do it here for mockDb and extra safety)
       if (user.role === 'suporte') {
-        docs = docs.filter(m => m.evaluated_id === user.id);
+        const myUser = userDocs.find(u => u.id === user.id);
+        let myTeamIds = myUser?.team_ids || user.team_ids || [];
+        
+        if (myTeamIds.length === 0) {
+          const fromRecords = docs.filter(m => m.evaluated_id === user.id && m.team_id).map(m => m.team_id!);
+          myTeamIds = Array.from(new Set(fromRecords));
+        }
+
+        docs = docs.filter(m => m.evaluated_id === user.id || (m.team_id && myTeamIds.includes(m.team_id)));
       } else if (user.role === 'qualidade') {
         docs = docs.filter(m => m.evaluator_id === user.id);
       } else if (user.role === 'gestor_suporte' || user.role === 'gestor_qualidade') {
@@ -87,10 +97,8 @@ export function DashboardProvider({ user, children }: { user: User | null, child
         docs = docs.filter(m => myTeamUserIds.includes(m.evaluated_id) || myTeamUserIds.includes(m.evaluator_id));
       }
 
-      // Exclude deactivated monitorias for non-admin/qualidade
-      if (user.role !== 'admin' && user.role !== 'qualidade') {
-        docs = docs.filter(m => m.active !== false);
-      }
+      // Save RBAC-filtered list before UI filters
+      setAllMonitorias(docs);
 
       // Apply Global Context Filters
       let filtered = docs.filter(m => {
@@ -103,7 +111,7 @@ export function DashboardProvider({ user, children }: { user: User | null, child
       });
 
       if (filters.teamId) filtered = filtered.filter(m => m.team_id === filters.teamId);
-      if (filters.agentId) filtered = filtered.filter(m => m.evaluated_id === filters.agentId);
+      if (filters.agentId && user.role !== 'suporte') filtered = filtered.filter(m => m.evaluated_id === filters.agentId);
       if (filters.auditorId) filtered = filtered.filter(m => m.evaluator_id === filters.auditorId);
       if (filters.formId) filtered = filtered.filter(m => m.form_id === filters.formId);
       if (filters.status) filtered = filtered.filter(m => m.status === filters.status);
@@ -131,7 +139,7 @@ export function DashboardProvider({ user, children }: { user: User | null, child
   const refresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);
 
   return (
-    <DashboardContext.Provider value={{ user, filters, setFilters, monitorias, users, teams, forms, loading, refresh }}>
+    <DashboardContext.Provider value={{ user, filters, setFilters, monitorias, allMonitorias, users, teams, forms, loading, refresh }}>
       {children}
     </DashboardContext.Provider>
   );

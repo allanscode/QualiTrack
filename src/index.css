@@ -46,11 +46,15 @@ body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Custom thin scrollbar for modals */
-.thin-scrollbar::-webkit-scrollbar { width: 4px; }
-.thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.thin-scrollbar::-webkit-scrollbar-thumb { background: #E2E4D8; border-radius: 99px; }
-.thin-scrollbar::-webkit-scrollbar-thumb:hover { background: #A7C0A5; }
+/* Custom thin scrollbar for modals and widgets */
+.thin-scrollbar::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.thin-scrollbar::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.thin-scrollbar::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--color-surface-border); border-radius: 99px; }
+.thin-scrollbar::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-brand-accent); }
 
 /* ── Date input ── */
 input[type="date"]::-webkit-calendar-picker-indicator {

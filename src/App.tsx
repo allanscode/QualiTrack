@@ -726,7 +726,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
         <header className="flex-shrink-0 px-8 py-6 flex items-center justify-between min-w-0">
           <div className="min-w-0 flex-1">
             <h2 className="text-2xl font-black text-brand-primary tracking-tight">
-              {activeTab === 'dashboard' ? 'Visão Geral da Qualidade' : (activeTab === 'monitorias' ? 'Gestão de Monitorias' : 'Administração')}
+              {activeTab === 'dashboard' ? (userData?.role === 'suporte' ? 'Visão Geral do Suporte' : 'Visão Geral da Qualidade') : (activeTab === 'monitorias' ? 'Gestão de Monitorias' : 'Administração')}
             </h2>
             <p className="text-brand-muted text-sm font-medium mt-0.5">Conectado como <span className="text-brand-primary font-bold">{userData?.name}</span></p>
           </div>

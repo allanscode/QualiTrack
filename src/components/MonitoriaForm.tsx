@@ -51,6 +51,7 @@ export default function MonitoriaForm({
   const [step, setStep] = useState(1);
   const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [agents, setAgents] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -90,16 +91,20 @@ export default function MonitoriaForm({
             mockDb.get('teams')
           ]);
           setForms((fRes.data || []).filter((f: any) => f.active !== false));
-          setAgents((aRes.data || []).filter((u: User) => u.role === 'suporte' && u.active !== false));
+          const usersList = (aRes.data || []) as User[];
+          setAllUsers(usersList);
+          setAgents(usersList.filter((u: User) => u.role === 'suporte' && u.active !== false));
           setTeams((tRes.data || []).filter((t: any) => t.active !== false));
         } else {
           const [{ data: fData }, { data: aData }, { data: tData }] = await Promise.all([
             supabase.from('forms').select('*').eq('active', true),
-            supabase.from('users').select('*').eq('role', 'suporte').eq('active', true),
+            supabase.from('users').select('*'), // Fetch all for history/anonymity
             supabase.from('teams').select('*').eq('active', true),
           ]);
           setForms(fData || []);
-          setAgents(aData || []);
+          const usersList = (aData || []) as User[];
+          setAllUsers(usersList);
+          setAgents(usersList.filter(u => u.role === 'suporte' && u.active === true));
           setTeams(tData || []);
         }
       } catch (e) { console.error('Erro ao carregar dados:', e); }
@@ -294,23 +299,21 @@ export default function MonitoriaForm({
         {/* Form Content */}
         <div className="flex-1 overflow-y-auto p-8 space-y-10 no-scrollbar">
           {/* Stepper Progress */}
-          {!isViewOnly && (
-            <div className="flex items-center justify-center gap-6 md:gap-10">
-              {[
-                { n: 1, label: 'Identificação' },
-                { n: 2, label: 'Pesquisa' },
-                { n: 3, label: 'Avaliação' },
-                { n: 4, label: 'Registro/Log' }
-              ].map(s => (
-                <div key={s.n} className="flex flex-col items-center gap-2 group">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black transition-all ${step >= s.n ? 'bg-brand-primary text-white' : 'bg-surface-subtle text-brand-muted'}`}>
-                    {s.n}
-                  </div>
-                  <span className={`text-[10px] font-black uppercase tracking-widest ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
+          <div className="flex items-center justify-center gap-6 md:gap-10">
+            {[
+              { n: 1, label: 'Identificação' },
+              { n: 2, label: 'Pesquisa' },
+              { n: 3, label: 'Avaliação' },
+              { n: 4, label: 'Registro/Log' }
+            ].map(s => (
+              <div key={s.n} className="flex flex-col items-center gap-2 group">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black transition-all ${step >= s.n ? 'bg-brand-primary text-white' : 'bg-surface-subtle text-brand-muted'}`}>
+                  {s.n}
                 </div>
-              ))}
-            </div>
-          )}
+                <span className={`text-[10px] font-black uppercase tracking-widest ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
+              </div>
+            ))}
+          </div>
 
           {step === 1 && (
             <section className="animate-fade-in space-y-8 max-w-4xl mx-auto">
@@ -327,6 +330,7 @@ export default function MonitoriaForm({
                     onChange={val => setHeader({...header, form_id: val})} 
                     options={[{ value: '', label: 'Selecione a ficha...' }, ...forms.map(f => ({ value: f.id, label: f.title }))]}
                     className="w-full"
+                    disabled={isViewOnly || isReevaluating}
                   />
                 </div>
 
@@ -337,6 +341,7 @@ export default function MonitoriaForm({
                     onChange={val => setHeader({...header, evaluated_id: val})} 
                     options={[{ value: '', label: 'Selecione o colaborador...' }, ...agents.map(a => ({ value: a.id, label: a.name }))]}
                     className="w-full"
+                    disabled={isViewOnly || isReevaluating}
                   />
                 </div>
 
@@ -347,6 +352,7 @@ export default function MonitoriaForm({
                     onChange={val => setHeader({...header, team_id: val})} 
                     options={[{ value: '', label: 'Selecione a equipe...' }, ...teams.map(t => ({ value: t.id, label: t.name }))]}
                     className="w-full"
+                    disabled={isViewOnly || isReevaluating}
                   />
                 </div>
 
@@ -372,6 +378,7 @@ export default function MonitoriaForm({
                     onChange={val => setHeader({...header, channel: val as any})} 
                     options={CHANNELS.map(c => ({ value: c, label: c }))}
                     className="w-full"
+                    disabled={isViewOnly || isReevaluating}
                   />
                 </div>
 
@@ -605,7 +612,17 @@ export default function MonitoriaForm({
                             <p className="text-xs font-black text-brand-primary uppercase tracking-tight">{h.action}</p>
                             <p className="text-[10px] font-bold text-brand-muted uppercase">{new Date(h.at).toLocaleString('pt-BR')}</p>
                           </div>
-                          <p className="text-[10px] font-bold text-brand-muted uppercase mb-3">{h.by_name}</p>
+                          <p className="text-[10px] font-bold text-brand-muted uppercase mb-3">
+                            {(() => {
+                              if (user?.role === 'suporte' || user?.role === 'gestor_suporte') {
+                                const actor = allUsers.find(u => u.id === h.by_id);
+                                if (actor && ['qualidade', 'gestor_qualidade', 'admin'].includes(actor.role)) {
+                                  return 'Equipe de Qualidade';
+                                }
+                              }
+                              return h.by_name;
+                            })()}
+                          </p>
                           {h.note && (
                             <div className="bg-surface-bg/50 rounded-xl p-4 border border-surface-border/50">
                               <p className="text-xs text-brand-primary font-medium italic leading-relaxed">"{h.note}"</p>

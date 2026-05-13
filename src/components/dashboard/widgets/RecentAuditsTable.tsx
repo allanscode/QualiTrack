@@ -57,7 +57,7 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-auto max-h-[450px] custom-scrollbar">
         <table className="w-full text-left">
           <thead className="bg-surface-subtle/20">
             <tr className="text-[10px] uppercase tracking-widest text-brand-muted font-black border-b border-surface-border">
