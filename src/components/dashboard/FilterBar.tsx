@@ -69,43 +69,46 @@ export default function FilterBar() {
         </button>
       </div>
 
-      <div className="bg-white rounded-3xl border border-surface-border shadow-sm p-4">
-        <div className="flex flex-wrap items-center gap-4">
+      <div className="bg-white rounded-3xl border border-surface-border shadow-premium p-4">
+        <div className="flex flex-wrap items-center gap-3">
           
           {/* Date Range Group (Always First) */}
-          <div className="flex items-center gap-2 bg-white border border-surface-border rounded-2xl px-3 h-10 shadow-sm">
-            <div className="flex items-center gap-2 relative">
-              <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
-              <input 
-                type="date" 
-                value={filters.startDate} 
-                onChange={e => setFilters({ ...filters, startDate: e.target.value })} 
-                className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-24 cursor-pointer relative z-0" 
-              />
-            </div>
-            <span className="text-brand-muted font-bold text-[10px] uppercase tracking-widest px-1">até</span>
-            <div className="flex items-center gap-2 relative">
-              <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
-              <input 
-                type="date" 
-                value={filters.endDate} 
-                onChange={e => setFilters({ ...filters, endDate: e.target.value })} 
-                className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-24 cursor-pointer relative z-0" 
-              />
+          <div className="flex-1 min-w-[280px]">
+            <div className="flex items-center gap-2 bg-white border border-surface-border rounded-2xl px-3 h-10 shadow-sm group hover:border-brand-accent transition-all relative">
+              <div className="flex items-center gap-2 relative flex-1">
+                <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
+                <input 
+                  type="date" 
+                  value={filters.startDate} 
+                  onChange={e => setFilters({ ...filters, startDate: e.target.value })} 
+                  className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0" 
+                />
+              </div>
+              <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest mx-0.5">até</span>
+              <div className="flex items-center gap-2 relative flex-1">
+                <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
+                <input 
+                  type="date" 
+                  value={filters.endDate} 
+                  onChange={e => setFilters({ ...filters, endDate: e.target.value })} 
+                  className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0" 
+                />
+              </div>
             </div>
           </div>
 
           {/* Dropdowns */}
-          <div className="w-48 h-10">
+          <div className="flex-1 min-w-[160px] h-10">
             <CustomSelect 
               value={filters.teamId}
               options={[{ value: '', label: 'Equipe' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
               onChange={(val: string) => setFilters({ ...filters, teamId: val, agentId: '' })}
+              className="w-full"
             />
           </div>
 
           {user?.role !== 'suporte' && (
-            <div className="w-56 h-10">
+            <div className="flex-1 min-w-[160px] h-10">
               <CustomSelect 
                 value={filters.agentId}
                 options={[
@@ -115,12 +118,13 @@ export default function FilterBar() {
                     .map(a => ({ value: a.id, label: a.name }))
                 ]}
                 onChange={(val: string) => setFilters({ ...filters, agentId: val })}
+                className="w-full"
               />
             </div>
           )}
 
           {user?.role !== 'suporte' && user?.role !== 'qualidade' && (
-            <div className="w-48 h-10">
+            <div className="flex-1 min-w-[160px] h-10">
               <CustomSelect 
                 value={filters.auditorId}
                 options={[
@@ -128,11 +132,12 @@ export default function FilterBar() {
                   ...activeAuditors.map(a => ({ value: a.id, label: a.name }))
                 ]}
                 onChange={(val: string) => setFilters({ ...filters, auditorId: val })}
+                className="w-full"
               />
             </div>
           )}
 
-          <div className="w-48 h-10">
+          <div className="flex-1 min-w-[180px] h-10">
             <CustomSelect 
               value={filters.status}
               options={[
@@ -144,11 +149,12 @@ export default function FilterBar() {
                 { value: 'contestacao_negada', label: 'Contestação Negada' }
               ]}
               onChange={(val: string) => setFilters({ ...filters, status: val })}
+              className="w-full"
             />
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {hasChanged && (
               <Button
                 variant="ghost"
