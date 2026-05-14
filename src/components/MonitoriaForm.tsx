@@ -281,7 +281,7 @@ export default function MonitoriaForm({
         style={{ height: '92vh' }}
       >
         {/* Top Header */}
-        <div className="p-6 border-b border-surface-border flex items-center justify-between bg-white">
+        <div className="p-6 border-b border-surface-border flex items-center justify-between bg-surface-card">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-brand-subtle flex items-center justify-center text-brand-primary">
               <CheckCircle2 className="w-6 h-6" />
@@ -307,7 +307,7 @@ export default function MonitoriaForm({
               { n: 4, label: 'Registro/Log' }
             ].map(s => (
               <div key={s.n} className="flex flex-col items-center gap-2 group">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black transition-all ${step >= s.n ? 'bg-brand-primary text-white' : 'bg-surface-subtle text-brand-muted'}`}>
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black transition-all ${step >= s.n ? 'bg-brand-primary text-brand-on-primary shadow-premium' : 'bg-surface-subtle text-brand-muted'}`}>
                   {s.n}
                 </div>
                 <span className={`text-[10px] font-black uppercase tracking-widest ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
@@ -386,7 +386,7 @@ export default function MonitoriaForm({
                       value={header.ticket_id} 
                       onChange={e => setHeader({...header, ticket_id: e.target.value})} 
                       disabled={isViewOnly || isReevaluating} 
-                      className="w-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary placeholder:text-brand-muted/40 focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none" 
+                      className="w-full bg-surface-subtle border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary placeholder:text-brand-muted/40 focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none" 
                       placeholder="Digite o número do ticket" 
                     />
                   </div>
@@ -412,7 +412,7 @@ export default function MonitoriaForm({
                       value={header.ticket_date} 
                       onChange={e => setHeader({...header, ticket_date: e.target.value})} 
                       disabled={isViewOnly} 
-                      className="w-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none" 
+                      className="w-full bg-surface-subtle border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none" 
                     />
                   </div>
                 </div>
@@ -438,7 +438,7 @@ export default function MonitoriaForm({
                     <button 
                       key={opt} 
                       onClick={() => !isViewOnly && !isReevaluating && setHeader({...header, satisfaction_result: opt})} 
-                      className={`p-6 rounded-[24px] border-2 flex flex-col items-center gap-3 transition-all ${header.satisfaction_result === opt ? 'bg-brand-primary border-brand-primary text-white shadow-premium' : 'bg-white border-surface-border text-brand-muted hover:border-brand-highlight'}`} 
+                      className={`p-6 rounded-[24px] border-2 flex flex-col items-center gap-3 transition-all ${header.satisfaction_result === opt ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-premium' : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-highlight'}`} 
                       disabled={isViewOnly || isReevaluating}
                     >
                       <span className="text-sm font-black uppercase tracking-tight">{opt}</span>
@@ -449,12 +449,12 @@ export default function MonitoriaForm({
 
               {header.satisfaction_result && header.satisfaction_result !== 'Sem pesquisa' && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-                  <Card className="bg-white p-8 space-y-6">
+                  <Card className="bg-surface-card p-8 space-y-6">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-brand-primary">O cliente deixou algum registro (elogio/reclamação)?</p>
-                      <div className="flex gap-2 bg-surface-bg p-1 rounded-xl border border-surface-border">
+                      <div className="flex gap-2 bg-surface-subtle p-1 rounded-xl border border-surface-border">
                         {[true, false].map(v => (
-                          <button key={v ? 'y' : 'n'} onClick={() => !isViewOnly && setHeader({...header, satisfaction_has_record: v})} className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${header.satisfaction_has_record === v ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-muted hover:bg-white'}`} disabled={isViewOnly}>{v ? 'SIM' : 'NÃO'}</button>
+                          <button key={v ? 'y' : 'n'} onClick={() => !isViewOnly && setHeader({...header, satisfaction_has_record: v})} className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${header.satisfaction_has_record === v ? 'bg-brand-primary text-brand-on-primary shadow-sm' : 'text-brand-muted hover:bg-surface-card'}`} disabled={isViewOnly}>{v ? 'SIM' : 'NÃO'}</button>
                         ))}
                       </div>
                     </div>
@@ -474,12 +474,12 @@ export default function MonitoriaForm({
                   </Card>
 
                   {header.satisfaction_result === 'Negativa' && (
-                    <Card className="bg-red-50/30 border-red-100 p-8 space-y-6">
+                    <Card className="bg-error/5 border-error/20 p-8 space-y-6">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-bold text-error">Conseguimos contato com o cliente?</p>
-                        <div className="flex gap-2 bg-white p-1 rounded-xl border border-red-100">
+                        <div className="flex gap-2 bg-surface-card p-1 rounded-xl border border-error/10">
                           {[true, false].map(v => (
-                            <button key={v ? 'y' : 'n'} onClick={() => !isViewOnly && setHeader({...header, client_contact_success: v})} className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${header.client_contact_success === v ? 'bg-error text-white shadow-sm' : 'text-brand-muted hover:bg-red-50'}`} disabled={isViewOnly}>{v ? 'SIM' : 'NÃO'}</button>
+                            <button key={v ? 'y' : 'n'} onClick={() => !isViewOnly && setHeader({...header, client_contact_success: v})} className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${header.client_contact_success === v ? 'bg-error text-white shadow-sm' : 'text-brand-muted hover:bg-surface-subtle'}`} disabled={isViewOnly}>{v ? 'SIM' : 'NÃO'}</button>
                           ))}
                         </div>
                       </div>
@@ -489,7 +489,7 @@ export default function MonitoriaForm({
                           value={header.client_contact_log} 
                           onChange={e => setHeader({...header, client_contact_log: e.target.value})} 
                           disabled={isViewOnly}
-                          className="w-full bg-white border border-red-100 rounded-2xl p-4 text-sm font-medium min-h-[100px] focus:border-error focus:outline-none" 
+                          className="w-full bg-surface-card border border-error/20 rounded-2xl p-4 text-sm font-medium min-h-[100px] focus:border-error focus:outline-none" 
                           placeholder="Descreva como foi o contato ou o motivo do insucesso..."
                         />
                       </div>
@@ -547,7 +547,7 @@ export default function MonitoriaForm({
                   </div>
                   <div className="grid grid-cols-1 gap-4">
                     {section.questions.map(q => (
-                      <Card key={q.id} className={`bg-white hover:border-brand-accent transition-all group ${q.is_critical && scores[q.id] === 'NAO' ? 'border-error ring-4 ring-error/5' : ''}`}>
+                      <Card key={q.id} className={`bg-surface-card hover:border-brand-accent transition-all group ${q.is_critical && scores[q.id] === 'NAO' ? 'border-error ring-4 ring-error/5' : ''}`}>
                         <div className="flex flex-col md:flex-row justify-between gap-6">
                           <div className="flex-1">
                             <div className="flex items-start gap-3">
@@ -562,13 +562,13 @@ export default function MonitoriaForm({
                               </span>
                             </div>
                           </div>
-                          <div className="flex gap-1 bg-surface-bg p-1 rounded-2xl h-fit border border-surface-border">
+                          <div className="flex gap-1 bg-surface-subtle p-1 rounded-2xl h-fit border border-surface-border">
                             {(['SIM', 'NAO', 'NA'] as const).map(opt => (
-                              <button key={opt} onClick={() => !isViewOnly && setScores({...scores, [q.id]: opt})} className={`px-5 py-2 rounded-xl text-xs font-black transition-all ${scores[q.id] === opt ? (opt === 'NAO' && q.is_critical ? 'bg-error text-white shadow-premium' : 'bg-brand-primary text-white shadow-premium') : 'text-brand-muted hover:bg-white'}`} disabled={isViewOnly}>{opt}</button>
+                              <button key={opt} onClick={() => !isViewOnly && setScores({...scores, [q.id]: opt})} className={`px-5 py-2 rounded-xl text-xs font-black transition-all ${scores[q.id] === opt ? (opt === 'NAO' && q.is_critical ? 'bg-error text-white shadow-premium' : 'bg-brand-primary text-brand-on-primary shadow-premium') : 'text-brand-muted hover:bg-surface-card'}`} disabled={isViewOnly}>{opt}</button>
                             ))}
                           </div>
                         </div>
-                        <textarea value={observations[q.id] || ''} onChange={e => !isViewOnly && setObservations({...observations, [q.id]: e.target.value})} placeholder="Adicionar observação específica para este item..." className="w-full mt-4 bg-surface-bg border border-surface-border rounded-xl p-4 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all" disabled={isViewOnly} />
+                        <textarea value={observations[q.id] || ''} onChange={e => !isViewOnly && setObservations({...observations, [q.id]: e.target.value})} placeholder="Adicionar observação específica para este item..." className="w-full mt-4 bg-surface-subtle border border-surface-border rounded-xl p-4 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all" disabled={isViewOnly} />
                       </Card>
                     ))}
                   </div>
@@ -581,12 +581,12 @@ export default function MonitoriaForm({
                   <div className="grid grid-cols-1 gap-6">
                     {selectedForm.critical_errors.map(ce => (
                       <div key={ce.id} className="space-y-3">
-                        <label className={`flex items-center gap-4 p-5 rounded-[24px] border-2 transition-all cursor-pointer ${criticalErrors[ce.id] ? 'bg-red-50 border-error' : 'bg-white border-surface-border hover:border-error/30'}`}>
+                        <label className={`flex items-center gap-4 p-5 rounded-[24px] border-2 transition-all cursor-pointer ${criticalErrors[ce.id] ? 'bg-error/5 border-error' : 'bg-surface-card border-surface-border hover:border-error/30'}`}>
                           <input type="checkbox" checked={!!criticalErrors[ce.id]} onChange={e => !isViewOnly && setCriticalErrors({...criticalErrors, [ce.id]: e.target.checked})} disabled={isViewOnly} className="w-6 h-6 rounded-lg text-error focus:ring-error" />
                           <span className="text-sm font-black text-brand-primary uppercase tracking-tight">{ce.text}</span>
                         </label>
                         {criticalErrors[ce.id] && (
-                          <textarea value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa técnica obrigatória para a aplicação deste erro crítico..." className="w-full border-error/20 border-2 rounded-2xl p-4 text-sm font-medium focus:border-error focus:outline-none bg-red-50/20" disabled={isViewOnly} />
+                          <textarea value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa técnica obrigatória para a aplicação deste erro crítico..." className="w-full border-error/20 border-2 rounded-2xl p-4 text-sm font-medium focus:border-error focus:outline-none bg-error/5" disabled={isViewOnly} />
                         )}
                       </div>
                     ))}
@@ -604,15 +604,15 @@ export default function MonitoriaForm({
                   value={header.evaluator_note} 
                   onChange={e => setHeader({...header, evaluator_note: e.target.value})} 
                   disabled={isViewOnly} 
-                  className="w-full bg-white border border-surface-border rounded-[24px] p-8 text-sm font-medium min-h-[200px] focus:border-brand-accent focus:outline-none shadow-premium-sm" 
+                  className="w-full bg-surface-card border border-surface-border rounded-[24px] p-8 text-sm font-medium min-h-[200px] focus:border-brand-accent focus:outline-none shadow-premium-sm" 
                   placeholder="Escreva aqui as observações gerais da auditoria..." 
                 />
               </div>
 
               {isReevaluating && (
-                <Card className="bg-brand-subtle border-brand-highlight p-6">
+                <Card className="bg-brand-subtle/30 border-brand-highlight/20 p-6">
                   <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3">Justificativa da Reavaliação *</p>
-                  <textarea value={header.reevaluation_justification} onChange={e => setHeader({...header, reevaluation_justification: e.target.value})} className="w-full bg-white border border-surface-border rounded-2xl p-4 text-sm font-medium focus:border-brand-accent focus:outline-none" placeholder="Explique por que os itens foram alterados..." />
+                  <textarea value={header.reevaluation_justification} onChange={e => setHeader({...header, reevaluation_justification: e.target.value})} className="w-full bg-surface-card border border-surface-border rounded-2xl p-4 text-sm font-medium focus:border-brand-accent focus:outline-none" placeholder="Explique por que os itens foram alterados..." />
                 </Card>
               )}
 
@@ -660,7 +660,7 @@ export default function MonitoriaForm({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-8 bg-white border-t border-surface-border flex items-center justify-between">
+        <div className="p-8 bg-surface-card border-t border-surface-border flex items-center justify-between">
           <Button variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4" />}>
             Voltar
           </Button>

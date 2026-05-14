@@ -5,8 +5,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase, mockDb } from './lib/supabase';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, Search, Plus, User as UserIcon, Clock } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { format as formatDate } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
 import { User } from './types';
 
@@ -16,6 +18,8 @@ import MonitoriaList from './components/MonitoriaList';
 import MonitoriaForm from './components/MonitoriaForm';
 import AdminPanel from './components/AdminPanel';
 
+type AuthView = 'login' | 'request-access' | 'pending' | 'change-password' | 'forgot-password' | 'setup-password';
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userData, setUserData] = useState<User | null>(null);
@@ -23,161 +27,71 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'monitorias' | 'admin'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [authView, setAuthView] = useState<'login' | 'request-access' | 'pending' | 'change-password' | 'forgot-password' | 'setup-password'>('login');
+  const [authView, setAuthView] = useState<AuthView>('login');
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('qualitrack_theme') === 'dark');
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('qualitrack_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('qualitrack_theme', 'light');
+    }
+  }, [isDarkMode]);
+
   const [credentials, setCredentials] = useState({ email: '', password: '' });
   const [requestData, setRequestData] = useState({ name: '', email: '' });
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetEmail, setResetEmail] = useState('');
-  const [resetToken, setResetToken] = useState<string | null>(null);
   const [isExistingRequest, setIsExistingRequest] = useState(false);
-  const [monitoriaRefreshKey, setMonitoriaRefreshKey] = useState(0);
 
-  // Ref to block auto-login during password recovery flow
   const isPasswordRecoveryRef = React.useRef(false);
-
   const isMockMode = !supabase;
 
-  // ... (keep existing effects and handlers)
-
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const tempPassword = Math.random().toString(36).substr(2, 6);
-      if (isMockMode) {
-        const { data: users } = await mockDb.get('users');
-        const user = users.find((u: any) => u.email.toLowerCase() === resetEmail.toLowerCase());
-        if (user) {
-          await mockDb.update('users', user.id, { password: tempPassword, must_change_password: true });
-          console.log(`[SIMULAÇÃO E-MAIL] Para: ${resetEmail} - Reset de Senha - Nova Senha: ${tempPassword}`);
-          toast.success('Senha provisória enviada para seu e-mail!');
-          setAuthView('login');
-        } else {
-          toast.error('E-mail não cadastrado.');
-        }
-      } else {
-        const { error } = await supabase!.auth.resetPasswordForEmail(resetEmail.toLowerCase(), {
-          redirectTo: window.location.origin, // Supabase redirecionará com o hash #access_token=...&type=recovery
-        });
-        
-        if (error) {
-          throw new Error('Falha ao enviar e-mail de recuperação: ' + error.message);
-        }
-
-        toast.success('E-mail enviado! Verifique sua caixa de entrada com o link seguro.', {
-          duration: 5000,
-        });
-        setAuthView('login');
-      }
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao processar solicitação.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSetupPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword.length < 6) return toast.error('A senha deve ter pelo menos 6 caracteres.');
-    if (newPassword !== confirmPassword) return toast.error('As senhas não coincidem.');
-    
-    setLoading(true);
-    try {
-      if (!isMockMode && supabase) {
-        // Se a gente chegou aqui via link de recuperação, o Supabase já abriu uma sessão
-        // Tudo o que precisamos fazer é chamar o updateUser com a nova senha
-        const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-        
-        if (updateError) throw updateError;
-
-        // Atualizar também na tabela de usuários caso tenha a flag must_change_password
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await supabase.from('users').update({ must_change_password: false }).eq('id', user.id);
-        }
-
-        toast.success('Senha definida com sucesso! Você já pode entrar.');
-        
-        setNewPassword('');
-        setConfirmPassword('');
-        setAuthView('login');
-        
-        // Remove o token da URL para não entrar em loop
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-    } catch (e: any) {
-      console.error(e);
-      toast.error('Erro ao definir senha: ' + (e.message || 'Erro desconhecido'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // --- Auth Lifecycle ---
   useEffect(() => {
-    // Failsafe: if the app is still loading after 10 seconds, force show login
     const initializationTimeout = setTimeout(() => {
-      if (loading) {
-        console.warn('[Auth] Initialization timeout reached. Forcing login screen.');
-        setLoading(false);
-        setAuthView('login');
-      }
+      setLoading(false);
     }, 10000);
 
     if (isMockMode) {
-      // Mock mode: restore session from localStorage
       const savedUser = localStorage.getItem('qualitrack_mock_user');
       if (savedUser) {
         try {
           const user = JSON.parse(savedUser);
-          setCurrentUser(user);
           setUserData(user);
-        } catch (e) { /* ignore */ }
+          setCurrentUser({ email: user.email });
+        } catch (e) {}
       }
       setLoading(false);
       clearTimeout(initializationTimeout);
       return;
     }
 
-    // Supabase mode:
     const hash = window.location.hash;
-    if (hash) {
-      if (hash.includes('error=access_denied') && hash.includes('otp_expired')) {
-        toast.error('O link de recuperação expirou ou já foi usado. Solicite um novo.');
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } else if (hash.includes('type=recovery') || hash.includes('type=invite')) {
-        isPasswordRecoveryRef.current = true;
-        setAuthView('change-password');
-        setLoading(false);
-      }
+    if (hash && (hash.includes('type=recovery') || hash.includes('type=invite'))) {
+      isPasswordRecoveryRef.current = true;
+      setAuthView('change-password');
+      setLoading(false);
     }
 
     const { data: { subscription } } = supabase!.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] event:', event, '| session:', !!session, '| recoveryRef:', isPasswordRecoveryRef.current);
-
       if (event === 'PASSWORD_RECOVERY') {
         isPasswordRecoveryRef.current = true;
         setAuthView('change-password');
-        setLoading(false);
-        clearTimeout(initializationTimeout);
       } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-        if (isPasswordRecoveryRef.current) {
-          setLoading(false);
-          clearTimeout(initializationTimeout);
-        } else if (session) {
+        if (!isPasswordRecoveryRef.current && session) {
           await handleUserSession(session.user);
-          setLoading(false); // Garante que o loading pare após processar a sessão
-          clearTimeout(initializationTimeout);
-        } else {
-          setLoading(false);
-          clearTimeout(initializationTimeout);
         }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setUserData(null);
-        setLoading(false);
-        clearTimeout(initializationTimeout);
+        setAuthView('login');
       }
+      setLoading(false);
+      clearTimeout(initializationTimeout);
     });
 
     return () => {
@@ -186,64 +100,22 @@ export default function App() {
     };
   }, []);
 
-  // Inactivity auto-logout: 2 hours
-  const INACTIVITY_TIMEOUT_MS = 2 * 60 * 60 * 1000;
-  useEffect(() => {
-    if (!currentUser) return;
-    let timer: ReturnType<typeof setTimeout>;
-    const resetTimer = () => {
-      clearTimeout(timer);
-      timer = setTimeout(async () => {
-        toast.info('Sessão encerrada por inatividade. Faça login novamente.');
-        if (!isMockMode && supabase) await supabase.auth.signOut();
-        localStorage.removeItem('qualitrack_mock_user');
-        setCurrentUser(null);
-        setUserData(null);
-        setAuthView('login');
-      }, INACTIVITY_TIMEOUT_MS);
-    };
-    const events = ['click', 'mousemove', 'keydown', 'scroll', 'touchstart'] as const;
-    events.forEach(ev => window.addEventListener(ev, resetTimer, { passive: true }));
-    resetTimer();
-    return () => {
-      clearTimeout(timer);
-      events.forEach(ev => window.removeEventListener(ev, resetTimer));
-    };
-  }, [currentUser]);
-
   const handleUserSession = async (user: any) => {
     try {
       if (isMockMode) {
         const { data } = await mockDb.get('users');
         const dbUser = data.find((u: any) => u.email === user.email && u.active);
         if (dbUser) {
-          if (dbUser.must_change_password) {
-            isPasswordRecoveryRef.current = true;
-            setAuthView('change-password');
-            setUserData(dbUser);
-          } else {
-            setUserData(dbUser);
-            setCurrentUser(user);
-            localStorage.setItem('qualitrack_mock_user', JSON.stringify(dbUser));
-          }
-        } else {
-          setAuthView('login');
+          setUserData(dbUser);
+          setCurrentUser(user);
+          localStorage.setItem('qualitrack_mock_user', JSON.stringify(dbUser));
         }
       } else {
         const { data, error } = await supabase!.from('users').select('*').eq('email', user.email).single();
         if (data && data.active) {
-          if (data.must_change_password) {
-            isPasswordRecoveryRef.current = true;
-            setAuthView('change-password');
-            setUserData(data);
-          } else {
-            setUserData(data);
-            setCurrentUser(user);
-          }
+          setUserData(data);
+          setCurrentUser(user);
         } else if (error && error.code === 'PGRST116') {
-          // User not found in database even if they have an Auth session
-          // This can happen if a user is deleted from the table but session remains.
-          // Force sign out to clean up the state.
           await supabase!.auth.signOut();
           setAuthView('login');
         } else {
@@ -251,11 +123,8 @@ export default function App() {
           setRequestData({ name: user.name || '', email: user.email });
         }
       }
-    } catch (e: any) {
-      console.error('[Auth] Error handling user session:', e);
-      toast.error('Erro ao processar sessão. Tente logar novamente.');
-      if (!isMockMode) await supabase!.auth.signOut();
-      setAuthView('login');
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
@@ -275,11 +144,6 @@ export default function App() {
 
         if (user) {
           if (!user.active) return toast.error('Esta conta está desativada.');
-          if (user.must_change_password) {
-            setUserData(user);
-            setAuthView('change-password');
-            return;
-          }
           setCurrentUser(user);
           setUserData(user);
           setActiveTab('dashboard');
@@ -289,24 +153,47 @@ export default function App() {
           toast.error('E-mail ou senha incorretos.');
         }
       } else {
-        // Login Seguro usando Supabase Auth (GoTrue)
-        const { data, error } = await supabase!.auth.signInWithPassword({
+        const { error } = await supabase!.auth.signInWithPassword({
           email: emailLower,
           password: credentials.password
         });
-
-        if (error || !data.user) {
-          toast.error('E-mail ou senha incorretos.');
-          return;
-        }
-
-        // A sessão agora foi criada pelo Supabase Auth.
-        // O restante (buscar dados da tabela users e setar currentUser) será feito automaticamente
-        // pelo onAuthStateChange que definimos no useEffect.
+        if (error) throw error;
         toast.success('Login realizado com sucesso!');
       }
     } catch (e: any) {
       toast.error(e.message || 'Erro ao realizar login.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setCurrentUser(null);
+    setUserData(null);
+    setAuthView('login');
+    localStorage.removeItem('qualitrack_mock_user');
+    if (!isMockMode && supabase) {
+      supabase.auth.signOut().catch(console.error);
+    }
+    toast.success('Sessão encerrada.');
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (isMockMode) {
+        toast.success('Funcionalidade simulada no modo Mock.');
+      } else {
+        const { error } = await supabase!.auth.resetPasswordForEmail(resetEmail.toLowerCase(), {
+          redirectTo: window.location.origin,
+        });
+        if (error) throw error;
+        toast.success('E-mail de recuperação enviado!');
+        setAuthView('login');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao processar solicitação.');
     } finally {
       setLoading(false);
     }
@@ -319,53 +206,21 @@ export default function App() {
     setLoading(true);
     try {
       if (isMockMode) {
-        if (!userData?.id) throw new Error('Sessão expirada. Faça login novamente.');
+        if (!userData?.id) throw new Error('Sessão expirada.');
         await mockDb.update('users', userData.id, { password: newPassword, must_change_password: false });
-        localStorage.removeItem('qualitrack_mock_user');
-        toast.success('Senha definida! Faça login com sua nova senha.');
-        setNewPassword('');
-        setConfirmPassword('');
-        setCurrentUser(null);
-        setUserData(null);
-        setAuthView('login');
+        toast.success('Senha atualizada!');
+        handleLogout();
       } else {
-        // 1. Update password in Supabase Auth (GoTrue)
-        const { error: authError } = await supabase!.auth.updateUser({ password: newPassword });
-        if (authError) throw authError;
-
-        // 2. Update must_change_password flag
-        // Use userData.email if available (invite flow sets userData via handleUserSession)
-        // Fall back to auth.getUser() only for recovery flow where userData is null
-        const emailToUpdate = userData?.email;
-        if (emailToUpdate) {
-          await supabase!.from('users').update({ must_change_password: false }).eq('email', emailToUpdate);
-        } else {
-          // Recovery flow fallback
-          const { data: { user: authUser } } = await supabase!.auth.getUser();
-          if (authUser?.email) {
-            await supabase!.from('users').update({ must_change_password: false }).eq('email', authUser.email);
-          }
-        }
-
-        // 3. Clear URL hash so F5 goes to login, not back to change-password
+        const { error } = await supabase!.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+        await supabase!.from('users').update({ must_change_password: false }).eq('email', userData?.email);
         window.history.replaceState({}, document.title, window.location.pathname);
-
-        // 4. Clear all UI state BEFORE signOut — prevents spinner hanging if recovery session blocks
         isPasswordRecoveryRef.current = false;
-        setNewPassword('');
-        setConfirmPassword('');
-        setCurrentUser(null);
-        setUserData(null);
-        setLoading(false);
-        setAuthView('login');
-        toast.success('Senha definida! Faça login com sua nova senha.');
-
-        // 5. Sign out in background (fire and forget — do NOT await)
-        supabase!.auth.signOut().catch(console.error);
-        return; // loading already cleared above
+        handleLogout();
+        toast.success('Senha definida com sucesso!');
       }
     } catch (e: any) {
-      toast.error('Erro ao atualizar senha: ' + (e?.message || 'Erro desconhecido'));
+      toast.error(e.message || 'Erro ao atualizar senha.');
     } finally {
       setLoading(false);
     }
@@ -374,46 +229,17 @@ export default function App() {
   const handleRequestAccess = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    if (!requestData.email || !requestData.name) return;
-    setLoading(true);
     try {
-      const emailLower = requestData.email.toLowerCase();
-      
-      if (!isMockMode && supabase) {
-        // 1. Verificar se já é um usuário ATIVO (ignora desativados)
-        const { data: existingUsers } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', emailLower)
-          .eq('active', true);
-
-        if (existingUsers && existingUsers.length > 0) {
-          toast.info('Este e-mail já possui um cadastro ativo.');
-          setAuthView('login');
-          return;
-        }
-
-        // 2. Verificar se já tem uma solicitação pendente
-        const { data: existingReqs } = await supabase
-          .from('access_requests')
-          .select('id')
-          .eq('email', emailLower)
-          .eq('status', 'pending');
-
-        if (existingReqs && existingReqs.length > 0) {
-          setIsExistingRequest(true);
-          setAuthView('pending');
-          return;
-        }
-
+      if (isMockMode) {
+        toast.success('Solicitação simulada enviada!');
+        setAuthView('pending');
+      } else {
         const { error } = await supabase.from('access_requests').insert([
-          { name: requestData.name, email: emailLower, status: 'pending' }
+          { name: requestData.name, email: requestData.email.toLowerCase(), status: 'pending' }
         ]);
         if (error) throw error;
-        setIsExistingRequest(false);
+        setAuthView('pending');
       }
-      toast.success('Solicitação enviada com sucesso!');
-      setAuthView('pending');
     } catch (e: any) {
       toast.error('Erro ao enviar solicitação.');
     } finally {
@@ -421,284 +247,109 @@ export default function App() {
     }
   };
 
-  const handleLogout = async () => {
-    // 1. Limpar estado local IMEDIATAMENTE para garantir que a UI mude
-    setCurrentUser(null);
-    setUserData(null);
-    setAuthView('login');
-    localStorage.removeItem('qualitrack_mock_user');
-    
-    // 2. Tentar deslogar do Supabase em segundo plano
-    try {
-      if (!isMockMode && supabase) {
-        // Não damos 'await' aqui para não travar a UI se a rede estiver lenta
-        supabase.auth.signOut().catch(console.error);
-      }
-      toast.success('Sessão encerrada.');
-    } catch (e) {
-      console.error('Erro ao encerrar sessão no servidor:', e);
-    }
-  };
-
   const renderContent = () => {
     if (loading) {
       return (
-        <div className="h-screen w-screen flex items-center justify-center bg-[#F9F9F6]">
-          <motion.div 
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-12 h-12 border-4 border-[#2D3A3A] border-t-transparent rounded-full"
-          />
+        <div className="h-screen w-screen flex items-center justify-center bg-surface-bg">
+          <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full" />
         </div>
       );
     }
 
     if (!currentUser) {
       return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#F9F9F6] p-6 text-[#3D4035]">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="max-w-md w-full text-center space-y-8"
-          >
-          <div className="space-y-4">
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#F9F9F6] p-6 text-[#2D3A3A] light">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full text-center space-y-8">
             <h1 className="text-5xl font-bold tracking-tight text-[#2D3A3A]">QualiTrack</h1>
-            <p className="text-[#7A7D71] text-lg">Auditoria de Qualidade Inteligente</p>
-          </div>
-
-          <div className="bg-white p-8 rounded-[40px] border border-[#E2E4D8] shadow-sm min-h-[400px] flex flex-col justify-center">
-            <AnimatePresence mode="wait">
-              {authView === 'login' && (
-                <motion.div key="login" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6">
-                  <div className="text-left space-y-4">
-                    <h3 className="text-xl font-bold text-[#2D3A3A] text-center mb-6">Acesse sua Conta</h3>
-                    <form onSubmit={handleLogin} className="space-y-4">
+            <div className="bg-white p-8 rounded-[40px] border border-[#E2E4D8] shadow-premium min-h-[400px] flex flex-col justify-center">
+              <AnimatePresence mode="wait">
+                {authView === 'login' && (
+                  <motion.div key="login" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6">
+                    <h3 className="text-xl font-bold text-center mb-6">Acesse sua Conta</h3>
+                    <form onSubmit={handleLogin} className="space-y-4 text-left">
                       <div>
-                        <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">E-mail corporativo</label>
-                        <input 
-                          type="email" 
-                          required
-                          className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none"
-                          value={credentials.email}
-                          onChange={e => setCredentials({...credentials, email: e.target.value})}
-                          placeholder="seu@email.com"
-                        />
+                        <label className="block text-xs font-semibold text-[#7A7D71] uppercase mb-2">E-mail corporativo</label>
+                        <input type="email" required className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#8E9B7B] focus:outline-none text-[#2D3A3A]" value={credentials.email} onChange={e => setCredentials({...credentials, email: e.target.value})} />
                       </div>
                       <div>
                         <div className="flex justify-between mb-2">
-                          <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Senha</label>
-                          <button type="button" onClick={() => setAuthView('forgot-password')} className="text-[10px] font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors">Esqueci minha senha</button>
+                          <label className="block text-xs font-semibold text-[#7A7D71] uppercase mb-2">Senha</label>
+                          <button type="button" onClick={() => setAuthView('forgot-password')} className="text-[10px] font-bold text-[#8E9B7B] hover:text-[#2D3A3A] transition-colors">Esqueci a senha</button>
                         </div>
-                        <input 
-                          type="password" 
-                          required
-                          className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none"
-                          value={credentials.password}
-                          onChange={e => setCredentials({...credentials, password: e.target.value})}
-                          placeholder="••••••••"
-                        />
+                        <input type="password" required className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#8E9B7B] focus:outline-none text-[#2D3A3A]" value={credentials.password} onChange={e => setCredentials({...credentials, password: e.target.value})} />
                       </div>
-                      <button className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all">
-                        Entrar na Plataforma
-                      </button>
+                      <button className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-opacity-90 transition-all">Entrar</button>
                     </form>
-                    <div className="pt-4 text-center">
-                      <button 
-                        onClick={() => setAuthView('request-access')}
-                        className="text-sm font-bold text-[#A7C0A5] hover:text-[#2D3A3A] transition-colors"
-                      >
-                        Não tem acesso? Solicite aqui
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+                    <button onClick={() => setAuthView('request-access')} className="text-sm font-bold text-[#8E9B7B] hover:text-[#2D3A3A]">Não tem acesso? Solicite aqui</button>
+                  </motion.div>
+                )}
 
-              {authView === 'request-access' && (
-                <motion.div key="request" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
-                  <div className="text-center mb-6">
-                    <h3 className="text-xl font-bold text-[#2D3A3A]">Solicitar Novo Acesso</h3>
-                    <p className="text-sm text-[#7A7D71]">Preencha os dados abaixo para análise.</p>
-                  </div>
-                  <form onSubmit={handleRequestAccess} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nome completo</label>
-                      <input 
-                        type="text" 
-                        required
-                        className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none"
-                        value={requestData.name}
-                        onChange={e => setRequestData({...requestData, name: e.target.value})}
-                        placeholder="Ex: João Silva"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">E-mail corporativo</label>
-                      <input 
-                        type="email" 
-                        required
-                        className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none"
-                        value={requestData.email}
-                        onChange={e => setRequestData({...requestData, email: e.target.value})}
-                        placeholder="seu@email.com"
-                      />
-                    </div>
-                    <button className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all">
-                      Enviar para Análise
-                    </button>
-                    <button type="button" onClick={() => setAuthView('login')} className="w-full text-sm font-bold text-[#7A7D71] hover:text-[#2D3A3A] transition-colors">
-                      Voltar para Login
-                    </button>
-                  </form>
-                </motion.div>
-              )}
+                {authView === 'request-access' && (
+                  <motion.div key="request" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
+                    <h3 className="text-xl font-bold text-center mb-6">Solicitar Novo Acesso</h3>
+                    <form onSubmit={handleRequestAccess} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Nome completo</label>
+                        <input type="text" required className="w-full bg-surface-bg border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none" value={requestData.name} onChange={e => setRequestData({...requestData, name: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">E-mail corporativo</label>
+                        <input type="email" required className="w-full bg-surface-bg border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none" value={requestData.email} onChange={e => setRequestData({...requestData, email: e.target.value})} />
+                      </div>
+                      <button className="w-full bg-brand-primary text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-opacity-90 transition-all">Enviar Solicitação</button>
+                      <button type="button" onClick={() => setAuthView('login')} className="w-full text-sm font-bold text-brand-muted">Voltar para Login</button>
+                    </form>
+                  </motion.div>
+                )}
 
-              {authView === 'pending' && (
-                <motion.div key="pending" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 py-4">
-                  <div className="w-16 h-16 bg-[#F0F1E8] rounded-full flex items-center justify-center mx-auto mb-4">
-                    {isExistingRequest ? (
-                       <Clock className="w-8 h-8 text-orange-400" />
-                    ) : (
-                       <Settings className="w-8 h-8 text-[#A7C0A5] animate-spin" />
-                    )}
-                  </div>
-                  <h3 className="text-xl font-bold text-[#2D3A3A]">
-                    {isExistingRequest ? 'Solicitação em Análise' : 'Solicitação Enviada'}
-                  </h3>
-                  <p className="text-sm text-[#7A7D71]">
-                    {isExistingRequest 
-                      ? 'Identificamos que você já possui uma solicitação pendente para este e-mail. Por favor, aguarde a aprovação do administrador.'
-                      : 'Sua solicitação foi enviada para o administrador. Você receberá um e-mail assim que for aprovado.'
-                    }
-                  </p>
-                  <button onClick={() => setAuthView('login')} className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all">
-                    Voltar para o Início
-                  </button>
-                </motion.div>
-              )}
+                {authView === 'pending' && (
+                  <motion.div key="pending" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 py-4 text-center">
+                    <div className="w-16 h-16 bg-surface-subtle rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Clock className="w-8 h-8 text-brand-accent" />
+                    </div>
+                    <h3 className="text-xl font-bold">Solicitação Enviada</h3>
+                    <p className="text-sm text-brand-muted">Aguarde a aprovação do administrador. Você receberá um e-mail em breve.</p>
+                    <button onClick={() => setAuthView('login')} className="w-full bg-brand-primary text-white py-4 rounded-2xl font-bold shadow-lg transition-all">Voltar para o Início</button>
+                  </motion.div>
+                )}
 
-              {authView === 'change-password' && (
-                <motion.div key="change" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
-                  <div className="text-center mb-6">
-                    <h3 className="text-xl font-bold text-[#2D3A3A]">Defina sua nova senha</h3>
-                    <p className="text-sm text-[#7A7D71]">Para sua segurança, crie uma senha de acesso exclusiva.</p>
-                  </div>
-                  <form onSubmit={handleUpdatePassword} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nova senha</label>
-                      <input 
-                        type="password" 
-                        required
-                        className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none"
-                        value={newPassword}
-                        onChange={e => setNewPassword(e.target.value)}
-                        placeholder="Mínimo 6 caracteres"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Confirmar nova senha</label>
-                      <input 
-                        type="password" 
-                        required
-                        className={`w-full bg-[#F9F9F6] border rounded-2xl py-3 px-4 text-sm focus:outline-none transition-colors ${
-                          confirmPassword && confirmPassword !== newPassword 
-                            ? 'border-red-400 focus:border-red-400' 
-                            : 'border-[#E2E4D8] focus:border-[#A7C0A5]'
-                        }`}
-                        value={confirmPassword}
-                        onChange={e => setConfirmPassword(e.target.value)}
-                        placeholder="Repita sua nova senha"
-                      />
-                      {confirmPassword && confirmPassword !== newPassword && (
-                        <p className="text-xs text-red-500 mt-1 font-semibold">As senhas não coincidem</p>
-                      )}
-                    </div>
-                    <button 
-                      className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all disabled:opacity-50"
-                      disabled={loading || (!!confirmPassword && confirmPassword !== newPassword)}
-                    >
-                      {loading ? 'Salvando...' : 'Definir Nova Senha'}
-                    </button>
-                    <button type="button" onClick={handleLogout} className="w-full text-sm font-bold text-[#7A7D71] hover:text-[#2D3A3A] transition-colors mt-2">
-                      Cancelar / Entrar com outra conta
-                    </button>
-                  </form>
-                </motion.div>
-              )}
-              {authView === 'setup-password' && (
-                <motion.div key="setup" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
-                  <div className="text-center mb-6">
-                    <h3 className="text-xl font-bold text-[#2D3A3A]">Definir Nova Senha</h3>
-                    <p className="text-sm text-[#7A7D71]">Escolha uma senha forte para sua conta.</p>
-                  </div>
-                  <form onSubmit={handleSetupPassword} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Nova senha</label>
-                      <input 
-                        type="password" 
-                        required
-                        className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none"
-                        value={newPassword}
-                        onChange={e => setNewPassword(e.target.value)}
-                        placeholder="Mínimo 6 caracteres"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Confirmar senha</label>
-                      <input 
-                        type="password" 
-                        required
-                        className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none"
-                        value={confirmPassword}
-                        onChange={e => setConfirmPassword(e.target.value)}
-                        placeholder="Repita sua nova senha"
-                      />
-                    </div>
-                    <button className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all">
-                      Confirmar e Entrar
-                    </button>
-                    <button type="button" onClick={handleLogout} className="w-full text-sm font-bold text-[#7A7D71] hover:text-[#2D3A3A] transition-colors mt-2">
-                      Sair / Entrar com outra conta
-                    </button>
-                  </form>
-                </motion.div>
-              )}
-              {authView === 'forgot-password' && (
-                <motion.div key="forgot" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
-                  <div className="text-center mb-6">
-                    <h3 className="text-xl font-bold text-[#2D3A3A]">Recuperar Senha</h3>
-                    <p className="text-sm text-[#7A7D71]">Informe seu e-mail cadastrado para receber um link de redefinição.</p>
-                  </div>
-                  <form onSubmit={handleForgotPassword} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">E-mail cadastrado</label>
-                      <input 
-                        type="email" 
-                        required
-                        className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#A7C0A5] focus:outline-none"
-                        value={resetEmail}
-                        onChange={e => setResetEmail(e.target.value)}
-                        placeholder="seu@email.com"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      <button className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all">
-                        Enviar Link de Recuperação
-                      </button>
-                      <button type="button" onClick={() => setAuthView('login')} className="w-full py-4 rounded-2xl font-bold text-[#7A7D71] hover:bg-[#F9F9F6] transition-all">
-                        Voltar para Login
-                      </button>
-                    </div>
-                  </form>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-};
+                {authView === 'change-password' && (
+                  <motion.div key="change" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
+                    <h3 className="text-xl font-bold text-center mb-6">Defina sua nova senha</h3>
+                    <form onSubmit={handleUpdatePassword} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Nova senha</label>
+                        <input type="password" required className="w-full bg-surface-bg border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Confirmar nova senha</label>
+                        <input type="password" required className="w-full bg-surface-bg border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                      </div>
+                      <button className="w-full bg-brand-primary text-white py-4 rounded-2xl font-bold shadow-lg transition-all">Definir Nova Senha</button>
+                    </form>
+                  </motion.div>
+                )}
+
+                {authView === 'forgot-password' && (
+                  <motion.div key="forgot" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
+                    <h3 className="text-xl font-bold text-center mb-6">Recuperar Senha</h3>
+                    <form onSubmit={handleForgotPassword} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">E-mail cadastrado</label>
+                        <input type="email" required className="w-full bg-surface-bg border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none" value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
+                      </div>
+                      <button className="w-full bg-brand-primary text-white py-4 rounded-2xl font-bold shadow-lg transition-all">Enviar Link</button>
+                      <button type="button" onClick={() => setAuthView('login')} className="w-full py-4 text-brand-muted font-bold">Voltar</button>
+                    </form>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        </div>
+      );
+    }
+  };
 
   return (
     <>
@@ -714,6 +365,8 @@ export default function App() {
           handleLogout={handleLogout}
           isFormOpen={isFormOpen}
           setIsFormOpen={setIsFormOpen}
+          isDarkMode={isDarkMode}
+          setIsDarkMode={setIsDarkMode}
         />
       ) : (
         renderContent()
@@ -722,10 +375,11 @@ export default function App() {
   );
 }
 
-function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setActiveTab, userData, handleLogout, isFormOpen, setIsFormOpen }: any) {
+function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setActiveTab, userData, handleLogout, isFormOpen, setIsFormOpen, isDarkMode, setIsDarkMode }: any) {
   const [teams, setTeams] = React.useState<any[]>([]);
+  const [showTeamList, setShowTeamList] = React.useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const loadTeams = async () => {
       if (!supabase) {
         const { data } = await mockDb.get('teams');
@@ -741,9 +395,12 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
   const userTeams = teams.filter(t => (userData?.team_ids || []).includes(t.id));
   const teamNames = userTeams.map(t => t.name).join(', ');
 
+  const sidebarStyle = {
+    backgroundColor: `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})`,
+  };
+
   return (
-    <div className="h-screen w-full flex bg-[#F9F9F6] text-[#3D4035] font-sans selection:bg-[#A7C0A5] selection:text-[#2D3A3A] overflow-hidden">
-      {/* Global Monitoria Form Overlay — renders above everything */}
+    <div className="h-screen w-full flex bg-surface-bg text-brand-primary font-sans overflow-hidden">
       <AnimatePresence>
         {isFormOpen && (
           <MonitoriaForm
@@ -753,129 +410,175 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
           />
         )}
       </AnimatePresence>
+
       <motion.aside 
         initial={false}
-        animate={{ width: isSidebarOpen ? 256 : 80 }}
-        className="bg-[#2D3A3A] text-white flex flex-col relative z-20 transition-all"
+        animate={{ width: isSidebarOpen ? 260 : 80 }}
+        style={sidebarStyle}
+        className="text-white flex flex-col relative z-20 transition-all border-r border-white/5"
       >
-        <div className="p-6 flex items-center justify-between overflow-hidden">
-          <AnimatePresence mode="wait">
+        {/* Header / Logo */}
+        <div className="h-20 flex items-center px-6 overflow-hidden">
+          <div className="flex items-center gap-3 whitespace-nowrap">
+            <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-4 h-4 border-2 border-white rounded-[2px]" />
+            </div>
             {isSidebarOpen && (
-              <motion.div 
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="flex items-center gap-3 whitespace-nowrap"
-              >
-                <div className="w-8 h-8 bg-[#A7C0A5] rounded-xl flex items-center justify-center flex-shrink-0">
-                  <div className="w-4 h-4 border-[1.5px] border-white rounded-[2px]" />
-                </div>
-                <h2 className="font-bold text-lg tracking-tight">QualiTrack</h2>
-              </motion.div>
+              <h2 className="font-bold text-lg tracking-tight">QualiTrack</h2>
             )}
-          </AnimatePresence>
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-1 hover:bg-white/10 rounded-lg transition-colors ml-auto flex-shrink-0 text-[#A7C0A5]"
-          >
-            <Layout className="w-5 h-5" />
-          </button>
+          </div>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 mt-4">
-          <NavItem 
-            icon={<DashboardIcon className="w-5 h-5" />} 
-            label="Dashboard" 
-            active={activeTab === 'dashboard'} 
-            onClick={() => setActiveTab('dashboard')}
-            isOpen={isSidebarOpen}
-          />
-          <NavItem 
-            icon={<ClipboardCheck className="w-5 h-5" />} 
-            label="Monitorias" 
-            active={activeTab === 'monitorias'} 
-            onClick={() => setActiveTab('monitorias')}
-            isOpen={isSidebarOpen}
-          />
+        {/* Navigation */}
+        <nav className="flex-1 px-3 space-y-1 py-4">
+          <NavItem icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={isSidebarOpen} />
+          <NavItem icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={isSidebarOpen} />
           {userData?.role === 'admin' && (
-            <NavItem 
-              icon={<Settings className="w-5 h-5" />} 
-              label="Configurações" 
-              active={activeTab === 'admin'} 
-              onClick={() => setActiveTab('admin')}
-              isOpen={isSidebarOpen}
-            />
+            <NavItem icon={<Settings className="w-5 h-5" />} label="Configurações" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} isOpen={isSidebarOpen} />
           )}
         </nav>
 
-        <div className={`p-4 mt-auto transition-all ${!isSidebarOpen ? 'px-2' : ''}`}>
-          <div className={`flex items-center p-3 bg-white/5 rounded-2xl border border-white/5 transition-all ${isSidebarOpen ? 'gap-3' : 'flex-col gap-4 px-0 py-4'}`}>
-            {currentUser.photoURL ? (
-              <img src={currentUser.photoURL} className="w-8 h-8 rounded-full border border-white/20 flex-shrink-0" alt="" />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-[#A7C0A5] flex items-center justify-center text-[#2D3A3A] flex-shrink-0">
-                <UserIcon className="w-4 h-4" />
-              </div>
-            )}
-            {isSidebarOpen && (
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold truncate text-white">{userData?.name}</p>
-                <p className="text-[10px] font-semibold tracking-widest text-[#A7C0A5] uppercase opacity-80">{({'admin':'Administrador','qualidade':'Monitor de Qualidade','gestor_qualidade':'Supervisor de Qualidade','gestor_suporte':'Supervisor de Atendimento','suporte':'Agente de Atendimento'} as any)[userData?.role] || userData?.role}</p>
-                {teamNames && (
-                  <p className="text-[9px] font-medium truncate text-white/40 mt-0.5">{teamNames}</p>
-                )}
-              </div>
-            )}
+        {/* Footer Area - CLEAN & MINIMAL */}
+        <div className="p-4 space-y-4 border-t border-white/5">
+          {/* Controls row */}
+          <div className={`flex items-center gap-2 ${isSidebarOpen ? 'justify-start' : 'flex-col'}`}>
             <button 
-              onClick={handleLogout}
-              className={`p-2 hover:bg-white/10 rounded-xl transition-colors text-[#A7C0A5] flex-shrink-0 ${!isSidebarOpen ? 'mt-2' : ''}`}
-              title="Sair do sistema"
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
+              title="Alternar Tema"
             >
-              <LogOut className="w-4 h-4" />
+              {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
+              title="Recolher Menu"
+            >
+              <Layout className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* User Profile - SOLID FLAT */}
+          <div className="relative">
+            <div className={`flex items-center ${isSidebarOpen ? 'gap-3' : 'flex-col gap-3'} p-2 rounded-xl bg-black/10`}>
+              <button 
+                onClick={() => setShowTeamList(!showTeamList)}
+                className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 hover:bg-white/20 transition-all relative"
+              >
+                <UserIcon className="w-5 h-5" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-[#2D3A3A] rounded-full" />
+              </button>
+              
+              {isSidebarOpen && (
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold truncate text-white leading-tight">{userData?.name}</p>
+                  <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5">{userData?.role}</p>
+                </div>
+              )}
+              
+              {isSidebarOpen && (
+                <button 
+                  onClick={handleLogout} 
+                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Team List Popover */}
+            <AnimatePresence>
+              {showTeamList && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute bottom-full left-0 mb-2 w-56 bg-surface-card border border-surface-border rounded-2xl shadow-premium p-3 z-50 text-brand-primary"
+                >
+                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-surface-border">
+                    <Users className="w-4 h-4 text-brand-accent" />
+                    <span className="text-xs font-black uppercase tracking-wider">Suas Equipes</span>
+                  </div>
+                  <div className="space-y-1">
+                    {userTeams.length > 0 ? userTeams.map(t => (
+                      <div key={t.id} className="text-xs py-1.5 px-2 hover:bg-surface-subtle rounded-lg font-bold">
+                        • {t.name}
+                      </div>
+                    )) : (
+                      <div className="text-[10px] text-brand-muted italic p-2">Nenhuma equipe vinculada</div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </motion.aside>
 
-      <main className="flex-1 flex flex-col relative min-w-0 overflow-hidden">
-        <header className="flex-shrink-0 px-8 py-6 flex items-center justify-between min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-surface-bg">
+        <header className="px-8 h-20 flex items-center justify-between border-b border-surface-border/50">
           <div className="min-w-0 flex-1">
-            <h2 className="text-2xl font-black text-brand-primary tracking-tight">
-              {activeTab === 'dashboard' ? (userData?.role === 'suporte' ? 'Visão Geral do Atendimento' : 'Visão Geral da Qualidade') : (activeTab === 'monitorias' ? 'Gestão de Monitorias' : 'Administração')}
-            </h2>
-            <p className="text-brand-muted text-sm font-medium mt-0.5">Conectado como <span className="text-brand-primary font-bold">{userData?.name}</span></p>
+            <div className="flex flex-col">
+              <h2 className="text-xl font-black text-brand-primary tracking-tight">
+                {activeTab === 'dashboard' 
+                  ? `Olá, ${userData?.name.split(' ')[0]}! 👋` 
+                  : activeTab === 'monitorias' 
+                    ? 'Gestão de Monitorias' 
+                    : 'Configurações do Sistema'}
+              </h2>
+              <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest mt-0.5">
+                {activeTab === 'dashboard' 
+                  ? (userData?.role === 'suporte' 
+                      ? 'Acompanhe seu desempenho e evolução individual' 
+                      : userData?.role === 'qualidade' 
+                        ? 'Gestão de produtividade e análise de qualidade'
+                        : 'Visão executiva da performance e KPIs globais')
+                  : activeTab === 'monitorias' 
+                    ? 'Fluxo de auditoria, contestações e reavaliações' 
+                    : 'Parâmetros de qualidade, SLA e horários comerciais'}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-4 flex-shrink-0 ml-4">
-            {(activeTab === 'monitorias' || activeTab === 'dashboard') && userData?.role === 'qualidade' && (
-              <button 
-                onClick={() => setIsFormOpen(true)}
-                className="bg-[#2D3A3A] text-white px-6 py-2 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all flex items-center gap-2 whitespace-nowrap"
-              >
-                <Plus className="w-4 h-4" /> Nova Monitoria
-              </button>
-            )}
+          
+          <div className="flex items-center gap-6">
+            <div className="hidden xl:flex flex-col items-end">
+              <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">{formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span className="text-[9px] font-bold text-brand-primary uppercase tracking-tight">Sistema Online</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {userData?.role === 'qualidade' && (
+                <button 
+                  onClick={() => setIsFormOpen(true)} 
+                  className="bg-brand-primary text-brand-on-primary h-10 px-5 rounded-xl text-xs font-black shadow-premium hover:opacity-90 transition-all flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Nova Monitoria
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto px-6 pb-8 pt-2 min-w-0">
+        <div className="flex-1 overflow-auto px-8 pb-8 pt-6 min-w-0">
           <AnimatePresence mode="wait">
-            <>
-              {activeTab === 'dashboard' && (
-                <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <DashboardMain user={userData} />
-                </motion.div>
-              )}
-              {activeTab === 'monitorias' && (
-                <motion.div key="monitorias" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} />
-                </motion.div>
-              )}
-              {activeTab === 'admin' && (
-                <motion.div key="admin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <AdminPanel user={userData} />
-                </motion.div>
-              )}
-            </>
+            {activeTab === 'dashboard' && (
+              <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <DashboardMain user={userData} />
+              </motion.div>
+            )}
+            {activeTab === 'monitorias' && (
+              <motion.div key="monitorias" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} />
+              </motion.div>
+            )}
+            {activeTab === 'admin' && (
+              <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <AdminPanel user={userData} />
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
       </main>
@@ -883,19 +586,29 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
   );
 }
 
-function NavItem({ icon, label, active, onClick, isOpen }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, isOpen: boolean }) {
+function NavItem({ icon, label, active, onClick, isOpen }: any) {
   return (
     <button 
       onClick={onClick}
       className={`
-        w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors font-semibold
-        ${active ? 'bg-[#A7C0A5] text-[#2D3A3A]' : 'text-white hover:bg-white/5'}
+        w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative
+        ${active 
+          ? 'bg-white/10 text-white' 
+          : 'text-white/40 hover:text-white hover:bg-white/5'}
       `}
     >
-      <div className={`flex-shrink-0 ${active ? 'text-[#2D3A3A]' : 'text-[#A7C0A5]'}`}>{icon}</div>
-      {isOpen && <span className="text-sm">{label}</span>}
-      {active && isOpen && <ChevronRight className="w-4 h-4 ml-auto opacity-50" />}
+      {active && (
+        <motion.div 
+          layoutId="active-bar"
+          className="absolute left-0 w-1 h-6 bg-white rounded-full"
+        />
+      )}
+      <div className={`flex-shrink-0 ${active ? 'text-white' : 'text-white/30 group-hover:text-white'}`}>
+        {icon}
+      </div>
+      {isOpen && (
+        <span className="text-sm tracking-tight">{label}</span>
+      )}
     </button>
   );
 }
-

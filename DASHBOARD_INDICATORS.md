@@ -1,73 +1,99 @@
-# 📊 Dicionário de Indicadores do Dashboard - QualiTrack
+# 📊 Dicionário de Indicadores - QualiTrack
 
-Este documento detalha o funcionamento, cálculo e visibilidade de cada indicador presente nos dashboards do sistema, separados por perfil de acesso.
-
----
-
-## 🛠️ Notas Gerais
-- **Filtros Globais:** Todos os indicadores respeitam os filtros de **Data (Início/Fim)**, **Canal**, **Status** e **Formulário** selecionados na barra superior, a menos que indicado o contrário.
-- **Base de Dados:** Os cálculos são realizados em tempo real com base na tabela `monitorias` e `users`.
+Este guia explica o que significa cada número e gráfico que aparece no seu Dashboard, como eles são calculados e quem eles representam.
 
 ---
 
-## 1. Agente de Atendimento (`suporte`)
-Focado na performance individual e benchmarks.
+## 👨‍💻 Perfil: Agente de Atendimento
+*Foco: Resultados individuais e comparação com a média do time.*
 
-| Indicador | Descrição | Regra de Cálculo | Envolvidos / Visibilidade |
-| :--- | :--- | :--- | :--- |
-| **Minha Média** | Nota média pessoal do agente | `Soma das Notas / Total de Monitorias` | Somente dados do próprio agente logado. |
-| **Média das Minhas Equipes** | Performance média das equipes do agente | `Média dos Scores de todos os membros das equipes do agente` | Colegas de equipe do agente. |
-| **Média Global** | Benchmark da empresa | `Média de todos os Scores do sistema no período` | Toda a operação (Empresa). |
-| **Monitorias** | Volume pessoal | `Contagem total de monitorias do agente` | Somente dados do agente. |
-| **Solicitadas (Reav.)** | Volume de contestações | `Total de monitorias onde o agente abriu contestação` | Somente dados do agente. |
-| **Taxa de Reversão** | Eficácia da contestação | `(Contestações Aceitas / Total de Contestações) * 100` | Percentual de vitórias do agente. |
-| **Evolução Comparativa** | Gráfico de tendência | `Média diária do Agente vs Média diária das suas Equipes` | Agente vs Time. |
-| **Meus Ofensores** | Pontos de atenção | `Ranking de critérios com maior frequência de erro` | Somente dados do agente. |
+### 📍 Performance e Benchmarks
+*   **Minha Média:** É a sua nota média pessoal. Somamos todas as suas notas e dividimos pela quantidade de monitorias que você teve.
+*   **Média Equipe:** É a média de todos os agentes que trabalham nas mesmas equipes que você. Serve para você saber se está acima ou abaixo do seu time.
+*   **Média Global:** É a média de toda a empresa (todos os setores e agentes).
+*   **Tendência:** Indica se o seu desempenho está melhorando ou caindo. Compara a média da segunda metade do período com a primeira metade.
 
----
+### 📈 Volumetria e Contestações (Contagem Única por Monitoria)
+*   **Monitorias:** Quantas vezes você foi auditado no período selecionado.
+*   **Total Pendentes:** Quantas monitorias estão paradas aguardando você dar o "Ciente" ou decidir se vai re-contestar.
+*   **Solicitadas:** Quantas monitorias você contestou. (Cada monitoria conta apenas uma vez, mesmo que você escreva várias mensagens).
+*   **Aprovadas:** Quantas das suas monitorias contestadas tiveram a nota alterada (Contestação Procedente).
+*   **Recusadas:** Quantas das suas monitorias contestadas tiveram a nota original mantida (Contestação Improcedente).
+*   **Taxa de Reversão:** Qual a sua porcentagem de "vitórias" nas contestações aprovadas em relação às solicitadas.
 
-## 2. Monitor de Qualidade (`qualidade`)
-Focado na produtividade, assertividade e gestão da qualidade.
-
-| Indicador | Descrição | Regra de Cálculo | Envolvidos / Visibilidade |
-| :--- | :--- | :--- | :--- |
-| **Meu Volume** | Produtividade do auditor | `Contagem de monitorias onde o usuário logado foi o avaliador` | Somente monitorias feitas por ele. |
-| **Nota Média** | Nível de rigor | `Média das notas aplicadas por este monitor` | Reflete o perfil de avaliação dele. |
-| **Pendente Ação** | Gargalo de resposta | `Monitorias em status 'Em Contestação' aguardando resposta` | Apenas o que ele auditou. |
-| **Reav. Aceitas** | Falhas na auditoria | `Monitorias onde a contestação foi aceita (nota alterada)` | Erros de interpretação/aplicação. |
-| **Reav. Recusadas** | Assertividade técnica | `Monitorias onde a nota foi mantida após contestação` | Domínio do processo. |
-| **Volumetria Diária** | Benchmark de produção | `Volume diário do monitor vs Média diária da equipe de monitores` | Monitor vs Colegas de Qualidade. |
-| **Precisão da Qualidade** | Nível de estabilidade | `Monitorias sem alteração vs Monitorias alteradas após reanálise` | Qualidade da entrega do monitor. |
-| **Maiores Ofensores** | Visão da operação | `Ranking global de itens despontuados em todas as monitorias` | Visão macro de problemas da operação. |
+### 📉 Gráficos e Detalhes
+*   **Evolução Comparativa:** Gráfico que mostra a sua linha de score diária vs a linha média da sua equipe.
+*   **Meus Ofensores:** Mostra os critérios onde você mais perdeu pontos. canto maior a barra, mais atenção você deve dar ao item.
 
 ---
 
-## 3. Supervisor de Atendimento (`gestor_suporte`)
-Focado na gestão de times, SLAs e desenvolvimento de pessoas.
+## 🧐 Perfil: Monitor de Qualidade
+*Foco: Produtividade diária e assertividade nas avaliações.*
 
-| Indicador | Descrição | Regra de Cálculo | Envolvidos / Visibilidade |
-| :--- | :--- | :--- | :--- |
-| **Média Equipe** | Performance do time | `Média das notas de todos os agentes vinculados às equipes do gestor` | **Restrito** às equipes dele. |
-| **Pendentes Suporte** | Engajamento/Ciência | `Monitorias concluídas onde o agente ainda não deu o 'Ciente'` | Somente agentes das suas equipes. |
-| **Minhas Ações** | Pendências do gestor | `Monitorias aguardando decisão/aprovação do Supervisor` | Apenas o que depende dele. |
-| **Taxa de Reversão** | Defesa do time | `% de contestações do time que resultaram em mudança de nota` | Eficácia da defesa do time. |
-| **Ranking Agentes** | Meritocracia | `Top 5 Maiores Médias e Top 5 Oportunidades (Abaixo da Meta)` | **Restrito** às equipes dele. |
-| **Aguardando Minha Ação**| SLA de Gestão | `Lista de monitorias paradas no status de aprovação do supervisor` | Foco em fluidez do processo. |
+### 📍 Performance de Auditoria
+*   **Meu Volume:** Total de monitorias que **você** realizou no período.
+*   **Nota Média:** A média das notas que você aplicou. Ajuda a entender se você está sendo muito rigoroso ou muito flexível.
+*   **Pendente Ação:** Quantas contestações de agentes você recebeu e ainda não respondeu (reanálise).
+
+### 🎯 Assertividade (Qualidade do Monitor)
+*   **Reav. Aceitas:** Quantas vezes você mudou a nota após o agente contestar. (Indica que a primeira avaliação pode ter sido equivocada).
+*   **Reav. Recusadas:** Quantas vezes você manteve a nota original após o agente contestar. (Indica que sua avaliação estava correta e bem fundamentada).
+*   **Total de Reav. Recebidas:** O volume total de "reclamações" ou pedidos de revisão que chegaram para você.
+
+### 📊 Gráficos de Controle
+*   **Volumetria Diária:** Compara quantas monitorias você fez por dia em relação à média dos seus colegas monitores.
+*   **Precisão da Qualidade:** Mostra qual porcentagem das suas notas são "estáveis" (ninguém contestou ou mudou) vs "reavaliadas".
+
+---
+
+## 👥 Perfil: Supervisor de Atendimento
+*Foco: Gestão de pessoas e equipes sob sua responsabilidade.*
+
+### 📍 Performance e Benchmarks
+*   **Média Equipe:** A nota média de todos os agentes que pertencem às **suas equipes**. Não inclui agentes de outros supervisores.
+*   **Média Global:** Média de toda a empresa para comparação de desempenho.
+*   **Tendência:** Evolução da nota média das suas equipes no período.
+*   **Monitorias:** Volume total de avaliações realizadas para o seu time.
+
+### 👥 Gestão e Pendências
+*   **Pendentes Agentes:** Quantas monitorias o seu time recebeu, mas os agentes ainda não clicaram em "Ciente".
+*   **Minhas Ações:** Quantas contestações estão aguardando especificamente a **sua** decisão ou encaminhamento.
+
+### 🏆 Reavaliações (Exclusivo das Suas Equipes)
+*   **Taxa de Reversão:** Porcentagem de contestações do seu time que resultaram em mudança de nota (Procedentes).
+*   **Reav. Solicitadas:** Total de monitorias das suas equipes que foram contestadas. (Contagem única por monitoria).
+*   **Reav. Aceitas:** Monitorias onde a contestação foi aceita e a nota do agente foi alterada.
+*   **Reav. Recusadas:** Monitorias onde a contestação foi negada e a nota original foi mantida.
+
+### 📊 Gráficos e Rankings
+*   **Top Melhores Notas:** Ranking dos 5 agentes com as melhores médias dentro do seu time.
+*   **Oportunidades de Melhoria:** Ranking dos 5 agentes com as notas mais baixas do seu time.
+*   **Top Reav. Aceitas:** Os 5 agentes do seu time que mais tiveram contestações aprovadas (nota mudou).
+*   **Top Reav. Recusadas:** Os 5 agentes do seu time que mais tiveram contestações negadas (nota mantida).
+*   **Aguardando Minha Ação:** Lista detalhada de monitorias que precisam de uma decisão sua.
 
 ---
 
-## 4. Supervisor de Qualidade (`gestor_qualidade`)
-Focado em controle macro, tendências e calibração.
+## 👑 Perfil: Supervisor de Qualidade
+*Foco: Visão estratégica, calibração e saúde geral da operação.*
 
-| Indicador | Descrição | Regra de Cálculo | Envolvidos / Visibilidade |
-| :--- | :--- | :--- | :--- |
-| **Média Geral** | KPI Principal | `Média consolidada de todas as notas do sistema` | Visão Global da Empresa. |
-| **Pendentes** | Visão de Processo | `Total de ações abertas em todos os perfis do sistema` | Visão de eficiência do fluxo. |
-| **Monitorias** | Volume Macro | `Total de avaliações realizadas na empresa no período` | Volume total consolidado. |
-| **Tendência** | Evolução temporal | `Comparação da média da 2ª metade do período vs a 1ª metade` | Direção da qualidade (sobe/desce). |
-| **Ranking Qualidade** | Gestão da Qualidade | `Ranking de monitores por volume de auditorias realizadas` | Produtividade da equipe de qualidade. |
-| **Curva de Qualidade** | Saúde da operação | `% de monitorias em cada faixa (Crítico, Regular, Bom, Excelente)` | Distribuição estatística de notas. |
-| **Melhores/Oportunidades**| Talentos/Críticos | `Ranking global dos melhores e piores agentes da operação` | Visão Top/Bottom Global. |
+### 📍 Visão Macro (Empresa Toda)
+*   **Média Geral:** A nota média de 100% das monitorias realizadas na empresa.
+*   **Minhas Ações:** Quantas monitorias estão aguardando especificamente a **sua** decisão ou validação final.
+*   **Monitorias:** O volume total de auditorias realizadas por toda a equipe no período.
+*   **Tendência:** Indica se a nota da empresa está melhorando ou caindo comparando as metades do período.
+
+### ⚖️ Calibração e Precisão
+*   **Total Pendentes:** Quantas ações (contestações, cientes, etc) estão abertas em todo o sistema.
+*   **Taxa de Reversão Global:** Porcentagem de contestações que resultaram em mudança de nota em toda a empresa.
+*   **Precisão da Qualidade:** Gráfico que compara monitorias "Estáveis" (nota mantida) vs "Reavaliadas" (nota alterada).
+*   **Curva de Qualidade:** Distribuição das notas por faixas (Ex: Crítico, Regular, Excelente).
+
+### 🏆 Rankings
+*   **Ranking de Qualidade:** Ranking de produtividade dos monitores (quem auditou mais).
+*   **Melhores/Oportunidades Suporte:** Ranking global dos agentes com maiores e menores notas na empresa.
+*   **Top Reav. Aceitas (Geral):** Os 5 agentes da empresa com mais contestações aprovadas.
+*   **Top Reav. Recusadas (Geral):** Os 5 agentes da empresa com mais contestações negadas.
 
 ---
-*Este documento é atualizado automaticamente conforme as regras de negócio implementadas no código-fonte.*
+*Este documento reflete exatamente as fórmulas programadas no sistema QualiTrack.*

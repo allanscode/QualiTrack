@@ -49,10 +49,10 @@ export default function OfensoresChart({ monitorias, forms, limit = 8, title = '
     if (!active || !payload?.length) return null;
     const d = payload[0].payload;
     return (
-      <div className="bg-brand-primary text-white px-4 py-3 rounded-2xl shadow-xl text-xs max-w-[260px]">
+      <div className="bg-brand-primary text-brand-on-primary px-4 py-3 rounded-2xl shadow-xl text-xs max-w-[260px]">
         <p className="font-black mb-1">{d.fullText}</p>
         <p className="text-warning font-bold">{d.naoCount} ocorrência{d.naoCount !== 1 ? 's' : ''} de "NÃO"</p>
-        <p className="text-brand-highlight font-semibold">Taxa de falha: {d.taxaFalha.toFixed(1)}%</p>
+        <p className="opacity-80 font-semibold">Taxa de falha: {d.taxaFalha.toFixed(1)}%</p>
       </div>
     );
   };
@@ -92,24 +92,24 @@ export default function OfensoresChart({ monitorias, forms, limit = 8, title = '
             margin={{ top: 10, right: 40, left: 0, bottom: 25 }}
             barCategoryGap="20%"
           >
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F0F1E8" />
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--surface-border)" />
             <XAxis
               type="number"
-              tick={{ fontSize: 9, fontWeight: 700, fill: '#7A7D71' }}
+              tick={{ fontSize: 9, fontWeight: 700, fill: 'var(--brand-muted)' }}
               axisLine={false}
               tickLine={false}
               allowDecimals={false}
-              label={{ value: 'Qtd. de falhas (NÃO)', position: 'bottom', offset: 10, fontSize: 9, fontWeight: 800, fill: '#7A7D71' }}
+              label={{ value: 'Qtd. de falhas (NÃO)', position: 'bottom', offset: 10, fontSize: 9, fontWeight: 800, fill: 'var(--brand-muted)' }}
             />
             <YAxis
               type="category"
               dataKey="text"
               width={130}
-              tick={{ fontSize: 9, fontWeight: 700, fill: '#2D3A3A' }}
+              tick={{ fontSize: 9, fontWeight: 700, fill: 'var(--brand-primary)' }}
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(239,68,68,0.04)' }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--surface-subtle)' }} />
             <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14}>
               {ofensores.map((entry, index) => {
                 const intensity = 1 - index / ofensores.length;

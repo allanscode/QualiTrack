@@ -104,13 +104,30 @@ export default function AgentDashboard() {
     });
   }, [myMonitorias, teamMonitorias]);
 
+  // --- Tendência: Compara a média da 2ª metade do período vs a 1ª metade
+  const trendPercentage = useMemo(() => {
+    if (trendData.length < 2) return 0;
+    const mid = Math.floor(trendData.length / 2);
+    const firstHalf = trendData.slice(0, mid);
+    const secondHalf = trendData.slice(mid);
+    const avgFirst = firstHalf.reduce((a, b) => a + (b.MeuScore || 0), 0) / (firstHalf.filter(x => x.MeuScore !== undefined).length || 1);
+    const avgSecond = secondHalf.reduce((a, b) => a + (b.MeuScore || 0), 0) / (secondHalf.filter(x => x.MeuScore !== undefined).length || 1);
+    return avgFirst > 0 ? ((avgSecond / avgFirst) - 1) * 100 : 0;
+  }, [trendData]);
+
+  // --- Total Pendentes: Monitorias aguardando ação do agente (Ciente ou Re-contestação)
+  const pendingCount = useMemo(() => 
+    myAllMonitorias.filter(m => ['pendente_revisao', 'contestacao_negada'].includes(m.status)).length,
+    [myAllMonitorias]
+  );
+
   const { globalAvg } = useDashboard();
   const level = getLevelForScore(avgScore);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Performance Benchmarks */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Linha 1: Benchmarks de Performance */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Minha Média"
           value={`${avgScore.toFixed(2)}%`}
@@ -120,9 +137,9 @@ export default function AgentDashboard() {
           accent={level.color}
         />
         <StatCard
-          title="Média das Minhas Equipes"
+          title="Média Equipe"
           value={`${teamAvgScore.toFixed(2)}%`}
-          sub={avgScore >= teamAvgScore ? 'Você está acima da média' : 'Você está abaixo da média'}
+          sub={avgScore >= teamAvgScore ? 'Acima da média' : 'Abaixo da média'}
           good={avgScore >= teamAvgScore}
           icon={<Users className="w-5 h-5" />}
           accent="text-brand-accent"
@@ -130,15 +147,23 @@ export default function AgentDashboard() {
         <StatCard
           title="Média Global"
           value={`${globalAvg.toFixed(2)}%`}
-          sub="Geral da Empresa"
+          sub="Empresa"
           good={avgScore >= globalAvg}
           icon={<BarChart3 className="w-5 h-5" />}
           accent="text-info"
         />
+        <StatCard
+          title="Tendência"
+          value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(1)}%`}
+          sub="Evolução no período"
+          good={trendPercentage >= 0}
+          icon={<TrendingUp className="w-5 h-5" />}
+          accent="text-brand-highlight"
+        />
       </div>
 
-      {/* Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Linha 2: Volume e Contestações (Contagem Única por Monitoria) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard
           title="Monitorias"
           value={myMonitorias.length.toString()}
@@ -148,45 +173,17 @@ export default function AgentDashboard() {
           accent="text-brand-muted"
         />
         <StatCard
-          title="Solicitadas"
-          value={myContestations.length.toString()}
-          sub="Total de Contestações"
-          good={true}
-          icon={<BarChart3 className="w-5 h-5" />}
-          accent="text-brand-muted"
-        />
-        <StatCard
-          title="Aprovadas"
-          value={contestationsApproved.toString()}
-          sub="Nota Alterada"
-          good={true}
-          icon={<CheckCircle2 className="w-5 h-5" />}
-          accent="text-success"
-        />
-        <StatCard
-          title="Recusadas"
-          value={contestationsRejected.toString()}
-          sub="Nota Mantida"
-          good={false}
-          icon={<XCircle className="w-5 h-5" />}
-          accent="text-error"
-        />
-      </div>
-
-      {/* Contestation Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Taxa de Reversão"
-          value={`${reversalRate.toFixed(1)}%`}
-          sub="Contestações Procedentes"
-          good={true}
-          icon={<RotateCcw className="w-5 h-5" />}
-          accent="text-brand-muted"
+          title="Total Pendentes"
+          value={pendingCount.toString()}
+          sub="Aguardando sua ação"
+          good={pendingCount === 0}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          accent="text-warning"
         />
         <StatCard
           title="Solicitadas"
           value={myContestations.length.toString()}
-          sub="Total de Contestações"
+          sub="Contestações abertas"
           good={true}
           icon={<BarChart3 className="w-5 h-5" />}
           accent="text-brand-muted"

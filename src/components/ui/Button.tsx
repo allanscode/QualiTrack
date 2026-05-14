@@ -18,7 +18,7 @@ export default function Button({
   ...props 
 }: ButtonProps) {
   const variants = {
-    primary: 'bg-brand-primary text-white hover:bg-opacity-90 shadow-premium active:scale-[0.98]',
+    primary: 'bg-brand-primary text-brand-on-primary hover:bg-opacity-90 shadow-premium active:scale-[0.98]',
     secondary: 'bg-brand-accent text-brand-primary hover:bg-opacity-90 shadow-premium active:scale-[0.98]',
     outline: 'bg-transparent border border-surface-border text-brand-primary hover:bg-surface-subtle active:scale-[0.98]',
     danger: 'bg-error text-white hover:bg-opacity-90 shadow-premium active:scale-[0.98]',

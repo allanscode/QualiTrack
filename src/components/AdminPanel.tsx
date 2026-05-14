@@ -111,7 +111,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
               className={`
                 flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
                 ${active 
-                  ? 'bg-brand-primary text-white shadow-premium' 
+                  ? 'bg-brand-primary text-brand-on-primary shadow-premium' 
                   : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'}
               `}
             >
@@ -244,7 +244,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
               placeholder="Buscar usuário..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
+              className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
             />
           </div>
           <div className="h-10 flex items-center">
@@ -472,7 +472,7 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
               placeholder="Buscar equipe..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
+              className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
             />
           </div>
           <div className="h-10 flex items-center">
@@ -669,7 +669,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
               placeholder="Buscar formulário..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-full bg-white border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
+              className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
             />
           </div>
           <div className="h-10 flex items-center">

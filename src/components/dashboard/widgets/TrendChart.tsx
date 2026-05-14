@@ -37,12 +37,12 @@ export default function TrendChart({ title, subtitle, data, dataKeys }: TrendCha
                 </linearGradient>
               ))}
             </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F1E8" />
-            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#7A7D71', fontWeight: 700 }} dy={8} />
-            <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#7A7D71', fontWeight: 700 }} />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />
+            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} dy={8} />
+            <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} />
             <Tooltip
-              cursor={{ stroke: '#E2E4D8', strokeWidth: 2, strokeDasharray: '4 4' }}
-              contentStyle={{ backgroundColor: '#2D3A3A', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: 700, padding: '8px 14px' }}
+              cursor={{ stroke: 'var(--brand-accent)', strokeWidth: 2, strokeDasharray: '4 4' }}
+              contentStyle={{ backgroundColor: 'var(--brand-primary)', border: 'none', borderRadius: '12px', color: 'var(--brand-on-primary)', fontSize: '11px', fontWeight: 700, padding: '8px 14px' }}
             />
             {dataKeys.map(dk => (
               <Area

@@ -11,7 +11,7 @@ export default function Select({ label, options, className = '', ...props }: Sel
       {label && <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">{label}</label>}
       <select 
         className={`
-          bg-white 
+          bg-surface-card 
           border border-surface-border 
           rounded-2xl 
           px-4 py-2 

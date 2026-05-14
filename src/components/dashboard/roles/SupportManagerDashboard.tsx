@@ -5,7 +5,7 @@ import TrendChart from '../widgets/TrendChart';
 import RankingWidget from '../widgets/RankingWidget';
 import SlaWidget from '../widgets/SlaWidget';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, Users, TrendingUp, AlertTriangle, RotateCcw, CheckCircle2, XCircle } from 'lucide-react';
+import { Target, Users, TrendingUp, AlertTriangle, RotateCcw, CheckCircle2, XCircle, ClipboardCheck } from 'lucide-react';
 
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 
@@ -28,6 +28,8 @@ export default function SupportManagerDashboard() {
       : 0,
     [scoredMonitorias]
   );
+
+  const { globalAvg } = useDashboard();
 
   // --- Pendentes Agente: awaiting agent acknowledgement
   const pendingAgent = useMemo(() =>
@@ -145,16 +147,50 @@ export default function SupportManagerDashboard() {
 
   // Opportunities = below target, sorted from furthest to closest to target
   const bottomAgents = agentRanking
-    .filter(a => a.score < config.targetScore)
     .sort((a, b) => a.score - b.score)
     .slice(0, 5);
+
+  // --- Rankings de Contestações (Top 5 Agentes)
+  const topApprovedAgents = useMemo(() => {
+    const map: Record<string, number> = {};
+    monitorias.forEach(m => {
+      if ((m.status === 'contestacao_aceita' || m.status === 'finalizada_alterada') && m.evaluated_id) {
+        map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
+      }
+    });
+    return Object.entries(map)
+      .map(([id, count]) => ({
+        id,
+        name: users.find(u => u.id === id)?.name || 'Agente Externo',
+        count
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [monitorias, users]);
+
+  const topRejectedAgents = useMemo(() => {
+    const map: Record<string, number> = {};
+    monitorias.forEach(m => {
+      if (m.status === 'contestacao_negada' && m.evaluated_id) {
+        map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
+      }
+    });
+    return Object.entries(map)
+      .map(([id, count]) => ({
+        id,
+        name: users.find(u => u.id === id)?.name || 'Agente Externo',
+        count
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [monitorias, users]);
 
   if (!user) return null;
 
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
 
-      {/* Row 1 — Main KPIs */}
+      {/* Linha 1 — Benchmarks */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Média Equipe"
@@ -165,7 +201,35 @@ export default function SupportManagerDashboard() {
           accent={getLevelForScore(avgScore).color}
         />
         <StatCard
-          title="Pendentes Suporte"
+          title="Média Global"
+          value={`${globalAvg.toFixed(2)}%`}
+          sub="Empresa"
+          good={avgScore >= globalAvg}
+          icon={<Target className="w-5 h-5" />}
+          accent="text-info"
+        />
+        <StatCard
+          title="Tendência"
+          value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(1)}%`}
+          sub="Evolução no período"
+          good={trendPercentage >= 0}
+          icon={<TrendingUp className="w-4 h-4" />}
+          accent="text-brand-highlight"
+        />
+        <StatCard
+          title="Monitorias"
+          value={monitorias.length}
+          sub="Total do seu time"
+          good={true}
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          accent="text-brand-accent"
+        />
+      </div>
+
+      {/* Linha 2 — Gestão e Ações */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <StatCard
+          title="Pendentes Agentes"
           value={pendingAgent}
           sub="Aguardando ciência do suporte"
           good={pendingAgent === 0}
@@ -180,22 +244,14 @@ export default function SupportManagerDashboard() {
           icon={<AlertTriangle className="w-5 h-5" />}
           accent="text-error"
         />
-        <StatCard
-          title="Tendência"
-          value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`}
-          sub="2ª metade vs 1ª metade do período"
-          good={trendPercentage >= 0}
-          icon={<TrendingUp className="w-4 h-4" />}
-          accent="text-info"
-        />
       </div>
 
-      {/* Row 2 — Reevaluation KPIs */}
+      {/* Linha 3 — Reavaliações (Contagem Única por Monitoria) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Taxa de Reversão"
           value={`${reversalRate.toFixed(2)}%`}
-          sub="Contestações com nota alterada"
+          sub="Contestações Procedentes"
           good={reversalRate <= 20}
           icon={<RotateCcw className="w-5 h-5" />}
           accent="text-brand-highlight"
@@ -203,7 +259,7 @@ export default function SupportManagerDashboard() {
         <StatCard
           title="Reav. Solicitadas"
           value={totalContestations}
-          sub="Total de contestações abertas"
+          sub="Total de contestações"
           good={true}
           icon={<AlertTriangle className="w-5 h-5" />}
           accent="text-info"
@@ -211,7 +267,7 @@ export default function SupportManagerDashboard() {
         <StatCard
           title="Reav. Aceitas"
           value={reavAccepted}
-          sub="Nota alterada (procedentes)"
+          sub="Nota alterada"
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
           accent="text-success"
@@ -219,7 +275,7 @@ export default function SupportManagerDashboard() {
         <StatCard
           title="Reav. Recusadas"
           value={reavRejected}
-          sub="Nota mantida (improcedentes)"
+          sub="Nota mantida"
           good={true}
           icon={<XCircle className="w-5 h-5" />}
           accent="text-error"
@@ -246,17 +302,33 @@ export default function SupportManagerDashboard() {
         </div>
       </div>
 
-      {/* Row 4 — Rankings */}
+      {/* Linha 5 — Rankings de Notas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RankingWidget
-          title="Top Melhores Notas"
-          subtitle={`Suporte acima da meta (${config.targetScore}%)`}
+          title="Melhores Notas (Time)"
+          subtitle={`Agentes acima da meta (${config.targetScore}%)`}
           data={topAgents}
         />
         <RankingWidget
-          title="Oportunidades de Melhoria"
-          subtitle={`Suporte abaixo da meta — mais críticos primeiro`}
+          title="Oportunidades (Time)"
+          subtitle="Agentes abaixo da meta"
           data={bottomAgents}
+        />
+      </div>
+
+      {/* Linha 6 — Rankings de Contestações */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <RankingWidget
+          title="Top Reav. Aceitas"
+          subtitle="Agentes com mais notas alteradas"
+          data={topApprovedAgents}
+          type="count"
+        />
+        <RankingWidget
+          title="Top Reav. Recusadas"
+          subtitle="Agentes com mais notas mantidas"
+          data={topRejectedAgents}
+          type="count"
         />
       </div>
 

@@ -176,12 +176,59 @@ export default function QualityManagerDashboard() {
     .sort((a, b) => a.score - b.score)
     .slice(0, 5);
 
+  // --- Rankings de Contestações (Top 5 Agentes - Global)
+  const topApprovedAgents = useMemo(() => {
+    const map: Record<string, number> = {};
+    monitorias.forEach(m => {
+      if ((m.status === 'contestacao_aceita' || m.status === 'finalizada_alterada') && m.evaluated_id) {
+        map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
+      }
+    });
+    return Object.entries(map)
+      .map(([id, count]) => ({
+        id,
+        name: users.find(u => u.id === id)?.name || 'Agente Externo',
+        count
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [monitorias, users]);
+
+  const topRejectedAgents = useMemo(() => {
+    const map: Record<string, number> = {};
+    monitorias.forEach(m => {
+      if (m.status === 'contestacao_negada' && m.evaluated_id) {
+        map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
+      }
+    });
+    return Object.entries(map)
+      .map(([id, count]) => ({
+        id,
+        name: users.find(u => u.id === id)?.name || 'Agente Externo',
+        count
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [monitorias, users]);
+
+  // --- Precisão da Qualidade (Estáveis vs Reavaliadas)
+  const precisionData = useMemo(() => {
+    const total = scoredMonitorias.length;
+    const reevaluated = reavAccepted; // Consideramos reavaliadas as que tiveram nota alterada
+    const stable = total - reevaluated;
+    
+    return [
+      { name: 'Estáveis', value: stable, color: '#6366f1' },
+      { name: 'Reavaliadas', value: reevaluated, color: '#f59e0b' }
+    ].filter(d => d.value > 0);
+  }, [scoredMonitorias, reavAccepted]);
+
   if (!user) return null;
 
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
 
-      {/* Row 1 — Main KPIs */}
+      {/* Linha 1 — Benchmarks e Minhas Ações */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Média Geral"
@@ -192,17 +239,17 @@ export default function QualityManagerDashboard() {
           accent={getLevelForScore(avgScore).color}
         />
         <StatCard
-          title="Pendentes"
-          value={pendingActions}
-          sub="Ações abertas no sistema"
-          good={pendingActions === 0}
-          icon={<Users className="w-5 h-5" />}
-          accent="text-info"
+          title="Minhas Ações"
+          value={pendingMyActions}
+          sub="Aguardando sua decisão"
+          good={pendingMyActions === 0}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          accent="text-error"
         />
         <StatCard
           title="Monitorias"
           value={monitorias.length}
-          sub="Avaliações no período"
+          sub="Volume total do período"
           good={true}
           icon={<ClipboardCheck className="w-5 h-5" />}
           accent="text-brand-accent"
@@ -210,35 +257,35 @@ export default function QualityManagerDashboard() {
         <StatCard
           title="Tendência"
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`}
-          sub="2ª metade vs 1ª metade do período"
+          sub="Evolução no período"
           good={trendPercentage >= 0}
           icon={<TrendingUp className="w-5 h-5" />}
           accent="text-brand-highlight"
         />
       </div>
 
-      {/* Row 2 — Reevaluation KPIs */}
+      {/* Linha 2 — Pendências e Qualidade */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Total Pendentes"
+          value={pendingActions}
+          sub="Ações abertas no sistema"
+          good={pendingActions === 0}
+          icon={<Users className="w-5 h-5" />}
+          accent="text-info"
+        />
         <StatCard
           title="Taxa de Reversão"
           value={`${reversalRate.toFixed(2)}%`}
-          sub="Contestações com nota alterada"
+          sub="Contestações Procedentes"
           good={reversalRate <= 15}
           icon={<RotateCcw className="w-5 h-5" />}
           accent="text-brand-highlight"
         />
         <StatCard
-          title="Reav. Solicitadas"
-          value={totalContestations}
-          sub="Total de contestações abertas"
-          good={true}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-info"
-        />
-        <StatCard
           title="Reav. Aceitas"
           value={reavAccepted}
-          sub="Nota alterada (procedentes)"
+          sub="Nota alterada"
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
           accent="text-success"
@@ -246,16 +293,16 @@ export default function QualityManagerDashboard() {
         <StatCard
           title="Reav. Recusadas"
           value={reavRejected}
-          sub="Nota mantida (improcedentes)"
+          sub="Nota mantida"
           good={true}
           icon={<XCircle className="w-5 h-5" />}
           accent="text-error"
         />
       </div>
 
-      {/* Row 3 — Trend chart + Distribution + Auditor Ranking */}
+      {/* Linha 3 — Evolução, Curva e Precisão */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[300px]">
+        <div className="lg:col-span-1 h-[300px]">
           <TrendChart
             title="Evolução da Qualidade"
             subtitle="Média global de score por dia"
@@ -263,13 +310,17 @@ export default function QualityManagerDashboard() {
             dataKeys={[{ key: 'ScoreMedio', name: 'Média Global', color: '#6366f1' }]}
           />
         </div>
-        <div className="space-y-6">
-          <div className="h-[300px]">
-            <DistributionChart
-              title="Curva de Qualidade"
-              data={gradeDistribution}
-            />
-          </div>
+        <div className="h-[300px]">
+          <DistributionChart
+            title="Curva de Qualidade"
+            data={gradeDistribution}
+          />
+        </div>
+        <div className="h-[300px]">
+          <DistributionChart
+            title="Precisão da Qualidade"
+            data={precisionData}
+          />
         </div>
       </div>
 
@@ -314,6 +365,22 @@ export default function QualityManagerDashboard() {
             />
           </div>
         </div>
+      </div>
+
+      {/* Linha 6 — Rankings de Contestações */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <RankingWidget
+          title="Top Reav. Aceitas (Geral)"
+          subtitle="Agentes com mais notas alteradas"
+          data={topApprovedAgents}
+          type="count"
+        />
+        <RankingWidget
+          title="Top Reav. Recusadas (Geral)"
+          subtitle="Agentes com mais notas mantidas"
+          data={topRejectedAgents}
+          type="count"
+        />
       </div>
 
       <RecentAuditsTable monitorias={monitorias} users={users} />

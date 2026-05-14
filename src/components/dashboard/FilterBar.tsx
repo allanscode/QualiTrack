@@ -78,12 +78,12 @@ export default function FilterBar() {
         </button>
       </div>
 
-      <div className="bg-white rounded-3xl border border-surface-border shadow-premium p-4">
+      <div className="bg-surface-card rounded-3xl border border-surface-border shadow-premium p-6">
         <div className="flex flex-wrap items-center gap-3">
           
           {/* Date Range Group (Always First) */}
           <div className="flex-1 min-w-[280px]">
-            <div className="flex items-center gap-2 bg-white border border-surface-border rounded-2xl px-3 h-10 shadow-sm group hover:border-brand-accent transition-all relative">
+            <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-10 shadow-sm group hover:border-brand-accent transition-all relative">
               <div className="flex items-center gap-2 relative flex-1">
                 <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
                 <input 

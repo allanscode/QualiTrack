@@ -15,7 +15,7 @@ export default function Badge({
 }: BadgeProps) {
   // All variants use design system tokens instead of raw Tailwind color classes
   const variants = {
-    primary:   'bg-brand-primary text-white',
+    primary:   'bg-brand-primary text-brand-on-primary',
     secondary: 'bg-surface-subtle text-brand-muted',
     success:   'bg-success/10 text-success',
     warning:   'bg-warning/10 text-warning',

@@ -15,9 +15,9 @@ export default function DistributionChart({ title, data }: DistributionChartProp
     const d = payload[0].payload;
     const percent = total > 0 ? ((d.value / total) * 100).toFixed(1) : 0;
     return (
-      <div className="bg-brand-primary text-white px-3 py-2 rounded-xl shadow-xl text-xs font-bold">
+      <div className="bg-brand-primary text-brand-on-primary px-3 py-2 rounded-xl shadow-xl text-xs font-bold">
         <p className="mb-0.5">{d.name}</p>
-        <p className="text-brand-accent">{d.value} ocorrências ({percent}%)</p>
+        <p className="opacity-80">{d.value} ocorrências ({percent}%)</p>
       </div>
     );
   };
