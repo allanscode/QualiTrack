@@ -72,14 +72,37 @@ serve(async (req: Request) => {
           </p>
         </div>
       `;
+    } else if (type === 'rejection') {
+      const reason = token; // Reuse the token field for the rejection reason text
+      subject = "QualiTrack - Solicitação de Acesso";
+      htmlContent = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #2D3A3A; padding: 20px; border: 1px solid #E2E4D8; border-radius: 12px;">
+          <h2 style="color: #2D3A3A;">Olá, ${name}!</h2>
+          <p>Sua solicitação de acesso ao sistema QualiTrack foi analisada.</p>
+          <p>Infelizmente, não foi possível aprovar seu acesso neste momento pelo seguinte motivo:</p>
+          <div style="background-color: #F9F9F6; border: 1px solid #E2E4D8; padding: 15px; border-radius: 8px; font-style: italic; margin: 20px 0;">
+            "${reason || 'Não informado.'}"
+          </div>
+          <p>Caso tenha dúvidas, entre em contato com o administrador do sistema.</p>
+        </div>
+      `;
     }
 
     console.log(`[LOG] Enviando e-mail via SMTP...`);
+    
+    // Criar uma versão em texto simples amigável para o campo 'content'
+    let plainTextContent = "";
+    if (type === 'rejection') {
+      plainTextContent = `Olá, ${name}!\n\nSua solicitação de acesso ao QualiTrack foi analisada.\nInfelizmente, seu acesso não foi aprovado pelo seguinte motivo:\n\n"${token}"\n\nCaso tenha dúvidas, entre em contato com o administrador.`;
+    } else {
+      plainTextContent = `Olá, ${name}!\n\nSua conta no QualiTrack foi aprovada.\nPara definir sua senha, acesse o link: http://localhost:3001/setup-password?token=${token}`;
+    }
+
     await client.send({
       from: "qualidade@webposto.com.br",
       to: email,
       subject: subject,
-      content: "Por favor, abra este e-mail em um cliente com suporte a HTML.",
+      content: plainTextContent,
       html: htmlContent,
     });
 

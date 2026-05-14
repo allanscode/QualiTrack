@@ -16,6 +16,7 @@ import {
   Search, 
   AlertOctagon, 
   AlertTriangle,
+  AlertCircle,
   BarChart3,
   Mail,
   User as UserIcon,
@@ -43,6 +44,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
   const [loading, setLoading] = useState(true);
 
   const loadAllData = async () => {
+    setLoading(true);
     try {
       if (!supabase) {
         const [u, t, f, r] = await Promise.all([
@@ -56,16 +58,27 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
         setForms(f.data || []);
         setRequests(r.data || []);
       } else {
-        const [u, t, f, r] = await Promise.all([
+        // Fetch users, teams, and forms (usually safe)
+        const [u, t, f] = await Promise.all([
           supabase.from('users').select('*'),
           supabase.from('teams').select('*'),
-          supabase.from('forms').select('*'),
-          supabase.from('access_requests').select('*')
+          supabase.from('forms').select('*')
         ]);
         setUsers(u.data || []);
         setTeams(t.data || []);
         setForms(f.data || []);
-        setRequests(r.data || []);
+
+        // Fetch requests separately with a timeout failsafe
+        // This prevents the whole panel from hanging if access_requests RLS is broken
+        try {
+          const { data: r, error: rErr } = await Promise.race([
+            supabase.from('access_requests').select('*').order('created_at', { ascending: false }),
+            new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+          ]);
+          if (!rErr) setRequests(r || []);
+        } catch (e) {
+          console.warn('[Admin] access_requests fetch timed out');
+        }
       }
     } catch (e) {
       console.error("Error loading admin data:", e);
@@ -277,7 +290,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                 </td>
                 <td className="px-6 py-4">
                   <Badge variant="neutral" className="bg-surface-subtle text-brand-primary">
-                    {({ 'admin': 'Admin', 'qualidade': 'Qualidade', 'gestor_qualidade': 'Gestor Qual.', 'gestor_suporte': 'Gestor Suporte', 'suporte': 'Suporte' } as any)[u.role] || u.role}
+                    {({ 'admin': 'Administrador', 'qualidade': 'Monitor de Qualidade', 'gestor_qualidade': 'Supervisor de Qualidade', 'gestor_suporte': 'Supervisor de Atendimento', 'suporte': 'Agente de Atendimento' } as any)[u.role] || u.role}
                   </Badge>
                 </td>
                 <td className="px-6 py-4 text-xs font-bold text-brand-muted">
@@ -354,10 +367,10 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                   onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}
                   options={[
                     { value: 'admin', label: 'Administrador' },
-                    { value: 'gestor_qualidade', label: 'Gestor Qual.' },
-                    { value: 'gestor_suporte', label: 'Gestor Suporte' },
-                    { value: 'qualidade', label: 'Qualidade' },
-                    { value: 'suporte', label: 'Suporte' }
+                    { value: 'gestor_qualidade', label: 'Supervisor de Qualidade' },
+                    { value: 'gestor_suporte', label: 'Supervisor de Atendimento' },
+                    { value: 'qualidade', label: 'Monitor de Qualidade' },
+                    { value: 'suporte', label: 'Agente de Atendimento' }
                   ]}
                 />
                 <div className="flex flex-col gap-1">
@@ -952,13 +965,24 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
 
 function RequestsManagement({ requests: initialRequests, users, teams, loadData }: { requests: AccessRequest[], users: User[], teams: Team[], loadData: () => void }) {
   const [requests, setRequests] = useState<AccessRequest[]>(initialRequests);
+  const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [approvingReq, setApprovingReq] = useState<any>(null);
+  const [rejectingReq, setRejectingReq] = useState<any>(null);
+  const [rejectReason, setRejectReason] = useState('');
   const [approveData, setApproveData] = useState<{ name: string, email: string, role: string, team_ids: string[] }>({ name: '', email: '', role: 'suporte', team_ids: [] });
   const [saving, setSaving] = useState(false);
 
+  // Load on mount and whenever props update
   useEffect(() => { setRequests(initialRequests); }, [initialRequests]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   const handleApprove = async () => {
     setSaving(true);
@@ -987,18 +1011,57 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
       }
       toast.success('Solicitação aprovada e e-mail de acesso enviado!');
       setIsApproveModalOpen(false);
-      loadData();
+      await handleRefresh(); // refresh directly from source
+      loadData(); // also refresh parent counters
     } catch (e: any) { toast.error(e.message || 'Erro ao aprovar solicitação'); }
     finally { setSaving(false); }
   };
 
-  const handleReject = async (id: string) => {
+  const handleReject = (req: any) => {
+    setRejectingReq(req);
+    setRejectReason('');
+    setIsRejectModalOpen(true);
+  };
+
+  const confirmReject = async () => {
+    if (!rejectReason.trim()) {
+      toast.error('Por favor, informe o motivo da rejeição.');
+      return;
+    }
+
+    setSaving(true);
     try {
-      if (!supabase) await mockDb.update('access_requests', id, { status: 'rejected' });
-      else await supabase.from('access_requests').update({ status: 'rejected' }).eq('id', id);
-      toast.success('Rejeitada.');
+      // 1. Update Database
+      if (!supabase) {
+        await mockDb.update('access_requests', rejectingReq.id, { status: 'rejected', rejection_reason: rejectReason });
+      } else {
+        const { error } = await supabase
+          .from('access_requests')
+          .update({ status: 'rejected', rejection_reason: rejectReason })
+          .eq('id', rejectingReq.id);
+        if (error) throw error;
+
+        // 2. Send Rejection Email via Edge Function
+        const { error: emailError } = await supabase.functions.invoke('send-email', {
+          body: {
+            email: rejectingReq.email,
+            name: rejectingReq.name,
+            type: 'rejection',
+            token: rejectReason // We reuse the token field to pass the reason string
+          }
+        });
+        if (emailError) console.error('Failed to send rejection email:', emailError);
+      }
+
+      toast.success('Solicitação rejeitada e e-mail enviado.');
+      setIsRejectModalOpen(false);
+      await handleRefresh();
       loadData();
-    } catch (e) { toast.error('Erro ao rejeitar'); }
+    } catch (e: any) {
+      toast.error('Erro ao rejeitar: ' + (e.message || 'Erro desconhecido'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const filtered = requests.filter(r => r.status === statusFilter);
@@ -1011,7 +1074,9 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
           onChange={e => setStatusFilter(e.target.value as any)} 
           options={[{ value: 'pending', label: 'Pendentes' }, { value: 'approved', label: 'Aprovadas' }, { value: 'rejected', label: 'Rejeitadas' }]} 
         />
-        <Button variant="ghost" onClick={loadData} icon={<RefreshCw className="w-4 h-4" />}>Atualizar</Button>
+         <Button variant="ghost" onClick={handleRefresh} disabled={refreshing} icon={<RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />}>
+          {refreshing ? 'Atualizando...' : 'Atualizar'}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
@@ -1029,7 +1094,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
             </div>
             {req.status === 'pending' && (
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleReject(req.id)} className="text-error hover:bg-red-50">Recusar</Button>
+                <Button variant="outline" size="sm" onClick={() => handleReject(req)} className="text-error hover:bg-red-50">Recusar</Button>
                 <Button size="sm" onClick={() => { setApprovingReq(req); setApproveData({ name: req.name, email: req.email, role: 'suporte', team_ids: [] }); setIsApproveModalOpen(true); }}>Revisar e Aprovar</Button>
               </div>
             )}
@@ -1053,7 +1118,18 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome</label>
                     <input type="text" className="w-full bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
                   </div>
-                  <Select label="Perfil" value={approveData.role} onChange={e => setApproveData({...approveData, role: e.target.value})} options={[{ value: 'admin', label: 'Admin' }, { value: 'gestor_qualidade', label: 'Gestor Qual.' }, { value: 'gestor_suporte', label: 'Gestor Suporte' }, { value: 'qualidade', label: 'Qualidade' }, { value: 'suporte', label: 'Suporte' }]} />
+                  <Select 
+                    label="Perfil" 
+                    value={approveData.role} 
+                    onChange={e => setApproveData({...approveData, role: e.target.value})} 
+                    options={[
+                      { value: 'admin', label: 'Administrador' }, 
+                      { value: 'gestor_qualidade', label: 'Supervisor de Qualidade' }, 
+                      { value: 'gestor_suporte', label: 'Supervisor de Atendimento' }, 
+                      { value: 'qualidade', label: 'Monitor de Qualidade' }, 
+                      { value: 'suporte', label: 'Agente de Atendimento' }
+                    ]} 
+                  />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipes</label>
@@ -1070,6 +1146,41 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
                   </div>
                 </div>
                 <Button className="w-full mt-4" onClick={handleApprove} disabled={saving} icon={<Check className="w-4 h-4" />}>{saving ? 'Processando...' : 'Confirmar Aprovação'}</Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {isRejectModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <Card className="max-w-md w-full">
+              <header className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2 text-error">
+                  <AlertCircle className="w-5 h-5" />
+                  <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Rejeitar Solicitação</h3>
+                </div>
+                <button onClick={() => setIsRejectModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
+              </header>
+              <div className="space-y-4">
+                <p className="text-sm text-brand-muted font-medium">
+                  Você está recusando o acesso de <span className="text-brand-primary font-bold">{rejectingReq?.name}</span>.
+                  Informe abaixo o motivo da recusa, que será enviado por e-mail para o usuário.
+                </p>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Motivo da Rejeição</label>
+                  <textarea 
+                    className="w-full bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-error focus:outline-none min-h-[120px] resize-none"
+                    placeholder="Ex: E-mail não corporativo ou setor não autorizado."
+                    value={rejectReason}
+                    onChange={e => setRejectReason(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-3 mt-4">
+                  <Button variant="outline" className="flex-1" onClick={() => setIsRejectModalOpen(false)}>Cancelar</Button>
+                  <Button className="flex-1 bg-error hover:bg-red-700" onClick={confirmReject} disabled={saving}>
+                    {saving ? 'Enviando...' : 'Confirmar Recusa'}
+                  </Button>
+                </div>
               </div>
             </Card>
           </div>

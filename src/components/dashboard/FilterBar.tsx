@@ -38,12 +38,13 @@ export default function FilterBar() {
 
   const activeTeams = useMemo(() => {
     let list = teams.filter(t => t.active !== false);
-    if (user?.role === 'suporte') {
+    
+    // Filtro para Supervisor de Atendimento ou Agente
+    if (user?.role === 'suporte' || user?.role === 'gestor_suporte') {
       const myInfo = users.find(u => u.id === user.id);
       let myTeamIds = myInfo?.team_ids || user.team_ids || [];
       
-      // Fallback if no teams in profile
-      if (myTeamIds.length === 0) {
+      if (myTeamIds.length === 0 && user?.role === 'suporte') {
         const fromRecords = allMonitorias.filter(m => m.evaluated_id === user.id && m.team_id).map(m => m.team_id!);
         myTeamIds = Array.from(new Set(fromRecords));
       }
@@ -53,7 +54,15 @@ export default function FilterBar() {
     return list;
   }, [teams, user, users, allMonitorias]);
 
-  const activeAgents = useMemo(() => users.filter(u => u.role === 'suporte' && u.active !== false), [users]);
+  const activeAgents = useMemo(() => {
+    let list = users.filter(u => u.role === 'suporte' && u.active !== false);
+    if (user?.role === 'gestor_suporte') {
+      const myTeamIds = user.team_ids || [];
+      list = list.filter(u => u.team_ids?.some(tid => myTeamIds.includes(tid)));
+    }
+    return list;
+  }, [users, user]);
+
   const activeAuditors = useMemo(() => users.filter(u => (u.role === 'qualidade' || u.role === 'gestor_qualidade' || u.role === 'admin') && u.active !== false), [users]);
 
   return (
@@ -112,7 +121,7 @@ export default function FilterBar() {
               <CustomSelect 
                 value={filters.agentId}
                 options={[
-                  { value: '', label: 'Suporte' }, 
+                  { value: '', label: 'Agentes' }, 
                   ...activeAgents
                     .filter(a => !filters.teamId || (a.team_ids && a.team_ids.includes(filters.teamId)))
                     .map(a => ({ value: a.id, label: a.name }))
@@ -123,12 +132,12 @@ export default function FilterBar() {
             </div>
           )}
 
-          {user?.role !== 'suporte' && user?.role !== 'qualidade' && (
+          {user?.role !== 'suporte' && user?.role !== 'qualidade' && user?.role !== 'gestor_suporte' && (
             <div className="flex-1 min-w-[160px] h-10">
               <CustomSelect 
                 value={filters.auditorId}
                 options={[
-                  { value: '', label: 'Qualidade' },
+                  { value: '', label: 'Monitores' },
                   ...activeAuditors.map(a => ({ value: a.id, label: a.name }))
                 ]}
                 onChange={(val: string) => setFilters({ ...filters, auditorId: val })}

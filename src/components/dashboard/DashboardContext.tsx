@@ -109,10 +109,12 @@ export function DashboardProvider({ user, children }: { user: User | null, child
         docs = docs.filter(m => m.evaluated_id === user.id || (m.team_id && myTeamIds.includes(m.team_id)));
       } else if (user.role === 'qualidade') {
         docs = docs.filter(m => m.evaluator_id === user.id);
-      } else if (user.role === 'gestor_suporte' || user.role === 'gestor_qualidade') {
+      } else if (user.role === 'gestor_suporte') {
         const myTeamIds = user.team_ids || [];
-        const myTeamUserIds = userDocs.filter(u => u.team_ids?.some(tid => myTeamIds.includes(tid))).map(u => u.id);
-        docs = docs.filter(m => myTeamUserIds.includes(m.evaluated_id) || myTeamUserIds.includes(m.evaluator_id));
+        // Vê apenas monitorias das suas equipes
+        docs = docs.filter(m => myTeamIds.includes(m.team_id));
+      } else if (user.role === 'gestor_qualidade') {
+        // Gestor de Qualidade vê tudo por padrão para gerir a qualidade global
       }
 
       // Save RBAC-filtered list before UI filters

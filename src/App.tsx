@@ -31,6 +31,10 @@ export default function App() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [isExistingRequest, setIsExistingRequest] = useState(false);
+  const [monitoriaRefreshKey, setMonitoriaRefreshKey] = useState(0);
+
+  // Ref to block auto-login during password recovery flow
+  const isPasswordRecoveryRef = React.useRef(false);
 
   const isMockMode = !supabase;
 
@@ -111,49 +115,101 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Checar se há um hash fragment de recovery/invite na URL
-    const hash = window.location.hash;
-    if (hash && (hash.includes('type=recovery') || hash.includes('type=invite'))) {
-      setAuthView('change-password');
-      setLoading(false);
-      // O Supabase já terá logado o usuário nos bastidores se o token for válido.
-      // Apenas forçamos a tela de mudança de senha (que usará o supabase.auth.updateUser)
-    }
+    // Failsafe: if the app is still loading after 10 seconds, force show login
+    const initializationTimeout = setTimeout(() => {
+      if (loading) {
+        console.warn('[Auth] Initialization timeout reached. Forcing login screen.');
+        setLoading(false);
+        setAuthView('login');
+      }
+    }, 10000);
 
-    const checkSession = async () => {
-      if (isMockMode) {
-        const savedUser = localStorage.getItem('qualitrack_mock_user');
-        if (savedUser) {
+    if (isMockMode) {
+      // Mock mode: restore session from localStorage
+      const savedUser = localStorage.getItem('qualitrack_mock_user');
+      if (savedUser) {
+        try {
           const user = JSON.parse(savedUser);
           setCurrentUser(user);
           setUserData(user);
-        }
+        } catch (e) { /* ignore */ }
+      }
+      setLoading(false);
+      clearTimeout(initializationTimeout);
+      return;
+    }
+
+    // Supabase mode:
+    const hash = window.location.hash;
+    if (hash) {
+      if (hash.includes('error=access_denied') && hash.includes('otp_expired')) {
+        toast.error('O link de recuperação expirou ou já foi usado. Solicite um novo.');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (hash.includes('type=recovery') || hash.includes('type=invite')) {
+        isPasswordRecoveryRef.current = true;
+        setAuthView('change-password');
         setLoading(false);
-      } else {
-        const { data: { session } } = await supabase!.auth.getSession();
-        if (session) {
+      }
+    }
+
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] event:', event, '| session:', !!session, '| recoveryRef:', isPasswordRecoveryRef.current);
+
+      if (event === 'PASSWORD_RECOVERY') {
+        isPasswordRecoveryRef.current = true;
+        setAuthView('change-password');
+        setLoading(false);
+        clearTimeout(initializationTimeout);
+      } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        if (isPasswordRecoveryRef.current) {
+          setLoading(false);
+          clearTimeout(initializationTimeout);
+        } else if (session) {
           await handleUserSession(session.user);
+          setLoading(false); // Garante que o loading pare após processar a sessão
+          clearTimeout(initializationTimeout);
         } else {
           setLoading(false);
+          clearTimeout(initializationTimeout);
         }
-        
-        // Listen to auth changes
-        supabase!.auth.onAuthStateChange(async (event, session) => {
-          if (event === 'PASSWORD_RECOVERY') {
-            setAuthView('change-password');
-            setLoading(false);
-          } else if (session) {
-            await handleUserSession(session.user);
-          } else {
-            setCurrentUser(null);
-            setUserData(null);
-            setLoading(false);
-          }
-        });
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setUserData(null);
+        setLoading(false);
+        clearTimeout(initializationTimeout);
       }
+    });
+
+    return () => {
+      clearTimeout(initializationTimeout);
+      subscription.unsubscribe();
     };
-    checkSession();
   }, []);
+
+  // Inactivity auto-logout: 2 hours
+  const INACTIVITY_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+  useEffect(() => {
+    if (!currentUser) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        toast.info('Sessão encerrada por inatividade. Faça login novamente.');
+        if (!isMockMode && supabase) await supabase.auth.signOut();
+        localStorage.removeItem('qualitrack_mock_user');
+        setCurrentUser(null);
+        setUserData(null);
+        setAuthView('login');
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+    const events = ['click', 'mousemove', 'keydown', 'scroll', 'touchstart'] as const;
+    events.forEach(ev => window.addEventListener(ev, resetTimer, { passive: true }));
+    resetTimer();
+    return () => {
+      clearTimeout(timer);
+      events.forEach(ev => window.removeEventListener(ev, resetTimer));
+    };
+  }, [currentUser]);
 
   const handleUserSession = async (user: any) => {
     try {
@@ -162,6 +218,7 @@ export default function App() {
         const dbUser = data.find((u: any) => u.email === user.email && u.active);
         if (dbUser) {
           if (dbUser.must_change_password) {
+            isPasswordRecoveryRef.current = true;
             setAuthView('change-password');
             setUserData(dbUser);
           } else {
@@ -176,19 +233,29 @@ export default function App() {
         const { data, error } = await supabase!.from('users').select('*').eq('email', user.email).single();
         if (data && data.active) {
           if (data.must_change_password) {
+            isPasswordRecoveryRef.current = true;
             setAuthView('change-password');
             setUserData(data);
           } else {
             setUserData(data);
             setCurrentUser(user);
           }
+        } else if (error && error.code === 'PGRST116') {
+          // User not found in database even if they have an Auth session
+          // This can happen if a user is deleted from the table but session remains.
+          // Force sign out to clean up the state.
+          await supabase!.auth.signOut();
+          setAuthView('login');
         } else {
           setAuthView('request-access');
           setRequestData({ name: user.name || '', email: user.email });
         }
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error('[Auth] Error handling user session:', e);
+      toast.error('Erro ao processar sessão. Tente logar novamente.');
+      if (!isMockMode) await supabase!.auth.signOut();
+      setAuthView('login');
     } finally {
       setLoading(false);
     }
@@ -248,23 +315,57 @@ export default function App() {
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 6) return toast.error('A senha deve ter pelo menos 6 caracteres.');
+    if (newPassword !== confirmPassword) return toast.error('As senhas não coincidem.');
     setLoading(true);
     try {
       if (isMockMode) {
-        await mockDb.update('users', userData!.id, { password: newPassword, must_change_password: false });
-        const updatedUser = { ...userData!, password: newPassword, must_change_password: false };
-        setUserData(updatedUser);
-        setCurrentUser(updatedUser);
-        localStorage.setItem('qualitrack_mock_user', JSON.stringify(updatedUser));
+        if (!userData?.id) throw new Error('Sessão expirada. Faça login novamente.');
+        await mockDb.update('users', userData.id, { password: newPassword, must_change_password: false });
+        localStorage.removeItem('qualitrack_mock_user');
+        toast.success('Senha definida! Faça login com sua nova senha.');
+        setNewPassword('');
+        setConfirmPassword('');
+        setCurrentUser(null);
+        setUserData(null);
+        setAuthView('login');
       } else {
-        await supabase!.from('users').update({ password: newPassword, must_change_password: false }).eq('id', userData!.id);
-        const { data: updated } = await supabase!.from('users').select('*').eq('id', userData!.id).single();
-        setUserData(updated);
-        setCurrentUser(updated);
+        // 1. Update password in Supabase Auth (GoTrue)
+        const { error: authError } = await supabase!.auth.updateUser({ password: newPassword });
+        if (authError) throw authError;
+
+        // 2. Update must_change_password flag
+        // Use userData.email if available (invite flow sets userData via handleUserSession)
+        // Fall back to auth.getUser() only for recovery flow where userData is null
+        const emailToUpdate = userData?.email;
+        if (emailToUpdate) {
+          await supabase!.from('users').update({ must_change_password: false }).eq('email', emailToUpdate);
+        } else {
+          // Recovery flow fallback
+          const { data: { user: authUser } } = await supabase!.auth.getUser();
+          if (authUser?.email) {
+            await supabase!.from('users').update({ must_change_password: false }).eq('email', authUser.email);
+          }
+        }
+
+        // 3. Clear URL hash so F5 goes to login, not back to change-password
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        // 4. Clear all UI state BEFORE signOut — prevents spinner hanging if recovery session blocks
+        isPasswordRecoveryRef.current = false;
+        setNewPassword('');
+        setConfirmPassword('');
+        setCurrentUser(null);
+        setUserData(null);
+        setLoading(false);
+        setAuthView('login');
+        toast.success('Senha definida! Faça login com sua nova senha.');
+
+        // 5. Sign out in background (fire and forget — do NOT await)
+        supabase!.auth.signOut().catch(console.error);
+        return; // loading already cleared above
       }
-      toast.success('Senha atualizada com sucesso!');
-    } catch (e) {
-      toast.error('Erro ao atualizar senha.');
+    } catch (e: any) {
+      toast.error('Erro ao atualizar senha: ' + (e?.message || 'Erro desconhecido'));
     } finally {
       setLoading(false);
     }
@@ -321,21 +422,21 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    // 1. Limpar estado local IMEDIATAMENTE para garantir que a UI mude
+    setCurrentUser(null);
+    setUserData(null);
+    setAuthView('login');
+    localStorage.removeItem('qualitrack_mock_user');
+    
+    // 2. Tentar deslogar do Supabase em segundo plano
     try {
       if (!isMockMode && supabase) {
-        await supabase.auth.signOut();
+        // Não damos 'await' aqui para não travar a UI se a rede estiver lenta
+        supabase.auth.signOut().catch(console.error);
       }
-      localStorage.removeItem('qualitrack_mock_user');
-      setCurrentUser(null);
-      setUserData(null);
-      setAuthView('login');
       toast.success('Sessão encerrada.');
     } catch (e) {
-      console.error(e);
-      // Fallback: Force logout anyway
-      setCurrentUser(null);
-      setUserData(null);
-      setAuthView('login');
+      console.error('Erro ao encerrar sessão no servidor:', e);
     }
   };
 
@@ -494,11 +595,32 @@ export default function App() {
                         placeholder="Mínimo 6 caracteres"
                       />
                     </div>
-                    <button className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all">
-                      Definir Nova Senha e Entrar
+                    <div>
+                      <label className="block text-xs font-semibold tracking-wide text-[#7A7D71] uppercase mb-2">Confirmar nova senha</label>
+                      <input 
+                        type="password" 
+                        required
+                        className={`w-full bg-[#F9F9F6] border rounded-2xl py-3 px-4 text-sm focus:outline-none transition-colors ${
+                          confirmPassword && confirmPassword !== newPassword 
+                            ? 'border-red-400 focus:border-red-400' 
+                            : 'border-[#E2E4D8] focus:border-[#A7C0A5]'
+                        }`}
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        placeholder="Repita sua nova senha"
+                      />
+                      {confirmPassword && confirmPassword !== newPassword && (
+                        <p className="text-xs text-red-500 mt-1 font-semibold">As senhas não coincidem</p>
+                      )}
+                    </div>
+                    <button 
+                      className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all disabled:opacity-50"
+                      disabled={loading || (!!confirmPassword && confirmPassword !== newPassword)}
+                    >
+                      {loading ? 'Salvando...' : 'Definir Nova Senha'}
                     </button>
                     <button type="button" onClick={handleLogout} className="w-full text-sm font-bold text-[#7A7D71] hover:text-[#2D3A3A] transition-colors mt-2">
-                      Sair / Entrar com outra conta
+                      Cancelar / Entrar com outra conta
                     </button>
                   </form>
                 </motion.div>
@@ -698,7 +820,7 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
             {isSidebarOpen && (
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold truncate text-white">{userData?.name}</p>
-                <p className="text-[10px] font-semibold tracking-widest text-[#A7C0A5] uppercase opacity-80">{({'admin':'Administrador','qualidade':'Qualidade','gestor_qualidade':'Gestor Qual.','gestor_suporte':'Gestor Suporte','suporte':'Suporte'} as any)[userData?.role] || userData?.role}</p>
+                <p className="text-[10px] font-semibold tracking-widest text-[#A7C0A5] uppercase opacity-80">{({'admin':'Administrador','qualidade':'Monitor de Qualidade','gestor_qualidade':'Supervisor de Qualidade','gestor_suporte':'Supervisor de Atendimento','suporte':'Agente de Atendimento'} as any)[userData?.role] || userData?.role}</p>
                 {teamNames && (
                   <p className="text-[9px] font-medium truncate text-white/40 mt-0.5">{teamNames}</p>
                 )}
@@ -719,12 +841,12 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
         <header className="flex-shrink-0 px-8 py-6 flex items-center justify-between min-w-0">
           <div className="min-w-0 flex-1">
             <h2 className="text-2xl font-black text-brand-primary tracking-tight">
-              {activeTab === 'dashboard' ? (userData?.role === 'suporte' ? 'Visão Geral do Suporte' : 'Visão Geral da Qualidade') : (activeTab === 'monitorias' ? 'Gestão de Monitorias' : 'Administração')}
+              {activeTab === 'dashboard' ? (userData?.role === 'suporte' ? 'Visão Geral do Atendimento' : 'Visão Geral da Qualidade') : (activeTab === 'monitorias' ? 'Gestão de Monitorias' : 'Administração')}
             </h2>
             <p className="text-brand-muted text-sm font-medium mt-0.5">Conectado como <span className="text-brand-primary font-bold">{userData?.name}</span></p>
           </div>
           <div className="flex items-center gap-4 flex-shrink-0 ml-4">
-            {activeTab === 'monitorias' && (userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') && (
+            {(activeTab === 'monitorias' || activeTab === 'dashboard') && userData?.role === 'qualidade' && (
               <button 
                 onClick={() => setIsFormOpen(true)}
                 className="bg-[#2D3A3A] text-white px-6 py-2 rounded-2xl text-sm font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all flex items-center gap-2 whitespace-nowrap"

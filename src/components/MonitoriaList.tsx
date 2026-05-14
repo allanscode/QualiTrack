@@ -105,7 +105,14 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
 
       // Role-based visibility
       if (user?.role === 'suporte' && m.evaluated_id !== user.id) return false;
-      if (user?.role === 'qualidade' && m.evaluator_id !== user.id) return false;
+      
+      // Supervisor de Atendimento: Vê apenas monitorias das suas equipes
+      if (user?.role === 'gestor_suporte') {
+        const userTeamIds = user.team_ids || [];
+        if (!userTeamIds.includes(m.team_id)) return false;
+      }
+      
+      // Monitor de Qualidade: Por padrão vê tudo para "gerir as monitorias" (removida trava restritiva)
 
       // Tab (navigation by status)
       if (tab !== 'todas' && m.status !== tab) return false;
@@ -240,8 +247,24 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     } finally { setSubmitting(false); }
   };
 
-  const activeTeams = useMemo(() => teams.filter(t => t.active !== false), [teams]);
-  const activeSuportes = useMemo(() => users.filter(u => u.role === 'suporte' && u.active !== false), [users]);
+  const activeTeams = useMemo(() => {
+    let filtered = teams.filter(t => t.active !== false);
+    if (user?.role === 'gestor_suporte') {
+      const userTeamIds = user.team_ids || [];
+      filtered = filtered.filter(t => userTeamIds.includes(t.id));
+    }
+    return filtered;
+  }, [teams, user]);
+
+  const activeSuportes = useMemo(() => {
+    let filtered = users.filter(u => u.role === 'suporte' && u.active !== false);
+    if (user?.role === 'gestor_suporte') {
+      const userTeamIds = user.team_ids || [];
+      filtered = filtered.filter(u => u.team_ids?.some(tid => userTeamIds.includes(tid)));
+    }
+    return filtered;
+  }, [users, user]);
+
   const activeAuditors = useMemo(() => users.filter(u => ['qualidade', 'gestor_qualidade', 'admin'].includes(u.role) && u.active !== false), [users]);
 
   if (loading) return (
@@ -313,7 +336,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                 <CustomSelect 
                   value={teamFilter}
                   onChange={val => setTeamFilter(val)}
-                  options={[{ value: '', label: 'Equipes' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
+                  options={[{ value: '', label: 'Todas Equipes' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
                   className="w-full"
                 />
               </div>
@@ -323,18 +346,18 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                   <CustomSelect 
                     value={suporteFilter}
                     onChange={val => setSuporteFilter(val)}
-                    options={[{ value: '', label: 'Suporte' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
+                    options={[{ value: '', label: 'Agentes' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
                     className="w-full"
                   />
                 </div>
               )}
 
-              {user?.role !== 'suporte' && user?.role !== 'qualidade' && (
+              {['admin', 'gestor_qualidade'].includes(user?.role || '') && (
                 <div className="flex-1 min-w-[160px] h-10">
                   <CustomSelect 
                     value={auditorFilter}
                     onChange={val => setAuditorFilter(val)}
-                    options={[{ value: '', label: 'Qualidade' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
+                    options={[{ value: '', label: 'Monitores' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
                     className="w-full"
                   />
                 </div>

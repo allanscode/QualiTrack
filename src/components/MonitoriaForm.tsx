@@ -335,7 +335,7 @@ export default function MonitoriaForm({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Suporte *</label>
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Agente de Atendimento *</label>
                   <CustomSelect 
                     value={header.evaluated_id} 
                     onChange={val => {
@@ -347,7 +347,7 @@ export default function MonitoriaForm({
                       }
                     }} 
                     options={[
-                      { value: '', label: 'Selecione o colaborador...' }, 
+                      { value: '', label: 'Selecione o agente...' }, 
                       ...agents
                         .filter(a => !header.team_id || (a.team_ids && a.team_ids.includes(header.team_id)))
                         .map(a => ({ value: a.id, label: a.name }))
