@@ -53,26 +53,18 @@ export default function App() {
           toast.error('E-mail não cadastrado.');
         }
       } else {
-        const { data: user } = await supabase!.from('users').select('*').eq('email', resetEmail.toLowerCase()).single();
-        if (user) {
-          // Gerar token real
-          const token = Math.random().toString(36).substr(2, 10);
-          await supabase!.from('users').update({ reset_token: token }).eq('id', user.id);
-          
-          // Chama a Edge Function
-          const { data, error: funcError } = await supabase.functions.invoke('send-email', {
-            body: { email: user.email, name: user.name, type: 'reset', token }
-          });
-
-          if (funcError) throw new Error('Falha ao enviar e-mail de recuperação.');
-
-          toast.success('E-mail enviado! Verifique sua caixa de entrada.', {
-            duration: 5000,
-          });
-          setAuthView('login');
-        } else {
-          toast.error('E-mail não cadastrado.');
+        const { error } = await supabase!.auth.resetPasswordForEmail(resetEmail.toLowerCase(), {
+          redirectTo: window.location.origin, // Supabase redirecionará com o hash #access_token=...&type=recovery
+        });
+        
+        if (error) {
+          throw new Error('Falha ao enviar e-mail de recuperação: ' + error.message);
         }
+
+        toast.success('E-mail enviado! Verifique sua caixa de entrada com o link seguro.', {
+          duration: 5000,
+        });
+        setAuthView('login');
       }
     } catch (e: any) {
       toast.error(e.message || 'Erro ao processar solicitação.');
@@ -88,28 +80,21 @@ export default function App() {
     
     setLoading(true);
     try {
-      if (!isMockMode && supabase && resetToken) {
-        // Busca o usuário pelo token
-        const { data: user, error: findError } = await supabase.from('users').select('*').eq('reset_token', resetToken).single();
+      if (!isMockMode && supabase) {
+        // Se a gente chegou aqui via link de recuperação, o Supabase já abriu uma sessão
+        // Tudo o que precisamos fazer é chamar o updateUser com a nova senha
+        const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
         
-        if (findError || !user) {
-          toast.error('Link inválido ou expirado.');
-          return;
-        }
-
-        // Atualiza a senha e limpa o token
-        const { error: updateError } = await supabase.from('users').update({ 
-          password: newPassword, 
-          must_change_password: false,
-          reset_token: null 
-        }).eq('id', user.id);
-
         if (updateError) throw updateError;
+
+        // Atualizar também na tabela de usuários caso tenha a flag must_change_password
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('users').update({ must_change_password: false }).eq('id', user.id);
+        }
 
         toast.success('Senha definida com sucesso! Você já pode entrar.');
         
-        // Limpa tudo e volta pro login
-        setResetToken(null);
         setNewPassword('');
         setConfirmPassword('');
         setAuthView('login');
@@ -126,15 +111,13 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Checar se há um token na URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    
-    if (token) {
-      setResetToken(token);
-      setAuthView('setup-password');
+    // Checar se há um hash fragment de recovery/invite na URL
+    const hash = window.location.hash;
+    if (hash && (hash.includes('type=recovery') || hash.includes('type=invite'))) {
+      setAuthView('change-password');
       setLoading(false);
-      return;
+      // O Supabase já terá logado o usuário nos bastidores se o token for válido.
+      // Apenas forçamos a tela de mudança de senha (que usará o supabase.auth.updateUser)
     }
 
     const checkSession = async () => {
@@ -153,6 +136,20 @@ export default function App() {
         } else {
           setLoading(false);
         }
+        
+        // Listen to auth changes
+        supabase!.auth.onAuthStateChange(async (event, session) => {
+          if (event === 'PASSWORD_RECOVERY') {
+            setAuthView('change-password');
+            setLoading(false);
+          } else if (session) {
+            await handleUserSession(session.user);
+          } else {
+            setCurrentUser(null);
+            setUserData(null);
+            setLoading(false);
+          }
+        });
       }
     };
     checkSession();
@@ -225,31 +222,21 @@ export default function App() {
           toast.error('E-mail ou senha incorretos.');
         }
       } else {
-        // Login direto na tabela customizada do Supabase
-        const { data: user, error } = await supabase!
-          .from('users')
-          .select('*')
-          .eq('email', emailLower)
-          .eq('password', credentials.password)
-          .single();
+        // Login Seguro usando Supabase Auth (GoTrue)
+        const { data, error } = await supabase!.auth.signInWithPassword({
+          email: emailLower,
+          password: credentials.password
+        });
 
-        if (error || !user) {
+        if (error || !data.user) {
           toast.error('E-mail ou senha incorretos.');
           return;
         }
 
-        if (!user.active) return toast.error('Esta conta está desativada.');
-        
-        if (user.must_change_password) {
-          setUserData(user);
-          setAuthView('change-password');
-          return;
-        }
-
-        setCurrentUser(user);
-        setUserData(user);
-        setActiveTab('dashboard');
-        toast.success(`Bem-vindo, ${user.name}!`);
+        // A sessão agora foi criada pelo Supabase Auth.
+        // O restante (buscar dados da tabela users e setar currentUser) será feito automaticamente
+        // pelo onAuthStateChange que definimos no useEffect.
+        toast.success('Login realizado com sucesso!');
       }
     } catch (e: any) {
       toast.error(e.message || 'Erro ao realizar login.');
@@ -510,6 +497,9 @@ export default function App() {
                     <button className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all">
                       Definir Nova Senha e Entrar
                     </button>
+                    <button type="button" onClick={handleLogout} className="w-full text-sm font-bold text-[#7A7D71] hover:text-[#2D3A3A] transition-colors mt-2">
+                      Sair / Entrar com outra conta
+                    </button>
                   </form>
                 </motion.div>
               )}
@@ -544,6 +534,9 @@ export default function App() {
                     </div>
                     <button className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#2D3A3A]/20 hover:bg-opacity-90 transition-all">
                       Confirmar e Entrar
+                    </button>
+                    <button type="button" onClick={handleLogout} className="w-full text-sm font-bold text-[#7A7D71] hover:text-[#2D3A3A] transition-colors mt-2">
+                      Sair / Entrar com outra conta
                     </button>
                   </form>
                 </motion.div>

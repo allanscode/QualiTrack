@@ -155,25 +155,40 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
         email: emailLower,
         role: editingUser.role,
         active: true,
-        team_ids: editingUser.team_ids || [],
-        ...(editingUser.password ? { password: editingUser.password } : {})
+        team_ids: editingUser.team_ids || []
       };
 
       if (!supabase) {
         if (editingUser.id) await mockDb.update('users', editingUser.id, payload);
         else await mockDb.insert('users', { ...payload, id: emailLower });
       } else {
-        const { error } = editingUser.id 
-          ? await supabase.from('users').update(payload).eq('id', editingUser.id)
-          : await supabase.from('users').insert([payload]);
-        if (error) throw error;
+        if (editingUser.id) {
+          // Atualização de dados na tabela pública
+          const { error } = await supabase.from('users').update(payload).eq('id', editingUser.id);
+          if (error) throw error;
+        } else {
+          // Criação de NOVO usuário usa a Edge Function (Segurança / Envio de Link)
+          const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', {
+            body: payload
+          });
+          
+          if (funcError) {
+            console.error('Edge Function HTTP Error:', funcError);
+            throw new Error('Falha de conexão com a função de convite.');
+          }
+
+          if (data && data.success === false) {
+            console.error('Edge Function Logic Error:', data);
+            throw new Error(`Erro do Supabase: ${data.details?.message || data.error}`);
+          }
+        }
       }
 
       toast.success('Usuário salvo com sucesso!');
       setIsModalOpen(false);
       loadData();
     } catch (error: any) {
-      toast.error('Erro ao salvar: ' + error.message);
+      toast.error(error.message || 'Erro ao salvar o usuário');
     } finally {
       setSaving(false);
     }
@@ -186,7 +201,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
         return;
       }
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: window.location.origin,
       });
       if (error) throw error;
       toast.success('Email de recuperação enviado!');
@@ -948,19 +963,32 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
   const handleApprove = async () => {
     setSaving(true);
     try {
-      const payload = { ...approveData, active: true, must_change_password: true, reset_token: Math.random().toString(36).substr(2, 10) };
+      const payload = { ...approveData, active: true };
       if (!supabase) {
         await mockDb.update('access_requests', approvingReq.id, { status: 'approved' });
         await mockDb.insert('users', { id: approveData.email, ...payload });
       } else {
         await supabase.from('access_requests').update({ status: 'approved' }).eq('id', approvingReq.id);
-        await supabase.from('users').upsert([payload], { onConflict: 'email' });
-        await supabase.functions.invoke('send-email', { body: { email: payload.email, name: payload.name, type: 'welcome', token: payload.reset_token } });
+        
+        // Criação do usuário via Supabase Auth (Edge Function)
+        const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', {
+          body: payload
+        });
+
+        if (funcError) {
+          console.error('Edge Function HTTP Error:', funcError);
+          throw new Error('Falha de conexão com a função de convite.');
+        }
+
+        if (data && data.success === false) {
+          console.error('Edge Function Logic Error:', data);
+          throw new Error(`Erro do Supabase: ${data.details?.message || data.error}`);
+        }
       }
-      toast.success('Solicitação aprovada e e-mail enviado!');
+      toast.success('Solicitação aprovada e e-mail de acesso enviado!');
       setIsApproveModalOpen(false);
       loadData();
-    } catch (e) { toast.error('Erro ao aprovar'); }
+    } catch (e: any) { toast.error(e.message || 'Erro ao aprovar solicitação'); }
     finally { setSaving(false); }
   };
 
