@@ -101,18 +101,21 @@ export default function MonitoriaForm({
             supabase.from('users').select('*'), // Fetch all for history/anonymity
             supabase.from('teams').select('*').eq('active', true),
           ]);
-          setForms(fData || []);
+          setForms((fData || []).sort((a: any, b: any) => a.title.localeCompare(b.title)));
           const usersList = (aData || []) as User[];
           setAllUsers(usersList);
-          setAgents(usersList.filter(u => u.role === 'suporte' && u.active === true));
-          setTeams(tData || []);
+          setAgents(usersList.filter(u => u.role === 'suporte' && u.active === true).sort((a, b) => a.name.localeCompare(b.name)));
+          setTeams((tData || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
         }
       } catch (e) { console.error('Erro ao carregar dados:', e); }
     };
     loadData();
   }, []);
 
-  const selectedForm = forms.find(f => f.id === header.form_id);
+  const selectedForm = useMemo(() => {
+    if (initialData?.form_snapshot) return initialData.form_snapshot;
+    return forms.find(f => f.id === header.form_id);
+  }, [initialData, forms, header.form_id]);
 
   const calculateScore = () => {
     // 1. Check for any failed critical questions (from the new system)
@@ -253,6 +256,7 @@ export default function MonitoriaForm({
         client_contact_log: header.client_contact_log,
         client_contact_success: header.client_contact_success,
         active: true,
+        form_snapshot: selectedForm,
         history: [...(initialData?.history || []), historyEntry],
         deadline_at: (initialData?.deadline_at && !isReevaluating && !isAdminEdit) ? initialData.deadline_at : getDeadline(),
         updated_at: nowTs,
@@ -554,7 +558,17 @@ export default function MonitoriaForm({
                               {q.is_critical && (
                                 <Badge variant="error" size="sm" className="mt-1 flex-shrink-0 animate-pulse">ERRO CRÍTICO</Badge>
                               )}
-                              <p className="text-sm font-bold text-brand-primary leading-relaxed">{q.text}</p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-bold text-brand-primary leading-relaxed">{q.text}</p>
+                                {q.description && (
+                                  <div className="relative group/info">
+                                    <Info className="w-4 h-4 text-brand-muted hover:text-brand-accent cursor-help transition-colors" />
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-surface-card border border-surface-border rounded-xl shadow-premium opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all z-50 pointer-events-none text-center">
+                                      <p className="text-[11px] font-bold text-brand-muted leading-relaxed">{q.description}</p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             <div className="flex items-center gap-4 mt-2">
                               <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">

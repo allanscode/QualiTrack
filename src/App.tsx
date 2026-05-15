@@ -100,6 +100,83 @@ export default function App() {
     };
   }, []);
 
+  // --- Session Resilience & Recovery ---
+  useEffect(() => {
+    if (isMockMode || !supabase) return;
+
+    // Heartbeat: Pings the session every 5 minutes to keep it fresh
+    const heartbeatInterval = setInterval(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) console.log('[System] Sessão renovada pelo heartbeat.');
+      } catch (e) {
+        console.warn('[System] Falha no heartbeat de sessão.');
+      }
+    }, 5 * 60 * 1000);
+
+    // Tab Focus Recovery: Refreshes session when user returns to the tab
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[System] Aba focada. Validando sessão...');
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            // If session is close to expiry (less than 10 mins), refresh it
+            const expiresAt = session.expires_at || 0;
+            const now = Math.floor(Date.now() / 1000);
+            if (expiresAt - now < 600) {
+              await supabase.auth.refreshSession();
+              console.log('[System] Sessão próxima da expiração. Renovada com sucesso.');
+            }
+          }
+        } catch (e) {
+          console.error('[System] Erro ao recuperar sessão no foco.');
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [isMockMode]);
+
+  // --- Inactivity Timer (60 minutes) ---
+  useEffect(() => {
+    if (!currentUser || isMockMode) return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(async () => {
+        // Antes de deslogar, verifica se a aba ainda está aberta/visível
+        if (document.visibilityState === 'visible') {
+          // Se o usuário está olhando para a tela, apenas renova a sessão em vez de deslogar
+          await supabase?.auth.getSession();
+          resetTimer();
+        } else {
+          supabase?.auth.signOut();
+          toast.info('Sessão encerrada por inatividade prolongada.');
+        }
+      }, 60 * 60 * 1000); // 60 minutos
+    };
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => document.addEventListener(event, resetTimer));
+
+    resetTimer(); // Inicia o timer
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      events.forEach(event => document.removeEventListener(event, resetTimer));
+    };
+  }, [currentUser]);
+
   const handleUserSession = async (user: any) => {
     try {
       if (isMockMode) {

@@ -64,41 +64,56 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     if (!user) return;
     setLoading(true);
     try {
-      let docs: Monitoria[] = [];
-      let userDocs: User[] = [];
       if (!supabase) {
-        docs = (await mockDb.get('monitorias')).data || [];
-        userDocs = (await mockDb.get('users')).data || [];
+        const { data: d } = await mockDb.get('monitorias');
+        const { data: u } = await mockDb.get('users');
         const { data: t } = await mockDb.get('teams');
         const { data: f } = await mockDb.get('forms');
+        setMonitorias(d || []);
+        setUsers(u || []);
         setTeams(t || []);
         setForms(f || []);
       } else {
-        // Implement timeout to prevent infinite hang on background idle
-        const fetchPromise = Promise.all([
-          supabase.from('monitorias').select('*').order('created_at', { ascending: false }),
-          supabase.from('users').select('*'),
-          supabase.from('teams').select('*'),
-          supabase.from('forms').select('*')
-        ]);
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('timeout')), 15000)
-        );
+        const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
+          try {
+            console.log(`[Monitorias] Buscando dados (Tentativa ${retryCount + 1})...`);
+            const fetchPromise = Promise.all([
+              supabase.from('monitorias').select('*').order('created_at', { ascending: false }),
+              supabase.from('users').select('*'),
+              supabase.from('teams').select('*'),
+              supabase.from('forms').select('*')
+            ]);
+            
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('timeout')), 30000)
+            );
 
-        const [mRes, uRes, tRes, fRes] = await Promise.race([fetchPromise, timeoutPromise]) as any[];
-        
-        docs = (mRes.data || []).map((r: any) => ({ ...r, history: r.history || [], answers: r.answers || {} }));
-        userDocs = (uRes.data || []) as User[];
-        setTeams(tRes.data || []);
-        setForms(fRes.data || []);
+            const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+            const errorRes = results.find(r => r.error);
+            if (errorRes) throw errorRes.error;
+
+            return results;
+          } catch (err: any) {
+            console.error(`[Monitorias] Erro na tentativa ${retryCount + 1}:`, err);
+            if (retryCount < 2) {
+              await supabase.auth.getSession();
+              await new Promise(res => setTimeout(res, 1500 * (retryCount + 1)));
+              return executeWithRetry(retryCount + 1);
+            }
+            throw err;
+          }
+        };
+
+        const [mRes, uRes, tRes, fRes] = await executeWithRetry();
+        if (mRes.data) setMonitorias(mRes.data.map((r: any) => ({ ...r, history: r.history || [], answers: r.answers || {} })));
+        if (uRes.data) setUsers(uRes.data as User[]);
+        if (tRes.data) setTeams(tRes.data || []);
+        if (fRes.data) setForms(fRes.data || []);
       }
-      setMonitorias(docs);
-      setUsers(userDocs);
     } catch (e: any) { 
       console.error(e);
       if (e.message === 'timeout') {
-        toast.error('A conexão expirou. Por favor, atualize a página (F5).');
+        toast.error('O servidor não respondeu. Tente alternar entre os menus para recarregar.');
       }
     }
     finally { setLoading(false); }
@@ -269,7 +284,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       const userTeamIds = user.team_ids || [];
       filtered = filtered.filter(t => userTeamIds.includes(t.id));
     }
-    return filtered;
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [teams, user]);
 
   const activeSuportes = useMemo(() => {
@@ -278,10 +293,13 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       const userTeamIds = user.team_ids || [];
       filtered = filtered.filter(u => u.team_ids?.some(tid => userTeamIds.includes(tid)));
     }
-    return filtered;
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [users, user]);
 
-  const activeAuditors = useMemo(() => users.filter(u => ['qualidade', 'gestor_qualidade', 'admin'].includes(u.role) && u.active !== false), [users]);
+  const activeAuditors = useMemo(() => {
+    const list = users.filter(u => ['qualidade', 'gestor_qualidade', 'admin'].includes(u.role) && u.active !== false);
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
+  }, [users]);
 
   if (loading) return (
     <div className="space-y-4">

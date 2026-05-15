@@ -65,23 +65,42 @@ export function DashboardProvider({ user, children }: { user: User | null, child
         teamDocs = (await mockDb.get('teams')).data || [];
         formDocs = (await mockDb.get('forms')).data || [];
       } else {
-        const fetchPromise = Promise.all([
-          supabase.from('monitorias').select('*').order('created_at', { ascending: false }),
-          supabase.from('users').select('*'),
-          supabase.from('teams').select('*'),
-          supabase.from('forms').select('*')
-        ]);
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('timeout')), 15000)
-        );
+        const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
+          try {
+            console.log(`[Dashboard] Carregando dados (Tentativa ${retryCount + 1})...`);
+            const fetchPromise = Promise.all([
+              supabase.from('monitorias').select('*').order('created_at', { ascending: false }),
+              supabase.from('users').select('*'),
+              supabase.from('teams').select('*'),
+              supabase.from('forms').select('*')
+            ]);
+            
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('timeout')), 30000)
+            );
 
-        const [mRes, uRes, tRes, fRes] = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+            const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+            const errorRes = results.find(r => r.error);
+            if (errorRes) throw errorRes.error;
+
+            return results;
+          } catch (err: any) {
+            console.error(`[Dashboard] Erro na tentativa ${retryCount + 1}:`, err);
+            if (retryCount < 2) {
+              await supabase.auth.getSession();
+              await new Promise(res => setTimeout(res, 1500 * (retryCount + 1)));
+              return executeWithRetry(retryCount + 1);
+            }
+            throw err;
+          }
+        };
+
+        const [mRes, uRes, tRes, fRes] = await executeWithRetry();
         
-        docs = (mRes.data || []) as Monitoria[];
-        userDocs = (uRes.data || []) as User[];
-        teamDocs = (tRes.data || []) as Team[];
-        formDocs = (fRes.data || []) as EvaluationForm[];
+        if (mRes.data) docs = mRes.data as Monitoria[];
+        if (uRes.data) userDocs = uRes.data as User[];
+        if (tRes.data) teamDocs = tRes.data as Team[];
+        if (formDocs) formDocs = fRes.data as EvaluationForm[];
       }
 
       // Always exclude deactivated monitorias from dashboard

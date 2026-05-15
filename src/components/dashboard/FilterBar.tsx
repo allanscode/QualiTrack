@@ -51,7 +51,7 @@ export default function FilterBar() {
       
       list = list.filter(t => myTeamIds.includes(t.id));
     }
-    return list;
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [teams, user, users, allMonitorias]);
 
   const activeAgents = useMemo(() => {
@@ -60,10 +60,13 @@ export default function FilterBar() {
       const myTeamIds = user.team_ids || [];
       list = list.filter(u => u.team_ids?.some(tid => myTeamIds.includes(tid)));
     }
-    return list;
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [users, user]);
 
-  const activeAuditors = useMemo(() => users.filter(u => (u.role === 'qualidade' || u.role === 'gestor_qualidade' || u.role === 'admin') && u.active !== false), [users]);
+  const activeAuditors = useMemo(() => {
+    const list = users.filter(u => (u.role === 'qualidade' || u.role === 'gestor_qualidade' || u.role === 'admin') && u.active !== false);
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
+  }, [users]);
 
   return (
     <div className="space-y-2">

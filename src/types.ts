@@ -25,6 +25,7 @@ export interface Ticket {
 export interface Question {
   id: string;
   text: string;
+  description?: string;
   type: 'yes_no_na';
   weight?: number;
   is_critical?: boolean;
@@ -92,6 +93,7 @@ export interface Monitoria {
   team_id?: string;
   satisfaction_record_text?: string;
   selected_critical_errors?: string[];
+  form_snapshot?: EvaluationForm;
   active?: boolean;
   display_id?: number;
   history: MonitoriaHistoryEntry[];
@@ -104,6 +106,8 @@ export interface Team {
   name: string;
   active: boolean;
   description?: string;
+  sigla?: string;
+  icon?: string;
 }
 
 export interface AccessRequest {

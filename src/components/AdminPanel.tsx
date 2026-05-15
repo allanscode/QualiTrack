@@ -22,9 +22,70 @@ import {
   User as UserIcon,
   ShieldCheck,
   ChevronRight,
+  ChevronLeft,
   ArrowRight,
   Pencil,
-  Key
+  Key,
+  MessageSquare,
+  Headset,
+  Phone,
+  Zap,
+  Target,
+  Rocket,
+  Cpu,
+  Globe,
+  Award,
+  Star,
+  Heart,
+  Smile,
+  Flame,
+  Layers,
+  Layout,
+  Package,
+  Box,
+  Activity,
+  TrendingUp,
+  BarChart,
+  PieChart,
+  Bell,
+  Calendar,
+  Camera,
+  Cloud,
+  Coffee,
+  Compass,
+  Database,
+  Eye,
+  Flag,
+  Flashlight,
+  Folder,
+  Gift,
+  Hammer,
+  HelpCircle,
+  Home,
+  Image,
+  Inbox,
+  Info,
+  Laptop,
+  Lightbulb,
+  Lock,
+  Map,
+  Mic,
+  Monitor,
+  Music,
+  Navigation,
+  Printer,
+  Radio,
+  Send,
+  Settings,
+  Smartphone,
+  Speaker,
+  Sun,
+  Terminal,
+  ThumbsUp,
+  Wrench,
+  Video,
+  Wifi,
+  Wind
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -32,7 +93,6 @@ import QualityConfigManagement from './QualityConfigManagement';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
-import Select from './ui/Select';
 import CustomSelect from './ui/CustomSelect';
 
 export default function AdminPanel({ user: currentUser }: { user: User | null }) {
@@ -42,6 +102,20 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
   const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Heartbeat global para manter a sessão viva a cada 5 minutos em toda a aba Admin
+  useEffect(() => {
+    if (!supabase) return;
+    const interval = setInterval(async () => {
+      try {
+        await supabase.auth.getSession();
+        console.log('[Admin] Sessão validada pelo heartbeat global.');
+      } catch (e) {
+        console.warn('[Admin] Falha no heartbeat de sessão.');
+      }
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const loadAllData = async () => {
     setLoading(true);
@@ -58,26 +132,59 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
         setForms(f.data || []);
         setRequests(r.data || []);
       } else {
-        // Fetch users, teams, and forms (usually safe)
-        const [u, t, f] = await Promise.all([
-          supabase.from('users').select('*'),
-          supabase.from('teams').select('*'),
-          supabase.from('forms').select('*')
-        ]);
-        setUsers(u.data || []);
-        setTeams(t.data || []);
-        setForms(f.data || []);
+        const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
+          try {
+            console.log(`[Admin] Carregando dados (Tentativa ${retryCount + 1})...`);
+            
+            // Garantir que temos uma sessão válida antes de tentar buscar
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session && retryCount < 1) {
+              console.warn('[Admin] Sessão não encontrada. Tentando refresh...');
+              await supabase.auth.refreshSession();
+            }
 
-        // Fetch requests separately with a timeout failsafe
-        // This prevents the whole panel from hanging if access_requests RLS is broken
+            const fetchPromise = Promise.all([
+              supabase.from('users').select('*'),
+              supabase.from('teams').select('*'),
+              supabase.from('forms').select('*')
+            ]);
+            
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('timeout')), 30000)
+            );
+
+            const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+            
+            const errorRes = results.find(r => r.error);
+            if (errorRes) throw errorRes.error;
+
+            return results;
+          } catch (err: any) {
+            console.error(`[Admin] Erro na tentativa ${retryCount + 1}:`, err);
+            
+            if (retryCount < 2) {
+              const waitTime = 1000 * (retryCount + 1);
+              console.warn(`[Admin] Retentando em ${waitTime/1000}s...`);
+              await new Promise(res => setTimeout(res, waitTime));
+              return executeWithRetry(retryCount + 1);
+            }
+            throw err;
+          }
+        };
+
+        const [u, t, f] = await executeWithRetry();
+        
+        // Só atualiza o estado se tivermos dados válidos
+        if (u.data) setUsers(u.data);
+        if (t.data) setTeams(t.data);
+        if (f.data) setForms(f.data);
+
+        // Busca de solicitações separada (mais propensa a erro se RLS estiver OFF)
         try {
-          const { data: r, error: rErr } = await Promise.race([
-            supabase.from('access_requests').select('*').order('created_at', { ascending: false }),
-            new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-          ]);
-          if (!rErr) setRequests(r || []);
+          const { data: r, error: re } = await supabase.from('access_requests').select('*').order('created_at', { ascending: false });
+          if (!re && r) setRequests(r);
         } catch (e) {
-          console.warn('[Admin] access_requests fetch timed out');
+          console.warn('[Admin] Falha ao carregar solicitações de acesso.');
         }
       }
     } catch (e) {
@@ -148,6 +255,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [teamSearch, setTeamSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [teamFilter, setTeamFilter] = useState('');
 
@@ -166,47 +274,67 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
   const handleSaveUser = async () => {
     if (!editingUser.name || !editingUser.email) return;
     setSaving(true);
-    try {
-      const emailLower = editingUser.email.toLowerCase();
-      const payload: any = {
-        name: editingUser.name,
-        email: emailLower,
-        role: editingUser.role,
-        active: true,
-        team_ids: editingUser.team_ids || []
-      };
-
-      if (!supabase) {
-        if (editingUser.id) await mockDb.update('users', editingUser.id, payload);
-        else await mockDb.insert('users', { ...payload, id: emailLower });
-      } else {
-        if (editingUser.id) {
-          // Atualização de dados na tabela pública
-          const { error } = await supabase.from('users').update(payload).eq('id', editingUser.id);
-          if (error) throw error;
-        } else {
-          // Criação de NOVO usuário usa a Edge Function (Segurança / Envio de Link)
-          const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', {
-            body: payload
-          });
-          
-          if (funcError) {
-            console.error('Edge Function HTTP Error:', funcError);
-            throw new Error('Falha de conexão com a função de convite.');
-          }
-
-          if (data && data.success === false) {
-            console.error('Edge Function Logic Error:', data);
-            throw new Error(`Erro do Supabase: ${data.details?.message || data.error}`);
-          }
+    const executeWithRetry = async (retryCount = 0): Promise<void> => {
+      try {
+        if (!supabase) {
+          const emailLower = editingUser.email.toLowerCase();
+          const payload = { ...editingUser, email: emailLower, active: true, team_ids: editingUser.team_ids || [] };
+          if (editingUser.id) await mockDb.update('users', editingUser.id, payload);
+          else await mockDb.insert('users', { ...payload, id: emailLower });
+          return;
         }
-      }
 
-      toast.success('Usuário salvo com sucesso!');
+        // 1. Aquecimento de sessão (garante que o cliente está pronto)
+        await supabase.auth.getSession();
+
+        const emailLower = editingUser.email.toLowerCase();
+        const payload = {
+          name: editingUser.name,
+          email: emailLower,
+          role: editingUser.role,
+          active: true,
+          team_ids: editingUser.team_ids || []
+        };
+
+        // 2. Definição da Operação
+        const operation = (async () => {
+          if (editingUser.id) {
+            const { error } = await supabase.from('users').update(payload).eq('id', editingUser.id);
+            if (error) throw error;
+          } else {
+            const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', { body: payload });
+            if (funcError) throw funcError;
+            if (data?.success === false) throw new Error(data.details?.message || 'Erro ao convidar usuário');
+          }
+        })();
+
+        // 3. Corrida com Timeout
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        await Promise.race([operation, timeoutPromise]);
+
+      } catch (err: any) {
+        // Se for timeout e ainda houver tentativas, tenta novamente em 1 segundo
+        if (err.message === 'timeout' && retryCount < 2) {
+          console.warn(`Tentativa ${retryCount + 1} de salvamento de usuário falhou por timeout. Retentando...`);
+          await new Promise(res => setTimeout(res, 1000));
+          return executeWithRetry(retryCount + 1);
+        }
+        throw err;
+      }
+    };
+
+    try {
+      await executeWithRetry();
+      toast.success(editingUser.id ? 'Usuário atualizado!' : 'Convite enviado com sucesso!');
       setIsModalOpen(false);
       loadData();
-    } catch (error: any) {
-      toast.error('Não foi possível salvar o usuário. Verifique os dados e tente novamente.');
+    } catch (e: any) {
+      console.error('Erro definitivo ao gerenciar usuário:', e);
+      if (e.message === 'timeout') {
+        toast.error('O servidor não respondeu após várias tentativas. Por favor, verifique sua conexão ou tente recarregar a página (F5).');
+      } else {
+        toast.error(e.message || 'Erro ao salvar usuário.');
+      }
     } finally {
       setSaving(false);
     }
@@ -264,11 +392,11 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
               onChange={val => setRoleFilter(val as string)}
               options={[
                 { value: '', label: 'Todos os Perfis' }, 
-                { value: 'suporte', label: 'Agente Suporte' },
-                { value: 'qualidade', label: 'Monitor Qualidade' },
-                { value: 'gestor_suporte', label: 'Superv. Atendimento' },
-                { value: 'gestor_qualidade', label: 'Monit. Qualidade Senior' },
-                { value: 'admin', label: 'Administrador' }
+                { value: 'admin', label: 'Administrador' },
+                { value: 'suporte', label: 'Agente de Atendimento' },
+                { value: 'qualidade', label: 'Monitor de Qualidade' },
+                { value: 'gestor_suporte', label: 'Supervisor de Atendimento' },
+                { value: 'gestor_qualidade', label: 'Supervisor de Qualidade' }
               ]}
               className="w-48"
             />
@@ -277,7 +405,9 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
               onChange={val => setTeamFilter(val as string)}
               options={[
                 { value: '', label: 'Todas as Equipes' },
-                ...teams.filter(t => t.active !== false).map(t => ({ value: t.id, label: t.name }))
+                ...teams.filter(t => t.active !== false)
+                   .sort((a, b) => a.name.localeCompare(b.name))
+                   .map(t => ({ value: t.id, label: t.name }))
               ]}
               className="w-48"
             />
@@ -376,7 +506,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
             <Card className="max-w-md w-full animate-in zoom-in-95 duration-200">
               <header className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">{editingUser.id ? 'Editar Usuário' : 'Novo Usuário'}</h3>
-                <button onClick={() => setIsModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
+                <button onClick={() => { setIsModalOpen(false); setTeamSearch(''); }} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
               </header>
 
               <div className="space-y-4">
@@ -388,23 +518,40 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Email</label>
                   <input type="email" disabled={!!editingUser.id} className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
                 </div>
-                <Select 
+                <CustomSelect 
                   label="Perfil"
                   value={editingUser.role}
-                  onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}
+                  onChange={val => setEditingUser({ ...editingUser, role: val as any })}
                   options={[
                     { value: 'admin', label: 'Administrador' },
-                    { value: 'gestor_qualidade', label: 'Supervisor de Qualidade' },
-                    { value: 'gestor_suporte', label: 'Supervisor de Atendimento' },
+                    { value: 'suporte', label: 'Agente de Atendimento' },
                     { value: 'qualidade', label: 'Monitor de Qualidade' },
-                    { value: 'suporte', label: 'Agente de Atendimento' }
-                  ]}
+                    { value: 'gestor_suporte', label: 'Supervisor de Atendimento' },
+                    { value: 'gestor_qualidade', label: 'Supervisor de Qualidade' }
+                  ].sort((a, b) => a.label.localeCompare(b.label))}
                 />
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipes</label>
+                  <div className="flex items-center justify-between ml-1 mb-1">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Equipes</label>
+                    {teams.filter(t => t.active !== false).length > 8 && (
+                      <div className="relative w-32 h-7">
+                        <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-brand-muted/50" />
+                        <input 
+                          type="text" 
+                          placeholder="Buscar..." 
+                          className="w-full h-full bg-surface-subtle border border-surface-border rounded-lg pl-6 pr-2 text-[10px] font-bold text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
+                          value={teamSearch}
+                          onChange={e => setTeamSearch(e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2 p-3 bg-surface-bg border border-surface-border rounded-xl max-h-32 overflow-y-auto no-scrollbar">
-                    {teams.filter(t => t.active !== false).map(t => (
-                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${editingUser.team_ids?.includes(t.id) ? 'bg-brand-primary text-white border-brand-primary shadow-sm' : 'bg-white text-brand-muted border-surface-border hover:border-brand-highlight'}`}>
+                    {teams.filter(t => t.active !== false)
+                      .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(t => (
+                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${editingUser.team_ids?.includes(t.id) ? 'bg-brand-primary text-brand-on-primary border-brand-primary shadow-sm' : 'bg-surface-subtle text-brand-muted border-surface-border hover:border-brand-highlight'}`}>
                         <input
                           type="checkbox"
                           className="hidden"
@@ -421,6 +568,9 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
                     ))}
                     {teams.filter(t => t.active !== false).length === 0 && (
                       <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2">Nenhuma equipe ativa cadastrada.</p>
+                    )}
+                    {teams.filter(t => t.active !== false).length > 0 && teams.filter(t => t.active !== false).filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
+                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 w-full text-center">Nenhuma equipe encontrada.</p>
                     )}
                   </div>
                 </div>
@@ -439,35 +589,131 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
 
 function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: User[], loadData: () => void }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTeam, setEditingTeam] = useState<{ name: string, id?: string }>({ name: '' });
+  const [editingTeam, setEditingTeam] = useState<Partial<Team>>({ name: '', sigla: '', icon: 'Shield' });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [searchTerm, setSearchTerm] = useState('');
 
+  const TEAM_ICONS_LIST = [
+    { id: 'Shield', icon: Shield },
+    { id: 'Headset', icon: Headset },
+    { id: 'MessageSquare', icon: MessageSquare },
+    { id: 'Mail', icon: Mail },
+    { id: 'Phone', icon: Phone },
+    { id: 'Zap', icon: Zap },
+    { id: 'Target', icon: Target },
+    { id: 'Rocket', icon: Rocket },
+    { id: 'Cpu', icon: Cpu },
+    { id: 'Globe', icon: Globe },
+    { id: 'Award', icon: Award },
+    { id: 'Star', icon: Star },
+    { id: 'Heart', icon: Heart },
+    { id: 'Smile', icon: Smile },
+    { id: 'Flame', icon: Flame },
+    { id: 'Layers', icon: Layers },
+    { id: 'Layout', icon: Layout },
+    { id: 'Package', icon: Package },
+    { id: 'Box', icon: Box },
+    { id: 'Activity', icon: Activity },
+    { id: 'TrendingUp', icon: TrendingUp },
+    { id: 'BarChart', icon: BarChart },
+    { id: 'PieChart', icon: PieChart },
+    { id: 'Bell', icon: Bell },
+    { id: 'Calendar', icon: Calendar },
+    { id: 'Camera', icon: Camera },
+    { id: 'Cloud', icon: Cloud },
+    { id: 'Coffee', icon: Coffee },
+    { id: 'Compass', icon: Compass },
+    { id: 'Database', icon: Database },
+    { id: 'Eye', icon: Eye },
+    { id: 'Flag', icon: Flag },
+    { id: 'Flashlight', icon: Flashlight },
+    { id: 'Folder', icon: Folder },
+    { id: 'Gift', icon: Gift },
+    { id: 'Hammer', icon: Hammer },
+    { id: 'HelpCircle', icon: HelpCircle },
+    { id: 'Home', icon: Home },
+    { id: 'Image', icon: Image },
+    { id: 'Inbox', icon: Inbox },
+    { id: 'Info', icon: Info },
+    { id: 'Laptop', icon: Laptop },
+    { id: 'Lightbulb', icon: Lightbulb },
+    { id: 'Lock', icon: Lock },
+    { id: 'Map', icon: Map },
+    { id: 'Mic', icon: Mic },
+    { id: 'Monitor', icon: Monitor },
+    { id: 'Music', icon: Music },
+    { id: 'Navigation', icon: Navigation },
+    { id: 'Printer', icon: Printer },
+    { id: 'Radio', icon: Radio },
+    { id: 'Send', icon: Send },
+    { id: 'Settings', icon: Settings },
+    { id: 'Smartphone', icon: Smartphone },
+    { id: 'Speaker', icon: Speaker },
+    { id: 'Sun', icon: Sun },
+    { id: 'Terminal', icon: Terminal },
+    { id: 'ThumbsUp', icon: ThumbsUp },
+    { id: 'Wrench', icon: Wrench },
+    { id: 'Video', icon: Video },
+    { id: 'Wifi', icon: Wifi },
+    { id: 'Wind', icon: Wind },
+  ];
+
+  const getTeamIcon = (iconName?: string) => {
+    const item = TEAM_ICONS_LIST.find(i => i.id === iconName);
+    return item ? item.icon : Shield;
+  };
+
   const filteredTeams = useMemo(() => {
     return teams
       .filter(t => statusFilter === 'active' ? t.active !== false : t.active === false)
-      .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
+      .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [teams, statusFilter, searchTerm]);
 
   const handleSaveTeam = async () => {
     if (!editingTeam.name) return toast.error('Por favor, informe o nome da equipe.');
     setSaving(true);
-    try {
-      const payload = { name: editingTeam.name, active: true };
-      if (!supabase) {
-        if (editingTeam.id) await mockDb.update('teams', editingTeam.id, payload);
-        else await mockDb.insert('teams', payload);
-      } else {
-        const { error } = await supabase.from('teams').upsert([{ ...(editingTeam.id ? { id: editingTeam.id } : {}), ...payload }]);
-        if (error) throw error;
+    const executeWithRetry = async (retryCount = 0): Promise<void> => {
+      try {
+        if (!supabase) {
+          const payload = { name: editingTeam.name, sigla: editingTeam.sigla?.toUpperCase(), icon: editingTeam.icon || 'Shield', active: true };
+          if (editingTeam.id) await mockDb.update('teams', editingTeam.id, payload);
+          else await mockDb.insert('teams', payload);
+          return;
+        }
+
+        await supabase.auth.getSession();
+        const payload = { name: editingTeam.name, sigla: editingTeam.sigla?.toUpperCase(), icon: editingTeam.icon || 'Shield', active: true };
+
+        const operation = (async () => {
+          const { error } = await supabase.from('teams').upsert([{ ...(editingTeam.id ? { id: editingTeam.id } : {}), ...payload }]);
+          if (error) throw error;
+        })();
+
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        await Promise.race([operation, timeoutPromise]);
+      } catch (err: any) {
+        if (err.message === 'timeout' && retryCount < 2) {
+          await new Promise(res => setTimeout(res, 1000 * (retryCount + 1)));
+          return executeWithRetry(retryCount + 1);
+        }
+        throw err;
       }
+    };
+
+    try {
+      await executeWithRetry();
       toast.success('Equipe salva com sucesso!');
       setIsModalOpen(false);
       loadData();
-    } catch (e) { toast.error('Não foi possível salvar a equipe.'); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      console.error('Erro definitivo ao salvar equipe:', e);
+      toast.error(e.message === 'timeout' ? 'O servidor não respondeu. Verifique sua conexão.' : 'Não foi possível salvar a equipe.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleToggleStatus = async (id: string, active: boolean) => {
@@ -514,34 +760,43 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
         <Button onClick={() => { setEditingTeam({ name: '' }); setIsModalOpen(true); }} icon={<Plus className="w-4 h-4" />}>Nova Equipe</Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTeams.map(t => (
-          <Card key={t.id} className="group hover:border-brand-accent transition-all relative overflow-hidden">
-            {t.active === false && <div className="absolute inset-0 bg-surface-bg/60 backdrop-blur-[1px] z-10 flex items-center justify-center"><Badge variant="error">Desativada</Badge></div>}
-            <div className="flex justify-between items-start">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-2xl bg-brand-subtle flex items-center justify-center text-brand-primary">
-                  <Shield className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-black text-brand-primary uppercase tracking-tight">{t.name}</h4>
-                  <p className="text-[10px] font-bold text-brand-muted uppercase mt-0.5">{users.filter(u => u.team_ids?.includes(t.id)).length} Agentes</p>
-                </div>
-              </div>
-              <div className="flex gap-1">
-                <button onClick={() => { setEditingTeam(t); setIsModalOpen(true); }} className="p-2 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><Edit2 className="w-4 h-4" /></button>
-                {deleteConfirmId === t.id ? (
-                  <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
-                    <button onClick={() => handleToggleStatus(t.id, false)} className="px-2.5 py-1.5 rounded-lg bg-error text-white text-[10px] font-black uppercase">Sim</button>
-                    <button onClick={() => setDeleteConfirmId(null)} className="px-2.5 py-1.5 rounded-lg bg-surface-subtle text-brand-muted text-[10px] font-black uppercase tracking-widest">Não</button>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-stretch">
+        {filteredTeams.map(t => {
+          const TeamIcon = getTeamIcon(t.icon);
+          return (
+            <Card key={t.id} padding="sm" className="group hover:border-brand-accent transition-all relative overflow-hidden flex flex-col justify-center min-h-[90px]">
+              {t.active === false && <div className="absolute inset-0 bg-surface-bg/60 backdrop-blur-[1px] z-10 flex items-center justify-center"><Badge variant="error">Desativada</Badge></div>}
+              <div className="flex justify-between items-center gap-3">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-brand-subtle flex items-center justify-center text-brand-primary shrink-0 shadow-sm group-hover:bg-brand-primary group-hover:text-brand-on-primary transition-colors">
+                    <TeamIcon className="w-5 h-5" />
                   </div>
-                ) : (
-                  <button onClick={() => setDeleteConfirmId(t.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-brand-muted hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
-                )}
+                  <div className="min-w-0">
+                    <div className="flex flex-col gap-0.5">
+                      <h4 className="font-black text-[11px] text-brand-primary uppercase tracking-tight leading-tight break-words">{t.name}</h4>
+                      {t.sigla && <span className="w-fit px-1 py-0.5 rounded-md bg-surface-subtle text-[7px] font-black text-brand-muted border border-surface-border">{t.sigla}</span>}
+                    </div>
+                    <p className="text-[9px] font-bold text-brand-muted uppercase mt-0.5 flex items-center gap-1">
+                      <Users className="w-2.5 h-2.5" />
+                      {users.filter(u => u.team_ids?.includes(t.id)).length} Agentes
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => { setEditingTeam(t); setIsModalOpen(true); }} className="p-1.5 rounded-lg hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><Edit2 className="w-3.5 h-3.5" /></button>
+                  {deleteConfirmId === t.id ? (
+                    <div className="flex items-center gap-0.5 animate-in fade-in slide-in-from-right-2">
+                      <button onClick={() => handleToggleStatus(t.id, false)} className="px-1.5 py-1 rounded-md bg-error text-white text-[8px] font-black uppercase">Sim</button>
+                      <button onClick={() => setDeleteConfirmId(null)} className="px-1.5 py-1 rounded-md bg-surface-subtle text-brand-muted text-[8px] font-black uppercase">Não</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setDeleteConfirmId(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-brand-muted hover:text-error transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                  )}
+                </div>
               </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
 
       <AnimatePresence>
@@ -552,12 +807,50 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
                 <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">{editingTeam.id ? 'Editar Equipe' : 'Nova Equipe'}</h3>
                 <button onClick={() => setIsModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
               </header>
-              <div className="space-y-4">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome da Equipe</label>
-                  <input type="text" className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={editingTeam.name} onChange={e => setEditingTeam({ ...editingTeam, name: e.target.value })} />
+              <div className="space-y-6">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome da Equipe</label>
+                    <input 
+                      type="text" 
+                      className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none" 
+                      value={editingTeam.name} 
+                      onChange={e => setEditingTeam({ ...editingTeam, name: e.target.value })} 
+                      placeholder="Ex: Suporte Nível 1"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Sigla</label>
+                    <input 
+                      type="text" 
+                      maxLength={5}
+                      className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-black uppercase focus:border-brand-accent focus:outline-none text-center" 
+                      value={editingTeam.sigla} 
+                      onChange={e => setEditingTeam({ ...editingTeam, sigla: e.target.value.toUpperCase() })} 
+                      placeholder="SUP1"
+                    />
+                  </div>
                 </div>
-                <Button className="w-full" onClick={handleSaveTeam} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Equipe'}</Button>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Ícone da Equipe ({TEAM_ICONS_LIST.length} opções)</label>
+                  <div className="grid grid-cols-8 gap-2 p-3 bg-surface-bg border border-surface-border rounded-2xl max-h-48 overflow-y-auto custom-scrollbar">
+                    {TEAM_ICONS_LIST.map(item => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setEditingTeam({ ...editingTeam, icon: item.id })}
+                        className={`p-2 rounded-lg flex items-center justify-center transition-all ${editingTeam.icon === item.id ? 'bg-brand-primary text-brand-on-primary shadow-md' : 'bg-surface-subtle text-brand-muted hover:bg-surface-border'}`}
+                      >
+                        <item.icon className="w-4 h-4" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Button className="w-full" onClick={handleSaveTeam} disabled={saving} icon={<Save className="w-4 h-4" />}>
+                  {saving ? 'Salvando...' : 'Salvar Equipe'}
+                </Button>
               </div>
             </Card>
           </div>
@@ -576,11 +869,40 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'geral' | 'pilares' | 'criticos'>('geral');
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
+
+  // Auto-save logic
+  useEffect(() => {
+    // Only auto-save if it's a new form AND has some content
+    const hasContent = editingForm.title || (editingForm.sections && editingForm.sections.length > 0);
+    if (isModalOpen && !editingForm.id && hasContent) { 
+      localStorage.setItem('qualitrack_form_draft', JSON.stringify(editingForm));
+    }
+  }, [editingForm, isModalOpen]);
+  
+
+
+  const loadDraft = () => {
+    const draft = localStorage.getItem('qualitrack_form_draft');
+    if (draft) {
+      try {
+        setEditingForm(JSON.parse(draft));
+        toast.success('Rascunho recuperado com sucesso!');
+      } catch (e) {
+        console.error('Failed to load draft', e);
+      }
+    }
+  };
+
+  const clearDraft = () => {
+    localStorage.removeItem('qualitrack_form_draft');
+  };
 
   const filteredForms = useMemo(() => {
     return forms
       .filter(f => statusFilter === 'active' ? f.active !== false : f.active === false)
-      .filter(f => f.title.toLowerCase().includes(searchTerm.toLowerCase()));
+      .filter(f => f.title.toLowerCase().includes(searchTerm.toLowerCase()))
+      .sort((a, b) => a.title.localeCompare(b.title));
   }, [forms, statusFilter, searchTerm]);
 
   const loadForms = async () => {
@@ -605,20 +927,46 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
   const handleSaveForm = async () => {
     if (!editingForm.title || !editingForm.sections?.length) return toast.error('Por favor, preencha o título e as seções do formulário.');
     setSaving(true);
-    try {
-      const payload = { ...editingForm, active: true, created_by: currentUser?.email };
-      if (!supabase) {
-        if (editingForm.id) await mockDb.update('forms', editingForm.id, payload);
-        else await mockDb.insert('forms', payload);
-      } else {
-        const { error } = await supabase.from('forms').upsert([{ ...(editingForm.id ? { id: editingForm.id } : {}), ...payload }]);
-        if (error) throw error;
+    const executeWithRetry = async (retryCount = 0): Promise<void> => {
+      try {
+        if (!supabase) {
+          const payload = { ...editingForm, active: true, created_by: currentUser?.email };
+          if (editingForm.id) await mockDb.update('forms', editingForm.id, payload);
+          else await mockDb.insert('forms', payload);
+          return;
+        }
+
+        await supabase.auth.getSession();
+        const payload = { ...editingForm, active: true, created_by: currentUser?.email };
+
+        const operation = (async () => {
+          const { error } = await supabase.from('forms').upsert([{ ...(editingForm.id ? { id: editingForm.id } : {}), ...payload }]);
+          if (error) throw error;
+        })();
+
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        await Promise.race([operation, timeoutPromise]);
+      } catch (err: any) {
+        if (err.message === 'timeout' && retryCount < 2) {
+          await new Promise(res => setTimeout(res, 1000 * (retryCount + 1)));
+          return executeWithRetry(retryCount + 1);
+        }
+        throw err;
       }
+    };
+
+    try {
+      await executeWithRetry();
       toast.success('Formulário salvo com sucesso!');
+      clearDraft();
       setIsModalOpen(false);
       loadForms();
-    } catch (e) { toast.error('Não foi possível salvar o formulário.'); }
-    finally { setSaving(false); }
+    } catch (e: any) { 
+      console.error('Erro definitivo ao salvar formulário:', e);
+      toast.error(e.message === 'timeout' ? 'O servidor não respondeu. Seu rascunho continua salvo localmente.' : (e.message || 'Não foi possível salvar o formulário.'));
+    } finally { 
+      setSaving(false); 
+    }
   };
 
   const addSection = () => {
@@ -685,6 +1033,12 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
     return (editingForm.sections || []).reduce((acc, s) => acc + (Number(s.weight) || 0), 0);
   }, [editingForm.sections]);
 
+  const isValid = useMemo(() => {
+    return totalWeight === 100 && 
+           !(editingForm.sections || []).some(s => (Number(s.weight) || 0) <= 0) &&
+           !(editingForm.sections || []).some(s => !s.questions || s.questions.length === 0);
+  }, [totalWeight, editingForm.sections]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -708,7 +1062,16 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
             />
           </div>
         </div>
-        <Button onClick={() => { setEditingForm({ title: '', description: '', team_id: '', sections: [], critical_errors: [] }); setIsModalOpen(true); }} icon={<Plus className="w-4 h-4" />}>Novo Formulário</Button>
+        <div className="flex gap-2">
+          {localStorage.getItem('qualitrack_form_draft') && (
+            <Button variant="outline" onClick={loadDraft} className="border-brand-accent/30 text-brand-accent hover:bg-brand-accent/5">
+              Recuperar Rascunho
+            </Button>
+          )}
+          <Button onClick={() => { setEditingForm({ title: '', description: '', team_id: '', sections: [], critical_errors: [] }); setIsModalOpen(true); }} icon={<Plus className="w-4 h-4" />}>
+            Novo Formulário
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -890,8 +1253,30 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                                       <span className="text-brand-muted/20">•</span>
                                       <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Impacto Global: {itemImpactInTotal}%</span>
                                     </div>
+                                    {expandedDescriptions[q.id] && (
+                                      <div className="mt-3">
+                                        <textarea
+                                          className="w-full bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-xs font-semibold text-brand-primary focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/10 outline-none transition-all resize-none shadow-sm placeholder:text-brand-muted/40"
+                                          placeholder="Descreva detalhadamente o que este critério avalia (será exibido como dica durante a monitoria)..."
+                                          rows={2}
+                                          value={q.description || ''}
+                                          onChange={e => updateQuestion(section.id, q.id, 'description', e.target.value)}
+                                        />
+                                      </div>
+                                    )}
                                   </div>
-                                  <button onClick={() => removeQuestion(section.id, q.id)} className="p-2 text-brand-muted/30 hover:text-error transition-colors opacity-0 group-hover:opacity-100"><X className="w-4 h-4" /></button>
+                                  <div className="flex flex-col gap-1">
+                                    <button 
+                                      onClick={() => setExpandedDescriptions(prev => ({ ...prev, [q.id]: !prev[q.id] }))} 
+                                      className={`p-2 rounded-xl transition-colors ${expandedDescriptions[q.id] || q.description ? 'text-brand-accent bg-brand-accent/10' : 'text-brand-muted/30 hover:text-brand-primary hover:bg-surface-subtle'}`}
+                                      title="Adicionar Descrição"
+                                    >
+                                      <MessageSquare className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => removeQuestion(section.id, q.id)} className="p-2 rounded-xl text-brand-muted/30 hover:text-error hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100">
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
                                 </div>
                               );
                             })}
@@ -962,57 +1347,65 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
               
               <footer className="p-8 border-t border-surface-border bg-surface-card flex items-center justify-between sticky bottom-0">
                 <div className="flex items-center gap-4">
-                  {totalWeight !== 100 && (
-                    <div className="flex items-center gap-2 text-error animate-pulse">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">O peso total deve ser 100% (Atual: {totalWeight}%)</span>
-                    </div>
-                  )}
-                  {totalWeight === 100 && (
-                    <div className="flex items-center gap-2 text-success">
-                      <Check className="w-4 h-4" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Estrutura de pesos válida</span>
-                    </div>
-                  )}
+                  {(() => {
+                    if (totalWeight !== 100) return (
+                      <div className="flex items-center gap-2 text-error animate-pulse">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Peso Total incorreto ({totalWeight}%)</span>
+                      </div>
+                    );
+                    if ((editingForm.sections || []).some(s => (Number(s.weight) || 0) <= 0)) return (
+                      <div className="flex items-center gap-2 text-error animate-pulse">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Pilar com Valor Zerado</span>
+                      </div>
+                    );
+                    if ((editingForm.sections || []).some(s => !s.questions || s.questions.length === 0)) return (
+                      <div className="flex items-center gap-2 text-error animate-pulse">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Pilar sem Critério</span>
+                      </div>
+                    );
+                    return (
+                      <div className="flex items-center gap-2 text-success">
+                        <Check className="w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Estrutura válida</span>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-3">
-                  {activeTab !== 'geral' && (
+                  <div className="flex gap-2 mr-4 border-r border-surface-border pr-4">
                     <Button 
                       variant="ghost" 
-                      onClick={() => setActiveTab(activeTab === 'criticos' ? 'pilares' : 'geral')} 
-                      className="rounded-2xl px-6 text-brand-muted hover:text-brand-primary"
+                      onClick={() => setActiveTab(activeTab === 'criticos' ? 'pilares' : activeTab === 'pilares' ? 'geral' : 'geral')} 
+                      disabled={activeTab === 'geral'}
+                      className="rounded-2xl px-4 text-brand-muted hover:text-brand-primary disabled:opacity-30"
                     >
-                      Voltar
+                      <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
                     </Button>
-                  )}
-                  
-                  {activeTab === 'geral' && (
                     <Button 
                       variant="ghost" 
-                      onClick={() => setIsModalOpen(false)} 
-                      className="rounded-2xl px-6 text-brand-muted hover:text-brand-primary"
+                      onClick={() => setActiveTab(activeTab === 'geral' ? 'pilares' : 'criticos')} 
+                      disabled={activeTab === 'criticos'}
+                      className="rounded-2xl px-4 text-brand-muted hover:text-brand-primary disabled:opacity-30"
                     >
-                      Cancelar
+                      Próximo <ChevronRight className="w-4 h-4 ml-1" />
                     </Button>
-                  )}
+                  </div>
+
+                  <Button variant="ghost" onClick={() => setIsModalOpen(false)} className="rounded-2xl px-6 text-brand-muted hover:text-brand-primary">
+                    Cancelar
+                  </Button>
                   
-                  {activeTab === 'geral' && (
-                    <Button onClick={() => setActiveTab('pilares')} className="rounded-2xl px-8 shadow-premium shadow-brand-primary/20">
-                      Próximo: Pilares
-                    </Button>
-                  )}
-                  
-                  {activeTab === 'pilares' && (
-                    <Button onClick={() => setActiveTab('criticos')} className="rounded-2xl px-8 shadow-premium shadow-brand-primary/20">
-                      Próximo: Erros Críticos
-                    </Button>
-                  )}
-                  
-                  {activeTab === 'criticos' && (
-                    <Button onClick={handleSaveForm} disabled={saving || totalWeight !== 100} className="rounded-2xl px-10 shadow-premium shadow-brand-accent/20 bg-brand-accent hover:bg-brand-accent/90 text-white">
-                      {saving ? 'Publicando...' : (editingForm.id ? 'Salvar Alterações' : 'Publicar Formulário')}
-                    </Button>
-                  )}
+                  <Button 
+                    onClick={handleSaveForm} 
+                    disabled={saving || !isValid} 
+                    variant={isValid ? 'secondary' : 'outline'}
+                    className="rounded-2xl px-10 shadow-premium transition-all"
+                  >
+                    {saving ? 'Publicando...' : (editingForm.id ? 'Salvar Alterações' : 'Publicar Formulário')}
+                  </Button>
                 </div>
               </footer>
             </motion.div>
@@ -1034,6 +1427,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
   const [rejectReason, setRejectReason] = useState('');
   const [approveData, setApproveData] = useState<{ name: string, email: string, role: string, team_ids: string[] }>({ name: '', email: '', role: 'suporte', team_ids: [] });
   const [saving, setSaving] = useState(false);
+  const [teamSearch, setTeamSearch] = useState('');
 
   // Load on mount and whenever props update
   useEffect(() => { setRequests(initialRequests); }, [initialRequests]);
@@ -1046,35 +1440,50 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
 
   const handleApprove = async () => {
     setSaving(true);
-    try {
-      const payload = { ...approveData, active: true };
-      if (!supabase) {
-        await mockDb.update('access_requests', approvingReq.id, { status: 'approved' });
-        await mockDb.insert('users', { id: approveData.email, ...payload });
-      } else {
-        await supabase.from('access_requests').update({ status: 'approved' }).eq('id', approvingReq.id);
-        
-        // Criação do usuário via Supabase Auth (Edge Function)
-        const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', {
-          body: payload
-        });
-
-        if (funcError) {
-          console.error('Edge Function HTTP Error:', funcError);
-          throw new Error('Falha de conexão com a função de convite.');
+    const executeWithRetry = async (retryCount = 0): Promise<void> => {
+      try {
+        if (!supabase) {
+          const payload = { ...approveData, active: true };
+          await mockDb.update('access_requests', approvingReq.id, { status: 'approved' });
+          await mockDb.insert('users', { id: approveData.email, ...payload });
+          return;
         }
 
-        if (data && data.success === false) {
-          console.error('Edge Function Logic Error:', data);
-          throw new Error(`Erro do Supabase: ${data.details?.message || data.error}`);
+        await supabase.auth.getSession();
+        const payload = { ...approveData, active: true };
+
+        const operation = (async () => {
+          const { error: reqError } = await supabase.from('access_requests').update({ status: 'approved' }).eq('id', approvingReq.id);
+          if (reqError) throw reqError;
+
+          const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', { body: payload });
+          if (funcError) throw funcError;
+          if (data?.success === false) throw new Error(data.details?.message || 'Erro ao convidar usuário');
+        })();
+
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        await Promise.race([operation, timeoutPromise]);
+      } catch (err: any) {
+        if (err.message === 'timeout' && retryCount < 2) {
+          await new Promise(res => setTimeout(res, 1000 * (retryCount + 1)));
+          return executeWithRetry(retryCount + 1);
         }
+        throw err;
       }
+    };
+
+    try {
+      await executeWithRetry();
       toast.success('Solicitação aprovada e e-mail de acesso enviado!');
       setIsApproveModalOpen(false);
-      await handleRefresh(); // refresh directly from source
-      loadData(); // also refresh parent counters
-    } catch (e: any) { toast.error('Não foi possível aprovar a solicitação no momento.'); }
-    finally { setSaving(false); }
+      await handleRefresh(); 
+      loadData(); 
+    } catch (e: any) { 
+      console.error('Erro definitivo ao aprovar solicitação:', e);
+      toast.error(e.message === 'timeout' ? 'O servidor não respondeu ao processar o convite. Tente novamente.' : (e.message || 'Não foi possível aprovar a solicitação no momento.'));
+    } finally { 
+      setSaving(false); 
+    }
   };
 
   const handleReject = (req: any) => {
@@ -1129,9 +1538,9 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Select 
+        <CustomSelect 
           value={statusFilter} 
-          onChange={e => setStatusFilter(e.target.value as any)} 
+          onChange={val => setStatusFilter(val as any)} 
           options={[{ value: 'pending', label: 'Pendentes' }, { value: 'approved', label: 'Aprovadas' }, { value: 'rejected', label: 'Rejeitadas' }]} 
         />
          <Button variant="ghost" onClick={handleRefresh} disabled={refreshing} icon={<RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />}>
@@ -1178,24 +1587,41 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome</label>
                     <input type="text" className="w-full bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
                   </div>
-                  <Select 
+                  <CustomSelect 
                     label="Perfil" 
                     value={approveData.role} 
-                    onChange={e => setApproveData({...approveData, role: e.target.value})} 
+                    onChange={val => setApproveData({...approveData, role: val})} 
                     options={[
                       { value: 'admin', label: 'Administrador' }, 
-                      { value: 'gestor_qualidade', label: 'Supervisor de Qualidade' }, 
-                      { value: 'gestor_suporte', label: 'Supervisor de Atendimento' }, 
+                      { value: 'suporte', label: 'Agente de Atendimento' }, 
                       { value: 'qualidade', label: 'Monitor de Qualidade' }, 
-                      { value: 'suporte', label: 'Agente de Atendimento' }
-                    ]} 
+                      { value: 'gestor_suporte', label: 'Supervisor de Atendimento' }, 
+                      { value: 'gestor_qualidade', label: 'Supervisor de Qualidade' }
+                    ].sort((a, b) => a.label.localeCompare(b.label))} 
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipes</label>
-                  <div className="flex flex-wrap gap-2 p-3 bg-surface-bg border border-surface-border rounded-xl">
-                    {teams.map(t => (
-                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${approveData.team_ids?.includes(t.id) ? 'bg-brand-primary text-white border-brand-primary' : 'bg-white text-brand-muted border-surface-border'}`}>
+                  <div className="flex items-center justify-between ml-1 mb-1">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Equipes</label>
+                    {teams.length > 8 && (
+                      <div className="relative w-32 h-7">
+                        <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-brand-muted/50" />
+                        <input 
+                          type="text" 
+                          placeholder="Buscar..." 
+                          className="w-full h-full bg-surface-subtle border border-surface-border rounded-lg pl-6 pr-2 text-[10px] font-bold text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
+                          value={teamSearch}
+                          onChange={e => setTeamSearch(e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 p-3 bg-surface-bg border border-surface-border rounded-xl max-h-32 overflow-y-auto no-scrollbar">
+                    {teams
+                      .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(t => (
+                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${approveData.team_ids?.includes(t.id) ? 'bg-brand-primary text-brand-on-primary border-brand-primary' : 'bg-surface-subtle text-brand-muted border-surface-border'}`}>
                         <input type="checkbox" className="hidden" checked={approveData.team_ids?.includes(t.id)} onChange={e => {
                           const newIds = e.target.checked ? [...approveData.team_ids, t.id] : approveData.team_ids.filter(id => id !== t.id);
                           setApproveData({...approveData, team_ids: newIds});
@@ -1203,6 +1629,9 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
                         {t.name}
                       </label>
                     ))}
+                    {teams.length > 0 && teams.filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
+                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 w-full text-center">Nenhuma equipe encontrada.</p>
+                    )}
                   </div>
                 </div>
                 <Button className="w-full mt-4" onClick={handleApprove} disabled={saving} icon={<Check className="w-4 h-4" />}>{saving ? 'Processando...' : 'Confirmar Aprovação'}</Button>
