@@ -65,12 +65,19 @@ export function DashboardProvider({ user, children }: { user: User | null, child
         teamDocs = (await mockDb.get('teams')).data || [];
         formDocs = (await mockDb.get('forms')).data || [];
       } else {
-        const [mRes, uRes, tRes, fRes] = await Promise.all([
+        const fetchPromise = Promise.all([
           supabase.from('monitorias').select('*').order('created_at', { ascending: false }),
           supabase.from('users').select('*'),
           supabase.from('teams').select('*'),
           supabase.from('forms').select('*')
         ]);
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('timeout')), 15000)
+        );
+
+        const [mRes, uRes, tRes, fRes] = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+        
         docs = (mRes.data || []) as Monitoria[];
         userDocs = (uRes.data || []) as User[];
         teamDocs = (tRes.data || []) as Team[];
@@ -142,8 +149,13 @@ export function DashboardProvider({ user, children }: { user: User | null, child
       setTeams(teamDocs);
       setForms(formDocs);
       setGlobalAvg(gAvg);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      if (e.message === 'timeout') {
+        import('sonner').then(({ toast }) => {
+          toast.error('A conexão expirou. Por favor, atualize a página (F5).');
+        });
+      }
     } finally {
       setLoading(false);
     }

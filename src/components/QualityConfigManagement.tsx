@@ -46,7 +46,7 @@ export default function QualityConfigManagement() {
       await recalculateActiveDeadlines(oldConfig, localConfig);
       toast.success('Prazos recalculados com sucesso!');
     } else {
-      toast.success('Configuracoes de qualidade salvas!');
+      toast.success('Configurações de qualidade salvas com sucesso!');
     }
     
     setSaving(false);

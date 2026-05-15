@@ -148,15 +148,20 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [teamFilter, setTeamFilter] = useState('');
 
   const filteredUsers = useMemo(() => {
     return users
       .filter(u => statusFilter === 'active' ? u.active !== false : u.active === false)
+      .filter(u => roleFilter === '' ? true : u.role === roleFilter)
+      .filter(u => teamFilter === '' ? true : (u.team_ids || []).includes(teamFilter))
       .filter(u =>
         u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         u.email.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-  }, [users, statusFilter, searchTerm]);
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [users, statusFilter, searchTerm, roleFilter, teamFilter]);
 
   const handleSaveUser = async () => {
     if (!editingUser.name || !editingUser.email) return;
@@ -201,7 +206,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
       setIsModalOpen(false);
       loadData();
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao salvar o usuário');
+      toast.error('Não foi possível salvar o usuário. Verifique os dados e tente novamente.');
     } finally {
       setSaving(false);
     }
@@ -219,7 +224,7 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
       if (error) throw error;
       toast.success('Email de recuperação enviado!');
     } catch (e: any) {
-      toast.error('Erro ao enviar email: ' + e.message);
+      toast.error('Não foi possível enviar o email de recuperação.');
     }
   };
 
@@ -227,10 +232,10 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
     try {
       if (!supabase) await mockDb.update('users', id, { active });
       else await supabase.from('users').update({ active }).eq('id', id);
-      toast.success(active ? 'Reativado!' : 'Desativado!');
+      toast.success(active ? 'Usuário reativado!' : 'Usuário desativado!');
       setDeleteConfirmId(null);
       loadData();
-    } catch (e) { toast.error('Erro ao alterar status'); }
+    } catch (e) { toast.error('Não foi possível alterar o status do usuário.'); }
   };
 
   return (
@@ -247,12 +252,34 @@ function UsersManagement({ users, teams, loadData }: { users: User[], teams: Tea
               className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
             />
           </div>
-          <div className="h-10 flex items-center">
+          <div className="h-10 flex items-center gap-2">
             <CustomSelect 
               value={statusFilter}
               onChange={val => setStatusFilter(val as any)}
               options={[{ value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Desativados' }]}
-              className="w-44"
+              className="w-40"
+            />
+            <CustomSelect 
+              value={roleFilter}
+              onChange={val => setRoleFilter(val as string)}
+              options={[
+                { value: '', label: 'Todos os Perfis' }, 
+                { value: 'suporte', label: 'Agente Suporte' },
+                { value: 'qualidade', label: 'Monitor Qualidade' },
+                { value: 'gestor_suporte', label: 'Superv. Atendimento' },
+                { value: 'gestor_qualidade', label: 'Monit. Qualidade Senior' },
+                { value: 'admin', label: 'Administrador' }
+              ]}
+              className="w-48"
+            />
+            <CustomSelect 
+              value={teamFilter}
+              onChange={val => setTeamFilter(val as string)}
+              options={[
+                { value: '', label: 'Todas as Equipes' },
+                ...teams.filter(t => t.active !== false).map(t => ({ value: t.id, label: t.name }))
+              ]}
+              className="w-48"
             />
           </div>
         </div>
@@ -425,7 +452,7 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
   }, [teams, statusFilter, searchTerm]);
 
   const handleSaveTeam = async () => {
-    if (!editingTeam.name) return toast.error('O nome da equipe é obrigatório.');
+    if (!editingTeam.name) return toast.error('Por favor, informe o nome da equipe.');
     setSaving(true);
     try {
       const payload = { name: editingTeam.name, active: true };
@@ -439,7 +466,7 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
       toast.success('Equipe salva com sucesso!');
       setIsModalOpen(false);
       loadData();
-    } catch (e) { toast.error('Erro ao salvar'); }
+    } catch (e) { toast.error('Não foi possível salvar a equipe.'); }
     finally { setSaving(false); }
   };
 
@@ -455,10 +482,10 @@ function TeamsManagement({ teams, users, loadData }: { teams: Team[], users: Use
     try {
       if (!supabase) await mockDb.update('teams', id, { active });
       else await supabase.from('teams').update({ active }).eq('id', id);
-      toast.success(active ? 'Ativada!' : 'Desativada!');
+      toast.success(active ? 'Equipe ativada!' : 'Equipe desativada!');
       setDeleteConfirmId(null);
       loadData();
-    } catch (e) { toast.error('Erro ao alterar status'); }
+    } catch (e) { toast.error('Não foi possível alterar o status da equipe.'); }
   };
 
   return (
@@ -569,14 +596,14 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
     try {
       if (!supabase) await mockDb.update('forms', id, { active });
       else await supabase.from('forms').update({ active }).eq('id', id);
-      toast.success(active ? 'Ativado!' : 'Desativado!');
+      toast.success(active ? 'Formulário ativado!' : 'Formulário desativado!');
       setDeleteConfirmId(null);
       loadForms();
-    } catch (e) { toast.error('Erro ao alterar status'); }
+    } catch (e) { toast.error('Não foi possível alterar o status do formulário.'); }
   };
 
   const handleSaveForm = async () => {
-    if (!editingForm.title || !editingForm.sections?.length) return toast.error('Preencha os campos obrigatórios.');
+    if (!editingForm.title || !editingForm.sections?.length) return toast.error('Por favor, preencha o título e as seções do formulário.');
     setSaving(true);
     try {
       const payload = { ...editingForm, active: true, created_by: currentUser?.email };
@@ -587,10 +614,10 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
         const { error } = await supabase.from('forms').upsert([{ ...(editingForm.id ? { id: editingForm.id } : {}), ...payload }]);
         if (error) throw error;
       }
-      toast.success('Formulário salvo!');
+      toast.success('Formulário salvo com sucesso!');
       setIsModalOpen(false);
       loadForms();
-    } catch (e) { toast.error('Erro ao salvar'); }
+    } catch (e) { toast.error('Não foi possível salvar o formulário.'); }
     finally { setSaving(false); }
   };
 
@@ -729,8 +756,8 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/60 backdrop-blur-md">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col bg-white rounded-[32px] shadow-2xl">
-              <header className="flex items-center justify-between p-8 border-b border-surface-border bg-white sticky top-0 z-10">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col bg-surface-card rounded-[32px] shadow-2xl">
+              <header className="flex items-center justify-between p-8 border-b border-surface-border bg-surface-card sticky top-0 z-10">
                 <div className="flex items-center gap-6">
                   <div className="w-14 h-14 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
                     <ClipboardList className="w-7 h-7" />
@@ -775,7 +802,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                           <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Título do Formulário</label>
                           <input 
                             type="text" 
-                            className="w-full bg-white border border-surface-border rounded-2xl px-6 py-4 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all shadow-sm" 
+                            className="w-full bg-surface-bg border border-surface-border rounded-2xl px-6 py-4 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all shadow-sm" 
                             value={editingForm.title} 
                             onChange={e => setEditingForm({...editingForm, title: e.target.value})} 
                             placeholder="Ex: Monitoria de Atendimento Chat" 
@@ -792,7 +819,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                         <div className="flex flex-col gap-2">
                           <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Descrição do Propósito</label>
                           <textarea 
-                            className="w-full bg-white border border-surface-border rounded-3xl px-6 py-4 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all min-h-[150px] shadow-sm leading-relaxed" 
+                            className="w-full bg-surface-bg border border-surface-border rounded-3xl px-6 py-4 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all min-h-[150px] shadow-sm leading-relaxed" 
                             value={editingForm.description} 
                             onChange={e => setEditingForm({...editingForm, description: e.target.value})} 
                             placeholder="Descreva detalhadamente o que este formulário avalia e quais os objetivos..." 
@@ -815,7 +842,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                     
                     <div className="grid grid-cols-1 gap-6">
                       {editingForm.sections?.map((section, sIdx) => (
-                        <div key={section.id} className="bg-white rounded-[32px] border border-surface-border shadow-premium-sm overflow-hidden border-l-8 border-l-brand-accent">
+                        <div key={section.id} className="bg-surface-card rounded-[32px] border border-surface-border shadow-premium-sm overflow-hidden border-l-8 border-l-brand-accent">
                           <div className="p-6 border-b border-surface-border bg-surface-subtle/10 flex items-center justify-between gap-6">
                             <div className="flex items-center gap-4 flex-1">
                               <span className="text-[10px] font-black text-brand-muted/40 uppercase tracking-widest">#{sIdx + 1}</span>
@@ -829,7 +856,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                             <div className="flex items-center gap-6">
                               <div className="flex flex-col items-end">
                                 <label className="text-[8px] font-black text-brand-muted uppercase tracking-[0.2em] mb-1">Peso do Pilar</label>
-                                <div className="flex items-center gap-2 bg-white border border-surface-border rounded-xl px-3 py-1.5 shadow-sm">
+                                <div className="flex items-center gap-2 bg-surface-bg border border-surface-border rounded-xl px-3 py-1.5 shadow-sm">
                                   <input 
                                     type="number" 
                                     className="w-10 bg-transparent border-none p-0 text-sm font-black text-brand-primary focus:ring-0 text-center"
@@ -849,7 +876,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                               const itemImpactInTotal = section.questions.length > 0 ? ((section.weight || 0) / section.questions.length).toFixed(1) : 0;
 
                               return (
-                                <div key={q.id} className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-surface-border group hover:border-brand-accent/40 transition-all shadow-sm">
+                                <div key={q.id} className="flex items-center gap-4 p-4 rounded-2xl bg-surface-card border border-surface-border group hover:border-brand-accent/40 transition-all shadow-sm">
                                   <div className="w-8 h-8 rounded-lg bg-surface-subtle flex items-center justify-center text-[10px] font-black text-brand-muted">{qIdx + 1}</div>
                                   <div className="flex-1">
                                     <input 
@@ -880,8 +907,8 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                       ))}
 
                       {(!editingForm.sections || editingForm.sections.length === 0) && (
-                        <div className="bg-white/50 p-16 rounded-[40px] border-2 border-dashed border-surface-border text-center">
-                          <div className="w-20 h-20 rounded-[2.5rem] bg-white shadow-premium flex items-center justify-center mx-auto mb-6">
+                        <div className="bg-surface-bg/50 p-16 rounded-[40px] border-2 border-dashed border-surface-border text-center">
+                          <div className="w-20 h-20 rounded-[2.5rem] bg-surface-card shadow-premium flex items-center justify-center mx-auto mb-6">
                             <Plus className="w-10 h-10 text-brand-muted/40" />
                           </div>
                           <h5 className="text-brand-primary font-black uppercase tracking-widest text-sm">Nenhum Pilar Definido</h5>
@@ -908,7 +935,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
 
                     <div className="grid grid-cols-1 gap-4">
                       {editingForm.critical_errors?.map((ce, idx) => (
-                        <div key={ce.id} className="flex items-center gap-4 p-5 rounded-2xl bg-white border border-surface-border border-l-8 border-l-error group hover:border-error/20 transition-all shadow-sm">
+                        <div key={ce.id} className="flex items-center gap-4 p-5 rounded-2xl bg-surface-card border border-surface-border border-l-8 border-l-error group hover:border-error/20 transition-all shadow-sm">
                           <div className="w-10 h-10 rounded-xl bg-error/5 text-error flex items-center justify-center text-[10px] font-black">{idx + 1}</div>
                           <div className="flex-1">
                             <input 
@@ -923,7 +950,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                       ))}
                       
                       {(!editingForm.critical_errors || editingForm.critical_errors.length === 0) && (
-                        <div className="py-20 text-center border-2 border-dashed border-surface-border/40 rounded-[40px] bg-white/30">
+                        <div className="py-20 text-center border-2 border-dashed border-surface-border/40 rounded-[40px] bg-surface-bg/30">
                           <AlertOctagon className="w-12 h-12 text-brand-muted/20 mx-auto mb-4" />
                           <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Nenhum erro crítico foi configurado para este formulário</p>
                         </div>
@@ -933,7 +960,7 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                 )}
               </div>
               
-              <footer className="p-8 border-t border-surface-border bg-white flex items-center justify-between sticky bottom-0">
+              <footer className="p-8 border-t border-surface-border bg-surface-card flex items-center justify-between sticky bottom-0">
                 <div className="flex items-center gap-4">
                   {totalWeight !== 100 && (
                     <div className="flex items-center gap-2 text-error animate-pulse">
@@ -948,11 +975,44 @@ function FormsManagement({ currentUser, teams, loadData }: { currentUser: User |
                     </div>
                   )}
                 </div>
-                <div className="flex gap-4">
-                  <Button variant="ghost" onClick={() => setIsModalOpen(false)} className="rounded-2xl px-6">Cancelar</Button>
-                  <Button onClick={handleSaveForm} disabled={saving || totalWeight !== 100} className="rounded-2xl px-10 shadow-premium shadow-brand-primary/20">
-                    {saving ? 'Publicando...' : (editingForm.id ? 'Salvar Alterações' : 'Publicar Formulário')}
-                  </Button>
+                <div className="flex gap-3">
+                  {activeTab !== 'geral' && (
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => setActiveTab(activeTab === 'criticos' ? 'pilares' : 'geral')} 
+                      className="rounded-2xl px-6 text-brand-muted hover:text-brand-primary"
+                    >
+                      Voltar
+                    </Button>
+                  )}
+                  
+                  {activeTab === 'geral' && (
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => setIsModalOpen(false)} 
+                      className="rounded-2xl px-6 text-brand-muted hover:text-brand-primary"
+                    >
+                      Cancelar
+                    </Button>
+                  )}
+                  
+                  {activeTab === 'geral' && (
+                    <Button onClick={() => setActiveTab('pilares')} className="rounded-2xl px-8 shadow-premium shadow-brand-primary/20">
+                      Próximo: Pilares
+                    </Button>
+                  )}
+                  
+                  {activeTab === 'pilares' && (
+                    <Button onClick={() => setActiveTab('criticos')} className="rounded-2xl px-8 shadow-premium shadow-brand-primary/20">
+                      Próximo: Erros Críticos
+                    </Button>
+                  )}
+                  
+                  {activeTab === 'criticos' && (
+                    <Button onClick={handleSaveForm} disabled={saving || totalWeight !== 100} className="rounded-2xl px-10 shadow-premium shadow-brand-accent/20 bg-brand-accent hover:bg-brand-accent/90 text-white">
+                      {saving ? 'Publicando...' : (editingForm.id ? 'Salvar Alterações' : 'Publicar Formulário')}
+                    </Button>
+                  )}
                 </div>
               </footer>
             </motion.div>
@@ -1013,7 +1073,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
       setIsApproveModalOpen(false);
       await handleRefresh(); // refresh directly from source
       loadData(); // also refresh parent counters
-    } catch (e: any) { toast.error(e.message || 'Erro ao aprovar solicitação'); }
+    } catch (e: any) { toast.error('Não foi possível aprovar a solicitação no momento.'); }
     finally { setSaving(false); }
   };
 
@@ -1058,7 +1118,7 @@ function RequestsManagement({ requests: initialRequests, users, teams, loadData 
       await handleRefresh();
       loadData();
     } catch (e: any) {
-      toast.error('Erro ao rejeitar: ' + (e.message || 'Erro desconhecido'));
+      toast.error('Não foi possível processar a rejeição da solicitação.');
     } finally {
       setSaving(false);
     }

@@ -150,7 +150,7 @@ export default function App() {
           localStorage.setItem('qualitrack_mock_user', JSON.stringify(user));
           toast.success(`Bem-vindo, ${user.name}!`);
         } else {
-          toast.error('E-mail ou senha incorretos.');
+          toast.error('E-mail ou senha incorretos. Tente novamente.');
         }
       } else {
         const { error } = await supabase!.auth.signInWithPassword({
@@ -161,7 +161,7 @@ export default function App() {
         toast.success('Login realizado com sucesso!');
       }
     } catch (e: any) {
-      toast.error(e.message || 'Erro ao realizar login.');
+      toast.error('As credenciais informadas estão incorretas ou são inválidas.');
     } finally {
       setLoading(false);
     }
@@ -175,7 +175,7 @@ export default function App() {
     if (!isMockMode && supabase) {
       supabase.auth.signOut().catch(console.error);
     }
-    toast.success('Sessão encerrada.');
+    toast.success('Você saiu do sistema com sucesso.');
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -189,11 +189,11 @@ export default function App() {
           redirectTo: window.location.origin,
         });
         if (error) throw error;
-        toast.success('E-mail de recuperação enviado!');
+        toast.success('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
         setAuthView('login');
       }
     } catch (e: any) {
-      toast.error(e.message || 'Erro ao processar solicitação.');
+      toast.error('Não foi possível enviar o e-mail de recuperação. Verifique o e-mail digitado.');
     } finally {
       setLoading(false);
     }
@@ -208,7 +208,7 @@ export default function App() {
       if (isMockMode) {
         if (!userData?.id) throw new Error('Sessão expirada.');
         await mockDb.update('users', userData.id, { password: newPassword, must_change_password: false });
-        toast.success('Senha atualizada!');
+        toast.success('Sua senha foi atualizada com sucesso!');
         handleLogout();
       } else {
         const { error } = await supabase!.auth.updateUser({ password: newPassword });
@@ -217,10 +217,10 @@ export default function App() {
         window.history.replaceState({}, document.title, window.location.pathname);
         isPasswordRecoveryRef.current = false;
         handleLogout();
-        toast.success('Senha definida com sucesso!');
+        toast.success('Sua nova senha foi definida com sucesso!');
       }
     } catch (e: any) {
-      toast.error(e.message || 'Erro ao atualizar senha.');
+      toast.error('Não foi possível atualizar sua senha. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -241,7 +241,7 @@ export default function App() {
         setAuthView('pending');
       }
     } catch (e: any) {
-      toast.error('Erro ao enviar solicitação.');
+      toast.error('Não foi possível enviar sua solicitação. Tente novamente mais tarde.');
     } finally {
       setLoading(false);
     }

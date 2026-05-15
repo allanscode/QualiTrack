@@ -268,7 +268,7 @@ export default function MonitoriaForm({
       toast.success('Monitoria salva com sucesso!');
       onSaved();
     } catch (e: any) {
-      toast.error('Erro ao salvar: ' + e.message);
+      toast.error('Não foi possível salvar a monitoria. Tente novamente.');
     } finally { setSaving(false); }
   };
 

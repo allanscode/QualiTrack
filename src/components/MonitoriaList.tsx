@@ -62,6 +62,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
 
   const load = useCallback(async () => {
     if (!user) return;
+    setLoading(true);
     try {
       let docs: Monitoria[] = [];
       let userDocs: User[] = [];
@@ -73,18 +74,33 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
         setTeams(t || []);
         setForms(f || []);
       } else {
-        const { data: m } = await supabase.from('monitorias').select('*').order('created_at', { ascending: false });
-        docs = (m || []).map((r: any) => ({ ...r, history: r.history || [], answers: r.answers || {} }));
-        const { data: u } = await supabase.from('users').select('*');
-        userDocs = (u || []) as User[];
-        const { data: t } = await supabase.from('teams').select('*');
-        const { data: f } = await supabase.from('forms').select('*');
-        setTeams(t || []);
-        setForms(f || []);
+        // Implement timeout to prevent infinite hang on background idle
+        const fetchPromise = Promise.all([
+          supabase.from('monitorias').select('*').order('created_at', { ascending: false }),
+          supabase.from('users').select('*'),
+          supabase.from('teams').select('*'),
+          supabase.from('forms').select('*')
+        ]);
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('timeout')), 15000)
+        );
+
+        const [mRes, uRes, tRes, fRes] = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+        
+        docs = (mRes.data || []).map((r: any) => ({ ...r, history: r.history || [], answers: r.answers || {} }));
+        userDocs = (uRes.data || []) as User[];
+        setTeams(tRes.data || []);
+        setForms(fRes.data || []);
       }
       setMonitorias(docs);
       setUsers(userDocs);
-    } catch (e) { console.error(e); }
+    } catch (e: any) { 
+      console.error(e);
+      if (e.message === 'timeout') {
+        toast.error('A conexão expirou. Por favor, atualize a página (F5).');
+      }
+    }
     finally { setLoading(false); }
   }, [user]);
 
