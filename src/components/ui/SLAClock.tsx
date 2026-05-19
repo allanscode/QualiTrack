@@ -62,7 +62,9 @@ export default function SLAClock({ deadlineAt, status }: SLAClockProps) {
   if (isFinalStatus || !deadlineAt) return null;
 
   return (
-    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 font-mono text-[10px] font-black tabular-nums transition-all shadow-sm ${
+    <div 
+      title={deadlineAt ? `Prazo Limite: ${new Date(deadlineAt).toLocaleString('pt-BR')}` : undefined}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 font-mono text-[10px] font-black tabular-nums transition-all shadow-sm ${
       isLate 
         ? 'bg-red-100 border-red-500 text-red-700 animate-pulse' 
         : isWarning

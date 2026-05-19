@@ -120,7 +120,7 @@ export function useQualityConfig() {
           .select('id, updated_at, deadline_at')
           .eq('active', true)
           .not('deadline_at', 'is', null)
-          .not('status', 'in', ['concluida', 'finalizada_alterada']);
+          .not('status', 'in', '(concluida,finalizada_alterada)');
         activeDocs = data || [];
       } else {
         const { data } = await mockDb.get('monitorias');
