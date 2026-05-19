@@ -77,13 +77,18 @@ export default function App() {
       setLoading(false);
     }
 
-    const { data: { subscription } } = supabase!.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         isPasswordRecoveryRef.current = true;
         setAuthView('change-password');
       } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
         if (!isPasswordRecoveryRef.current && session) {
-          await handleUserSession(session.user);
+          // Avoid async deadlocks on Windows/Localhost by deferring DB queries
+          // allowing the Supabase Auth Lock to release immediately.
+          setTimeout(() => {
+            handleUserSession(session.user);
+          }, 0);
+          return; // handleUserSession will handle setLoading(false)
         }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
@@ -100,48 +105,132 @@ export default function App() {
     };
   }, []);
 
-  // --- Session Resilience & Recovery ---
+  const [isSystemOnline, setIsSystemOnline] = useState(true);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+
+  // --- Session Resilience & Active Reconnection ---
   useEffect(() => {
     if (isMockMode || !supabase) return;
 
-    // Heartbeat: Pings the session every 5 minutes to keep it fresh
-    const heartbeatInterval = setInterval(async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) console.log('[System] Sessão renovada pelo heartbeat.');
-      } catch (e) {
-        console.warn('[System] Falha no heartbeat de sessão.');
-      }
-    }, 5 * 60 * 1000);
+    let lastFocusCheck = 0;
+    let reconnectInterval: ReturnType<typeof setInterval> | null = null;
+    let wasOffline = false;
 
-    // Tab Focus Recovery: Refreshes session when user returns to the tab
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        console.log('[System] Aba focada. Validando sessão...');
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            // If session is close to expiry (less than 10 mins), refresh it
-            const expiresAt = session.expires_at || 0;
-            const now = Math.floor(Date.now() / 1000);
-            if (expiresAt - now < 600) {
-              await supabase.auth.refreshSession();
-              console.log('[System] Sessão próxima da expiração. Renovada com sucesso.');
-            }
-          }
-        } catch (e) {
-          console.error('[System] Erro ao recuperar sessão no foco.');
+    const pingSupabase = async (): Promise<boolean> => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        // Usamos um limit(1) em vez de head: true porque head tem comportamentos estranhos no Supabase JS
+        const { error } = await supabase.from('users').select('id').limit(1).abortSignal(controller.signal);
+        clearTimeout(timeout);
+        
+        if (error && error.message !== 'JWT expired') {
+          console.warn('[System] Ping falhou, erro retornado pelo DB:', error);
+          // Se for erro de auth, a rede pode estar OK
+          if (error.code === 'PGRST301' || error.message.includes('auth')) return true;
+          throw error;
+        }
+        return true;
+      } catch (e: any) {
+        console.error('[System] Ping catch error:', e.message || e);
+        return false;
+      }
+    };
+
+    const handleOnlineStatusChange = async (online: boolean) => {
+      setIsSystemOnline(online);
+      if (online && wasOffline) {
+        // Transição offline → online: reconectou!
+        console.log('[System] ✅ Reconexão detectada! Notificando componentes...');
+        wasOffline = false;
+        setIsReconnecting(false);
+        // Tenta renovar sessão após reconexão
+        try { await supabase.auth.refreshSession(); } catch {}
+        // Notifica TODOS os componentes para recarregarem
+        window.dispatchEvent(new CustomEvent('qualitrack:reconnected'));
+        // Para o polling agressivo
+        if (reconnectInterval) {
+          clearInterval(reconnectInterval);
+          reconnectInterval = null;
+        }
+      } else if (!online && !wasOffline) {
+        // Transição online → offline
+        console.warn('[System] ⚠️ Conexão perdida. Iniciando reconexão ativa...');
+        wasOffline = true;
+        setIsReconnecting(true);
+        // Inicia polling agressivo a cada 5 segundos até reconectar
+        if (!reconnectInterval) {
+          reconnectInterval = setInterval(async () => {
+            console.log('[System] 🔄 Tentando reconectar...');
+            const ok = await pingSupabase();
+            if (ok) handleOnlineStatusChange(true);
+          }, 5000);
         }
       }
     };
 
+    // Heartbeat periódico: a cada 2 minutos verifica se a conexão está viva
+    const heartbeatInterval = setInterval(async () => {
+      const ok = await pingSupabase();
+      handleOnlineStatusChange(ok);
+    }, 2 * 60 * 1000);
+
+    // Ping inicial
+    pingSupabase().then(ok => handleOnlineStatusChange(ok));
+
+    // Tab Focus Recovery: quando o usuário volta para a aba
+    const handleVisibilityChange = async () => {
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && now - lastFocusCheck > 15000) {
+        lastFocusCheck = now;
+        console.log('[System] Aba focada. Validando conexão...');
+        setIsReconnecting(true);
+        const ok = await pingSupabase();
+        if (ok) {
+          // Se a sessão está quase expirando, renova
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+              const timeToExpiry = (session.expires_at || 0) - Math.floor(now / 1000);
+              if (timeToExpiry < 900) await supabase.auth.refreshSession();
+            }
+          } catch {}
+          setIsSystemOnline(true);
+          setIsReconnecting(false);
+          // Se estava offline, notifica reconexão
+          if (wasOffline) {
+            wasOffline = false;
+            if (reconnectInterval) { clearInterval(reconnectInterval); reconnectInterval = null; }
+            window.dispatchEvent(new CustomEvent('qualitrack:reconnected'));
+          }
+        } else {
+          handleOnlineStatusChange(false);
+        }
+      }
+    };
+
+    // Listeners nativos do navegador para online/offline
+    const handleBrowserOnline = () => {
+      console.log('[System] Navegador reportou: online');
+      pingSupabase().then(ok => handleOnlineStatusChange(ok));
+    };
+    const handleBrowserOffline = () => {
+      console.log('[System] Navegador reportou: offline');
+      handleOnlineStatusChange(false);
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleVisibilityChange);
+    window.addEventListener('online', handleBrowserOnline);
+    window.addEventListener('offline', handleBrowserOffline);
 
     return () => {
       clearInterval(heartbeatInterval);
+      if (reconnectInterval) clearInterval(reconnectInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleVisibilityChange);
+      window.removeEventListener('online', handleBrowserOnline);
+      window.removeEventListener('offline', handleBrowserOffline);
     };
   }, [isMockMode]);
 
@@ -193,8 +282,15 @@ export default function App() {
           setUserData(data);
           setCurrentUser(user);
         } else if (error && error.code === 'PGRST116') {
+          // Usuário não encontrado no banco
           await supabase!.auth.signOut();
           setAuthView('login');
+        } else if (error) {
+          // Erro de rede ou RLS (ex: timeout, failed to fetch)
+          console.error('[App] Erro crítico em handleUserSession:', error);
+          toast.error('Erro de conexão ao carregar seu perfil. O sistema está tentando reconectar.');
+          // Mantemos o usuário como null para que fique na tela de login, mas NÃO forçamos logout ainda 
+          // pois a rede pode voltar.
         } else {
           setAuthView('request-access');
           setRequestData({ name: user.name || '', email: user.email });
@@ -444,6 +540,8 @@ export default function App() {
           setIsFormOpen={setIsFormOpen}
           isDarkMode={isDarkMode}
           setIsDarkMode={setIsDarkMode}
+          isSystemOnline={isSystemOnline}
+          isReconnecting={isReconnecting}
         />
       ) : (
         renderContent()
@@ -452,7 +550,21 @@ export default function App() {
   );
 }
 
-function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setActiveTab, userData, handleLogout, isFormOpen, setIsFormOpen, isDarkMode, setIsDarkMode }: any) {
+function MainApp({ 
+  isSidebarOpen, 
+  setIsSidebarOpen, 
+  currentUser, 
+  activeTab, 
+  setActiveTab, 
+  userData, 
+  handleLogout, 
+  isFormOpen, 
+  setIsFormOpen, 
+  isDarkMode, 
+  setIsDarkMode,
+  isSystemOnline,
+  isReconnecting 
+}: any) {
   const [teams, setTeams] = React.useState<any[]>([]);
   const [showTeamList, setShowTeamList] = React.useState(false);
 
@@ -621,8 +733,10 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
             <div className="hidden xl:flex flex-col items-end">
               <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">{formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                <span className="text-[9px] font-bold text-brand-primary uppercase tracking-tight">Sistema Online</span>
+                <div className={`w-1.5 h-1.5 rounded-full ${isSystemOnline ? 'bg-success animate-pulse' : 'bg-error'} ${isReconnecting ? 'animate-bounce' : ''}`} />
+                <span className={`text-[9px] font-bold uppercase tracking-tight ${isSystemOnline ? 'text-brand-primary' : 'text-error'}`}>
+                  {isReconnecting ? 'Reconectando...' : isSystemOnline ? 'Sistema Online' : 'Sistema Offline'}
+                </span>
               </div>
             </div>
 
@@ -640,23 +754,15 @@ function MainApp({ isSidebarOpen, setIsSidebarOpen, currentUser, activeTab, setA
         </header>
 
         <div className="flex-1 overflow-auto px-8 pb-8 pt-6 min-w-0">
-          <AnimatePresence mode="wait">
-            {activeTab === 'dashboard' && (
-              <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <DashboardMain user={userData} />
-              </motion.div>
-            )}
-            {activeTab === 'monitorias' && (
-              <motion.div key="monitorias" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} />
-              </motion.div>
-            )}
-            {activeTab === 'admin' && (
-              <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <AdminPanel user={userData} />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div className={activeTab === 'dashboard' ? 'block animate-fade-in' : 'hidden'}>
+            <DashboardMain user={userData} />
+          </div>
+          <div className={activeTab === 'monitorias' ? 'block animate-fade-in' : 'hidden'}>
+            <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} />
+          </div>
+          <div className={activeTab === 'admin' ? 'block animate-fade-in' : 'hidden'}>
+            <AdminPanel user={userData} />
+          </div>
         </div>
       </main>
     </div>

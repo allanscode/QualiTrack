@@ -4,13 +4,38 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Custom fetch wrapper for debugging hanging requests and timeouts
+const customFetch = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
+  const requestId = Math.random().toString(36).substring(7);
+  const startTime = Date.now();
+  console.log(`[Supabase Fetch ${requestId}] 🚀 START`, url, options?.method || 'GET');
+  
+  try {
+    const response = await fetch(url, options);
+    const duration = Date.now() - startTime;
+    console.log(`[Supabase Fetch ${requestId}] ✅ END (${duration}ms) - Status: ${response.status}`);
+    return response;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`[Supabase Fetch ${requestId}] ❌ ERROR (${duration}ms) -`, error);
+    throw error;
+  }
+};
+
 export const supabase = (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('placeholder')) 
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
-        flowType: 'pkce'
+        flowType: 'pkce',
+        lock: async (name: string, acquireTimeout: number, fn: () => Promise<any>) => await fn(), // Correção da assinatura da trava (evita o TypeError)
+      },
+      realtime: {
+        worker: true // Use worker to avoid background timer throttling
+      },
+      global: {
+        fetch: customFetch
       }
     })
   : null;

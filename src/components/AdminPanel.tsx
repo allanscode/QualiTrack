@@ -103,20 +103,6 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Heartbeat global para manter a sessão viva a cada 5 minutos em toda a aba Admin
-  useEffect(() => {
-    if (!supabase) return;
-    const interval = setInterval(async () => {
-      try {
-        await supabase.auth.getSession();
-        console.log('[Admin] Sessão validada pelo heartbeat global.');
-      } catch (e) {
-        console.warn('[Admin] Falha no heartbeat de sessão.');
-      }
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   const loadAllData = async () => {
     setLoading(true);
     try {
@@ -136,21 +122,24 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           try {
             console.log(`[Admin] Carregando dados (Tentativa ${retryCount + 1})...`);
             
-            // Garantir que temos uma sessão válida antes de tentar buscar
             const { data: { session } } = await supabase.auth.getSession();
             if (!session && retryCount < 1) {
               console.warn('[Admin] Sessão não encontrada. Tentando refresh...');
               await supabase.auth.refreshSession();
             }
 
+            const controller = new AbortController();
             const fetchPromise = Promise.all([
-              supabase.from('users').select('*'),
-              supabase.from('teams').select('*'),
-              supabase.from('forms').select('*')
+              supabase.from('users').select('*').abortSignal(controller.signal),
+              supabase.from('teams').select('*').abortSignal(controller.signal),
+              supabase.from('forms').select('*').abortSignal(controller.signal)
             ]);
             
             const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('timeout')), 30000)
+              setTimeout(() => {
+                controller.abort();
+                reject(new Error('timeout'));
+              }, 15000)
             );
 
             const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
@@ -162,24 +151,25 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           } catch (err: any) {
             console.error(`[Admin] Erro na tentativa ${retryCount + 1}:`, err);
             
-            if (retryCount < 2) {
-              const waitTime = 1000 * (retryCount + 1);
-              console.warn(`[Admin] Retentando em ${waitTime/1000}s...`);
+            if (retryCount < 4) {
+              const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
+              toast.loading(`Conexão instável. Recuperando dados... (${retryCount + 1}/5)`, { id: 'admin-retry' });
+              console.warn(`[Admin] Retentando em ${Math.round(waitTime/1000)}s...`);
               await new Promise(res => setTimeout(res, waitTime));
               return executeWithRetry(retryCount + 1);
             }
+            toast.dismiss('admin-retry');
+            toast.error('Não foi possível conectar ao servidor. Verifique sua internet.');
             throw err;
           }
         };
 
         const [u, t, f] = await executeWithRetry();
         
-        // Só atualiza o estado se tivermos dados válidos
         if (u.data) setUsers(u.data);
         if (t.data) setTeams(t.data);
         if (f.data) setForms(f.data);
 
-        // Busca de solicitações separada (mais propensa a erro se RLS estiver OFF)
         try {
           const { data: r, error: re } = await supabase.from('access_requests').select('*').order('created_at', { ascending: false });
           if (!re && r) setRequests(r);
@@ -191,12 +181,40 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
       console.error("Error loading admin data:", e);
     } finally {
       setLoading(false);
+      toast.dismiss('admin-retry');
     }
   };
 
+  // Listener de reconexão automática: quando o sistema central detecta que voltou online,
+  // recarrega todos os dados automaticamente sem o usuário precisar dar F5.
+  useEffect(() => {
+    const handleReconnect = () => {
+      console.log('[Admin] 🔄 Reconexão detectada. Recarregando dados...');
+      loadAllData();
+    };
+    window.addEventListener('qualitrack:reconnected', handleReconnect);
+    return () => window.removeEventListener('qualitrack:reconnected', handleReconnect);
+  }, []);
+
+  // Failsafe contra carregamento infinito
+  useEffect(() => {
+    let timer: any;
+    if (loading) {
+      timer = setTimeout(() => {
+        if (loading) {
+          console.warn('[Admin] Failsafe: Interrompendo carregamento após 45s.');
+          setLoading(false);
+          toast.dismiss('admin-retry');
+        }
+      }, 45000);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  // Carregar dados apenas na montagem inicial
   useEffect(() => {
     loadAllData();
-  }, [activeSubTab]);
+  }, []);
 
   return (
     <div className="space-y-6 animate-fade-in">

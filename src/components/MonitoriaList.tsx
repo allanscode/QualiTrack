@@ -77,15 +77,19 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
         const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
           try {
             console.log(`[Monitorias] Buscando dados (Tentativa ${retryCount + 1})...`);
+            const controller = new AbortController();
             const fetchPromise = Promise.all([
-              supabase.from('monitorias').select('*').order('created_at', { ascending: false }),
-              supabase.from('users').select('*'),
-              supabase.from('teams').select('*'),
-              supabase.from('forms').select('*')
+              supabase.from('monitorias').select('*').order('created_at', { ascending: false }).abortSignal(controller.signal),
+              supabase.from('users').select('*').abortSignal(controller.signal),
+              supabase.from('teams').select('*').abortSignal(controller.signal),
+              supabase.from('forms').select('*').abortSignal(controller.signal)
             ]);
             
             const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('timeout')), 30000)
+              setTimeout(() => {
+                controller.abort();
+                reject(new Error('timeout'));
+              }, 15000)
             );
 
             const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
@@ -95,11 +99,15 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
             return results;
           } catch (err: any) {
             console.error(`[Monitorias] Erro na tentativa ${retryCount + 1}:`, err);
-            if (retryCount < 2) {
+            if (retryCount < 4) { // Até 5 tentativas
+              const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
+              toast.loading(`Recuperando monitorias... (${retryCount + 1}/5)`, { id: 'mon-retry' });
               await supabase.auth.getSession();
-              await new Promise(res => setTimeout(res, 1500 * (retryCount + 1)));
+              await new Promise(res => setTimeout(res, waitTime));
               return executeWithRetry(retryCount + 1);
             }
+            toast.dismiss('mon-retry');
+            toast.error('Não foi possível conectar ao servidor. Verifique sua internet.');
             throw err;
           }
         };
@@ -116,8 +124,36 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
         toast.error('O servidor não respondeu. Tente alternar entre os menus para recarregar.');
       }
     }
-    finally { setLoading(false); }
+    finally { 
+      setLoading(false); 
+      toast.dismiss('mon-retry');
+    }
   }, [user]);
+
+  // Failsafe contra skeletons infinitos (comum em abas suspensas)
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (loading) {
+      timer = setTimeout(() => {
+        if (loading) {
+          console.warn('[Monitorias] Failsafe ativado: Forçando fim do carregamento após 45s.');
+          setLoading(false);
+          toast.dismiss('mon-retry');
+        }
+      }, 45000);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  // Listener de reconexão automática
+  useEffect(() => {
+    const handleReconnect = () => {
+      console.log('[Monitorias] 🔄 Reconexão detectada. Recarregando dados...');
+      load();
+    };
+    window.addEventListener('qualitrack:reconnected', handleReconnect);
+    return () => window.removeEventListener('qualitrack:reconnected', handleReconnect);
+  }, [load]);
 
   useEffect(() => { load(); }, [load]);
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Monitoria, User, Team, EvaluationForm } from '../../types';
 import { supabase, mockDb } from '../../lib/supabase';
+import { toast } from 'sonner';
 
 export interface DashboardFilters {
   startDate: string;
@@ -68,15 +69,19 @@ export function DashboardProvider({ user, children }: { user: User | null, child
         const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
           try {
             console.log(`[Dashboard] Carregando dados (Tentativa ${retryCount + 1})...`);
+            const controller = new AbortController();
             const fetchPromise = Promise.all([
-              supabase.from('monitorias').select('*').order('created_at', { ascending: false }),
-              supabase.from('users').select('*'),
-              supabase.from('teams').select('*'),
-              supabase.from('forms').select('*')
+              supabase.from('monitorias').select('*').order('created_at', { ascending: false }).abortSignal(controller.signal),
+              supabase.from('users').select('*').abortSignal(controller.signal),
+              supabase.from('teams').select('*').abortSignal(controller.signal),
+              supabase.from('forms').select('*').abortSignal(controller.signal)
             ]);
             
             const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('timeout')), 30000)
+              setTimeout(() => {
+                controller.abort();
+                reject(new Error('timeout'));
+              }, 15000)
             );
 
             const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
@@ -86,11 +91,15 @@ export function DashboardProvider({ user, children }: { user: User | null, child
             return results;
           } catch (err: any) {
             console.error(`[Dashboard] Erro na tentativa ${retryCount + 1}:`, err);
-            if (retryCount < 2) {
+            if (retryCount < 4) { // Até 5 tentativas
+              const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
+              toast.loading(`Recuperando dashboard... (${retryCount + 1}/5)`, { id: 'dash-retry' });
               await supabase.auth.getSession();
-              await new Promise(res => setTimeout(res, 1500 * (retryCount + 1)));
+              await new Promise(res => setTimeout(res, waitTime));
               return executeWithRetry(retryCount + 1);
             }
+            toast.dismiss('dash-retry');
+            toast.error('Não foi possível conectar ao servidor. Verifique sua internet.');
             throw err;
           }
         };
@@ -186,6 +195,16 @@ export function DashboardProvider({ user, children }: { user: User | null, child
       loadData();
     }, 300);
     return () => clearTimeout(timer);
+  }, [loadData]);
+
+  // Listener de reconexão automática
+  useEffect(() => {
+    const handleReconnect = () => {
+      console.log('[Dashboard] 🔄 Reconexão detectada. Recarregando dados...');
+      loadData();
+    };
+    window.addEventListener('qualitrack:reconnected', handleReconnect);
+    return () => window.removeEventListener('qualitrack:reconnected', handleReconnect);
   }, [loadData]);
 
   const refresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);
