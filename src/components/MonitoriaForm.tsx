@@ -493,7 +493,7 @@ export default function MonitoriaForm({
                           value={header.client_contact_log} 
                           onChange={e => setHeader({...header, client_contact_log: e.target.value})} 
                           disabled={isViewOnly}
-                          className="w-full bg-surface-card border border-error/20 rounded-2xl p-4 text-sm font-medium min-h-[100px] focus:border-error focus:outline-none" 
+                          className="w-full bg-surface-bg border border-surface-border rounded-2xl p-4 text-sm font-medium min-h-[100px] focus:border-brand-accent focus:outline-none" 
                           placeholder="Descreva como foi o contato ou o motivo do insucesso..."
                         />
                       </div>
@@ -638,7 +638,7 @@ export default function MonitoriaForm({
                   </div>
                   <div className="space-y-4">
                     {initialData.history.map((h, i) => (
-                      <div key={i} className="flex items-start gap-4 bg-white/60 p-6 rounded-[24px] border border-surface-border shadow-sm">
+                      <div key={i} className="flex items-start gap-4 bg-surface-card p-6 rounded-[24px] border border-surface-border shadow-sm">
                         <div className="w-10 h-10 rounded-2xl bg-surface-subtle flex items-center justify-center flex-shrink-0 text-brand-muted">
                           <UserIcon className="w-5 h-5" />
                         </div>
@@ -685,7 +685,7 @@ export default function MonitoriaForm({
                 Continuar
               </Button>
             ) : (
-              <Button onClick={handleSave} disabled={saving || isViewOnly} className="bg-brand-accent text-white px-12" icon={<Save className="w-4 h-4" />}>
+              <Button onClick={handleSave} disabled={saving || isViewOnly} variant="primary" className="px-12" icon={<Save className="w-4 h-4" />}>
                 {saving ? 'Processando...' : 'Finalizar Monitoria'}
               </Button>
             )}

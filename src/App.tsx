@@ -50,6 +50,50 @@ export default function App() {
   const isPasswordRecoveryRef = React.useRef(false);
   const isMockMode = !supabase;
 
+  // --- Inactivity Timer (30 minutes) ---
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    let timeoutId: NodeJS.Timeout;
+    
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      // 30 minutos = 30 * 60 * 1000 = 1800000 ms
+      timeoutId = setTimeout(async () => {
+        if (supabase) {
+          await supabase.auth.signOut();
+        } else {
+          localStorage.removeItem('qualitrack_mock_user');
+          setCurrentUser(null);
+          setUserData(null);
+          setAuthView('login');
+        }
+        toast.error('Sessão encerrada por inatividade (30 minutos). Faça login novamente.');
+      }, 1800000);
+    };
+
+    // Lista de eventos de atividade do usuário
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    
+    // Listener throttled para não sobrecarregar
+    let isThrottled = false;
+    const handleActivity = () => {
+      if (!isThrottled) {
+        resetTimer();
+        isThrottled = true;
+        setTimeout(() => isThrottled = false, 1000); // 1 tick a cada 1 seg
+      }
+    };
+
+    events.forEach(event => document.addEventListener(event, handleActivity, { passive: true }));
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach(event => document.removeEventListener(event, handleActivity));
+    };
+  }, [currentUser]);
+
   // --- Auth Lifecycle ---
   useEffect(() => {
     const initializationTimeout = setTimeout(() => {

@@ -486,7 +486,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       </Card>
 
       {/* Block 2: The List */}
-      <Card padding="none" className="border border-surface-border shadow-premium bg-white overflow-hidden">
+      <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card overflow-hidden">
         <div className="divide-y divide-surface-subtle">
           {filtered.length > 0 ? filtered.map(m => {
             const config = getStatusConfig(m.status);
@@ -556,7 +556,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                               <div className="space-y-4 ml-2 border-l-2 border-surface-border/60 pl-6 py-1">
                                 {m.history.map((h, i) => (
                                   <div key={i} className="relative">
-                                    <div className="absolute -left-[31px] top-1.5 w-2 h-2 rounded-full bg-brand-accent border-2 border-white shadow-sm" />
+                                    <div className="absolute -left-[31px] top-1.5 w-2 h-2 rounded-full bg-brand-accent border-2 border-surface-bg shadow-sm" />
                                     <div className="flex flex-col">
                                       <span className="text-[11px] font-bold text-brand-primary leading-none">{h.action}</span>
                                       <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70">
