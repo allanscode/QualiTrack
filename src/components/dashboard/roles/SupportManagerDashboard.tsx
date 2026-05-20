@@ -5,7 +5,7 @@ import TrendChart from '../widgets/TrendChart';
 import RankingWidget from '../widgets/RankingWidget';
 import SlaWidget from '../widgets/SlaWidget';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, Users, TrendingUp, AlertTriangle, RotateCcw, CheckCircle2, XCircle, ClipboardCheck } from 'lucide-react';
+import { Target, Users, TrendingUp, AlertTriangle, RotateCcw, CheckCircle2, XCircle, ClipboardCheck, UserMinus } from 'lucide-react';
 
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 
@@ -147,6 +147,7 @@ export default function SupportManagerDashboard() {
 
   // Opportunities = below target, sorted from furthest to closest to target
   const bottomAgents = agentRanking
+    .filter(a => a.score < config.targetScore)
     .sort((a, b) => a.score - b.score)
     .slice(0, 5);
 
@@ -154,7 +155,11 @@ export default function SupportManagerDashboard() {
   const topApprovedAgents = useMemo(() => {
     const map: Record<string, number> = {};
     monitorias.forEach(m => {
-      if ((m.status === 'contestacao_aceita' || m.status === 'finalizada_alterada') && m.evaluated_id) {
+      const isAccepted = m.status === 'contestacao_aceita' || 
+                        m.status === 'finalizada_alterada' ||
+                        m.history?.some(h => h.action.toLowerCase().includes('aceita') || h.action.toLowerCase().includes('procedente') || h.action.toLowerCase().includes('alterada'));
+      
+      if (isAccepted && m.evaluated_id) {
         map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
       }
     });
@@ -171,7 +176,10 @@ export default function SupportManagerDashboard() {
   const topRejectedAgents = useMemo(() => {
     const map: Record<string, number> = {};
     monitorias.forEach(m => {
-      if (m.status === 'contestacao_negada' && m.evaluated_id) {
+      const isRejected = m.status === 'contestacao_negada' || 
+                        m.history?.some(h => h.action.toLowerCase().includes('negada') || h.action.toLowerCase().includes('recusada') || h.action.includes('Improcedente') || h.action.includes('Mantida'));
+      
+      if (isRejected && m.evaluated_id) {
         map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
       }
     });
@@ -282,9 +290,9 @@ export default function SupportManagerDashboard() {
         />
       </div>
 
-      {/* Row 3 — Trend chart + SLA Widget */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+      {/* Linha 4 — Trend chart (Agora ocupando a linha inteira) */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="h-[340px]">
           <TrendChart
             title="Evolução do Score"
             subtitle="Nota média agregada das suas equipes"
@@ -292,44 +300,46 @@ export default function SupportManagerDashboard() {
             dataKeys={[{ key: 'ScoreEquipe', name: 'Média Equipe', color: '#6366f1' }]}
           />
         </div>
-        <div>
-          <SlaWidget
-            title="Aguardando Minha Ação"
-            monitorias={monitorias}
-            users={users}
-            targetStatus="aguardando_gestor_suporte"
-          />
-        </div>
       </div>
 
       {/* Linha 5 — Rankings de Notas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RankingWidget
-          title="Melhores Notas (Time)"
-          subtitle={`Agentes acima da meta (${config.targetScore}%)`}
-          data={topAgents}
-        />
-        <RankingWidget
-          title="Oportunidades (Time)"
-          subtitle="Agentes abaixo da meta"
-          data={bottomAgents}
-        />
+        <div className="h-[280px]">
+          <RankingWidget
+            title="Melhores Notas (Time)"
+            subtitle={`Agentes acima da meta (${config.targetScore}%)`}
+            data={topAgents}
+          />
+        </div>
+        <div className="h-[280px]">
+          <RankingWidget
+            title="Oportunidades (Time)"
+            subtitle={`Agentes abaixo da meta (${config.targetScore}%)`}
+            data={bottomAgents}
+            icon={<Target className="w-4 h-4 text-brand-primary" />}
+          />
+        </div>
       </div>
 
       {/* Linha 6 — Rankings de Contestações */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RankingWidget
-          title="Top Reav. Aceitas"
-          subtitle="Agentes com mais notas alteradas"
-          data={topApprovedAgents}
-          type="count"
-        />
-        <RankingWidget
-          title="Top Reav. Recusadas"
-          subtitle="Agentes com mais notas mantidas"
-          data={topRejectedAgents}
-          type="count"
-        />
+        <div className="h-[280px]">
+          <RankingWidget
+            title="Top Reav. Aceitas"
+            subtitle="Agentes com mais notas alteradas"
+            data={topApprovedAgents}
+            type="count"
+          />
+        </div>
+        <div className="h-[280px]">
+          <RankingWidget
+            title="Top Reav. Recusadas"
+            subtitle="Agentes com mais notas mantidas"
+            data={topRejectedAgents}
+            type="count"
+            icon={<UserMinus className="w-4 h-4 text-brand-primary" />}
+          />
+        </div>
       </div>
 
       <RecentAuditsTable monitorias={monitorias} users={users} />

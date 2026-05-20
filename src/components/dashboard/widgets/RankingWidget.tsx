@@ -15,9 +15,10 @@ interface RankingWidgetProps {
   subtitle?: string;
   data: RankingItem[];
   type?: 'score' | 'count';
+  icon?: React.ReactNode;
 }
 
-export default function RankingWidget({ title, subtitle, data, type = 'score' }: RankingWidgetProps) {
+export default function RankingWidget({ title, subtitle, data, type = 'score', icon }: RankingWidgetProps) {
   const { getLevelForScore } = useQualityConfig();
 
   return (
@@ -28,7 +29,7 @@ export default function RankingWidget({ title, subtitle, data, type = 'score' }:
           {subtitle && <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>}
         </div>
         <div className="w-9 h-9 rounded-xl bg-surface-subtle flex items-center justify-center flex-shrink-0">
-          <Award className="w-4 h-4 text-brand-primary" />
+          {icon || <Award className="w-4 h-4 text-brand-primary" />}
         </div>
       </div>
 

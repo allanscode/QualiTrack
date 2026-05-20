@@ -7,7 +7,7 @@ import RankingWidget from '../widgets/RankingWidget';
 import SlaWidget from '../widgets/SlaWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, ShieldCheck, History, Activity } from 'lucide-react';
+import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, ShieldCheck, History, Activity, UserMinus } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 
 export default function AdminDashboard() {
@@ -341,6 +341,7 @@ export default function AdminDashboard() {
             subtitle="Pontos de melhoria"
             data={bottomAgents}
             type="score"
+            icon={<AlertTriangle className="w-4 h-4 text-brand-primary" />}
           />
         </div>
         <div className="h-[420px] lg:col-span-1">

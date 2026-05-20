@@ -7,7 +7,7 @@ import RankingWidget from '../widgets/RankingWidget';
 import SlaWidget from '../widgets/SlaWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users } from 'lucide-react';
+import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, UserMinus } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 
 export default function QualityManagerDashboard() {
@@ -360,6 +360,7 @@ export default function QualityManagerDashboard() {
             title="Oportunidades (Suporte)"
             subtitle="Mais críticos primeiro"
             data={bottomAgents}
+            icon={<Target className="w-4 h-4 text-brand-primary" />}
           />
         </div>
       </div>
@@ -388,6 +389,7 @@ export default function QualityManagerDashboard() {
             subtitle="Agentes com mais notas mantidas"
             data={topRejectedAgents}
             type="count"
+            icon={<UserMinus className="w-4 h-4 text-brand-primary" />}
           />
         </div>
       </div>
