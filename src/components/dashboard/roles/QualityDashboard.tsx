@@ -97,9 +97,15 @@ export default function QualityDashboard() {
   }, [config.levels, myMonitorias]);
 
   const totalReevaluated = useMemo(() => {
+    // "Reavaliada" = quality's original assessment was CHANGED (contestation accepted)
+    // "Estável"   = quality maintained their assessment (including rejected contestations)
     return myMonitorias.filter(m => 
-      ['contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(m.status) ||
-      m.history?.some(h => h.action.includes('Reavaliada') || h.action.includes('Contestação'))
+      ['contestacao_aceita', 'finalizada_alterada'].includes(m.status) ||
+      m.history?.some(h => 
+        h.action.toLowerCase().includes('reavaliada') ||
+        h.action.toLowerCase().includes('procedente') ||
+        h.action.toLowerCase().includes('alterada')
+      )
     ).length;
   }, [myMonitorias]);
 

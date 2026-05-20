@@ -44,11 +44,10 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
 
   const displayList = React.useMemo(() => {
     return [...monitorias]
-      .filter(m => m.status !== 'concluida')
       .sort((a, b) => {
-        const dateA = a.deadline_at ? new Date(a.deadline_at).getTime() : Infinity;
-        const dateB = b.deadline_at ? new Date(b.deadline_at).getTime() : Infinity;
-        return dateA - dateB;
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateB - dateA;
       })
       .slice(0, limit);
   }, [monitorias, limit]);
@@ -112,7 +111,7 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
             })}
             {displayList.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-brand-muted text-xs font-bold uppercase tracking-widest">
+                <td colSpan={8} className="px-6 py-12 text-center text-brand-muted text-xs font-bold uppercase tracking-widest">
                   Nenhuma monitoria encontrada
                 </td>
               </tr>

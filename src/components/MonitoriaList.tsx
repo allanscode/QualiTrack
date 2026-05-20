@@ -1,5 +1,5 @@
 // QualiTrack UI Refinement Session - 2026-05-13
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, User, Team, EvaluationForm, MonitoriaHistoryEntry } from '../types';
 import { 
@@ -61,9 +61,11 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
   const [reopenStatus, setReopenStatus] = useState<MonitoriaStatus>('pendente_revisao');
   const [submitting, setSubmitting] = useState(false);
 
+  const hasLoadedOnce = useRef(false);
+
   const load = useCallback(async (silent = false) => {
     if (!user) return;
-    if (!silent) setLoading(true);
+    if (!silent && !hasLoadedOnce.current) setLoading(true);
     try {
       let fetchedMonitorias: any[] = [];
       let fetchedUsers: any[] = [];
@@ -203,6 +205,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
     }
     finally { 
       setLoading(false); 
+      hasLoadedOnce.current = true;
       toast.dismiss('mon-retry');
     }
   }, [user]);

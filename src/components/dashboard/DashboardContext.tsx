@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { Monitoria, User, Team, EvaluationForm } from '../../types';
 import { supabase, mockDb } from '../../lib/supabase';
 import { toast } from 'sonner';
@@ -50,10 +50,13 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
   const [loading, setLoading] = useState(true);
   const [globalAvg, setGlobalAvg] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const hasLoadedOnce = useRef(false);
 
   const loadData = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
+    if (!hasLoadedOnce.current) {
+      setLoading(true);
+    }
     try {
       let docs: Monitoria[] = [];
       let scoreDocs: any[] = [];
@@ -213,6 +216,7 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
       }
     } finally {
       setLoading(false);
+      hasLoadedOnce.current = true;
     }
   }, [user, filters, refreshTrigger]);
 
