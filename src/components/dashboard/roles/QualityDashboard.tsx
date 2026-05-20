@@ -179,65 +179,21 @@ export default function QualityDashboard() {
         />
       </div>
 
-      {/* Row 3: Middle Charts */}
+      {/* Row 3: Main Charts (Volume and Pendents) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="h-[340px]">
-            <ComparativeBarChart 
-              title="Volumetria Diária"
-              subtitle="Comparativo com a média da equipe"
-              data={comparativeData}
-              dataKeys={[
-                { key: 'meuVolume', name: 'Meu Volume', color: '#6366f1' },
-                { key: 'mediaEquipe', name: 'Média Equipe', color: '#94a3b8' }
-              ]}
-            />
-          </div>
-          
-          <div className="h-[400px]">
-            <SlaWidget 
-              title="Minhas Reavaliações Pendentes"
-              monitorias={myMonitorias}
-              users={users}
-              targetStatus="em_contestacao"
-            />
-          </div>
-        </div>
-        
-        <div className="space-y-6">
-          <div className="h-[340px]">
-            <DistributionChart 
-              title="Minha Curva de Qualidade" 
-              data={gradeDistribution} 
-            />
-          </div>
-
-          <div className="h-[400px]">
-            <DistributionChart 
-              title="Precisão da Qualidade" 
-              data={[
-                { name: 'Estáveis', value: myMonitorias.length - totalReevaluated, color: '#6366f1' },
-                { name: 'Reavaliadas', value: totalReevaluated, color: '#f59e0b' }
-              ].filter(d => d.value > 0)} 
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Row 4: Ofensores + Pendentes (As requested) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[380px]">
-          <OfensoresChart 
-            title="Maiores Ofensores"
-            subtitle="Itens que você mais despontuou"
-            monitorias={myMonitorias} 
-            forms={forms} 
-            limit={8} 
+        <div className="lg:col-span-2 h-[340px]">
+          <ComparativeBarChart 
+            title="Volumetria Diária"
+            subtitle="Comparativo com a média da equipe"
+            data={comparativeData}
+            dataKeys={[
+              { key: 'meuVolume', name: 'Meu Volume', color: '#6366f1' },
+              { key: 'mediaEquipe', name: 'Média Equipe', color: '#94a3b8' }
+            ]}
           />
         </div>
-        <div className="lg:col-span-1 h-[380px]">
+        <div className="h-[340px]">
           <Card padding="lg" className="h-full flex flex-col">
-            {/* Standard Header Pattern */}
             <div className="flex items-center gap-3 mb-5">
               <div className="w-9 h-9 rounded-xl bg-brand-primary/10 flex items-center justify-center flex-shrink-0">
                 <Clock className="w-4 h-4 text-brand-primary" />
@@ -247,8 +203,6 @@ export default function QualityDashboard() {
                 <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">Aguardando Conclusão</p>
               </div>
             </div>
-            
-            {/* Standardized Content Area */}
             <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
               <div className="relative">
                 <p className="text-[100px] font-black text-brand-primary tracking-tighter tabular-nums leading-none">
@@ -256,16 +210,53 @@ export default function QualityDashboard() {
                 </p>
                 <div className="absolute -top-4 -right-8 w-10 h-10 bg-brand-primary/5 rounded-full blur-xl animate-pulse" />
               </div>
-              
               <div className="mt-8 px-6 py-2.5 bg-brand-primary/5 rounded-full border border-brand-primary/10">
                 <p className="text-[10px] font-black text-brand-muted uppercase tracking-[0.2em]">Total em Aberto</p>
               </div>
-              
-              <p className="mt-4 text-[9px] font-bold text-brand-muted/60 uppercase tracking-widest max-w-[160px] mx-auto">
-                Inclui monitorias não finalizadas ou não removidas
-              </p>
             </div>
           </Card>
+        </div>
+      </div>
+
+      {/* Row 4: Quality Charts and Reevaluations (3 columns) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="h-[400px]">
+          <DistributionChart 
+            title="Minha Curva de Qualidade" 
+            data={gradeDistribution} 
+          />
+        </div>
+
+        <div className="h-[400px]">
+          <DistributionChart 
+            title="Precisão da Qualidade" 
+            data={[
+              { name: 'Estáveis', value: myMonitorias.length - totalReevaluated, color: '#6366f1' },
+              { name: 'Reavaliadas', value: totalReevaluated, color: '#f59e0b' }
+            ].filter(d => d.value > 0)} 
+          />
+        </div>
+
+        <div className="h-[400px]">
+          <SlaWidget 
+            title="Minhas Reavaliações Pendentes"
+            monitorias={myMonitorias}
+            users={users}
+            targetStatus="em_contestacao"
+          />
+        </div>
+      </div>
+
+      {/* Row 5: Maiores Ofensores (Full Width) */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="h-[420px]">
+          <OfensoresChart 
+            title="Maiores Ofensores"
+            subtitle="Itens que você mais despontuou"
+            monitorias={myMonitorias} 
+            forms={forms} 
+            limit={12} 
+          />
         </div>
       </div>
 
