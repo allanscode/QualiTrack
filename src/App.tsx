@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
-import { User } from './types';
+import { User, ROLE_LABELS } from './types';
 
 // Components
 import DashboardMain from './components/dashboard/DashboardMain';
@@ -831,7 +831,9 @@ function MainApp({
               {isSidebarOpen && (
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold truncate text-white leading-tight">{userData?.name}</p>
-                  <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5">{userData?.role}</p>
+                  <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5">
+                    {userData ? ROLE_LABELS[userData.role] : ''}
+                  </p>
                 </div>
               )}
               

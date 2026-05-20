@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, mockDb } from '../../lib/supabase';
-import { User, Team } from '../../types';
+import { User, Team, ROLE_LABELS } from '../../types';
 import { 
   Search, 
   UserPlus, 
@@ -223,7 +223,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                 </td>
                 <td className="px-6 py-4">
                   <Badge variant="neutral" className="bg-surface-subtle text-brand-primary">
-                    {({ 'admin': 'Administrador', 'qualidade': 'Monitor de Qualidade', 'gestor_qualidade': 'Supervisor de Qualidade', 'gestor_suporte': 'Supervisor de Atendimento', 'suporte': 'Agente de Atendimento' } as any)[u.role] || u.role}
+                    {ROLE_LABELS[u.role] || u.role}
                   </Badge>
                 </td>
                 <td className="px-6 py-4 text-xs font-bold text-brand-muted">
