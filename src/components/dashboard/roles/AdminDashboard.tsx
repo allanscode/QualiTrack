@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
@@ -7,11 +7,11 @@ import RankingWidget from '../widgets/RankingWidget';
 import SlaWidget from '../widgets/SlaWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, ShieldCheck, History } from 'lucide-react';
+import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, ShieldCheck, History, Activity } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 
 export default function AdminDashboard() {
-  const { user, monitorias, users, forms } = useDashboard();
+  const { user, monitorias, users, forms, onlineUsers } = useDashboard();
   const { config, getLevelForScore, isAboveTarget } = useQualityConfig();
 
   const scoredMonitorias = useMemo(() =>
@@ -155,6 +155,86 @@ export default function AdminDashboard() {
     .sort((a, b) => a.score - b.score)
     .slice(0, 5);
 
+  const [showOnlineList, setShowOnlineList] = useState(false);
+
+  useEffect(() => {
+    if (!showOnlineList) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.online-users-popover') && !target.closest('.online-users-trigger')) {
+        setShowOnlineList(false);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick, true);
+    return () => document.removeEventListener('click', handleOutsideClick, true);
+  }, [showOnlineList]);
+
+  const onlineSub = useMemo(() => (
+    <div className="relative inline-flex items-center gap-1.5">
+      <button 
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowOnlineList(prev => !prev);
+        }}
+        className="online-users-trigger cursor-pointer hover:opacity-90 active:scale-95 transition-all inline-flex items-center gap-1.5 group/online"
+      >
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span className="transition-colors group-hover/online:text-emerald-500 font-bold lowercase tracking-wider border-b border-dashed border-emerald-500/40 pb-0.5">
+          {onlineUsers.length === 1 ? '1 conectado agora' : `${onlineUsers.length} conectados agora`}
+        </span>
+      </button>
+
+      {/* Premium Tooltip / Popover triggered by click */}
+      {showOnlineList && (
+        <div className="online-users-popover absolute top-full left-0 mt-3 w-72 bg-surface-card border border-surface-border rounded-2xl shadow-2xl p-4 z-[100] text-left normal-case tracking-normal animate-slide-in-up">
+          <div className="flex items-center justify-between border-b border-surface-border pb-2.5 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </div>
+              <span className="text-xs font-extrabold text-brand-primary tracking-wide">Pessoas Online ({onlineUsers.length})</span>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setShowOnlineList(false)}
+              className="text-brand-muted hover:text-brand-primary hover:bg-surface-subtle p-1.5 rounded-lg transition-all text-xs font-bold cursor-pointer"
+              aria-label="Fechar"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+            {onlineUsers.length === 0 ? (
+              <div className="text-[10px] text-brand-muted py-2 text-center">Nenhum usuário ativo</div>
+            ) : (
+              onlineUsers.map(u => (
+                <div 
+                  key={u.id} 
+                  className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-surface-subtle/80 transition-all duration-200 group/item"
+                >
+                  <div className="w-7 h-7 rounded-full bg-brand-subtle flex items-center justify-center font-extrabold text-xs text-brand-primary uppercase shrink-0 group-hover/item:scale-105 transition-transform duration-200">
+                    {u.name ? u.name.substring(0, 2) : 'US'}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold truncate text-[11px] text-brand-primary group-hover/item:text-brand-accent transition-colors">
+                      {u.name} {user && u.id === user.id ? ' (Você)' : ''}
+                    </span>
+                    <span className="text-[9px] text-brand-muted font-medium capitalize mt-0.5">{u.role?.replace('_', ' ')}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  ), [onlineUsers, user, showOnlineList]);
+
   if (!user) return null;
 
   return (
@@ -177,12 +257,12 @@ export default function AdminDashboard() {
           accent="text-error"
         />
         <StatCard
-          title="Usuários Ativos"
-          value={users.filter(u => u.active !== false).length}
-          sub="Cadastrados no sistema"
+          title="Usuários Online"
+          value={onlineUsers.length}
+          sub={onlineSub}
           good={true}
-          icon={<Users className="w-5 h-5" />}
-          accent="text-brand-accent"
+          icon={<Activity className="w-5 h-5" />}
+          accent="text-success"
         />
         <StatCard
           title="Tendência"

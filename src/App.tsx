@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase, mockDb } from './lib/supabase';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -28,17 +28,50 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
-  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('qualitrack_theme') === 'dark');
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
+    return (localStorage.getItem('qualitrack_theme') as any) || 'system';
+  });
 
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('qualitrack_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('qualitrack_theme', 'light');
+    const root = document.documentElement;
+    localStorage.setItem('qualitrack_theme', theme);
+
+    const applyTheme = () => {
+      if (theme === 'system') {
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (systemPrefersDark) {
+          root.classList.add('dark');
+        } else {
+          root.classList.remove('dark');
+        }
+      } else if (theme === 'dark') {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    };
+
+    applyTheme();
+
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleSystemThemeChange = () => {
+        applyTheme();
+      };
+      if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener('change', handleSystemThemeChange);
+      } else {
+        mediaQuery.addListener(handleSystemThemeChange);
+      }
+      return () => {
+        if (mediaQuery.removeEventListener) {
+          mediaQuery.removeEventListener('change', handleSystemThemeChange);
+        } else {
+          mediaQuery.removeListener(handleSystemThemeChange);
+        }
+      };
     }
-  }, [isDarkMode]);
+  }, [theme]);
 
   const [credentials, setCredentials] = useState({ email: '', password: '' });
   const [requestData, setRequestData] = useState({ name: '', email: '' });
@@ -609,8 +642,8 @@ export default function App() {
               handleLogout={handleLogout}
               isFormOpen={isFormOpen}
               setIsFormOpen={setIsFormOpen}
-              isDarkMode={isDarkMode}
-              setIsDarkMode={setIsDarkMode}
+              theme={theme}
+              setTheme={setTheme}
               isSystemOnline={isSystemOnline}
               isReconnecting={isReconnecting}
             />
@@ -631,8 +664,8 @@ function MainApp({
   handleLogout, 
   isFormOpen, 
   setIsFormOpen, 
-  isDarkMode, 
-  setIsDarkMode,
+  theme, 
+  setTheme,
   isSystemOnline,
   isReconnecting 
 }: any) {
@@ -666,6 +699,24 @@ function MainApp({
       }
     }
   }, [userData?.email, currentUser?.user_metadata?.sidebar_color, userData?.sidebar_color, currentUser?.email]);
+
+  // Fechar o menu de equipes/configurações ao clicar fora
+  useEffect(() => {
+    if (!showTeamList) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.interactive-sidebar-popover') && !target.closest('.profile-toggle-btn')) {
+        setShowTeamList(false);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick, true);
+    return () => document.removeEventListener('click', handleOutsideClick, true);
+  }, [showTeamList]);
+
+  // Fechar o menu ao abrir ou recolher o sidebar para evitar que fique flutuando desalinhado
+  useEffect(() => {
+    setShowTeamList(false);
+  }, [isSidebarOpen]);
 
   const handleSidebarColorChange = async (color: string) => {
     setSidebarColor(color);
@@ -768,7 +819,7 @@ function MainApp({
         <div className="p-4 space-y-4 border-t border-white/5 interactive-sidebar-item">
           {/* User Profile - SOLID FLAT */}
           <div className="relative interactive-sidebar-item">
-            <div className={`flex items-center ${isSidebarOpen ? 'gap-3' : 'flex-col gap-3'} p-2 rounded-xl bg-black/10`}>
+            <div className={`profile-toggle-btn flex items-center ${isSidebarOpen ? 'gap-3' : 'flex-col gap-3'} p-2 rounded-xl bg-black/10`}>
               <button 
                 onClick={() => setShowTeamList(!showTeamList)}
                 className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 hover:bg-white/20 transition-all relative cursor-pointer"
@@ -802,8 +853,18 @@ function MainApp({
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute bottom-full left-0 mb-2 w-56 bg-surface-card border border-surface-border rounded-2xl shadow-premium p-3 z-50 text-brand-primary interactive-sidebar-item"
+                  className={`absolute w-56 bg-surface-card border border-surface-border rounded-2xl shadow-premium p-4 z-50 text-brand-primary interactive-sidebar-popover ${
+                    isSidebarOpen ? 'bottom-full left-0 mb-2' : 'bottom-0 left-full ml-2'
+                  }`}
                 >
+                  <button 
+                    onClick={() => setShowTeamList(false)}
+                    className="absolute top-3.5 right-3.5 text-brand-muted hover:text-brand-primary p-1 rounded-lg hover:bg-surface-subtle transition-colors cursor-pointer"
+                    title="Fechar"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+
                   <div className="flex items-center gap-2 mb-2 pb-2 border-b border-surface-border">
                     <Users className="w-4 h-4 text-brand-accent" />
                     <span className="text-xs font-black uppercase tracking-wider">Suas Equipes</span>
@@ -818,24 +879,37 @@ function MainApp({
                     )}
                   </div>
 
-                  {/* Theme Toggle Section */}
+                  {/* Theme Selector Section */}
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t border-surface-border mb-2">
-                    {isDarkMode ? <Moon className="w-4 h-4 text-brand-accent" /> : <Sun className="w-4 h-4 text-brand-accent" />}
+                    {theme === 'dark' ? <Moon className="w-4 h-4 text-brand-accent" /> : theme === 'light' ? <Sun className="w-4 h-4 text-brand-accent" /> : <Monitor className="w-4 h-4 text-brand-accent" />}
                     <span className="text-xs font-black uppercase tracking-wider">Aparência</span>
                   </div>
-                  <div className="flex">
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsDarkMode(!isDarkMode);
-                      }}
-                      className="w-full flex items-center justify-between p-2 rounded-lg bg-surface-subtle border border-surface-border hover:border-brand-accent transition-all cursor-pointer"
-                    >
-                      <span className="text-xs font-bold">{isDarkMode ? 'Modo Escuro' : 'Modo Claro'}</span>
-                      <div className={`w-8 h-4 rounded-full p-0.5 flex items-center transition-colors ${isDarkMode ? 'bg-brand-accent' : 'bg-brand-muted/30'}`}>
-                        <div className={`w-3 h-3 rounded-full bg-white transition-transform ${isDarkMode ? 'translate-x-4' : 'translate-x-0'}`} />
-                      </div>
-                    </button>
+                  <div className="grid grid-cols-3 gap-1 bg-surface-subtle p-1 rounded-xl border border-surface-border">
+                    {[
+                      { value: 'light', label: 'Claro', icon: Sun },
+                      { value: 'dark', label: 'Escuro', icon: Moon },
+                      { value: 'system', label: 'Sistema', icon: Monitor }
+                    ].map(opt => {
+                      const Icon = opt.icon;
+                      const isActive = theme === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTheme(opt.value as any);
+                          }}
+                          className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                            isActive 
+                              ? 'bg-surface-card text-brand-primary shadow-sm border border-surface-border' 
+                              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-card/30 border border-transparent'
+                          }`}
+                        >
+                          <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-brand-accent' : 'text-brand-muted'}`} />
+                          <span>{opt.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* Color Selector Section */}
@@ -846,15 +920,25 @@ function MainApp({
                   <div className="grid grid-cols-5 gap-1.5 pt-1">
                     {[
                       { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
+                      { value: '#475569', label: 'Slate', hex: 'bg-[#475569]' },
                       { value: '#1E293B', label: 'Escuro', hex: 'bg-[#1E293B]' },
-                      { value: '#065F46', label: 'Verde', hex: 'bg-[#065F46]' },
+                      { value: '#111827', label: 'Carvão', hex: 'bg-[#111827]' },
+                      { value: '#0F172A', label: 'Meia-noite', hex: 'bg-[#0F172A]' },
+                      { value: '#047857', label: 'Esmeralda', hex: 'bg-[#047857]' },
+                      { value: '#14532D', label: 'Floresta', hex: 'bg-[#14532D]' },
+                      { value: '#0D9488', label: 'Menta', hex: 'bg-[#0D9488]' },
                       { value: '#1E40AF', label: 'Azul', hex: 'bg-[#1E40AF]' },
-                      { value: '#6D28D9', label: 'Roxo', hex: 'bg-[#6D28D9]' },
+                      { value: '#0284C7', label: 'Céu', hex: 'bg-[#0284C7]' },
                       { value: '#881337', label: 'Vinho', hex: 'bg-[#881337]' },
+                      { value: '#E11D48', label: 'Rubi', hex: 'bg-[#E11D48]' },
+                      { value: '#6D28D9', label: 'Roxo', hex: 'bg-[#6D28D9]' },
+                      { value: '#5B21B6', label: 'Lavanda', hex: 'bg-[#5B21B6]' },
+                      { value: '#86198F', label: 'Fúcsia', hex: 'bg-[#86198F]' },
                       { value: '#B45309', label: 'Bronze', hex: 'bg-[#B45309]' },
-                      { value: '#0F172A', label: 'Slate', hex: 'bg-[#0F172A]' },
-                      { value: '#111827', label: 'Charcoal', hex: 'bg-[#111827]' },
-                      { value: '#2C3E50', label: 'Midnight', hex: 'bg-[#2C3E50]' }
+                      { value: '#EA580C', label: 'Pôr do Sol', hex: 'bg-[#EA580C]' },
+                      { value: '#3F6212', label: 'Oliva', hex: 'bg-[#3F6212]' },
+                      { value: '#451A03', label: 'Café', hex: 'bg-[#451A03]' },
+                      { value: '#1D4ED8', label: 'Safira', hex: 'bg-[#1D4ED8]' }
                     ].map(opt => {
                       const isActive = sidebarColor === opt.value;
                       return (

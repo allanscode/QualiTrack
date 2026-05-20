@@ -26,6 +26,7 @@ interface DashboardContextType {
   loading: boolean;
   globalAvg: number;
   refresh: () => void;
+  onlineUsers: User[];
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -273,10 +274,162 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
     };
   }, [loadData]);
 
+  const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    if (!user) {
+      setOnlineUsers([]);
+      return;
+    }
+
+    // 1. Local Storage Heartbeat (works across tabs/browsers on same machine)
+    const HEARTBEAT_INTERVAL = 10000; // 10s
+    const SESSION_TIMEOUT = 25000;    // 25s
+
+    const performLocalHeartbeat = () => {
+      try {
+        const storedStr = localStorage.getItem('qualitrack_active_sessions');
+        let sessions = storedStr ? JSON.parse(storedStr) : [];
+        if (!Array.isArray(sessions)) sessions = [];
+
+        const now = Date.now();
+        // Remove expired sessions or sessions of this user (which we will re-add)
+        sessions = sessions.filter((s: any) => 
+          s && s.id && s.lastActive && (now - s.lastActive < SESSION_TIMEOUT) && s.id !== user.id
+        );
+
+        // Add current user session
+        sessions.push({
+          id: user.id,
+          name: user.name,
+          role: user.role,
+          email: user.email,
+          active: true,
+          lastActive: now
+        });
+
+        localStorage.setItem('qualitrack_active_sessions', JSON.stringify(sessions));
+        return sessions.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          role: s.role,
+          email: s.email,
+          active: true,
+          created_at: s.created_at || new Date().toISOString()
+        })) as User[];
+      } catch (e) {
+        console.error('[Presence] Error updating local heartbeat:', e);
+        return [];
+      }
+    };
+
+    // Initial heartbeat
+    let localSessions = performLocalHeartbeat();
+
+    // 2. Supabase Realtime Presence
+    let presenceSessions: User[] = [];
+    let channel: any = null;
+
+    const updateCombinedOnlineUsers = (local: User[], remote: User[]) => {
+      // Merge unique users by ID
+      const userMap = new Map<string, User>();
+      
+      // Local first
+      local.forEach(u => userMap.set(u.id, u));
+      
+      // Remote next (overwrites/adds from other machines)
+      remote.forEach(u => userMap.set(u.id, u));
+
+      const merged = Array.from(userMap.values());
+      setOnlineUsers(merged);
+    };
+
+    updateCombinedOnlineUsers(localSessions, presenceSessions);
+
+    if (supabase) {
+      channel = supabase.channel('online-presence', {
+        config: {
+          presence: {
+            key: user.id,
+          },
+        },
+      });
+
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          try {
+            const presenceState = channel.presenceState();
+            const remote = Object.values(presenceState)
+              .flatMap((presences: any) => presences || [])
+              .filter((p: any) => p && p.user_id)
+              .map((p: any) => ({
+                id: p.user_id,
+                name: p.name,
+                role: p.role,
+                email: p.email,
+                active: true,
+                created_at: p.created_at || new Date().toISOString()
+              }));
+            
+            presenceSessions = remote;
+            updateCombinedOnlineUsers(performLocalHeartbeat(), presenceSessions);
+          } catch (e) {
+            console.error('[Presence] Sync event error:', e);
+          }
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            try {
+              await channel.track({
+                user_id: user.id,
+                name: user.name,
+                role: user.role,
+                email: user.email,
+                online_at: new Date().toISOString()
+              });
+            } catch (e) {
+              console.error('[Presence] Track error:', e);
+            }
+          }
+        });
+    }
+
+    // Interval for local heartbeat and refreshing online state
+    const timer = setInterval(() => {
+      const activeLocal = performLocalHeartbeat();
+      updateCombinedOnlineUsers(activeLocal, presenceSessions);
+    }, HEARTBEAT_INTERVAL);
+
+    // Unload cleanup: remove current user session from local storage immediately when closing tab
+    const handleUnload = () => {
+      try {
+        const storedStr = localStorage.getItem('qualitrack_active_sessions');
+        if (storedStr) {
+          let sessions = JSON.parse(storedStr);
+          if (Array.isArray(sessions)) {
+            sessions = sessions.filter((s: any) => s && s.id !== user.id);
+            localStorage.setItem('qualitrack_active_sessions', JSON.stringify(sessions));
+          }
+        }
+        if (channel) {
+          channel.unsubscribe();
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('beforeunload', handleUnload);
+      handleUnload();
+    };
+  }, [user]);
+
   const refresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);
 
   return (
-    <DashboardContext.Provider value={{ user, filters, setFilters, monitorias, allMonitorias, users, teams, forms, loading, globalAvg, refresh }}>
+    <DashboardContext.Provider value={{ user, filters, setFilters, monitorias, allMonitorias, users, teams, forms, loading, globalAvg, refresh, onlineUsers }}>
       {children}
     </DashboardContext.Provider>
   );

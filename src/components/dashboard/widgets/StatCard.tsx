@@ -4,7 +4,7 @@ import Card from '../../ui/Card';
 interface StatCardProps {
   title: string;
   value: string | number;
-  sub: string;
+  sub: React.ReactNode;
   good: boolean;
   icon: React.ReactNode;
   /** Tailwind text-color class for the icon, e.g. 'text-success', 'text-error' */
