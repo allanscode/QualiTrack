@@ -820,7 +820,7 @@ function MainApp({
         <div className="p-4 space-y-4 border-t border-white/5 interactive-sidebar-item">
           {/* User Profile - SOLID FLAT */}
           <div className="relative interactive-sidebar-item">
-            <div className={`profile-toggle-btn flex items-center ${isSidebarOpen ? 'gap-3' : 'flex-col gap-3'} p-2 rounded-xl bg-black/10`}>
+            <div className={`profile-toggle-btn flex ${isSidebarOpen ? 'items-center gap-3' : 'flex-col items-center gap-2'} p-2 rounded-xl bg-black/10 transition-all duration-300`}>
               <button 
                 onClick={() => setShowTeamList(!showTeamList)}
                 className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 hover:bg-white/20 transition-all relative cursor-pointer"
@@ -829,7 +829,7 @@ function MainApp({
                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
               </button>
               
-              <div className={`flex-1 flex items-center gap-3 overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
+              <div className={`flex items-center gap-3 overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'opacity-100 max-w-full flex-1' : 'opacity-0 max-w-0 h-0 hidden'}`}>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold truncate text-white leading-tight">{userData?.name}</p>
                   <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5 whitespace-nowrap">
@@ -845,6 +845,16 @@ function MainApp({
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
+
+              {!isSidebarOpen && (
+                <button 
+                  onClick={handleLogout} 
+                  className="w-9 h-9 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all cursor-pointer flex-shrink-0"
+                  title="Sair"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              )}
             </div>
 
             {/* Team List & Settings Popover */}
