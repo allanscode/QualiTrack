@@ -27,18 +27,18 @@ export default function ComparativeBarChart({ title, subtitle, data, dataKeys }:
       <div className="flex-1 min-h-[150px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F1E8" />
-            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#7A7D71', fontWeight: 700 }} dy={8} />
-            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#7A7D71', fontWeight: 700 }} />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />
+            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} dy={8} />
+            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} />
             <Tooltip
-              cursor={{ fill: '#F9F9F6' }}
-              contentStyle={{ backgroundColor: '#2D3A3A', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: 700, padding: '10px 14px' }}
+              cursor={false}
+              contentStyle={{ backgroundColor: 'var(--brand-primary)', border: 'none', borderRadius: '12px', color: 'var(--surface-bg)', fontSize: '11px', fontWeight: 700, padding: '10px 14px' }}
               itemStyle={{ fontSize: '11px', padding: '2px 0' }}
             />
             <Legend
               iconType="circle"
               iconSize={8}
-              wrapperStyle={{ fontSize: '10px', fontWeight: 700, color: '#7A7D71', paddingTop: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+              wrapperStyle={{ fontSize: '10px', fontWeight: 700, color: 'var(--brand-muted)', paddingTop: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
             />
             {dataKeys.map(dk => (
               <Bar key={dk.key} dataKey={dk.key} name={dk.name} fill={dk.color} radius={[4, 4, 0, 0]} maxBarSize={40} />

@@ -38,14 +38,14 @@ import CustomSelect from './ui/CustomSelect';
 import SLAClock from './ui/SLAClock';
 import { useQualityConfig } from '../lib/useQualityConfig';
 
-export default function MonitoriaList({ user, onNew }: { user: User | null; onNew: () => void }) {
+export default function MonitoriaList({ user, onNew, activeTab }: { user: User | null; onNew: () => void; activeTab?: string }) {
   const { config: qualityConfig, getLevelForScore } = useQualityConfig();
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<MonitoriaStatus | 'todas'>('todas');
+  const [tab, setTab] = useState<MonitoriaStatus | 'todas' | 'expiradas_sla'>('todas');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'active' | 'removed'>('active');
   const [teamFilter, setTeamFilter] = useState<string>('');
@@ -55,24 +55,30 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
   const [startDate, setStartDate] = useState(new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [actionModal, setActionModal] = useState<{ id: string; type: 'aceitar' | 'contestar' | 'manter' | 'aprovar' | 'escalar' | 'excluir' | 'reavaliar' | 'devolver' | 'editAdmin' | 'solicitar_reavaliacao' | 'recusar_agente' } | null>(null);
+  const [actionModal, setActionModal] = useState<{ id: string; type: 'aceitar' | 'contestar' | 'manter' | 'aprovar' | 'escalar' | 'excluir' | 'reavaliar' | 'devolver' | 'editAdmin' | 'solicitar_reavaliacao' | 'recusar_agente' | 'reabrir' } | null>(null);
   const [viewingMonitoria, setViewingMonitoria] = useState<Monitoria | null>(null);
   const [actionNote, setActionNote] = useState('');
+  const [reopenStatus, setReopenStatus] = useState<MonitoriaStatus>('pendente_revisao');
   const [submitting, setSubmitting] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (!user) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
+      let fetchedMonitorias: any[] = [];
+      let fetchedUsers: any[] = [];
+      let fetchedTeams: any[] = [];
+      let fetchedForms: any[] = [];
+
       if (!supabase) {
         const { data: d } = await mockDb.get('monitorias');
         const { data: u } = await mockDb.get('users');
         const { data: t } = await mockDb.get('teams');
         const { data: f } = await mockDb.get('forms');
-        setMonitorias(d || []);
-        setUsers(u || []);
-        setTeams(t || []);
-        setForms(f || []);
+        fetchedMonitorias = d || [];
+        fetchedUsers = u || [];
+        fetchedTeams = t || [];
+        fetchedForms = f || [];
       } else {
         const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
           try {
@@ -132,11 +138,63 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
         };
 
         const [mRes, uRes, tRes, fRes] = await executeWithRetry();
-        if (mRes.data) setMonitorias(mRes.data.map((r: any) => ({ ...r, history: r.history || [], answers: r.answers || {} })));
-        if (uRes.data) setUsers(uRes.data as User[]);
-        if (tRes.data) setTeams(tRes.data || []);
-        if (fRes.data) setForms(fRes.data || []);
+        fetchedMonitorias = mRes.data || [];
+        fetchedUsers = uRes.data || [];
+        fetchedTeams = tRes.data || [];
+        fetchedForms = fRes.data || [];
       }
+
+      // Check for expired monitorias and auto-finalize them
+      const expired = fetchedMonitorias.filter((m: any) => 
+        m.active !== false && 
+        !['concluida', 'finalizada_alterada'].includes(m.status) && 
+        m.deadline_at && 
+        new Date(m.deadline_at) < new Date()
+      );
+
+      if (expired.length > 0) {
+        console.log(`[SLA] Encontradas ${expired.length} monitorias expiradas. Finalizando...`);
+        const nowStr = new Date().toISOString();
+        for (const m of expired) {
+          const isQualityTurn = ['em_contestacao', 'aguardando_gestor_qualidade', 'reavaliacao_solicitada'].includes(m.status);
+          const newScore = isQualityTurn ? 100 : m.score;
+          const note = isQualityTurn 
+            ? 'Monitoria aprovada automaticamente (nota 100%) por perda de prazo da Equipe de Qualidade.' 
+            : 'Monitoria aprovada automaticamente por perda de prazo da Equipe de Suporte.';
+          
+          const historyEntry: MonitoriaHistoryEntry = {
+            action: 'Finalização Automática (SLA)',
+            by_id: 'system',
+            by_name: 'Sistema Automático',
+            at: nowStr,
+            note
+          };
+
+          const update = {
+            status: 'concluida',
+            score: newScore,
+            updated_at: nowStr,
+            history: [...(m.history || []), historyEntry]
+          };
+
+          if (!supabase) {
+            await mockDb.update('monitorias', m.id, update);
+          } else {
+            await supabase.from('monitorias').update(update).eq('id', m.id);
+          }
+        }
+        
+        // Re-load silently
+        setTimeout(() => {
+          load(true);
+        }, 50);
+        return;
+      }
+
+      setMonitorias(fetchedMonitorias.map((r: any) => ({ ...r, history: r.history || [], answers: r.answers || {} })));
+      setUsers(fetchedUsers as User[]);
+      setTeams(fetchedTeams || []);
+      setForms(fetchedForms || []);
     } catch (e: any) { 
       console.error(e);
       if (e.message === 'timeout') {
@@ -164,14 +222,49 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     return () => clearTimeout(timer);
   }, [loading]);
 
-  // Listener de reconexão automática
+  // Recarrega sempre que a aba de monitorias for focada/exibida
+  useEffect(() => {
+    if (activeTab === 'monitorias') {
+      console.log('[Monitorias] Aba selecionada, recarregando...');
+      load();
+    }
+  }, [activeTab, load]);
+
+  // Listener de reconexão automática e recarga de monitorias
   useEffect(() => {
     const handleReconnect = () => {
       console.log('[Monitorias] 🔄 Reconexão detectada. Recarregando dados...');
       load();
     };
+    const handleRefresh = () => {
+      console.log('[Monitorias] 🔄 Notificação de nova monitoria recebida. Recarregando dados...');
+      load(true);
+    };
     window.addEventListener('qualitrack:reconnected', handleReconnect);
-    return () => window.removeEventListener('qualitrack:reconnected', handleReconnect);
+    window.addEventListener('qualitrack:refresh-monitorias', handleRefresh);
+    return () => {
+      window.removeEventListener('qualitrack:reconnected', handleReconnect);
+      window.removeEventListener('qualitrack:refresh-monitorias', handleRefresh);
+    };
+  }, [load]);
+
+  // Realtime Supabase updates
+  useEffect(() => {
+    if (!supabase) return;
+    
+    console.log('[Monitorias] 🔌 Conectando canal Realtime Postgres...');
+    const channel = supabase
+      .channel('monitorias-realtime-list')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, (payload) => {
+        console.log('[Monitorias] ⚡ Alteração Postgres recebida via Realtime:', payload);
+        load(true);
+      })
+      .subscribe();
+
+    return () => {
+      console.log('[Monitorias] 🔌 Desconectando canal Realtime Postgres...');
+      supabase.removeChannel(channel);
+    };
   }, [load]);
 
   useEffect(() => { load(); }, [load]);
@@ -201,7 +294,19 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       // Monitor de Qualidade: Por padrão vê tudo para "gerir as monitorias" (removida trava restritiva)
 
       // Tab (navigation by status)
-      if (tab !== 'todas' && m.status !== tab) return false;
+      if (tab !== 'todas') {
+        if (tab === 'pendente_revisao') {
+          if (m.status !== 'pendente_revisao' && m.status !== 'contestacao_negada') return false;
+        } else if (tab === 'expiradas_sla') {
+          const isTimeout = m.status === 'concluida' && m.history?.some(h => h.by_id === 'system' || h.action === 'Finalização Automática (SLA)');
+          if (!isTimeout) return false;
+        } else if (tab === 'concluida') {
+          const isTimeout = m.status === 'concluida' && m.history?.some(h => h.by_id === 'system' || h.action === 'Finalização Automática (SLA)');
+          if (isTimeout || m.status !== 'concluida') return false;
+        } else {
+          if (m.status !== tab) return false;
+        }
+      }
 
       // Filters
       if (teamFilter && m.team_id !== teamFilter) return false;
@@ -222,6 +327,29 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       if (endDate && targetDate > endDate + 'T23:59:59') return false;
 
       return true;
+    }).sort((a, b) => {
+      const aIsFinished = ['concluida', 'finalizada_alterada', 'contestacao_aceita'].includes(a.status);
+      const bIsFinished = ['concluida', 'finalizada_alterada', 'contestacao_aceita'].includes(b.status);
+
+      // 1. Active (not finished) monitorias with deadlines always come first
+      if (!aIsFinished && bIsFinished) return -1;
+      if (aIsFinished && !bIsFinished) return 1;
+
+      // 2. If both are active (not finished)
+      if (!aIsFinished && !bIsFinished) {
+        if (a.deadline_at && b.deadline_at) {
+          // Sort by deadline_at ascending (earliest deadline first)
+          return new Date(a.deadline_at).getTime() - new Date(b.deadline_at).getTime();
+        }
+        if (a.deadline_at) return -1;
+        if (b.deadline_at) return 1;
+      }
+
+      // 3. Fallback: both are finished or neither has a deadline.
+      // Sort by created_at descending (newest first for completed/inactive)
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bTime - aTime;
     });
   }, [monitorias, user, tab, search, statusFilter, teamFilter, auditorFilter, dateType, startDate, endDate]);
 
@@ -243,17 +371,18 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     setTab('todas');
   };
 
-  const getStatusConfig = (status: MonitoriaStatus) => {
+  const getStatusConfig = (status: MonitoriaStatus | 'expiradas_sla') => {
     switch (status) {
-      case 'pendente_revisao': return { label: 'Aguardando Revisão', variant: 'warning' as const, icon: Clock };
-      case 'em_contestacao': return { label: 'Em Reanálise', variant: 'error' as const, icon: AlertTriangle };
-      case 'aguardando_gestor_suporte': return { label: 'Aguardando Gestor', variant: 'info' as const, icon: Shield };
-      case 'aguardando_gestor_qualidade': return { label: 'Aguardando Qualidade', variant: 'info' as const, icon: Shield };
+      case 'pendente_revisao': return { label: 'Revisão', variant: 'warning' as const, icon: Clock };
+      case 'em_contestacao': return { label: 'Reanálise', variant: 'error' as const, icon: AlertTriangle };
+      case 'aguardando_gestor_suporte': return { label: 'Gestão Sup.', variant: 'info' as const, icon: Shield };
+      case 'aguardando_gestor_qualidade': return { label: 'Gestão Qual.', variant: 'info' as const, icon: Shield };
       case 'concluida': return { label: 'Concluída', variant: 'success' as const, icon: CheckCircle2 };
-      case 'finalizada_alterada': return { label: 'Finalizada (Alterada)', variant: 'success' as const, icon: CheckCircle2 };
-      case 'contestacao_aceita': return { label: 'Contestação Aceita', variant: 'success' as const, icon: CheckCircle2 };
-      case 'contestacao_negada': return { label: 'Contestação Negada', variant: 'error' as const, icon: XCircle };
-      case 'reavaliacao_solicitada': return { label: 'Reavaliação Solicitada', variant: 'error' as const, icon: AlertTriangle };
+      case 'finalizada_alterada': return { label: 'Alterada', variant: 'success' as const, icon: CheckCircle2 };
+      case 'contestacao_aceita': return { label: 'Aceita', variant: 'success' as const, icon: CheckCircle2 };
+      case 'contestacao_negada': return { label: 'Negada', variant: 'error' as const, icon: XCircle };
+      case 'reavaliacao_solicitada': return { label: 'Reavaliação', variant: 'error' as const, icon: AlertTriangle };
+      case 'expiradas_sla': return { label: 'Estouro SLA', variant: 'error' as const, icon: Clock };
       default: return { label: status, variant: 'neutral' as const, icon: AlertCircle };
     }
   };
@@ -276,7 +405,8 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       'reavaliar': 'Reavaliação aceita pelo Gestor Qual.',
       'solicitar_reavaliacao': 'Reavaliação solicitada pelo Gestor',
       'devolver': 'Devolvido para reanálise da Qualidade',
-      'recusar_agente': 'Contestação mantida pelo Agente (enviado ao Gestor)'
+      'recusar_agente': 'Contestação mantida pelo Agente (enviado ao Gestor)',
+      'reabrir': 'Monitoria reaberta pelo Administrador'
     };
 
     const historyEntry: MonitoriaHistoryEntry = { 
@@ -294,11 +424,13 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
     else if (type === 'recusar_agente') nextStatus = 'aguardando_gestor_suporte';
     else if (type === 'escalar') nextStatus = 'aguardando_gestor_qualidade';
     else if (type === 'solicitar_reavaliacao') nextStatus = 'reavaliacao_solicitada';
+    else if (type === 'reabrir') nextStatus = reopenStatus;
 
     const getDeadlineHours = (status: MonitoriaStatus) => {
       const sla = qualityConfig.sla;
       switch (status) {
-        case 'pendente_revisao': return sla?.agentReview || 50;
+        case 'pendente_revisao':
+        case 'contestacao_negada': return sla?.agentReview || 50;
         case 'em_contestacao': 
         case 'reavaliacao_solicitada': return sla?.auditorReevaluation || 25;
         case 'aguardando_gestor_suporte': return sla?.managerSupport || 25;
@@ -328,6 +460,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
       setActionModal(null);
       setActionNote('');
       load();
+      window.dispatchEvent(new CustomEvent('qualitrack:refresh-monitorias'));
     } catch (e: any) {
       toast.error('Erro: ' + e.message);
     } finally { setSubmitting(false); }
@@ -479,11 +612,25 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
           </div>
 
           {/* Status Tabs (Unified inside) */}
-          <div className="pt-4 border-t border-surface-border/50 grid grid-cols-2 md:grid-cols-5 gap-2">
-            {['todas', 'pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'concluida'].map(t => {
+          <div className="pt-4 border-t border-surface-border/50 flex flex-wrap gap-2">
+            {['todas', 'pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade', 'concluida', 'expiradas_sla'].map(t => {
               const count = monitorias.filter(m => {
                 const matchesActiveStatus = statusFilter === 'active' ? m.active !== false : m.active === false;
-                const matchesTab = t === 'todas' || m.status === t;
+                
+                let matchesTab = false;
+                if (t === 'todas') {
+                  matchesTab = true;
+                } else if (t === 'pendente_revisao') {
+                  matchesTab = m.status === 'pendente_revisao' || m.status === 'contestacao_negada';
+                } else if (t === 'expiradas_sla') {
+                  matchesTab = m.status === 'concluida' && m.history?.some(h => h.by_id === 'system' || h.action === 'Finalização Automática (SLA)');
+                } else if (t === 'concluida') {
+                  const isTimeout = m.status === 'concluida' && m.history?.some(h => h.by_id === 'system' || h.action === 'Finalização Automática (SLA)');
+                  matchesTab = m.status === 'concluida' && !isTimeout;
+                } else {
+                  matchesTab = m.status === t;
+                }
+                
                 return matchesActiveStatus && matchesTab;
               }).length;
 
@@ -491,7 +638,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                 <button
                   key={t}
                   onClick={() => setTab(t as any)}
-                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-between gap-3 ${tab === t ? 'bg-brand-primary text-brand-on-primary shadow-lg' : 'bg-surface-subtle text-brand-primary hover:bg-surface-card border border-surface-border/50'}`}
+                  className={`flex-1 min-w-[130px] px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-between gap-3 ${tab === t ? 'bg-brand-primary text-brand-on-primary shadow-lg' : 'bg-surface-subtle text-brand-primary hover:bg-surface-card border border-surface-border/50'}`}
                 >
                   <span className="truncate">{t === 'todas' ? 'Tudo' : getStatusConfig(t as any).label}</span>
                   <span className={`px-2 py-0.5 rounded-lg text-[9px] flex-shrink-0 ${tab === t ? 'bg-black/10 text-brand-on-primary' : 'bg-surface-card text-brand-primary shadow-sm'}`}>
@@ -528,7 +675,14 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                           <span className="font-mono text-xs font-black text-brand-primary tracking-tight">TICKET {m.ticket_id}</span>
                         </div>
                         <div className="w-48 flex justify-center">
-                          <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">{config.label}</Badge>
+                          {(() => {
+                            const isSlaTimeout = m.status === 'concluida' && m.history?.some((h: any) => h.by_id === 'system' || h.action === 'Finalização Automática (SLA)');
+                            return (
+                              <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">
+                                {isSlaTimeout ? 'Concluída pelo Sistema' : config.label}
+                              </Badge>
+                            );
+                          })()}
                         </div>
                         <div className="w-36">
                           {m.active !== false && <SLAClock deadlineAt={m.deadline_at} status={m.status} />}
@@ -559,50 +713,67 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                   {isExpanded && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-t border-surface-border/50">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-2">
-                        <div className="space-y-6">
-                          <div>
-                            <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-2 ml-1">Observações da Qualidade</p>
-                            <p className="text-sm text-brand-primary font-medium bg-surface-bg/50 p-4 rounded-3xl border border-surface-border/40 min-h-[80px] leading-relaxed italic">
-                              "{m.evaluator_note || 'Nenhuma observação registrada.'}"
-                            </p>
-                          </div>
-                          
-                          {m.history?.length > 0 && (
+                        {/* Coluna 1: Observações, Linha do tempo e Visualizar Avaliação */}
+                        <div className="space-y-6 flex flex-col justify-between h-full">
+                          <div className="space-y-6">
                             <div>
-                              <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-3 ml-1 flex items-center gap-2">
-                                <History className="w-3 h-3" /> Linha do Tempo
+                              <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-2 ml-1">Observações da Qualidade</p>
+                              <p className="text-sm text-brand-primary font-medium bg-surface-bg/50 p-4 rounded-3xl border border-surface-border/40 min-h-[80px] leading-relaxed italic">
+                                "{m.evaluator_note || 'Nenhuma observação registrada.'}"
                               </p>
-                              <div className="space-y-4 ml-2 border-l-2 border-surface-border/60 pl-6 py-1">
-                                {m.history.map((h, i) => (
-                                  <div key={i} className="relative">
-                                    <div className="absolute -left-[31px] top-1.5 w-2 h-2 rounded-full bg-brand-accent border-2 border-surface-bg shadow-sm" />
-                                    <div className="flex flex-col">
-                                      <span className="text-[11px] font-bold text-brand-primary leading-none">{h.action}</span>
-                                      <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70">
-                                        {(() => {
-                                          const actor = users.find(u => u.id === h.by_id);
-                                          const isSupportView = user?.role === 'suporte' || user?.role === 'gestor_suporte';
-                                          const isQualityActor = actor && ['qualidade', 'gestor_qualidade'].includes(actor.role);
-                                          return (isSupportView && isQualityActor) ? 'Equipe de Qualidade' : h.by_name;
-                                        })()} <span className="mx-1">•</span> {format(new Date(h.at), 'HH:mm')}
-                                      </span>
-                                      {h.note && (
-                                        <div className="mt-2 text-[11px] text-brand-muted/80 bg-surface-subtle/50 p-2 rounded-xl border border-surface-border/30">
-                                          {h.note}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
                             </div>
-                          )}
+                            
+                            {m.history?.length > 0 && (
+                              <div>
+                                <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-3 ml-1 flex items-center gap-2">
+                                  <History className="w-3 h-3" /> Linha do Tempo
+                                </p>
+                                <div className="space-y-4 ml-2 border-l-2 border-surface-border/60 pl-6 py-1">
+                                  {m.history.map((h, i) => (
+                                    <div key={i} className="relative">
+                                      <div className="absolute -left-[31px] top-1.5 w-2 h-2 rounded-full bg-brand-accent border-2 border-surface-bg shadow-sm" />
+                                      <div className="flex flex-col">
+                                        <span className="text-[11px] font-bold text-brand-primary leading-none">{h.action}</span>
+                                        <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70">
+                                          {(() => {
+                                            const actor = users.find(u => u.id === h.by_id);
+                                            const isSupportView = user?.role === 'suporte' || user?.role === 'gestor_suporte';
+                                            const isQualityActor = actor && ['qualidade', 'gestor_qualidade'].includes(actor.role);
+                                            return (isSupportView && isQualityActor) ? 'Equipe de Qualidade' : h.by_name;
+                                          })()} <span className="mx-1">•</span> {format(new Date(h.at), 'HH:mm')}
+                                        </span>
+                                        {h.note && (
+                                          <div className="mt-2 text-[11px] text-brand-muted/80 bg-surface-subtle/50 p-2 rounded-xl border border-surface-border/30">
+                                            {h.note}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pt-4 mt-auto">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setViewingMonitoria(m)} 
+                              icon={<Eye className="w-4 h-4" />}
+                              className="w-full md:w-auto shadow-sm border border-surface-border/50"
+                            >
+                              Visualizar Avaliação Completa
+                            </Button>
+                          </div>
                         </div>
 
-                          <div className="flex flex-wrap gap-2 justify-end w-full">
+                        {/* Coluna 2: Ações do Fluxo e Exclusão */}
+                        <div className="flex flex-col justify-between h-full min-h-[220px] items-end space-y-6">
+                          <div className="flex flex-wrap gap-3 justify-end items-start w-full">
                             {/* Suporte Actions */}
                             {user?.role === 'suporte' && (m.status === 'pendente_revisao' || m.status === 'contestacao_negada') && (
-                              <div className="flex gap-3 items-center">
+                              <div className="flex gap-3 items-center flex-wrap justify-end">
                                 <Button 
                                   variant="secondary" 
                                   size="sm" 
@@ -631,7 +802,7 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                                     icon={<XCircle className="w-3.5 h-3.5" />}
                                     className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
                                   >
-                                    Enviar Gestor
+                                    Apelar
                                   </Button>
                                 )}
                               </div>
@@ -639,43 +810,91 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
 
                             {/* Gestor Suporte Actions */}
                             {user?.role === 'gestor_suporte' && m.status === 'aguardando_gestor_suporte' && (
-                              <>
-                                <Button variant="secondary" size="sm" onClick={() => setActionModal({ id: m.id, type: 'aprovar' })} icon={<CheckCircle2 className="w-4 h-4" />}>Aprovar Monitoria</Button>
-                                <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'escalar' })} icon={<AlertTriangle className="w-4 h-4" />}>Escalar para Qualidade</Button>
-                              </>
+                              <div className="flex gap-3 items-center flex-wrap justify-end">
+                                <Button 
+                                  variant="secondary" 
+                                  size="sm" 
+                                  onClick={() => setActionModal({ id: m.id, type: 'aprovar' })} 
+                                  icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                                  className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                                >
+                                  Aprovar
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => setActionModal({ id: m.id, type: 'escalar' })} 
+                                  icon={<AlertTriangle className="w-3.5 h-3.5" />}
+                                  className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                                >
+                                  Escalar
+                                </Button>
+                              </div>
                             )}
 
                             {/* Qualidade / Auditor Actions */}
-                            {(user?.role === 'qualidade' || user?.role === 'gestor_qualidade' || user?.role === 'admin') && (m.status === 'em_contestacao' || m.status === 'reavaliacao_solicitada') && (
-                              <>
-                                <Button variant="secondary" size="sm" onClick={() => setViewingMonitoria({ ...m, _reevaluate: true } as any)} icon={<Pencil className="w-4 h-4" />}>Reavaliar Monitoria</Button>
+                            {(user?.role === 'qualidade' || user?.role === 'gestor_qualidade') && (m.status === 'em_contestacao' || m.status === 'reavaliacao_solicitada') && (
+                              <div className="flex flex-wrap gap-3 justify-end items-start w-full">
+                                <Button 
+                                  variant="secondary" 
+                                  size="sm" 
+                                  onClick={() => setViewingMonitoria({ ...m, _reevaluate: true } as any)} 
+                                  icon={<Pencil className="w-4 h-4" />}
+                                  className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
+                                >
+                                  Reavaliar
+                                </Button>
                                 {m.status === 'em_contestacao' && (
-                                  <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'manter' })} icon={<XCircle className="w-4 h-4" />}>Manter Nota Original (Negar)</Button>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => setActionModal({ id: m.id, type: 'manter' })} 
+                                    icon={<XCircle className="w-4 h-4" />}
+                                    className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                                  >
+                                    Recusar
+                                  </Button>
                                 )}
-                              </>
+                              </div>
                             )}
 
-                            {/* Gestor Qualidade / Admin Final Actions */}
-                            {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'aguardando_gestor_qualidade' && (
-                              <>
-                                <Button variant="secondary" size="sm" onClick={() => setActionModal({ id: m.id, type: 'aprovar' })} icon={<CheckCircle2 className="w-4 h-4" />}>Decisão Final: Aprovar</Button>
-                                <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'solicitar_reavaliacao' })} icon={<Pencil className="w-4 h-4" />}>Solicitar Reavaliação</Button>
-                              </>
+                            {/* Gestor Qualidade Final Actions */}
+                            {user?.role === 'gestor_qualidade' && m.status === 'aguardando_gestor_qualidade' && (
+                              <div className="flex gap-3 items-center flex-wrap justify-end">
+                                <Button 
+                                  variant="secondary" 
+                                  size="sm" 
+                                  onClick={() => setActionModal({ id: m.id, type: 'aprovar' })} 
+                                  icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                                  className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                                >
+                                  Aprovar
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => setActionModal({ id: m.id, type: 'solicitar_reavaliacao' })} 
+                                  icon={<Pencil className="w-3.5 h-3.5" />}
+                                  className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                                >
+                                  Solicitar
+                                </Button>
+                              </div>
                             )}
                           </div>
 
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => setViewingMonitoria(m)} 
-                            icon={<Eye className="w-4 h-4" />}
-                            className="w-full md:w-auto shadow-sm border border-surface-border/50"
-                          >
-                            Visualizar Avaliação Completa
-                          </Button>
-                          
-                          <div className="flex flex-wrap gap-2 justify-end w-full">
-                            {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
+                          {/* Admin Final / Excluir Registro no final da coluna 2 */}
+                          {(user?.role === 'admin') && m.active !== false && (
+                            <div className="w-full mt-auto flex justify-end gap-3 flex-wrap">
+                              <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => setActionModal({ id: m.id, type: 'reabrir' })} 
+                                  className="w-full md:w-auto"
+                                  icon={<RotateCcw className="w-4 h-4" />}
+                                >
+                                  Reabrir
+                                </Button>
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
@@ -683,10 +902,11 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                                 className="text-error hover:bg-red-50 w-full md:w-auto"
                                 icon={<Trash2 className="w-4 h-4" />}
                               >
-                                Excluir Registro
+                                Excluir
                               </Button>
-                            )}
-                          </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -723,9 +943,12 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                 <p className="text-sm text-brand-muted font-medium mb-6 leading-relaxed">
                   Você está prestes a realizar a ação de <strong className="text-brand-primary underline underline-offset-4">{
                     actionModal.type === 'aceitar' ? 'Aprovação/Aceite' : 
-                    actionModal.type === 'recusar_agente' ? 'Manutenção de Contestação' :
+                    actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
                     actionModal.type === 'excluir' ? 'Exclusão' : 
                     actionModal.type === 'solicitar_reavaliacao' ? 'Solicitação de Reavaliação' :
+                    actionModal.type === 'manter' ? 'Recusar Reavaliação' :
+                    actionModal.type === 'escalar' ? 'Escalar para Qualidade' :
+                    actionModal.type === 'reabrir' ? 'Reabertura de Monitoria' :
                     actionModal.type.toUpperCase()
                   }</strong> nesta monitoria.
                   <br /><br />
@@ -736,7 +959,23 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
                   }
                 </p>
                 
-                {(actionModal.type === 'contestar' || actionModal.type === 'excluir' || actionModal.type === 'solicitar_reavaliacao') && (
+                {actionModal.type === 'reabrir' && (
+                  <div className="mb-6">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 block">Retornar para qual etapa?</label>
+                    <select 
+                      value={reopenStatus}
+                      onChange={e => setReopenStatus(e.target.value as any)}
+                      className="w-full bg-surface-bg border border-surface-border rounded-xl p-3 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/50 transition-all mb-4"
+                    >
+                      <option value="pendente_revisao">Pendente Revisão (Agente de Suporte)</option>
+                      <option value="em_contestacao">Em Contestação (Monitor de Qualidade)</option>
+                      <option value="aguardando_gestor_suporte">Gestão Suporte (Gestor de Suporte)</option>
+                      <option value="aguardando_gestor_qualidade">Gestão Qualidade (Gestor de Qualidade)</option>
+                    </select>
+                  </div>
+                )}
+
+                {(actionModal.type === 'aprovar' || actionModal.type === 'reabrir' || actionModal.type === 'contestar' || actionModal.type === 'escalar' || actionModal.type === 'excluir' || actionModal.type === 'solicitar_reavaliacao' || actionModal.type === 'manter' || actionModal.type === 'recusar_agente') && (
                   <div className="mb-6">
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 block">Justificativa / Motivo</label>
                     <textarea 

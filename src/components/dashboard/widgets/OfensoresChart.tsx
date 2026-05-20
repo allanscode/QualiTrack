@@ -109,7 +109,7 @@ export default function OfensoresChart({ monitorias, forms, limit = 8, title = '
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--surface-subtle)' }} />
+            <Tooltip content={<CustomTooltip />} cursor={false} />
             <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14}>
               {ofensores.map((entry, index) => {
                 const intensity = 1 - index / ofensores.length;

@@ -270,6 +270,7 @@ export default function MonitoriaForm({
         else await supabase.from('monitorias').insert([payload]);
       }
       toast.success('Monitoria salva com sucesso!');
+      window.dispatchEvent(new CustomEvent('qualitrack:refresh-monitorias'));
       onSaved();
     } catch (e: any) {
       toast.error('Não foi possível salvar a monitoria. Tente novamente.');

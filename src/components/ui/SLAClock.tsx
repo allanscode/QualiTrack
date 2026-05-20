@@ -33,11 +33,7 @@ export default function SLAClock({ deadlineAt, status }: SLAClockProps) {
         if (diffMs <= 0) {
           setIsLate(true);
           setIsWarning(true);
-          const absDiff = Math.abs(diffMs);
-          const hours = Math.floor(absDiff / (1000 * 60 * 60));
-          const minutes = Math.floor((absDiff % (1000 * 60 * 60)) / (1000 * 60));
-          const seconds = Math.floor((absDiff % (1000 * 60)) / 1000);
-          setTimeLeft(`-${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+          setTimeLeft('00:00:00');
         } else {
           setIsLate(false);
           const businessSeconds = getRemainingBusinessSeconds(now, deadline, qualityConfig.businessHours);

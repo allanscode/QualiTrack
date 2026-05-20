@@ -47,11 +47,11 @@ function DashboardRouter() {
   }
 }
 
-export default function DashboardMain({ user }: { user: User | null }) {
+export default function DashboardMain({ user, activeTab }: { user: User | null; activeTab?: string }) {
   if (!user) return null;
 
   return (
-    <DashboardProvider user={user}>
+    <DashboardProvider user={user} activeTab={activeTab}>
       <div className="space-y-4">
         <FilterBar />
         <DashboardRouter />

@@ -30,7 +30,7 @@ interface DashboardContextType {
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
-export function DashboardProvider({ user, children }: { user: User | null, children: ReactNode }) {
+export function DashboardProvider({ user, activeTab, children }: { user: User | null, activeTab?: string, children: ReactNode }) {
   const [filters, setFilters] = useState<DashboardFilters>({
     startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0], // Default 30 days
     endDate: new Date().toISOString().split('T')[0],
@@ -224,14 +224,49 @@ export function DashboardProvider({ user, children }: { user: User | null, child
     return () => clearTimeout(timer);
   }, [loadData]);
 
-  // Listener de reconexão automática
+  // Recarrega sempre que a aba do dashboard for focada/exibida
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      console.log('[Dashboard] Aba selecionada, recarregando...');
+      loadData();
+    }
+  }, [activeTab, loadData]);
+
+  // Listener de reconexão automática e recarga de monitorias
   useEffect(() => {
     const handleReconnect = () => {
       console.log('[Dashboard] 🔄 Reconexão detectada. Recarregando dados...');
       loadData();
     };
+    const handleRefresh = () => {
+      console.log('[Dashboard] 🔄 Notificação de nova monitoria recebida. Recarregando dados...');
+      loadData();
+    };
     window.addEventListener('qualitrack:reconnected', handleReconnect);
-    return () => window.removeEventListener('qualitrack:reconnected', handleReconnect);
+    window.addEventListener('qualitrack:refresh-monitorias', handleRefresh);
+    return () => {
+      window.removeEventListener('qualitrack:reconnected', handleReconnect);
+      window.removeEventListener('qualitrack:refresh-monitorias', handleRefresh);
+    };
+  }, [loadData]);
+
+  // Realtime Supabase updates
+  useEffect(() => {
+    if (!supabase) return;
+    
+    console.log('[Dashboard] 🔌 Conectando canal Realtime Postgres...');
+    const channel = supabase
+      .channel('monitorias-realtime-dash')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, (payload) => {
+        console.log('[Dashboard] ⚡ Alteração Postgres recebida via Realtime:', payload);
+        loadData();
+      })
+      .subscribe();
+
+    return () => {
+      console.log('[Dashboard] 🔌 Desconectando canal Realtime Postgres...');
+      supabase.removeChannel(channel);
+    };
   }, [loadData]);
 
   const refresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);

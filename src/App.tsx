@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase, mockDb } from './lib/supabase';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -225,30 +225,35 @@ export default function App() {
     // Tab Focus Recovery: quando o usuário volta para a aba
     const handleVisibilityChange = async () => {
       const now = Date.now();
-      if (document.visibilityState === 'visible' && now - lastFocusCheck > 15000) {
-        lastFocusCheck = now;
-        console.log('[System] Aba focada. Validando conexão...');
-        setIsReconnecting(true);
-        const ok = await pingSupabase();
-        if (ok) {
-          // Se a sessão está quase expirando, renova
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-              const timeToExpiry = (session.expires_at || 0) - Math.floor(now / 1000);
-              if (timeToExpiry < 900) await supabase.auth.refreshSession();
+      if (document.visibilityState === 'visible') {
+        console.log('[System] Aba focada. Disparando recarregamento de dados...');
+        window.dispatchEvent(new CustomEvent('qualitrack:refresh-monitorias'));
+        
+        if (now - lastFocusCheck > 15000) {
+          lastFocusCheck = now;
+          console.log('[System] Verificando conexão...');
+          setIsReconnecting(true);
+          const ok = await pingSupabase();
+          if (ok) {
+            // Se a sessão está quase expirando, renova
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session) {
+                const timeToExpiry = (session.expires_at || 0) - Math.floor(now / 1000);
+                if (timeToExpiry < 900) await supabase.auth.refreshSession();
+              }
+            } catch {}
+            setIsSystemOnline(true);
+            setIsReconnecting(false);
+            // Se estava offline, notifica reconexão
+            if (wasOffline) {
+              wasOffline = false;
+              if (reconnectInterval) { clearInterval(reconnectInterval); reconnectInterval = null; }
+              window.dispatchEvent(new CustomEvent('qualitrack:reconnected'));
             }
-          } catch {}
-          setIsSystemOnline(true);
-          setIsReconnecting(false);
-          // Se estava offline, notifica reconexão
-          if (wasOffline) {
-            wasOffline = false;
-            if (reconnectInterval) { clearInterval(reconnectInterval); reconnectInterval = null; }
-            window.dispatchEvent(new CustomEvent('qualitrack:reconnected'));
+          } else {
+            handleOnlineStatusChange(false);
           }
-        } else {
-          handleOnlineStatusChange(false);
         }
       }
     };
@@ -633,6 +638,51 @@ function MainApp({
 }: any) {
   const [teams, setTeams] = React.useState<any[]>([]);
   const [showTeamList, setShowTeamList] = React.useState(false);
+  const [sidebarColor, setSidebarColor] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const savedUser = sessionStorage.getItem('qualitrack_mock_user');
+      const email = savedUser ? JSON.parse(savedUser).email : '';
+      if (email) {
+        return localStorage.getItem(`qualitrack_sidebar_color_${email}`) || '';
+      }
+    }
+    return '';
+  });
+
+  useEffect(() => {
+    const email = userData?.email || currentUser?.email;
+    if (email) {
+      const cached = localStorage.getItem(`qualitrack_sidebar_color_${email}`);
+      if (cached !== null) {
+        setSidebarColor(cached);
+      } else {
+        const metadataColor = currentUser?.user_metadata?.sidebar_color || userData?.sidebar_color;
+        if (metadataColor) {
+          setSidebarColor(metadataColor);
+          localStorage.setItem(`qualitrack_sidebar_color_${email}`, metadataColor);
+        } else {
+          setSidebarColor('');
+        }
+      }
+    }
+  }, [userData?.email, currentUser?.user_metadata?.sidebar_color, userData?.sidebar_color, currentUser?.email]);
+
+  const handleSidebarColorChange = async (color: string) => {
+    setSidebarColor(color);
+    const email = userData?.email || currentUser?.email;
+    if (email) {
+      localStorage.setItem(`qualitrack_sidebar_color_${email}`, color);
+      if (!supabase) {
+        if (userData?.id) {
+          await mockDb.update('users', userData.id, { sidebar_color: color });
+        }
+      } else {
+        await supabase.auth.updateUser({
+          data: { sidebar_color: color }
+        });
+      }
+    }
+  };
 
   useEffect(() => {
     const loadTeams = async () => {
@@ -651,7 +701,7 @@ function MainApp({
   const teamNames = userTeams.map(t => t.name).join(', ');
 
   const sidebarStyle = {
-    backgroundColor: `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})`,
+    backgroundColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})`,
   };
 
   return (
@@ -670,8 +720,29 @@ function MainApp({
         initial={false}
         animate={{ width: isSidebarOpen ? 260 : 80 }}
         style={sidebarStyle}
-        className="text-white flex flex-col relative z-20 transition-all border-r border-white/5"
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('select') || target.closest('.interactive-sidebar-item')) {
+            return;
+          }
+          setIsSidebarOpen(!isSidebarOpen);
+        }}
+        className="text-white flex flex-col relative z-20 transition-all border-r border-white/5 group/sidebar cursor-pointer"
       >
+        {/* Floating toggle button on hover */}
+        <div 
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsSidebarOpen(!isSidebarOpen);
+          }}
+          className="absolute -right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-surface-card border border-surface-border text-brand-primary flex items-center justify-center shadow-premium hover:scale-110 active:scale-95 transition-all opacity-0 group-hover/sidebar:opacity-100 z-30 cursor-pointer"
+        >
+          {isSidebarOpen ? (
+            <ChevronLeft className="w-4 h-4" />
+          ) : (
+            <ChevronRight className="w-4 h-4" />
+          )}
+        </div>
         {/* Header / Logo */}
         <div className="h-20 flex items-center px-6 overflow-hidden">
           <div className="flex items-center gap-3 whitespace-nowrap">
@@ -694,34 +765,16 @@ function MainApp({
         </nav>
 
         {/* Footer Area - CLEAN & MINIMAL */}
-        <div className="p-4 space-y-4 border-t border-white/5">
-          {/* Controls row */}
-          <div className={`flex items-center gap-2 ${isSidebarOpen ? 'justify-start' : 'flex-col'}`}>
-            <button 
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
-              title="Alternar Tema"
-            >
-              {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
-              title="Recolher Menu"
-            >
-              <Layout className="w-4 h-4" />
-            </button>
-          </div>
-
+        <div className="p-4 space-y-4 border-t border-white/5 interactive-sidebar-item">
           {/* User Profile - SOLID FLAT */}
-          <div className="relative">
+          <div className="relative interactive-sidebar-item">
             <div className={`flex items-center ${isSidebarOpen ? 'gap-3' : 'flex-col gap-3'} p-2 rounded-xl bg-black/10`}>
               <button 
                 onClick={() => setShowTeamList(!showTeamList)}
-                className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 hover:bg-white/20 transition-all relative"
+                className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 hover:bg-white/20 transition-all relative cursor-pointer"
               >
                 <UserIcon className="w-5 h-5" />
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-[#2D3A3A] rounded-full" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
               </button>
               
               {isSidebarOpen && (
@@ -734,21 +787,22 @@ function MainApp({
               {isSidebarOpen && (
                 <button 
                   onClick={handleLogout} 
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-colors"
+                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-colors cursor-pointer"
+                  title="Sair"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
               )}
             </div>
 
-            {/* Team List Popover */}
+            {/* Team List & Settings Popover */}
             <AnimatePresence>
               {showTeamList && (
                 <motion.div 
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute bottom-full left-0 mb-2 w-56 bg-surface-card border border-surface-border rounded-2xl shadow-premium p-3 z-50 text-brand-primary"
+                  className="absolute bottom-full left-0 mb-2 w-56 bg-surface-card border border-surface-border rounded-2xl shadow-premium p-3 z-50 text-brand-primary interactive-sidebar-item"
                 >
                   <div className="flex items-center gap-2 mb-2 pb-2 border-b border-surface-border">
                     <Users className="w-4 h-4 text-brand-accent" />
@@ -763,6 +817,58 @@ function MainApp({
                       <div className="text-[10px] text-brand-muted italic p-2">Nenhuma equipe vinculada</div>
                     )}
                   </div>
+
+                  {/* Theme Toggle Section */}
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-surface-border mb-2">
+                    {isDarkMode ? <Moon className="w-4 h-4 text-brand-accent" /> : <Sun className="w-4 h-4 text-brand-accent" />}
+                    <span className="text-xs font-black uppercase tracking-wider">Aparência</span>
+                  </div>
+                  <div className="flex">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsDarkMode(!isDarkMode);
+                      }}
+                      className="w-full flex items-center justify-between p-2 rounded-lg bg-surface-subtle border border-surface-border hover:border-brand-accent transition-all cursor-pointer"
+                    >
+                      <span className="text-xs font-bold">{isDarkMode ? 'Modo Escuro' : 'Modo Claro'}</span>
+                      <div className={`w-8 h-4 rounded-full p-0.5 flex items-center transition-colors ${isDarkMode ? 'bg-brand-accent' : 'bg-brand-muted/30'}`}>
+                        <div className={`w-3 h-3 rounded-full bg-white transition-transform ${isDarkMode ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Color Selector Section */}
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-surface-border mb-2">
+                    <Palette className="w-4 h-4 text-brand-accent" />
+                    <span className="text-xs font-black uppercase tracking-wider">Cor do Menu</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5 pt-1">
+                    {[
+                      { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
+                      { value: '#1E293B', label: 'Escuro', hex: 'bg-[#1E293B]' },
+                      { value: '#065F46', label: 'Verde', hex: 'bg-[#065F46]' },
+                      { value: '#1E40AF', label: 'Azul', hex: 'bg-[#1E40AF]' },
+                      { value: '#6D28D9', label: 'Roxo', hex: 'bg-[#6D28D9]' },
+                      { value: '#881337', label: 'Vinho', hex: 'bg-[#881337]' },
+                      { value: '#B45309', label: 'Bronze', hex: 'bg-[#B45309]' },
+                      { value: '#0F172A', label: 'Slate', hex: 'bg-[#0F172A]' },
+                      { value: '#111827', label: 'Charcoal', hex: 'bg-[#111827]' },
+                      { value: '#2C3E50', label: 'Midnight', hex: 'bg-[#2C3E50]' }
+                    ].map(opt => {
+                      const isActive = sidebarColor === opt.value;
+                      return (
+                        <button
+                          key={opt.label}
+                          onClick={() => handleSidebarColorChange(opt.value)}
+                          className={`w-7 h-7 rounded-full ${opt.hex} border-2 hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer ${isActive ? 'border-brand-accent shadow-md scale-105' : 'border-surface-border'}`}
+                          title={opt.label}
+                        >
+                          {isActive && <Check className="w-3.5 h-3.5 text-white drop-shadow" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -771,7 +877,20 @@ function MainApp({
       </motion.aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-surface-bg">
-        <header className="px-8 h-20 flex items-center justify-between border-b border-surface-border/50">
+        <header className="px-8 h-20 flex items-center gap-4 border-b border-surface-border/50">
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="sidebar-toggle-btn p-2 hover:bg-surface-subtle border border-surface-border/40 rounded-xl transition-all text-brand-muted hover:text-brand-primary shadow-sm flex-shrink-0 flex items-center justify-center w-10 h-10 cursor-pointer"
+            title={isSidebarOpen ? "Recolher Menu" : "Expandir Menu"}
+          >
+            <Layout className="w-4 h-4 layout-icon" />
+            {isSidebarOpen ? (
+              <ChevronLeft className="w-4 h-4 arrow-icon" />
+            ) : (
+              <ChevronRight className="w-4 h-4 arrow-icon" />
+            )}
+          </button>
+
           <div className="min-w-0 flex-1">
             <div className="flex flex-col">
               <h2 className="text-xl font-black text-brand-primary tracking-tight">
@@ -821,10 +940,10 @@ function MainApp({
 
         <div className="flex-1 overflow-auto px-8 pb-8 pt-6 min-w-0">
           <div className={activeTab === 'dashboard' ? 'block animate-fade-in' : 'hidden'}>
-            <DashboardMain user={userData} />
+            <DashboardMain user={userData} activeTab={activeTab} />
           </div>
           <div className={activeTab === 'monitorias' ? 'block animate-fade-in' : 'hidden'}>
-            <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} />
+            <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} activeTab={activeTab} />
           </div>
           <div className={activeTab === 'admin' ? 'block animate-fade-in' : 'hidden'}>
             <AdminPanel user={userData} />

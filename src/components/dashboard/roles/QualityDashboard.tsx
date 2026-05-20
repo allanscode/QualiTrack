@@ -41,24 +41,28 @@ export default function QualityDashboard() {
   useEffect(() => {
     async function calculateComparativeData() {
       try {
-        const days: Record<string, { meuVolume: number, teamTotal: number }> = {};
+        const days: Record<string, { meuVolume: number, teamTotal: number, activeAuditors: Set<string> }> = {};
         
         monitorias.forEach(m => {
           const date = new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-          if (!days[date]) days[date] = { meuVolume: 0, teamTotal: 0 };
+          if (!days[date]) days[date] = { meuVolume: 0, teamTotal: 0, activeAuditors: new Set() };
           
           if (m.evaluator_id === user?.id) {
             days[date].meuVolume += 1;
           }
           days[date].teamTotal += 1;
+          if (m.evaluator_id) {
+            days[date].activeAuditors.add(m.evaluator_id);
+          }
         });
-
-        const auditorsCount = users.filter(u => u.role === 'qualidade').length || 1;
 
         const chartData = Object.entries(days).map(([name, data]) => ({
           name,
           meuVolume: data.meuVolume,
-          mediaEquipe: Number((data.teamTotal / auditorsCount).toFixed(2))
+          // Divide only by auditors who actually worked that day
+          mediaEquipe: data.activeAuditors.size > 0
+            ? Number((data.teamTotal / data.activeAuditors.size).toFixed(2))
+            : 0
         })).sort((a, b) => {
           const [da, ma] = a.name.split('/').map(Number);
           const [db, mb] = b.name.split('/').map(Number);
