@@ -197,7 +197,10 @@ export default function QualityManagerDashboard() {
   const topRejectedAgents = useMemo(() => {
     const map: Record<string, number> = {};
     monitorias.forEach(m => {
-      if (m.status === 'contestacao_negada' && m.evaluated_id) {
+      const isRejected = m.status === 'contestacao_negada' || 
+                        m.history?.some(h => h.action.toLowerCase().includes('negada') || h.action.toLowerCase().includes('recusada') || h.action.includes('Improcedente') || h.action.includes('Mantida'));
+      
+      if (isRejected && m.evaluated_id) {
         map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
       }
     });
@@ -300,9 +303,9 @@ export default function QualityManagerDashboard() {
         />
       </div>
 
-      {/* Linha 3 — Evolução, Curva e Precisão */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 h-[300px]">
+      {/* Linha 3 — Evolução Única */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="h-[300px]">
           <TrendChart
             title="Evolução da Qualidade"
             subtitle="Média global de score por dia"
@@ -310,6 +313,10 @@ export default function QualityManagerDashboard() {
             dataKeys={[{ key: 'ScoreMedio', name: 'Média Global', color: '#6366f1' }]}
           />
         </div>
+      </div>
+
+      {/* Linha 4 — Curva, Precisão e Ranking */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="h-[300px]">
           <DistributionChart
             title="Curva de Qualidade"
@@ -322,11 +329,7 @@ export default function QualityManagerDashboard() {
             data={precisionData}
           />
         </div>
-      </div>
-
-      {/* Row 4 — Auditor Ranking + SLA Widget */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[320px]">
+        <div className="h-[300px]">
           <RankingWidget
             title="Ranking de Qualidade"
             subtitle="Por volume de auditorias realizadas"
@@ -334,6 +337,35 @@ export default function QualityManagerDashboard() {
             type="count"
           />
         </div>
+      </div>
+
+      {/* Row 5 — Maiores Ofensores Único */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="h-[420px]">
+          <OfensoresChart monitorias={monitorias} forms={forms} limit={12} />
+        </div>
+      </div>
+
+      {/* Row 6 — Melhores Scores e Oportunidades */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="h-[250px]">
+          <RankingWidget
+            title="Melhores Scores (Suporte)"
+            subtitle={`Acima da meta (${config.targetScore}%)`}
+            data={topAgents}
+          />
+        </div>
+        <div className="h-[250px]">
+          <RankingWidget
+            title="Oportunidades (Suporte)"
+            subtitle="Mais críticos primeiro"
+            data={bottomAgents}
+          />
+        </div>
+      </div>
+
+      {/* Row 7 — SLA e Rankings de Contestações */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="h-[320px]">
           <SlaWidget
             title="Aguardando Minha Ação"
@@ -342,45 +374,22 @@ export default function QualityManagerDashboard() {
             targetStatus="aguardando_gestor_qualidade"
           />
         </div>
-      </div>
-
-      {/* Row 5 — Ofensores + Agent Rankings */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="h-[420px]">
-          <OfensoresChart monitorias={monitorias} forms={forms} limit={8} />
+        <div className="h-[320px]">
+          <RankingWidget
+            title="Top Reav. Aceitas (Geral)"
+            subtitle="Agentes com mais notas alteradas"
+            data={topApprovedAgents}
+            type="count"
+          />
         </div>
-        <div className="space-y-6">
-          <div className="h-[200px]">
-            <RankingWidget
-              title="Melhores Scores (Suporte)"
-              subtitle={`Acima da meta (${config.targetScore}%)`}
-              data={topAgents}
-            />
-          </div>
-          <div className="h-[200px]">
-            <RankingWidget
-              title="Oportunidades (Suporte)"
-              subtitle="Mais críticos primeiro"
-              data={bottomAgents}
-            />
-          </div>
+        <div className="h-[320px]">
+          <RankingWidget
+            title="Top Reav. Recusadas (Geral)"
+            subtitle="Agentes com mais notas mantidas"
+            data={topRejectedAgents}
+            type="count"
+          />
         </div>
-      </div>
-
-      {/* Linha 6 — Rankings de Contestações */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RankingWidget
-          title="Top Reav. Aceitas (Geral)"
-          subtitle="Agentes com mais notas alteradas"
-          data={topApprovedAgents}
-          type="count"
-        />
-        <RankingWidget
-          title="Top Reav. Recusadas (Geral)"
-          subtitle="Agentes com mais notas mantidas"
-          data={topRejectedAgents}
-          type="count"
-        />
       </div>
 
       <RecentAuditsTable monitorias={monitorias} users={users} />
