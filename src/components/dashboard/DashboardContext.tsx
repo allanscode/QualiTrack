@@ -56,12 +56,14 @@ export function DashboardProvider({ user, children }: { user: User | null, child
     setLoading(true);
     try {
       let docs: Monitoria[] = [];
+      let scoreDocs: any[] = [];
       let userDocs: User[] = [];
       let teamDocs: Team[] = [];
       let formDocs: EvaluationForm[] = [];
 
       if (!supabase) {
         docs = (await mockDb.get('monitorias')).data || [];
+        scoreDocs = docs;
         userDocs = (await mockDb.get('users')).data || [];
         teamDocs = (await mockDb.get('teams')).data || [];
         formDocs = (await mockDb.get('forms')).data || [];
@@ -70,8 +72,31 @@ export function DashboardProvider({ user, children }: { user: User | null, child
           try {
             console.log(`[Dashboard] Carregando dados (Tentativa ${retryCount + 1})...`);
             const controller = new AbortController();
+            
+            let monitoriasQuery = supabase.from('monitorias').select('*').order('created_at', { ascending: false });
+            let scoresQuery = supabase.from('monitorias').select('score, created_at, status, channel, form_id, active');
+
+            const myTeamIds = user.team_ids || [];
+
+            if (user.role === 'suporte') {
+              if (myTeamIds.length > 0) {
+                monitoriasQuery = monitoriasQuery.or(`evaluated_id.eq.${user.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`);
+              } else {
+                monitoriasQuery = monitoriasQuery.eq('evaluated_id', user.id);
+              }
+            } else if (user.role === 'qualidade') {
+              monitoriasQuery = monitoriasQuery.eq('evaluator_id', user.id);
+            } else if (user.role === 'gestor_suporte') {
+              if (myTeamIds.length > 0) {
+                monitoriasQuery = monitoriasQuery.in('team_id', myTeamIds);
+              } else {
+                monitoriasQuery = monitoriasQuery.eq('team_id', '00000000-0000-0000-0000-000000000000');
+              }
+            }
+
             const fetchPromise = Promise.all([
-              supabase.from('monitorias').select('*').order('created_at', { ascending: false }).abortSignal(controller.signal),
+              monitoriasQuery.abortSignal(controller.signal),
+              scoresQuery.abortSignal(controller.signal),
               supabase.from('users').select('*').abortSignal(controller.signal),
               supabase.from('teams').select('*').abortSignal(controller.signal),
               supabase.from('forms').select('*').abortSignal(controller.signal)
@@ -104,19 +129,21 @@ export function DashboardProvider({ user, children }: { user: User | null, child
           }
         };
 
-        const [mRes, uRes, tRes, fRes] = await executeWithRetry();
+        const [mRes, sRes, uRes, tRes, fRes] = await executeWithRetry();
         
         if (mRes.data) docs = mRes.data as Monitoria[];
+        if (sRes.data) scoreDocs = sRes.data;
         if (uRes.data) userDocs = uRes.data as User[];
         if (tRes.data) teamDocs = tRes.data as Team[];
-        if (formDocs) formDocs = fRes.data as EvaluationForm[];
+        if (fRes.data) formDocs = fRes.data as EvaluationForm[];
       }
 
       // Always exclude deactivated monitorias from dashboard
       docs = docs.filter(m => m.active !== false);
 
       // Calculate Global Average (filtered only by date/status/channel, not RBAC)
-      const globalFiltered = docs.filter(m => {
+      const globalFiltered = scoreDocs.filter(m => {
+        if (m.active === false) return false;
         const targetDate = m.created_at;
         if (!targetDate) return true;
         const d = new Date(targetDate).getTime();

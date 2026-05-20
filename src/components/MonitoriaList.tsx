@@ -78,8 +78,27 @@ export default function MonitoriaList({ user, onNew }: { user: User | null; onNe
           try {
             console.log(`[Monitorias] Buscando dados (Tentativa ${retryCount + 1})...`);
             const controller = new AbortController();
+            
+            let monitoriasQuery = supabase.from('monitorias').select('*').order('created_at', { ascending: false });
+
+            const myTeamIds = user.team_ids || [];
+
+            if (user.role === 'suporte') {
+              if (myTeamIds.length > 0) {
+                monitoriasQuery = monitoriasQuery.or(`evaluated_id.eq.${user.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`);
+              } else {
+                monitoriasQuery = monitoriasQuery.eq('evaluated_id', user.id);
+              }
+            } else if (user.role === 'gestor_suporte') {
+              if (myTeamIds.length > 0) {
+                monitoriasQuery = monitoriasQuery.in('team_id', myTeamIds);
+              } else {
+                monitoriasQuery = monitoriasQuery.eq('team_id', '00000000-0000-0000-0000-000000000000');
+              }
+            }
+
             const fetchPromise = Promise.all([
-              supabase.from('monitorias').select('*').order('created_at', { ascending: false }).abortSignal(controller.signal),
+              monitoriasQuery.abortSignal(controller.signal),
               supabase.from('users').select('*').abortSignal(controller.signal),
               supabase.from('teams').select('*').abortSignal(controller.signal),
               supabase.from('forms').select('*').abortSignal(controller.signal)

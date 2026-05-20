@@ -3,6 +3,7 @@ import { Save, Plus, Trash2, Calendar, Clock, Check } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { useQualityConfig } from '../lib/useQualityConfig';
+import CustomSelect from './ui/CustomSelect';
 
 const COLORS = [
   { color: 'text-indigo-700', bgColor: 'bg-indigo-50', label: 'Indigo' },
@@ -20,16 +21,76 @@ export default function QualityConfigManagement() {
 
   const updateLevel = (idx: number, field: string, value: any) => {
     const newLevels = [...localConfig.levels];
-    (newLevels[idx] as any)[field] = ['label', 'color', 'bgColor'].includes(field) ? value : Number(value);
+    if (['label', 'color', 'bgColor'].includes(field)) {
+      (newLevels[idx] as any)[field] = value;
+    } else {
+      (newLevels[idx] as any)[field] = value === '' ? '' : Number(value);
+    }
     setLocalConfig(c => ({ ...c, levels: newLevels }));
   };
 
   const handleSave = async () => {
     setSaving(true);
+
+    // Validate SLA fields are at least 1h
+    const slaFields = ['agentReview', 'auditorReevaluation', 'managerSupport', 'managerQuality'];
+    for (const field of slaFields) {
+      const val = (localConfig.sla as any)?.[field];
+      if (typeof val !== 'number' || isNaN(val) || val < 1) {
+        toast.error('Os prazos de atendimento (SLA) devem ser de no mínimo 1 hora.');
+        setSaving(false);
+        return;
+      }
+    }
+
+    // Validate targetScore
+    if (typeof localConfig.targetScore !== 'number' || isNaN(localConfig.targetScore) || localConfig.targetScore < 0 || localConfig.targetScore > 100) {
+      toast.error('A meta de desempenho deve ser um número válido entre 0 e 100.');
+      setSaving(false);
+      return;
+    }
+
+    // Validate levels
+    for (const level of localConfig.levels) {
+      if (typeof level.minScore !== 'number' || isNaN(level.minScore) || level.minScore < 0 || level.minScore > 100 ||
+          typeof level.maxScore !== 'number' || isNaN(level.maxScore) || level.maxScore < 0 || level.maxScore > 100) {
+        toast.error('Os limites das faixas de classificação devem ser números válidos entre 0 e 100.');
+        setSaving(false);
+        return;
+      }
+      if (level.minScore > level.maxScore) {
+        toast.error(`O score mínimo do nível "${level.label}" não pode ser maior que o score máximo.`);
+        setSaving(false);
+        return;
+      }
+    }
+
     const sorted = [...localConfig.levels].sort((a, b) => a.minScore - b.minScore);
+    
+    if (sorted[0].minScore !== 0) {
+      toast.error('A primeira faixa de classificação deve começar em 0%.');
+      setSaving(false);
+      return;
+    }
+
+    if (sorted[sorted.length - 1].maxScore !== 100) {
+      toast.error('A última faixa de classificação deve terminar em 100%.');
+      setSaving(false);
+      return;
+    }
+
     for (let i = 0; i < sorted.length - 1; i++) {
-      if (sorted[i].maxScore >= sorted[i + 1].minScore) {
-        toast.error('Faixas sobrepostas. Corrija os limites antes de salvar.');
+      const currentMax = sorted[i].maxScore;
+      const nextMin = sorted[i + 1].minScore;
+      
+      if (nextMin <= currentMax) {
+        toast.error(`Faixas sobrepostas detectadas entre "${sorted[i].label}" e "${sorted[i + 1].label}".`);
+        setSaving(false);
+        return;
+      }
+      
+      if (nextMin > currentMax + 1) {
+        toast.error(`Existe um intervalo ausente (gap) entre as faixas "${sorted[i].label}" (${currentMax}%) e "${sorted[i + 1].label}" (${nextMin}%). Os limites devem ser contínuos (ex: 74% e 75%).`);
         setSaving(false);
         return;
       }
@@ -74,8 +135,11 @@ export default function QualityConfigManagement() {
               type="number"
               min={0}
               max={100}
-              value={localConfig.targetScore}
-              onChange={e => setLocalConfig(c => ({ ...c, targetScore: Number(e.target.value) }))}
+              value={localConfig.targetScore ?? ''}
+              onChange={e => {
+                const val = e.target.value === '' ? '' : Number(e.target.value);
+                setLocalConfig(c => ({ ...c, targetScore: val as any }));
+              }}
               className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
             />
           </div>
@@ -105,8 +169,11 @@ export default function QualityConfigManagement() {
                 <input
                   type="number"
                   min={1}
-                  value={(localConfig.sla as any)?.[sla.field] || 24}
-                  onChange={e => setLocalConfig(c => ({ ...c, sla: { ...c.sla, [sla.field]: Number(e.target.value) } }))}
+                  value={(localConfig.sla as any)?.[sla.field] ?? ''}
+                  onChange={e => {
+                    const val = e.target.value === '' ? '' : Number(e.target.value);
+                    setLocalConfig(c => ({ ...c, sla: { ...c.sla, [sla.field]: val as any } }));
+                  }}
                   className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none pr-12 transition-all"
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand-muted uppercase tracking-widest opacity-50">h</span>
@@ -279,7 +346,7 @@ export default function QualityConfigManagement() {
                     type="number"
                     min={0}
                     max={100}
-                    value={level.minScore}
+                    value={level.minScore ?? ''}
                     onChange={e => updateLevel(idx, 'minScore', e.target.value)}
                     className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
                   />
@@ -290,29 +357,28 @@ export default function QualityConfigManagement() {
                     type="number"
                     min={0}
                     max={100}
-                    value={level.maxScore}
+                    value={level.maxScore ?? ''}
                     onChange={e => updateLevel(idx, 'maxScore', e.target.value)}
                     className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Cor de Destaque</label>
-                  <select
+                  <CustomSelect
+                    label="Cor de Destaque"
                     value={level.color + '||' + level.bgColor}
-                    onChange={e => {
-                      const parts = e.target.value.split('||');
+                    onChange={val => {
+                      const parts = val.split('||');
                       const color = parts[0];
                       const bgColor = parts[1];
                       const newLevels = [...localConfig.levels];
                       newLevels[idx] = { ...newLevels[idx], color, bgColor };
                       setLocalConfig(c => ({ ...c, levels: newLevels }));
                     }}
-                    className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
-                  >
-                    {COLORS.map(c => (
-                      <option key={c.label} value={c.color + '||' + c.bgColor}>{c.label}</option>
-                    ))}
-                  </select>
+                    options={COLORS.map(c => ({
+                      value: c.color + '||' + c.bgColor,
+                      label: c.label
+                    }))}
+                  />
                 </div>
               </div>
               <div className="mt-4 flex items-center gap-3">

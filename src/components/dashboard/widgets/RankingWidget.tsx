@@ -6,7 +6,7 @@ import { useQualityConfig } from '../../../lib/useQualityConfig';
 interface RankingItem {
   id: string;
   name: string;
-  score: number;
+  score?: number;
   count: number;
 }
 
@@ -34,7 +34,7 @@ export default function RankingWidget({ title, subtitle, data, type = 'score' }:
 
       <div className="flex-1 space-y-2 overflow-y-auto pr-1 no-scrollbar">
         {data.map((item, index) => {
-          const level = getLevelForScore(item.score);
+          const level = item.score !== undefined ? getLevelForScore(item.score) : { color: 'text-brand-primary', label: '' };
           const isCount = type === 'count';
 
           return (
@@ -67,7 +67,7 @@ export default function RankingWidget({ title, subtitle, data, type = 'score' }:
               {/* Score / Volume */}
               <div className="text-right flex-shrink-0">
                 <div className={`text-sm font-black ${isCount ? 'text-brand-primary' : level.color}`}>
-                  {isCount ? `${item.count} Vol.` : `${item.score.toFixed(1)}%`}
+                  {isCount ? `${item.count} Vol.` : `${(item.score ?? 0).toFixed(1)}%`}
                 </div>
                 {!isCount && (
                   <div className={`text-[9px] font-black uppercase tracking-widest ${level.color} opacity-70`}>
