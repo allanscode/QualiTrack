@@ -770,6 +770,7 @@ function MainApp({
       <motion.aside 
         initial={false}
         animate={{ width: isSidebarOpen ? 260 : 80 }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
         style={sidebarStyle}
         onClick={(e) => {
           const target = e.target as HTMLElement;
@@ -828,24 +829,22 @@ function MainApp({
                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
               </button>
               
-              {isSidebarOpen && (
+              <div className={`flex-1 flex items-center gap-3 overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold truncate text-white leading-tight">{userData?.name}</p>
-                  <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5">
+                  <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5 whitespace-nowrap">
                     {userData ? ROLE_LABELS[userData.role] : ''}
                   </p>
                 </div>
-              )}
-              
-              {isSidebarOpen && (
+                
                 <button 
                   onClick={handleLogout} 
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-colors cursor-pointer flex-shrink-0"
                   title="Sair"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
-              )}
+              </div>
             </div>
 
             {/* Team List & Settings Popover */}
@@ -1060,9 +1059,11 @@ function NavItem({ icon, label, active, onClick, isOpen }: any) {
       <div className={`flex-shrink-0 ${active ? 'text-white' : 'text-white/30 group-hover:text-white'}`}>
         {icon}
       </div>
-      {isOpen && (
-        <span className="text-sm tracking-tight">{label}</span>
-      )}
+      <div className={`flex-1 overflow-hidden transition-all duration-300 ${isOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
+        <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
+          {label}
+        </span>
+      </div>
     </button>
   );
 }
