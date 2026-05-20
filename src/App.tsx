@@ -63,7 +63,7 @@ export default function App() {
         if (supabase) {
           await supabase.auth.signOut();
         } else {
-          localStorage.removeItem('qualitrack_mock_user');
+          sessionStorage.removeItem('qualitrack_mock_user');
           setCurrentUser(null);
           setUserData(null);
           setAuthView('login');
@@ -101,7 +101,7 @@ export default function App() {
     }, 10000);
 
     if (isMockMode) {
-      const savedUser = localStorage.getItem('qualitrack_mock_user');
+      const savedUser = sessionStorage.getItem('qualitrack_mock_user');
       if (savedUser) {
         try {
           const user = JSON.parse(savedUser);
@@ -318,7 +318,7 @@ export default function App() {
         if (dbUser) {
           setUserData(dbUser);
           setCurrentUser(user);
-          localStorage.setItem('qualitrack_mock_user', JSON.stringify(dbUser));
+          sessionStorage.setItem('qualitrack_mock_user', JSON.stringify(dbUser));
         }
       } else {
         const { data, error } = await supabase!.from('users').select('*').eq('email', user.email).single();
@@ -364,7 +364,7 @@ export default function App() {
           setCurrentUser(user);
           setUserData(user);
           setActiveTab('dashboard');
-          localStorage.setItem('qualitrack_mock_user', JSON.stringify(user));
+          sessionStorage.setItem('qualitrack_mock_user', JSON.stringify(user));
           toast.success(`Bem-vindo, ${user.name}!`);
         } else {
           toast.error('E-mail ou senha incorretos. Tente novamente.');
@@ -388,7 +388,7 @@ export default function App() {
     setCurrentUser(null);
     setUserData(null);
     setAuthView('login');
-    localStorage.removeItem('qualitrack_mock_user');
+    sessionStorage.removeItem('qualitrack_mock_user');
     if (!isMockMode && supabase) {
       supabase.auth.signOut().catch(console.error);
     }
