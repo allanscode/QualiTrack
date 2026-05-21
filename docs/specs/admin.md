@@ -110,9 +110,9 @@ interface AccessRequest {
 
 | Ação | Roles Permitidos |
 |---|---|
-| Ver Admin Panel | `admin` |
-| Gerenciar usuários | `admin` |
-| Gerenciar equipes | `admin` |
-| Gerenciar formulários | `admin` |
-| Aprovar solicitações | `admin`, `gestor_qualidade`, `gestor_suporte` |
-| Config. qualidade | `admin`, `gestor_qualidade` |
+| Ver Admin Panel | `admin` (Administrador) |
+| Gerenciar usuários | `admin` (Administrador) |
+| Gerenciar equipes | `admin` (Administrador) |
+| Gerenciar formulários | `admin` (Administrador) |
+| Aprovar solicitações | `admin`, `gestor_qualidade` (Supervisor de Qualidade), `gestor_suporte` (Supervisor de Atendimento) |
+| Config. qualidade | `admin`, `gestor_qualidade` (Supervisor de Qualidade) |

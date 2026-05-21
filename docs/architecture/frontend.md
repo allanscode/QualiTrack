@@ -117,15 +117,19 @@ Definidos em `src/index.css`, com variantes light/dark:
 | `--surface-card` | `#FFFFFF` | `#252820` | Background de cards |
 | `--surface-border` | `#E2E4D8` | `#3D4136` | Bordas |
 
-### Cores por Role (Sidebar)
+### Mapeamento de Perfis (`ROLE_LABELS`)
+Os perfis de usuário (roles) são mapeados de IDs técnicos para nomes amigáveis em `src/types.ts`:
+- `admin` ➔ **Administrador**
+- `qualidade` ➔ **Monitor de Qualidade**
+- `gestor_qualidade` ➔ **Supervisor de Qualidade**
+- `gestor_suporte` ➔ **Supervisor de Atendimento**
+- `suporte` ➔ **Agente de Atendimento**
 
-| Role | Light | Dark |
-|------|-------|------|
-| admin | `#2D3A3A` | `#1A1C16` |
-| qualidade | `#065F46` | `#064E3B` |
-| gestor_qualidade | `#4338CA` | `#312E81` |
-| gestor_suporte | `#B45309` | `#78350F` |
-| suporte | `#1E40AF` | `#1E3A8A` |
+### Padrões de Layout e Animação
+- **Sidebar Dinâmica:** Largura variável (80px recolhida / 260px aberta) controlada por `motion.aside`.
+- **Sincronização de Texto:** Rótulos dos menus e seção de perfil utilizam contêineres com `overflow-hidden` e transições de `max-width` sincronizadas em 300ms para evitar transbordo durante a animação.
+- **Perfil do Usuário:** Seção de perfil (`profile-toggle-btn`) utiliza `layout` animation do Framer Motion para alternar entre `flex-row` (aberta) e `flex-col` (recolhida), permitindo que o botão de logout fique abaixo do ícone no modo compacto.
+- **Quebra de Texto:** Nomes e cargos suportam `break-words` para evitar quebra de layout com nomes extensos.
 
 ### Cores Funcionais (fixas)
 

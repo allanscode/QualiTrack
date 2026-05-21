@@ -29,47 +29,53 @@ export default function App() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
-    return (localStorage.getItem('qualitrack_theme') as any) || 'system';
+    // Se estivermos na tela de login (sem usuário logado), sempre seguimos o sistema
+    // para evitar que a preferência do usuário anterior "vaze" para o próximo.
+    const saved = localStorage.getItem('qualitrack_theme') as any;
+    if (saved && (sessionStorage.getItem('qualitrack_mock_user') || localStorage.getItem('supabase.auth.token'))) {
+      return saved;
+    }
+    return 'system';
   });
 
+  // Atualiza o tema quando o usuário loga ou desloga
+  useEffect(() => {
+    if (!currentUser) {
+      setTheme('system');
+    } else {
+      const saved = localStorage.getItem('qualitrack_theme') as any;
+      if (saved) setTheme(saved);
+    }
+  }, [currentUser]);
+
+  // Efeito para aplicar o tema no root (html)
   useEffect(() => {
     const root = document.documentElement;
-    localStorage.setItem('qualitrack_theme', theme);
-
     const applyTheme = () => {
+      let isDark = false;
       if (theme === 'system') {
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (systemPrefersDark) {
-          root.classList.add('dark');
-        } else {
-          root.classList.remove('dark');
-        }
-      } else if (theme === 'dark') {
+        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } else {
+        isDark = theme === 'dark';
+      }
+
+      if (isDark) {
         root.classList.add('dark');
+        root.style.colorScheme = 'dark';
       } else {
         root.classList.remove('dark');
+        root.style.colorScheme = 'light';
       }
     };
 
     applyTheme();
+    localStorage.setItem('qualitrack_theme', theme);
 
     if (theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleSystemThemeChange = () => {
-        applyTheme();
-      };
-      if (mediaQuery.addEventListener) {
-        mediaQuery.addEventListener('change', handleSystemThemeChange);
-      } else {
-        mediaQuery.addListener(handleSystemThemeChange);
-      }
-      return () => {
-        if (mediaQuery.removeEventListener) {
-          mediaQuery.removeEventListener('change', handleSystemThemeChange);
-        } else {
-          mediaQuery.removeListener(handleSystemThemeChange);
-        }
-      };
+      const listener = () => applyTheme();
+      mediaQuery.addEventListener('change', listener);
+      return () => mediaQuery.removeEventListener('change', listener);
     }
   }, [theme]);
 
@@ -533,47 +539,51 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="h-screen w-screen flex flex-col items-center justify-center bg-[#F9F9F6] p-6 text-[#2D3A3A] light"
+            className="h-screen w-screen flex flex-col items-center justify-center bg-surface-bg p-6 text-brand-primary"
           >
             <div className="max-w-md w-full text-center space-y-8">
-              <h1 className="text-5xl font-bold tracking-tight text-[#2D3A3A]">QualiTrack</h1>
-              <div className="bg-white p-8 rounded-[40px] border border-[#E2E4D8] shadow-premium min-h-[400px] flex flex-col justify-center">
+              <h1 className="text-5xl font-bold tracking-tight text-brand-primary">QualiTrack</h1>
+              <div className="bg-surface-card p-8 rounded-[40px] border border-surface-border shadow-premium min-h-[400px] flex flex-col justify-center">
                 <AnimatePresence mode="wait">
                   {authView === 'login' && (
                     <motion.div key="login" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6">
                       <h3 className="text-xl font-bold text-center mb-6">Acesse sua Conta</h3>
                       <form onSubmit={handleLogin} className="space-y-4 text-left">
                         <div>
-                          <label className="block text-xs font-semibold text-[#7A7D71] uppercase mb-2">E-mail corporativo</label>
-                          <input type="email" required className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#8E9B7B] focus:outline-none text-[#2D3A3A]" value={credentials.email} onChange={e => setCredentials({...credentials, email: e.target.value})} />
+                          <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">E-mail corporativo</label>
+                          <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={credentials.email} onChange={e => setCredentials({...credentials, email: e.target.value})} />
                         </div>
                         <div>
                           <div className="flex justify-between mb-2">
-                            <label className="block text-xs font-semibold text-[#7A7D71] uppercase mb-2">Senha</label>
-                            <button type="button" onClick={() => setAuthView('forgot-password')} className="text-[10px] font-bold text-[#8E9B7B] hover:text-[#2D3A3A] transition-colors">Esqueci a senha</button>
+                            <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Senha</label>
+                            <button type="button" onClick={() => setAuthView('forgot-password')} className="text-[10px] font-bold text-brand-accent hover:text-brand-primary transition-colors">Esqueci a senha</button>
                           </div>
-                          <input type="password" required className="w-full bg-[#F9F9F6] border border-[#E2E4D8] rounded-2xl py-3 px-4 text-sm focus:border-[#8E9B7B] focus:outline-none text-[#2D3A3A]" value={credentials.password} onChange={e => setCredentials({...credentials, password: e.target.value})} />
+                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={credentials.password} onChange={e => setCredentials({...credentials, password: e.target.value})} />
                         </div>
-                        <button className="w-full bg-[#2D3A3A] text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-opacity-90 transition-all">Entrar</button>
+                        <button className="w-full bg-brand-accent text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
+                          <span className="text-white">Entrar</span>
+                        </button>
                       </form>
-                      <button onClick={() => setAuthView('request-access')} className="text-sm font-bold text-[#8E9B7B] hover:text-[#2D3A3A]">Não tem acesso? Solicite aqui</button>
+                      <button onClick={() => setAuthView('request-access')} className="text-sm font-bold text-brand-accent hover:text-brand-primary transition-colors">Não tem acesso? Solicite aqui</button>
                     </motion.div>
                   )}
 
                   {authView === 'request-access' && (
                     <motion.div key="request" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
-                      <h3 className="text-xl font-bold text-center mb-6">Solicitar Novo Acesso</h3>
+                      <h3 className="text-xl font-bold text-center mb-6 text-brand-primary">Solicitar Novo Acesso</h3>
                       <form onSubmit={handleRequestAccess} className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Nome completo</label>
-                          <input type="text" required className="w-full bg-surface-bg border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none" value={requestData.name} onChange={e => setRequestData({...requestData, name: e.target.value})} />
+                          <input type="text" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={requestData.name} onChange={e => setRequestData({...requestData, name: e.target.value})} />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">E-mail corporativo</label>
-                          <input type="email" required className="w-full bg-surface-bg border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none" value={requestData.email} onChange={e => setRequestData({...requestData, email: e.target.value})} />
+                          <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={requestData.email} onChange={e => setRequestData({...requestData, email: e.target.value})} />
                         </div>
-                        <button className="w-full bg-brand-primary text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-opacity-90 transition-all">Enviar Solicitação</button>
-                        <button type="button" onClick={() => setAuthView('login')} className="w-full text-sm font-bold text-brand-muted">Voltar para Login</button>
+                        <button className="w-full bg-brand-accent text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
+                          <span className="text-white">Enviar Solicitação</span>
+                        </button>
+                        <button type="button" onClick={() => setAuthView('login')} className="w-full text-sm font-bold text-brand-muted hover:text-brand-primary transition-colors mt-2 text-center">Voltar para Login</button>
                       </form>
                     </motion.div>
                   )}
@@ -583,39 +593,45 @@ export default function App() {
                       <div className="w-16 h-16 bg-surface-subtle rounded-full flex items-center justify-center mx-auto mb-4">
                         <Clock className="w-8 h-8 text-brand-accent" />
                       </div>
-                      <h3 className="text-xl font-bold">Solicitação Enviada</h3>
+                      <h3 className="text-xl font-bold text-brand-primary">Solicitação Enviada</h3>
                       <p className="text-sm text-brand-muted">Aguarde a aprovação do administrador. Você receberá um e-mail em breve.</p>
-                      <button onClick={() => setAuthView('login')} className="w-full bg-brand-primary text-white py-4 rounded-2xl font-bold shadow-lg transition-all">Voltar para o Início</button>
+                      <button onClick={() => setAuthView('login')} className="w-full bg-brand-accent text-white py-4 rounded-2xl font-bold shadow-lg transition-all flex items-center justify-center">
+                        <span className="text-white">Voltar para o Início</span>
+                      </button>
                     </motion.div>
                   )}
 
                   {authView === 'change-password' && (
                     <motion.div key="change" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
-                      <h3 className="text-xl font-bold text-center mb-6">Defina sua nova senha</h3>
+                      <h3 className="text-xl font-bold text-center mb-6 text-brand-primary">Defina sua nova senha</h3>
                       <form onSubmit={handleUpdatePassword} className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Nova senha</label>
-                          <input type="password" required className="w-full bg-surface-bg border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Confirmar nova senha</label>
-                          <input type="password" required className="w-full bg-surface-bg border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
                         </div>
-                        <button className="w-full bg-brand-primary text-white py-4 rounded-2xl font-bold shadow-lg transition-all">Definir Nova Senha</button>
+                        <button className="w-full bg-brand-accent text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
+                          <span className="text-white">Definir Nova Senha</span>
+                        </button>
                       </form>
                     </motion.div>
                   )}
 
                   {authView === 'forgot-password' && (
                     <motion.div key="forgot" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
-                      <h3 className="text-xl font-bold text-center mb-6">Recuperar Senha</h3>
+                      <h3 className="text-xl font-bold text-center mb-6 text-brand-primary">Recuperar Senha</h3>
                       <form onSubmit={handleForgotPassword} className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">E-mail cadastrado</label>
-                          <input type="email" required className="w-full bg-surface-bg border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none" value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
+                          <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
                         </div>
-                        <button className="w-full bg-brand-primary text-white py-4 rounded-2xl font-bold shadow-lg transition-all">Enviar Link</button>
-                        <button type="button" onClick={() => setAuthView('login')} className="w-full py-4 text-brand-muted font-bold">Voltar</button>
+                        <button className="w-full bg-brand-accent text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
+                          <span className="text-white">Enviar Link</span>
+                        </button>
+                        <button type="button" onClick={() => setAuthView('login')} className="w-full py-4 text-brand-muted font-bold hover:text-brand-primary transition-colors text-center">Voltar</button>
                       </form>
                     </motion.div>
                   )}

@@ -64,16 +64,41 @@ interface DashboardFilters {
 
 ## Widgets Disponíveis
 
-| Widget | Descrição |
-|---|---|
-| `StatCard` | Card com valor numérico, ícone e cor |
-| `TrendChart` | Gráfico de tendência (linha) temporal |
-| `DistributionChart` | Distribuição de scores (barras por faixa) |
-| `ComparativeBarChart` | Comparação entre agentes/equipes |
-| `RankingWidget` | Ranking de top/bottom performers |
-| `OfensoresChart` | Critérios mais descumpridos (maiores ofensores) |
-| `RecentAuditsTable` | Tabela de monitorias recentes |
-| `SlaWidget` | Status de SLA (dentro/fora do prazo) |
+| Widget | Descrição | Ícones Semânticos |
+|---|---|---|
+| `StatCard` | Card com valor numérico, ícone e cor | — |
+| `TrendChart` | Gráfico de tendência (linha) temporal | — |
+| `DistributionChart` | Distribuição de scores (barras por faixa) | — |
+| `ComparativeBarChart` | Comparação entre agentes/equipes | — |
+| `RankingWidget` | Ranking de top/bottom performers | `Target` (Oportunidades), `UserMinus` (Recusas), `AlertTriangle` (Ofensores) |
+| `OfensoresChart` | Critérios mais descumpridos (maiores ofensores) | — |
+| `RecentAuditsTable` | Tabela de monitorias recentes | — |
+| `SlaWidget` | Status de SLA (dentro/fora do prazo) | — |
+
+## Lógica de Reavaliações (History-Based)
+Para garantir a precisão dos rankings de contestações, os widgets não dependem apenas do `status` atual da monitoria (que pode mudar), mas sim de uma varredura no `history` da monitoria em busca de termos chave:
+- **Aceitas/Procedentes:** Busca por "aceita", "procedente", "alterada".
+- **Recusadas/Improcedentes:** Busca por "negada", "recusada", "mantida", "improcedente".
+
+## Layouts por Perfil
+
+### Supervisor de Qualidade (`QualityManagerDashboard`)
+- **Evolução da Qualidade:** Linha única (full width) para análise temporal detalhada.
+- **Distribuição e Ranking:** Curva de Qualidade, Precisão e Ranking de Volume em 3 colunas.
+- **Maiores Ofensores:** Linha única (full width) exibindo até 12 critérios.
+- **Scores de Suporte:** Melhores Notas e Oportunidades em 2 colunas.
+- **Controle:** SLA e Rankings de Contestações na base em 3 colunas.
+
+### Supervisor de Atendimento (`SupportManagerDashboard`)
+- **Benchmarks e Tendência:** StatCards de performance.
+- **Evolução do Score:** Linha única (full width) após remoção do SLA duplicado.
+- **Rankings de Notas:** Melhores Notas e Oportunidades em 2 colunas (meta dinâmica).
+- **Rankings de Contestações:** Top Aceitas e Top Recusadas em 2 colunas.
+
+### Monitor de Qualidade (`QualityDashboard`)
+- **Volume e Pendências:** Volumetria Diária (2/3) e Auditorias Pendentes (1/3).
+- **Qualidade e Reavaliações:** Curva de Qualidade, Precisão e Reavaliações Pendentes em 3 colunas.
+- **Análise de Falhas:** Maiores Ofensores em linha única (full width, 12 itens).
 
 ## Filtros por Role na FilterBar
 
