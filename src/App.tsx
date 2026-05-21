@@ -154,6 +154,16 @@ export default function App() {
     }
 
     const hash = window.location.hash;
+    const search = window.location.search;
+
+    if (hash.includes('error_code=otp_expired') || search.includes('error_code=otp_expired')) {
+      toast.error('O link expirou ou já foi utilizado. Por favor, solicite um novo link de recuperação.');
+      setAuthView('forgot-password');
+      window.history.replaceState(null, '', window.location.pathname);
+      setLoading(false);
+      return;
+    }
+
     if (hash && (hash.includes('type=recovery') || hash.includes('type=invite'))) {
       isPasswordRecoveryRef.current = true;
       setAuthView('change-password');

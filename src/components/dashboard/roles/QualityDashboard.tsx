@@ -22,10 +22,11 @@ export default function QualityDashboard() {
   
   const reavAccepted = useMemo(() => myMonitorias.filter(m =>
     m.history?.some(h =>
-      h.action.includes('Procedente') ||
-      h.action.includes('Alterada') ||
+      h.action.toLowerCase().includes('procedente') ||
+      h.action.toLowerCase().includes('alterada') ||
       h.action.toLowerCase().includes('aceita') ||
-      h.action.toLowerCase().includes('alterado')
+      h.action.toLowerCase().includes('alterado') ||
+      h.action.toLowerCase().includes('reavaliada')
     )
   ).length, [myMonitorias]);
 

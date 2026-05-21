@@ -219,7 +219,7 @@ export default function MonitoriaForm({
       }
 
       const historyEntry: MonitoriaHistoryEntry = { 
-        action: isAdminEdit ? 'Edição pelo Administrador' : (isReevaluating ? 'Monitoria Reavaliada' : 'Monitoria Criada'), 
+        action: isAdminEdit ? 'Edição pelo Administrador' : (isReevaluating ? 'Monitoria Reavaliada (Procedente)' : 'Monitoria Criada'), 
         by_id: user.id, 
         by_name: user.name, 
         at: nowTs,

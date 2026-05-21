@@ -4,7 +4,7 @@ import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import DistributionChart from '../widgets/DistributionChart';
 import RankingWidget from '../widgets/RankingWidget';
-import SlaWidget from '../widgets/SlaWidget';
+import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, UserMinus } from 'lucide-react';
@@ -56,10 +56,11 @@ export default function QualityManagerDashboard() {
   const reavAccepted = useMemo(() =>
     monitorias.filter(m =>
       m.history?.some(h =>
-        h.action.includes('Procedente') ||
-        h.action.includes('Alterada') ||
+        h.action.toLowerCase().includes('procedente') ||
+        h.action.toLowerCase().includes('alterada') ||
         h.action.toLowerCase().includes('aceita') ||
-        h.action.toLowerCase().includes('alterado')
+        h.action.toLowerCase().includes('alterado') ||
+        h.action.toLowerCase().includes('reavaliada')
       )
     ).length,
     [monitorias]
@@ -180,7 +181,17 @@ export default function QualityManagerDashboard() {
   const topApprovedAgents = useMemo(() => {
     const map: Record<string, number> = {};
     monitorias.forEach(m => {
-      if ((m.status === 'contestacao_aceita' || m.status === 'finalizada_alterada') && m.evaluated_id) {
+      const isAccepted = m.status === 'contestacao_aceita' || 
+                        m.status === 'finalizada_alterada' ||
+                        m.history?.some(h =>
+                          h.action.toLowerCase().includes('procedente') ||
+                          h.action.toLowerCase().includes('alterada') ||
+                          h.action.toLowerCase().includes('aceita') ||
+                          h.action.toLowerCase().includes('alterado') ||
+                          h.action.toLowerCase().includes('reavaliada')
+                        );
+      
+      if (isAccepted && m.evaluated_id) {
         map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
       }
     });
@@ -225,6 +236,49 @@ export default function QualityManagerDashboard() {
       { name: 'Reavaliadas', value: reevaluated, color: '#f59e0b' }
     ].filter(d => d.value > 0);
   }, [scoredMonitorias, reavAccepted]);
+
+  // --- Volumetria de Reavaliações (Aceitas vs Recusadas) por Agente da Qualidade
+  const reevaluationVolumeData = useMemo(() => {
+    // 1. Identifica todos os IDs únicos de avaliadores (agentes da qualidade) no período
+    const evaluatorIds = Array.from(new Set(
+      monitorias.map(m => m.evaluator_id).filter((id): id is string => !!id)
+    ));
+
+    // 2. Mapeia cada avaliador para a quantidade de reavaliações aceitas e recusadas
+    return evaluatorIds.map(evaluatorId => {
+      const auditorName = users.find(u => u.id === evaluatorId)?.name || 'Avaliador';
+      const auditorMonitorias = monitorias.filter(m => m.evaluator_id === evaluatorId);
+      
+      const aceitas = auditorMonitorias.filter(m =>
+        m.status === 'contestacao_aceita' || 
+        m.status === 'finalizada_alterada' ||
+        m.history?.some(h =>
+          h.action.toLowerCase().includes('procedente') ||
+          h.action.toLowerCase().includes('alterada') ||
+          h.action.toLowerCase().includes('aceita') ||
+          h.action.toLowerCase().includes('alterado') ||
+          h.action.toLowerCase().includes('reavaliada')
+        )
+      ).length;
+
+      const recusadas = auditorMonitorias.filter(m =>
+        m.status === 'contestacao_negada' ||
+        m.history?.some(h =>
+          h.action.includes('Improcedente') ||
+          h.action.includes('Mantida') ||
+          h.action.toLowerCase().includes('negada') ||
+          h.action.toLowerCase().includes('recusada') ||
+          h.action.toLowerCase().includes('mantida')
+        )
+      ).length;
+
+      return {
+        name: auditorName,
+        Aceitas: aceitas,
+        Recusadas: recusadas
+      };
+    }).sort((a, b) => (b.Aceitas + b.Recusadas) - (a.Aceitas + a.Recusadas));
+  }, [monitorias, users]);
 
   if (!user) return null;
 
@@ -368,11 +422,14 @@ export default function QualityManagerDashboard() {
       {/* Row 7 — SLA e Rankings de Contestações */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="h-[320px]">
-          <SlaWidget
-            title="Aguardando Minha Ação"
-            monitorias={monitorias}
-            users={users}
-            targetStatus="aguardando_gestor_qualidade"
+          <ComparativeBarChart
+            title="Volume de Reavaliações"
+            subtitle="Aceitas vs Recusadas no período"
+            data={reevaluationVolumeData}
+            dataKeys={[
+              { key: 'Aceitas', name: 'Aceitas (Nota Alterada)', color: '#10b981' },
+              { key: 'Recusadas', name: 'Recusadas (Nota Mantida)', color: '#ef4444' }
+            ]}
           />
         </div>
         <div className="h-[320px]">

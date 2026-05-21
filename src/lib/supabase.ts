@@ -29,7 +29,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes
         persistSession: true,
         detectSessionInUrl: true,
         flowType: 'pkce',
-        storage: typeof window !== 'undefined' ? window.sessionStorage : undefined,
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
         lock: async (name: string, acquireTimeout: number, fn: () => Promise<any>) => await fn(), // Correção da assinatura da trava (evita o TypeError)
       },
       realtime: {

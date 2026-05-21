@@ -54,17 +54,42 @@ export default function AgentDashboard() {
 
   // --- Contestation Metrics
   const myContestations = useMemo(() => 
-    myMonitorias.filter(m => m.history?.some(h => h.action.includes('Contestação'))),
+    myMonitorias.filter(m => 
+      m.history?.some(h => 
+        h.action.includes('Contestação') ||
+        h.action.toLowerCase().includes('contestou') ||
+        h.action.toLowerCase().includes('solicitou reavaliação')
+      )
+    ),
     [myMonitorias]
   );
 
   const contestationsApproved = useMemo(() => 
-    myContestations.filter(m => m.status === 'contestacao_aceita' || m.status === 'finalizada_alterada').length,
+    myContestations.filter(m => 
+      m.status === 'contestacao_aceita' || 
+      m.status === 'finalizada_alterada' ||
+      m.history?.some(h =>
+        h.action.toLowerCase().includes('procedente') ||
+        h.action.toLowerCase().includes('alterada') ||
+        h.action.toLowerCase().includes('aceita') ||
+        h.action.toLowerCase().includes('alterado') ||
+        h.action.toLowerCase().includes('reavaliada')
+      )
+    ).length,
     [myContestations]
   );
 
   const contestationsRejected = useMemo(() => 
-    myContestations.filter(m => m.status === 'contestacao_negada').length,
+    myContestations.filter(m => 
+      m.status === 'contestacao_negada' ||
+      m.history?.some(h =>
+        h.action.includes('Improcedente') ||
+        h.action.includes('Mantida') ||
+        h.action.toLowerCase().includes('negada') ||
+        h.action.toLowerCase().includes('recusada') ||
+        h.action.toLowerCase().includes('mantida')
+      )
+    ).length,
     [myContestations]
   );
 
