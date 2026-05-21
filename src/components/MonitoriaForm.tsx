@@ -228,7 +228,7 @@ export default function MonitoriaForm({
           toast.error('Informe o registro de contato para a pesquisa negativa.');
           return false;
         }
-        if (header.satisfaction_result === 'Negativa') {
+        if (header.satisfaction_result === 'Negativa' && (header.satisfaction_has_record || header.client_contact_success)) {
           for (const field of clientFieldsToShow) {
             const answers = dissatisfactionAnswers[field.id] || [];
             if (answers.length === 0) {
@@ -294,7 +294,7 @@ export default function MonitoriaForm({
       };
 
       const filteredDissatisfactionAnswers = { ...dissatisfactionAnswers };
-      if (header.satisfaction_result !== 'Negativa') {
+      if (header.satisfaction_result !== 'Negativa' || !(header.satisfaction_has_record || header.client_contact_success)) {
         dissatisfactionFields.forEach(f => {
           if (f.type === 'cliente') {
             delete filteredDissatisfactionAnswers[f.id];
@@ -572,7 +572,7 @@ export default function MonitoriaForm({
                     </Card>
                   )}
 
-                  {header.satisfaction_result === 'Negativa' && clientFieldsToShow.length > 0 && (
+                  {header.satisfaction_result === 'Negativa' && (header.satisfaction_has_record || header.client_contact_success) && clientFieldsToShow.length > 0 && (
                     <div className="space-y-6 pt-4 animate-fade-in">
                       <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1 text-center">Campos Extras do Cliente</p>
                       {clientFieldsToShow.map(field => (
