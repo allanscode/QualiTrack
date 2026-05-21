@@ -63,12 +63,107 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // Check if user already exists in public.users
+    const { data: existingUser, error: searchError } = await supabaseAdmin
+      .from('users')
+      .select('id, active')
+      .eq('email', email.toLowerCase())
+      .maybeSingle()
+
+    if (searchError) {
+      console.warn('Search User Error (non-fatal):', searchError)
+    }
+
+    if (existingUser) {
+      // User already exists in public.users (and thus in auth.users)
+      // 1. Update public.users
+      const { error: dbError } = await supabaseAdmin.from('users').update({
+        name: name,
+        role: role || 'tecnico',
+        team_ids: team_ids || [],
+        active: true,
+        must_change_password: true
+      }).eq('id', existingUser.id)
+
+      if (dbError) {
+        console.error('DB Update Error for existing user:', dbError)
+        return new Response(JSON.stringify({ success: false, error: 'Failed to update existing user in public users table', details: dbError }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // 2. Send reset password email
+      const origin = req.headers.get('Origin') || 'http://localhost:3000'
+      const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email.toLowerCase(), {
+        redirectTo: origin
+      })
+
+      if (resetError) {
+        console.error('Reset Password Error:', resetError)
+        return new Response(JSON.stringify({ success: false, error: 'Failed to send password reset email to existing user', details: resetError }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      return new Response(JSON.stringify({ success: true, user: { id: existingUser.id, email } }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // 1. Invite the user via Supabase Auth
     const { data: authData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: { name }
     })
 
     if (inviteError) {
+      // Fallback: If user is already registered in Auth but not in public.users
+      const isAlreadyRegistered = inviteError.message?.includes('already been registered') || inviteError.status === 422;
+      if (isAlreadyRegistered) {
+        const { data: { users: authUsers }, error: listError } = await supabaseAdmin.auth.admin.listUsers()
+        const foundUser = authUsers?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+        if (foundUser) {
+          // Found the user in Auth! Now upsert into public.users
+          const { error: dbError } = await supabaseAdmin.from('users').upsert({
+            id: foundUser.id,
+            email: email.toLowerCase(),
+            name: name,
+            role: role || 'tecnico',
+            team_ids: team_ids || [],
+            active: true,
+            must_change_password: true,
+            created_at: new Date().toISOString()
+          })
+
+          if (dbError) {
+            console.error('DB Upsert Fallback Error:', dbError)
+            return new Response(JSON.stringify({ success: false, error: 'Failed to save to public users table in fallback', details: dbError }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          // Trigger reset password email
+          const origin = req.headers.get('Origin') || 'http://localhost:3000'
+          const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email.toLowerCase(), {
+            redirectTo: origin
+          })
+
+          if (resetError) {
+            console.error('Reset Password Fallback Error:', resetError)
+            return new Response(JSON.stringify({ success: false, error: 'Failed to send password reset email in fallback', details: resetError }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          return new Response(JSON.stringify({ success: true, user: foundUser }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+      }
+
       console.error('Invite Error:', inviteError)
       return new Response(JSON.stringify({ success: false, error: 'Failed to invite user via Auth', details: inviteError }), {
         status: 200,

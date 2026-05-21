@@ -20,24 +20,55 @@ export default function QualityDashboard() {
   const scoredMonitorias = useMemo(() => myMonitorias.filter(m => m.score !== undefined && m.score !== null), [myMonitorias]);
   const avgScore = useMemo(() => scoredMonitorias.length > 0 ? (scoredMonitorias.reduce((a, m) => a + (m.score || 0), 0) / scoredMonitorias.length) : 0, [scoredMonitorias]);
   
-  const reavAccepted = useMemo(() => myMonitorias.filter(m =>
-    m.history?.some(h =>
-      h.action.toLowerCase().includes('procedente') ||
-      h.action.toLowerCase().includes('alterada') ||
-      h.action.toLowerCase().includes('aceita') ||
-      h.action.toLowerCase().includes('alterado') ||
-      h.action.toLowerCase().includes('reavaliada')
-    )
-  ).length, [myMonitorias]);
+  // Helpers para classificar desfechos
+  const isApprovalAction = (action: string) =>
+    action.toLowerCase().includes('procedente') ||
+    action.toLowerCase().includes('aceita') ||
+    action.toLowerCase().includes('reavaliada') ||
+    action.toLowerCase().includes('alterada') ||
+    action.toLowerCase().includes('alterado');
 
-  const reavRejected = useMemo(() => myMonitorias.filter(m =>
-    m.history?.some(h =>
-      h.action.includes('Improcedente') ||
-      h.action.includes('Mantida') ||
-      h.action.toLowerCase().includes('negada') ||
-      h.action.toLowerCase().includes('recusada')
-    )
-  ).length, [myMonitorias]);
+  const isRejectionAction = (action: string) =>
+    action.includes('Improcedente') ||
+    action.includes('Mantida') ||
+    action.toLowerCase().includes('negada') ||
+    action.toLowerCase().includes('recusada') ||
+    action.toLowerCase().includes('mantida');
+
+  // Monitorias que tiveram pelo menos uma contestação
+  const contestedMyMonitorias = useMemo(() =>
+    myMonitorias.filter(m =>
+      m.history?.some(h =>
+        h.action.includes('Contestação') ||
+        h.action.toLowerCase().includes('contestou') ||
+        h.action.toLowerCase().includes('solicitou reavaliação')
+      )
+    ),
+    [myMonitorias]
+  );
+
+  // Conta apenas pelo ÚLTIMO desfecho — evita dupla contagem em múltiplas rodadas
+  const reavAccepted = useMemo(() =>
+    contestedMyMonitorias.filter(m => {
+      const resolutions = (m.history || []).filter(h =>
+        isApprovalAction(h.action) || isRejectionAction(h.action)
+      );
+      if (resolutions.length === 0) return false;
+      return isApprovalAction(resolutions[resolutions.length - 1].action);
+    }).length,
+    [contestedMyMonitorias]
+  );
+
+  const reavRejected = useMemo(() =>
+    contestedMyMonitorias.filter(m => {
+      const resolutions = (m.history || []).filter(h =>
+        isApprovalAction(h.action) || isRejectionAction(h.action)
+      );
+      if (resolutions.length === 0) return false;
+      return isRejectionAction(resolutions[resolutions.length - 1].action);
+    }).length,
+    [contestedMyMonitorias]
+  );
 
   useEffect(() => {
     async function calculateComparativeData() {

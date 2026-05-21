@@ -33,36 +33,56 @@ export default function AdminDashboard() {
     [monitorias]
   );
 
-  const totalContestations = useMemo(() =>
+  // Monitorias que tiveram pelo menos uma contestação
+  const contestedMonitorias = useMemo(() =>
     monitorias.filter(m =>
-      m.history?.some(h => h.action.includes('Contestação'))
-    ).length,
+      m.history?.some(h =>
+        h.action.includes('Contestação') ||
+        h.action.toLowerCase().includes('contestou') ||
+        h.action.toLowerCase().includes('solicitou reavaliação')
+      )
+    ),
     [monitorias]
   );
 
+  const totalContestations = contestedMonitorias.length;
+
+  // Helpers para classificar ações de resolução
+  const isApprovalAction = (action: string) =>
+    action.toLowerCase().includes('procedente') ||
+    action.toLowerCase().includes('aceita') ||
+    action.toLowerCase().includes('reavaliada') ||
+    action.toLowerCase().includes('alterada') ||
+    action.toLowerCase().includes('alterado');
+
+  const isRejectionAction = (action: string) =>
+    action.includes('Improcedente') ||
+    action.includes('Mantida') ||
+    action.toLowerCase().includes('negada') ||
+    action.toLowerCase().includes('recusada') ||
+    action.toLowerCase().includes('mantida');
+
+  // Conta apenas pelo ÚLTIMO desfecho — evita dupla contagem em múltiplas rodadas
   const reavAccepted = useMemo(() =>
-    monitorias.filter(m =>
-      m.history?.some(h =>
-        h.action.toLowerCase().includes('procedente') ||
-        h.action.toLowerCase().includes('alterada') ||
-        h.action.toLowerCase().includes('aceita') ||
-        h.action.toLowerCase().includes('alterado') ||
-        h.action.toLowerCase().includes('reavaliada')
-      )
-    ).length,
-    [monitorias]
+    contestedMonitorias.filter(m => {
+      const resolutions = (m.history || []).filter(h =>
+        isApprovalAction(h.action) || isRejectionAction(h.action)
+      );
+      if (resolutions.length === 0) return false;
+      return isApprovalAction(resolutions[resolutions.length - 1].action);
+    }).length,
+    [contestedMonitorias]
   );
 
   const reavRejected = useMemo(() =>
-    monitorias.filter(m =>
-      m.history?.some(h =>
-        h.action.includes('Improcedente') ||
-        h.action.includes('Mantida') ||
-        h.action.toLowerCase().includes('negada') ||
-        h.action.toLowerCase().includes('recusada')
-      )
-    ).length,
-    [monitorias]
+    contestedMonitorias.filter(m => {
+      const resolutions = (m.history || []).filter(h =>
+        isApprovalAction(h.action) || isRejectionAction(h.action)
+      );
+      if (resolutions.length === 0) return false;
+      return isRejectionAction(resolutions[resolutions.length - 1].action);
+    }).length,
+    [contestedMonitorias]
   );
 
   const reversalRate = useMemo(() =>

@@ -487,16 +487,20 @@ export default function App() {
         toast.success('Sua senha foi atualizada com sucesso!');
         handleLogout();
       } else {
+        const { data: { user }, error: userError } = await supabase!.auth.getUser();
+        if (userError || !user) throw userError || new Error('Usuário não autenticado.');
+
         const { error } = await supabase!.auth.updateUser({ password: newPassword });
         if (error) throw error;
-        await supabase!.from('users').update({ must_change_password: false }).eq('email', userData?.email);
+        await supabase!.from('users').update({ must_change_password: false }).eq('email', user.email);
         window.history.replaceState({}, document.title, window.location.pathname);
         isPasswordRecoveryRef.current = false;
         handleLogout();
         toast.success('Sua nova senha foi definida com sucesso!');
       }
     } catch (e: any) {
-      toast.error('Não foi possível atualizar sua senha. Tente novamente.');
+      console.error('[handleUpdatePassword] Erro ao atualizar senha:', e);
+      toast.error(`Não foi possível atualizar sua senha: ${e.message || e}`);
     } finally {
       setLoading(false);
     }
