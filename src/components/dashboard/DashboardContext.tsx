@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { Monitoria, User, Team, EvaluationForm } from '../../types';
+import { Monitoria, User, Team, EvaluationForm, DissatisfactionField } from '../../types';
 import { supabase, mockDb } from '../../lib/supabase';
 import { toast } from 'sonner';
 
@@ -27,6 +27,7 @@ interface DashboardContextType {
   globalAvg: number;
   refresh: () => void;
   onlineUsers: User[];
+  dissatisfactionFields: DissatisfactionField[];
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -48,6 +49,7 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [forms, setForms] = useState<EvaluationForm[]>([]);
+  const [dissatisfactionFields, setDissatisfactionFields] = useState<DissatisfactionField[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalAvg, setGlobalAvg] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -64,13 +66,22 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
       let userDocs: User[] = [];
       let teamDocs: Team[] = [];
       let formDocs: EvaluationForm[] = [];
+      let dfDocs: DissatisfactionField[] = [];
 
       if (!supabase) {
-        docs = (await mockDb.get('monitorias')).data || [];
+        const [mRes, uRes, tRes, fRes, dfRes] = await Promise.all([
+          mockDb.get('monitorias'),
+          mockDb.get('users'),
+          mockDb.get('teams'),
+          mockDb.get('forms'),
+          mockDb.get('dissatisfaction_fields')
+        ]);
+        docs = mRes.data || [];
         scoreDocs = docs;
-        userDocs = (await mockDb.get('users')).data || [];
-        teamDocs = (await mockDb.get('teams')).data || [];
-        formDocs = (await mockDb.get('forms')).data || [];
+        userDocs = uRes.data || [];
+        teamDocs = tRes.data || [];
+        formDocs = fRes.data || [];
+        dfDocs = dfRes.data || [];
       } else {
         const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
           try {
@@ -103,7 +114,8 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
               scoresQuery.abortSignal(controller.signal),
               supabase.from('users').select('*').abortSignal(controller.signal),
               supabase.from('teams').select('*').abortSignal(controller.signal),
-              supabase.from('forms').select('*').abortSignal(controller.signal)
+              supabase.from('forms').select('*').abortSignal(controller.signal),
+              supabase.from('dissatisfaction_fields').select('*').abortSignal(controller.signal)
             ]);
             
             const timeoutPromise = new Promise((_, reject) => 
@@ -133,13 +145,14 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
           }
         };
 
-        const [mRes, sRes, uRes, tRes, fRes] = await executeWithRetry();
+        const [mRes, sRes, uRes, tRes, fRes, dfRes] = await executeWithRetry();
         
         if (mRes.data) docs = mRes.data as Monitoria[];
         if (sRes.data) scoreDocs = sRes.data;
         if (uRes.data) userDocs = uRes.data as User[];
         if (tRes.data) teamDocs = tRes.data as Team[];
         if (fRes.data) formDocs = fRes.data as EvaluationForm[];
+        if (dfRes.data) dfDocs = dfRes.data as DissatisfactionField[];
       }
 
       // Always exclude deactivated monitorias from dashboard
@@ -207,6 +220,7 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
       setUsers(userDocs);
       setTeams(teamDocs);
       setForms(formDocs);
+      setDissatisfactionFields(dfDocs);
       setGlobalAvg(gAvg);
     } catch (e: any) {
       console.error(e);
@@ -429,7 +443,7 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
   const refresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);
 
   return (
-    <DashboardContext.Provider value={{ user, filters, setFilters, monitorias, allMonitorias, users, teams, forms, loading, globalAvg, refresh, onlineUsers }}>
+    <DashboardContext.Provider value={{ user, filters, setFilters, monitorias, allMonitorias, users, teams, forms, loading, globalAvg, refresh, onlineUsers, dissatisfactionFields }}>
       {children}
     </DashboardContext.Provider>
   );

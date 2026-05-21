@@ -211,8 +211,8 @@ export default function DissatisfactionFieldsManagement() {
               onChange={val => setTypeFilter(val as string)}
               options={[
                 { value: '', label: 'Todos os Tipos' }, 
-                { value: 'cliente', label: 'Visão do Cliente (Aba 2)' },
-                { value: 'qualidade', label: 'Visão do Monitor (Aba 4)' }
+                { value: 'cliente', label: 'Visão do Cliente' },
+                { value: 'qualidade', label: 'Visão do Monitor' }
               ]}
               className="w-56"
             />
@@ -251,7 +251,7 @@ export default function DissatisfactionFieldsManagement() {
                 </td>
                 <td className="px-6 py-4">
                   <Badge variant="neutral" className="bg-surface-subtle text-brand-primary uppercase text-[9px] tracking-wider font-extrabold">
-                    {f.type === 'cliente' ? 'Visão do Cliente (Aba 2)' : 'Visão do Monitor (Aba 4)'}
+                    {f.type === 'cliente' ? 'Visão do Cliente' : 'Visão do Monitor'}
                   </Badge>
                 </td>
                 <td className="px-6 py-4 max-w-xs md:max-w-md">
@@ -330,8 +330,8 @@ export default function DissatisfactionFieldsManagement() {
                   value={editingField.type}
                   onChange={val => setEditingField({ ...editingField, type: val as any })}
                   options={[
-                    { value: 'cliente', label: 'Visão do Cliente (Exibir na Aba 2 se Pesquisa Negativa)' },
-                    { value: 'qualidade', label: 'Visão do Monitor (Exibir na Aba 4 no Registro)' }
+                    { value: 'cliente', label: 'Visão do Cliente' },
+                    { value: 'qualidade', label: 'Visão do Monitor' }
                   ]}
                 />
 

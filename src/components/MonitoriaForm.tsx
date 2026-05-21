@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
-import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus } from '../types';
+import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus, DissatisfactionField } from '../types';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -49,11 +49,50 @@ export default function MonitoriaForm({
   const isAdminEdit = !!(initialData as any)?._adminEdit;
   
   const [step, setStep] = useState(1);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [step]);
+
   const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [agents, setAgents] = useState<User[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [saving, setSaving] = useState(false);
+  const [dissatisfactionFields, setDissatisfactionFields] = useState<DissatisfactionField[]>([]);
+  const [dissatisfactionAnswers, setDissatisfactionAnswers] = useState<Record<string, string[]>>(initialData?.dissatisfaction_answers || {});
+
+  const clientFieldsToShow = useMemo(() => {
+    return dissatisfactionFields.filter(f => 
+      f.type === 'cliente' && (f.active || (dissatisfactionAnswers[f.id] && dissatisfactionAnswers[f.id].length > 0))
+    );
+  }, [dissatisfactionFields, dissatisfactionAnswers]);
+
+  const qualityFieldsToShow = useMemo(() => {
+    return dissatisfactionFields.filter(f => 
+      f.type === 'qualidade' && (f.active || (dissatisfactionAnswers[f.id] && dissatisfactionAnswers[f.id].length > 0))
+    );
+  }, [dissatisfactionFields, dissatisfactionAnswers]);
+
+  const handleCheckboxChange = (fieldId: string, option: string, checked: boolean) => {
+    if (isViewOnly) return;
+    setDissatisfactionAnswers(prev => {
+      const currentOpts = prev[fieldId] || [];
+      let newOpts;
+      if (checked) {
+        newOpts = [...currentOpts, option];
+      } else {
+        newOpts = currentOpts.filter(o => o !== option);
+      }
+      return {
+        ...prev,
+        [fieldId]: newOpts
+      };
+    });
+  };
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -85,27 +124,31 @@ export default function MonitoriaForm({
     const loadData = async () => {
       try {
         if (!supabase) {
-          const [fRes, aRes, tRes] = await Promise.all([
+          const [fRes, aRes, tRes, dfRes] = await Promise.all([
             mockDb.get('forms'),
             mockDb.get('users'),
-            mockDb.get('teams')
+            mockDb.get('teams'),
+            mockDb.get('dissatisfaction_fields')
           ]);
           setForms((fRes.data || []).filter((f: any) => f.active !== false));
           const usersList = (aRes.data || []) as User[];
           setAllUsers(usersList);
           setAgents(usersList.filter((u: User) => u.role === 'suporte' && u.active !== false));
           setTeams((tRes.data || []).filter((t: any) => t.active !== false));
+          setDissatisfactionFields(dfRes.data || []);
         } else {
-          const [{ data: fData }, { data: aData }, { data: tData }] = await Promise.all([
+          const [{ data: fData }, { data: aData }, { data: tData }, { data: dfData }] = await Promise.all([
             supabase.from('forms').select('*').eq('active', true),
             supabase.from('users').select('*'), // Fetch all for history/anonymity
             supabase.from('teams').select('*').eq('active', true),
+            supabase.from('dissatisfaction_fields').select('*')
           ]);
           setForms((fData || []).sort((a: any, b: any) => a.title.localeCompare(b.title)));
           const usersList = (aData || []) as User[];
           setAllUsers(usersList);
           setAgents(usersList.filter(u => u.role === 'suporte' && u.active === true).sort((a, b) => a.name.localeCompare(b.name)));
           setTeams((tData || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
+          setDissatisfactionFields(dfData || []);
         }
       } catch (e) { console.error('Erro ao carregar dados:', e); }
     };
@@ -181,9 +224,18 @@ export default function MonitoriaForm({
           toast.error('Informe o registro deixado pelo cliente.');
           return false;
         }
-        if (header.satisfaction_result === 'Negativa' && !header.client_contact_log.trim()) {
+        if (header.satisfaction_result === 'Negativa' && header.client_contact_success && !header.client_contact_log.trim()) {
           toast.error('Informe o registro de contato para a pesquisa negativa.');
           return false;
+        }
+        if (header.satisfaction_result === 'Negativa') {
+          for (const field of clientFieldsToShow) {
+            const answers = dissatisfactionAnswers[field.id] || [];
+            if (answers.length === 0) {
+              toast.error(`Por favor, preencha o campo extra obrigatório: "${field.title}".`);
+              return false;
+            }
+          }
         }
       }
     }
@@ -199,6 +251,13 @@ export default function MonitoriaForm({
   const handleSave = async () => {
     if (!user) return;
     if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
+    for (const field of qualityFieldsToShow) {
+      const answers = dissatisfactionAnswers[field.id] || [];
+      if (answers.length === 0) {
+        toast.error(`Por favor, preencha o campo extra obrigatório: "${field.title}".`);
+        return;
+      }
+    }
     if (isReevaluating && !header.reevaluation_justification.trim()) {
       toast.error('Informe a justificativa da reavaliação.');
       return;
@@ -234,6 +293,15 @@ export default function MonitoriaForm({
         return addBusinessHours(now, sla?.agentReview || 50, bh).toISOString();
       };
 
+      const filteredDissatisfactionAnswers = { ...dissatisfactionAnswers };
+      if (header.satisfaction_result !== 'Negativa') {
+        dissatisfactionFields.forEach(f => {
+          if (f.type === 'cliente') {
+            delete filteredDissatisfactionAnswers[f.id];
+          }
+        });
+      }
+
       const payload = {
         form_id: header.form_id,
         evaluator_id: initialData?.evaluator_id || user.id,
@@ -253,13 +321,14 @@ export default function MonitoriaForm({
         score,
         status: isAdminEdit ? (initialData?.status || 'pendente_revisao') : (isReevaluating ? 'pendente_revisao' : (initialData?.status || 'pendente_revisao')),
         evaluator_note: header.evaluator_note,
-        client_contact_log: header.client_contact_log,
+        client_contact_log: header.client_contact_success ? header.client_contact_log : '',
         client_contact_success: header.client_contact_success,
         active: true,
         form_snapshot: selectedForm,
         history: [...(initialData?.history || []), historyEntry],
         deadline_at: (initialData?.deadline_at && !isReevaluating && !isAdminEdit) ? initialData.deadline_at : getDeadline(),
         updated_at: nowTs,
+        dissatisfaction_answers: filteredDissatisfactionAnswers,
       };
 
       if (!supabase) {
@@ -302,7 +371,7 @@ export default function MonitoriaForm({
         </div>
 
         {/* Form Content */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-10 no-scrollbar">
+        <div ref={contentRef} className="flex-1 overflow-y-auto p-8 space-y-10 no-scrollbar">
           {/* Stepper Progress */}
           <div className="flex items-center justify-center gap-6 md:gap-10">
             {[
@@ -488,17 +557,54 @@ export default function MonitoriaForm({
                           ))}
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">Registro de Contato/Tentativa</label>
-                        <textarea 
-                          value={header.client_contact_log} 
-                          onChange={e => setHeader({...header, client_contact_log: e.target.value})} 
-                          disabled={isViewOnly}
-                          className="w-full bg-surface-bg border border-surface-border rounded-2xl p-4 text-sm font-medium min-h-[100px] focus:border-brand-accent focus:outline-none" 
-                          placeholder="Descreva como foi o contato ou o motivo do insucesso..."
-                        />
-                      </div>
+                      {header.client_contact_success && (
+                        <div className="space-y-2 animate-fade-in">
+                          <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">Registro de Contato/Tentativa</label>
+                          <textarea 
+                            value={header.client_contact_log} 
+                            onChange={e => setHeader({...header, client_contact_log: e.target.value})} 
+                            disabled={isViewOnly}
+                            className="w-full bg-surface-bg border border-surface-border rounded-2xl p-4 text-sm font-medium min-h-[100px] focus:border-brand-accent focus:outline-none" 
+                            placeholder="Descreva como foi o contato ou o motivo do insucesso..."
+                          />
+                        </div>
+                      )}
                     </Card>
+                  )}
+
+                  {header.satisfaction_result === 'Negativa' && clientFieldsToShow.length > 0 && (
+                    <div className="space-y-6 pt-4 animate-fade-in">
+                      <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1 text-center">Campos Extras do Cliente</p>
+                      {clientFieldsToShow.map(field => (
+                        <Card key={field.id} className="bg-surface-card p-6 border border-surface-border space-y-4 shadow-premium-sm">
+                          <p className="text-sm font-bold text-brand-primary">{field.title} *</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {field.options.map(opt => {
+                              const isChecked = (dissatisfactionAnswers[field.id] || []).includes(opt);
+                              return (
+                                <label 
+                                  key={opt} 
+                                  className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                                    isChecked 
+                                      ? 'bg-brand-subtle/40 border-brand-primary/60 text-brand-primary' 
+                                      : 'bg-surface-bg border-surface-border text-brand-muted hover:border-brand-highlight'
+                                  }`}
+                                >
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isChecked} 
+                                    onChange={e => handleCheckboxChange(field.id, opt, e.target.checked)} 
+                                    disabled={isViewOnly} 
+                                    className="w-5 h-5 rounded-lg text-brand-primary focus:ring-brand-primary" 
+                                  />
+                                  <span className="text-xs font-bold uppercase tracking-tight">{opt}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
                   )}
                 </motion.div>
               )}
@@ -613,23 +719,75 @@ export default function MonitoriaForm({
 
           {step === 4 && (
             <section className="space-y-10 animate-fade-in max-w-4xl mx-auto w-full">
+              {qualityFieldsToShow.length > 0 && (
+                <div className="space-y-6 animate-fade-in">
+                  <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Campos Extras da Qualidade</p>
+                  {qualityFieldsToShow.map(field => (
+                    <Card key={field.id} className="bg-surface-card p-6 border border-surface-border space-y-4 shadow-premium-sm">
+                      <p className="text-sm font-bold text-brand-primary">{field.title} *</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {field.options.map(opt => {
+                          const isChecked = (dissatisfactionAnswers[field.id] || []).includes(opt);
+                          return (
+                            <label 
+                              key={opt} 
+                              className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                                isChecked 
+                                  ? 'bg-brand-subtle/40 border-brand-primary/60 text-brand-primary' 
+                                  : 'bg-surface-bg border-surface-border text-brand-muted hover:border-brand-highlight'
+                              }`}
+                            >
+                              <input 
+                                type="checkbox" 
+                                checked={isChecked} 
+                                onChange={e => handleCheckboxChange(field.id, opt, e.target.checked)} 
+                                disabled={isViewOnly} 
+                                className="w-5 h-5 rounded-lg text-brand-primary focus:ring-brand-primary" 
+                              />
+                              <span className="text-xs font-bold uppercase tracking-tight">{opt}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
               <div className="space-y-4">
                 <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Registro do Auditor</p>
                 <textarea 
                   value={header.evaluator_note} 
                   onChange={e => setHeader({...header, evaluator_note: e.target.value})} 
-                  disabled={isViewOnly} 
+                  disabled={isViewOnly || isReevaluating} 
                   className="w-full bg-surface-card border border-surface-border rounded-[24px] p-8 text-sm font-medium min-h-[200px] focus:border-brand-accent focus:outline-none shadow-premium-sm" 
                   placeholder="Escreva aqui as observações gerais da auditoria..." 
                 />
               </div>
 
-              {isReevaluating && (
-                <Card className="bg-brand-subtle/30 border-brand-highlight/20 p-6">
-                  <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3">Justificativa da Reavaliação *</p>
-                  <textarea value={header.reevaluation_justification} onChange={e => setHeader({...header, reevaluation_justification: e.target.value})} className="w-full bg-surface-card border border-surface-border rounded-2xl p-4 text-sm font-medium focus:border-brand-accent focus:outline-none" placeholder="Explique por que os itens foram alterados..." />
-                </Card>
-              )}
+              {(() => {
+                const reevalHistoryEntry = initialData?.history?.find(h => h.action.includes('Reavaliada'));
+                const showJustification = isReevaluating || (isViewOnly && !!reevalHistoryEntry);
+                if (!showJustification) return null;
+
+                // Strip the "[DE X% PARA Y%] " prefix that is prepended when saving
+                const viewNote = reevalHistoryEntry?.note?.replace(/^\[DE [\d.]+% PARA [\d.]+%\]\s*/, '') || '';
+
+                return (
+                  <Card className="bg-brand-subtle/30 border-brand-highlight/20 p-6">
+                    <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3">
+                      Justificativa da Reavaliação {isReevaluating && <span className="text-error">*</span>}
+                    </p>
+                    <textarea
+                      value={isViewOnly ? viewNote : header.reevaluation_justification}
+                      onChange={e => !isViewOnly && setHeader({...header, reevaluation_justification: e.target.value})}
+                      disabled={isViewOnly}
+                      className="w-full bg-surface-card border border-surface-border rounded-2xl p-4 text-sm font-medium focus:border-brand-accent focus:outline-none disabled:opacity-70 disabled:cursor-default"
+                      placeholder="Explique por que os itens foram alterados..."
+                    />
+                  </Card>
+                );
+              })()}
 
               {initialData?.history && initialData.history.length > 0 && (
                 <div className="space-y-6">

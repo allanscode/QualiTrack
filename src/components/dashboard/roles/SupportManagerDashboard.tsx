@@ -4,6 +4,7 @@ import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import RankingWidget from '../widgets/RankingWidget';
 import SlaWidget from '../widgets/SlaWidget';
+import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import { Target, Users, TrendingUp, AlertTriangle, RotateCcw, CheckCircle2, XCircle, ClipboardCheck, UserMinus } from 'lucide-react';
 
@@ -11,7 +12,7 @@ import { useQualityConfig } from '../../../lib/useQualityConfig';
 
 export default function SupportManagerDashboard() {
   // monitorias from context are already filtered by date/team/agent/channel from FilterBar
-  const { user, monitorias, users, teams } = useDashboard();
+  const { user, monitorias, users, teams, dissatisfactionFields } = useDashboard();
   const { config, getLevelForScore, isAboveTarget } = useQualityConfig();
 
   // --- Scored monitorias: any monitoria that has been evaluated (has a score)
@@ -342,6 +343,41 @@ export default function SupportManagerDashboard() {
           />
         </div>
       </div>
+
+      {dissatisfactionFields.length > 0 && (() => {
+        const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#3b82f6', '#ec4899', '#14b8a6'];
+        const monWithAnswers = monitorias.filter(m => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
+
+        const clientFields = dissatisfactionFields.filter(f => f.type === 'cliente');
+        const qualityFields = dissatisfactionFields.filter(f => f.type === 'qualidade');
+
+        const buildChartData = (fields: typeof dissatisfactionFields) => {
+          const freq: Record<string, number> = {};
+          monWithAnswers.forEach(m => {
+            fields.forEach(f => {
+              const answers = m.dissatisfaction_answers?.[f.id] || [];
+              answers.forEach(opt => { freq[opt] = (freq[opt] || 0) + 1; });
+            });
+          });
+          return Object.entries(freq)
+            .sort((a, b) => b[1] - a[1])
+            .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
+        };
+
+        const clientData = buildChartData(clientFields);
+        const qualityData = buildChartData(qualityFields);
+
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-[300px]">
+              <DistributionChart title="Insatisfação — Visão do Cliente" data={clientData} />
+            </div>
+            <div className="h-[300px]">
+              <DistributionChart title="Insatisfação — Visão da Qualidade" data={qualityData} />
+            </div>
+          </div>
+        );
+      })()}
 
       <RecentAuditsTable monitorias={monitorias} users={users} />
     </div>

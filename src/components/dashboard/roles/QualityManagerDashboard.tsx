@@ -11,7 +11,7 @@ import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCirc
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 
 export default function QualityManagerDashboard() {
-  const { user, monitorias, users, forms } = useDashboard();
+  const { user, monitorias, users, forms, dissatisfactionFields } = useDashboard();
   const { config, getLevelForScore, isAboveTarget } = useQualityConfig();
 
   // --- Scored monitorias (have a score value)
@@ -450,6 +450,41 @@ export default function QualityManagerDashboard() {
           />
         </div>
       </div>
+
+      {dissatisfactionFields.length > 0 && (() => {
+        const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#3b82f6', '#ec4899', '#14b8a6'];
+        const monWithAnswers = monitorias.filter(m => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
+
+        const clientFields = dissatisfactionFields.filter(f => f.type === 'cliente');
+        const qualityFields = dissatisfactionFields.filter(f => f.type === 'qualidade');
+
+        const buildChartData = (fields: typeof dissatisfactionFields) => {
+          const freq: Record<string, number> = {};
+          monWithAnswers.forEach(m => {
+            fields.forEach(f => {
+              const answers = m.dissatisfaction_answers?.[f.id] || [];
+              answers.forEach(opt => { freq[opt] = (freq[opt] || 0) + 1; });
+            });
+          });
+          return Object.entries(freq)
+            .sort((a, b) => b[1] - a[1])
+            .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
+        };
+
+        const clientData = buildChartData(clientFields);
+        const qualityData = buildChartData(qualityFields);
+
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-[300px]">
+              <DistributionChart title="Insatisfação — Visão do Cliente" data={clientData} />
+            </div>
+            <div className="h-[300px]">
+              <DistributionChart title="Insatisfação — Visão da Qualidade" data={qualityData} />
+            </div>
+          </div>
+        );
+      })()}
 
       <RecentAuditsTable monitorias={monitorias} users={users} />
     </div>
