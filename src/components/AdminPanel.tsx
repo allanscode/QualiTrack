@@ -6,7 +6,8 @@ import {
   ClipboardList, 
   Shield, 
   UserPlus, 
-  BarChart3 
+  BarChart3,
+  Sliders
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -15,9 +16,10 @@ import UsersManagement from './admin/UsersManagement';
 import TeamsManagement from './admin/TeamsManagement';
 import FormsManagement from './admin/FormsManagement';
 import RequestsManagement from './admin/RequestsManagement';
+import DissatisfactionFieldsManagement from './admin/DissatisfactionFieldsManagement';
 
 export default function AdminPanel({ user: currentUser }: { user: User | null }) {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests' | 'qualidade'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests' | 'qualidade' | 'campos_extras'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [forms, setForms] = useState<EvaluationForm[]>([]);
@@ -150,6 +152,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           { key: 'forms', label: 'Formulários', icon: ClipboardList },
           { key: 'requests', label: 'Solicitações', icon: UserPlus },
           { key: 'qualidade', label: 'Configurações', icon: BarChart3 },
+          { key: 'campos_extras', label: 'Campos Extras', icon: Sliders },
         ].map((item) => {
           const Icon = item.icon;
           const active = activeSubTab === item.key;
@@ -184,6 +187,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           {activeSubTab === 'forms' && <FormsManagement currentUser={currentUser} teams={teams} loadData={loadAllData} />}
           {activeSubTab === 'requests' && <RequestsManagement requests={requests} users={users} teams={teams} loadData={loadAllData} />}
           {activeSubTab === 'qualidade' && <QualityConfigManagement />}
+          {activeSubTab === 'campos_extras' && <DissatisfactionFieldsManagement />}
         </motion.div>
       </AnimatePresence>
     </div>

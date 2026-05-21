@@ -97,7 +97,8 @@ const INITIAL_DATA: { [key: string]: any[] } = {
   teams: [],
   monitorias: [],
   access_requests: [],
-  quality_configs: []
+  quality_configs: [],
+  dissatisfaction_fields: []
 };
 
 // Initialize localStorage if empty or ensure test users exist

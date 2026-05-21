@@ -105,6 +105,7 @@ export interface Monitoria {
   active?: boolean;
   display_id?: number;
   history: MonitoriaHistoryEntry[];
+  dissatisfaction_answers?: Record<string, string[]>;
   created_at: string;
   updated_at: string;
 }
@@ -125,3 +126,13 @@ export interface AccessRequest {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
 }
+
+export interface DissatisfactionField {
+  id: string;
+  title: string;
+  type: 'cliente' | 'qualidade';
+  options: string[];
+  active: boolean;
+  created_at: string;
+}
+
