@@ -63,12 +63,8 @@ flowchart TD
 
 Quando Supabase não está configurado:
 - Login compara email/senha diretamente no localStorage
-- Usuários padrão pré-cadastrados:
-  - `admin@qualitrack.com` / `admin123`
-  - `qualidade@qualitrack.com` / `123456`
-  - `suporte@qualitrack.com` / `123456`
-  - `gestor.suporte@qualitrack.com` / `123456`
-  - `gestor.qualidade@qualitrack.com` / `123456`
+- Usuário padrão: `qualidade@webposto.com.br` / `123456` (admin)
+- Outros perfis são usuários reais ou temporários e serão removidos na publicação
 
 ## Detecção de Hash (Recovery/Invite)
 

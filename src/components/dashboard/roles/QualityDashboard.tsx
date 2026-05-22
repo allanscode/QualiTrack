@@ -8,6 +8,7 @@ import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import OfensoresChart from '../widgets/OfensoresChart';
 import { ClipboardCheck, Target, CheckCircle2, XCircle, AlertTriangle, History, Clock } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
+import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import Card from '../../ui/Card';
 
 export default function QualityDashboard() {
@@ -20,29 +21,10 @@ export default function QualityDashboard() {
   const scoredMonitorias = useMemo(() => myMonitorias.filter(m => m.score !== undefined && m.score !== null), [myMonitorias]);
   const avgScore = useMemo(() => scoredMonitorias.length > 0 ? (scoredMonitorias.reduce((a, m) => a + (m.score || 0), 0) / scoredMonitorias.length) : 0, [scoredMonitorias]);
   
-  // Helpers para classificar desfechos
-  const isApprovalAction = (action: string) =>
-    action.toLowerCase().includes('procedente') ||
-    action.toLowerCase().includes('aceita') ||
-    action.toLowerCase().includes('reavaliada') ||
-    action.toLowerCase().includes('alterada') ||
-    action.toLowerCase().includes('alterado');
-
-  const isRejectionAction = (action: string) =>
-    action.includes('Improcedente') ||
-    action.includes('Mantida') ||
-    action.toLowerCase().includes('negada') ||
-    action.toLowerCase().includes('recusada') ||
-    action.toLowerCase().includes('mantida');
-
   // Monitorias que tiveram pelo menos uma contestação
   const contestedMyMonitorias = useMemo(() =>
     myMonitorias.filter(m =>
-      m.history?.some(h =>
-        h.action.includes('Contestação') ||
-        h.action.toLowerCase().includes('contestou') ||
-        h.action.toLowerCase().includes('solicitou reavaliação')
-      )
+      m.history?.some(h => isContestationAction(h.action))
     ),
     [myMonitorias]
   );

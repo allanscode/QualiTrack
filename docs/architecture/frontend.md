@@ -24,9 +24,10 @@ src/
 ├── index.css                  # Design tokens + CSS global
 ├── types.ts                   # Tipos TypeScript globais
 ├── lib/
-│   ├── supabase.ts            # Cliente Supabase + MockDB (localStorage)
-│   ├── useQualityConfig.ts    # Hook de configuração de qualidade
-│   └── businessHours.ts       # Utilitários de horário comercial/SLA
+│ ├── supabase.ts # Cliente Supabase + MockDB (localStorage)
+│ ├── useQualityConfig.ts # Hook de configuração de qualidade
+│ ├── businessHours.ts # Utilitários de horário comercial/SLA
+│ └── contestation.ts # Funções unificadas de contestação
 ├── utils/                     # (Vazio — não utilizado atualmente)
 └── components/
     ├── AdminPanel.tsx          # Painel administrativo (1192 linhas)

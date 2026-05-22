@@ -27,12 +27,19 @@ serve(async (req: Request) => {
 
     const client = new SmtpClient();
 
+    const smtpUsername = Deno.env.get("SMTP_USERNAME");
+    const smtpPassword = Deno.env.get("SMTP_PASSWORD");
+
+    if (!smtpUsername || !smtpPassword) {
+      throw new Error("SMTP_USERNAME e SMTP_PASSWORD não configurados. Defina via: supabase secrets set SMTP_USERNAME=... SMTP_PASSWORD=...");
+    }
+
     console.log(`[LOG] Conectando ao smtp.gmail.com...`);
     await client.connectTLS({
-      hostname: "smtp.gmail.com",
-      port: 465,
-      username: "qualidade@webposto.com.br",
-      password: "xwjc aezt mzmb eyat",
+      hostname: Deno.env.get("SMTP_HOSTNAME") || "smtp.gmail.com",
+      port: parseInt(Deno.env.get("SMTP_PORT") || "465"),
+      username: smtpUsername,
+      password: smtpPassword,
     });
 
     const resetLink = `http://localhost:3001/setup-password?token=${token}`;
@@ -98,8 +105,8 @@ serve(async (req: Request) => {
       plainTextContent = `Olá, ${name}!\n\nSua conta no QualiTrack foi aprovada.\nPara definir sua senha, acesse o link: http://localhost:3001/setup-password?token=${token}`;
     }
 
-    await client.send({
-      from: "qualidade@webposto.com.br",
+  await client.send({
+    from: Deno.env.get("SMTP_USERNAME") || "qualidade@webposto.com.br",
       to: email,
       subject: subject,
       content: plainTextContent,

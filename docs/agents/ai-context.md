@@ -31,10 +31,10 @@ Antes de commitar/sugerir uma alteração:
 
 Se você for debugar algo, verifique estes pontos conhecidos primeiro:
 
-1. **Z-index e Clipping**: Dropdowns (CustomSelect) dentro de containers scrolláveis ou com `overflow-hidden` (como gráficos Recharts) frequentemente quebram. Use portais (React Portal) ou revise a hierarquia de `z-index`.
+1. **Z-index e Clipping**: Resolvido — `CustomSelect` usa React Portal (`createPortal`) para evitar clipping em containers scrolláveis.
 2. **SLA Sensitivity**: O recálculo de SLA (`recalculateActiveDeadlines` em `useQualityConfig`) é uma operação pesada. Não a dispare desnecessariamente (apenas on-save da configuração).
 3. **Formatação de Datas**: Use sempre ISO strings para armazenar (`toISOString()`) e converta localmente na hora de renderizar, pois o Supabase armazena em UTC e o frontend no horário local (provavelmente -03:00).
-4. **Edge Function SMTP**: As credenciais SMTP no `send-email` estão expostas no código. Qualquer alteração lá exige cuidado.
+4. **Edge Function SMTP**: As credenciais SMTP no `send-email` foram migradas para env vars (`Deno.env.get()`). Nunca hardcoded credenciais em Edge Functions.
 5. **Hook Violations**: Houveram incidentes anteriores com conditional hooks em `MonitoriaForm.tsx`. Mantenha todos os `useX` no topo do componente, sempre incondicionais.
 
 ## 5. Como Iniciar uma Nova Feature

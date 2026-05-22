@@ -169,4 +169,3 @@ As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) 
 | `auth_migration.sql` | Cria admin padrão no Auth + public.users |
 | `create_quality_configs.sql` | Cria tabela quality_configs + RLS |
 | `supabase_sla_cron.sql` | Função + cron job para SLA timeout |
-| `firestore.rules` | **Legado** (Firebase, não utilizado) |

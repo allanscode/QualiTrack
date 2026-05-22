@@ -9,6 +9,7 @@ import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, UserMinus } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
+import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 
 export default function QualityManagerDashboard() {
   const { user, monitorias, users, forms, dissatisfactionFields } = useDashboard();
@@ -49,31 +50,12 @@ export default function QualityManagerDashboard() {
   // Monitorias que tiveram pelo menos uma contestação
   const contestedMonitorias = useMemo(() =>
     monitorias.filter(m =>
-      m.history?.some(h =>
-        h.action.includes('Contestação') ||
-        h.action.toLowerCase().includes('contestou') ||
-        h.action.toLowerCase().includes('solicitou reavaliação')
-      )
+      m.history?.some(h => isContestationAction(h.action))
     ),
     [monitorias]
   );
 
   const totalContestations = contestedMonitorias.length;
-
-  // Helpers para classificar desfechos
-  const isApprovalAction = (action: string) =>
-    action.toLowerCase().includes('procedente') ||
-    action.toLowerCase().includes('aceita') ||
-    action.toLowerCase().includes('reavaliada') ||
-    action.toLowerCase().includes('alterada') ||
-    action.toLowerCase().includes('alterado');
-
-  const isRejectionAction = (action: string) =>
-    action.includes('Improcedente') ||
-    action.includes('Mantida') ||
-    action.toLowerCase().includes('negada') ||
-    action.toLowerCase().includes('recusada') ||
-    action.toLowerCase().includes('mantida');
 
   // Conta apenas pelo ÚLTIMO desfecho — evita dupla contagem em múltiplas rodadas
   const reavAccepted = useMemo(() =>
@@ -269,11 +251,7 @@ export default function QualityManagerDashboard() {
       const auditorName = users.find(u => u.id === evaluatorId)?.name || 'Avaliador';
       const auditorContested = monitorias.filter(m =>
         m.evaluator_id === evaluatorId &&
-        m.history?.some(h =>
-          h.action.includes('Contestação') ||
-          h.action.toLowerCase().includes('contestou') ||
-          h.action.toLowerCase().includes('solicitou reavaliação')
-        )
+        m.history?.some(h => isContestationAction(h.action))
       );
 
       let aceitas = 0;

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 
 interface Option {
@@ -16,34 +17,97 @@ interface CustomSelectProps {
   label?: string;
 }
 
-export default function CustomSelect({ 
-  value, 
-  onChange, 
-  options, 
-  placeholder = 'Selecionar...', 
+export default function CustomSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Selecionar...',
   className = '',
   disabled = false,
   label
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const selectedOption = options.find(opt => opt.value === value);
 
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    const dropdown = dropdownRef.current;
+    if (!trigger || !dropdown) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportH = window.innerHeight;
+    const spaceBelow = viewportH - rect.bottom;
+    const spaceAbove = rect.top;
+    const dropdownHeight = 256;
+
+    let top: number;
+    if (spaceBelow >= dropdownHeight || spaceBelow >= spaceAbove) {
+      top = rect.bottom + 8;
+    } else {
+      top = rect.top - dropdownHeight - 8;
+    }
+
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = `${top}px`;
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.width = `${rect.width}px`;
+    dropdown.style.zIndex = '9999';
+  }, []);
+
   useEffect(() => {
+    if (isOpen) {
+      updatePosition();
+    }
+  }, [isOpen, updatePosition]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+
+    function handleScroll() {
+      updatePosition();
+    }
+
+    function handleResize() {
+      updatePosition();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, updatePosition]);
 
   return (
-    <div className={`flex flex-col gap-1 ${className}`} ref={containerRef}>
+    <div className={`flex flex-col gap-1 ${className}`}>
       {label && <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">{label}</label>}
-      <div className={`relative ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}>
+      <div className={disabled ? 'opacity-60 cursor-not-allowed' : ''}>
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
@@ -53,8 +117,11 @@ export default function CustomSelect({
           <ChevronDown className={`w-3.5 h-3.5 ml-2 transition-transform ${isOpen ? 'rotate-180 text-brand-accent' : 'text-brand-muted'}`} />
         </button>
 
-        {isOpen && !disabled && (
-          <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-surface-card border border-surface-border rounded-2xl shadow-premium-lg z-[100] max-h-60 overflow-auto py-2 animate-in fade-in slide-in-from-top-2 duration-200 no-scrollbar">
+        {isOpen && !disabled && createPortal(
+          <div
+            ref={dropdownRef}
+            className="bg-surface-card border border-surface-border rounded-2xl shadow-premium-lg max-h-60 overflow-auto py-2 animate-in fade-in slide-in-from-top-2 duration-200 no-scrollbar"
+          >
             {options.map((opt) => (
               <button
                 key={opt.value}
@@ -68,7 +135,8 @@ export default function CustomSelect({
                 {opt.label}
               </button>
             ))}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>

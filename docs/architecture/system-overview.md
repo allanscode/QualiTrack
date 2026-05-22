@@ -144,7 +144,6 @@ graph LR
 3. **Componentes grandes** — `AdminPanel.tsx` (1192 linhas), `MonitoriaForm.tsx` (684 linhas)
 4. **Sem testes automatizados** — Nenhum framework de teste configurado
 5. **Sem CI/CD** — Nenhum pipeline configurado
-6. **Firestore rules desatualizadas** — Arquivo `firestore.rules` é legado da migração Firebase → Supabase
 
 ## Decisões Arquiteturais Chave
 

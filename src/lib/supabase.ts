@@ -47,50 +47,50 @@ const DB_PREFIX = 'qualitrack_mock_';
 
 const INITIAL_DATA: { [key: string]: any[] } = {
   users: [
-    { 
-      id: 'marcospaulo@webposto.com.br', 
-      name: 'Marcos Paulo', 
-      email: 'marcospaulo@webposto.com.br', 
-      password: 'admin',
-      role: 'admin', 
+    {
+      id: 'qualidade@webposto.com.br',
+      name: 'Administrador',
+      email: 'qualidade@webposto.com.br',
+      password: '123456',
+      role: 'admin',
       active: true,
-      createdAt: new Date().toISOString() 
+      createdAt: new Date().toISOString()
     },
-    { 
-      id: 'suporte@teste.com', 
-      name: 'João Suporte (Auditado)', 
-      email: 'suporte@teste.com', 
+    {
+      id: 'suporte@teste.com',
+      name: 'João Suporte (Auditado)',
+      email: 'suporte@teste.com',
       password: '123',
-      role: 'suporte', 
+      role: 'suporte',
       active: true,
-      createdAt: new Date().toISOString() 
+      createdAt: new Date().toISOString()
     },
-    { 
-      id: 'auditor@teste.com', 
-      name: 'Maria Auditora', 
-      email: 'auditor@teste.com', 
+    {
+      id: 'auditor@teste.com',
+      name: 'Maria Auditora',
+      email: 'auditor@teste.com',
       password: '123',
-      role: 'qualidade', 
+      role: 'qualidade',
       active: true,
-      createdAt: new Date().toISOString() 
+      createdAt: new Date().toISOString()
     },
-    { 
-      id: 'gestor.suporte@teste.com', 
-      name: 'Carlos Gestor Suporte', 
-      email: 'gestor.suporte@teste.com', 
+    {
+      id: 'gestor.suporte@teste.com',
+      name: 'Carlos Gestor Suporte',
+      email: 'gestor.suporte@teste.com',
       password: '123',
-      role: 'gestor_suporte', 
+      role: 'gestor_suporte',
       active: true,
-      createdAt: new Date().toISOString() 
+      createdAt: new Date().toISOString()
     },
-    { 
-      id: 'gestor.qualidade@teste.com', 
-      name: 'Ana Gestora Qualidade', 
-      email: 'gestor.qualidade@teste.com', 
+    {
+      id: 'gestor.qualidade@teste.com',
+      name: 'Ana Gestora Qualidade',
+      email: 'gestor.qualidade@teste.com',
       password: '123',
-      role: 'gestor_qualidade', 
+      role: 'gestor_qualidade',
       active: true,
-      createdAt: new Date().toISOString() 
+      createdAt: new Date().toISOString()
     }
   ],
   forms: [],

@@ -29,7 +29,7 @@ QualiTrack não possui servidor backend tradicional. Toda comunicação é feita
 ### 3. `send-email`
 - **SMTP**: Gmail (smtp.gmail.com:465, TLS)
 - **Tipos**: `welcome`, `reset`, `rejection`
-- ⚠️ Credenciais SMTP hardcoded
+- **Credenciais**: Via env vars (`Deno.env.get("SMTP_USERNAME")`, `Deno.env.get("SMTP_PASSWORD")`)
 
 ## Cron Job — SLA (`process_sla_timeouts()`)
 
@@ -46,11 +46,15 @@ Executada a cada 5 minutos (pg_cron):
 - SELECT: Todos autenticados
 - INSERT/UPDATE/DELETE: Apenas admin e gestor_qualidade
 
-> Demais policies foram criadas no painel Supabase e não estão versionadas.
+### `monitorias`
+- Policies versionadas em `rls_monitorias.sql` e `supabase/migrations/`
+- SELECT: RBAC por role (suporte=self, qualidade=self, gestor_suporte=teams, gestor_qualidade=all, admin=all)
+- INSERT: Apenas admin, gestor_qualidade, qualidade
+- UPDATE: Mesmas regras de SELECT
+- DELETE: Apenas admin
+- **Nota**: Casts `auth.uid()::text` necessários porque colunas são TEXT mas `auth.uid()` retorna UUID
 
 ## Alertas
 
-- [ ] Policies RLS completas não versionadas
-- [ ] Credenciais SMTP hardcoded em `send-email`
-- [ ] `admin-create-user` não implementada
+- [ ] `admin-create-user` não implementada (retorna 501)
 - [ ] Sem rate limiting, logging estruturado ou observabilidade

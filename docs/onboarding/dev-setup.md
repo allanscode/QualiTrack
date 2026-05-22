@@ -19,7 +19,7 @@ npm install
 npm run dev
 ```
 
-O app estará disponível em `http://localhost:5173`.
+O app estará disponível em `http://localhost:3000`.
 
 ## Variáveis de Ambiente
 
@@ -29,9 +29,6 @@ Crie um arquivo `.env` na raiz com:
 # Supabase (produção)
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-
-# (Opcional) Gemini AI
-GEMINI_API_KEY=your-key
 
 # (Opcional) Desabilitar HMR
 DISABLE_HMR=true
@@ -44,11 +41,9 @@ Se as variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` não estiverem c
 
 | Email | Senha | Role |
 |---|---|---|
-| admin@qualitrack.com | admin123 | admin |
-| qualidade@qualitrack.com | 123456 | qualidade |
-| suporte@qualitrack.com | 123456 | suporte |
-| gestor.suporte@qualitrack.com | 123456 | gestor_suporte |
-| gestor.qualidade@qualitrack.com | 123456 | gestor_qualidade |
+| qualidade@webposto.com.br | 123456 | admin (Administrador) |
+
+> **Nota**: Usuários de outros perfis são reais ou de teste temporário e serão removidos quando o app for publicado.
 
 ## Scripts npm
 
@@ -56,6 +51,7 @@ Se as variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` não estiverem c
 |---|---|
 | `npm run dev` | Dev server com HMR (Vite) |
 | `npm run build` | Build de produção |
+| `npm run lint` | Type checking (tsc --noEmit) |
 | `npm run preview` | Preview do build de produção |
 
 ## Estrutura do Projeto
@@ -72,9 +68,10 @@ QualiTrack/
 │   ├── lib/               # Utilitários e hooks
 │   └── components/        # Componentes React
 ├── supabase/
-│   ├── config.toml        # Config Edge Functions
-│   └── functions/         # Edge Functions (Deno)
-├── *.sql                  # Migrations SQL manuais
+│ ├── config.toml # Config Edge Functions
+│ ├── migrations/ # Migrations SQL versionadas
+│ └── functions/ # Edge Functions (Deno)
+├── rls_monitorias.sql # RLS policies para a tabela monitorias
 ├── .env                   # Variáveis de ambiente (gitignored)
 ├── .env.example           # Template de variáveis
 ├── package.json

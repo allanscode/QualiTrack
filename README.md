@@ -1,20 +1,28 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# QualiTrack
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/6cfc3452-6869-45d0-834d-41b7188484af
+Sistema de gestão de qualidade para operações de suporte ao cliente.
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js 18+
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Configure Supabase (or use Mock Mode):
+   - Copy `.env.example` to `.env` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+   - If not configured, the app runs in **Mock Mode** (localStorage)
 3. Run the app:
-   `npm run dev`
+   `npm run dev` → http://localhost:3000
+
+## NPM Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Dev server (port 3000) |
+| `npm run build` | Production build |
+| `npm run lint` | Type checking (tsc --noEmit) |
+| `npm run preview` | Preview production build |
+
+## Documentation
+
+See `docs/` for full documentation. Start with `docs/onboarding/dev-setup.md`.

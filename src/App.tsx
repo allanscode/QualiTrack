@@ -853,7 +853,7 @@ function MainApp({
             <motion.div 
               layout
               transition={{ duration: 0.3, ease: "easeInOut" }}
-              className={`profile-toggle-btn flex ${isSidebarOpen ? 'items-center gap-3' : 'flex-col items-center gap-2'} p-2 rounded-xl bg-black/10 overflow-hidden`}
+              className={`profile-toggle-btn flex ${isSidebarOpen ? 'items-center gap-3 w-full' : 'flex-col items-center gap-2'} p-2 rounded-xl bg-black/10 overflow-hidden`}
             >
               <button 
                 onClick={() => setShowTeamList(!showTeamList)}
@@ -863,7 +863,7 @@ function MainApp({
                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
               </button>
               
-              <div className={`flex items-center gap-2 transition-all duration-300 ${isSidebarOpen ? 'opacity-100 max-w-[150px]' : 'opacity-0 max-w-0 h-0 hidden'}`}>
+              <div className={`flex-1 flex items-center gap-2 min-w-0 transition-all duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 max-w-0 h-0 hidden'}`}>
                 <div className="min-w-0 flex-1 py-1">
                   <p className="text-xs font-bold text-white leading-tight break-words">{userData?.name}</p>
                   <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5 leading-tight break-words">
