@@ -30,9 +30,9 @@ export interface QualityConfig {
 const DEFAULT_CONFIG: QualityConfig = {
   targetScore: 75,
   levels: [
-    { label: 'Excelente', minScore: 96, maxScore: 100, color: 'text-indigo-700', bgColor: 'bg-indigo-50' },
-    { label: 'Aceitável', minScore: 75, maxScore: 95, color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
-    { label: 'Ruim', minScore: 0, maxScore: 74, color: 'text-red-700', bgColor: 'bg-red-50' },
+    { label: 'Excelente', minScore: 96, maxScore: 100, color: 'text-level-excelente', bgColor: 'bg-level-excelente' },
+    { label: 'Aceitável', minScore: 75, maxScore: 95, color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel' },
+    { label: 'Ruim', minScore: 0, maxScore: 74, color: 'text-level-ruim', bgColor: 'bg-level-ruim' },
   ],
   action_deadline: {
     agent_review: 50,
@@ -63,12 +63,33 @@ function migrateSlaToActionDeadline(cfg: any): any {
   return cfg;
 }
 
+const LEGACY_COLOR_MAP: Record<string, { color: string; bgColor: string }> = {
+  'text-indigo-700': { color: 'text-level-excelente', bgColor: 'bg-level-excelente' },
+  'text-emerald-700': { color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel' },
+  'text-amber-700': { color: 'text-level-atencao', bgColor: 'bg-level-atencao' },
+  'text-red-700': { color: 'text-level-ruim', bgColor: 'bg-level-ruim' },
+};
+
+function migrateLegacyLevelColors(cfg: any): any {
+  if (cfg.levels && Array.isArray(cfg.levels)) {
+    cfg.levels = cfg.levels.map((l: any) => {
+      const mapped = LEGACY_COLOR_MAP[l.color];
+      if (mapped) {
+        return { ...l, color: mapped.color, bgColor: mapped.bgColor };
+      }
+      return l;
+    });
+  }
+  return cfg;
+}
+
 function loadFromStorage(): QualityConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       migrateSlaToActionDeadline(parsed);
+      migrateLegacyLevelColors(parsed);
       return parsed as QualityConfig;
     }
   } catch {}

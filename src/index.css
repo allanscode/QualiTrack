@@ -19,7 +19,7 @@
   /* ── Functional Colors ── */
   --color-success: #10B981;
   --color-warning: #F59E0B;
-  --color-error: #EF4444;
+  --color-error: var(--error-color);
   --color-info: #6366F1;
 
   /* ── Layout Tokens ── */
@@ -56,6 +56,14 @@
   --sidebar-bg-gestor-qualidade: #4338CA;
   --sidebar-bg-gestor-suporte: #B45309;
   --sidebar-bg-suporte: #1E40AF;
+
+  /* Functional color tokens (light mode) */
+  --error-color: #EF4444;
+  --error-bg: #FEF2F2;
+  --warning-color: #D97706;
+  --warning-bg: #FFFBEB;
+  --success-color: #059669;
+  --success-bg: #ECFDF5;
 }
 
 .dark {
@@ -81,6 +89,14 @@
   --sidebar-bg-gestor-qualidade: #312E81;
   --sidebar-bg-gestor-suporte: #78350F;
   --sidebar-bg-suporte: #1E3A8A;
+
+  /* Functional color tokens (dark mode — softer/less saturated) */
+  --error-color: #F87171;
+  --error-bg: #451A1A;
+  --warning-color: #FBBF24;
+  --warning-bg: #451A03;
+  --success-color: #34D399;
+  --success-bg: #064E3B;
 }
 
 
@@ -181,3 +197,26 @@ select {
 .sidebar-toggle-btn:hover .arrow-icon {
   display: block !important;
 }
+
+/* ── Quality Level Colors (theme-aware) ── */
+.text-level-excelente { color: #4338CA; }
+.bg-level-excelente { background-color: #EEF2FF; }
+.text-level-aceitavel { color: #047857; }
+.bg-level-aceitavel { background-color: #ECFDF5; }
+.text-level-ruim { color: var(--error-color); }
+.bg-level-ruim { background-color: var(--error-bg); }
+.text-level-atencao { color: var(--warning-color); }
+.bg-level-atencao { background-color: var(--warning-bg); }
+
+.dark .text-level-excelente { color: #A5B4FC; }
+.dark .bg-level-excelente { background-color: #312E81; }
+.dark .text-level-aceitavel { color: #6EE7B7; }
+.dark .bg-level-aceitavel { background-color: #064E3B; }
+
+/* ── Functional text helpers (theme-aware) ── */
+.text-functional-error { color: var(--error-color); }
+.bg-functional-error { background-color: var(--error-bg); }
+.text-functional-warning { color: var(--warning-color); }
+.bg-functional-warning { background-color: var(--warning-bg); }
+.text-functional-success { color: var(--success-color); }
+.bg-functional-success { background-color: var(--success-bg); }

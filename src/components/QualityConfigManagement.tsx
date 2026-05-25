@@ -6,10 +6,10 @@ import { useQualityConfig } from '../lib/useQualityConfig';
 import CustomSelect from './ui/CustomSelect';
 
 const COLORS = [
-  { color: 'text-indigo-700', bgColor: 'bg-indigo-50', label: 'Indigo' },
-  { color: 'text-emerald-700', bgColor: 'bg-emerald-50', label: 'Verde' },
-  { color: 'text-amber-700', bgColor: 'bg-amber-50', label: 'Ambar' },
-  { color: 'text-red-700', bgColor: 'bg-red-50', label: 'Vermelho' },
+  { color: 'text-level-excelente', bgColor: 'bg-level-excelente', label: 'Indigo' },
+  { color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel', label: 'Verde' },
+  { color: 'text-level-atencao', bgColor: 'bg-level-atencao', label: 'Ambar' },
+  { color: 'text-level-ruim', bgColor: 'bg-level-ruim', label: 'Vermelho' },
   { color: 'text-purple-700', bgColor: 'bg-purple-50', label: 'Roxo' },
   { color: 'text-blue-700', bgColor: 'bg-blue-50', label: 'Azul' },
 ];
@@ -382,8 +382,8 @@ export default function QualityConfigManagement() {
                 </div>
               </div>
               <div className="mt-4 flex items-center gap-3">
-                <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${level.bgColor} ${level.color}`}>
-                  <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text', 'bg')}`} />
+      <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${level.bgColor} ${level.color}`}>
+      <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />
                   {level.label}: {level.minScore}% - {level.maxScore}%
                 </span>
               </div>

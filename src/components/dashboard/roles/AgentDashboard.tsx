@@ -227,7 +227,7 @@ export default function AgentDashboard() {
           sub="Nota Mantida"
           good={false}
           icon={<XCircle className="w-5 h-5" />}
-          accent="text-error"
+          accent="text-functional-error"
         />
       </div>
 

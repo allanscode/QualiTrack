@@ -116,9 +116,11 @@ export default function QualityManagerDashboard() {
 
   // --- Grade Distribution (by config levels)
   const colorMap: Record<string, string> = {
-    'text-indigo-700': '#6366f1', 'text-emerald-700': '#10b981',
-    'text-amber-700': '#f59e0b',  'text-red-700': '#ef4444',
-    'text-purple-700': '#a855f7', 'text-blue-700': '#3b82f6',
+  'text-indigo-700': '#6366f1', 'text-emerald-700': '#10b981',
+  'text-amber-700': '#f59e0b', 'text-red-700': '#ef4444',
+  'text-purple-700': '#a855f7', 'text-blue-700': '#3b82f6',
+  'text-level-excelente': '#6366f1', 'text-level-aceitavel': '#10b981',
+  'text-level-ruim': '#ef4444', 'text-level-atencao': '#f59e0b',
   };
   const gradeDistribution = useMemo(() =>
     config.levels
@@ -296,7 +298,7 @@ export default function QualityManagerDashboard() {
           sub="Aguardando sua decisão"
           good={pendingMyActions === 0}
           icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-error"
+          accent="text-functional-error"
         />
         <StatCard
           title="Monitorias"
@@ -348,7 +350,7 @@ export default function QualityManagerDashboard() {
           sub="Nota mantida"
           good={true}
           icon={<XCircle className="w-5 h-5" />}
-          accent="text-error"
+          accent="text-functional-error"
         />
       </div>
 

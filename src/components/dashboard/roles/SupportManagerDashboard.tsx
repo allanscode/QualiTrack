@@ -246,7 +246,7 @@ export default function SupportManagerDashboard() {
           sub="Aguardando minha decisão"
           good={pendingManager === 0}
           icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-error"
+          accent="text-functional-error"
         />
       </div>
 
@@ -282,7 +282,7 @@ export default function SupportManagerDashboard() {
           sub="Nota mantida"
           good={true}
           icon={<XCircle className="w-5 h-5" />}
-          accent="text-error"
+          accent="text-functional-error"
         />
       </div>
 

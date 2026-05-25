@@ -628,15 +628,15 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                 const isTarget = isAboveTarget(score);
                 
                 // Mapeamento para cores sólidas vibrantes baseadas na configuração
-                const getSolidBg = (textColor: string) => {
-                  if (textColor.includes('indigo')) return 'bg-indigo-600';
-                  if (textColor.includes('emerald')) return 'bg-emerald-600';
-                  if (textColor.includes('amber')) return 'bg-amber-500';
-                  if (textColor.includes('red')) return 'bg-red-600';
-                  if (textColor.includes('purple')) return 'bg-purple-600';
-                  if (textColor.includes('blue')) return 'bg-blue-600';
-                  return 'bg-brand-primary';
-                };
+const getSolidBg = (textColor: string) => {
+  if (textColor.includes('excelente') || textColor.includes('indigo')) return 'bg-indigo-600';
+  if (textColor.includes('aceitavel') || textColor.includes('emerald')) return 'bg-emerald-600';
+  if (textColor.includes('atencao') || textColor.includes('amber')) return 'bg-amber-500';
+  if (textColor.includes('ruim') || textColor.includes('red')) return 'bg-red-600';
+  if (textColor.includes('purple')) return 'bg-purple-600';
+  if (textColor.includes('blue')) return 'bg-blue-600';
+  return 'bg-brand-primary';
+};
 
                 return (
                   <div className={`p-10 rounded-[40px] flex flex-col md:flex-row items-center justify-between text-white shadow-premium transition-all duration-700 relative overflow-hidden ${getSolidBg(level.color)}`}>

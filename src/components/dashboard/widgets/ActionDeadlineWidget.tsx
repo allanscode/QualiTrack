@@ -27,8 +27,8 @@ export default function ActionDeadlineWidget({ title, monitorias, targetStatus }
   return (
     <Card padding="lg" className="h-full flex flex-col">
       <div className="flex items-center gap-2.5 mb-5">
-        <div className="w-9 h-9 rounded-xl bg-warning/10 flex items-center justify-center flex-shrink-0">
-          <Clock className="w-4 h-4 text-warning" />
+      <div className="w-9 h-9 rounded-xl bg-functional-warning flex items-center justify-center flex-shrink-0">
+        <Clock className="w-4 h-4 text-functional-warning" />
         </div>
         <div>
           <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">{title}</h3>

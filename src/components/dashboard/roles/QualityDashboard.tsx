@@ -97,10 +97,14 @@ export default function QualityDashboard() {
     const colorMap: Record<string, string> = {
       'text-indigo-700': '#6366f1',
       'text-emerald-700': '#10b981',
-      'text-amber-700':   '#f59e0b',
-      'text-red-700':     '#ef4444',
-      'text-purple-700':  '#a855f7',
-      'text-blue-700':    '#3b82f6',
+      'text-amber-700': '#f59e0b',
+      'text-red-700': '#ef4444',
+      'text-purple-700': '#a855f7',
+      'text-blue-700': '#3b82f6',
+      'text-level-excelente': '#6366f1',
+      'text-level-aceitavel': '#10b981',
+      'text-level-ruim': '#ef4444',
+      'text-level-atencao': '#f59e0b',
     };
 
     return config.levels.map(level => ({
@@ -161,7 +165,7 @@ export default function QualityDashboard() {
           sub="Aguardando reanálise" 
           good={pendingActions === 0} 
           icon={<AlertTriangle className="w-5 h-5" />} 
-          accent="text-error" 
+          accent="text-functional-error" 
         />
       </div>
 
@@ -181,7 +185,7 @@ export default function QualityDashboard() {
           sub="Improcedentes (Nota mantida)" 
           good={true} 
           icon={<XCircle className="w-5 h-5" />} 
-          accent="text-error" 
+          accent="text-functional-error" 
         />
         <StatCard 
           title="Total Reav Recebidas" 
@@ -275,7 +279,7 @@ export default function QualityDashboard() {
 
       {/* Row 5: Recent Audits (Full Width) */}
       <div className="overflow-hidden">
-        <RecentAuditsTable monitorias={myMonitorias} users={users} title="Minhas Auditorias Recentes" limit={10} />
+        <RecentAuditsTable monitorias={myMonitorias} users={users} title="Minhas Auditorias Recentes" />
       </div>
     </div>
   );

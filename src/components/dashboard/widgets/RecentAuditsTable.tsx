@@ -8,22 +8,21 @@ import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
 interface RecentAuditsTableProps {
   monitorias: Monitoria[];
   users: User[];
-  limit?: number;
   title?: string;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  pendente_revisao:            { label: 'Aguardando Suporte',  color: 'text-warning',        bg: 'bg-warning/10' },
-  em_contestacao:              { label: 'Em Reanálise',         color: 'text-orange-600',     bg: 'bg-orange-50' },
-  aguardando_gestor_suporte:   { label: 'Aguardando Gestor',    color: 'text-info',            bg: 'bg-info/10' },
-  aguardando_gestor_qualidade: { label: 'Aguardando Qualidade', color: 'text-purple-600',     bg: 'bg-purple-50' },
-  concluida:                   { label: 'Finalizada',           color: 'text-success',         bg: 'bg-success/10' },
-  contestacao_aceita:          { label: 'Contestação Aceita',   color: 'text-success',         bg: 'bg-success/10' },
-  contestacao_negada:          { label: 'Contestação Negada',   color: 'text-error',           bg: 'bg-error/10' },
-  finalizada_alterada:         { label: 'Finalizada Alterada',  color: 'text-info',            bg: 'bg-info/10' },
+  pendente_revisao: { label: 'Aguardando Suporte', color: 'text-functional-warning', bg: 'bg-functional-warning' },
+  em_contestacao: { label: 'Em Reanálise', color: 'text-orange-500 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/40' },
+  aguardando_gestor_suporte: { label: 'Aguardando Gestor', color: 'text-functional-success', bg: 'bg-functional-success' },
+  aguardando_gestor_qualidade: { label: 'Aguardando Qualidade', color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/40' },
+  concluida: { label: 'Finalizada', color: 'text-functional-success', bg: 'bg-functional-success' },
+  contestacao_aceita: { label: 'Contestação Aceita', color: 'text-functional-success', bg: 'bg-functional-success' },
+  contestacao_negada: { label: 'Contestação Negada', color: 'text-functional-error', bg: 'bg-functional-error' },
+  finalizada_alterada: { label: 'Finalizada Alterada', color: 'text-functional-success', bg: 'bg-functional-success' },
 };
 
-export default function RecentAuditsTable({ monitorias, users, limit = 8, title = 'Monitorias Recentes' }: RecentAuditsTableProps) {
+export default function RecentAuditsTable({ monitorias, users, title = 'Monitorias Recentes' }: RecentAuditsTableProps) {
   const { user: currentUser } = useDashboard();
   const { getLevelForScore } = useQualityConfig();
 
@@ -31,7 +30,6 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
     const u = users.find(u => u.id === id);
     if (!u) return id;
 
-    // Anonymize auditor for agents and support managers
     const isProtectedRole = ['suporte', 'gestor_suporte'].includes(currentUser?.role || '');
     const isAuditorRole = ['qualidade', 'gestor_qualidade', 'admin'].includes(u.role);
 
@@ -48,26 +46,23 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
         const dateA = new Date(a.created_at).getTime();
         const dateB = new Date(b.created_at).getTime();
         return dateB - dateA;
-      })
-      .slice(0, limit);
-  }, [monitorias, limit]);
+      });
+  }, [monitorias]);
 
   return (
-    <Card padding="none" className="overflow-hidden">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-surface-border flex justify-between items-center bg-surface-subtle/30">
+    <Card padding="none" className="overflow-hidden flex flex-col">
+      <div className="px-6 py-4 border-b border-surface-border flex justify-between items-center bg-surface-subtle/30 flex-shrink-0">
         <div>
           <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">{title}</h3>
           <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">
-            Mostrando {displayList.length} de {monitorias.length} monitorias
+            {displayList.length} monitoria{displayList.length !== 1 ? 's' : ''}
           </p>
         </div>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto overflow-y-auto max-h-[450px] custom-scrollbar">
         <table className="w-full text-left">
-          <thead className="bg-surface-subtle/20">
+          <thead className="bg-surface-subtle/30 sticky top-0 z-10">
             <tr className="text-[10px] uppercase tracking-widest text-brand-muted font-black border-b border-surface-border">
               <th className="px-6 py-3">#</th>
               <th className="px-6 py-3">Ticket</th>
