@@ -26,6 +26,7 @@ const IDLE_WARNING_MS = 5 * 60 * 1000;
 const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 const SESSION_REFRESH_MS = 50 * 60 * 1000;
 const MOCK_SESSION_KEY = 'qualitrack_session';
+const LAST_ACTIVITY_KEY = 'qualitrack_last_activity';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -116,24 +117,37 @@ export default function App() {
         try {
           const parsed = JSON.parse(stored);
           const now = Date.now();
-          if (parsed.sessionExpiresAt && parsed.sessionExpiresAt > now) {
-            mockDb.get('users').then(({ data }) => {
-              const dbUser = data.find((u: any) => u.id === parsed.userId && u.active);
-              if (dbUser) {
-                setCurrentUser(dbUser);
-                setUserData(dbUser);
-                setActiveTab('dashboard');
-                sessionStartTimeRef.current = parsed.sessionStartedAt || now;
-              } else {
+            if (parsed.sessionExpiresAt && parsed.sessionExpiresAt > now) {
+              const lastActivityStored = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
+              if (lastActivityStored && (now - lastActivityStored) >= IDLE_TIMEOUT_MS) {
                 localStorage.removeItem(MOCK_SESSION_KEY);
+                localStorage.removeItem(LAST_ACTIVITY_KEY);
+              } else if (parsed.sessionStartedAt && (now - parsed.sessionStartedAt) >= ABSOLUTE_TIMEOUT_MS) {
+                localStorage.removeItem(MOCK_SESSION_KEY);
+                localStorage.removeItem(LAST_ACTIVITY_KEY);
+              } else {
+                mockDb.get('users').then(async ({ data }) => {
+                  const dbUser = data.find((u: any) => u.id === parsed.userId && u.active);
+                  if (dbUser) {
+                    const enriched = await enrichUserWithTeamIds(dbUser);
+                    setCurrentUser(enriched);
+                    setUserData(enriched);
+                    setActiveTab('dashboard');
+                    sessionStartTimeRef.current = parsed.sessionStartedAt || now;
+                  } else {
+                    localStorage.removeItem(MOCK_SESSION_KEY);
+                    localStorage.removeItem(LAST_ACTIVITY_KEY);
+                  }
+                });
               }
-            });
-          } else {
-            localStorage.removeItem(MOCK_SESSION_KEY);
-          }
-        } catch {
-          localStorage.removeItem(MOCK_SESSION_KEY);
-        }
+      } else {
+        localStorage.removeItem(MOCK_SESSION_KEY);
+        localStorage.removeItem(LAST_ACTIVITY_KEY);
+      }
+    } catch {
+      localStorage.removeItem(MOCK_SESSION_KEY);
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+    }
       }
       setLoading(false);
       clearTimeout(initializationTimeout);
@@ -366,11 +380,12 @@ export default function App() {
     let idleTimerId: NodeJS.Timeout;
     let warningIntervalId: NodeJS.Timeout;
     let refreshTimerId: NodeJS.Timeout;
-    let lastActivity = Date.now();
+    let lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_KEY)) || Date.now();
 
     const forceLogout = async (reason: string) => {
       setShowIdleWarning(false);
       localStorage.removeItem(MOCK_SESSION_KEY);
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
       if (!isMockMode && supabase) {
         isCleaningSessionRef.current = true;
         await supabase.auth.signOut();
@@ -381,6 +396,17 @@ export default function App() {
       sessionStartTimeRef.current = null;
       toast.error(reason);
     };
+
+    // Verifica se a sessão já expirou por inatividade ou tempo absoluto
+    const idleElapsed = Date.now() - lastActivity;
+    if (idleElapsed >= IDLE_TIMEOUT_MS) {
+      forceLogout('Sessão encerrada por inatividade (60 minutos). Faça login novamente.');
+      return;
+    }
+    if (sessionStartTimeRef.current && (Date.now() - sessionStartTimeRef.current) >= ABSOLUTE_TIMEOUT_MS) {
+      forceLogout('Sessão encerrada após 8 horas contínuas. Faça login novamente.');
+      return;
+    }
 
     const checkAbsoluteTimeout = () => {
       if (!sessionStartTimeRef.current) return false;
@@ -432,6 +458,7 @@ export default function App() {
       const now = Date.now();
       if (now - lastActivity < 1000) return;
       lastActivity = now;
+      localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
 
       if (showIdleWarning) {
         setShowIdleWarning(false);
@@ -485,13 +512,29 @@ export default function App() {
     extendSessionRef.current();
   }, []);
 
+  const enrichUserWithTeamIds = async (dbUser: any): Promise<any> => {
+    try {
+      if (isMockMode) {
+        const { data: utData } = await mockDb.get('user_teams');
+        const userTeamIds = (utData || []).filter((ut: any) => ut.user_id === dbUser.id).map((ut: any) => ut.team_id);
+        return { ...dbUser, team_ids: userTeamIds.length > 0 ? userTeamIds : (dbUser.team_ids || []) };
+      } else if (supabase) {
+        const { data: utData } = await supabase.from('user_teams').select('team_id').eq('user_id', dbUser.id);
+        const userTeamIds = (utData || []).map((ut: any) => ut.team_id);
+        return { ...dbUser, team_ids: userTeamIds.length > 0 ? userTeamIds : (dbUser.team_ids || []) };
+      }
+    } catch {}
+    return dbUser;
+  };
+
   const handleUserSession = async (user: any) => {
     try {
       if (isMockMode) {
         const { data } = await mockDb.get('users');
         const dbUser = data.find((u: any) => u.email === user.email && u.active);
         if (dbUser) {
-          setUserData(dbUser);
+          const enriched = await enrichUserWithTeamIds(dbUser);
+          setUserData(enriched);
           setCurrentUser(user);
           setActiveTab('dashboard');
           if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now();
@@ -500,14 +543,17 @@ export default function App() {
             sessionStartedAt: sessionStartTimeRef.current,
             sessionExpiresAt: sessionStartTimeRef.current + ABSOLUTE_TIMEOUT_MS,
           }));
+          localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
         }
       } else {
         const { data, error } = await supabase!.from('users').select('*').eq('email', user.email).single();
         if (data && data.active) {
-          setUserData(data);
+          const enriched = await enrichUserWithTeamIds(data);
+          setUserData(enriched);
           setCurrentUser(user);
           setActiveTab('dashboard');
           if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now();
+          localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
         } else if (error && error.code === 'PGRST116') {
           await supabase!.auth.signOut();
           setAuthView('login');
@@ -543,17 +589,19 @@ export default function App() {
             setLoading(false);
             return toast.error('Esta conta está desativada.');
           }
-        setCurrentUser(user);
-        setUserData(user);
+          const enriched = await enrichUserWithTeamIds(user);
+          setCurrentUser(enriched);
+          setUserData(enriched);
         setActiveTab('dashboard');
         setCredentials({ email: '', password: '' });
         sessionStartTimeRef.current = Date.now();
-        localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({
-          userId: user.id,
-          sessionStartedAt: sessionStartTimeRef.current,
-          sessionExpiresAt: sessionStartTimeRef.current + ABSOLUTE_TIMEOUT_MS,
-        }));
-        toast.success(`Bem-vindo, ${user.name}!`);
+          localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({
+            userId: user.id,
+            sessionStartedAt: sessionStartTimeRef.current,
+            sessionExpiresAt: sessionStartTimeRef.current + ABSOLUTE_TIMEOUT_MS,
+          }));
+          localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
+          toast.success(`Bem-vindo, ${user.name}!`);
         } else {
           toast.error('E-mail ou senha incorretos. Tente novamente.');
         }
