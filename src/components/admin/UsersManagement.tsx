@@ -48,44 +48,81 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [users, statusFilter, searchTerm, roleFilter, teamFilter]);
 
+  const syncUserTeams = async (userId: string, teamIds: string[]) => {
+    let existing: any[] = [];
+    if (supabase) {
+      const { data } = await supabase.from('user_teams').select('*').eq('user_id', userId);
+      existing = data || [];
+    } else {
+      const { data } = await mockDb.get('user_teams');
+      existing = (data || []).filter((ut: any) => ut.user_id === userId);
+    }
+    const existingTeamIds = existing.map((ut: any) => ut.team_id);
+    const toAdd = teamIds.filter(id => !existingTeamIds.includes(id));
+    const toRemove = existing.filter((ut: any) => !teamIds.includes(ut.team_id));
+
+    if (toRemove.length > 0) {
+      const removeIds = toRemove.map((ut: any) => ut.id);
+      if (supabase) {
+        await supabase.from('user_teams').delete().in('id', removeIds);
+      } else {
+        for (const rid of removeIds) await mockDb.delete('user_teams', rid);
+      }
+    }
+    if (toAdd.length > 0) {
+      const inserts = toAdd.map(team_id => ({ user_id: userId, team_id }));
+      if (supabase) {
+        await supabase.from('user_teams').insert(inserts);
+      } else {
+        for (const ins of inserts) await mockDb.insert('user_teams', ins);
+      }
+    }
+  };
+
   const handleSaveUser = async () => {
     if (!editingUser.name || !editingUser.email) return;
     setSaving(true);
     const executeWithRetry = async (retryCount = 0): Promise<void> => {
       try {
+        const emailLower = editingUser.email.toLowerCase();
+        const teamIds = editingUser.team_ids || [];
+
         if (!supabase) {
-          const emailLower = editingUser.email.toLowerCase();
-          const payload = { ...editingUser, email: emailLower, active: true, team_ids: editingUser.team_ids || [] };
-          if (editingUser.id) await mockDb.update('users', editingUser.id, payload);
-          else await mockDb.insert('users', { ...payload, id: emailLower });
+          const payload = { ...editingUser, email: emailLower, active: true, team_ids: teamIds };
+          if (editingUser.id) {
+            await mockDb.update('users', editingUser.id, payload);
+            await syncUserTeams(editingUser.id, teamIds);
+          } else {
+            const newUser = await mockDb.insert('users', { ...payload, id: emailLower });
+            await syncUserTeams(newUser.data.id, teamIds);
+          }
           return;
         }
 
-        // 1. Session warmup
         await supabase.auth.getSession();
 
-        const emailLower = editingUser.email.toLowerCase();
-        const payload = {
+        const userPayload = {
           name: editingUser.name,
           email: emailLower,
           role: editingUser.role,
-          active: true,
-          team_ids: editingUser.team_ids || []
+          active: true
         };
 
-        // 2. Define Operation
         const operation = (async () => {
+          let userId = editingUser.id;
           if (editingUser.id) {
-            const { error } = await supabase.from('users').update(payload).eq('id', editingUser.id);
+            const { error } = await supabase.from('users').update(userPayload).eq('id', editingUser.id);
             if (error) throw error;
+            await syncUserTeams(editingUser.id, teamIds);
           } else {
-            const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', { body: payload });
+            const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', { body: { ...userPayload, team_ids: teamIds } });
             if (funcError) throw funcError;
             if (data?.success === false) throw new Error(data.details?.message || 'Erro ao convidar usuário');
+            userId = data?.user?.id || null;
+            if (userId) await syncUserTeams(userId, teamIds);
           }
         })();
 
-        // 3. Timeout race
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
         await Promise.race([operation, timeoutPromise]);
 

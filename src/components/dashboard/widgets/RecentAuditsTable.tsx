@@ -3,7 +3,7 @@ import { useDashboard } from '../DashboardContext';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { Monitoria, User } from '../../../types';
 import Card from '../../ui/Card';
-import SLAClock from '../../ui/SLAClock';
+import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
 
 interface RecentAuditsTableProps {
   monitorias: Monitoria[];
@@ -75,7 +75,7 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
               <th className="px-6 py-3">Suporte</th>
               <th className="px-6 py-3">Score</th>
               <th className="px-6 py-3">Status</th>
-              <th className="px-6 py-3">SLA</th>
+              <th className="px-6 py-3">Prazo</th>
               <th className="px-6 py-3">Data</th>
             </tr>
           </thead>
@@ -101,7 +101,7 @@ export default function RecentAuditsTable({ monitorias, users, limit = 8, title 
                     </span>
                   </td>
                   <td className="px-6 py-3.5">
-                    <SLAClock deadlineAt={m.deadline_at} status={m.status} />
+                    <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status} />
                   </td>
                   <td className="px-6 py-3.5 text-[10px] font-bold text-brand-muted uppercase tracking-wider">
                     {new Date(m.created_at).toLocaleDateString('pt-BR')}

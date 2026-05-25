@@ -31,11 +31,11 @@ QualiTrack não possui servidor backend tradicional. Toda comunicação é feita
 - **Tipos**: `welcome`, `reset`, `rejection`
 - **Credenciais**: Via env vars (`Deno.env.get("SMTP_USERNAME")`, `Deno.env.get("SMTP_PASSWORD")`)
 
-## Cron Job — SLA (`process_sla_timeouts()`)
+## Cron Job — Prazo de Ação (`process_action_deadline_timeouts()`)
 
 Executada a cada 5 minutos (pg_cron):
 
-| Posse Atual | Ação ao Vencer SLA |
+| Posse Atual | Ação ao Vencer Prazo |
 |---|---|
 | Qualidade (em_contestacao, etc.) | Score = 100%, status = concluida |
 | Suporte (pendente_revisao, etc.) | Score mantido, status = concluida |

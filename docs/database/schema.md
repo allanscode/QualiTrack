@@ -57,7 +57,7 @@ erDiagram
         text feedback
         text status
         jsonb history
-        timestamptz deadline_at
+        timestamptz action_deadline_at
         boolean active
         timestamptz created_at
         timestamptz updated_at
@@ -130,7 +130,7 @@ erDiagram
 | `feedback` | TEXT | — | Feedback textual |
 | `status` | TEXT | — | Status atual (ver MonitoriaStatus) |
 | `history` | JSONB | `[]` | Array de HistoryEntry |
-| `deadline_at` | TIMESTAMPTZ | — | Prazo SLA atual |
+| `action_deadline_at` | TIMESTAMPTZ | — | Prazo de ação atual |
 | `active` | BOOLEAN | `true` | Soft-delete |
 | `created_at` | TIMESTAMPTZ | `now()` | Data de criação |
 | `updated_at` | TIMESTAMPTZ | `now()` | Última atualização |
@@ -168,4 +168,4 @@ As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) 
 |---|---|
 | `auth_migration.sql` | Cria admin padrão no Auth + public.users |
 | `create_quality_configs.sql` | Cria tabela quality_configs + RLS |
-| `supabase_sla_cron.sql` | Função + cron job para SLA timeout |
+| `supabase_sla_cron.sql` | Função + cron job para timeout de prazo de ação |

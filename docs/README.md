@@ -60,12 +60,12 @@
 - [Autenticação](./flows/authentication.md)
 - [Monitoria (Auditoria)](./flows/monitoria.md)
 - [Onboarding de Usuários](./flows/onboarding.md)
-- [SLA e Prazos](./flows/sla.md)
+- [Prazo de Ação](./flows/action-deadline.md)
 
 ### Decisões Arquiteturais
 - [ADR-001: Migração Firebase → Supabase](./decisions/adr-001.md)
 - [ADR-002: Mock Mode para Desenvolvimento](./decisions/adr-002.md)
-- [ADR-003: SLA com Horário Comercial](./decisions/adr-003.md)
+- [ADR-003: Prazo de Ação com Horário Comercial](./decisions/adr-003.md)
 
 ### Onboarding
 - [Setup de Desenvolvimento](./onboarding/dev-setup.md)

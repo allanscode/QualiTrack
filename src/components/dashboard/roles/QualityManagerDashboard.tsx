@@ -414,7 +414,7 @@ export default function QualityManagerDashboard() {
         </div>
       </div>
 
-      {/* Row 7 — SLA e Rankings de Contestações */}
+      {/* Row 7 — Prazos de Ação e Rankings de Contestações */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="h-[320px]">
           <ComparativeBarChart

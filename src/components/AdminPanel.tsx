@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
-import { User, Team, EvaluationForm, AccessRequest } from '../types';
+import { User, Team, EvaluationForm, AccessRequest, UserTeam } from '../types';
 import { 
   Users, 
   ClipboardList, 
@@ -29,78 +29,102 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
   const loadAllData = async () => {
     setLoading(true);
     try {
-      if (!supabase) {
-        const [u, t, f, r] = await Promise.all([
-          mockDb.get('users'),
-          mockDb.get('teams'),
-          mockDb.get('forms'),
-          mockDb.get('access_requests')
-        ]);
-        setUsers(u.data || []);
-        setTeams(t.data || []);
-        setForms(f.data || []);
-        setRequests(r.data || []);
-      } else {
-        const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
-          try {
-            console.log(`[Admin] Carregando dados (Tentativa ${retryCount + 1})...`);
-            
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session && retryCount < 1) {
-              console.warn('[Admin] Sessão não encontrada. Tentando refresh...');
-              await supabase.auth.refreshSession();
-            }
+    if (!supabase) {
+      const [u, t, f, r, ut] = await Promise.all([
+        mockDb.get('users'),
+        mockDb.get('teams'),
+        mockDb.get('forms'),
+        mockDb.get('access_requests'),
+        mockDb.get('user_teams')
+      ]);
 
-            const controller = new AbortController();
-            const fetchPromise = Promise.all([
-              supabase.from('users').select('*').abortSignal(controller.signal),
-              supabase.from('teams').select('*').abortSignal(controller.signal),
-              supabase.from('forms').select('*').abortSignal(controller.signal)
-            ]);
-            
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => {
-                controller.abort();
-                reject(new Error('timeout'));
-              }, 15000)
-            );
+      const teamIdsByUser: Record<string, string[]> = {};
+      (ut.data || []).forEach((utItem: any) => {
+        if (!teamIdsByUser[utItem.user_id]) teamIdsByUser[utItem.user_id] = [];
+        teamIdsByUser[utItem.user_id].push(utItem.team_id);
+      });
 
-            const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
-            
-            const errorRes = results.find(r => r.error);
-            if (errorRes) throw errorRes.error;
+      const enrichedUsers = (u.data || []).map((user: any) => ({
+        ...user,
+        team_ids: user.team_ids?.length ? user.team_ids : (teamIdsByUser[user.id] || [])
+      }));
 
-            return results;
-          } catch (err: any) {
-            console.error(`[Admin] Erro na tentativa ${retryCount + 1}:`, err);
-            
-            if (retryCount < 4) {
-              const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
-              toast.loading(`Conexão instável. Recuperando dados... (${retryCount + 1}/5)`, { id: 'admin-retry' });
-              console.warn(`[Admin] Retentando em ${Math.round(waitTime/1000)}s...`);
-              await new Promise(res => setTimeout(res, waitTime));
-              return executeWithRetry(retryCount + 1);
-            }
-            toast.dismiss('admin-retry');
-            toast.error('Não foi possível conectar ao servidor. Verifique sua internet.');
-            throw err;
-          }
-        };
-
-        const [u, t, f] = await executeWithRetry();
-        
-        if (u.data) setUsers(u.data);
-        if (t.data) setTeams(t.data);
-        if (f.data) setForms(f.data);
-
+      setUsers(enrichedUsers);
+      setTeams(t.data || []);
+      setForms(f.data || []);
+      setRequests(r.data || []);
+    } else {
+      const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
         try {
-          const { data: r, error: re } = await supabase.from('access_requests').select('*').order('created_at', { ascending: false });
-          if (!re && r) setRequests(r);
-        } catch (e) {
-          console.warn('[Admin] Falha ao carregar solicitações de acesso.');
+          console.log(`[Admin] Carregando dados (Tentativa ${retryCount + 1})...`);
+
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session && retryCount < 1) {
+            console.warn('[Admin] Sessão não encontrada. Tentando refresh...');
+            await supabase.auth.refreshSession();
+          }
+
+          const controller = new AbortController();
+          const fetchPromise = Promise.all([
+            supabase.from('users').select('*').abortSignal(controller.signal),
+            supabase.from('teams').select('*').abortSignal(controller.signal),
+            supabase.from('forms').select('*').abortSignal(controller.signal),
+            supabase.from('user_teams').select('*').abortSignal(controller.signal)
+          ]);
+
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000)
+          });
+
+          const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+
+          const errorRes = results.find((r: any) => r.error);
+          if (errorRes) throw errorRes.error;
+
+          return results;
+        } catch (err: any) {
+          console.error(`[Admin] Erro na tentativa ${retryCount + 1}:`, err);
+
+          if (retryCount < 4) {
+            const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
+            toast.loading(`Conexão instável. Recuperando dados... (${retryCount + 1}/5)`, { id: 'admin-retry' });
+            console.warn(`[Admin] Retentando em ${Math.round(waitTime/1000)}s...`);
+            await new Promise(res => setTimeout(res, waitTime));
+            return executeWithRetry(retryCount + 1);
+          }
+          toast.dismiss('admin-retry');
+          toast.error('Não foi possível conectar ao servidor. Verifique sua internet.');
+          throw err;
         }
+      };
+
+      const results = await executeWithRetry();
+      const [u, t, f, ut] = results;
+
+      const teamIdsByUser: Record<string, string[]> = {};
+      const utData = ut?.data || [];
+      utData.forEach((utItem: any) => {
+        if (!teamIdsByUser[utItem.user_id]) teamIdsByUser[utItem.user_id] = [];
+        teamIdsByUser[utItem.user_id].push(utItem.team_id);
+      });
+
+      const enrichedUsers = (u?.data || []).map((user: any) => ({
+        ...user,
+        team_ids: user.team_ids?.length ? user.team_ids : (teamIdsByUser[user.id] || [])
+      }));
+
+      if (enrichedUsers.length) setUsers(enrichedUsers);
+      if (t?.data) setTeams(t.data);
+      if (f?.data) setForms(f.data);
+
+      try {
+        const { data: r, error: re } = await supabase.from('access_requests').select('*').order('created_at', { ascending: false });
+        if (!re && r) setRequests(r);
+      } catch (e) {
+        console.warn('[Admin] Falha ao carregar solicitações de acesso.');
       }
-    } catch (e) {
+    }
+  } catch (e) {
       console.error("Error loading admin data:", e);
     } finally {
       setLoading(false);

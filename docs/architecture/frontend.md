@@ -25,22 +25,22 @@ src/
 ├── types.ts                   # Tipos TypeScript globais
 ├── lib/
 │ ├── supabase.ts # Cliente Supabase + MockDB (localStorage)
-│ ├── useQualityConfig.ts # Hook de configuração de qualidade
-│ ├── businessHours.ts # Utilitários de horário comercial/SLA
+│ ├── useQualityConfig.tsx # Context Provider + hook de configuração de qualidade
+│ ├── businessHours.ts # Utilitários de horário comercial/Prazo de Ação
 │ └── contestation.ts # Funções unificadas de contestação
 ├── utils/                     # (Vazio — não utilizado atualmente)
 └── components/
     ├── AdminPanel.tsx          # Painel administrativo (1192 linhas)
     ├── MonitoriaForm.tsx       # Formulário de monitoria multi-step (684 linhas)
     ├── MonitoriaList.tsx       # Lista de monitorias com ações (676 linhas)
-    ├── QualityConfigManagement.tsx # Config de qualidade/SLA (350 linhas)
+    ├── QualityConfigManagement.tsx # Config de qualidade/Prazo de Ação (350 linhas)
     ├── ui/                    # Componentes UI reutilizáveis
     │   ├── Badge.tsx
     │   ├── Button.tsx
     │   ├── Card.tsx
     │   ├── CustomSelect.tsx    # Select dropdown customizado
     │   ├── Select.tsx          # Select nativo estilizado
-    │   └── SLAClock.tsx        # Relógio de SLA com contagem regressiva
+│   └── ActionDeadlineClock.tsx # Relógio de prazo de ação com contagem regressiva
     └── dashboard/
         ├── DashboardMain.tsx   # Router de dashboard por role
         ├── DashboardContext.tsx # Context Provider com dados e filtros
@@ -57,7 +57,7 @@ src/
             ├── OfensoresChart.tsx
             ├── RankingWidget.tsx
             ├── RecentAuditsTable.tsx
-            ├── SlaWidget.tsx
+            ├── ActionDeadlineWidget.tsx
             ├── StatCard.tsx
             └── TrendChart.tsx
 ```
@@ -71,9 +71,11 @@ Estado raiz que controla:
 - `currentUser` — Sessão Supabase Auth ativa
 - `userData` — Dados do usuário da tabela `users`
 - `activeTab` — Tab ativa (`dashboard` | `monitorias` | `admin`)
-- `isDarkMode` — Tema claro/escuro
+- `theme` — Tema (`'light'` | `'dark'` | `'system'`) — respeita preferência salva quando logado, segue o sistema quando deslogado
 - `isFormOpen` — Modal de nova monitoria
-- `authView` — View de autenticação (`login` | `request-access` | `pending` | etc.)
+- `authView` — View de autenticação (`login` | `request-access` | `pending` | `change-password` | `forgot-password` | `setup-password`)
+- `showIdleWarning` — Modal de aviso de inatividade (5 min countdown)
+- `idleCountdown` — Segundos restantes no countdown de inatividade
 
 ### 2. Estado do Dashboard (`DashboardContext.tsx`)
 Context Provider que centraliza:
@@ -84,8 +86,38 @@ Context Provider que centraliza:
 - `globalAvg` — Média global de score
 - `loading`, `refresh` — Controle de loading e refresh
 
+### 2.5. Configuração de Qualidade (`QualityConfigProvider` — `useQualityConfig.tsx`)
+Context Provider singleton que envolve `<MainApp>` em `App.tsx`:
+- Faz **1 único fetch** a `quality_configs` (Supabase ou mockDb) no mount
+- Fornece `config`, `oldConfig`, `saveConfig`, `getLevelForScore`, `isAboveTarget`, `recalculateActiveActionDeadlines`
+- Consumido por 9+ componentes via `useQualityConfig()` hook (não há mais fetches independentes por componente)
+
 ### 3. Estado Local (Componentes)
 Cada componente major (AdminPanel, MonitoriaForm, MonitoriaList) mantém seu próprio estado local via `useState`.
+
+### 4. Gerenciamento de Sessão (`App.tsx`)
+
+O `App.tsx` implementa um sistema unificado de gerenciamento de sessão com 4 mecanismos:
+
+| Mecanismo | Constante (escopo do módulo) | Valor | Descrição |
+|-----------|------------------------------|-------|-----------|
+| Idle timeout | `IDLE_TIMEOUT_MS` | 60 min | Sem atividade → logout automático |
+| Idle warning | `IDLE_WARNING_MS` | 5 min | Modal com countdown 5 min antes do logout |
+| Absolute timeout | `ABSOLUTE_TIMEOUT_MS` | 8 h | Sessão contínua máximo 8h → logout forçado |
+| Proactive refresh | `SESSION_REFRESH_MS` | 50 min | `supabase.auth.refreshSession()` a cada 50min |
+
+**Constantes no escopo do módulo**: `IDLE_TIMEOUT_MS`, `IDLE_WARNING_MS`, `ABSOLUTE_TIMEOUT_MS`, `SESSION_REFRESH_MS` e `MOCK_SESSION_KEY` são declaradas **fora** do componente `App()` para estarem disponíveis em inicializadores de `useState`.
+
+**Refs de sessão**:
+- `sessionStartTimeRef` — Timestamp de início da sessão (8h limit)
+- `isCleaningSessionRef` — Previne race condition em logout forçado
+- `extendSessionRef` — Ponte entre `useEffect` e `useCallback` (ref-bridge pattern)
+
+**Persistência de sessão (F5)**:
+- **Supabase**: SDK `persistSession: true` + `localStorage` — evento `INITIAL_SESSION` com session restaura login
+- **Mock**: `localStorage` chave `qualitrack_session` (`{userId, sessionStartedAt, sessionExpiresAt}`) — substitui antigo `sessionStorage`
+
+**`handleLogout(options?)`**: Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handleLogout}`) seja passado como string para Sonner.
 
 ## Navegação / Roteamento
 
@@ -162,7 +194,7 @@ Os perfis de usuário (roles) são mapeados de IDs técnicos para nomes amigáve
 | `Badge` | Tag com variantes: success, error, warning, info, neutral |
 | `Select` | `<select>` nativo estilizado |
 | `CustomSelect` | Dropdown customizado com portal (evita clipping) |
-| `SLAClock` | Relógio de contagem regressiva de SLA |
+| `ActionDeadlineClock` | Relógio de contagem regressiva de prazo de ação |
 
 ## Fluxo de Renderização
 

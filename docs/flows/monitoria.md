@@ -30,7 +30,7 @@ flowchart TD
     L --> M{"Gestor Qualidade decide"}
     M -->|"Finaliza"| D
     
-    N["⏰ SLA Vencido"] -.->|"Cron Job"| D
+    N["⏰ Prazo Vencido"] -.->|"Cron Job"| D
     
     style D fill:#10B981,color:white
     style N fill:#EF4444,color:white
@@ -44,7 +44,7 @@ flowchart TD
 - Marca erros críticos (se houver)
 - Escreve feedback
 - Sistema calcula score automaticamente
-- Sistema calcula deadline (SLA) com `addBusinessHours()`
+- Sistema calcula prazo de ação com `addBusinessHours()`
 - Monitoria salva com status `pendente_revisao`
 
 ### 2. Revisão (Agente)
@@ -75,8 +75,8 @@ flowchart TD
 - **Finaliza** a monitoria → `concluida`
 - Pode ajustar score se necessário
 
-### 7. Auto-Finalização (SLA)
-- Se qualquer etapa vence o SLA:
+### 7. Auto-Finalização (Prazo de Ação)
+- Se qualquer etapa vence o prazo:
   - **Qualidade perdeu prazo** → Score = 100%, `concluida`
   - **Suporte perdeu prazo** → Score mantido, `concluida`
 

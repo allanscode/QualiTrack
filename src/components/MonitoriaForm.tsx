@@ -137,18 +137,19 @@ export default function MonitoriaForm({
           setTeams((tRes.data || []).filter((t: any) => t.active !== false));
           setDissatisfactionFields(dfRes.data || []);
         } else {
-          const [{ data: fData }, { data: aData }, { data: tData }, { data: dfData }] = await Promise.all([
-            supabase.from('forms').select('*').eq('active', true),
-            supabase.from('users').select('*'), // Fetch all for history/anonymity
-            supabase.from('teams').select('*').eq('active', true),
-            supabase.from('dissatisfaction_fields').select('*')
-          ]);
-          setForms((fData || []).sort((a: any, b: any) => a.title.localeCompare(b.title)));
-          const usersList = (aData || []) as User[];
-          setAllUsers(usersList);
-          setAgents(usersList.filter(u => u.role === 'suporte' && u.active === true).sort((a, b) => a.name.localeCompare(b.name)));
-          setTeams((tData || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
-          setDissatisfactionFields(dfData || []);
+      const [{ data: fData }, { data: aData }, { data: tData }] = await Promise.all([
+        supabase.from('forms').select('*').eq('active', true),
+        supabase.from('users').select('*'),
+        supabase.from('teams').select('*').eq('active', true),
+      ]);
+      const dfRes = await supabase.from('dissatisfaction_fields').select('*');
+      const dfData = dfRes.error?.code === 'PGRST205' ? [] : (dfRes.data || []);
+      setForms((fData || []).sort((a: any, b: any) => a.title.localeCompare(b.title)));
+      const usersList = (aData || []) as User[];
+      setAllUsers(usersList);
+      setAgents(usersList.filter(u => u.role === 'suporte' && u.active === true).sort((a, b) => a.name.localeCompare(b.name)));
+      setTeams((tData || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
+      setDissatisfactionFields(dfData);
         }
       } catch (e) { console.error('Erro ao carregar dados:', e); }
     };
@@ -285,13 +286,13 @@ export default function MonitoriaForm({
         note: historyNote
       };
       
-      const getDeadline = () => {
-        const now = new Date();
-        const sla = qualityConfig.sla;
-        const bh = qualityConfig.businessHours;
-        if (isReevaluating) return addBusinessHours(now, sla?.auditorReevaluation || 25, bh).toISOString();
-        return addBusinessHours(now, sla?.agentReview || 50, bh).toISOString();
-      };
+  const getDeadline = () => {
+    const now = new Date();
+    const actionDeadline = qualityConfig.action_deadline;
+    const bh = qualityConfig.businessHours;
+    if (isReevaluating) return addBusinessHours(now, actionDeadline?.auditor_reevaluation || 25, bh).toISOString();
+    return addBusinessHours(now, actionDeadline?.agent_review || 50, bh).toISOString();
+  };
 
       const filteredDissatisfactionAnswers = { ...dissatisfactionAnswers };
       if (header.satisfaction_result !== 'Negativa' || !(header.satisfaction_has_record || header.client_contact_success)) {
@@ -302,34 +303,43 @@ export default function MonitoriaForm({
         });
       }
 
-      const payload = {
-        form_id: header.form_id,
-        evaluator_id: initialData?.evaluator_id || user.id,
-        evaluated_id: header.evaluated_id,
-        team_id: header.team_id || null,
-        ticket_id: header.ticket_id,
-        channel: header.channel,
-        ticket_date: header.ticket_date,
-        analysis_date: header.analysis_date,
-        satisfaction_result: header.satisfaction_result || null,
-        satisfaction_has_record: header.satisfaction_has_record,
-        satisfaction_record_text: header.satisfaction_record_text,
-        answers: scores,
-        question_observations: observations,
-        critical_error_observations: criticalErrorObservations,
-        selected_critical_errors: Object.keys(criticalErrors).filter(id => criticalErrors[id]),
-        score,
-        status: isAdminEdit ? (initialData?.status || 'pendente_revisao') : (isReevaluating ? 'pendente_revisao' : (initialData?.status || 'pendente_revisao')),
-        evaluator_note: header.evaluator_note,
-        client_contact_log: header.client_contact_success ? header.client_contact_log : '',
-        client_contact_success: header.client_contact_success,
-        active: true,
-        form_snapshot: selectedForm,
-        history: [...(initialData?.history || []), historyEntry],
-        deadline_at: (initialData?.deadline_at && !isReevaluating && !isAdminEdit) ? initialData.deadline_at : getDeadline(),
-        updated_at: nowTs,
-        dissatisfaction_answers: filteredDissatisfactionAnswers,
-      };
+const evaluatedUser = allUsers.find(u => u.id === header.evaluated_id);
+const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.team_ids?.[0]));
+  const selectedFormObj = forms.find(f => f.id === header.form_id);
+
+  const payload = {
+    form_id: header.form_id,
+    evaluator_id: initialData?.evaluator_id || user.id,
+    evaluated_id: header.evaluated_id,
+    team_id: header.team_id || null,
+    ticket_id: header.ticket_id,
+    channel: header.channel,
+    ticket_date: header.ticket_date,
+    analysis_date: header.analysis_date,
+    satisfaction_result: header.satisfaction_result || null,
+    satisfaction_has_record: header.satisfaction_has_record,
+    satisfaction_record_text: header.satisfaction_record_text,
+    answers: scores,
+    question_observations: observations,
+    critical_error_observations: criticalErrorObservations,
+    selected_critical_errors: Object.keys(criticalErrors).filter(id => criticalErrors[id]),
+    score,
+    status: isAdminEdit ? (initialData?.status || 'pendente_revisao') : (isReevaluating ? 'pendente_revisao' : (initialData?.status || 'pendente_revisao')),
+    evaluator_note: header.evaluator_note,
+    client_contact_log: header.client_contact_success ? header.client_contact_log : '',
+    client_contact_success: header.client_contact_success,
+    active: true,
+    form_snapshot: selectedForm,
+    history: [...(initialData?.history || []), historyEntry],
+    action_deadline_at: (initialData?.action_deadline_at && !isReevaluating && !isAdminEdit) ? initialData.action_deadline_at : getDeadline(),
+    evaluator_name: user.name,
+    evaluated_name: evaluatedUser?.name || '',
+    form_name: selectedFormObj?.title || '',
+    team_name: selectedTeam?.name || '',
+    updated_at: nowTs,
+  dissatisfaction_answers: filteredDissatisfactionAnswers,
+  applied_config: qualityConfig as unknown as Record<string, unknown>,
+};
 
       if (!supabase) {
         if (initialData?.id) await mockDb.update('monitorias', initialData.id, payload);

@@ -24,7 +24,7 @@ export default function ComparativeBarChart({ title, subtitle, data, dataKeys }:
           {subtitle && <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>}
         </div>
       )}
-      <div className="flex-1 min-h-[150px]">
+      <div className="flex-1 min-h-[150px]" style={{ minWidth: 0, minHeight: 150 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />

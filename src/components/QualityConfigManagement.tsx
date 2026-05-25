@@ -15,7 +15,7 @@ const COLORS = [
 ];
 
 export default function QualityConfigManagement() {
-  const { config, oldConfig, saveConfig, recalculateActiveDeadlines } = useQualityConfig();
+  const { config, oldConfig, saveConfig, recalculateActiveActionDeadlines } = useQualityConfig();
   const [localConfig, setLocalConfig] = React.useState(config);
   const [saving, setSaving] = React.useState(false);
 
@@ -32,12 +32,12 @@ export default function QualityConfigManagement() {
   const handleSave = async () => {
     setSaving(true);
 
-    // Validate SLA fields are at least 1h
-    const slaFields = ['agentReview', 'auditorReevaluation', 'managerSupport', 'managerQuality'];
-    for (const field of slaFields) {
-      const val = (localConfig.sla as any)?.[field];
+    // Validate action_deadline fields are at least 1h
+    const deadlineFields = ['agent_review', 'auditor_reevaluation', 'manager_support', 'manager_quality'];
+    for (const field of deadlineFields) {
+      const val = (localConfig.action_deadline as any)?.[field];
       if (typeof val !== 'number' || isNaN(val) || val < 1) {
-        toast.error('Os prazos de atendimento (SLA) devem ser de no mínimo 1 hora.');
+        toast.error('Os prazos de ação devem ser de no mínimo 1 hora.');
         setSaving(false);
         return;
       }
@@ -104,7 +104,7 @@ export default function QualityConfigManagement() {
     
     if (holidaysChanged || daysChanged || hoursChanged) {
       toast.info('Recalculando prazos ativos por alteração no calendário...', { duration: 4000 });
-      await recalculateActiveDeadlines(oldConfig, localConfig);
+      await recalculateActiveActionDeadlines(oldConfig, localConfig);
       toast.success('Prazos recalculados com sucesso!');
     } else {
       toast.success('Configurações de qualidade salvas com sucesso!');
@@ -150,44 +150,44 @@ export default function QualityConfigManagement() {
         </div>
       </div>
 
-      {/* SLA Configuration */}
-      <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
-        <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Prazos de Atendimento (SLA)</h3>
-        <p className="text-sm text-brand-muted mb-6 font-medium">
-          Configure o tempo limite (em horas úteis) para cada ação no fluxo da monitoria.
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            { label: 'Ciência do Suporte', field: 'agentReview' },
-            { label: 'Reanálise Qualidade', field: 'auditorReevaluation' },
-            { label: 'Gestor Suporte', field: 'managerSupport' },
-            { label: 'Gestor Qualidade', field: 'managerQuality' }
-          ].map(sla => (
-            <div key={sla.field}>
-              <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">{sla.label}</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  min={1}
-                  value={(localConfig.sla as any)?.[sla.field] ?? ''}
-                  onChange={e => {
-                    const val = e.target.value === '' ? '' : Number(e.target.value);
-                    setLocalConfig(c => ({ ...c, sla: { ...c.sla, [sla.field]: val as any } }));
-                  }}
-                  className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none pr-12 transition-all"
-                />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand-muted uppercase tracking-widest opacity-50">h</span>
-              </div>
+    {/* Action Deadline Configuration */}
+    <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
+      <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Prazos de Ação</h3>
+      <p className="text-sm text-brand-muted mb-6 font-medium">
+        Configure o tempo limite (em horas úteis) para cada ação no fluxo da monitoria.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[
+          { label: 'Ciência do Suporte', field: 'agent_review' },
+          { label: 'Reanálise Qualidade', field: 'auditor_reevaluation' },
+          { label: 'Gestor Suporte', field: 'manager_support' },
+          { label: 'Gestor Qualidade', field: 'manager_quality' }
+        ].map(deadline => (
+          <div key={deadline.field}>
+            <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">{deadline.label}</label>
+            <div className="relative">
+              <input
+                type="number"
+                min={1}
+                value={(localConfig.action_deadline as any)?.[deadline.field] ?? ''}
+                onChange={e => {
+                  const val = e.target.value === '' ? '' : Number(e.target.value);
+                  setLocalConfig(c => ({ ...c, action_deadline: { ...c.action_deadline, [deadline.field]: val as any } }));
+                }}
+                className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none pr-12 transition-all"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand-muted uppercase tracking-widest opacity-50">h</span>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
+    </div>
 
       {/* Business Hours & Holidays Configuration */}
       <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
         <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Horário Comercial e Feriados</h3>
         <p className="text-sm text-brand-muted mb-6 font-medium">
-          Defina o período de funcionamento para o cálculo preciso do SLA.
+          Defina o período de funcionamento para o cálculo preciso do prazo.
         </p>
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

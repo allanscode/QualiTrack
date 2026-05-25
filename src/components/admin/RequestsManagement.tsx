@@ -49,20 +49,20 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
     const executeWithRetry = async (retryCount = 0): Promise<void> => {
       try {
         if (!supabase) {
-          const payload = { ...approveData, active: true };
+          const payload = { name: approveData.name, email: approveData.email.toLowerCase(), role: approveData.role, active: true, team_ids: approveData.team_ids || [] };
           await mockDb.update('access_requests', approvingReq.id, { status: 'approved' });
           await mockDb.insert('users', { id: approveData.email, ...payload });
           return;
         }
 
         await supabase.auth.getSession();
-        const payload = { ...approveData, active: true };
+        const userPayload = { name: approveData.name, email: approveData.email.toLowerCase(), role: approveData.role, active: true };
 
         const operation = (async () => {
           const { error: reqError } = await supabase.from('access_requests').update({ status: 'approved' }).eq('id', approvingReq.id);
           if (reqError) throw reqError;
 
-          const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', { body: payload });
+          const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', { body: { ...userPayload, team_ids: approveData.team_ids || [] } });
           if (funcError) throw funcError;
           if (data?.success === false) throw new Error(data.details?.message || 'Erro ao convidar usuário');
         })();
@@ -82,12 +82,12 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
       await executeWithRetry();
       toast.success('Solicitação aprovada e e-mail de acesso enviado!');
       setIsApproveModalOpen(false);
-      await handleRefresh(); 
-    } catch (e: any) { 
+      await handleRefresh();
+    } catch (e: any) {
       console.error('Erro definitivo ao aprovar solicitação:', e);
       toast.error(e.message === 'timeout' ? 'O servidor não respondeu ao processar o convite. Tente novamente.' : (e.message || 'Não foi possível aprovar a solicitação no momento.'));
-    } finally { 
-      setSaving(false); 
+    } finally {
+      setSaving(false);
     }
   };
 

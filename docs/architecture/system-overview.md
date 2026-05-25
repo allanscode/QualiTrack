@@ -22,7 +22,7 @@ graph TB
         DB["PostgreSQL"]
         Edge["Edge Functions (Deno)"]
         RLS["Row Level Security"]
-        Cron["pg_cron (SLA)"]
+        Cron["pg_cron (Prazo de Ação)"]
     end
 
     subgraph EdgeFuncs ["Edge Functions"]
@@ -55,7 +55,7 @@ graph TB
 - Criação de auditorias em 4 etapas (stepper)
 - Cálculo automático de score com pesos
 - Fluxo de contestação multi-etapa
-- Controle de SLA com horário comercial
+- Controle de prazos de ação com horário comercial
 - Histórico completo de ações
 
 ### 3. Dashboard (`dashboard/`)
@@ -71,10 +71,10 @@ graph TB
 - Gestão de Solicitações de Acesso
 - Configurações de Qualidade
 
-### 5. Configurações de Qualidade (`QualityConfigManagement.tsx` + `useQualityConfig.ts`)
+### 5. Configurações de Qualidade (`QualityConfigManagement.tsx` + `useQualityConfig.tsx`)
 - Faixas de classificação (Excelente, Aceitável, Ruim)
 - Meta de desempenho (target score)
-- SLA por etapa do fluxo
+- Prazo de ação por etapa do fluxo
 - Horário comercial e feriados
 - Recálculo automático de deadlines ao alterar configuração
 
@@ -93,7 +93,7 @@ graph LR
         Forms["Formulários"]
         Monitoria["Monitorias"]
         Score["Cálculo de Score"]
-        SLA["Controle de SLA"]
+        ActionDeadline["Controle de Prazo de Ação"]
     end
     
     subgraph Analytics ["Análise"]
@@ -126,7 +126,7 @@ graph LR
 | MonitoriaList → MonitoriaForm | State | `viewingMonitoria` renderiza o form inline |
 | AdminPanel → Edge Functions | HTTP | `supabase.functions.invoke()` |
 | DashboardContext → Widgets | Context | `useDashboard()` hook |
-| useQualityConfig → Todos | Hook | Config compartilhada via hook |
+| QualityConfigProvider → Todos | Context | Config compartilhada via Context Provider (1 fetch, consumido via `useQualityConfig()`) |
 
 ## Padrões Arquiteturais Observados
 
@@ -136,11 +136,11 @@ graph LR
 3. **Context Provider** — Estado centralizado do dashboard
 4. **Design Tokens** — CSS custom properties para temas (light/dark)
 5. **Component composition** — UI components reutilizáveis (Card, Button, Badge, etc.)
-6. **Business hours SLA** — Cálculo preciso de prazos com feriados
+6. **Business hours action deadline** — Cálculo preciso de prazos com feriados
 
 ### ⚠️ Trade-offs e Limitações
 1. **Sem routing library** — Navegação por estado (`activeTab`), sem URLs
-2. **Lógica de negócio no frontend** — Cálculo de score, SLA, RBAC no client-side
+2. **Lógica de negócio no frontend** — Cálculo de score, prazos de ação, RBAC no client-side
 3. **Componentes grandes** — `AdminPanel.tsx` (1192 linhas), `MonitoriaForm.tsx` (684 linhas)
 4. **Sem testes automatizados** — Nenhum framework de teste configurado
 5. **Sem CI/CD** — Nenhum pipeline configurado

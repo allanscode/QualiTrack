@@ -21,7 +21,7 @@
 ## 3. Checklist de Segurança para Edição
 
 Antes de commitar/sugerir uma alteração:
-- [ ] Verifiquei se quebra o fluxo de SLA (`addBusinessHours`)?
+- [ ] Verifiquei se quebra o fluxo de prazo de ação (`addBusinessHours`)?
 - [ ] O componente modificado lida corretamente com a renderização em Light e Dark mode?
 - [ ] Se adicionei um filtro no dashboard, eu o apliquei em `DashboardContext.tsx` e não apenas localmente no widget?
 - [ ] Testei o fluxo com o Role correto? (Um componente para `suporte` não pode exibir dados de outros agentes).
@@ -32,10 +32,12 @@ Antes de commitar/sugerir uma alteração:
 Se você for debugar algo, verifique estes pontos conhecidos primeiro:
 
 1. **Z-index e Clipping**: Resolvido — `CustomSelect` usa React Portal (`createPortal`) para evitar clipping em containers scrolláveis.
-2. **SLA Sensitivity**: O recálculo de SLA (`recalculateActiveDeadlines` em `useQualityConfig`) é uma operação pesada. Não a dispare desnecessariamente (apenas on-save da configuração).
+2. **Action Deadline Sensitivity**: O recálculo de prazos de ação (`recalculateActiveActionDeadlines` em `useQualityConfig`) é uma operação pesada. Não a dispare desnecessariamente (apenas on-save da configuração). O `useQualityConfig()` é um consumer de Context — exige que `<QualityConfigProvider>` esteja acima na árvore (envolve `<MainApp>` em `App.tsx`).
 3. **Formatação de Datas**: Use sempre ISO strings para armazenar (`toISOString()`) e converta localmente na hora de renderizar, pois o Supabase armazena em UTC e o frontend no horário local (provavelmente -03:00).
 4. **Edge Function SMTP**: As credenciais SMTP no `send-email` foram migradas para env vars (`Deno.env.get()`). Nunca hardcoded credenciais em Edge Functions.
 5. **Hook Violations**: Houveram incidentes anteriores com conditional hooks em `MonitoriaForm.tsx`. Mantenha todos os `useX` no topo do componente, sempre incondicionais.
+6. **Constantes no Escopo do Módulo**: Constantes usadas em inicializadores de `useState` (ex: `MOCK_SESSION_KEY`) devem ser declaradas **fora** do componente. Incidente: `MOCK_SESSION_KEY` referenciada em `useState` initializer antes de ser declarada dentro do componente.
+7. **Hooks nunca dentro de `useEffect`**: `useCallback`, `useMemo`, `useRef` etc. não podem ser chamados dentro de callbacks de `useEffect`. Use o padrão ref-bridge: atualize um `ref.current` dentro do effect e chame `ref.current()` em um `useCallback` fora do effect. Incidente: `useCallback` dentro de `useEffect` para `extendSession` em `App.tsx`.
 
 ## 5. Como Iniciar uma Nova Feature
 

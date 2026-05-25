@@ -3,7 +3,7 @@ import { useDashboard } from '../DashboardContext';
 import StatCard from '../widgets/StatCard';
 import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import SlaWidget from '../widgets/SlaWidget';
+import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import OfensoresChart from '../widgets/OfensoresChart';
 import { ClipboardCheck, Target, CheckCircle2, XCircle, AlertTriangle, History, Clock } from 'lucide-react';
@@ -252,12 +252,11 @@ export default function QualityDashboard() {
         </div>
 
         <div className="h-[400px]">
-          <SlaWidget 
-            title="Minhas Reavaliações Pendentes"
-            monitorias={myMonitorias}
-            users={users}
-            targetStatus="em_contestacao"
-          />
+<ActionDeadlineWidget
+          title="Minhas Reavaliações Pendentes"
+          monitorias={myMonitorias}
+          targetStatus="em_contestacao"
+        />
         </div>
       </div>
 

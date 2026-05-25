@@ -4,7 +4,7 @@ import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import SlaWidget from '../widgets/SlaWidget';
+import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
 import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, BarChart3, Users } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
@@ -19,7 +19,7 @@ export default function AgentDashboard() {
     [monitorias, user]
   );
 
-  // --- Only MY monitorias (for SlaWidget/Pendencies) - UNFILTERED BY UI
+  // --- Only MY monitorias (for ActionDeadlineWidget/Pendencies) - UNFILTERED BY UI
   const myAllMonitorias = useMemo(() => 
     allMonitorias.filter(m => m.evaluated_id === user?.id), 
     [allMonitorias, user]
@@ -266,12 +266,11 @@ export default function AgentDashboard() {
           />
         </div>
         <div className="lg:col-span-1">
-          <SlaWidget 
-            title="Aguardando Minha Ação"
-            monitorias={myAllMonitorias} 
-            users={users}
-            targetStatus={['pendente_revisao', 'contestacao_negada']}
-          />
+<ActionDeadlineWidget
+          title="Aguardando Minha Ação"
+          monitorias={myAllMonitorias}
+          targetStatus={['pendente_revisao', 'contestacao_negada']}
+        />
         </div>
       </div>
 

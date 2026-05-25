@@ -84,7 +84,7 @@ export default function OfensoresChart({ monitorias, forms, limit = 8, title = '
     <Card padding="lg" className="h-full flex flex-col overflow-hidden">
       <Header />
 
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0" style={{ minWidth: 0, minHeight: 150 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={ofensores}

@@ -2,7 +2,7 @@
 
 ## 1. Visão do Produto
 
-**QualiTrack** é um sistema de gestão de qualidade para operações de suporte ao cliente. Permite que equipes de qualidade avaliem a performance de atendentes através de monitorias estruturadas, com fluxo de contestação, SLA automatizado e dashboards analíticos por perfil.
+**QualiTrack** é um sistema de gestão de qualidade para operações de suporte ao cliente. Permite que equipes de qualidade avaliem a performance de atendentes através de monitorias estruturadas, com fluxo de contestação, prazos de ação automatizados e dashboards analíticos por perfil.
 
 ## 2. Problema
 
@@ -38,7 +38,7 @@ Centros de suporte precisam:
 - Cálculo automático de score com pesos e NA
 - Erros críticos zeram a nota (0%)
 - Fluxo de contestação multi-nível (agente → auditor → gestor suporte → gestor qualidade)
-- SLA com horário comercial e feriados
+- Prazos de ação com horário comercial e feriados
 - Histórico completo de todas as ações (audit trail)
 - Reavaliação com comparativo de scores
 
@@ -58,7 +58,7 @@ Centros de suporte precisam:
 ### 4.5 Configuração de Qualidade
 - Faixas de classificação (Excelente ≥ X%, Aceitável ≥ Y%, Ruim < Y%)
 - Meta de desempenho (target %)
-- SLA por etapa (em horas úteis)
+- Prazo de ação por etapa (em horas úteis)
 - Horário comercial configurável
 - Feriados com recálculo automático de deadlines
 
@@ -69,10 +69,10 @@ Centros de suporte precisam:
 - Critérios marcados como N/A são excluídos do cálculo
 - Se qualquer erro crítico é marcado → Score = 0%
 
-### SLA
+### Prazo de Ação (Action Deadline)
 - Prazos calculados em **horas úteis** (horário comercial)
 - Fins de semana e feriados não contam
-- Vencimento do SLA → resolução automática (cron job)
+- Vencimento do prazo → resolução automática (cron job)
 - Qualidade perde prazo → nota vira 100%
 - Suporte perde prazo → nota mantida
 
@@ -83,7 +83,7 @@ Centros de suporte precisam:
 - `gestor_qualidade` / `admin` → vê tudo
 
 ## 6. Métricas de Sucesso
-- Tempo médio de resolução de monitorias (dentro do SLA)
+- Tempo médio de resolução de monitorias (dentro do prazo)
 - Taxa de contestação
 - Score médio por equipe/agente
 - Volume de monitorias por auditor
@@ -91,7 +91,7 @@ Centros de suporte precisam:
 ## 7. Roadmap Futuro (Não implementado)
 - [ ] Integração com Gemini AI para sugestões de feedback
 - [ ] Exportação de relatórios (PDF/Excel)
-- [ ] Notificações push/email para SLA próximo do vencimento
+- [ ] Notificações push/email para prazo próximo do vencimento
 - [ ] Routing com URLs e deep-linking
 - [ ] Testes automatizados (unit + integration)
 - [ ] CI/CD pipeline

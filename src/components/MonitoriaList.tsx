@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, User, Team, EvaluationForm, MonitoriaHistoryEntry } from '../types';
+import { resolveContestationResult } from '../lib/contestation';
 import { 
   Search, 
   Eye, 
@@ -35,7 +36,7 @@ import Card from './ui/Card';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
 import CustomSelect from './ui/CustomSelect'; 
-import SLAClock from './ui/SLAClock';
+import ActionDeadlineClock from './ui/ActionDeadlineClock';
 import { useQualityConfig } from '../lib/useQualityConfig';
 
 export default function MonitoriaList({ user, onNew, activeTab }: { user: User | null; onNew: () => void; activeTab?: string }) {
@@ -45,7 +46,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
   const [teams, setTeams] = useState<Team[]>([]);
   const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<MonitoriaStatus | 'todas' | 'expiradas_sla'>('todas');
+  const [tab, setTab] = useState<MonitoriaStatus | 'todas' | 'expiradas_prazo'>('todas');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'active' | 'removed'>('active');
   const [teamFilter, setTeamFilter] = useState<string>('');
@@ -150,12 +151,12 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
       const expired = fetchedMonitorias.filter((m: any) => 
         m.active !== false && 
         !['concluida', 'finalizada_alterada'].includes(m.status) && 
-        m.deadline_at && 
-        new Date(m.deadline_at) < new Date()
+      m.action_deadline_at &&
+      new Date(m.action_deadline_at) < new Date()
       );
 
       if (expired.length > 0) {
-        console.log(`[SLA] Encontradas ${expired.length} monitorias expiradas. Finalizando...`);
+        console.log(`[Prazo] Encontradas ${expired.length} monitorias expiradas. Finalizando...`);
         const nowStr = new Date().toISOString();
         for (const m of expired) {
           const isQualityTurn = ['em_contestacao', 'aguardando_gestor_qualidade', 'reavaliacao_solicitada'].includes(m.status);
@@ -164,20 +165,21 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
             ? 'Monitoria aprovada automaticamente (nota 100%) por perda de prazo da Equipe de Qualidade.' 
             : 'Monitoria aprovada automaticamente por perda de prazo da Equipe de Suporte.';
           
-          const historyEntry: MonitoriaHistoryEntry = {
-            action: 'Finalização Automática (SLA)',
-            by_id: 'system',
-            by_name: 'Sistema Automático',
-            at: nowStr,
-            note
-          };
+        const historyEntry: MonitoriaHistoryEntry = {
+          action: 'Finalização Automática (Prazo)',
+          by_id: 'system',
+          by_name: 'Sistema Automático',
+          at: nowStr,
+          note
+        };
 
-          const update = {
-            status: 'concluida',
-            score: newScore,
-            updated_at: nowStr,
-            history: [...(m.history || []), historyEntry]
-          };
+        const update = {
+          status: 'concluida',
+          score: newScore,
+          resolution_type: 'automatic',
+          updated_at: nowStr,
+          history: [...(m.history || []), historyEntry]
+        };
 
           if (!supabase) {
             await mockDb.update('monitorias', m.id, update);
@@ -272,10 +274,11 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
 
   useEffect(() => { load(); }, [load]);
 
-  const getName = (id: string, isEvaluator?: boolean) => {
+  const getName = (id: string, isEvaluator?: boolean, snapshotName?: string) => {
     if (isEvaluator && (user?.role === 'suporte' || user?.role === 'gestor_suporte')) {
       return 'Equipe de Qualidade';
     }
+    if (snapshotName) return snapshotName;
     return users.find(u => u.id === id)?.name || id;
   };
 
@@ -289,10 +292,10 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
       if (user?.role === 'suporte' && m.evaluated_id !== user.id) return false;
       
       // Supervisor de Atendimento: Vê apenas monitorias das suas equipes
-      if (user?.role === 'gestor_suporte') {
-        const userTeamIds = user.team_ids || [];
-        if (!userTeamIds.includes(m.team_id)) return false;
-      }
+if (user?.role === 'gestor_suporte') {
+    if (user.team_ids?.length && m.team_id && !user.team_ids.includes(m.team_id)) return false;
+    else if (!user.team_ids?.length) return false;
+  }
       
       // Monitor de Qualidade: Por padrão vê tudo para "gerir as monitorias" (removida trava restritiva)
 
@@ -300,12 +303,12 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
       if (tab !== 'todas') {
         if (tab === 'pendente_revisao') {
           if (m.status !== 'pendente_revisao' && m.status !== 'contestacao_negada') return false;
-        } else if (tab === 'expiradas_sla') {
-          const isTimeout = m.status === 'concluida' && m.history?.some(h => h.by_id === 'system' || h.action === 'Finalização Automática (SLA)');
-          if (!isTimeout) return false;
-        } else if (tab === 'concluida') {
-          const isTimeout = m.status === 'concluida' && m.history?.some(h => h.by_id === 'system' || h.action === 'Finalização Automática (SLA)');
-          if (isTimeout || m.status !== 'concluida') return false;
+      } else if (tab === 'expiradas_prazo') {
+        const isTimeout = m.status === 'concluida' && m.resolution_type === 'automatic';
+        if (!isTimeout) return false;
+      } else if (tab === 'concluida') {
+        const isTimeout = m.status === 'concluida' && m.resolution_type === 'automatic';
+        if (isTimeout || m.status !== 'concluida') return false;
         } else {
           if (m.status !== tab) return false;
         }
@@ -339,13 +342,12 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
       if (aIsFinished && !bIsFinished) return 1;
 
       // 2. If both are active (not finished)
-      if (!aIsFinished && !bIsFinished) {
-        if (a.deadline_at && b.deadline_at) {
-          // Sort by deadline_at ascending (earliest deadline first)
-          return new Date(a.deadline_at).getTime() - new Date(b.deadline_at).getTime();
-        }
-        if (a.deadline_at) return -1;
-        if (b.deadline_at) return 1;
+    if (!aIsFinished && !bIsFinished) {
+      if (a.action_deadline_at && b.action_deadline_at) {
+        return new Date(a.action_deadline_at).getTime() - new Date(b.action_deadline_at).getTime();
+      }
+      if (a.action_deadline_at) return -1;
+      if (b.action_deadline_at) return 1;
       }
 
       // 3. Fallback: both are finished or neither has a deadline.
@@ -374,7 +376,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
     setTab('todas');
   };
 
-  const getStatusConfig = (status: MonitoriaStatus | 'expiradas_sla') => {
+  const getStatusConfig = (status: MonitoriaStatus | 'expiradas_prazo') => {
     switch (status) {
       case 'pendente_revisao': return { label: 'Revisão', variant: 'warning' as const, icon: Clock };
       case 'em_contestacao': return { label: 'Reanálise', variant: 'error' as const, icon: AlertTriangle };
@@ -385,7 +387,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
       case 'contestacao_aceita': return { label: 'Aceita', variant: 'success' as const, icon: CheckCircle2 };
       case 'contestacao_negada': return { label: 'Negada', variant: 'error' as const, icon: XCircle };
       case 'reavaliacao_solicitada': return { label: 'Reavaliação', variant: 'error' as const, icon: AlertTriangle };
-      case 'expiradas_sla': return { label: 'Estouro SLA', variant: 'error' as const, icon: Clock };
+      case 'expiradas_prazo': return { label: 'Prazo Expirado', variant: 'error' as const, icon: Clock };
       default: return { label: status, variant: 'neutral' as const, icon: AlertCircle };
     }
   };
@@ -429,28 +431,30 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
     else if (type === 'solicitar_reavaliacao') nextStatus = 'reavaliacao_solicitada';
     else if (type === 'reabrir') nextStatus = reopenStatus;
 
-    const getDeadlineHours = (status: MonitoriaStatus) => {
-      const sla = qualityConfig.sla;
-      switch (status) {
-        case 'pendente_revisao':
-        case 'contestacao_negada': return sla?.agentReview || 50;
-        case 'em_contestacao': 
-        case 'reavaliacao_solicitada': return sla?.auditorReevaluation || 25;
-        case 'aguardando_gestor_suporte': return sla?.managerSupport || 25;
-        case 'aguardando_gestor_qualidade': return sla?.managerQuality || 25;
-        default: return 25;
-      }
-    };
+  const getDeadlineHours = (status: MonitoriaStatus) => {
+    const actionDeadline = qualityConfig.action_deadline;
+    switch (status) {
+      case 'pendente_revisao':
+      case 'contestacao_negada': return actionDeadline?.agent_review || 50;
+      case 'em_contestacao':
+      case 'reavaliacao_solicitada': return actionDeadline?.auditor_reevaluation || 25;
+      case 'aguardando_gestor_suporte': return actionDeadline?.manager_support || 25;
+      case 'aguardando_gestor_qualidade': return actionDeadline?.manager_quality || 25;
+      default: return 25;
+    }
+  };
 
-    const update: any = type === 'excluir' 
-      ? { active: false, history: [...(monitoria.history || []), historyEntry], updated_at: now }
-      : {
-          status: nextStatus,
-          updated_at: now,
-          history: [...(monitoria.history || []), historyEntry],
-          ...(nextStatus !== 'concluida' ? { deadline_at: addBusinessHours(new Date(), getDeadlineHours(nextStatus), qualityConfig.businessHours).toISOString() } : {}),
-          ...(type === 'contestar' || type === 'solicitar_reavaliacao' ? { contestation_reason: actionNote } : {}),
-        };
+  const update: any = type === 'excluir'
+    ? { active: false, history: [...(monitoria.history || []), historyEntry], updated_at: now }
+    : {
+      status: nextStatus,
+      updated_at: now,
+      history: [...(monitoria.history || []), historyEntry],
+      ...(nextStatus !== 'concluida' ? { action_deadline_at: addBusinessHours(new Date(), getDeadlineHours(nextStatus), qualityConfig.businessHours).toISOString() } : {}),
+      ...(nextStatus === 'concluida' ? { resolution_type: 'human' } : {}),
+      ...(type === 'contestar' || type === 'solicitar_reavaliacao' ? { contestation_reason: actionNote } : {}),
+      ...(resolveContestationResult(actionDescriptions[type] || '') ? { contestation_result: resolveContestationResult(actionDescriptions[type] || '') } : {}),
+    };
 
     try {
       if (!supabase) {
@@ -471,19 +475,17 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
 
   const activeTeams = useMemo(() => {
     let filtered = teams.filter(t => t.active !== false);
-    if (user?.role === 'gestor_suporte') {
-      const userTeamIds = user.team_ids || [];
-      filtered = filtered.filter(t => userTeamIds.includes(t.id));
-    }
+  if (user?.role === 'gestor_suporte' && user.team_ids?.length) {
+    filtered = filtered.filter(t => user.team_ids!.includes(t.id));
+  }
     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [teams, user]);
 
   const activeSuportes = useMemo(() => {
     let filtered = users.filter(u => u.role === 'suporte' && u.active !== false);
-    if (user?.role === 'gestor_suporte') {
-      const userTeamIds = user.team_ids || [];
-      filtered = filtered.filter(u => u.team_ids?.some(tid => userTeamIds.includes(tid)));
-    }
+  if (user?.role === 'gestor_suporte' && user.team_ids?.length) {
+    filtered = filtered.filter(u => u.team_ids?.some(tid => user.team_ids!.includes(tid)));
+  }
     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [users, user]);
 
@@ -616,23 +618,23 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
 
           {/* Status Tabs (Unified inside) */}
           <div className="pt-4 border-t border-surface-border/50 flex flex-wrap gap-2">
-            {['todas', 'pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade', 'concluida', 'expiradas_sla'].map(t => {
-              const count = monitorias.filter(m => {
-                const matchesActiveStatus = statusFilter === 'active' ? m.active !== false : m.active === false;
-                
-                let matchesTab = false;
-                if (t === 'todas') {
-                  matchesTab = true;
-                } else if (t === 'pendente_revisao') {
-                  matchesTab = m.status === 'pendente_revisao' || m.status === 'contestacao_negada';
-                } else if (t === 'expiradas_sla') {
-                  matchesTab = m.status === 'concluida' && m.history?.some(h => h.by_id === 'system' || h.action === 'Finalização Automática (SLA)');
-                } else if (t === 'concluida') {
-                  const isTimeout = m.status === 'concluida' && m.history?.some(h => h.by_id === 'system' || h.action === 'Finalização Automática (SLA)');
-                  matchesTab = m.status === 'concluida' && !isTimeout;
-                } else {
-                  matchesTab = m.status === t;
-                }
+      {['todas', 'pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade', 'concluida', 'expiradas_prazo'].map(t => {
+        const count = monitorias.filter(m => {
+          const matchesActiveStatus = statusFilter === 'active' ? m.active !== false : m.active === false;
+
+          let matchesTab = false;
+          if (t === 'todas') {
+            matchesTab = true;
+          } else if (t === 'pendente_revisao') {
+            matchesTab = m.status === 'pendente_revisao' || m.status === 'contestacao_negada';
+          } else if (t === 'expiradas_prazo') {
+            matchesTab = m.status === 'concluida' && m.resolution_type === 'automatic';
+          } else if (t === 'concluida') {
+            const isTimeout = m.status === 'concluida' && m.resolution_type === 'automatic';
+            matchesTab = m.status === 'concluida' && !isTimeout;
+          } else {
+            matchesTab = m.status === t;
+          }
                 
                 return matchesActiveStatus && matchesTab;
               }).length;
@@ -678,25 +680,25 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                           <span className="font-mono text-xs font-black text-brand-primary tracking-tight">TICKET {m.ticket_id}</span>
                         </div>
                         <div className="w-48 flex justify-center">
-                          {(() => {
-                            const isSlaTimeout = m.status === 'concluida' && m.history?.some((h: any) => h.by_id === 'system' || h.action === 'Finalização Automática (SLA)');
-                            return (
-                              <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">
-                                {isSlaTimeout ? 'Concluída pelo Sistema' : config.label}
-                              </Badge>
-                            );
-                          })()}
+            {(() => {
+              const isDeadlineExpired = m.status === 'concluida' && m.resolution_type === 'automatic';
+              return (
+                <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">
+                  {isDeadlineExpired ? 'Concluída pelo Sistema' : config.label}
+                </Badge>
+              );
+            })()}
                         </div>
                         <div className="w-36">
-                          {m.active !== false && <SLAClock deadlineAt={m.deadline_at} status={m.status} />}
+                          {m.active !== false && <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status} />}
                         </div>
                       </div>
                       <div className="flex items-center gap-3 text-[10px] font-bold text-brand-muted uppercase tracking-tight">
-                        <span className="flex items-center gap-1.5"><UserIcon className="w-3 h-3 text-brand-highlight" /> {getName(m.evaluated_id)}</span>
-                        <span className="text-brand-muted/20">•</span>
-                        <span className="flex items-center gap-1.5"><Shield className="w-3 h-3 text-brand-highlight" /> {getName(m.evaluator_id, true)}</span>
-                        <span className="text-brand-muted/20">•</span>
-                        <span className="flex items-center gap-1.5"><Tag className="w-3 h-3 text-brand-highlight" /> {teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
+                <span className="flex items-center gap-1.5"><UserIcon className="w-3 h-3 text-brand-highlight" /> {getName(m.evaluated_id, false, m.evaluated_name)}</span>
+                <span className="text-brand-muted/20">•</span>
+                <span className="flex items-center gap-1.5"><Shield className="w-3 h-3 text-brand-highlight" /> {getName(m.evaluator_id, true, m.evaluator_name)}</span>
+                <span className="text-brand-muted/20">•</span>
+                <span className="flex items-center gap-1.5"><Tag className="w-3 h-3 text-brand-highlight" /> {m.team_name || teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
                       </div>
                     </div>
                   </div>
