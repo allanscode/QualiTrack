@@ -38,6 +38,8 @@ Se você for debugar algo, verifique estes pontos conhecidos primeiro:
 5. **Hook Violations**: Houveram incidentes anteriores com conditional hooks em `MonitoriaForm.tsx`. Mantenha todos os `useX` no topo do componente, sempre incondicionais.
 6. **Constantes no Escopo do Módulo**: Constantes usadas em inicializadores de `useState` (ex: `MOCK_SESSION_KEY`) devem ser declaradas **fora** do componente. Incidente: `MOCK_SESSION_KEY` referenciada em `useState` initializer antes de ser declarada dentro do componente.
 7. **Hooks nunca dentro de `useEffect`**: `useCallback`, `useMemo`, `useRef` etc. não podem ser chamados dentro de callbacks de `useEffect`. Use o padrão ref-bridge: atualize um `ref.current` dentro do effect e chame `ref.current()` em um `useCallback` fora do effect. Incidente: `useCallback` dentro de `useEffect` para `extendSession` em `App.tsx`.
+8. **Sessão expira ao restaurar (F5)**: Ao restaurar sessão persistida, o sistema verifica `Date.now() - lastActivity` (chave `qualitrack_last_activity` no localStorage). Se idle ≥ 60min ou absolute ≥ 8h, a sessão é descartada. Nunca assuma que sessão restaurada = sessão válida.
+9. **Enriquecimento de equipe via `user_teams`**: A coluna `users.team_ids` foi removida. Sempre use `enrichUserWithTeamIds()` para injetar `team_ids` no `userData` após buscar da tabela `users`. Nunca envie `team_ids` em payload de upsert/update da tabela `users` — sincronize via tabela N:N `user_teams`.
 
 ## 5. Como Iniciar uma Nova Feature
 

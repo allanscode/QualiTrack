@@ -106,7 +106,7 @@ O `App.tsx` implementa um sistema unificado de gerenciamento de sessão com 4 me
 | Absolute timeout | `ABSOLUTE_TIMEOUT_MS` | 8 h | Sessão contínua máximo 8h → logout forçado |
 | Proactive refresh | `SESSION_REFRESH_MS` | 50 min | `supabase.auth.refreshSession()` a cada 50min |
 
-**Constantes no escopo do módulo**: `IDLE_TIMEOUT_MS`, `IDLE_WARNING_MS`, `ABSOLUTE_TIMEOUT_MS`, `SESSION_REFRESH_MS` e `MOCK_SESSION_KEY` são declaradas **fora** do componente `App()` para estarem disponíveis em inicializadores de `useState`.
+**Constantes no escopo do módulo**: `IDLE_TIMEOUT_MS`, `IDLE_WARNING_MS`, `ABSOLUTE_TIMEOUT_MS`, `SESSION_REFRESH_MS`, `MOCK_SESSION_KEY` e `LAST_ACTIVITY_KEY` são declaradas **fora** do componente `App()` para estarem disponíveis em inicializadores de `useState`.
 
 **Refs de sessão**:
 - `sessionStartTimeRef` — Timestamp de início da sessão (8h limit)
@@ -116,8 +116,11 @@ O `App.tsx` implementa um sistema unificado de gerenciamento de sessão com 4 me
 **Persistência de sessão (F5)**:
 - **Supabase**: SDK `persistSession: true` + `localStorage` — evento `INITIAL_SESSION` com session restaura login
 - **Mock**: `localStorage` chave `qualitrack_session` (`{userId, sessionStartedAt, sessionExpiresAt}`) — substitui antigo `sessionStorage`
+- **Last Activity**: `localStorage` chave `qualitrack_last_activity` — timestamp da última interação. Ao restaurar sessão (F5), o sistema verifica se `Date.now() - lastActivity >= 60min` (idle) ou `Date.now() - sessionStartedAt >= 8h` (absolute). Se expirado, sessão descartada e usuário redirecionado ao login.
 
-**`handleLogout(options?)`**: Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handleLogout}`) seja passado como string para Sonner.
+**Enriquecimento de equipe**: `enrichUserWithTeamIds()` consulta a tabela N:N `user_teams` e injeta `team_ids` no `userData` em todas as entradas: login, restauração de sessão e `handleUserSession`. A coluna `users.team_ids` foi removida (migration M5) — nunca enviar `team_ids` em payload Supabase da tabela `users`.
+
+**`handleLogout(options?)`**: Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handleLogout}`) seja passado como string para Sonner. Limpa `MOCK_SESSION_KEY` e `LAST_ACTIVITY_KEY` do `localStorage`.
 
 ## Navegação / Roteamento
 
