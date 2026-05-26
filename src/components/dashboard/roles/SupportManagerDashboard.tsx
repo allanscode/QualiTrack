@@ -6,7 +6,7 @@ import RankingWidget from '../widgets/RankingWidget';
 import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, Users, TrendingUp, AlertTriangle, RotateCcw, CheckCircle2, XCircle, ClipboardCheck, UserMinus } from 'lucide-react';
+import { Target, Users, TrendingUp, AlertTriangle, RotateCcw, CheckCircle2, XCircle, ClipboardCheck } from 'lucide-react';
 
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
@@ -210,15 +210,15 @@ export default function SupportManagerDashboard() {
           value={`${globalAvg.toFixed(2)}%`}
           sub="Empresa"
           good={avgScore >= globalAvg}
-          icon={<Target className="w-5 h-5" />}
-          accent="text-info"
+          icon={<Users className="w-5 h-5" />}
+          accent="text-brand-muted"
         />
         <StatCard
           title="Tendência"
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(1)}%`}
           sub="Evolução no período"
           good={trendPercentage >= 0}
-          icon={<TrendingUp className="w-4 h-4" />}
+          icon={<TrendingUp className="w-5 h-5" />}
           accent="text-brand-highlight"
         />
         <StatCard
@@ -238,8 +238,8 @@ export default function SupportManagerDashboard() {
           value={pendingAgent}
           sub="Aguardando ciência do suporte"
           good={pendingAgent === 0}
-          icon={<Users className="w-5 h-5" />}
-          accent="text-warning"
+          icon={<AlertTriangle className="w-5 h-5" />}
+          accent="text-functional-warning"
         />
         <StatCard
           title="Minhas Ações"
@@ -266,8 +266,8 @@ export default function SupportManagerDashboard() {
           value={totalContestations}
           sub="Total de contestações"
           good={true}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-info"
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          accent="text-brand-muted"
         />
         <StatCard
           title="Reav. Aceitas"
@@ -275,7 +275,7 @@ export default function SupportManagerDashboard() {
           sub="Nota alterada"
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
-          accent="text-success"
+          accent="text-functional-success"
         />
         <StatCard
           title="Reav. Recusadas"
@@ -309,12 +309,13 @@ export default function SupportManagerDashboard() {
           />
         </div>
         <div className="h-[280px]">
-          <RankingWidget
-            title="Oportunidades (Time)"
-            subtitle={`Agentes abaixo da meta (${config.targetScore}%)`}
-            data={bottomAgents}
-            icon={<Target className="w-4 h-4 text-brand-primary" />}
-          />
+        <RankingWidget
+          title="Oportunidades (Time)"
+          subtitle={`Agentes abaixo da meta (${config.targetScore}%)`}
+          data={bottomAgents}
+          icon={<Target className="w-5 h-5" />}
+          accent="text-brand-highlight"
+        />
         </div>
       </div>
 
@@ -329,13 +330,14 @@ export default function SupportManagerDashboard() {
           />
         </div>
         <div className="h-[280px]">
-          <RankingWidget
-            title="Top Reav. Recusadas"
-            subtitle="Agentes com mais notas mantidas"
-            data={topRejectedAgents}
-            type="count"
-            icon={<UserMinus className="w-4 h-4 text-brand-primary" />}
-          />
+        <RankingWidget
+          title="Top Reav. Recusadas"
+          subtitle="Agentes com mais notas mantidas"
+          data={topRejectedAgents}
+          type="count"
+          icon={<XCircle className="w-5 h-5" />}
+          accent="text-functional-error"
+        />
         </div>
       </div>
 

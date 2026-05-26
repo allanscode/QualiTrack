@@ -4,7 +4,7 @@ import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { Monitoria, User } from '../../../types';
 import Card from '../../ui/Card';
 import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
-import { Clock } from 'lucide-react';
+import { Clock, ClipboardList } from 'lucide-react';
 
 interface RecentAuditsTableProps {
   monitorias: Monitoria[];
@@ -53,11 +53,16 @@ export default function RecentAuditsTable({ monitorias, users, title = 'Monitori
   return (
     <Card padding="none" className="overflow-hidden flex flex-col">
       <div className="px-6 py-4 border-b border-surface-border flex justify-between items-center bg-surface-subtle/30 flex-shrink-0">
-        <div>
-          <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">{title}</h3>
-          <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">
-            {displayList.length} monitoria{displayList.length !== 1 ? 's' : ''}
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-surface-subtle flex items-center justify-center flex-shrink-0 text-brand-muted">
+            <ClipboardList className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">{title}</h3>
+            <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">
+              {displayList.length} monitoria{displayList.length !== 1 ? 's' : ''}
+            </p>
+          </div>
         </div>
       </div>
 

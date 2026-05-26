@@ -1,6 +1,7 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import Card from '../../ui/Card';
+import { PieChart as PieChartIcon } from 'lucide-react';
 
 interface DistributionChartProps {
   title: string;
@@ -24,7 +25,12 @@ export default function DistributionChart({ title, data }: DistributionChartProp
 
   return (
     <Card padding="lg" className="h-full flex flex-col">
-      <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest mb-4">{title}</h3>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-9 h-9 rounded-xl bg-surface-subtle flex items-center justify-center flex-shrink-0 text-brand-accent">
+          <PieChartIcon className="w-5 h-5" />
+        </div>
+        <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">{title}</h3>
+      </div>
       {data.length > 0 ? (
         <div className="flex-1 flex flex-col">
           <div className="flex-1" style={{ minWidth: 0, minHeight: 150 }}>

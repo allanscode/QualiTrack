@@ -7,7 +7,7 @@ import RankingWidget from '../widgets/RankingWidget';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, UserMinus } from 'lucide-react';
+import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
@@ -321,8 +321,8 @@ export default function QualityManagerDashboard() {
           value={pendingActions}
           sub="Ações abertas no sistema"
           good={pendingActions === 0}
-          icon={<Users className="w-5 h-5" />}
-          accent="text-info"
+          icon={<AlertTriangle className="w-5 h-5" />}
+          accent="text-functional-warning"
         />
         <StatCard
           title="Taxa de Reversão"
@@ -338,7 +338,7 @@ export default function QualityManagerDashboard() {
           sub="Nota alterada"
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
-          accent="text-success"
+          accent="text-functional-success"
         />
         <StatCard
           title="Reav. Recusadas"
@@ -403,12 +403,13 @@ export default function QualityManagerDashboard() {
           />
         </div>
         <div className="h-[250px]">
-          <RankingWidget
-            title="Oportunidades (Suporte)"
-            subtitle="Mais críticos primeiro"
-            data={bottomAgents}
-            icon={<Target className="w-4 h-4 text-brand-primary" />}
-          />
+        <RankingWidget
+          title="Oportunidades (Suporte)"
+          subtitle="Mais críticos primeiro"
+          data={bottomAgents}
+          icon={<Target className="w-5 h-5" />}
+          accent="text-brand-highlight"
+        />
         </div>
       </div>
 
@@ -434,13 +435,14 @@ export default function QualityManagerDashboard() {
           />
         </div>
         <div className="h-[320px]">
-          <RankingWidget
-            title="Top Reav. Recusadas (Geral)"
-            subtitle="Agentes com mais notas mantidas"
-            data={topRejectedAgents}
-            type="count"
-            icon={<UserMinus className="w-4 h-4 text-brand-primary" />}
-          />
+        <RankingWidget
+          title="Top Reav. Recusadas (Geral)"
+          subtitle="Agentes com mais notas mantidas"
+          data={topRejectedAgents}
+          type="count"
+          icon={<XCircle className="w-5 h-5" />}
+          accent="text-functional-error"
+        />
         </div>
       </div>
 

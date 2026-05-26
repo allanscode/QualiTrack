@@ -16,9 +16,31 @@ interface RankingWidgetProps {
   data: RankingItem[];
   type?: 'score' | 'count';
   icon?: React.ReactNode;
+  accent?: string;
 }
 
-export default function RankingWidget({ title, subtitle, data, type = 'score', icon }: RankingWidgetProps) {
+const RANKING_BG_MAP: Record<string, string> = {
+  'text-functional-error': 'bg-functional-error',
+  'text-functional-warning': 'bg-functional-warning',
+  'text-functional-success': 'bg-functional-success',
+  'text-brand-accent': 'bg-brand-accent',
+  'text-brand-highlight': 'bg-brand-highlight',
+  'text-brand-muted': 'bg-surface-subtle',
+  'text-brand-primary': 'bg-brand-primary',
+  'text-info': 'bg-surface-subtle',
+  'text-warning': 'bg-functional-warning',
+  'text-success': 'bg-functional-success',
+};
+
+function getIconBg(accent: string): string {
+  if (RANKING_BG_MAP[accent]) return RANKING_BG_MAP[accent];
+  if (accent.startsWith('text-level-')) {
+    return accent.replace('text-level-', 'bg-level-');
+  }
+  return 'bg-surface-subtle';
+}
+
+export default function RankingWidget({ title, subtitle, data, type = 'score', icon, accent }: RankingWidgetProps) {
   const { getLevelForScore } = useQualityConfig();
 
   return (
@@ -28,8 +50,8 @@ export default function RankingWidget({ title, subtitle, data, type = 'score', i
           <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">{title}</h3>
           {subtitle && <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>}
         </div>
-        <div className="w-9 h-9 rounded-xl bg-surface-subtle flex items-center justify-center flex-shrink-0">
-          {icon || <Award className="w-4 h-4 text-brand-primary" />}
+        <div className={`w-9 h-9 rounded-xl ${accent ? getIconBg(accent) : 'bg-surface-subtle'} flex items-center justify-center flex-shrink-0 ${accent || ''}`}>
+          {icon || <Award className="w-5 h-5 text-brand-primary" />}
         </div>
       </div>
 

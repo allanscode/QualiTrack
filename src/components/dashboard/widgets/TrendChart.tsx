@@ -1,6 +1,7 @@
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import Card from '../../ui/Card';
+import { TrendingUp } from 'lucide-react';
 
 interface TrendChartProps {
   title: string;
@@ -13,9 +14,14 @@ export default function TrendChart({ title, subtitle, data, dataKeys }: TrendCha
   return (
     <Card padding="lg" className="h-full flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-        <div>
-          <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">{title}</h3>
-          {subtitle && <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>}
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-surface-subtle flex items-center justify-center flex-shrink-0 text-brand-highlight">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">{title}</h3>
+            {subtitle && <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-4 text-[10px] font-black uppercase tracking-widest text-brand-muted">
           {dataKeys.map(dk => (

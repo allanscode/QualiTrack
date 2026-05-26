@@ -6,11 +6,10 @@ import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import OfensoresChart from '../widgets/OfensoresChart';
-import { ClipboardCheck, Target, CheckCircle2, XCircle, AlertTriangle, History, Clock } from 'lucide-react';
+import { ClipboardCheck, Target, CheckCircle2, XCircle, AlertTriangle, History } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartPalette } from '../chartColors';
-import Card from '../../ui/Card';
 
 export default function QualityDashboard() {
   const { user, monitorias, users, forms } = useDashboard();
@@ -133,64 +132,64 @@ export default function QualityDashboard() {
 
       {/* Row 1: Key Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard 
-          title="Meu Volume" 
-          value={myMonitorias.length} 
-          sub="no período" 
-          good={true} 
-          icon={<ClipboardCheck className="w-4 h-4" />} 
-          accent="text-info" 
+        <StatCard
+          title="Meu Volume"
+          value={myMonitorias.length}
+          sub="no período"
+          good={true}
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          accent="text-brand-accent"
         />
-        <StatCard 
-          title="Nota Média" 
-          value={`${avgScore.toFixed(2)}%`} 
-          sub="Média das notas aplicadas" 
-          good={isAboveTarget(avgScore)} 
-          icon={<Target className="w-5 h-5" />} 
-          accent={getLevelForScore(avgScore).color} 
+        <StatCard
+          title="Nota Média"
+          value={`${avgScore.toFixed(2)}%`}
+          sub="Média das notas aplicadas"
+          good={isAboveTarget(avgScore)}
+          icon={<Target className="w-5 h-5" />}
+          accent={getLevelForScore(avgScore).color}
         />
-        <StatCard 
-          title="Pendente Ação" 
-          value={pendingActions} 
-          sub="Aguardando reanálise" 
-          good={pendingActions === 0} 
-          icon={<AlertTriangle className="w-5 h-5" />} 
-          accent="text-functional-error" 
+        <StatCard
+          title="Pendente Ação"
+          value={pendingActions}
+          sub="Aguardando reanálise"
+          good={pendingActions === 0}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          accent="text-functional-error"
         />
       </div>
 
       {/* Row 2: Reevaluation Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard 
-          title="Reav. Aceitas" 
-          value={reavAccepted} 
-          sub="Procedentes (Nota alterada)" 
-          good={reavAccepted === 0} 
-          icon={<CheckCircle2 className="w-5 h-5" />} 
-          accent="text-success" 
+        <StatCard
+          title="Reav. Aceitas"
+          value={reavAccepted}
+          sub="Procedentes (Nota alterada)"
+          good={true}
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          accent="text-functional-success"
         />
-        <StatCard 
-          title="Reav. Recusadas" 
-          value={reavRejected} 
-          sub="Improcedentes (Nota mantida)" 
-          good={true} 
-          icon={<XCircle className="w-5 h-5" />} 
-          accent="text-functional-error" 
+        <StatCard
+          title="Reav. Recusadas"
+          value={reavRejected}
+          sub="Improcedentes (Nota mantida)"
+          good={true}
+          icon={<XCircle className="w-5 h-5" />}
+          accent="text-functional-error"
         />
-        <StatCard 
-          title="Total Reav Recebidas" 
-          value={reavAccepted + reavRejected} 
-          sub="Total de contestações" 
-          good={true} 
-          icon={<History className="w-4 h-4" />} 
-          accent="text-brand-highlight" 
+        <StatCard
+          title="Total Reav Recebidas"
+          value={reavAccepted + reavRejected}
+          sub="Total de contestações"
+          good={true}
+          icon={<History className="w-5 h-5" />}
+          accent="text-brand-muted"
         />
       </div>
 
       {/* Row 3: Main Charts (Volume and Pendents) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 h-[340px]">
-          <ComparativeBarChart 
+          <ComparativeBarChart
             title="Volumetria Diária"
             subtitle="Comparativo com a média da equipe"
             data={comparativeData}
@@ -201,28 +200,14 @@ export default function QualityDashboard() {
           />
         </div>
         <div className="h-[340px]">
-          <Card padding="lg" className="h-full flex flex-col">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 rounded-xl bg-brand-primary/10 flex items-center justify-center flex-shrink-0">
-                <Clock className="w-4 h-4 text-brand-primary" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">Auditorias Pendentes</h3>
-                <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">Aguardando Conclusão</p>
-              </div>
-            </div>
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-              <div className="relative">
-                <p className="text-[100px] font-black text-brand-primary tracking-tighter tabular-nums leading-none">
-                  {pendingAuditsCount}
-                </p>
-                <div className="absolute -top-4 -right-8 w-10 h-10 bg-brand-primary/5 rounded-full blur-xl animate-pulse" />
-              </div>
-              <div className="mt-8 px-6 py-2.5 bg-brand-primary/5 rounded-full border border-brand-primary/10">
-                <p className="text-[10px] font-black text-brand-muted uppercase tracking-[0.2em]">Total em Aberto</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard
+            title="Auditorias Pendentes"
+            value={pendingAuditsCount}
+            sub="Aguardando Conclusão"
+            good={pendingAuditsCount === 0}
+            icon={<AlertTriangle className="w-5 h-5" />}
+            accent="text-functional-warning"
+          />
         </div>
       </div>
 
