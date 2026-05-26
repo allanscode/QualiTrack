@@ -438,14 +438,9 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Agente de Atendimento *</label>
                   <CustomSelect 
                     value={header.evaluated_id} 
-                    onChange={val => {
-                      setHeader(prev => ({...prev, evaluated_id: val}));
-                      // Auto-select team if only one is available for this agent
-                      const agent = agents.find(a => a.id === val);
-                      if (agent?.team_ids?.length === 1 && !header.team_id) {
-                        setHeader(prev => ({...prev, team_id: agent.team_ids![0]}));
-                      }
-                    }} 
+        onChange={val => {
+          setHeader(prev => ({...prev, evaluated_id: val, team_id: ''}));
+        }}
                     options={[
                       { value: '', label: 'Selecione o agente...' }, 
                       ...agents
@@ -461,7 +456,7 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipe *</label>
                   <CustomSelect 
                     value={header.team_id} 
-                    onChange={val => setHeader({...header, team_id: val})} 
+                    onChange={val => setHeader({...header, team_id: val, evaluated_id: ''})} 
                     options={[
                       { value: '', label: 'Selecione a equipe...' }, 
                       ...teams
