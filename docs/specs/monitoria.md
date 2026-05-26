@@ -3,9 +3,9 @@
 ## Arquivos Envolvidos
 - `src/components/MonitoriaForm.tsx` — Formulário de criação/reavaliação (684 linhas)
 - `src/components/MonitoriaList.tsx` — Lista com ações e filtros (676 linhas)
-- `src/components/ui/SLAClock.tsx` — Widget de contagem regressiva
-- `src/lib/businessHours.ts` — Cálculo de deadlines (SLA)
-- `src/lib/useQualityConfig.ts` — Configurações de SLA e qualidade
+- `src/components/ui/ActionDeadlineClock.tsx` — Widget de contagem regressiva
+- `src/lib/businessHours.ts` — Cálculo de prazos de ação
+- `src/lib/useQualityConfig.tsx` — Context Provider + hook de configuração de prazos de ação e qualidade
 
 ## Modelo de Dados (`Monitoria`)
 
@@ -27,7 +27,7 @@ interface Monitoria {
   feedback?: string;          // Feedback do auditor
   status: MonitoriaStatus;    // Status atual
   history: HistoryEntry[];    // Audit trail
-  deadline_at?: string;       // Deadline ISO do SLA
+  action_deadline_at?: string; // Deadline ISO do prazo de ação
   created_at: string;
   updated_at: string;
   active: boolean;            // soft-delete
@@ -70,12 +70,20 @@ stateDiagram-v2
 | `aguardando_gestor_suporte` | Aceitar | `concluida` | gestor_suporte |
 | `aguardando_gestor_suporte` | Escalar p/ Qualidade | `aguardando_gestor_qualidade` | gestor_suporte |
 | `aguardando_gestor_qualidade` | Finalizar | `concluida` | gestor_qualidade |
-| Qualquer (SLA vencido) | Auto-finalizar | `concluida` | sistema (cron) |
+| Qualquer (prazo vencido) | Auto-finalizar | `concluida` | sistema (cron) |
 
 ## Formulário Multi-Step (MonitoriaForm)
 
 ### Step 1 — Dados Básicos
-- Ticket ID, Agente (select), Equipe (auto-preenchida), Canal, Formulário
+- Ticket ID, Agente (select), Equipe (select), Canal, Formulário
+- **Lógica Agente↔Equipe** (vinculação protegida):
+  - Selecionar Agente → filtra equipes vinculadas ao agente; equipe permanece "Selecione a equipe"
+  - Selecionar Equipe → filtra agentes vinculados à equipe; agente permanece "Selecione o agente"
+  - Com ambos selecionados, a lista do outro campo é filtrada pelo relacionamento
+  - Tentar trocar Agente com Equipe incompatível selecionada → bloqueio + toast informativo
+  - Tentar trocar Equipe com Agente incompatível selecionado → bloqueio + toast informativo
+  - O usuário deve primeiro desselecionar (placeholder) para alterar o relacionamento
+- **CustomSelect com type-ahead**: Ao abrir qualquer dropdown, o usuário pode digitar para filtrar opções em tempo real (case-insensitive), sem campo de busca visível
 
 ### Step 2 — Avaliação por Pilar
 - Para cada pilar do formulário:
@@ -119,12 +127,12 @@ Se qualquer erro_critico marcado → Score Final = 0
 5. Se negada, agente pode **escalar** para gestor de suporte
 6. Gestor pode aceitar ou **escalar** para gestor de qualidade
 
-## SLA / Deadlines
+## Prazo de Ação / Deadlines
 
 - Cada transição de status recalcula o deadline
 - Prazo calculado com `addBusinessHours()` de `businessHours.ts`
 - Configurável via `useQualityConfig` (horas por etapa)
-- `SLAClock` exibe contagem regressiva em tempo real (atualiza a cada minuto)
+- `ActionDeadlineClock` exibe contagem regressiva em tempo real (atualiza a cada minuto)
 - Cores do relógio: verde (>50% restante), amarelo (25-50%), vermelho (<25%)
 - Expiração → cron job `process_sla_timeouts()` finaliza automaticamente
 

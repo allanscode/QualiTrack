@@ -2,7 +2,7 @@
 
 ## Arquivos
 - `src/components/QualityConfigManagement.tsx` (~350 linhas)
-- `src/lib/useQualityConfig.ts` (160 linhas)
+- `src/lib/useQualityConfig.tsx` (~200 linhas)
 - `create_quality_configs.sql` — Schema da tabela
 
 ## Modelo de Dados
@@ -17,11 +17,11 @@ interface QualityConfig {
     poor: { min: number; label: string; color: string };
   };
   target: number;              // Meta de desempenho (%)
-  sla: {
-    review: number;            // Horas úteis para revisão
-    contestation: number;      // Horas úteis para contestação
-    manager_review: number;    // Horas úteis para gestor
-    quality_review: number;    // Horas úteis para gestor qualidade
+  action_deadlines: {
+    review: number; // Horas úteis para revisão
+    contestation: number; // Horas úteis para contestação
+    manager_review: number; // Horas úteis para gestor
+    quality_review: number; // Horas úteis para gestor qualidade
   };
   businessHours: {
     start: string;             // "08:00"
@@ -44,7 +44,7 @@ const DEFAULT_CONFIG = {
     poor: { min: 0, label: 'Ruim', color: '#EF4444' },
   },
   target: 85,
-  sla: {
+  action_deadlines: {
     review: 48,
     contestation: 24,
     manager_review: 24,
@@ -55,19 +55,29 @@ const DEFAULT_CONFIG = {
 };
 ```
 
-## Hook `useQualityConfig()`
+## Context Provider + Hook `useQualityConfig()`
 
-Retorna:
-- `config` — Configuração atual
-- `loading` — Estado de carregamento
-- `saveConfig(newConfig)` — Salva no Supabase ou localStorage
-- `getScoreLevel(score)` — Retorna `{ label, color }` baseado no score
-- `recalculateActiveDeadlines()` — Recalcula deadlines de todas as monitorias ativas
+> **Arquitetura**: `useQualityConfig` agora é um **Context singleton**. O componente `QualityConfigProvider` (em `useQualityConfig.tsx`) envolve `MainApp` em `App.tsx` e faz **1 único fetch** a `quality_configs`. Todos os consumidores usam `useQualityConfig()` para ler do Context — não há mais múltiplos fetches independentes.
+
+### `QualityConfigProvider`
+- Deve envolver a árvore de componentes que precisa da config (atualmente em `App.tsx` envolvendo `<MainApp>`)
+- Faz fetch único de `quality_configs` no Supabase (ou mockDb) no mount
+- Retorna `config`, `oldConfig`, `saveConfig`, `getLevelForScore`, `isAboveTarget`, `recalculateActiveActionDeadlines`
+
+### `useQualityConfig()` (consumer hook)
+- Deve ser chamado dentro de um `<QualityConfigProvider>`
+- Retorna:
+  - `config` — Configuração atual
+  - `oldConfig` — Configuração anterior (para comparação no recálculo)
+  - `saveConfig(newConfig)` — Salva no Supabase ou localStorage
+  - `getLevelForScore(score)` — Retorna `{ label, color, bgColor }` baseado no score
+  - `isAboveTarget(score)` — Verifica se score >= target
+  - `recalculateActiveActionDeadlines(prev, next)` — Recalcula deadlines de todas as monitorias ativas
 
 ### Recálculo de Deadlines
-Quando o admin altera as horas de SLA, o sistema:
+Quando o admin altera as horas de prazo de ação, o sistema:
 1. Busca todas as monitorias com status ativo (não `concluida`)
-2. Recalcula o `deadline_at` baseado no `updated_at` + novas horas de SLA
+2. Recalcula o `action_deadline_at` baseado no `updated_at` + novas horas de prazo de ação
 3. Usa `addBusinessHours()` com novos horários comerciais e feriados
 4. Atualiza em batch no banco
 
@@ -91,11 +101,11 @@ CREATE TABLE quality_configs (
 ### Seções
 1. **Faixas de Classificação** — Inputs numéricos para thresholds
 2. **Meta de Desempenho** — Slider ou input numérico
-3. **SLA por Etapa** — Inputs de horas úteis para cada fase
+3. **Prazo de Ação por Etapa** — Inputs de horas úteis para cada fase
 4. **Horário Comercial** — Inputs de hora início/fim
 5. **Feriados** — Lista com data e nome, add/remove
 
 ### Comportamento ao Salvar
 - Salva config no banco
-- Exibe confirmação se SLA mudou
+- Exibe confirmação se prazo de ação mudou
 - Se confirmado → `recalculateActiveDeadlines()`

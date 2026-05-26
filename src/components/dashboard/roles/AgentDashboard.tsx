@@ -4,10 +4,11 @@ import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import SlaWidget from '../widgets/SlaWidget';
+import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
 import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, BarChart3, Users } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
+import { chartPalette } from '../chartColors';
 
 export default function AgentDashboard() {
   const { user, monitorias, allMonitorias, users, forms } = useDashboard();
@@ -19,7 +20,7 @@ export default function AgentDashboard() {
     [monitorias, user]
   );
 
-  // --- Only MY monitorias (for SlaWidget/Pendencies) - UNFILTERED BY UI
+  // --- Only MY monitorias (for ActionDeadlineWidget/Pendencies) - UNFILTERED BY UI
   const myAllMonitorias = useMemo(() => 
     allMonitorias.filter(m => m.evaluated_id === user?.id), 
     [allMonitorias, user]
@@ -227,7 +228,7 @@ export default function AgentDashboard() {
           sub="Nota Mantida"
           good={false}
           icon={<XCircle className="w-5 h-5" />}
-          accent="text-error"
+          accent="text-functional-error"
         />
       </div>
 
@@ -237,10 +238,10 @@ export default function AgentDashboard() {
             data={trendData} 
             title="Evolução Comparativa"
             subtitle="Meu Score vs Média da Equipe"
-            dataKeys={[
-              { key: 'MeuScore', name: 'Meu Score', color: '#6366f1' },
-              { key: 'MediaEquipe', name: 'Média Equipe', color: '#10b981' }
-            ]}
+      dataKeys={[
+        { key: 'MeuScore', name: 'Meu Score', color: chartPalette().excelente },
+        { key: 'MediaEquipe', name: 'Média Equipe', color: chartPalette().aceitavel }
+      ]}
           />
         </div>
         <div className="lg:col-span-1 h-[350px]">
@@ -249,7 +250,7 @@ export default function AgentDashboard() {
             data={config.levels.map(l => ({
               name: l.label,
               value: myMonitorias.filter(m => (m.score || 0) >= l.minScore && (m.score || 0) <= l.maxScore).length,
-              color: l.color.includes('emerald') ? '#10b981' : l.color.includes('amber') ? '#f59e0b' : l.color.includes('red') ? '#ef4444' : '#6366f1'
+              color: l.color.includes('aceitavel') || l.color.includes('emerald') ? chartPalette().aceitavel : l.color.includes('atencao') || l.color.includes('amber') ? chartPalette().atencao : l.color.includes('ruim') || l.color.includes('red') ? chartPalette().ruim : chartPalette().excelente
             })).filter(d => d.value > 0)}
           />
         </div>
@@ -266,12 +267,11 @@ export default function AgentDashboard() {
           />
         </div>
         <div className="lg:col-span-1">
-          <SlaWidget 
-            title="Aguardando Minha Ação"
-            monitorias={myAllMonitorias} 
-            users={users}
-            targetStatus={['pendente_revisao', 'contestacao_negada']}
-          />
+<ActionDeadlineWidget
+          title="Aguardando Minha Ação"
+          monitorias={myAllMonitorias}
+          targetStatus={['pendente_revisao', 'contestacao_negada']}
+        />
         </div>
       </div>
 

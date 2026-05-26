@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { Monitoria, User, Team, EvaluationForm, DissatisfactionField } from '../../types';
+import { Monitoria, User, Team, EvaluationForm, DissatisfactionField, UserTeam } from '../../types';
 import { supabase, mockDb } from '../../lib/supabase';
 import { toast } from 'sonner';
 
@@ -67,14 +67,16 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
       let teamDocs: Team[] = [];
       let formDocs: EvaluationForm[] = [];
       let dfDocs: DissatisfactionField[] = [];
+      let userTeamDocs: UserTeam[] = [];
 
       if (!supabase) {
-        const [mRes, uRes, tRes, fRes, dfRes] = await Promise.all([
+        const [mRes, uRes, tRes, fRes, dfRes, utRes] = await Promise.all([
           mockDb.get('monitorias'),
           mockDb.get('users'),
           mockDb.get('teams'),
           mockDb.get('forms'),
-          mockDb.get('dissatisfaction_fields')
+          mockDb.get('dissatisfaction_fields'),
+          mockDb.get('user_teams')
         ]);
         docs = mRes.data || [];
         scoreDocs = docs;
@@ -82,6 +84,7 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
         teamDocs = tRes.data || [];
         formDocs = fRes.data || [];
         dfDocs = dfRes.data || [];
+        userTeamDocs = utRes.data || [];
       } else {
         const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
           try {
@@ -109,27 +112,33 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
               }
             }
 
-            const fetchPromise = Promise.all([
-              monitoriasQuery.abortSignal(controller.signal),
-              scoresQuery.abortSignal(controller.signal),
-              supabase.from('users').select('*').abortSignal(controller.signal),
-              supabase.from('teams').select('*').abortSignal(controller.signal),
-              supabase.from('forms').select('*').abortSignal(controller.signal),
-              supabase.from('dissatisfaction_fields').select('*').abortSignal(controller.signal)
-            ]);
-            
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => {
-                controller.abort();
-                reject(new Error('timeout'));
-              }, 15000)
-            );
+        const coreFetch = Promise.all([
+          monitoriasQuery.abortSignal(controller.signal),
+          scoresQuery.abortSignal(controller.signal),
+          supabase.from('users').select('*').abortSignal(controller.signal),
+          supabase.from('teams').select('*').abortSignal(controller.signal),
+          supabase.from('forms').select('*').abortSignal(controller.signal),
+        ]);
 
-            const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
-            const errorRes = results.find(r => r.error);
-            if (errorRes) throw errorRes.error;
+        const optionalFetch = Promise.all([
+          supabase.from('dissatisfaction_fields').select('*').abortSignal(controller.signal),
+          supabase.from('user_teams').select('*').abortSignal(controller.signal),
+        ]);
 
-            return results;
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000));
+
+        const [coreResults, optionalResults] = await Promise.race([
+          Promise.all([coreFetch, optionalFetch]), timeoutPromise
+        ]) as [any[], any[]];
+
+        const errorRes = coreResults.find(r => r.error);
+        if (errorRes) throw errorRes.error;
+
+            const results = [...coreResults, ...optionalResults.map((r: any) => {
+        if (r.error?.code === 'PGRST205') return { data: [], error: null };
+        return r;
+      })];
+      return results;
           } catch (err: any) {
             console.error(`[Dashboard] Erro na tentativa ${retryCount + 1}:`, err);
             if (retryCount < 4) { // Até 5 tentativas
@@ -145,15 +154,27 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
           }
         };
 
-        const [mRes, sRes, uRes, tRes, fRes, dfRes] = await executeWithRetry();
+        const [mRes, sRes, uRes, tRes, fRes, dfRes, utRes] = await executeWithRetry();
         
         if (mRes.data) docs = mRes.data as Monitoria[];
         if (sRes.data) scoreDocs = sRes.data;
         if (uRes.data) userDocs = uRes.data as User[];
         if (tRes.data) teamDocs = tRes.data as Team[];
         if (fRes.data) formDocs = fRes.data as EvaluationForm[];
-        if (dfRes.data) dfDocs = dfRes.data as DissatisfactionField[];
-      }
+      if (dfRes.data) dfDocs = dfRes.data as DissatisfactionField[];
+      if (utRes.data) userTeamDocs = utRes.data as UserTeam[];
+    }
+
+    // Enrich userDocs with team_ids from user_teams table
+    const teamIdsByUser: Record<string, string[]> = {};
+    userTeamDocs.forEach(ut => {
+      if (!teamIdsByUser[ut.user_id]) teamIdsByUser[ut.user_id] = [];
+      teamIdsByUser[ut.user_id].push(ut.team_id);
+    });
+    userDocs = userDocs.map(u => ({
+      ...u,
+      team_ids: u.team_ids?.length ? u.team_ids : (teamIdsByUser[u.id] || [])
+    }));
 
       // Always exclude deactivated monitorias from dashboard
       docs = docs.filter(m => m.active !== false);

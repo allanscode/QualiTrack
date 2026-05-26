@@ -49,6 +49,7 @@ export default function DissatisfactionFieldsManagement() {
           .from('dissatisfaction_fields')
           .select('*')
           .order('created_at', { ascending: false });
+        if (error?.code === 'PGRST205') { setFields([]); return; }
         if (error) throw error;
         setFields(data || []);
       }

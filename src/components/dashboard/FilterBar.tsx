@@ -173,7 +173,7 @@ export default function FilterBar() {
                 size="sm"
                 onClick={handleClear}
                 icon={<X className="w-3.5 h-3.5" />}
-                className="text-error hover:bg-error/5 uppercase text-[10px] tracking-widest font-black"
+                className="text-functional-error hover:bg-functional-error uppercase text-[10px] tracking-widest font-black"
               >
                 Limpar
               </Button>

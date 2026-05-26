@@ -18,7 +18,7 @@ supabase.from('monitorias').select('*').order('created_at', { ascending: false }
 supabase.from('monitorias').insert({ ...monitoria })
 
 // Atualizar
-supabase.from('monitorias').update({ status, score, history, deadline_at, updated_at })
+supabase.from('monitorias').update({ status, score, history, action_deadline_at, updated_at })
   .eq('id', monitoriaId)
 
 // Soft-delete

@@ -23,6 +23,12 @@ export function isResolutionAction(action: string): boolean {
   return isApprovalAction(action) || isRejectionAction(action);
 }
 
+export function resolveContestationResult(action: string): 'approved' | 'rejected' | null {
+  if (isApprovalAction(action)) return 'approved';
+  if (isRejectionAction(action)) return 'rejected';
+  return null;
+}
+
 export function getContestedMonitorias(monitorias: Monitoria[]): Monitoria[] {
   return monitorias.filter(m =>
     m.history?.some(h => isContestationAction(h.action))
@@ -40,13 +46,13 @@ export function countContestationOutcomes(monitorias: Monitoria[]): { accepted: 
   const contested = getContestedMonitorias(monitorias);
   let accepted = 0;
   let rejected = 0;
-
   contested.forEach(m => {
+    if (m.contestation_result === 'approved') { accepted++; return; }
+    if (m.contestation_result === 'rejected') { rejected++; return; }
     const last = getLastResolution(m.history);
     if (!last) return;
     if (isApprovalAction(last.action)) accepted++;
     else if (isRejectionAction(last.action)) rejected++;
   });
-
   return { accepted, rejected, total: contested.length };
 }

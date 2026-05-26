@@ -27,9 +27,17 @@ export default function CustomSelect({
   label
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [query, setQuery] = useState('');
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const selectedOption = options.find(opt => opt.value === value);
+
+  const filtered = query
+    ? options.filter(opt =>
+        opt.label.toLowerCase().includes(query.toLowerCase())
+      )
+    : options;
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -58,7 +66,11 @@ export default function CustomSelect({
 
   useEffect(() => {
     if (isOpen) {
+      setQuery('');
       updatePosition();
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
     }
   }, [isOpen, updatePosition]);
 
@@ -102,39 +114,62 @@ export default function CustomSelect({
     };
   }, [isOpen, updatePosition]);
 
+  const displayText = isOpen
+    ? (query || '')
+    : (selectedOption ? selectedOption.label : placeholder);
+
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
       {label && <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">{label}</label>}
       <div className={disabled ? 'opacity-60 cursor-not-allowed' : ''}>
-        <button
+        <div
           ref={triggerRef}
-          type="button"
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          disabled={disabled}
+          onClick={() => {
+            if (disabled) return;
+            setIsOpen(!isOpen);
+          }}
           className={`flex items-center justify-between w-full bg-surface-card border border-surface-border rounded-2xl px-4 h-11 text-xs font-bold text-brand-primary transition-all shadow-sm ${!disabled ? 'hover:border-brand-accent cursor-pointer' : 'cursor-not-allowed'} ${isOpen ? 'ring-2 ring-brand-accent/20 border-brand-accent' : ''}`}
         >
-          <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
-          <ChevronDown className={`w-3.5 h-3.5 ml-2 transition-transform ${isOpen ? 'rotate-180 text-brand-accent' : 'text-brand-muted'}`} />
-        </button>
+          <span className="truncate flex-1 min-w-0">
+            {isOpen ? (
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder={selectedOption ? selectedOption.label : placeholder}
+                className="w-full bg-transparent outline-none text-xs font-bold text-brand-primary placeholder:text-brand-muted/60"
+                onClick={e => e.stopPropagation()}
+              />
+            ) : (
+              displayText || placeholder
+            )}
+          </span>
+          <ChevronDown className={`w-3.5 h-3.5 ml-2 shrink-0 transition-transform ${isOpen ? 'rotate-180 text-brand-accent' : 'text-brand-muted'}`} />
+        </div>
 
         {isOpen && !disabled && createPortal(
           <div
             ref={dropdownRef}
             className="bg-surface-card border border-surface-border rounded-2xl shadow-premium-lg max-h-60 overflow-auto py-2 animate-in fade-in slide-in-from-top-2 duration-200 no-scrollbar"
           >
-            {options.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => {
-                  onChange(opt.value.toString());
-                  setIsOpen(false);
-                }}
-                className={`w-full text-left px-4 py-2.5 text-xs font-bold transition-colors hover:bg-brand-highlight/20 ${value === opt.value ? 'text-brand-primary bg-brand-highlight/10' : 'text-brand-muted hover:text-brand-primary'}`}
-              >
-                {opt.label}
-              </button>
-            ))}
+            {filtered.length === 0 ? (
+              <div className="px-4 py-2.5 text-xs font-bold text-brand-muted">Nenhum resultado</div>
+            ) : (
+              filtered.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.value.toString());
+                    setIsOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 text-xs font-bold transition-colors hover:bg-brand-highlight/20 ${value === opt.value ? 'text-brand-primary bg-brand-highlight/10' : 'text-brand-muted hover:text-brand-primary'}`}
+                >
+                  {opt.label}
+                </button>
+              ))
+            )}
           </div>,
           document.body
         )}

@@ -3,12 +3,13 @@ import { useDashboard } from '../DashboardContext';
 import StatCard from '../widgets/StatCard';
 import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import SlaWidget from '../widgets/SlaWidget';
+import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import OfensoresChart from '../widgets/OfensoresChart';
 import { ClipboardCheck, Target, CheckCircle2, XCircle, AlertTriangle, History, Clock } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
+import { chartColorMap, chartPalette } from '../chartColors';
 import Card from '../../ui/Card';
 
 export default function QualityDashboard() {
@@ -94,14 +95,7 @@ export default function QualityDashboard() {
   if (!user) return null;
 
   const gradeDistribution = useMemo(() => {
-    const colorMap: Record<string, string> = {
-      'text-indigo-700': '#6366f1',
-      'text-emerald-700': '#10b981',
-      'text-amber-700':   '#f59e0b',
-      'text-red-700':     '#ef4444',
-      'text-purple-700':  '#a855f7',
-      'text-blue-700':    '#3b82f6',
-    };
+  const colorMap = chartColorMap();
 
     return config.levels.map(level => ({
       name: `${level.label} (${level.minScore}-${level.maxScore}%)`,
@@ -161,7 +155,7 @@ export default function QualityDashboard() {
           sub="Aguardando reanálise" 
           good={pendingActions === 0} 
           icon={<AlertTriangle className="w-5 h-5" />} 
-          accent="text-error" 
+          accent="text-functional-error" 
         />
       </div>
 
@@ -181,7 +175,7 @@ export default function QualityDashboard() {
           sub="Improcedentes (Nota mantida)" 
           good={true} 
           icon={<XCircle className="w-5 h-5" />} 
-          accent="text-error" 
+          accent="text-functional-error" 
         />
         <StatCard 
           title="Total Reav Recebidas" 
@@ -201,7 +195,7 @@ export default function QualityDashboard() {
             subtitle="Comparativo com a média da equipe"
             data={comparativeData}
             dataKeys={[
-              { key: 'meuVolume', name: 'Meu Volume', color: '#6366f1' },
+              { key: 'meuVolume', name: 'Meu Volume', color: chartPalette().excelente },
               { key: 'mediaEquipe', name: 'Média Equipe', color: '#94a3b8' }
             ]}
           />
@@ -245,19 +239,18 @@ export default function QualityDashboard() {
           <DistributionChart 
             title="Precisão da Qualidade" 
             data={[
-              { name: 'Estáveis', value: myMonitorias.length - totalReevaluated, color: '#6366f1' },
-              { name: 'Reavaliadas', value: totalReevaluated, color: '#f59e0b' }
+    { name: 'Estáveis', value: myMonitorias.length - totalReevaluated, color: chartPalette().excelente },
+    { name: 'Reavaliadas', value: totalReevaluated, color: chartPalette().atencao }
             ].filter(d => d.value > 0)} 
           />
         </div>
 
         <div className="h-[400px]">
-          <SlaWidget 
-            title="Minhas Reavaliações Pendentes"
-            monitorias={myMonitorias}
-            users={users}
-            targetStatus="em_contestacao"
-          />
+<ActionDeadlineWidget
+          title="Minhas Reavaliações Pendentes"
+          monitorias={myMonitorias}
+          targetStatus="em_contestacao"
+        />
         </div>
       </div>
 
@@ -276,7 +269,7 @@ export default function QualityDashboard() {
 
       {/* Row 5: Recent Audits (Full Width) */}
       <div className="overflow-hidden">
-        <RecentAuditsTable monitorias={myMonitorias} users={users} title="Minhas Auditorias Recentes" limit={10} />
+        <RecentAuditsTable monitorias={myMonitorias} users={users} title="Minhas Auditorias Recentes" />
       </div>
     </div>
   );

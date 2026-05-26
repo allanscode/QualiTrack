@@ -1,20 +1,17 @@
 import React from 'react';
-import { Clock, AlertCircle } from 'lucide-react';
-import { Monitoria, User } from '../../../types';
+import { Clock } from 'lucide-react';
+import { Monitoria } from '../../../types';
 import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
-import SLAClock from '../../ui/SLAClock';
+import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
 
-interface SlaWidgetProps {
+interface ActionDeadlineWidgetProps {
   title: string;
   monitorias: Monitoria[];
-  users: User[];
   targetStatus: string | string[];
 }
 
-export default function SlaWidget({ title, monitorias, users, targetStatus }: SlaWidgetProps) {
-  const getName = (id: string) => users.find(u => u.id === id)?.name || id;
-
+export default function ActionDeadlineWidget({ title, monitorias, targetStatus }: ActionDeadlineWidgetProps) {
   const statuses = Array.isArray(targetStatus) ? targetStatus : [targetStatus];
 
   const pending = monitorias
@@ -22,12 +19,16 @@ export default function SlaWidget({ title, monitorias, users, targetStatus }: Sl
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
     .slice(0, 5);
 
+  const getName = (m: Monitoria) => {
+    if (m.status === 'pendente_revisao') return m.evaluator_name || m.evaluator_id;
+    return m.evaluated_name || m.evaluated_id;
+  };
+
   return (
     <Card padding="lg" className="h-full flex flex-col">
-      {/* Header */}
       <div className="flex items-center gap-2.5 mb-5">
-        <div className="w-9 h-9 rounded-xl bg-warning/10 flex items-center justify-center flex-shrink-0">
-          <Clock className="w-4 h-4 text-warning" />
+      <div className="w-9 h-9 rounded-xl bg-functional-warning flex items-center justify-center flex-shrink-0">
+        <Clock className="w-4 h-4 text-functional-warning" />
         </div>
         <div>
           <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">{title}</h3>
@@ -39,7 +40,6 @@ export default function SlaWidget({ title, monitorias, users, targetStatus }: Sl
 
       <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
         {pending.length > 0 ? pending.map((m) => {
-          const hours = Math.floor((new Date().getTime() - new Date(m.deadline_at || m.created_at).getTime()) / (1000 * 3600));
           const days = Math.floor((new Date().getTime() - new Date(m.created_at).getTime()) / (1000 * 3600 * 24));
           const isCritical = days >= 2;
 
@@ -51,11 +51,11 @@ export default function SlaWidget({ title, monitorias, users, targetStatus }: Sl
                   <span className="font-mono text-[10px] font-black text-brand-primary">#{m.ticket_id}</span>
                 </div>
                 <p className="text-[10px] text-brand-muted truncate font-bold uppercase tracking-wider">
-                  {m.status === 'pendente_revisao' ? `Qualidade: ${getName(m.evaluator_id)}` : `Suporte: ${getName(m.evaluated_id)}`}
+                  {m.status === 'pendente_revisao' ? `Qualidade: ${getName(m)}` : `Suporte: ${getName(m)}`}
                 </p>
               </div>
               <div className="text-right ml-3 flex-shrink-0">
-                <SLAClock deadlineAt={m.deadline_at} status={m.status} />
+                <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status} />
               </div>
             </div>
           );

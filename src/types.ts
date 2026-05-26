@@ -19,6 +19,13 @@ export interface User {
   created_at: string;
 }
 
+export interface UserTeam {
+  id: string;
+  user_id: string;
+  team_id: string;
+  created_at: string;
+}
+
 export interface Ticket {
   id: string;
   external_id: string;
@@ -50,7 +57,7 @@ export interface EvaluationForm {
   id: string;
   title: string;
   description: string;
-  team_id: string; 
+  team_id: string;
   sections: FormSection[];
   critical_errors?: Question[];
   active: boolean;
@@ -92,7 +99,7 @@ export interface Monitoria {
   score: number;
   status: MonitoriaStatus;
   contestation_reason?: string;
-  deadline_at?: string;
+  action_deadline_at?: string;
   evaluator_note?: string;
   client_contact_log?: string;
   client_contact_success?: boolean;
@@ -106,6 +113,16 @@ export interface Monitoria {
   display_id?: number;
   history: MonitoriaHistoryEntry[];
   dissatisfaction_answers?: Record<string, string[]>;
+  resolution_type?: 'human' | 'automatic';
+  contestation_result?: 'approved' | 'rejected' | 'pending';
+  evaluator_name?: string;
+  evaluated_name?: string;
+  form_name?: string;
+  team_name?: string;
+  started_at?: string;
+  finished_at?: string;
+  concluded_at?: string;
+  applied_config?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -135,4 +152,3 @@ export interface DissatisfactionField {
   active: boolean;
   created_at: string;
 }
-

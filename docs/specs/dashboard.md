@@ -73,7 +73,7 @@ interface DashboardFilters {
 | `RankingWidget` | Ranking de top/bottom performers | `Target` (Oportunidades), `UserMinus` (Recusas), `AlertTriangle` (Ofensores) |
 | `OfensoresChart` | Critérios mais descumpridos (maiores ofensores) | — |
 | `RecentAuditsTable` | Tabela de monitorias recentes | — |
-| `SlaWidget` | Status de SLA (dentro/fora do prazo) | — |
+| `ActionDeadlineWidget` | Status de prazo de ação (dentro/fora do prazo) | — |
 
 ## Lógica de Reavaliações (History-Based)
 Para garantir a precisão dos rankings de contestações, os widgets não dependem apenas do `status` atual da monitoria (que pode mudar), mas sim de uma varredura no `history` da monitoria em busca de termos chave:
@@ -87,11 +87,11 @@ Para garantir a precisão dos rankings de contestações, os widgets não depend
 - **Distribuição e Ranking:** Curva de Qualidade, Precisão e Ranking de Volume em 3 colunas.
 - **Maiores Ofensores:** Linha única (full width) exibindo até 12 critérios.
 - **Scores de Suporte:** Melhores Notas e Oportunidades em 2 colunas.
-- **Controle:** SLA e Rankings de Contestações na base em 3 colunas.
+- **Controle:** Prazo de Ação e Rankings de Contestações na base em 3 colunas.
 
 ### Supervisor de Atendimento (`SupportManagerDashboard`)
 - **Benchmarks e Tendência:** StatCards de performance.
-- **Evolução do Score:** Linha única (full width) após remoção do SLA duplicado.
+- **Evolução do Score:** Linha única (full width) após remoção do prazo de ação duplicado.
 - **Rankings de Notas:** Melhores Notas e Oportunidades em 2 colunas (meta dinâmica).
 - **Rankings de Contestações:** Top Aceitas e Top Recusadas em 2 colunas.
 

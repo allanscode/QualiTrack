@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import Card from '../../ui/Card';
 import { AlertOctagon } from 'lucide-react';
 import { Monitoria, EvaluationForm } from '../../../types';
+import { chartPalette } from '../chartColors';
 
 interface OfensoresChartProps {
   monitorias: Monitoria[];
@@ -51,7 +52,7 @@ export default function OfensoresChart({ monitorias, forms, limit = 8, title = '
     return (
       <div className="bg-brand-primary text-brand-on-primary px-4 py-3 rounded-2xl shadow-xl text-xs max-w-[260px]">
         <p className="font-black mb-1">{d.fullText}</p>
-        <p className="text-warning font-bold">{d.naoCount} ocorrência{d.naoCount !== 1 ? 's' : ''} de "NÃO"</p>
+        <p className="text-functional-warning font-bold">{d.naoCount} ocorrência{d.naoCount !== 1 ? 's' : ''} de "NÃO"</p>
         <p className="opacity-80 font-semibold">Taxa de falha: {d.taxaFalha.toFixed(1)}%</p>
       </div>
     );
@@ -59,8 +60,8 @@ export default function OfensoresChart({ monitorias, forms, limit = 8, title = '
 
   const Header = () => (
     <div className="flex items-center gap-3 mb-5">
-      <div className="w-9 h-9 rounded-xl bg-error/10 flex items-center justify-center flex-shrink-0">
-        <AlertOctagon className="w-4 h-4 text-error" />
+      <div className="w-9 h-9 rounded-xl bg-functional-error flex items-center justify-center flex-shrink-0">
+        <AlertOctagon className="w-4 h-4 text-functional-error" />
       </div>
       <div>
         <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">{title}</h3>
@@ -84,7 +85,7 @@ export default function OfensoresChart({ monitorias, forms, limit = 8, title = '
     <Card padding="lg" className="h-full flex flex-col overflow-hidden">
       <Header />
 
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0" style={{ minWidth: 0, minHeight: 150 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={ofensores}
@@ -110,14 +111,20 @@ export default function OfensoresChart({ monitorias, forms, limit = 8, title = '
               tickLine={false}
             />
             <Tooltip content={<CustomTooltip />} cursor={false} />
-            <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14}>
-              {ofensores.map((entry, index) => {
-                const intensity = 1 - index / ofensores.length;
-                const r = Math.round(239 * intensity + 180 * (1 - intensity));
-                const g = Math.round(68 * intensity + 30 * (1 - intensity));
-                const b = Math.round(68 * intensity + 30 * (1 - intensity));
-                return <Cell key={`cell-${index}`} fill={`rgb(${r},${g},${b})`} />;
-              })}
+      <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14}>
+        {ofensores.map((entry, index) => {
+          const p = chartPalette();
+          const baseColor = p.ruim;
+          const hex = baseColor.replace('#', '');
+          const br = parseInt(hex.substring(0, 2), 16);
+          const bg = parseInt(hex.substring(2, 4), 16);
+          const bb = parseInt(hex.substring(4, 6), 16);
+          const fade = 1 - (index / ofensores.length) * 0.5;
+          const r = Math.round(br * fade + 160 * (1 - fade));
+          const g = Math.round(bg * fade + 140 * (1 - fade));
+          const b = Math.round(bb * fade + 140 * (1 - fade));
+          return <Cell key={`cell-${index}`} fill={`rgb(${r},${g},${b})`} />;
+        })}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -128,10 +135,10 @@ export default function OfensoresChart({ monitorias, forms, limit = 8, title = '
         {ofensores.slice(0, 3).map((o, i) => (
           <div key={i} className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="text-[9px] font-black text-error bg-error/10 rounded px-1.5 py-0.5 flex-shrink-0">#{i + 1}</span>
-              <span className="text-[9px] font-bold text-brand-primary truncate">{o.fullText}</span>
-            </div>
-            <span className="text-[9px] font-black text-error flex-shrink-0">{o.taxaFalha.toFixed(1)}% falha</span>
+          <span className="text-[9px] font-black text-functional-error bg-functional-error rounded px-1.5 py-0.5 flex-shrink-0">#{i + 1}</span>
+          <span className="text-[9px] font-bold text-brand-primary truncate">{o.fullText}</span>
+        </div>
+        <span className="text-[9px] font-black text-functional-error flex-shrink-0">{o.taxaFalha.toFixed(1)}% falha</span>
           </div>
         ))}
       </div>

@@ -3,13 +3,14 @@ import { useDashboard } from '../DashboardContext';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import RankingWidget from '../widgets/RankingWidget';
-import SlaWidget from '../widgets/SlaWidget';
+import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import { Target, Users, TrendingUp, AlertTriangle, RotateCcw, CheckCircle2, XCircle, ClipboardCheck, UserMinus } from 'lucide-react';
 
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
+import { chartColorArray, chartPalette } from '../chartColors';
 
 export default function SupportManagerDashboard() {
   // monitorias from context are already filtered by date/team/agent/channel from FilterBar
@@ -246,7 +247,7 @@ export default function SupportManagerDashboard() {
           sub="Aguardando minha decisão"
           good={pendingManager === 0}
           icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-error"
+          accent="text-functional-error"
         />
       </div>
 
@@ -282,7 +283,7 @@ export default function SupportManagerDashboard() {
           sub="Nota mantida"
           good={true}
           icon={<XCircle className="w-5 h-5" />}
-          accent="text-error"
+          accent="text-functional-error"
         />
       </div>
 
@@ -293,7 +294,7 @@ export default function SupportManagerDashboard() {
             title="Evolução do Score"
             subtitle="Nota média agregada das suas equipes"
             data={trendData}
-            dataKeys={[{ key: 'ScoreEquipe', name: 'Média Equipe', color: '#6366f1' }]}
+            dataKeys={[{ key: 'ScoreEquipe', name: 'Média Equipe', color: chartPalette().excelente }]}
           />
         </div>
       </div>
@@ -339,7 +340,7 @@ export default function SupportManagerDashboard() {
       </div>
 
       {dissatisfactionFields.length > 0 && (() => {
-        const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#3b82f6', '#ec4899', '#14b8a6'];
+        const COLORS = chartColorArray();
         const monWithAnswers = monitorias.filter(m => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
 
         const clientFields = dissatisfactionFields.filter(f => f.type === 'cliente');

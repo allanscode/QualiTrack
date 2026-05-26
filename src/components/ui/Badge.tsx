@@ -15,13 +15,13 @@ export default function Badge({
 }: BadgeProps) {
   // All variants use design system tokens instead of raw Tailwind color classes
   const variants = {
-    primary:   'bg-brand-primary text-brand-on-primary',
+    primary: 'bg-brand-primary text-brand-on-primary',
     secondary: 'bg-surface-subtle text-brand-muted',
-    success:   'bg-success/10 text-success',
-    warning:   'bg-warning/10 text-warning',
-    error:     'bg-error/10 text-error',
-    info:      'bg-info/10 text-info',
-    neutral:   'bg-surface-subtle text-brand-muted',
+    success: 'bg-functional-success text-functional-success',
+    warning: 'bg-functional-warning text-functional-warning',
+    error: 'bg-functional-error text-functional-error',
+    info: 'bg-info/10 text-info',
+    neutral: 'bg-surface-subtle text-brand-muted',
   };
 
   const sizes = {

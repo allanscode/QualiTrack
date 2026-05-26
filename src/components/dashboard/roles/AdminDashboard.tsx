@@ -4,12 +4,13 @@ import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import DistributionChart from '../widgets/DistributionChart';
 import RankingWidget from '../widgets/RankingWidget';
-import SlaWidget from '../widgets/SlaWidget';
+import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, ShieldCheck, History, Activity, UserMinus } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
+import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
 
 export default function AdminDashboard() {
   const { user, monitorias, users, forms, onlineUsers, dissatisfactionFields } = useDashboard();
@@ -98,11 +99,7 @@ export default function AdminDashboard() {
     return avgFirst > 0 ? ((avgSecond / avgFirst) - 1) * 100 : 0;
   }, [trendData]);
 
-  const colorMap: Record<string, string> = {
-    'text-indigo-700': '#6366f1', 'text-emerald-700': '#10b981',
-    'text-amber-700': '#f59e0b',  'text-red-700': '#ef4444',
-    'text-purple-700': '#a855f7', 'text-blue-700': '#3b82f6',
-  };
+  const colorMap = chartColorMap();
   const gradeDistribution = useMemo(() =>
     config.levels
       .map(level => ({
@@ -257,7 +254,7 @@ export default function AdminDashboard() {
           sub="Ações em todos os perfis"
           good={pendingActions === 0}
           icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-error"
+          accent="text-functional-error"
         />
         <StatCard
           title="Usuários Online"
@@ -308,7 +305,7 @@ export default function AdminDashboard() {
           sub="Contestações improcedentes"
           good={true}
           icon={<XCircle className="w-5 h-5" />}
-          accent="text-error"
+          accent="text-functional-error"
         />
       </div>
 
@@ -318,7 +315,7 @@ export default function AdminDashboard() {
             title="Performance Histórica"
             subtitle="Visão administrativa de score global"
             data={trendData}
-            dataKeys={[{ key: 'ScoreMedio', name: 'Média Global', color: '#6366f1' }]}
+            dataKeys={[{ key: 'ScoreMedio', name: 'Média Global', color: chartPalette().excelente }]}
           />
         </div>
         <div className="h-[300px]">
@@ -362,7 +359,7 @@ export default function AdminDashboard() {
       </div>
 
       {dissatisfactionFields.length > 0 && (() => {
-        const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#3b82f6', '#ec4899', '#14b8a6'];
+        const COLORS = chartColorArray();
         const monWithAnswers = monitorias.filter(m => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
 
         const clientFields = dissatisfactionFields.filter(f => f.type === 'cliente');

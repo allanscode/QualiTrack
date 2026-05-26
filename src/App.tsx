@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase, mockDb } from './lib/supabase';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
 import { User, ROLE_LABELS } from './types';
+import { QualityConfigProvider } from './lib/useQualityConfig';
 
 // Components
 import DashboardMain from './components/dashboard/DashboardMain';
@@ -19,6 +20,13 @@ import MonitoriaForm from './components/MonitoriaForm';
 import AdminPanel from './components/AdminPanel';
 
 type AuthView = 'login' | 'request-access' | 'pending' | 'change-password' | 'forgot-password' | 'setup-password';
+
+const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
+const IDLE_WARNING_MS = 5 * 60 * 1000;
+const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
+const SESSION_REFRESH_MS = 50 * 60 * 1000;
+const MOCK_SESSION_KEY = 'qualitrack_session';
+const LAST_ACTIVITY_KEY = 'qualitrack_last_activity';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -32,7 +40,7 @@ export default function App() {
     // Se estivermos na tela de login (sem usuário logado), sempre seguimos o sistema
     // para evitar que a preferência do usuário anterior "vaze" para o próximo.
     const saved = localStorage.getItem('qualitrack_theme') as any;
-    if (saved && (sessionStorage.getItem('qualitrack_mock_user') || localStorage.getItem('supabase.auth.token'))) {
+    if (saved && (localStorage.getItem(MOCK_SESSION_KEY) || localStorage.getItem('supabase.auth.token'))) {
       return saved;
     }
     return 'system';
@@ -87,51 +95,14 @@ export default function App() {
   const [isExistingRequest, setIsExistingRequest] = useState(false);
 
   const isPasswordRecoveryRef = React.useRef(false);
+  const isCleaningSessionRef = React.useRef(false);
+  const isInviteFlowRef = React.useRef(false);
   const isMockMode = !supabase;
 
-  // --- Inactivity Timer (30 minutes) ---
-  useEffect(() => {
-    if (!currentUser) return;
-    
-    let timeoutId: NodeJS.Timeout;
-    
-    const resetTimer = () => {
-      clearTimeout(timeoutId);
-      // 30 minutos = 30 * 60 * 1000 = 1800000 ms
-      timeoutId = setTimeout(async () => {
-        if (supabase) {
-          await supabase.auth.signOut();
-        } else {
-          sessionStorage.removeItem('qualitrack_mock_user');
-          setCurrentUser(null);
-          setUserData(null);
-          setAuthView('login');
-        }
-        toast.error('Sessão encerrada por inatividade (30 minutos). Faça login novamente.');
-      }, 1800000);
-    };
-
-    // Lista de eventos de atividade do usuário
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-    
-    // Listener throttled para não sobrecarregar
-    let isThrottled = false;
-    const handleActivity = () => {
-      if (!isThrottled) {
-        resetTimer();
-        isThrottled = true;
-        setTimeout(() => isThrottled = false, 1000); // 1 tick a cada 1 seg
-      }
-    };
-
-    events.forEach(event => document.addEventListener(event, handleActivity, { passive: true }));
-    resetTimer();
-
-    return () => {
-      clearTimeout(timeoutId);
-      events.forEach(event => document.removeEventListener(event, handleActivity));
-    };
-  }, [currentUser]);
+  // --- Session State ---
+  const [showIdleWarning, setShowIdleWarning] = useState(false);
+  const [idleCountdown, setIdleCountdown] = useState(300); // 5 min em segundos
+  const sessionStartTimeRef = useRef<number | null>(null);
 
   // --- Auth Lifecycle ---
   useEffect(() => {
@@ -140,13 +111,43 @@ export default function App() {
     }, 10000);
 
     if (isMockMode) {
-      const savedUser = sessionStorage.getItem('qualitrack_mock_user');
-      if (savedUser) {
+      // Restaura sessão mock do localStorage
+      const stored = localStorage.getItem(MOCK_SESSION_KEY);
+      if (stored) {
         try {
-          const user = JSON.parse(savedUser);
-          setUserData(user);
-          setCurrentUser({ email: user.email });
-        } catch (e) {}
+          const parsed = JSON.parse(stored);
+          const now = Date.now();
+            if (parsed.sessionExpiresAt && parsed.sessionExpiresAt > now) {
+              const lastActivityStored = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
+              if (lastActivityStored && (now - lastActivityStored) >= IDLE_TIMEOUT_MS) {
+                localStorage.removeItem(MOCK_SESSION_KEY);
+                localStorage.removeItem(LAST_ACTIVITY_KEY);
+              } else if (parsed.sessionStartedAt && (now - parsed.sessionStartedAt) >= ABSOLUTE_TIMEOUT_MS) {
+                localStorage.removeItem(MOCK_SESSION_KEY);
+                localStorage.removeItem(LAST_ACTIVITY_KEY);
+              } else {
+                mockDb.get('users').then(async ({ data }) => {
+                  const dbUser = data.find((u: any) => u.id === parsed.userId && u.active);
+                  if (dbUser) {
+                    const enriched = await enrichUserWithTeamIds(dbUser);
+                    setCurrentUser(enriched);
+                    setUserData(enriched);
+                    setActiveTab('dashboard');
+                    sessionStartTimeRef.current = parsed.sessionStartedAt || now;
+                  } else {
+                    localStorage.removeItem(MOCK_SESSION_KEY);
+                    localStorage.removeItem(LAST_ACTIVITY_KEY);
+                  }
+                });
+              }
+      } else {
+        localStorage.removeItem(MOCK_SESSION_KEY);
+        localStorage.removeItem(LAST_ACTIVITY_KEY);
+      }
+    } catch {
+      localStorage.removeItem(MOCK_SESSION_KEY);
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+    }
       }
       setLoading(false);
       clearTimeout(initializationTimeout);
@@ -166,6 +167,14 @@ export default function App() {
 
     if (hash && (hash.includes('type=recovery') || hash.includes('type=invite'))) {
       isPasswordRecoveryRef.current = true;
+      isInviteFlowRef.current = true;
+      setAuthView('change-password');
+      setLoading(false);
+    }
+
+    if (search && (search.includes('type=invite') || search.includes('type=recovery'))) {
+      isPasswordRecoveryRef.current = true;
+      isInviteFlowRef.current = true;
       setAuthView('change-password');
       setLoading(false);
     }
@@ -174,19 +183,46 @@ export default function App() {
       if (event === 'PASSWORD_RECOVERY') {
         isPasswordRecoveryRef.current = true;
         setAuthView('change-password');
-      } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-        if (!isPasswordRecoveryRef.current && session) {
-          // Avoid async deadlocks on Windows/Localhost by deferring DB queries
-          // allowing the Supabase Auth Lock to release immediately.
+      } else if (event === 'INITIAL_SESSION') {
+        if (isInviteFlowRef.current && session) {
+          return;
+        }
+        if (session) {
+          // Sessão persistida — restaura sem pedir login
+          // Para sessão restaurada, estimamos o início como agora menos o tempo decorrido
+          // Se não houver sessão prévia (login novo), usa Date.now()
+          if (!sessionStartTimeRef.current) {
+            sessionStartTimeRef.current = Date.now();
+          }
           setTimeout(() => {
             handleUserSession(session.user);
           }, 0);
-          return; // handleUserSession will handle setLoading(false)
+          return;
         }
-      } else if (event === 'SIGNED_OUT') {
+        // Sem sessão — mostra login
         setCurrentUser(null);
         setUserData(null);
         setAuthView('login');
+      } else if (event === 'SIGNED_IN') {
+        if (!isPasswordRecoveryRef.current && session) {
+          sessionStartTimeRef.current = Date.now();
+          setTimeout(() => {
+            handleUserSession(session.user);
+          }, 0);
+          return;
+        }
+      } else if (event === 'SIGNED_OUT') {
+        if (isCleaningSessionRef.current) {
+          isCleaningSessionRef.current = false;
+          setLoading(false);
+          clearTimeout(initializationTimeout);
+          return;
+        }
+        setCurrentUser(null);
+        setUserData(null);
+        setAuthView('login');
+      } else if (event === 'TOKEN_REFRESHED') {
+        // Token renovado silenciosamente — sem ação necessária
       }
       setLoading(false);
       clearTimeout(initializationTimeout);
@@ -203,7 +239,7 @@ export default function App() {
 
   // --- Session Resilience & Active Reconnection ---
   useEffect(() => {
-    if (isMockMode || !supabase) return;
+    if (isMockMode || !supabase || !currentUser) return;
 
     let lastFocusCheck = 0;
     let reconnectInterval: ReturnType<typeof setInterval> | null = null;
@@ -330,39 +366,166 @@ export default function App() {
       window.removeEventListener('online', handleBrowserOnline);
       window.removeEventListener('offline', handleBrowserOffline);
     };
-  }, [isMockMode]);
+  }, [isMockMode, currentUser]);
 
-  // --- Inactivity Timer (60 minutes) ---
+  // --- Unified Session Management: Idle Timeout + Warning + Absolute Timeout + Proactive Refresh ---
+  const extendSessionRef = useRef<() => void>(() => {});
+
   useEffect(() => {
-    if (!currentUser || isMockMode) return;
+    if (!currentUser) {
+      extendSessionRef.current = () => {};
+      return;
+    }
 
-    let timeoutId: NodeJS.Timeout;
+    let idleTimerId: NodeJS.Timeout;
+    let warningIntervalId: NodeJS.Timeout;
+    let refreshTimerId: NodeJS.Timeout;
+    let lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_KEY)) || Date.now();
 
-    const resetTimer = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(async () => {
-        // Antes de deslogar, verifica se a aba ainda está aberta/visível
-        if (document.visibilityState === 'visible') {
-          // Se o usuário está olhando para a tela, apenas renova a sessão em vez de deslogar
-          await supabase?.auth.getSession();
-          resetTimer();
-        } else {
-          supabase?.auth.signOut();
-          toast.info('Sessão encerrada por inatividade prolongada.');
-        }
-      }, 60 * 60 * 1000); // 60 minutos
+    const forceLogout = async (reason: string) => {
+      setShowIdleWarning(false);
+      localStorage.removeItem(MOCK_SESSION_KEY);
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+      if (!isMockMode && supabase) {
+        isCleaningSessionRef.current = true;
+        await supabase.auth.signOut();
+      }
+      setCurrentUser(null);
+      setUserData(null);
+      setAuthView('login');
+      sessionStartTimeRef.current = null;
+      toast.error(reason);
     };
 
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-    events.forEach(event => document.addEventListener(event, resetTimer));
+    // Verifica se a sessão já expirou por inatividade ou tempo absoluto
+    const idleElapsed = Date.now() - lastActivity;
+    if (idleElapsed >= IDLE_TIMEOUT_MS) {
+      forceLogout('Sessão encerrada por inatividade (60 minutos). Faça login novamente.');
+      return;
+    }
+    if (sessionStartTimeRef.current && (Date.now() - sessionStartTimeRef.current) >= ABSOLUTE_TIMEOUT_MS) {
+      forceLogout('Sessão encerrada após 8 horas contínuas. Faça login novamente.');
+      return;
+    }
 
-    resetTimer(); // Inicia o timer
+    const checkAbsoluteTimeout = () => {
+      if (!sessionStartTimeRef.current) return false;
+      const elapsed = Date.now() - sessionStartTimeRef.current;
+      if (elapsed >= ABSOLUTE_TIMEOUT_MS) {
+        forceLogout('Sessão encerrada após 8 horas contínuas. Faça login novamente.');
+        return true;
+      }
+      return false;
+    };
+
+    const doExtendSession = () => {
+      setShowIdleWarning(false);
+      clearInterval(warningIntervalId);
+      startIdleTimer();
+      if (!isMockMode && supabase) {
+        supabase.auth.refreshSession().catch(() => {});
+      }
+    };
+
+    extendSessionRef.current = doExtendSession;
+
+    const startIdleTimer = () => {
+      clearTimeout(idleTimerId);
+      clearInterval(warningIntervalId);
+      setShowIdleWarning(false);
+
+      idleTimerId = setTimeout(() => {
+        if (checkAbsoluteTimeout()) return;
+
+        setShowIdleWarning(true);
+        setIdleCountdown(Math.ceil(IDLE_WARNING_MS / 1000));
+
+        warningIntervalId = setInterval(() => {
+          setIdleCountdown(prev => {
+            if (prev <= 1) {
+              clearInterval(warningIntervalId);
+              if (checkAbsoluteTimeout()) return 0;
+              forceLogout('Sessão encerrada por inatividade (60 minutos). Faça login novamente.');
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }, IDLE_TIMEOUT_MS - IDLE_WARNING_MS);
+    };
+
+    const handleUserActivity = () => {
+      const now = Date.now();
+      if (now - lastActivity < 1000) return;
+      lastActivity = now;
+      localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+
+      if (showIdleWarning) {
+        setShowIdleWarning(false);
+        clearInterval(warningIntervalId);
+      }
+      startIdleTimer();
+    };
+
+    if (!isMockMode && supabase) {
+      refreshTimerId = setInterval(async () => {
+        if (!currentUser) return;
+        if (checkAbsoluteTimeout()) return;
+        try {
+          await supabase.auth.refreshSession();
+        } catch {}
+      }, SESSION_REFRESH_MS);
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && currentUser) {
+        if (checkAbsoluteTimeout()) return;
+        if (!isMockMode && supabase) {
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) {
+              const timeToExpiry = (session.expires_at || 0) - Math.floor(Date.now() / 1000);
+              if (timeToExpiry < 900) {
+                supabase.auth.refreshSession().catch(() => {});
+              }
+            }
+          });
+        }
+      }
+    };
+
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+    events.forEach(event => document.addEventListener(event, handleUserActivity, { passive: true }));
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    startIdleTimer();
 
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      events.forEach(event => document.removeEventListener(event, resetTimer));
+      clearTimeout(idleTimerId);
+      clearInterval(warningIntervalId);
+      clearInterval(refreshTimerId);
+      events.forEach(event => document.removeEventListener(event, handleUserActivity));
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentUser]);
+  }, [currentUser, isMockMode]);
+
+  const extendSession = useCallback(() => {
+    extendSessionRef.current();
+  }, []);
+
+  const enrichUserWithTeamIds = async (dbUser: any): Promise<any> => {
+    try {
+      if (isMockMode) {
+        const { data: utData } = await mockDb.get('user_teams');
+        const userTeamIds = (utData || []).filter((ut: any) => ut.user_id === dbUser.id).map((ut: any) => ut.team_id);
+        return { ...dbUser, team_ids: userTeamIds.length > 0 ? userTeamIds : (dbUser.team_ids || []) };
+      } else if (supabase) {
+        const { data: utData } = await supabase.from('user_teams').select('team_id').eq('user_id', dbUser.id);
+        const userTeamIds = (utData || []).map((ut: any) => ut.team_id);
+        return { ...dbUser, team_ids: userTeamIds.length > 0 ? userTeamIds : (dbUser.team_ids || []) };
+      }
+    } catch {}
+    return dbUser;
+  };
 
   const handleUserSession = async (user: any) => {
     try {
@@ -370,25 +533,33 @@ export default function App() {
         const { data } = await mockDb.get('users');
         const dbUser = data.find((u: any) => u.email === user.email && u.active);
         if (dbUser) {
-          setUserData(dbUser);
+          const enriched = await enrichUserWithTeamIds(dbUser);
+          setUserData(enriched);
           setCurrentUser(user);
-          sessionStorage.setItem('qualitrack_mock_user', JSON.stringify(dbUser));
+          setActiveTab('dashboard');
+          if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now();
+          localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({
+            userId: dbUser.id,
+            sessionStartedAt: sessionStartTimeRef.current,
+            sessionExpiresAt: sessionStartTimeRef.current + ABSOLUTE_TIMEOUT_MS,
+          }));
+          localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
         }
       } else {
         const { data, error } = await supabase!.from('users').select('*').eq('email', user.email).single();
         if (data && data.active) {
-          setUserData(data);
+          const enriched = await enrichUserWithTeamIds(data);
+          setUserData(enriched);
           setCurrentUser(user);
+          setActiveTab('dashboard');
+          if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now();
+          localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
         } else if (error && error.code === 'PGRST116') {
-          // Usuário não encontrado no banco
           await supabase!.auth.signOut();
           setAuthView('login');
         } else if (error) {
-          // Erro de rede ou RLS (ex: timeout, failed to fetch)
           console.error('[App] Erro crítico em handleUserSession:', error);
           toast.error('Erro de conexão ao carregar seu perfil. O sistema está tentando reconectar.');
-          // Mantemos o usuário como null para que fique na tela de login, mas NÃO forçamos logout ainda 
-          // pois a rede pode voltar.
         } else {
           setAuthView('request-access');
           setRequestData({ name: user.name || '', email: user.email });
@@ -418,10 +589,18 @@ export default function App() {
             setLoading(false);
             return toast.error('Esta conta está desativada.');
           }
-          setCurrentUser(user);
-          setUserData(user);
-          setActiveTab('dashboard');
-          sessionStorage.setItem('qualitrack_mock_user', JSON.stringify(user));
+          const enriched = await enrichUserWithTeamIds(user);
+          setCurrentUser(enriched);
+          setUserData(enriched);
+        setActiveTab('dashboard');
+        setCredentials({ email: '', password: '' });
+        sessionStartTimeRef.current = Date.now();
+          localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({
+            userId: user.id,
+            sessionStartedAt: sessionStartTimeRef.current,
+            sessionExpiresAt: sessionStartTimeRef.current + ABSOLUTE_TIMEOUT_MS,
+          }));
+          localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
           toast.success(`Bem-vindo, ${user.name}!`);
         } else {
           toast.error('E-mail ou senha incorretos. Tente novamente.');
@@ -443,15 +622,21 @@ export default function App() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (options?: { silent?: boolean; message?: string }) => {
     setCurrentUser(null);
     setUserData(null);
+    setActiveTab('dashboard');
     setAuthView('login');
-    sessionStorage.removeItem('qualitrack_mock_user');
+    setCredentials({ email: '', password: '' });
+    setShowIdleWarning(false);
+    sessionStartTimeRef.current = null;
+    localStorage.removeItem(MOCK_SESSION_KEY);
     if (!isMockMode && supabase) {
       supabase.auth.signOut().catch(console.error);
     }
-    toast.success('Você saiu do sistema com sucesso.');
+    if (!options?.silent) {
+      toast.success(options?.message || 'Você saiu do sistema com sucesso.');
+    }
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -484,8 +669,8 @@ export default function App() {
       if (isMockMode) {
         if (!userData?.id) throw new Error('Sessão expirada.');
         await mockDb.update('users', userData.id, { password: newPassword, must_change_password: false });
+        handleLogout({ silent: true });
         toast.success('Sua senha foi atualizada com sucesso!');
-        handleLogout();
       } else {
         const { data: { user }, error: userError } = await supabase!.auth.getUser();
         if (userError || !user) throw userError || new Error('Usuário não autenticado.');
@@ -495,8 +680,9 @@ export default function App() {
         await supabase!.from('users').update({ must_change_password: false }).eq('email', user.email);
         window.history.replaceState({}, document.title, window.location.pathname);
         isPasswordRecoveryRef.current = false;
-        handleLogout();
-        toast.success('Sua nova senha foi definida com sucesso!');
+        isInviteFlowRef.current = false;
+        handleLogout({ silent: true });
+        toast.success('Sua nova senha foi definida com sucesso! Faça login com suas novas credenciais.');
       }
     } catch (e: any) {
       console.error('[handleUpdatePassword] Erro ao atualizar senha:', e);
@@ -511,6 +697,7 @@ export default function App() {
     setLoading(true);
     try {
       if (isMockMode) {
+        await mockDb.insert('access_requests', { name: requestData.name, email: requestData.email.toLowerCase(), status: 'pending' });
         toast.success('Solicitação simulada enviada!');
         setAuthView('pending');
       } else {
@@ -529,8 +716,44 @@ export default function App() {
 
   return (
     <>
-      <Toaster position="top-right" richColors />
-      <AnimatePresence mode="wait">
+    <Toaster position="top-right" richColors />
+    <AnimatePresence>
+      {showIdleWarning && currentUser && (
+        <motion.div
+          key="idle-warning"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={extendSession}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="bg-surface-card border border-surface-border rounded-3xl p-8 max-w-md w-full mx-4 shadow-premium text-center"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <AlertTriangle className="w-8 h-8 text-amber-500" />
+            </div>
+            <h3 className="text-xl font-black text-brand-primary mb-2">Sessão expirando</h3>
+            <p className="text-sm text-brand-muted mb-1">
+              Sua sessão expirará em <span className="font-black text-amber-500 text-lg">{Math.floor(idleCountdown / 60)}:{String(idleCountdown % 60).padStart(2, '0')}</span> devido à inatividade.
+            </p>
+            <p className="text-xs text-brand-muted mb-6">Clique no botão abaixo para continuar conectado.</p>
+            <button
+              onClick={extendSession}
+              className="w-full bg-brand-accent text-white py-3.5 rounded-2xl font-bold shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all"
+            >
+              Continuar conectado
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    <AnimatePresence mode="wait">
         {loading ? (
           <motion.div
             key="app-loading"
@@ -662,21 +885,23 @@ export default function App() {
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="h-screen w-full"
           >
-            <MainApp 
-              isSidebarOpen={isSidebarOpen}
-              setIsSidebarOpen={setIsSidebarOpen}
-              currentUser={currentUser}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              userData={userData}
-              handleLogout={handleLogout}
-              isFormOpen={isFormOpen}
-              setIsFormOpen={setIsFormOpen}
-              theme={theme}
-              setTheme={setTheme}
-              isSystemOnline={isSystemOnline}
-              isReconnecting={isReconnecting}
-            />
+        <QualityConfigProvider>
+        <MainApp
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+          currentUser={currentUser}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            userData={userData}
+            handleLogout={handleLogout}
+            isFormOpen={isFormOpen}
+            setIsFormOpen={setIsFormOpen}
+            theme={theme}
+            setTheme={setTheme}
+            isSystemOnline={isSystemOnline}
+            isReconnecting={isReconnecting}
+          />
+        </QualityConfigProvider>
           </motion.div>
         )}
       </AnimatePresence>
@@ -684,27 +909,42 @@ export default function App() {
   );
 }
 
-function MainApp({ 
-  isSidebarOpen, 
-  setIsSidebarOpen, 
-  currentUser, 
-  activeTab, 
-  setActiveTab, 
-  userData, 
-  handleLogout, 
-  isFormOpen, 
-  setIsFormOpen, 
-  theme, 
+function MainApp({
+  isSidebarOpen,
+  setIsSidebarOpen,
+  currentUser,
+  activeTab,
+  setActiveTab,
+  userData,
+  handleLogout,
+  isFormOpen,
+  setIsFormOpen,
+  theme,
   setTheme,
   isSystemOnline,
-  isReconnecting 
+  isReconnecting
 }: any) {
   const [teams, setTeams] = React.useState<any[]>([]);
   const [showTeamList, setShowTeamList] = React.useState(false);
+  const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
+
+  const toggleSidebar = () => {
+    const willBeOpen = !isSidebarOpen;
+    if (!willBeOpen) {
+      setSidebarTextVisible(false);
+    }
+    setIsSidebarOpen(willBeOpen);
+  };
+
+  // Reset activeTab to dashboard if user doesn't have admin role
+  React.useEffect(() => {
+    if (userData && userData.role !== 'admin' && activeTab === 'admin') {
+      setActiveTab('dashboard');
+    }
+  }, [userData?.role]);
   const [sidebarColor, setSidebarColor] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      const savedUser = sessionStorage.getItem('qualitrack_mock_user');
-      const email = savedUser ? JSON.parse(savedUser).email : '';
+    const email = userData?.email || currentUser?.email || '';
       if (email) {
         return localStorage.getItem(`qualitrack_sidebar_color_${email}`) || '';
       }
@@ -797,26 +1037,27 @@ function MainApp({
         )}
       </AnimatePresence>
 
-      <motion.aside 
-        initial={false}
-        animate={{ width: isSidebarOpen ? 260 : 80 }}
-        transition={{ duration: 0.3, ease: "easeInOut" }}
-        style={sidebarStyle}
-        onClick={(e) => {
-          const target = e.target as HTMLElement;
-          if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('select') || target.closest('.interactive-sidebar-item')) {
-            return;
-          }
-          setIsSidebarOpen(!isSidebarOpen);
-        }}
+  <motion.aside
+    initial={false}
+    animate={{ width: isSidebarOpen ? 260 : 80 }}
+    transition={{ duration: 0.3, ease: "easeInOut" }}
+    onAnimationComplete={() => setSidebarTextVisible(isSidebarOpen)}
+    style={sidebarStyle}
+    onClick={(e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('select') || target.closest('.interactive-sidebar-item')) {
+        return;
+      }
+      toggleSidebar();
+    }}
         className="text-white flex flex-col relative z-20 transition-all border-r border-white/5 group/sidebar cursor-pointer"
       >
         {/* Floating toggle button on hover */}
         <div 
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsSidebarOpen(!isSidebarOpen);
-          }}
+      onClick={(e) => {
+        e.stopPropagation();
+        toggleSidebar();
+      }}
           className="absolute -right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-surface-card border border-surface-border text-brand-primary flex items-center justify-center shadow-premium hover:scale-110 active:scale-95 transition-all opacity-0 group-hover/sidebar:opacity-100 z-30 cursor-pointer"
         >
           {isSidebarOpen ? (
@@ -831,67 +1072,55 @@ function MainApp({
             <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
               <div className="w-4 h-4 border-2 border-white rounded-[2px]" />
             </div>
-            {isSidebarOpen && (
-              <h2 className="font-bold text-lg tracking-tight">QualiTrack</h2>
-            )}
+        {sidebarTextVisible && (
+          <h2 className="font-bold text-lg tracking-tight">QualiTrack</h2>
+        )}
           </div>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 px-3 space-y-1 py-4">
-          <NavItem icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={isSidebarOpen} />
-          <NavItem icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={isSidebarOpen} />
-          {userData?.role === 'admin' && (
-            <NavItem icon={<Settings className="w-5 h-5" />} label="Configurações" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} isOpen={isSidebarOpen} />
-          )}
+        <NavItem icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
+        <NavItem icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
+        {userData?.role === 'admin' && (
+          <NavItem icon={<Settings className="w-5 h-5" />} label="Configurações" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} isOpen={sidebarTextVisible} />
+        )}
         </nav>
 
-        {/* Footer Area - CLEAN & MINIMAL */}
-        <div className="p-4 space-y-4 border-t border-white/5 interactive-sidebar-item">
-          {/* User Profile - SOLID FLAT */}
-          <div className="relative interactive-sidebar-item">
-            <motion.div 
-              layout
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-              className={`profile-toggle-btn flex ${isSidebarOpen ? 'items-center gap-3 w-full' : 'flex-col items-center gap-2'} p-2 rounded-xl bg-black/10 overflow-hidden`}
+    {/* Footer Area - User Profile */}
+    <div className="p-3 border-t border-white/5 interactive-sidebar-item">
+      <div className="relative interactive-sidebar-item">
+        <div className="flex items-center gap-3 p-2 rounded-xl bg-black/10 overflow-hidden">
+          <button
+            onClick={() => setShowTeamList(!showTeamList)}
+            className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 hover:bg-white/20 transition-all relative cursor-pointer"
+          >
+            <UserIcon className="w-5 h-5" />
+            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
+          </button>
+
+          <div className="flex-1 flex items-center gap-2 min-w-0 overflow-hidden" style={{ opacity: sidebarTextVisible ? 1 : 0, maxWidth: sidebarTextVisible ? undefined : 0, transition: 'opacity 0.15s ease' }}>
+            <button
+              onClick={() => setShowTeamList(!showTeamList)}
+              className="min-w-0 flex-1 py-1 text-left cursor-pointer hover:opacity-80 transition-opacity"
             >
-              <button 
-                onClick={() => setShowTeamList(!showTeamList)}
-                className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 hover:bg-white/20 transition-all relative cursor-pointer"
-              >
-                <UserIcon className="w-5 h-5" />
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
-              </button>
-              
-              <div className={`flex-1 flex items-center gap-2 min-w-0 transition-all duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 max-w-0 h-0 hidden'}`}>
-                <div className="min-w-0 flex-1 py-1">
-                  <p className="text-xs font-bold text-white leading-tight break-words">{userData?.name}</p>
-                  <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5 leading-tight break-words">
-                    {userData ? ROLE_LABELS[userData.role] : ''}
-                  </p>
-                </div>
-                
-                <button 
-                  onClick={handleLogout} 
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-colors cursor-pointer flex-shrink-0"
-                  title="Sair"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
+              <p className="text-xs font-bold text-white leading-tight truncate">{userData?.name}</p>
+              <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5 leading-tight truncate">
+                {userData ? ROLE_LABELS[userData.role] : ''}
+              </p>
+            </button>
 
-              {!isSidebarOpen && (
-                <button 
-                  onClick={handleLogout} 
-                  className="w-9 h-9 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all cursor-pointer flex-shrink-0"
-                  title="Sair"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
-              )}
-            </motion.div>
+            <button
+              onClick={handleLogout}
+              className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-colors cursor-pointer flex-shrink-0"
+              title="Sair"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
 
-            {/* Team List & Settings Popover */}
+        {/* Team List & Settings Popover */}
             <AnimatePresence>
               {showTeamList && (
                 <motion.div 
@@ -1008,7 +1237,7 @@ function MainApp({
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-surface-bg">
         <header className="px-8 h-20 flex items-center gap-4 border-b border-surface-border/50">
           <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            onClick={() => toggleSidebar()}
             className="sidebar-toggle-btn p-2 hover:bg-surface-subtle border border-surface-border/40 rounded-xl transition-all text-brand-muted hover:text-brand-primary shadow-sm flex-shrink-0 flex items-center justify-center w-10 h-10 cursor-pointer"
             title={isSidebarOpen ? "Recolher Menu" : "Expandir Menu"}
           >
@@ -1038,7 +1267,7 @@ function MainApp({
                         : 'Visão executiva da performance e KPIs globais')
                   : activeTab === 'monitorias' 
                     ? 'Fluxo de auditoria, contestações e reavaliações' 
-                    : 'Parâmetros de qualidade, SLA e horários comerciais'}
+                    : 'Parâmetros de qualidade, prazos de ação e horários comerciais'}
               </p>
             </div>
           </div>
@@ -1074,9 +1303,11 @@ function MainApp({
           <div className={activeTab === 'monitorias' ? 'block animate-fade-in' : 'hidden'}>
             <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} activeTab={activeTab} />
           </div>
+        {userData?.role === 'admin' && (
           <div className={activeTab === 'admin' ? 'block animate-fade-in' : 'hidden'}>
             <AdminPanel user={userData} />
           </div>
+        )}
         </div>
       </main>
     </div>

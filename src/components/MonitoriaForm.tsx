@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
-import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus, DissatisfactionField } from '../types';
+import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus, DissatisfactionField, UserTeam } from '../types';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -124,31 +124,48 @@ export default function MonitoriaForm({
     const loadData = async () => {
       try {
         if (!supabase) {
-          const [fRes, aRes, tRes, dfRes] = await Promise.all([
+          const [fRes, aRes, tRes, dfRes, utRes] = await Promise.all([
             mockDb.get('forms'),
             mockDb.get('users'),
             mockDb.get('teams'),
-            mockDb.get('dissatisfaction_fields')
+            mockDb.get('dissatisfaction_fields'),
+            mockDb.get('user_teams')
           ]);
           setForms((fRes.data || []).filter((f: any) => f.active !== false));
           const usersList = (aRes.data || []) as User[];
-          setAllUsers(usersList);
-          setAgents(usersList.filter((u: User) => u.role === 'suporte' && u.active !== false));
+          const userTeamDocs = (utRes.data || []) as UserTeam[];
+          const teamIdsByUser: Record<string, string[]> = {};
+          userTeamDocs.forEach((ut: UserTeam) => {
+            if (!teamIdsByUser[ut.user_id]) teamIdsByUser[ut.user_id] = [];
+            teamIdsByUser[ut.user_id].push(ut.team_id);
+          });
+          const enriched = usersList.map(u => ({ ...u, team_ids: u.team_ids?.length ? u.team_ids : (teamIdsByUser[u.id] || []) }));
+          setAllUsers(enriched);
+          setAgents(enriched.filter((u: User) => u.role === 'suporte' && u.active !== false));
           setTeams((tRes.data || []).filter((t: any) => t.active !== false));
           setDissatisfactionFields(dfRes.data || []);
         } else {
-          const [{ data: fData }, { data: aData }, { data: tData }, { data: dfData }] = await Promise.all([
+          const [{ data: fData }, { data: aData }, { data: tData }, { data: utData }] = await Promise.all([
             supabase.from('forms').select('*').eq('active', true),
-            supabase.from('users').select('*'), // Fetch all for history/anonymity
+            supabase.from('users').select('*'),
             supabase.from('teams').select('*').eq('active', true),
-            supabase.from('dissatisfaction_fields').select('*')
+            supabase.from('user_teams').select('*'),
           ]);
+          const dfRes = await supabase.from('dissatisfaction_fields').select('*');
+          const dfData = dfRes.error?.code === 'PGRST205' ? [] : (dfRes.data || []);
           setForms((fData || []).sort((a: any, b: any) => a.title.localeCompare(b.title)));
           const usersList = (aData || []) as User[];
-          setAllUsers(usersList);
-          setAgents(usersList.filter(u => u.role === 'suporte' && u.active === true).sort((a, b) => a.name.localeCompare(b.name)));
+          const userTeamDocs = (utData || []) as UserTeam[];
+          const teamIdsByUser: Record<string, string[]> = {};
+          userTeamDocs.forEach((ut: UserTeam) => {
+            if (!teamIdsByUser[ut.user_id]) teamIdsByUser[ut.user_id] = [];
+            teamIdsByUser[ut.user_id].push(ut.team_id);
+          });
+          const enriched = usersList.map(u => ({ ...u, team_ids: u.team_ids?.length ? u.team_ids : (teamIdsByUser[u.id] || []) }));
+          setAllUsers(enriched);
+          setAgents(enriched.filter(u => u.role === 'suporte' && u.active === true).sort((a, b) => a.name.localeCompare(b.name)));
           setTeams((tData || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
-          setDissatisfactionFields(dfData || []);
+          setDissatisfactionFields(dfData);
         }
       } catch (e) { console.error('Erro ao carregar dados:', e); }
     };
@@ -285,13 +302,13 @@ export default function MonitoriaForm({
         note: historyNote
       };
       
-      const getDeadline = () => {
-        const now = new Date();
-        const sla = qualityConfig.sla;
-        const bh = qualityConfig.businessHours;
-        if (isReevaluating) return addBusinessHours(now, sla?.auditorReevaluation || 25, bh).toISOString();
-        return addBusinessHours(now, sla?.agentReview || 50, bh).toISOString();
-      };
+  const getDeadline = () => {
+    const now = new Date();
+    const actionDeadline = qualityConfig.action_deadline;
+    const bh = qualityConfig.businessHours;
+    if (isReevaluating) return addBusinessHours(now, actionDeadline?.auditor_reevaluation || 25, bh).toISOString();
+    return addBusinessHours(now, actionDeadline?.agent_review || 50, bh).toISOString();
+  };
 
       const filteredDissatisfactionAnswers = { ...dissatisfactionAnswers };
       if (header.satisfaction_result !== 'Negativa' || !(header.satisfaction_has_record || header.client_contact_success)) {
@@ -302,34 +319,43 @@ export default function MonitoriaForm({
         });
       }
 
-      const payload = {
-        form_id: header.form_id,
-        evaluator_id: initialData?.evaluator_id || user.id,
-        evaluated_id: header.evaluated_id,
-        team_id: header.team_id || null,
-        ticket_id: header.ticket_id,
-        channel: header.channel,
-        ticket_date: header.ticket_date,
-        analysis_date: header.analysis_date,
-        satisfaction_result: header.satisfaction_result || null,
-        satisfaction_has_record: header.satisfaction_has_record,
-        satisfaction_record_text: header.satisfaction_record_text,
-        answers: scores,
-        question_observations: observations,
-        critical_error_observations: criticalErrorObservations,
-        selected_critical_errors: Object.keys(criticalErrors).filter(id => criticalErrors[id]),
-        score,
-        status: isAdminEdit ? (initialData?.status || 'pendente_revisao') : (isReevaluating ? 'pendente_revisao' : (initialData?.status || 'pendente_revisao')),
-        evaluator_note: header.evaluator_note,
-        client_contact_log: header.client_contact_success ? header.client_contact_log : '',
-        client_contact_success: header.client_contact_success,
-        active: true,
-        form_snapshot: selectedForm,
-        history: [...(initialData?.history || []), historyEntry],
-        deadline_at: (initialData?.deadline_at && !isReevaluating && !isAdminEdit) ? initialData.deadline_at : getDeadline(),
-        updated_at: nowTs,
-        dissatisfaction_answers: filteredDissatisfactionAnswers,
-      };
+const evaluatedUser = allUsers.find(u => u.id === header.evaluated_id);
+const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.team_ids?.[0]));
+  const selectedFormObj = forms.find(f => f.id === header.form_id);
+
+  const payload = {
+    form_id: header.form_id,
+    evaluator_id: initialData?.evaluator_id || user.id,
+    evaluated_id: header.evaluated_id,
+    team_id: header.team_id || null,
+    ticket_id: header.ticket_id,
+    channel: header.channel,
+    ticket_date: header.ticket_date,
+    analysis_date: header.analysis_date,
+    satisfaction_result: header.satisfaction_result || null,
+    satisfaction_has_record: header.satisfaction_has_record,
+    satisfaction_record_text: header.satisfaction_record_text,
+    answers: scores,
+    question_observations: observations,
+    critical_error_observations: criticalErrorObservations,
+    selected_critical_errors: Object.keys(criticalErrors).filter(id => criticalErrors[id]),
+    score,
+    status: isAdminEdit ? (initialData?.status || 'pendente_revisao') : (isReevaluating ? 'pendente_revisao' : (initialData?.status || 'pendente_revisao')),
+    evaluator_note: header.evaluator_note,
+    client_contact_log: header.client_contact_success ? header.client_contact_log : '',
+    client_contact_success: header.client_contact_success,
+    active: true,
+    form_snapshot: selectedForm,
+    history: [...(initialData?.history || []), historyEntry],
+    action_deadline_at: (initialData?.action_deadline_at && !isReevaluating && !isAdminEdit) ? initialData.action_deadline_at : getDeadline(),
+    evaluator_name: user.name,
+    evaluated_name: evaluatedUser?.name || '',
+    form_name: selectedFormObj?.title || '',
+    team_name: selectedTeam?.name || '',
+    updated_at: nowTs,
+  dissatisfaction_answers: filteredDissatisfactionAnswers,
+  applied_config: qualityConfig as unknown as Record<string, unknown>,
+};
 
       if (!supabase) {
         if (initialData?.id) await mockDb.update('monitorias', initialData.id, payload);
@@ -408,48 +434,62 @@ export default function MonitoriaForm({
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Agente de Atendimento *</label>
-                  <CustomSelect 
-                    value={header.evaluated_id} 
-                    onChange={val => {
-                      setHeader(prev => ({...prev, evaluated_id: val}));
-                      // Auto-select team if only one is available for this agent
-                      const agent = agents.find(a => a.id === val);
-                      if (agent?.team_ids?.length === 1 && !header.team_id) {
-                        setHeader(prev => ({...prev, team_id: agent.team_ids![0]}));
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Agente de Atendimento *</label>
+                <CustomSelect
+                  value={header.evaluated_id}
+                  onChange={val => {
+                    if (header.team_id && val && val !== header.evaluated_id) {
+                      const newAgent = agents.find(a => a.id === val);
+                      if (newAgent && !newAgent.team_ids?.includes(header.team_id)) {
+                        toast.info('Remova a equipe antes de trocar o agente.');
+                        return;
                       }
-                    }} 
-                    options={[
-                      { value: '', label: 'Selecione o agente...' }, 
-                      ...agents
-                        .filter(a => !header.team_id || (a.team_ids && a.team_ids.includes(header.team_id)))
-                        .map(a => ({ value: a.id, label: a.name }))
-                    ]}
-                    className="w-full"
-                    disabled={isViewOnly || isReevaluating}
-                  />
-                </div>
+                    }
+                    setHeader(prev => ({...prev, evaluated_id: val, ...(val === '' ? { team_id: '' } : {})}));
+                  }}
+                  options={[
+                    { value: '', label: 'Selecione o agente...' },
+                    ...agents
+                    .filter(a => {
+                      if (!header.team_id) return true;
+                      return a.team_ids && a.team_ids.includes(header.team_id);
+                    })
+                    .map(a => ({ value: a.id, label: a.name }))
+                  ]}
+                  className="w-full"
+                  disabled={isViewOnly || isReevaluating}
+                />
+              </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipe *</label>
-                  <CustomSelect 
-                    value={header.team_id} 
-                    onChange={val => setHeader({...header, team_id: val})} 
-                    options={[
-                      { value: '', label: 'Selecione a equipe...' }, 
-                      ...teams
-                        .filter(t => {
-                          if (!header.evaluated_id) return true;
-                          const agent = agents.find(a => a.id === header.evaluated_id);
-                          return agent?.team_ids?.includes(t.id);
-                        })
-                        .map(t => ({ value: t.id, label: t.name }))
-                    ]}
-                    className="w-full"
-                    disabled={isViewOnly || isReevaluating}
-                  />
-                </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipe *</label>
+                <CustomSelect
+                  value={header.team_id}
+                  onChange={val => {
+                    if (header.evaluated_id && val && val !== header.team_id) {
+                      const currentAgent = agents.find(a => a.id === header.evaluated_id);
+                      if (currentAgent && !currentAgent.team_ids?.includes(val)) {
+                        toast.info('Remova o agente antes de trocar a equipe.');
+                        return;
+                      }
+                    }
+                    setHeader(prev => ({...prev, team_id: val, ...(val === '' ? { evaluated_id: '' } : {})}));
+                  }}
+                  options={[
+                    { value: '', label: 'Selecione a equipe...' },
+                    ...teams
+                    .filter(t => {
+                      if (!header.evaluated_id) return true;
+                      const agent = agents.find(a => a.id === header.evaluated_id);
+                      return agent?.team_ids?.includes(t.id);
+                    })
+                    .map(t => ({ value: t.id, label: t.name }))
+                  ]}
+                  className="w-full"
+                  disabled={isViewOnly || isReevaluating}
+                />
+              </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Número do Ticket *</label>
@@ -618,15 +658,15 @@ export default function MonitoriaForm({
                 const isTarget = isAboveTarget(score);
                 
                 // Mapeamento para cores sólidas vibrantes baseadas na configuração
-                const getSolidBg = (textColor: string) => {
-                  if (textColor.includes('indigo')) return 'bg-indigo-600';
-                  if (textColor.includes('emerald')) return 'bg-emerald-600';
-                  if (textColor.includes('amber')) return 'bg-amber-500';
-                  if (textColor.includes('red')) return 'bg-red-600';
-                  if (textColor.includes('purple')) return 'bg-purple-600';
-                  if (textColor.includes('blue')) return 'bg-blue-600';
-                  return 'bg-brand-primary';
-                };
+const getSolidBg = (textColor: string) => {
+  if (textColor.includes('excelente') || textColor.includes('indigo')) return 'bg-indigo-600';
+  if (textColor.includes('aceitavel') || textColor.includes('emerald')) return 'bg-emerald-600';
+  if (textColor.includes('atencao') || textColor.includes('amber')) return 'bg-amber-500';
+  if (textColor.includes('ruim') || textColor.includes('red')) return 'bg-red-600';
+  if (textColor.includes('purple')) return 'bg-purple-600';
+  if (textColor.includes('blue')) return 'bg-blue-600';
+  return 'bg-brand-primary';
+};
 
                 return (
                   <div className={`p-10 rounded-[40px] flex flex-col md:flex-row items-center justify-between text-white shadow-premium transition-all duration-700 relative overflow-hidden ${getSolidBg(level.color)}`}>

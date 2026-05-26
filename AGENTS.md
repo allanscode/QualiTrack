@@ -54,15 +54,16 @@ QualiTrack/
 │   ├── index.css                        # Design system tokens + Tailwind v4 @theme
 │   ├── lib/
 │ │ ├── supabase.ts # Cliente Supabase + mockDb completo (localStorage)
+│ │ ├── chartColors.ts # Utilitário de cores de gráfico (lê CSS vars, theme-aware)
 │ │ ├── businessHours.ts # Cálculo de SLA em horas úteis
 │ │ ├── contestation.ts # Funções unificadas de contestação (isApprovalAction/isRejectionAction)
-│ │ └── useQualityConfig.ts # Hook de configuração de qualidade
+│ │ └── useQualityConfig.tsx # Context Provider + hook de configuração de qualidade
 │   └── components/
 │       ├── MonitoriaList.tsx            # Listagem, filtros, transições de status
 │       ├── MonitoriaForm.tsx            # Formulário 4 etapas, cálculo de score, reavaliação
 │       ├── AdminPanel.tsx               # Container admin com tab routing
 │       ├── QualityConfigManagement.tsx  # Editor de configuração de qualidade
-│       ├── ui/                          # Componentes reutilizáveis (Card, Button, Badge, etc.)
+│ ├── ui/ # Componentes reutilizáveis (Card, Button, Badge, CustomSelect, etc.)
 │       ├── dashboard/
 │       │   ├── DashboardMain.tsx        # Router de dashboard por role
 │       │   ├── DashboardContext.tsx      # Estado central (filtros, dados, queries RBAC)
@@ -96,6 +97,9 @@ QualiTrack/
 4. **TailwindCSS v4**: Não use plugins do Tailwind v3 ou `tailwind.config.js`. Customização é via `@theme` em `src/index.css`.
 5. **Componentização**: Não adicione código aos arquivos monolíticos (`App.tsx`, `MonitoriaList.tsx`, `MonitoriaForm.tsx`). Prioridade é **extrair componentes menores** antes de adicionar features.
 6. **Hooks Incondicionais**: Todos os `useX` devem estar no topo do componente, nunca condicionais. Incidentes anteriores em `MonitoriaForm.tsx`.
+7. **Constantes no Escopo do Módulo**: Constantes usadas em inicializadores de `useState` ou outros hooks devem ser declaradas **fora** do componente (escopo do módulo). Nunca declare `const` dentro do componente que seja referenciado antes de sua linha. Incidente: `MOCK_SESSION_KEY` usada em `useState` antes de ser declarada.
+8. **Hooks nunca dentro de `useEffect`**: `useCallback`, `useMemo`, `useRef` etc. não podem ser chamados dentro de callbacks de `useEffect`. Use refs como ponte (ex: `extendSessionRef.current = fn` dentro do effect, `useCallback(() => ref.current())` fora). Incidente: `useCallback` dentro de `useEffect` de session management.
+9. **Seleção Agente↔Equipe nunca limpa automaticamente**: No `MonitoriaForm`, ao selecionar Agente ou Equipe, o outro campo NUNCA deve ser limpo automaticamente. Se o usuário tentar trocar um campo enquanto o outro está selecionado com valor incompatível, bloqueie com toast informativo. O usuário deve primeiro desselecionar (escolher placeholder) para depois alterar o relacionamento. Incidente: auto-select de equipe e auto-clear de campos.
 
 ---
 
@@ -213,6 +217,61 @@ Ativado automaticamente quando `VITE_SUPABASE_URL` está ausente ou contém "pla
 
 > **Nota**: Usuários de outros perfis (qualidade, suporte, gestores) são reais ou de teste temporário e serão removidos quando o app for publicado. Não documente credenciais de usuários temporários.
 
+### Sessão Mock
+
+Mock mode persiste sessão em `localStorage` com chave `qualitrack_session` (`{userId, sessionStartedAt, sessionExpiresAt}`). Isso substitui o antigo `sessionStorage` `qualitrack_mock_user` — a sessão sobrevive a F5 e fechamento de aba.
+
+---
+
+## 9.5. Gerenciamento de Sessão (`App.tsx`)
+
+O `App.tsx` implementa gerenciamento de sessão unificado com 4 mecanismos:
+
+| Mecanismo | Constante | Valor | Descrição |
+|-----------|-----------|-------|-----------|
+| Idle timeout | `IDLE_TIMEOUT_MS` | 60 min | Sem atividade → logout automático |
+| Idle warning | `IDLE_WARNING_MS` | 5 min | Modal com countdown 5 min antes do logout |
+| Absolute timeout | `ABSOLUTE_TIMEOUT_MS` | 8 h | Sessão contínua máximo 8h → logout forçado |
+| Proactive refresh | `SESSION_REFRESH_MS` | 50 min | `supabase.auth.refreshSession()` a cada 50min |
+
+### Padrão Ref-Bridge para `extendSession`
+
+`useCallback` **não pode** ser chamado dentro de `useEffect`. A solução é o padrão ref-bridge:
+
+```
+const extendSessionRef = useRef<() => void>(() => {});
+
+useEffect(() => {
+  // Dentro do effect: atualiza o ref
+  extendSessionRef.current = () => { /* lógica real */ };
+}, [deps]);
+
+// Fora do effect: callback estável para JSX
+const extendSession = useCallback(() => {
+  extendSessionRef.current();
+}, []);
+```
+
+### Estado de Sessão
+
+| State/Ref | Tipo | Uso |
+|-----------|------|-----|
+| `showIdleWarning` | `boolean` | Controla visibilidade do modal de aviso |
+| `idleCountdown` | `number` | Segundos restantes no countdown (M:SS) |
+| `sessionStartTimeRef` | `Ref<number>` | Timestamp de início da sessão (8h limit) |
+| `isCleaningSessionRef` | `Ref<boolean>` | Previne race condition em logout forçado |
+| `extendSessionRef` | `Ref<fn>` | Ponte entre useEffect e useCallback |
+
+### `handleLogout(options?)`
+
+Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handleLogout}`) seja passado como string para Sonner (crash). Após reset de senha: `handleLogout({ silent: true })` + toast contextual.
+
+### Persistência de Sessão (F5)
+
+- **Supabase**: SDK `persistSession: true` + `localStorage` — `INITIAL_SESSION` com session restaura login
+- **Mock**: `localStorage` chave `qualitrack_session` — `{userId, sessionStartedAt, sessionExpiresAt}`
+- **Last Activity**: `localStorage` chave `qualitrack_last_activity` — timestamp da última atividade do usuário. Ao restaurar sessão (F5), o sistema verifica se o idle já expirou comparando `Date.now() - lastActivity`. Se ≥ 60 min, sessão é descartada e usuário redirecionado ao login.
+
 ---
 
 ## 10. Variáveis de Ambiente
@@ -233,7 +292,7 @@ DISABLE_HMR # (opcional) "true" para desativar HMR
 | `docs/architecture/system-overview.md` | Visão geral da arquitetura |
 | `docs/architecture/frontend.md` | Arquitetura do frontend |
 | `docs/architecture/backend.md` | Arquitetura do backend |
-| `docs/database/schema.md` | Schema do banco (7 tabelas) |
+| `docs/database/schema.md` | Schema do banco (9 tabelas: users, teams, forms, monitorias, quality_configs, access_requests, user_teams, dissatisfaction_fields, business_hours/holidays) |
 | `docs/specs/monitoria.md` | Spec de monitorias (status, score, SLA, form) |
 | `docs/specs/dashboard.md` | Spec de dashboards (5 layouts, 8 widgets, RBAC) |
 | `docs/specs/admin.md` | Spec do painel admin (5 tabs) |
@@ -275,12 +334,16 @@ Antes de commitar qualquer alteração, verifique:
 | Sem RLS na tabela `monitorias` | **ALTA** | ✅ Resolvido | RLS implementada via `rls_monitorias.sql` (casts `auth.uid()::text` para compatibilidade TEXT/UUID) |
 | Lógica do cron SLA diverge do frontend | **MÉDIA** | ✅ Documentado | Comentário esclarecedor adicionado; cron usa `deadline_at` (salvo por `recalculateActiveDeadlines()`) |
 | Componentes monolíticos (App.tsx, MonitoriaList.tsx, MonitoriaForm.tsx) | **MÉDIA** | Pendente | Extrair componentes menores ANTES de adicionar features |
-| Z-index/clipping com CustomSelect em containers scrolláveis | **MÉDIA** | ✅ Resolvido | CustomSelect reescrito com React Portal (`createPortal`) |
+| Z-index/clipping com CustomSelect em containers scrolláveis | **MÉDIA** | ✅ Resolvido | CustomSelect reescrito com React Portal (`createPortal`) + type-ahead (filtro por digitação) |
 | Lógica de contestação duplicada em 5 dashboards | **MÉDIA** | ✅ Resolvido | Extraída para `src/lib/contestation.ts` — 4 dashboards atualizados |
 | `admin-create-user` Edge Function é placeholder | **BAIXA** | ✅ Resolvido | Retorna 501 com TODO (referenciado em config.toml, não removido) |
 | Migrations fora de `supabase/migrations/` | **BAIXA** | ✅ Resolvido | Copiadas para `supabase/migrations/` com timestamps |
 | `index.html` título é "My Google AI Studio App" | **BAIXA** | ✅ Resolvido | Corrigido para "QualiTrack" |
 | Dependências legadas no `package.json` | **BAIXA** | ✅ Resolvido | Removidos: `firebase`, `@google/genai`, `express`, `react-markdown`, `dotenv`, `autoprefixer`, `tsx`, `@types/express` |
+| `MOCK_SESSION_KEY` usada antes da declaração | **ALTA** | ✅ Resolvido | Constantes de sessão movidas para escopo do módulo (antes do componente) |
+| `useCallback` dentro de `useEffect` (session) | **ALTA** | ✅ Resolvido | Ref-bridge pattern: `extendSessionRef` atualizado no effect, `useCallback` fora chama `ref.current()` |
+| Favicon 404 | **BAIXA** | ✅ Resolvido | Adicionado `public/favicon.svg` + `<link>` em `index.html` |
+| Agente↔Equipe limpa campos automaticamente | **MÉDIA** | ✅ Resolvido | MonitoriaForm: lógica de seleção não limpa campos; bloqueia troca incompatível com toast informativo |
 
 ---
 

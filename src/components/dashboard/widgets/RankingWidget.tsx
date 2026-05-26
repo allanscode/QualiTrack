@@ -45,11 +45,11 @@ export default function RankingWidget({ title, subtitle, data, type = 'score', i
             >
               {/* Rank Badge */}
               <div className="relative flex-shrink-0">
-                <div className="w-9 h-9 rounded-xl bg-brand-primary text-white flex items-center justify-center font-black text-xs shadow-premium group-hover:scale-105 transition-transform">
-                  {index + 1}
-                </div>
-                {index === 0 && (
-                  <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-400 rounded-full border-2 border-white flex items-center justify-center">
+        <div className="w-9 h-9 rounded-xl bg-brand-accent text-white flex items-center justify-center font-black text-xs shadow-premium group-hover:scale-105 transition-transform">
+            {index + 1}
+          </div>
+          {index === 0 && (
+            <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-400 rounded-full border-2 border-surface-card flex items-center justify-center">
                     <Award className="w-2 h-2 text-white" />
                   </div>
                 )}

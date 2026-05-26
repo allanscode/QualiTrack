@@ -27,7 +27,7 @@ export default function DistributionChart({ title, data }: DistributionChartProp
       <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest mb-4">{title}</h3>
       {data.length > 0 ? (
         <div className="flex-1 flex flex-col">
-          <div className="flex-1">
+          <div className="flex-1" style={{ minWidth: 0, minHeight: 150 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Tooltip content={<CustomTooltip />} />
