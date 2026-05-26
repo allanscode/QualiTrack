@@ -4,6 +4,7 @@ import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { Monitoria, User } from '../../../types';
 import Card from '../../ui/Card';
 import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
+import { Clock } from 'lucide-react';
 
 interface RecentAuditsTableProps {
   monitorias: Monitoria[];
@@ -16,10 +17,10 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   em_contestacao: { label: 'Em Reanálise', color: 'text-level-atencao', bg: 'bg-level-atencao' },
   aguardando_gestor_suporte: { label: 'Aguardando Gestor', color: 'text-functional-success', bg: 'bg-functional-success' },
   aguardando_gestor_qualidade: { label: 'Aguardando Qualidade', color: 'text-level-roxo', bg: 'bg-level-roxo' },
-  concluida: { label: 'Finalizada', color: 'text-functional-success', bg: 'bg-functional-success' },
+  concluida: { label: 'Concluída', color: 'text-functional-success', bg: 'bg-functional-success' },
   contestacao_aceita: { label: 'Contestação Aceita', color: 'text-functional-success', bg: 'bg-functional-success' },
   contestacao_negada: { label: 'Contestação Negada', color: 'text-functional-error', bg: 'bg-functional-error' },
-  finalizada_alterada: { label: 'Finalizada Alterada', color: 'text-functional-success', bg: 'bg-functional-success' },
+  finalizada_alterada: { label: 'Concluída Alterada', color: 'text-functional-success', bg: 'bg-functional-success' },
 };
 
 export default function RecentAuditsTable({ monitorias, users, title = 'Monitorias Recentes' }: RecentAuditsTableProps) {
@@ -90,11 +91,14 @@ export default function RecentAuditsTable({ monitorias, users, title = 'Monitori
                       {sc.toFixed(2)}%
                     </span>
                   </td>
-                  <td className="px-6 py-3.5">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${cfg.bg} ${cfg.color}`}>
-                      {cfg.label}
-                    </span>
-                  </td>
+                <td className="px-6 py-3.5">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${cfg.bg} ${cfg.color}`}>
+                    {cfg.label}
+                    {m.resolution_type === 'automatic' && (
+                      <Clock className="w-3 h-3 opacity-70" />
+                    )}
+                  </span>
+                </td>
                   <td className="px-6 py-3.5">
                     <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status} />
                   </td>
