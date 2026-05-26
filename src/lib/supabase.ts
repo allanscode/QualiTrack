@@ -108,7 +108,10 @@ const INITIAL_DATA: { [key: string]: any[] } = {
   ],
   user_teams: [],
   forms: [],
-  teams: [],
+  teams: [
+    { id: 'team-alpha', name: 'Equipe Alpha', sigla: 'ALF', active: true, description: 'Equipe de atendimento Alpha', created_at: new Date().toISOString() },
+    { id: 'team-beta', name: 'Equipe Beta', sigla: 'BET', active: true, description: 'Equipe de atendimento Beta', created_at: new Date().toISOString() },
+  ],
   monitorias: [],
   access_requests: [],
   quality_configs: [],
@@ -134,23 +137,42 @@ const INITIAL_DATA: { [key: string]: any[] } = {
   ]
 };
 
-if (typeof window !== 'undefined') {
-  Object.keys(INITIAL_DATA).forEach(key => {
-    const existing = localStorage.getItem(`${DB_PREFIX}${key}`);
-    if (!existing) {
-      localStorage.setItem(`${DB_PREFIX}${key}`, JSON.stringify(INITIAL_DATA[key]));
-    } else if (key === 'users') {
-      const users = JSON.parse(existing);
-      INITIAL_DATA.users.forEach(defaultUser => {
-        const exists = users.some((u: any) => u.email === defaultUser.email);
-        if (!exists) {
-          users.push(defaultUser);
-        }
-      });
-      localStorage.setItem(`${DB_PREFIX}users`, JSON.stringify(users));
+  if (typeof window !== 'undefined') {
+    Object.keys(INITIAL_DATA).forEach(key => {
+      const existing = localStorage.getItem(`${DB_PREFIX}${key}`);
+      if (!existing) {
+        localStorage.setItem(`${DB_PREFIX}${key}`, JSON.stringify(INITIAL_DATA[key]));
+      } else if (key === 'users') {
+        const users = JSON.parse(existing);
+        INITIAL_DATA.users.forEach(defaultUser => {
+          const exists = users.some((u: any) => u.email === defaultUser.email);
+          if (!exists) {
+            users.push(defaultUser);
+          }
+        });
+        localStorage.setItem(`${DB_PREFIX}users`, JSON.stringify(users));
+      }
+    });
+
+    // Seed user_teams for suporte users if teams exist but no user_teams yet
+    const existingUT = localStorage.getItem(`${DB_PREFIX}user_teams`);
+    if (!existingUT || JSON.parse(existingUT).length === 0) {
+      const usersRaw = localStorage.getItem(`${DB_PREFIX}users`);
+      if (usersRaw) {
+        const users = JSON.parse(usersRaw);
+        const suporteUsers = users.filter((u: any) => u.role === 'suporte' && u.active !== false);
+        const gestorSuporteUsers = users.filter((u: any) => u.role === 'gestor_suporte' && u.active !== false);
+        const seedUT: any[] = [];
+        suporteUsers.forEach((u: any) => {
+          seedUT.push({ id: generateId(), user_id: u.id, team_id: 'team-alpha', created_at: new Date().toISOString() });
+        });
+        gestorSuporteUsers.forEach((u: any) => {
+          seedUT.push({ id: generateId(), user_id: u.id, team_id: 'team-alpha', created_at: new Date().toISOString() });
+        });
+        localStorage.setItem(`${DB_PREFIX}user_teams`, JSON.stringify(seedUT));
+      }
     }
-  });
-}
+  }
 
 const getMockData = (key: string) => {
   const fullKey = `${DB_PREFIX}${key}`;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
-import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus, DissatisfactionField } from '../types';
+import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus, DissatisfactionField, UserTeam } from '../types';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -124,32 +124,48 @@ export default function MonitoriaForm({
     const loadData = async () => {
       try {
         if (!supabase) {
-          const [fRes, aRes, tRes, dfRes] = await Promise.all([
+          const [fRes, aRes, tRes, dfRes, utRes] = await Promise.all([
             mockDb.get('forms'),
             mockDb.get('users'),
             mockDb.get('teams'),
-            mockDb.get('dissatisfaction_fields')
+            mockDb.get('dissatisfaction_fields'),
+            mockDb.get('user_teams')
           ]);
           setForms((fRes.data || []).filter((f: any) => f.active !== false));
           const usersList = (aRes.data || []) as User[];
-          setAllUsers(usersList);
-          setAgents(usersList.filter((u: User) => u.role === 'suporte' && u.active !== false));
+          const userTeamDocs = (utRes.data || []) as UserTeam[];
+          const teamIdsByUser: Record<string, string[]> = {};
+          userTeamDocs.forEach((ut: UserTeam) => {
+            if (!teamIdsByUser[ut.user_id]) teamIdsByUser[ut.user_id] = [];
+            teamIdsByUser[ut.user_id].push(ut.team_id);
+          });
+          const enriched = usersList.map(u => ({ ...u, team_ids: u.team_ids?.length ? u.team_ids : (teamIdsByUser[u.id] || []) }));
+          setAllUsers(enriched);
+          setAgents(enriched.filter((u: User) => u.role === 'suporte' && u.active !== false));
           setTeams((tRes.data || []).filter((t: any) => t.active !== false));
           setDissatisfactionFields(dfRes.data || []);
         } else {
-      const [{ data: fData }, { data: aData }, { data: tData }] = await Promise.all([
-        supabase.from('forms').select('*').eq('active', true),
-        supabase.from('users').select('*'),
-        supabase.from('teams').select('*').eq('active', true),
-      ]);
-      const dfRes = await supabase.from('dissatisfaction_fields').select('*');
-      const dfData = dfRes.error?.code === 'PGRST205' ? [] : (dfRes.data || []);
-      setForms((fData || []).sort((a: any, b: any) => a.title.localeCompare(b.title)));
-      const usersList = (aData || []) as User[];
-      setAllUsers(usersList);
-      setAgents(usersList.filter(u => u.role === 'suporte' && u.active === true).sort((a, b) => a.name.localeCompare(b.name)));
-      setTeams((tData || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
-      setDissatisfactionFields(dfData);
+          const [{ data: fData }, { data: aData }, { data: tData }, { data: utData }] = await Promise.all([
+            supabase.from('forms').select('*').eq('active', true),
+            supabase.from('users').select('*'),
+            supabase.from('teams').select('*').eq('active', true),
+            supabase.from('user_teams').select('*'),
+          ]);
+          const dfRes = await supabase.from('dissatisfaction_fields').select('*');
+          const dfData = dfRes.error?.code === 'PGRST205' ? [] : (dfRes.data || []);
+          setForms((fData || []).sort((a: any, b: any) => a.title.localeCompare(b.title)));
+          const usersList = (aData || []) as User[];
+          const userTeamDocs = (utData || []) as UserTeam[];
+          const teamIdsByUser: Record<string, string[]> = {};
+          userTeamDocs.forEach((ut: UserTeam) => {
+            if (!teamIdsByUser[ut.user_id]) teamIdsByUser[ut.user_id] = [];
+            teamIdsByUser[ut.user_id].push(ut.team_id);
+          });
+          const enriched = usersList.map(u => ({ ...u, team_ids: u.team_ids?.length ? u.team_ids : (teamIdsByUser[u.id] || []) }));
+          setAllUsers(enriched);
+          setAgents(enriched.filter(u => u.role === 'suporte' && u.active === true).sort((a, b) => a.name.localeCompare(b.name)));
+          setTeams((tData || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
+          setDissatisfactionFields(dfData);
         }
       } catch (e) { console.error('Erro ao carregar dados:', e); }
     };
