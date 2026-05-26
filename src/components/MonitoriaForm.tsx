@@ -434,43 +434,62 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Agente de Atendimento *</label>
-                  <CustomSelect 
-                    value={header.evaluated_id} 
-        onChange={val => {
-          setHeader(prev => ({...prev, evaluated_id: val, team_id: ''}));
-        }}
-                    options={[
-                      { value: '', label: 'Selecione o agente...' }, 
-                      ...agents
-                        .filter(a => !header.team_id || (a.team_ids && a.team_ids.includes(header.team_id)))
-                        .map(a => ({ value: a.id, label: a.name }))
-                    ]}
-                    className="w-full"
-                    disabled={isViewOnly || isReevaluating}
-                  />
-                </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Agente de Atendimento *</label>
+                <CustomSelect
+                  value={header.evaluated_id}
+                  onChange={val => {
+                    if (header.team_id && val && val !== header.evaluated_id) {
+                      const newAgent = agents.find(a => a.id === val);
+                      if (newAgent && !newAgent.team_ids?.includes(header.team_id)) {
+                        toast.info('Remova a equipe antes de trocar o agente.');
+                        return;
+                      }
+                    }
+                    setHeader(prev => ({...prev, evaluated_id: val, ...(val === '' ? { team_id: '' } : {})}));
+                  }}
+                  options={[
+                    { value: '', label: 'Selecione o agente...' },
+                    ...agents
+                    .filter(a => {
+                      if (!header.team_id) return true;
+                      return a.team_ids && a.team_ids.includes(header.team_id);
+                    })
+                    .map(a => ({ value: a.id, label: a.name }))
+                  ]}
+                  className="w-full"
+                  disabled={isViewOnly || isReevaluating}
+                />
+              </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipe *</label>
-                  <CustomSelect 
-                    value={header.team_id} 
-                    onChange={val => setHeader({...header, team_id: val, evaluated_id: ''})} 
-                    options={[
-                      { value: '', label: 'Selecione a equipe...' }, 
-                      ...teams
-                        .filter(t => {
-                          if (!header.evaluated_id) return true;
-                          const agent = agents.find(a => a.id === header.evaluated_id);
-                          return agent?.team_ids?.includes(t.id);
-                        })
-                        .map(t => ({ value: t.id, label: t.name }))
-                    ]}
-                    className="w-full"
-                    disabled={isViewOnly || isReevaluating}
-                  />
-                </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipe *</label>
+                <CustomSelect
+                  value={header.team_id}
+                  onChange={val => {
+                    if (header.evaluated_id && val && val !== header.team_id) {
+                      const currentAgent = agents.find(a => a.id === header.evaluated_id);
+                      if (currentAgent && !currentAgent.team_ids?.includes(val)) {
+                        toast.info('Remova o agente antes de trocar a equipe.');
+                        return;
+                      }
+                    }
+                    setHeader(prev => ({...prev, team_id: val, ...(val === '' ? { evaluated_id: '' } : {})}));
+                  }}
+                  options={[
+                    { value: '', label: 'Selecione a equipe...' },
+                    ...teams
+                    .filter(t => {
+                      if (!header.evaluated_id) return true;
+                      const agent = agents.find(a => a.id === header.evaluated_id);
+                      return agent?.team_ids?.includes(t.id);
+                    })
+                    .map(t => ({ value: t.id, label: t.name }))
+                  ]}
+                  className="w-full"
+                  disabled={isViewOnly || isReevaluating}
+                />
+              </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Número do Ticket *</label>
