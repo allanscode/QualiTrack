@@ -53,6 +53,8 @@ graph TB
 
 ### 2. Monitorias (`MonitoriaForm.tsx` + `MonitoriaList.tsx`)
 - Criação de auditorias em 4 etapas (stepper)
+- Seleção Agente↔Equipe com vinculação protegida (nunca limpa automaticamente; bloqueia troca incompatível com toast)
+- CustomSelect com type-ahead (filtro por digitação sem campo de busca)
 - Cálculo automático de score com pesos
 - Fluxo de contestação multi-etapa
 - Controle de prazos de ação com horário comercial

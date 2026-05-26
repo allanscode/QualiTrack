@@ -40,6 +40,8 @@ flowchart TD
 
 ### 1. Criação (Monitor de Qualidade)
 - Seleciona ticket, agente, equipe, canal, formulário
+- **Agente↔Equipe**: ao selecionar um campo, o outro filtra suas opções automaticamente; nunca limpa a seleção atual; troca incompatível bloqueada com toast
+- **Type-ahead**: nos dropdowns, pode digitar para filtrar opções em tempo real
 - Avalia cada critério de cada pilar (Sim/Não/N.A.)
 - Marca erros críticos (se houver)
 - Escreve feedback

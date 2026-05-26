@@ -75,7 +75,15 @@ stateDiagram-v2
 ## Formulário Multi-Step (MonitoriaForm)
 
 ### Step 1 — Dados Básicos
-- Ticket ID, Agente (select), Equipe (auto-preenchida), Canal, Formulário
+- Ticket ID, Agente (select), Equipe (select), Canal, Formulário
+- **Lógica Agente↔Equipe** (vinculação protegida):
+  - Selecionar Agente → filtra equipes vinculadas ao agente; equipe permanece "Selecione a equipe"
+  - Selecionar Equipe → filtra agentes vinculados à equipe; agente permanece "Selecione o agente"
+  - Com ambos selecionados, a lista do outro campo é filtrada pelo relacionamento
+  - Tentar trocar Agente com Equipe incompatível selecionada → bloqueio + toast informativo
+  - Tentar trocar Equipe com Agente incompatível selecionado → bloqueio + toast informativo
+  - O usuário deve primeiro desselecionar (placeholder) para alterar o relacionamento
+- **CustomSelect com type-ahead**: Ao abrir qualquer dropdown, o usuário pode digitar para filtrar opções em tempo real (case-insensitive), sem campo de busca visível
 
 ### Step 2 — Avaliação por Pilar
 - Para cada pilar do formulário:

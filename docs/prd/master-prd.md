@@ -35,6 +35,8 @@ Centros de suporte precisam:
 ### 4.2 Monitorias (Core)
 - Formulários de avaliação configuráveis (pilares + critérios + pesos)
 - Criação em 4 etapas (stepper): Dados → Pilar → Resumo → Salvar
+- **Seleção Agente↔Equipe com vinculação protegida**: campos filtram listas um do outro, nunca limpam automaticamente; troca incompatível bloqueada com toast
+- **Type-ahead em selects**: digitar no dropdown filtra opções em tempo real (sem campo de busca)
 - Cálculo automático de score com pesos e NA
 - Erros críticos zeram a nota (0%)
 - Fluxo de contestação multi-nível (agente → auditor → gestor suporte → gestor qualidade)

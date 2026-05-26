@@ -38,7 +38,7 @@ src/
     │   ├── Badge.tsx
     │   ├── Button.tsx
     │   ├── Card.tsx
-    │   ├── CustomSelect.tsx    # Select dropdown customizado
+│   ├── CustomSelect.tsx # Select dropdown com portal + type-ahead (filtro por digitação)
     │   ├── Select.tsx          # Select nativo estilizado
 │   └── ActionDeadlineClock.tsx # Relógio de prazo de ação com contagem regressiva
     └── dashboard/
@@ -196,7 +196,7 @@ Os perfis de usuário (roles) são mapeados de IDs técnicos para nomes amigáve
 | `Button` | Botão com variantes: primary, secondary, outline, ghost |
 | `Badge` | Tag com variantes: success, error, warning, info, neutral |
 | `Select` | `<select>` nativo estilizado |
-| `CustomSelect` | Dropdown customizado com portal (evita clipping) |
+| `CustomSelect` | Dropdown customizado com portal (evita clipping) + type-ahead (filtro por digitação) |
 | `ActionDeadlineClock` | Relógio de contagem regressiva de prazo de ação |
 
 ## Fluxo de Renderização

@@ -12,18 +12,17 @@ erDiagram
     USERS ||--o{ MONITORIAS : "evaluated_id"
     TEAMS ||--o{ MONITORIAS : "team_id"
     FORMS ||--o{ MONITORIAS : "form_id"
-    USERS }o--o{ TEAMS : "team_ids[]"
+USERS }o--o{ TEAMS : "user_teams (N:N)"
 
-    USERS {
-        uuid id PK
-        text email UK
-        text name
-        text role
-        uuid[] team_ids
-        boolean active
-        boolean must_change_password
-        timestamptz created_at
-    }
+USERS {
+uuid id PK
+text email UK
+text name
+text role
+boolean active
+boolean must_change_password
+timestamptz created_at
+}
 
     TEAMS {
         uuid id PK
@@ -89,10 +88,20 @@ erDiagram
 | `email` | TEXT | UNIQUE | Email do usuário |
 | `name` | TEXT | — | Nome completo |
 | `role` | TEXT | — | `admin`, `gestor_qualidade`, `gestor_suporte`, `qualidade`, `suporte` |
-| `team_ids` | UUID[] | `[]` | IDs das equipes associadas |
 | `active` | BOOLEAN | `true` | Soft-delete |
 | `must_change_password` | BOOLEAN | `false` | Flag para forçar troca de senha |
 | `created_at` | TIMESTAMPTZ | `now()` | Data de criação |
+
+> **Nota**: A coluna `team_ids` foi removida (migration M5). O relacionamento N:N entre usuários e equipes é feito via tabela `user_teams`. O frontend enriquece o objeto `User` com `team_ids: string[]` via `enrichUserWithTeamIds()`, mas **nunca** envia `team_ids` em payloads Supabase da tabela `users`.
+
+### `public.user_teams`
+
+| Coluna | Tipo | Default | Descrição |
+|---|---|---|---|
+| `user_id` | UUID | FK → users | ID do usuário |
+| `team_id` | UUID | FK → teams | ID da equipe |
+
+> Tabela N:N — um usuário pode pertencer a múltiplas equipes e uma equipe possui múltiplos usuários. PK composta `(user_id, team_id)`.
 
 ### `public.teams`
 | Coluna | Tipo | Default | Descrição |
@@ -169,3 +178,4 @@ As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) 
 | `auth_migration.sql` | Cria admin padrão no Auth + public.users |
 | `create_quality_configs.sql` | Cria tabela quality_configs + RLS |
 | `supabase_sla_cron.sql` | Função + cron job para timeout de prazo de ação |
+| `supabase/migrations/` | Migrations SQL versionadas (timestamp) — inclui `user_teams`, `dissatisfaction_fields`, `business_hours`, `holidays`, RLS policies |
