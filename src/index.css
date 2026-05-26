@@ -225,11 +225,26 @@ select {
 .bg-level-ruim { background-color: var(--error-bg); }
 .text-level-atencao { color: var(--warning-color); }
 .bg-level-atencao { background-color: var(--warning-bg); }
+.text-level-roxo { color: #7E22AE; }
+.bg-level-roxo { background-color: #FAF5FF; }
+.text-level-azul { color: #1D4ED8; }
+.bg-level-azul { background-color: #EFF6FF; }
 
 .dark .text-level-excelente { color: #A5B4FC; }
 .dark .bg-level-excelente { background-color: #2E2A5E; }
 .dark .text-level-aceitavel { color: #6EE7B7; }
 .dark .bg-level-aceitavel { background-color: #1A3A2A; }
+.dark .text-level-ruim { color: #FCA5A5; }
+.dark .bg-level-ruim { background-color: #3B1C1C; }
+.dark .text-level-atencao { color: #FCD34D; }
+.dark .bg-level-atencao { background-color: #3B2F0A; }
+.dark .text-level-roxo { color: #D8B4FE; }
+.dark .bg-level-roxo { background-color: #2E1A4E; }
+.dark .text-level-azul { color: #93C5FD; }
+.dark .bg-level-azul { background-color: #1A2A4E; }
+
+.dark .text-level-atencao { color: #FCD34D; }
+.dark .bg-level-atencao { background-color: #3B2F0A; }
 
 /* ── Functional text helpers (theme-aware) ── */
 .text-functional-error { color: var(--error-color); }

@@ -13,9 +13,9 @@ interface RecentAuditsTableProps {
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   pendente_revisao: { label: 'Aguardando Suporte', color: 'text-functional-warning', bg: 'bg-functional-warning' },
-  em_contestacao: { label: 'Em Reanálise', color: 'text-orange-500 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/40' },
+  em_contestacao: { label: 'Em Reanálise', color: 'text-level-atencao', bg: 'bg-level-atencao' },
   aguardando_gestor_suporte: { label: 'Aguardando Gestor', color: 'text-functional-success', bg: 'bg-functional-success' },
-  aguardando_gestor_qualidade: { label: 'Aguardando Qualidade', color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/40' },
+  aguardando_gestor_qualidade: { label: 'Aguardando Qualidade', color: 'text-level-roxo', bg: 'bg-level-roxo' },
   concluida: { label: 'Finalizada', color: 'text-functional-success', bg: 'bg-functional-success' },
   contestacao_aceita: { label: 'Contestação Aceita', color: 'text-functional-success', bg: 'bg-functional-success' },
   contestacao_negada: { label: 'Contestação Negada', color: 'text-functional-error', bg: 'bg-functional-error' },

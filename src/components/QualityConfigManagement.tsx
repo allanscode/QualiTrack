@@ -10,8 +10,8 @@ const COLORS = [
   { color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel', label: 'Verde' },
   { color: 'text-level-atencao', bgColor: 'bg-level-atencao', label: 'Ambar' },
   { color: 'text-level-ruim', bgColor: 'bg-level-ruim', label: 'Vermelho' },
-  { color: 'text-purple-700', bgColor: 'bg-purple-50', label: 'Roxo' },
-  { color: 'text-blue-700', bgColor: 'bg-blue-50', label: 'Azul' },
+  { color: 'text-level-roxo', bgColor: 'bg-level-roxo', label: 'Roxo' },
+  { color: 'text-level-azul', bgColor: 'bg-level-azul', label: 'Azul' },
 ];
 
 export default function QualityConfigManagement() {

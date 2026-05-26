@@ -68,6 +68,8 @@ const LEGACY_COLOR_MAP: Record<string, { color: string; bgColor: string }> = {
   'text-emerald-700': { color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel' },
   'text-amber-700': { color: 'text-level-atencao', bgColor: 'bg-level-atencao' },
   'text-red-700': { color: 'text-level-ruim', bgColor: 'bg-level-ruim' },
+  'text-purple-700': { color: 'text-level-roxo', bgColor: 'bg-level-roxo' },
+  'text-blue-700': { color: 'text-level-azul', bgColor: 'bg-level-azul' },
 };
 
 function migrateLegacyLevelColors(cfg: any): any {
