@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 
 interface Option {
   value: string | number;
@@ -27,9 +27,15 @@ export default function CustomSelect({
   label
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const selectedOption = options.find(opt => opt.value === value);
+
+  const filteredOptions = options.filter(opt =>
+    opt.value === '' || opt.label.toLowerCase().includes(search.toLowerCase())
+  );
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -59,6 +65,10 @@ export default function CustomSelect({
   useEffect(() => {
     if (isOpen) {
       updatePosition();
+      setSearch('');
+      requestAnimationFrame(() => {
+        searchRef.current?.focus();
+      });
     }
   }, [isOpen, updatePosition]);
 
@@ -120,21 +130,40 @@ export default function CustomSelect({
         {isOpen && !disabled && createPortal(
           <div
             ref={dropdownRef}
-            className="bg-surface-card border border-surface-border rounded-2xl shadow-premium-lg max-h-60 overflow-auto py-2 animate-in fade-in slide-in-from-top-2 duration-200 no-scrollbar"
+            className="bg-surface-card border border-surface-border rounded-2xl shadow-premium-lg max-h-60 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
           >
-            {options.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => {
-                  onChange(opt.value.toString());
-                  setIsOpen(false);
-                }}
-                className={`w-full text-left px-4 py-2.5 text-xs font-bold transition-colors hover:bg-brand-highlight/20 ${value === opt.value ? 'text-brand-primary bg-brand-highlight/10' : 'text-brand-muted hover:text-brand-primary'}`}
-              >
-                {opt.label}
-              </button>
-            ))}
+            <div className="sticky top-0 bg-surface-card px-3 pt-3 pb-2 border-b border-surface-border">
+              <div className="flex items-center gap-2 bg-surface-subtle rounded-xl px-3 h-8">
+                <Search className="w-3.5 h-3.5 text-brand-muted flex-shrink-0" />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar..."
+                  className="w-full bg-transparent text-xs font-medium text-brand-primary placeholder:text-brand-muted/50 outline-none"
+                />
+              </div>
+            </div>
+            <div className="overflow-auto max-h-[calc(15rem-2.5rem)] no-scrollbar">
+              {filteredOptions.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-brand-muted">Nenhum resultado</div>
+              ) : (
+                filteredOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(opt.value.toString());
+                      setIsOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-xs font-bold transition-colors hover:bg-brand-highlight/20 ${value === opt.value ? 'text-brand-primary bg-brand-highlight/10' : 'text-brand-muted hover:text-brand-primary'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))
+              )}
+            </div>
           </div>,
           document.body
         )}
