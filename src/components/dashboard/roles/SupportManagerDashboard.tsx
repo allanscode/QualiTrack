@@ -10,6 +10,7 @@ import { Target, Users, TrendingUp, AlertTriangle, RotateCcw, CheckCircle2, XCir
 
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
+import { chartColorArray, chartPalette } from '../chartColors';
 
 export default function SupportManagerDashboard() {
   // monitorias from context are already filtered by date/team/agent/channel from FilterBar
@@ -293,7 +294,7 @@ export default function SupportManagerDashboard() {
             title="Evolução do Score"
             subtitle="Nota média agregada das suas equipes"
             data={trendData}
-            dataKeys={[{ key: 'ScoreEquipe', name: 'Média Equipe', color: '#6366f1' }]}
+            dataKeys={[{ key: 'ScoreEquipe', name: 'Média Equipe', color: chartPalette().excelente }]}
           />
         </div>
       </div>
@@ -339,7 +340,7 @@ export default function SupportManagerDashboard() {
       </div>
 
       {dissatisfactionFields.length > 0 && (() => {
-        const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#3b82f6', '#ec4899', '#14b8a6'];
+        const COLORS = chartColorArray();
         const monWithAnswers = monitorias.filter(m => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
 
         const clientFields = dissatisfactionFields.filter(f => f.type === 'cliente');

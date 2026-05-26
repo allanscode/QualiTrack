@@ -9,6 +9,7 @@ import OfensoresChart from '../widgets/OfensoresChart';
 import { ClipboardCheck, Target, CheckCircle2, XCircle, AlertTriangle, History, Clock } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
+import { chartColorMap, chartPalette } from '../chartColors';
 import Card from '../../ui/Card';
 
 export default function QualityDashboard() {
@@ -94,18 +95,7 @@ export default function QualityDashboard() {
   if (!user) return null;
 
   const gradeDistribution = useMemo(() => {
-    const colorMap: Record<string, string> = {
-      'text-indigo-700': '#6366f1',
-      'text-emerald-700': '#10b981',
-      'text-amber-700': '#f59e0b',
-      'text-red-700': '#ef4444',
-      'text-purple-700': '#a855f7',
-      'text-blue-700': '#3b82f6',
-      'text-level-excelente': '#6366f1',
-      'text-level-aceitavel': '#10b981',
-      'text-level-ruim': '#ef4444',
-      'text-level-atencao': '#f59e0b',
-    };
+  const colorMap = chartColorMap();
 
     return config.levels.map(level => ({
       name: `${level.label} (${level.minScore}-${level.maxScore}%)`,
@@ -205,7 +195,7 @@ export default function QualityDashboard() {
             subtitle="Comparativo com a média da equipe"
             data={comparativeData}
             dataKeys={[
-              { key: 'meuVolume', name: 'Meu Volume', color: '#6366f1' },
+              { key: 'meuVolume', name: 'Meu Volume', color: chartPalette().excelente },
               { key: 'mediaEquipe', name: 'Média Equipe', color: '#94a3b8' }
             ]}
           />
@@ -249,8 +239,8 @@ export default function QualityDashboard() {
           <DistributionChart 
             title="Precisão da Qualidade" 
             data={[
-              { name: 'Estáveis', value: myMonitorias.length - totalReevaluated, color: '#6366f1' },
-              { name: 'Reavaliadas', value: totalReevaluated, color: '#f59e0b' }
+    { name: 'Estáveis', value: myMonitorias.length - totalReevaluated, color: chartPalette().excelente },
+    { name: 'Reavaliadas', value: totalReevaluated, color: chartPalette().atencao }
             ].filter(d => d.value > 0)} 
           />
         </div>

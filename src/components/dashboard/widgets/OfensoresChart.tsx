@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import Card from '../../ui/Card';
 import { AlertOctagon } from 'lucide-react';
 import { Monitoria, EvaluationForm } from '../../../types';
+import { chartPalette } from '../chartColors';
 
 interface OfensoresChartProps {
   monitorias: Monitoria[];
@@ -110,14 +111,20 @@ export default function OfensoresChart({ monitorias, forms, limit = 8, title = '
               tickLine={false}
             />
             <Tooltip content={<CustomTooltip />} cursor={false} />
-            <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14}>
-              {ofensores.map((entry, index) => {
-                const intensity = 1 - index / ofensores.length;
-                const r = Math.round(239 * intensity + 180 * (1 - intensity));
-                const g = Math.round(68 * intensity + 30 * (1 - intensity));
-                const b = Math.round(68 * intensity + 30 * (1 - intensity));
-                return <Cell key={`cell-${index}`} fill={`rgb(${r},${g},${b})`} />;
-              })}
+      <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14}>
+        {ofensores.map((entry, index) => {
+          const p = chartPalette();
+          const baseColor = p.ruim;
+          const hex = baseColor.replace('#', '');
+          const br = parseInt(hex.substring(0, 2), 16);
+          const bg = parseInt(hex.substring(2, 4), 16);
+          const bb = parseInt(hex.substring(4, 6), 16);
+          const fade = 1 - (index / ofensores.length) * 0.5;
+          const r = Math.round(br * fade + 160 * (1 - fade));
+          const g = Math.round(bg * fade + 140 * (1 - fade));
+          const b = Math.round(bb * fade + 140 * (1 - fade));
+          return <Cell key={`cell-${index}`} fill={`rgb(${r},${g},${b})`} />;
+        })}
             </Bar>
           </BarChart>
         </ResponsiveContainer>

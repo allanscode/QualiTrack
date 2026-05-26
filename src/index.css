@@ -58,12 +58,24 @@
   --sidebar-bg-suporte: #1E40AF;
 
   /* Functional color tokens (light mode) */
-  --error-color: #EF4444;
+  --error-color: #DC2626;
   --error-bg: #FEF2F2;
+  --error-pastel: #FCA5A5;
+  --error-pastel-bg: #3B1C1C;
   --warning-color: #D97706;
   --warning-bg: #FFFBEB;
+  --warning-pastel: #FCD34D;
+  --warning-pastel-bg: #3B2F0A;
   --success-color: #059669;
   --success-bg: #ECFDF5;
+  --success-pastel: #6EE7B7;
+  --success-pastel-bg: #1A3A2A;
+
+  /* Chart palette (light mode) */
+  --chart-excelente: #818CF8;
+  --chart-aceitavel: #34D399;
+  --chart-atencao: #FBBF24;
+  --chart-ruim: #F87171;
 }
 
 .dark {
@@ -90,13 +102,19 @@
   --sidebar-bg-gestor-suporte: #78350F;
   --sidebar-bg-suporte: #1E3A8A;
 
-  /* Functional color tokens (dark mode — softer/less saturated) */
-  --error-color: #F87171;
-  --error-bg: #451A1A;
-  --warning-color: #FBBF24;
-  --warning-bg: #451A03;
-  --success-color: #34D399;
-  --success-bg: #064E3B;
+  /* Functional color tokens (dark mode — pastel/soft) */
+  --error-color: var(--error-pastel);
+  --error-bg: var(--error-pastel-bg);
+  --warning-color: var(--warning-pastel);
+  --warning-bg: var(--warning-pastel-bg);
+  --success-color: var(--success-pastel);
+  --success-bg: var(--success-pastel-bg);
+
+  /* Chart palette (dark mode — pastel) */
+  --chart-excelente: #A5B4FC;
+  --chart-aceitavel: #6EE7B7;
+  --chart-atencao: #FCD34D;
+  --chart-ruim: #FCA5A5;
 }
 
 
@@ -209,9 +227,9 @@ select {
 .bg-level-atencao { background-color: var(--warning-bg); }
 
 .dark .text-level-excelente { color: #A5B4FC; }
-.dark .bg-level-excelente { background-color: #312E81; }
+.dark .bg-level-excelente { background-color: #2E2A5E; }
 .dark .text-level-aceitavel { color: #6EE7B7; }
-.dark .bg-level-aceitavel { background-color: #064E3B; }
+.dark .bg-level-aceitavel { background-color: #1A3A2A; }
 
 /* ── Functional text helpers (theme-aware) ── */
 .text-functional-error { color: var(--error-color); }
