@@ -7,7 +7,7 @@ import RankingWidget from '../widgets/RankingWidget';
 import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, History, Activity } from 'lucide-react';
+import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
@@ -269,8 +269,8 @@ export default function AdminDashboard() {
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`}
           sub="Evolução global"
           good={trendPercentage >= 0}
-          icon={<TrendingUp className="w-5 h-5" />}
-          accent="text-brand-highlight"
+      icon={<TrendingUp className="w-5 h-5" />}
+      accent="text-functional-success"
         />
       </div>
 
@@ -283,14 +283,14 @@ export default function AdminDashboard() {
           icon={<History className="w-5 h-5" />}
           accent="text-brand-muted"
         />
-        <StatCard
-          title="Taxa Reversão"
-          value={`${reversalRate.toFixed(2)}%`}
-          sub="Qualidade das monitorias"
-          good={reversalRate <= 15}
-          icon={<RotateCcw className="w-5 h-5" />}
-          accent="text-brand-highlight"
-        />
+    <StatCard
+      title="Taxa Reversão"
+      value={`${reversalRate.toFixed(2)}%`}
+      sub="Qualidade das monitorias"
+      good={reversalRate <= 15}
+      icon={<Target className="w-5 h-5" />}
+      accent={getLevelForScore(reversalRate).color}
+    />
         <StatCard
           title="Reav. Aprovadas"
           value={reavAccepted}

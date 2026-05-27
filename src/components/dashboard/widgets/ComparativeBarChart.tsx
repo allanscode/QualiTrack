@@ -38,8 +38,8 @@ export default function ComparativeBarChart({ title, subtitle, data, dataKeys }:
             <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} />
             <Tooltip
               cursor={false}
-              contentStyle={{ backgroundColor: 'var(--brand-primary)', border: 'none', borderRadius: '12px', color: 'var(--surface-bg)', fontSize: '11px', fontWeight: 700, padding: '10px 14px' }}
-              itemStyle={{ fontSize: '11px', padding: '2px 0' }}
+        contentStyle={{ backgroundColor: 'var(--brand-primary)', border: 'none', borderRadius: '12px', color: 'var(--brand-on-primary)', fontSize: '11px', fontWeight: 700, padding: '10px 14px' }}
+        itemStyle={{ fontSize: '11px', padding: '2px 0', color: 'var(--brand-on-primary)' }}
             />
             <Legend
               iconType="circle"

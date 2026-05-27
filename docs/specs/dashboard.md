@@ -93,14 +93,14 @@ interface DashboardFilters {
 | `ActionDeadlineWidget` | Status de prazo de ação | `Clock` | `text-functional-warning` |
 
 ### `getIconBg()` Map
-Mapeia automaticamente classes `text-*` → `bg-*`:
-- `text-functional-error` → `bg-functional-error`
-- `text-functional-warning` → `bg-functional-warning`
-- `text-functional-success` → `bg-functional-success`
-- `text-brand-accent` → `bg-brand-accent`
-- `text-brand-highlight` → `bg-brand-highlight`
-- `text-brand-muted` → `bg-brand-muted`
-- `text-brand-primary` → `bg-brand-primary`
+Mapeia automaticamente classes `text-*` → `bg-icon-*`:
+- `text-functional-error` → `bg-icon-error`
+- `text-functional-warning` → `bg-icon-warning`
+- `text-functional-success` → `bg-icon-success`
+- `text-brand-accent` → `bg-icon-accent`
+- `text-brand-highlight` → `bg-icon-highlight`
+- `text-brand-muted` → `bg-icon-muted`
+- `text-brand-primary` → `bg-icon-primary`
 - `text-level-*` → `bg-level-*` (replace prefix)
 - Fallback: `bg-surface-subtle`
 
@@ -113,10 +113,10 @@ Mapeia automaticamente classes `text-*` → `bg-*`:
 | Pendência | `AlertTriangle` | `text-functional-error` ou `text-functional-warning` |
 | Aprovação | `CheckCircle2` | `text-functional-success` |
 | Rejeição | `XCircle` | `text-functional-error` |
-| Tendência | `TrendingUp` | `text-brand-highlight` |
+| Tendência | `TrendingUp` | `text-functional-success` |
 | Info/Contexto | `Users`, `History`, `ClipboardList` | `text-brand-muted` |
 
-> Todos os ícones: tamanho `w-5 h-5`. Container: `w-9 h-9 rounded-xl bg-surface-subtle`.
+> Todos os ícones: tamanho `w-5 h-5`. Container: `w-9 h-9 rounded-xl` com classe `bg-icon-*` derivada via `getIconBg()`. NUNCA usar `bg-brand-*` para fundo de ícone (mesma cor do texto = invisível).
 
 ## Lógica de Reavaliações (History-Based)
 Para garantir a precisão dos rankings de contestações, os widgets não dependem apenas do `status` atual da monitoria (que pode mudar), mas sim de uma varredura no `history` da monitoria em busca de termos chave:

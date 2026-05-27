@@ -156,10 +156,10 @@ Use **sempre** os tokens semânticos definidos em `index.css`. Nunca hardcode co
 | Pendência | `AlertTriangle` | `text-functional-error` ou `text-functional-warning` |
 | Aprovação | `CheckCircle2` | `text-functional-success` |
 | Rejeição | `XCircle` | `text-functional-error` |
-| Tendência | `TrendingUp` | `text-brand-highlight` |
+| Tendência | `TrendingUp` | `text-functional-success` |
 | Info/Contexto | `Users`, `History`, `ClipboardList` | `text-brand-muted` |
 
-> **StatCard** e **RankingWidget**: a cor de fundo do ícone deriva do accent via `getIconBg()` — mapeia `text-*` → `bg-*` automaticamente.
+> **StatCard** e **RankingWidget**: a cor de fundo do ícone deriva do accent via `getIconBg()` — mapeia `text-*` → `bg-icon-*` automaticamente (nunca `bg-brand-*`, que usaria a mesma cor do texto).
 
 ### Assinaturas de Design
 - **Labels**: `uppercase tracking-widest text-[10px] font-black`
@@ -328,6 +328,7 @@ Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handle
 - **Supabase**: SDK `persistSession: true` + `localStorage` — `INITIAL_SESSION` com session restaura login
 - **Mock**: `localStorage` chave `qualitrack_session` — `{userId, sessionStartedAt, sessionExpiresAt}`
 - **Last Activity**: `localStorage` chave `qualitrack_last_activity` — timestamp da última atividade do usuário. Ao restaurar sessão (F5), o sistema verifica se o idle já expirou comparando `Date.now() - lastActivity`. Se ≥ 60 min, sessão é descartada e usuário redirecionado ao login.
+- **Tema/Aparência**: `localStorage` chave `qualitrack_theme` — valor `'light'` | `'dark'` | `'system'`. Restaurado incondicionalmente no `useState` initializer (sem depender de sessão). NÃO resetar tema no `useEffect` de `currentUser` — o estado transiente `currentUser = null` durante restauração de sessão causava reset prematuro para `'system'`.
 
 ### Resiliência de Sessão
 - Heartbeat ping ao Supabase a cada 2 min
@@ -421,6 +422,9 @@ Antes de commitar qualquer alteração, verifique:
 | RankingWidget badge invisível no dark | **MÉDIA** | ✅ Resolvido | `bg-brand-accent` substituído |
 | Dark mode cores saturadas nos indicadores | **MÉDIA** | ✅ Resolvido | Sistema pastel com `.dark` overrides |
 | Dashboard ícones sem padronização | **MÉDIA** | ✅ Resolvido | Categorias semânticas + `getIconBg()` |
+| Ícones invisíveis (bg = text color) | **ALTA** | ✅ Resolvido | Classes `.bg-icon-*` separadas de `bg-brand-*` em `index.css` |
+| Tema não persistia após F5 | **ALTA** | ✅ Resolvido | Removido `setTheme('system')` do useEffect de `currentUser` |
+| Tooltip ComparativeBarChart sem contraste | **MÉDIA** | ✅ Resolvido | `color: var(--brand-on-primary)` + `itemStyle` com cor explícita |
 
 ---
 
@@ -452,6 +456,8 @@ Antes de commitar qualquer alteração, verifique:
 - **Auto-save**: FormsManagement auto-salva drafts em `localStorage` com chave `qualitrack_form_draft`.
 - **CustomSelect**: Usa `<div>` trigger com `<input>` inline para type-ahead; `createPortal` para dropdown; filtra opções por digitação (case-insensitive).
 - **Gráficos**: Cores via `chartPalette()`/`chartColorArray()`/`chartColorMap()` de `chartColors.ts` — lê CSS vars em runtime, funciona em light e dark mode.
+- **Ícones Dashboard**: Fundos de ícone usam classes `.bg-icon-*` (ex: `bg-icon-primary`, `bg-icon-accent`, `bg-icon-highlight`) — cores claras/pastel que contrastam com `text-brand-*`. NUNCA use `bg-brand-*` para fundo de ícone, pois estas classes usam as mesmas CSS vars de `text-brand-*` (ícone ficaria invisível).
+- **Tooltips Recharts**: Usar `backgroundColor: 'var(--brand-primary)'` + `color: 'var(--brand-on-primary)'` — garante contraste em light e dark mode.
 - **Git**: Branch por feature/fix; delete merged branches; PR via GitHub.
 
 ---
