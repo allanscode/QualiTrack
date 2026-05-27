@@ -1,6 +1,7 @@
 import React from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import Card from '../../ui/Card';
+import { BarChart3 } from 'lucide-react';
 
 interface DataKey {
   key: string;
@@ -19,9 +20,14 @@ export default function ComparativeBarChart({ title, subtitle, data, dataKeys }:
   return (
     <Card padding="lg" className="h-full flex flex-col">
       {(title || subtitle) && (
-        <div className="mb-4">
-          {title && <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">{title}</h3>}
-          {subtitle && <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-xl bg-surface-subtle flex items-center justify-center flex-shrink-0 text-brand-muted">
+            <BarChart3 className="w-5 h-5" />
+          </div>
+          <div>
+            {title && <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">{title}</h3>}
+            {subtitle && <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>}
+          </div>
         </div>
       )}
       <div className="flex-1 min-h-[150px]" style={{ minWidth: 0, minHeight: 150 }}>

@@ -7,7 +7,7 @@ import RankingWidget from '../widgets/RankingWidget';
 import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, ShieldCheck, History, Activity, UserMinus } from 'lucide-react';
+import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, Users, History, Activity } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
@@ -262,7 +262,7 @@ export default function AdminDashboard() {
           sub={onlineSub}
           good={true}
           icon={<Activity className="w-5 h-5" />}
-          accent="text-success"
+          accent="text-functional-success"
         />
         <StatCard
           title="Tendência"
@@ -281,7 +281,7 @@ export default function AdminDashboard() {
           sub="Total de contestações"
           good={true}
           icon={<History className="w-5 h-5" />}
-          accent="text-info"
+          accent="text-brand-muted"
         />
         <StatCard
           title="Taxa Reversão"
@@ -297,7 +297,7 @@ export default function AdminDashboard() {
           sub="Contestações procedentes"
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
-          accent="text-success"
+          accent="text-functional-success"
         />
         <StatCard
           title="Reav. Recusadas"
@@ -336,13 +336,14 @@ export default function AdminDashboard() {
           />
         </div>
         <div className="h-[420px] lg:col-span-1">
-          <RankingWidget
-            title="Maiores Ofensores"
-            subtitle="Pontos de melhoria"
-            data={bottomAgents}
-            type="score"
-            icon={<AlertTriangle className="w-4 h-4 text-brand-primary" />}
-          />
+            <RankingWidget
+              title="Maiores Ofensores"
+              subtitle="Pontos de melhoria"
+              data={bottomAgents}
+              type="score"
+              icon={<AlertTriangle className="w-5 h-5" />}
+              accent="text-functional-error"
+            />
         </div>
         <div className="h-[420px] lg:col-span-1">
           <RankingWidget

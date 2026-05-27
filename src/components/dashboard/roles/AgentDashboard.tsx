@@ -6,7 +6,7 @@ import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle, BarChart3, Users } from 'lucide-react';
+import { Target, ClipboardCheck, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { chartPalette } from '../chartColors';
 
@@ -168,15 +168,15 @@ export default function AgentDashboard() {
           sub={avgScore >= teamAvgScore ? 'Acima da média' : 'Abaixo da média'}
           good={avgScore >= teamAvgScore}
           icon={<Users className="w-5 h-5" />}
-          accent="text-brand-accent"
+          accent="text-brand-muted"
         />
         <StatCard
           title="Média Global"
           value={`${globalAvg.toFixed(2)}%`}
           sub="Empresa"
           good={avgScore >= globalAvg}
-          icon={<BarChart3 className="w-5 h-5" />}
-          accent="text-info"
+          icon={<Users className="w-5 h-5" />}
+          accent="text-brand-muted"
         />
         <StatCard
           title="Tendência"
@@ -196,7 +196,7 @@ export default function AgentDashboard() {
           sub="Total no período"
           good={true}
           icon={<ClipboardCheck className="w-5 h-5" />}
-          accent="text-brand-muted"
+          accent="text-brand-accent"
         />
         <StatCard
           title="Total Pendentes"
@@ -204,14 +204,14 @@ export default function AgentDashboard() {
           sub="Aguardando sua ação"
           good={pendingCount === 0}
           icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-warning"
+          accent="text-functional-error"
         />
         <StatCard
           title="Solicitadas"
           value={myContestations.length.toString()}
           sub="Contestações abertas"
           good={true}
-          icon={<BarChart3 className="w-5 h-5" />}
+          icon={<ClipboardCheck className="w-5 h-5" />}
           accent="text-brand-muted"
         />
         <StatCard
@@ -220,7 +220,7 @@ export default function AgentDashboard() {
           sub="Nota Alterada"
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
-          accent="text-success"
+          accent="text-functional-success"
         />
         <StatCard
           title="Recusadas"
