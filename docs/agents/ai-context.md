@@ -1,6 +1,8 @@
 # Contexto para Agentes de IA
 
-**Atenção Agente de IA**: Leia este documento antes de iniciar qualquer modificação estrutural na codebase do QualiTrack.
+**Atenção Agente de IA**: Leia este documento antes de iniciar qualquer modificação estrutural na codebase do QualiTrack. Para regras completas, consulte `AGENTS.md` na raiz do projeto.
+
+---
 
 ## 1. Regras Fundamentais de Arquitetura
 
@@ -8,44 +10,83 @@
 2. **Sem Router Library**: A navegação é baseada em state (`activeTab` em `App.tsx`). Não instale `react-router-dom` sem a permissão explícita do Tech Lead/User.
 3. **Mock Mode Preservado**: Todo CRUD no frontend precisa suportar o "Mock Mode". Se você adicionar uma query Supabase, adicione a respectiva persistência em `localStorage` via `mockDb`.
 4. **TailwindCSS v4**: O projeto utiliza a versão 4 do Tailwind, que é baseada em CSS moderno e `@theme`. Não use plugins do Tailwind v3 ou configurações no `tailwind.config.js` obsoleto.
-5. **Componentização**: Não adicione mais código aos arquivos "monolíticos" (`AdminPanel.tsx` e `MonitoriaForm.tsx`). Se for mexer neles, a prioridade é **extrair componentes menores** antes de adicionar features.
+5. **Componentização**: Não adicione mais código aos arquivos "monolíticos" (`App.tsx`, `MonitoriaForm.tsx`, `MonitoriaList.tsx`). Se for mexer neles, a prioridade é **extrair componentes menores** antes de adicionar features.
+6. **Hooks Incondicionais**: Mantenha todos os `useX` no topo do componente, sempre incondicionais. Incidentes anteriores em `MonitoriaForm.tsx`.
+7. **Constantes no Escopo do Módulo**: Constantes usadas em inicializadores de `useState` (ex: `MOCK_SESSION_KEY`) devem ser declaradas **fora** do componente. Incidente: `MOCK_SESSION_KEY` referenciada em `useState` initializer antes de ser declarada dentro do componente.
+8. **Hooks nunca dentro de `useEffect`**: `useCallback`, `useMemo`, `useRef` etc. não podem ser chamados dentro de callbacks de `useEffect`. Use o padrão ref-bridge: atualize um `ref.current` dentro do effect e chame `ref.current()` em um `useCallback` fora do effect. Incidente: `useCallback` dentro de `useEffect` para `extendSession` em `App.tsx`.
+9. **Seleção Agente↔Equipe**: No `MonitoriaForm`, ao selecionar Agente ou Equipe, o outro campo NUNCA deve ser limpo automaticamente. Se o usuário tentar trocar um campo enquanto o outro está selecionado com valor incompatível, bloqueie com toast informativo. O usuário deve primeiro desselecionar (escolher placeholder) para depois alterar o relacionamento.
+10. **Nunca enviar `team_ids` em payload da tabela `users`**: O relacionamento N:N usuário↔equipe é feito via tabela `user_teams`. O frontend enriquece o objeto `User` com `team_ids: string[]` via `enrichUserWithTeamIds()`, mas **nunca** envia `team_ids` em upsert/update Supabase da tabela `users`. Use `syncUserTeams()` para sincronizar.
+
+---
 
 ## 2. Padrões de UI / UX
 
-- **Cores**: Use os tokens semânticos definidos em `index.css` (ex: `bg-surface-card`, `text-brand-primary`). Não hardcode cores hexadecimais no JSX.
-- **Dark Mode**: Já está configurado de forma nativa via classes `.dark` no `index.css`. Não precisa reescrever o sistema de temas.
-- **Tipografia**: Use sempre `uppercase tracking-widest text-[10px] font-black` para labels, pequenos headers e badges. É uma assinatura do design do sistema.
+- **Cores**: Use os tokens semânticos definidos em `index.css` (ex: `bg-surface-card`, `text-brand-primary`, `text-level-*`, `text-functional-*`). Não hardcode cores hexadecimais no JSX.
+- **Dark Mode**: Configurado via classe `.dark` no `<html>`. As cores de nível de qualidade são **pastel/soft** no dark mode (ex: `#FCA5A5` para ruim). Nunca use cores saturadas em indicadores.
+- **Tipografia**: Use sempre `uppercase tracking-widest text-[10px] font-black` para labels, pequenos headers e badges.
 - **Bordas e Shadows**: Use `rounded-2xl` ou `rounded-3xl` (nunca bordas quadradas) e `shadow-premium` para cards flutuantes.
 - **Animações**: Use `motion` (Framer Motion) para transitions. Evite transições CSS brutas para montar/desmontar componentes.
+- **Ícones**: Use **apenas** `lucide-react`, tamanho padrão `w-5 h-5`. Nunca introduza outra lib de ícones.
+- **Dashboard — Categorias Semânticas de Ícones**:
+  - Score/Nota → `Target` + cor derivada do nível (level-*)
+  - Volume → `ClipboardCheck` + `text-brand-accent`
+  - Pendência → `AlertTriangle` + `text-functional-error` ou `text-functional-warning`
+  - Aprovação → `CheckCircle2` + `text-functional-success`
+  - Rejeição → `XCircle` + `text-functional-error`
+  - Tendência → `TrendingUp` + `text-brand-highlight`
+  - Info/Contexto → `Users`/`History`/`ClipboardList` + `text-brand-muted`
+- **StatCard/RankingWidget**: a cor de fundo do ícone deriva do accent via `getIconBg()` (mapeia `text-*` → `bg-*` automaticamente).
+- **Gráficos**: Cores via `chartPalette()`/`chartColorArray()`/`chartColorMap()` de `chartColors.ts` — lê CSS vars em runtime, funciona em light e dark mode.
+
+---
 
 ## 3. Checklist de Segurança para Edição
 
 Antes de commitar/sugerir uma alteração:
-- [ ] Verifiquei se quebra o fluxo de prazo de ação (`addBusinessHours`)?
-- [ ] O componente modificado lida corretamente com a renderização em Light e Dark mode?
-- [ ] Se adicionei um filtro no dashboard, eu o apliquei em `DashboardContext.tsx` e não apenas localmente no widget?
-- [ ] Testei o fluxo com o Role correto? (Um componente para `suporte` não pode exibir dados de outros agentes).
-- [ ] Eu usei `lucide-react` para os ícones?
+
+- [ ] Não quebra o fluxo de prazo de ação (`addBusinessHours`)?
+- [ ] O componente funciona em Light **e** Dark mode?
+- [ ] Se adicionou filtro no dashboard, aplicou em `DashboardContext.tsx` e não apenas localmente?
+- [ ] Testou o fluxo com o Role correto? (Componente para `suporte` não pode exibir dados de outros agentes)
+- [ ] Usou `lucide-react` para ícones (tamanho `w-5 h-5`)?
+- [ ] Adicionou suporte no `mockDb` se adicionou query Supabase?
+- [ ] Hooks estão no topo do componente, incondicionais?
+- [ ] Não hardcodou cores hexadecimais — usou tokens semânticos?
+- [ ] Formatação de datas: Supabase armazena UTC, frontend renderiza horário local (-03:00)?
+- [ ] Não enviou `team_ids` em payload Supabase da tabela `users` — usou `syncUserTeams()`?
+
+---
 
 ## 4. Known Bugs & Pontos de Atenção (Débito Técnico)
 
 Se você for debugar algo, verifique estes pontos conhecidos primeiro:
 
-1. **Z-index e Clipping**: Resolvido — `CustomSelect` usa React Portal (`createPortal`) para evitar clipping em containers scrolláveis. Também possui **type-ahead**: ao abrir o dropdown, o usuário pode digitar para filtrar opções em tempo real (case-insensitive), sem campo de busca visível.
-2. **Action Deadline Sensitivity**: O recálculo de prazos de ação (`recalculateActiveActionDeadlines` em `useQualityConfig`) é uma operação pesada. Não a dispare desnecessariamente (apenas on-save da configuração). O `useQualityConfig()` é um consumer de Context — exige que `<QualityConfigProvider>` esteja acima na árvore (envolve `<MainApp>` em `App.tsx`).
-3. **Formatação de Datas**: Use sempre ISO strings para armazenar (`toISOString()`) e converta localmente na hora de renderizar, pois o Supabase armazena em UTC e o frontend no horário local (provavelmente -03:00).
-4. **Edge Function SMTP**: As credenciais SMTP no `send-email` foram migradas para env vars (`Deno.env.get()`). Nunca hardcoded credenciais em Edge Functions.
-5. **Hook Violations**: Houveram incidentes anteriores com conditional hooks em `MonitoriaForm.tsx`. Mantenha todos os `useX` no topo do componente, sempre incondicionais.
-6. **Seleção Agente↔Equipe**: No `MonitoriaForm`, ao selecionar Agente ou Equipe, o outro campo NUNCA deve ser limpo automaticamente. Se o usuário tentar trocar um campo enquanto o outro está selecionado com valor incompatível, bloqueie com toast informativo. O usuário deve primeiro desselecionar (escolher placeholder) para depois alterar o relacionamento.
+1. **Action Deadline Sensitivity**: O recálculo de prazos de ação (`recalculateActiveActionDeadlines` em `useQualityConfig`) é uma operação pesada. Não a dispare desnecessariamente (apenas on-save da configuração). O `useQualityConfig()` é um consumer de Context — exige que `<QualityConfigProvider>` esteja acima na árvore (envolve `<MainApp>` em `App.tsx`).
+2. **Formatação de Datas**: Use sempre ISO strings para armazenar (`toISOString()`) e converta localmente na hora de renderizar, pois o Supabase armazena em UTC e o frontend no horário local (provavelmente -03:00).
+3. **Edge Function SMTP**: As credenciais SMTP no `send-email` foram migradas para env vars (`Deno.env.get()`). Nunca hardcoded credenciais em Edge Functions.
+4. **Hook Violations**: Incidentes anteriores com conditional hooks em `MonitoriaForm.tsx`. Mantenha todos os `useX` no topo do componente, sempre incondicionais.
+5. **Seleção Agente↔Equipe**: No `MonitoriaForm`, ao selecionar Agente ou Equipe, o outro campo NUNCA deve ser limpo automaticamente. Se o usuário tentar trocar um campo enquanto o outro está selecionado com valor incompatível, bloqueie com toast informativo. O usuário deve primeiro desselecionar (escolher placeholder) para depois alterar o relacionamento.
 6. **Constantes no Escopo do Módulo**: Constantes usadas em inicializadores de `useState` (ex: `MOCK_SESSION_KEY`) devem ser declaradas **fora** do componente. Incidente: `MOCK_SESSION_KEY` referenciada em `useState` initializer antes de ser declarada dentro do componente.
 7. **Hooks nunca dentro de `useEffect`**: `useCallback`, `useMemo`, `useRef` etc. não podem ser chamados dentro de callbacks de `useEffect`. Use o padrão ref-bridge: atualize um `ref.current` dentro do effect e chame `ref.current()` em um `useCallback` fora do effect. Incidente: `useCallback` dentro de `useEffect` para `extendSession` em `App.tsx`.
 8. **Sessão expira ao restaurar (F5)**: Ao restaurar sessão persistida, o sistema verifica `Date.now() - lastActivity` (chave `qualitrack_last_activity` no localStorage). Se idle ≥ 60min ou absolute ≥ 8h, a sessão é descartada. Nunca assuma que sessão restaurada = sessão válida.
-9. **Enriquecimento de equipe via `user_teams`**: A coluna `users.team_ids` foi removida. Sempre use `enrichUserWithTeamIds()` para injetar `team_ids` no `userData` após buscar da tabela `users`. Nunca envie `team_ids` em payload de upsert/update da tabela `users` — sincronize via tabela N:N `user_teams`.
+9. **Enriquecimento de equipe via `user_teams`**: A coluna `users.team_ids` foi removida. Sempre use `enrichUserWithTeamIds()` para injetar `team_ids` no `userData` após buscar da tabela `users`. Nunca envie `team_ids` em payload de upsert/update da tabela `users` — sincronize via tabela N:N `user_teams` usando `syncUserTeams()`.
+10. **Conclusão automática**: Monitorias com `resolution_type === 'automatic'` foram finalizadas pelo cron de prazo de ação. O `RecentAuditsTable` exibe ícone `Clock` ao lado do status para indicar isso. Nunca remova esse indicador visual.
+11. **CustomSelect**: Usa React Portal (`createPortal`) para evitar clipping em containers scrolláveis. Possui type-ahead: ao abrir o dropdown, o usuário pode digitar para filtrar opções em tempo real (case-insensitive), sem campo de busca visível. O trigger é `<div>` com `<input>` inline.
+12. **Z-index e Clipping**: Resolvido — `CustomSelect` usa React Portal. Se criar novos dropdowns, siga o mesmo padrão.
+13. **RLS Infinite Recursion**: A função `is_admin_user()` é `SECURITY DEFINER` para evitar recursão infinita nas policies RLS da tabela `users`. Não modifique sem entender o padrão.
+
+---
 
 ## 5. Como Iniciar uma Nova Feature
 
 1. **Leia a SPEC correspondente** na pasta `/docs/specs/`.
 2. **Identifique a tabela afetada** no `/docs/database/schema.md`.
-3. Crie a interface no arquivo `src/types.ts`.
+3. Crie/atualize a interface no arquivo `src/types.ts`.
 4. Implemente o componente UI usando a pasta `src/components/ui/` sempre que possível.
 5. Se for dado persistente, adicione no `supabase.ts` (para Supabase e MockDb simultaneamente).
+6. Se adicionou filtros no dashboard, aplique em `DashboardContext.tsx`.
+7. Execute `npm run lint` para verificar tipos.
+8. Execute `npm run build` para validar compilação.
+9. Teste em Mock Mode e com Supabase (se disponível).
+10. Teste em Light e Dark mode.
+11. Teste com o role correto (RBAC).

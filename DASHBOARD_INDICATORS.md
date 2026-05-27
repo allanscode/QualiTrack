@@ -1,99 +1,145 @@
-# 📊 Dicionário de Indicadores - QualiTrack
+# Dicionário de Indicadores — QualiTrack
 
-Este guia explica o que significa cada número e gráfico que aparece no seu Dashboard, como eles são calculados e quem eles representam.
+Este guia explica o que significa cada número e gráfico que aparece no Dashboard, como eles são calculados e quem eles representam.
+
+> **Nota técnica**: Cores de nível usam classes `text-level-*`/`bg-level-*` com `.dark` overrides (pastel). Chart colors via `chartColors.ts` (runtime CSS vars). Ícones por categoria semântica (ver `docs/specs/dashboard.md`).
 
 ---
 
-## 👨‍💻 Perfil: Agente de Atendimento
+## Perfil: Agente de Atendimento (`suporte`)
 *Foco: Resultados individuais e comparação com a média do time.*
 
-### 📍 Performance e Benchmarks
-*   **Minha Média:** É a sua nota média pessoal. Somamos todas as suas notas e dividimos pela quantidade de monitorias que você teve.
-*   **Média Equipe:** É a média de todos os agentes que trabalham nas mesmas equipes que você. Serve para você saber se está acima ou abaixo do seu time.
-*   **Média Global:** É a média de toda a empresa (todos os setores e agentes).
-*   **Tendência:** Indica se o seu desempenho está melhorando ou caindo. Compara a média da segunda metade do período com a primeira metade.
+### Performance e Benchmarks
+| Indicador | Cálculo | Ícone | Accent |
+|---|---|---|---|
+| **Minha Média** | Σ scores / nº monitorias do agente | `Target` | Derivada do nível (level-*) |
+| **Média Equipe** | Σ scores de agentes das mesmas equipes / nº monitorias | `Users` | `text-brand-muted` |
+| **Média Global** | Σ scores de todas monitorias / total | `Users` | `text-brand-muted` |
+| **Tendência** | Média 2ª metade do período − média 1ª metade | `TrendingUp` | `text-brand-highlight` |
 
-### 📈 Volumetria e Contestações (Contagem Única por Monitoria)
-*   **Monitorias:** Quantas vezes você foi auditado no período selecionado.
-*   **Total Pendentes:** Quantas monitorias estão paradas aguardando você dar o "Ciente" ou decidir se vai re-contestar.
-*   **Solicitadas:** Quantas monitorias você contestou. (Cada monitoria conta apenas uma vez, mesmo que você escreva várias mensagens).
-*   **Aprovadas:** Quantas das suas monitorias contestadas tiveram a nota alterada (Contestação Procedente).
-*   **Recusadas:** Quantas das suas monitorias contestadas tiveram a nota original mantida (Contestação Improcedente).
-*   **Taxa de Reversão:** Qual a sua porcentagem de "vitórias" nas contestações aprovadas em relação às solicitadas.
+### Volumetria e Contestações
+| Indicador | Cálculo | Ícone | Accent |
+|---|---|---|---|
+| **Monitorias** | Contagem de monitorias do agente no período | `ClipboardCheck` | `text-brand-accent` |
+| **Total Pendentes** | Monitorias aguardando ação do agente | `AlertTriangle` | `text-functional-warning` |
+| **Solicitadas** | Monitorias contestadas pelo agente (contagem única) | `ClipboardList` | `text-brand-muted` |
+| **Aprovadas** | Contestações com nota alterada (Procedente) | `CheckCircle2` | `text-functional-success` |
+| **Recusadas** | Contestações com nota mantida (Improcedente) | `XCircle` | `text-functional-error` |
+| **Taxa de Reversão** | Aprovadas / Solicitadas × 100 | `Target` | Derivada do nível |
 
-### 📉 Gráficos e Detalhes
-*   **Evolução Comparativa:** Gráfico que mostra a sua linha de score diária vs a linha média da sua equipe.
-*   **Meus Ofensores:** Mostra os critérios onde você mais perdeu pontos. canto maior a barra, mais atenção você deve dar ao item.
+### Gráficos
+- **Evolução Comparativa**: `TrendChart` — linha diária do agente vs média da equipe
+- **Meus Ofensores**: `TopOffendersChart` — critérios onde mais perdeu pontos
 
 ---
 
-## 🧐 Perfil: Monitor de Qualidade
+## Perfil: Monitor de Qualidade (`qualidade`)
 *Foco: Produtividade diária e assertividade nas avaliações.*
 
-### 📍 Performance de Auditoria
-*   **Meu Volume:** Total de monitorias que **você** realizou no período.
-*   **Nota Média:** A média das notas que você aplicou. Ajuda a entender se você está sendo muito rigoroso ou muito flexível.
-*   **Pendente Ação:** Quantas contestações de agentes você recebeu e ainda não respondeu (reanálise).
+### Performance de Auditoria
+| Indicador | Cálculo | Ícone | Accent |
+|---|---|---|---|
+| **Meu Volume** | Total de monitorias criadas pelo monitor | `ClipboardCheck` | `text-brand-accent` |
+| **Nota Média** | Σ scores aplicados / nº monitorias | `Target` | Derivada do nível |
+| **Pendente Ação** | Contestações recebidas sem resposta | `AlertTriangle` | `text-functional-warning` |
 
-### 🎯 Assertividade (Qualidade do Monitor)
-*   **Reav. Aceitas:** Quantas vezes você mudou a nota após o agente contestar. (Indica que a primeira avaliação pode ter sido equivocada).
-*   **Reav. Recusadas:** Quantas vezes você manteve a nota original após o agente contestar. (Indica que sua avaliação estava correta e bem fundamentada).
-*   **Total de Reav. Recebidas:** O volume total de "reclamações" ou pedidos de revisão que chegaram para você.
+### Assertividade (Qualidade do Monitor)
+| Indicador | Cálculo | Ícone | Accent |
+|---|---|---|---|
+| **Reav. Aceitas** | Contestações onde nota foi alterada (history-based) | `CheckCircle2` | `text-functional-success` |
+| **Reav. Recusadas** | Contestações onde nota foi mantida (history-based) | `XCircle` | `text-functional-error` |
+| **Total de Reav. Recebidas** | Volume total de contestações recebidas | `ClipboardList` | `text-brand-muted` |
 
-### 📊 Gráficos de Controle
-*   **Volumetria Diária:** Compara quantas monitorias você fez por dia em relação à média dos seus colegas monitores.
-*   **Precisão da Qualidade:** Mostra qual porcentagem das suas notas são "estáveis" (ninguém contestou ou mudou) vs "reavaliadas".
+> **Lógica history-based**: usa `isApprovalAction()`/`isRejectionAction()` de `src/lib/contestation.ts`. Última resolução apenas (evita contagem dupla).
+
+### Gráficos
+- **Volumetria Diária**: `TrendChart` — monitorias/dia vs média dos colegas
+- **Precisão da Qualidade**: `PrecisionChart` — estáveis (sem contestação) vs reavaliadas
 
 ---
 
-## 👥 Perfil: Supervisor de Atendimento
+## Perfil: Supervisor de Atendimento (`gestor_suporte`)
 *Foco: Gestão de pessoas e equipes sob sua responsabilidade.*
 
-### 📍 Performance e Benchmarks
-*   **Média Equipe:** A nota média de todos os agentes que pertencem às **suas equipes**. Não inclui agentes de outros supervisores.
-*   **Média Global:** Média de toda a empresa para comparação de desempenho.
-*   **Tendência:** Evolução da nota média das suas equipes no período.
-*   **Monitorias:** Volume total de avaliações realizadas para o seu time.
+### Performance e Benchmarks
+| Indicador | Cálculo | Ícone | Accent |
+|---|---|---|---|
+| **Média Equipe** | Σ scores das suas equipes / nº monitorias | `Target` | Derivada do nível |
+| **Média Global** | Σ scores de toda a empresa / total | `Users` | `text-brand-muted` |
+| **Tendência** | Média 2ª metade − 1ª metade | `TrendingUp` | `text-brand-highlight` |
+| **Monitorias** | Volume total das suas equipes | `ClipboardCheck` | `text-brand-accent` |
 
-### 👥 Gestão e Pendências
-*   **Pendentes Agentes:** Quantas monitorias o seu time recebeu, mas os agentes ainda não clicaram em "Ciente".
-*   **Minhas Ações:** Quantas contestações estão aguardando especificamente a **sua** decisão ou encaminhamento.
+### Gestão e Pendências
+| Indicador | Cálculo | Ícone | Accent |
+|---|---|---|---|
+| **Pendentes Agentes** | Monitorias aguardando agente das suas equipes | `AlertTriangle` | `text-functional-warning` |
+| **Minhas Ações** | Contestações aguardando sua decisão | `AlertTriangle` | `text-functional-error` |
 
-### 🏆 Reavaliações (Exclusivo das Suas Equipes)
-*   **Taxa de Reversão:** Porcentagem de contestações do seu time que resultaram em mudança de nota (Procedentes).
-*   **Reav. Solicitadas:** Total de monitorias das suas equipes que foram contestadas. (Contagem única por monitoria).
-*   **Reav. Aceitas:** Monitorias onde a contestação foi aceita e a nota do agente foi alterada.
-*   **Reav. Recusadas:** Monitorias onde a contestação foi negada e a nota original foi mantida.
+### Reavaliações (Exclusivo das Suas Equipes)
+| Indicador | Cálculo | Ícone | Accent |
+|---|---|---|---|
+| **Taxa de Reversão** | Aprovadas / Solicitadas × 100 | `Target` | Derivada do nível |
+| **Reav. Solicitadas** | Contestações das suas equipes (únicas) | `ClipboardList` | `text-brand-muted` |
+| **Reav. Aceitas** | Nota alterada (history-based) | `CheckCircle2` | `text-functional-success` |
+| **Reav. Recusadas** | Nota mantida (history-based) | `XCircle` | `text-functional-error` |
 
-### 📊 Gráficos e Rankings
-*   **Top Melhores Notas:** Ranking dos 5 agentes com as melhores médias dentro do seu time.
-*   **Oportunidades de Melhoria:** Ranking dos 5 agentes com as notas mais baixas do seu time.
-*   **Top Reav. Aceitas:** Os 5 agentes do seu time que mais tiveram contestações aprovadas (nota mudou).
-*   **Top Reav. Recusadas:** Os 5 agentes do seu time que mais tiveram contestações negadas (nota mantida).
-*   **Aguardando Minha Ação:** Lista detalhada de monitorias que precisam de uma decisão sua.
+### Rankings e Tabelas
+- **Top Melhores Notas**: `RankingWidget` — top 5 agentes com maiores médias
+- **Oportunidades de Melhoria**: `RankingWidget` — top 5 agentes com menores notas
+- **Top Reav. Aceitas**: `RankingWidget` — top 5 agentes com mais contestações aprovadas
+- **Top Reav. Recusadas**: `RankingWidget` — top 5 agentes com mais contestações negadas
+- **Aguardando Minha Ação**: `PendingActionsTable` — monitorias que precisam de decisão
 
 ---
 
-## 👑 Perfil: Supervisor de Qualidade
+## Perfil: Supervisor de Qualidade (`gestor_qualidade`)
 *Foco: Visão estratégica, calibração e saúde geral da operação.*
 
-### 📍 Visão Macro (Empresa Toda)
-*   **Média Geral:** A nota média de 100% das monitorias realizadas na empresa.
-*   **Minhas Ações:** Quantas monitorias estão aguardando especificamente a **sua** decisão ou validação final.
-*   **Monitorias:** O volume total de auditorias realizadas por toda a equipe no período.
-*   **Tendência:** Indica se a nota da empresa está melhorando ou caindo comparando as metades do período.
+### Visão Macro (Empresa Toda)
+| Indicador | Cálculo | Ícone | Accent |
+|---|---|---|---|
+| **Média Geral** | Σ scores de todas monitorias / total | `Target` | Derivada do nível |
+| **Minhas Ações** | Monitorias aguardando decisão do gestor qualidade | `AlertTriangle` | `text-functional-error` |
+| **Monitorias** | Volume total da empresa | `ClipboardCheck` | `text-brand-accent` |
+| **Tendência** | Média 2ª metade − 1ª metade | `TrendingUp` | `text-brand-highlight` |
 
-### ⚖️ Calibração e Precisão
-*   **Total Pendentes:** Quantas ações (contestações, cientes, etc) estão abertas em todo o sistema.
-*   **Taxa de Reversão Global:** Porcentagem de contestações que resultaram em mudança de nota em toda a empresa.
-*   **Precisão da Qualidade:** Gráfico que compara monitorias "Estáveis" (nota mantida) vs "Reavaliadas" (nota alterada).
-*   **Curva de Qualidade:** Distribuição das notas por faixas (Ex: Crítico, Regular, Excelente).
+### Calibração e Precisão
+| Indicador | Cálculo | Ícone | Accent |
+|---|---|---|---|
+| **Total Pendentes** | Todas ações abertas no sistema | `AlertTriangle` | `text-functional-warning` |
+| **Taxa de Reversão Global** | Aprovadas / Solicitadas × 100 (empresa) | `Target` | Derivada do nível |
 
-### 🏆 Rankings
-*   **Ranking de Qualidade:** Ranking de produtividade dos monitores (quem auditou mais).
-*   **Melhores/Oportunidades Suporte:** Ranking global dos agentes com maiores e menores notas na empresa.
-*   **Top Reav. Aceitas (Geral):** Os 5 agentes da empresa com mais contestações aprovadas.
-*   **Top Reav. Recusadas (Geral):** Os 5 agentes da empresa com mais contestações negadas.
+### Gráficos
+- **Precisão da Qualidade**: `PrecisionChart` — estáveis vs reavaliadas
+- **Curva de Qualidade**: `DistributionChart` — notas por faixa (Crítico, Regular, Excelente)
+
+### Rankings
+- **Ranking de Qualidade**: `RankingWidget` — produtividade dos monitores (quem auditou mais)
+- **Melhores/Oportunidades Suporte**: `RankingWidget` — top/bottom agentes global
+- **Top Reav. Aceitas (Geral)**: `RankingWidget` — top 5 global
+- **Top Reav. Recusadas (Geral)**: `RankingWidget` — top 5 global
 
 ---
-*Este documento reflete exatamente as fórmulas programadas no sistema QualiTrack.*
+
+## Perfil: Administrador (`admin`)
+*Foco: Mesmo dashboard do Supervisor de Qualidade — visão estratégica completa.*
+
+Todos os indicadores do perfil `gestor_qualidade` aplicam-se ao `admin`, com acesso total a todos os dados sem filtro de equipe.
+
+---
+
+## Convenções Visuais
+
+| Elemento | Padrão |
+|---|---|
+| Ícones | `w-5 h-5`, categoria semântica (ver tabela acima) |
+| Cor de fundo do ícone | `getIconBg(accent)` — mapeia `text-*` → `bg-*` automaticamente |
+| Labels | `uppercase tracking-widest text-[10px] font-black` |
+| Cards | `rounded-2xl` ou `rounded-3xl`, `shadow-premium` |
+| Cores de nível | `text-level-excelente`, `text-level-aceitavel`, `text-level-atencao`, `text-level-ruim`, `text-level-roxo` |
+| Dark mode | Cores pastel (ex: ruim = `#FCA5A5` em vez de vermelho saturado) |
+| Auto-conclusão | Ícone `Clock` + label no `RecentAuditsTable` quando `resolution_type === 'automatic'` |
+
+---
+
+*Este documento reflete as fórmulas e convenções programadas no sistema QualiTrack.*

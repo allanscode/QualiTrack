@@ -37,24 +37,10 @@ export default function App() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
-    // Se estivermos na tela de login (sem usuário logado), sempre seguimos o sistema
-    // para evitar que a preferência do usuário anterior "vaze" para o próximo.
-    const saved = localStorage.getItem('qualitrack_theme') as any;
-    if (saved && (localStorage.getItem(MOCK_SESSION_KEY) || localStorage.getItem('supabase.auth.token'))) {
-      return saved;
-    }
+    const saved = localStorage.getItem('qualitrack_theme');
+    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
     return 'system';
   });
-
-  // Atualiza o tema quando o usuário loga ou desloga
-  useEffect(() => {
-    if (!currentUser) {
-      setTheme('system');
-    } else {
-      const saved = localStorage.getItem('qualitrack_theme') as any;
-      if (saved) setTheme(saved);
-    }
-  }, [currentUser]);
 
   // Efeito para aplicar o tema no root (html)
   useEffect(() => {

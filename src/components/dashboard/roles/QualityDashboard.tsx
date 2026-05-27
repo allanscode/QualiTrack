@@ -137,8 +137,8 @@ export default function QualityDashboard() {
           value={myMonitorias.length}
           sub="no período"
           good={true}
-          icon={<ClipboardCheck className="w-5 h-5" />}
-          accent="text-brand-accent"
+      icon={<ClipboardCheck className="w-5 h-5" />}
+      accent="text-brand-primary"
         />
         <StatCard
           title="Nota Média"

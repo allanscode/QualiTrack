@@ -7,7 +7,7 @@ import RankingWidget from '../widgets/RankingWidget';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp, RotateCcw, CheckCircle2, XCircle } from 'lucide-react';
+import { Target, ClipboardCheck, AlertTriangle, TrendingUp, CheckCircle2, XCircle } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
@@ -301,16 +301,16 @@ export default function QualityManagerDashboard() {
           value={monitorias.length}
           sub="Volume total do período"
           good={true}
-          icon={<ClipboardCheck className="w-5 h-5" />}
-          accent="text-brand-accent"
-        />
-        <StatCard
-          title="Tendência"
-          value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`}
-          sub="Evolução no período"
-          good={trendPercentage >= 0}
-          icon={<TrendingUp className="w-5 h-5" />}
-          accent="text-brand-highlight"
+      icon={<ClipboardCheck className="w-5 h-5" />}
+      accent="text-brand-primary"
+    />
+    <StatCard
+      title="Tendência"
+      value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`}
+      sub="Evolução no período"
+      good={trendPercentage >= 0}
+      icon={<TrendingUp className="w-5 h-5" />}
+      accent="text-functional-success"
         />
       </div>
 
@@ -324,14 +324,14 @@ export default function QualityManagerDashboard() {
           icon={<AlertTriangle className="w-5 h-5" />}
           accent="text-functional-warning"
         />
-        <StatCard
-          title="Taxa de Reversão"
-          value={`${reversalRate.toFixed(2)}%`}
-          sub="Contestações Procedentes"
-          good={reversalRate <= 15}
-          icon={<RotateCcw className="w-5 h-5" />}
-          accent="text-brand-highlight"
-        />
+    <StatCard
+      title="Taxa de Reversão"
+      value={`${reversalRate.toFixed(2)}%`}
+      sub="Contestações Procedentes"
+      good={reversalRate <= 15}
+      icon={<Target className="w-5 h-5" />}
+      accent={getLevelForScore(reversalRate).color}
+    />
         <StatCard
           title="Reav. Aceitas"
           value={reavAccepted}
@@ -407,8 +407,8 @@ export default function QualityManagerDashboard() {
           title="Oportunidades (Suporte)"
           subtitle="Mais críticos primeiro"
           data={bottomAgents}
-          icon={<Target className="w-5 h-5" />}
-          accent="text-brand-highlight"
+      icon={<Target className="w-5 h-5" />}
+      accent="text-functional-warning"
         />
         </div>
       </div>

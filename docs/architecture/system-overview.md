@@ -9,11 +9,11 @@ QualiTrack é uma **SPA monolítica** (Single Page Application) que se comunica 
 ```mermaid
 graph TB
     subgraph Cliente ["🖥️ Frontend (React SPA)"]
-        App["App.tsx<br/>Auth + Layout + Routing"]
+        App["App.tsx<br/>Auth + Layout + Routing + Session"]
         Dashboard["DashboardMain<br/>+ DashboardContext"]
         MonList["MonitoriaList"]
         MonForm["MonitoriaForm"]
-        Admin["AdminPanel"]
+        Admin["AdminPanel (6 tabs)"]
         QConfig["QualityConfigManagement"]
     end
 
@@ -23,6 +23,7 @@ graph TB
         Edge["Edge Functions (Deno)"]
         RLS["Row Level Security"]
         Cron["pg_cron (Prazo de Ação)"]
+        Presence["Realtime Presence"]
     end
 
     subgraph EdgeFuncs ["Edge Functions"]
@@ -40,43 +41,56 @@ graph TB
     SendEmail --> SMTP["Gmail SMTP"]
     Cron --> DB
     DB --> RLS
+    App --> Presence
 ```
 
 ## Módulos Principais
 
 ### 1. Autenticação (`App.tsx`)
 - Login com email/senha via Supabase Auth
-- Recuperação de senha
-- Fluxo de convite (invite link)
+- Recuperação de senha (hash `type=recovery`)
+- Fluxo de convite (hash `type=invite`, detectado por `isInviteFlowRef`)
 - Solicitação de acesso (self-service)
 - Mock mode com localStorage
+- Gerenciamento de sessão unificado: idle timeout (60min), idle warning (5min countdown), absolute timeout (8h), proactive refresh (50min)
+- Ref-bridge pattern para `extendSession` (useCallback não pode ser chamado dentro de useEffect)
+- `handleLogout({ silent?, message? })` — aceita options para evitar crash com MouseEvent no Sonner
 
 ### 2. Monitorias (`MonitoriaForm.tsx` + `MonitoriaList.tsx`)
 - Criação de auditorias em 4 etapas (stepper)
 - Seleção Agente↔Equipe com vinculação protegida (nunca limpa automaticamente; bloqueia troca incompatível com toast)
 - CustomSelect com type-ahead (filtro por digitação sem campo de busca)
 - Cálculo automático de score com pesos
+- Erro crítico zera nota (0%)
 - Fluxo de contestação multi-etapa
 - Controle de prazos de ação com horário comercial
-- Histórico completo de ações
+- Conclusão automática por cron (`resolution_type: 'automatic'`, indicador visual Clock)
+- Histórico completo de ações (audit trail)
+- `form_snapshot` e `applied_config` salvos no momento da avaliação
 
 ### 3. Dashboard (`dashboard/`)
-- Context Provider centralizado (`DashboardContext`)
+- Context Provider centralizado (`DashboardContext`) — RBAC, filtros, dados, presença online
 - Roteamento por role (5 dashboards diferentes)
-- Filtros globais (data, equipe, agente, auditor, status, canal)
-- Widgets reutilizáveis (gráficos, rankings, tabelas)
+- Filtros globais (data, equipe, agente, auditor, status, canal) — debounced 300ms
+- Widgets reutilizáveis com ícones padronizados por categoria semântica
+- `getIconBg()` mapeia accent→bg automaticamente
+- Cores de gráfico via `chartColors.ts` (lê CSS vars, theme-aware)
+- Realtime subscription no canal `monitorias-realtime-dash`
 
 ### 4. Administração (`AdminPanel.tsx`)
-- CRUD de Usuários (com convite via Edge Function)
+- 6 sub-tabs: Usuários, Equipes, Formulários, Solicitações, Configurações, Campos Extras
+- CRUD de Usuários com convite via Edge Function + `syncUserTeams()`
 - CRUD de Equipes
 - Editor de Formulários de Avaliação (pilares + pesos + erros críticos)
 - Gestão de Solicitações de Acesso
 - Configurações de Qualidade
+- Campos de Insatisfação (DissatisfactionFields)
 
 ### 5. Configurações de Qualidade (`QualityConfigManagement.tsx` + `useQualityConfig.tsx`)
-- Faixas de classificação (Excelente, Aceitável, Ruim)
+- Context Provider singleton (1 fetch, consumido via `useQualityConfig()`)
+- Faixas de classificação (Excelente, Aceitável, Ruim) com cores pastel no dark mode
 - Meta de desempenho (target score)
-- Prazo de ação por etapa do fluxo
+- Prazo de ação por etapa do fluxo (horas úteis)
 - Horário comercial e feriados
 - Recálculo automático de deadlines ao alterar configuração
 
@@ -90,28 +104,29 @@ graph LR
         Recovery["Recuperação de Senha"]
         Invite["Convite Admin"]
     end
-    
+
     subgraph Quality ["Qualidade"]
         Forms["Formulários"]
         Monitoria["Monitorias"]
         Score["Cálculo de Score"]
         ActionDeadline["Controle de Prazo de Ação"]
     end
-    
+
     subgraph Analytics ["Análise"]
         Dashboards
         Filters["Filtros"]
         Rankings
         Charts["Gráficos"]
     end
-    
+
     subgraph Admin ["Administração"]
         Users["Usuários"]
         Teams["Equipes"]
         Config["Configurações"]
         AccessReq["Solicitações"]
+        Dissatisfaction["Campos de Insatisfação"]
     end
-    
+
     Auth --> Quality
     Quality --> Analytics
     Admin --> Auth
@@ -129,21 +144,26 @@ graph LR
 | AdminPanel → Edge Functions | HTTP | `supabase.functions.invoke()` |
 | DashboardContext → Widgets | Context | `useDashboard()` hook |
 | QualityConfigProvider → Todos | Context | Config compartilhada via Context Provider (1 fetch, consumido via `useQualityConfig()`) |
+| Custom Events | Múltiplos | `qualitrack:reconnected`, `qualitrack:refresh-monitorias` |
 
 ## Padrões Arquiteturais Observados
 
 ### ✅ Padrões Positivos
 1. **Dual-mode persistence** — Mock (localStorage) + Supabase (produção)
 2. **Role-Based Access Control (RBAC)** — 5 perfis com visibilidade diferenciada
-3. **Context Provider** — Estado centralizado do dashboard
-4. **Design Tokens** — CSS custom properties para temas (light/dark)
-5. **Component composition** — UI components reutilizáveis (Card, Button, Badge, etc.)
+3. **Context Providers** — Estado centralizado do dashboard e da config de qualidade
+4. **Design Tokens** — CSS custom properties para temas (light/dark) com cores pastel no dark
+5. **Component composition** — UI components reutilizáveis (Card, Button, Badge, CustomSelect, etc.)
 6. **Business hours action deadline** — Cálculo preciso de prazos com feriados
+7. **Ref-bridge pattern** — Solução robusta para hooks dentro de useEffect
+8. **Semantic icon categories** — Dashboard com ícones padronizados por categoria
+9. **`getIconBg()` map** — Deriva automaticamente bg do accent color
+10. **Online presence** — Merge local (localStorage) + Supabase Presence, deduplicado por user ID
 
 ### ⚠️ Trade-offs e Limitações
 1. **Sem routing library** — Navegação por estado (`activeTab`), sem URLs
 2. **Lógica de negócio no frontend** — Cálculo de score, prazos de ação, RBAC no client-side
-3. **Componentes grandes** — `AdminPanel.tsx` (1192 linhas), `MonitoriaForm.tsx` (684 linhas)
+3. **Componentes grandes** — `App.tsx` (1344 linhas), `MonitoriaForm.tsx` (684 linhas), `MonitoriaList.tsx` (676 linhas)
 4. **Sem testes automatizados** — Nenhum framework de teste configurado
 5. **Sem CI/CD** — Nenhum pipeline configurado
 
@@ -157,6 +177,8 @@ graph LR
 | TailwindCSS v4 | Design system moderno com CSS custom properties | Exige conhecimento de Tailwind v4 (breaking changes) |
 | Edge Functions (Deno) | Operações admin que requerem service role key | Dependência de Deno runtime no Supabase |
 | RBAC no client | Controle fino de visibilidade de dados | Segurança depende de RLS no banco para ser efetiva |
+| `user_teams` N:N | Relacionamento multi-equipe por usuário | Exige `enrichUserWithTeamIds()` em toda carga de dados |
+| `SECURITY DEFINER` para RLS | Evitar recursão infinita (42P17) na policy de `users` | Função `is_admin_user()` bypassa RLS intencionalmente |
 
 ## Fluxo de Dados Principal
 
@@ -172,20 +194,22 @@ sequenceDiagram
     F->>S: auth.signInWithPassword()
     S-->>F: Session + JWT
     F->>S: SELECT * FROM users WHERE email=...
-    S-->>F: User data (role, teams)
+    F->>S: SELECT * FROM user_teams WHERE user_id=...
+    S-->>F: User data + team_ids (enriquecido)
     F->>F: Renderiza dashboard por role
-    
+
     Note over F,S: Criação de Monitoria
     U->>F: Preenche formulário (4 etapas)
     F->>F: Calcula score (client-side)
     F->>S: INSERT INTO monitorias
     S-->>F: Monitoria criada
-    
+
     Note over F,E: Convite de Usuário (Admin)
     U->>F: Adiciona usuário no Admin
     F->>E: admin-invite-user
     E->>S: auth.admin.inviteUserByEmail()
     E->>S: INSERT INTO users
+    E->>S: INSERT INTO user_teams (sync)
     S-->>E: OK
     E-->>F: { success: true }
 ```

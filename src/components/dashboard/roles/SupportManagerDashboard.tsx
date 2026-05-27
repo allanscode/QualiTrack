@@ -6,7 +6,7 @@ import RankingWidget from '../widgets/RankingWidget';
 import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import { Target, Users, TrendingUp, AlertTriangle, RotateCcw, CheckCircle2, XCircle, ClipboardCheck } from 'lucide-react';
+import { Target, Users, TrendingUp, AlertTriangle, CheckCircle2, XCircle, ClipboardCheck } from 'lucide-react';
 
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
@@ -218,16 +218,16 @@ export default function SupportManagerDashboard() {
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(1)}%`}
           sub="Evolução no período"
           good={trendPercentage >= 0}
-          icon={<TrendingUp className="w-5 h-5" />}
-          accent="text-brand-highlight"
-        />
-        <StatCard
-          title="Monitorias"
-          value={monitorias.length}
-          sub="Total do seu time"
-          good={true}
-          icon={<ClipboardCheck className="w-5 h-5" />}
-          accent="text-brand-accent"
+      icon={<TrendingUp className="w-5 h-5" />}
+      accent="text-functional-success"
+    />
+    <StatCard
+      title="Monitorias"
+      value={monitorias.length}
+      sub="Total do seu time"
+      good={true}
+      icon={<ClipboardCheck className="w-5 h-5" />}
+      accent="text-brand-primary"
         />
       </div>
 
@@ -253,14 +253,14 @@ export default function SupportManagerDashboard() {
 
       {/* Linha 3 — Reavaliações (Contagem Única por Monitoria) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Taxa de Reversão"
-          value={`${reversalRate.toFixed(2)}%`}
-          sub="Contestações Procedentes"
-          good={reversalRate <= 20}
-          icon={<RotateCcw className="w-5 h-5" />}
-          accent="text-brand-highlight"
-        />
+    <StatCard
+      title="Taxa de Reversão"
+      value={`${reversalRate.toFixed(2)}%`}
+      sub="Contestações Procedentes"
+      good={reversalRate <= 20}
+      icon={<Target className="w-5 h-5" />}
+      accent={getLevelForScore(reversalRate).color}
+    />
         <StatCard
           title="Reav. Solicitadas"
           value={totalContestations}
@@ -313,8 +313,8 @@ export default function SupportManagerDashboard() {
           title="Oportunidades (Time)"
           subtitle={`Agentes abaixo da meta (${config.targetScore}%)`}
           data={bottomAgents}
-          icon={<Target className="w-5 h-5" />}
-          accent="text-brand-highlight"
+      icon={<Target className="w-5 h-5" />}
+      accent="text-functional-warning"
         />
         </div>
       </div>

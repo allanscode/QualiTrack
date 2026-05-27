@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-QualiTrack não possui servidor backend tradicional. Toda comunicação é feita diretamente do frontend para o **Supabase** (BaaS).
+QualiTrack não possui servidor backend tradicional. Toda comunicação é feita diretamente do frontend para o **Supabase** (BaaS). Operações privilegiadas são delegadas a Edge Functions (Deno).
 
 ## Autenticação — Supabase Auth
 
@@ -13,48 +13,97 @@ QualiTrack não possui servidor backend tradicional. Toda comunicação é feita
 
 ### Tabelas Auth
 - `auth.users` — Gerenciada pelo Supabase (email, senha, JWT)
-- `public.users` — Customizada com role, team_ids, name, active
+- `public.users` — Customizada com role, name, active, must_change_password
 - **Vínculo**: Mesmo UUID entre as duas
+- **Nota**: Coluna `team_ids` foi removida de `public.users` (migration M5). Relacionamento N:N via `user_teams`.
+
+### Detecção de Hash
+```typescript
+// Em App.tsx useEffect
+const hash = window.location.hash;
+if (hash.includes('type=recovery')) { isPasswordRecoveryRef.current = true; }
+if (hash.includes('type=invite')) { isInviteFlowRef.current = true; }
+```
 
 ## Edge Functions (Deno)
 
 ### 1. `admin-invite-user`
 - **Auth**: JWT obrigatório + role check (admin, gestor_qualidade, gestor_suporte)
-- **Fluxo**: Valida JWT → Verifica role → `inviteUserByEmail()` → INSERT `public.users`
+- **Fluxo**: Valida JWT → Verifica role → `inviteUserByEmail()` → INSERT `public.users` → INSERT `user_teams` (sync)
 - **Input**: `{ email, name, role, team_ids }`
+- **Importante**: `team_ids` é sincronizado via `user_teams`, NÃO inserido na tabela `users`
+- **Deploy**: `npx supabase functions deploy admin-invite-user`
 
 ### 2. `admin-create-user`
-- **Status**: Placeholder (scaffold, não implementado)
+- **Status**: Placeholder (retorna 501 com TODO)
 
 ### 3. `send-email`
 - **SMTP**: Gmail (smtp.gmail.com:465, TLS)
 - **Tipos**: `welcome`, `reset`, `rejection`
 - **Credenciais**: Via env vars (`Deno.env.get("SMTP_USERNAME")`, `Deno.env.get("SMTP_PASSWORD")`)
+- **Deploy**: `npx supabase functions deploy send-email`
 
 ## Cron Job — Prazo de Ação (`process_action_deadline_timeouts()`)
 
 Executada a cada 5 minutos (pg_cron):
 
-| Posse Atual | Ação ao Vencer Prazo |
-|---|---|
-| Qualidade (em_contestacao, etc.) | Score = 100%, status = concluida |
-| Suporte (pendente_revisao, etc.) | Score mantido, status = concluida |
+| Posse Atual | Ação ao Vencer Prazo | resolution_type |
+|---|---|---|
+| Qualidade (em_contestacao, aguardando_gestor_qualidade, reavaliacao_solicitada) | Score = 100%, status = `concluida` | `'automatic'` |
+| Suporte (pendente_revisao, aguardando_gestor_suporte, contestacao_negada) | Score mantido, status = `concluida` | `'automatic'` |
+
+### Ativação do Cron
+```sql
+SELECT cron.schedule(
+  'process-action-deadline',
+  '*/5 * * * *',
+  'SELECT process_action_deadline_timeouts();'
+);
+```
 
 ## Row Level Security (RLS)
+
+### `users`
+- SELECT: Todos autenticados
+- INSERT/UPDATE/DELETE: Apenas admin
+- **Nota**: Policy `users_admin_write` usa função `is_admin_user()` com `SECURITY DEFINER` para evitar recursão infinita (erro 42P17)
+
+### `user_teams`
+- SELECT: Todos autenticados
+- INSERT: Admin, gestor_qualidade, gestor_suporte
+- UPDATE/DELETE: Admin
 
 ### `quality_configs`
 - SELECT: Todos autenticados
 - INSERT/UPDATE/DELETE: Apenas admin e gestor_qualidade
 
+### `dissatisfaction_fields`
+- SELECT: Todos autenticados
+- INSERT/UPDATE/DELETE: Apenas admin e gestor_qualidade
+
 ### `monitorias`
 - Policies versionadas em `rls_monitorias.sql` e `supabase/migrations/`
-- SELECT: RBAC por role (suporte=self, qualidade=self, gestor_suporte=teams, gestor_qualidade=all, admin=all)
+- SELECT: RBAC por role (suporte=self+team, qualidade=self, gestor_suporte=teams, gestor_qualidade=all, admin=all)
 - INSERT: Apenas admin, gestor_qualidade, qualidade
 - UPDATE: Mesmas regras de SELECT
 - DELETE: Apenas admin
 - **Nota**: Casts `auth.uid()::text` necessários porque colunas são TEXT mas `auth.uid()` retorna UUID
 
+### `access_requests`
+- SELECT: Admin, gestor_qualidade, gestor_suporte
+- INSERT: Anônimo (self-service signup)
+- UPDATE: Admin, gestor_qualidade, gestor_suporte
+
+## Funções SQL
+
+### `is_admin_user()` — SECURITY DEFINER
+Retorna boolean se o usuário autenticado é admin. Necessária para evitar recursão infinita nas policies RLS de `users`. Não modifique sem entender o padrão 42P17.
+
+### `process_action_deadline_timeouts()`
+Busca monitorias com `action_deadline_at < now()` e status ativo, aplica regras de auto-finalização por posse.
+
 ## Alertas
 
 - [ ] `admin-create-user` não implementada (retorna 501)
 - [ ] Sem rate limiting, logging estruturado ou observabilidade
+- [ ] Cron de prazo de ação não usa mesma lógica de horário comercial do frontend — compara `action_deadline_at < now()` diretamente

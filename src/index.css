@@ -253,3 +253,12 @@ select {
 .bg-functional-warning { background-color: var(--warning-bg); }
 .text-functional-success { color: var(--success-color); }
 .bg-functional-success { background-color: var(--success-bg); }
+
+/* ── Icon background tokens (theme-aware, light bg for dark text) ── */
+.bg-icon-highlight { background-color: #E8F0E7; }
+.bg-icon-accent { background-color: #E8EBE3; }
+.bg-icon-primary { background-color: #E2E4D8; }
+
+.dark .bg-icon-highlight { background-color: #2A3529; }
+.dark .bg-icon-accent { background-color: #2A2D24; }
+.dark .bg-icon-primary { background-color: #3D4136; }

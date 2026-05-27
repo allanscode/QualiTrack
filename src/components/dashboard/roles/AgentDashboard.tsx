@@ -183,20 +183,20 @@ export default function AgentDashboard() {
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(1)}%`}
           sub="Evolução no período"
           good={trendPercentage >= 0}
-          icon={<TrendingUp className="w-5 h-5" />}
-          accent="text-brand-highlight"
-        />
-      </div>
+      icon={<TrendingUp className="w-5 h-5" />}
+      accent="text-functional-success"
+    />
+  </div>
 
-      {/* Linha 2: Volume e Contestações (Contagem Única por Monitoria) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard
-          title="Monitorias"
-          value={myMonitorias.length.toString()}
-          sub="Total no período"
-          good={true}
-          icon={<ClipboardCheck className="w-5 h-5" />}
-          accent="text-brand-accent"
+  {/* Linha 2: Volume e Contestações (Contagem Única por Monitoria) */}
+  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <StatCard
+      title="Monitorias"
+      value={myMonitorias.length.toString()}
+      sub="Total no período"
+      good={true}
+      icon={<ClipboardCheck className="w-5 h-5" />}
+      accent="text-brand-primary"
         />
         <StatCard
           title="Total Pendentes"

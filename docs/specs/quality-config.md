@@ -3,7 +3,6 @@
 ## Arquivos
 - `src/components/QualityConfigManagement.tsx` (~350 linhas)
 - `src/lib/useQualityConfig.tsx` (~200 linhas)
-- `create_quality_configs.sql` — Schema da tabela
 
 ## Modelo de Dados
 
@@ -16,20 +15,20 @@ interface QualityConfig {
     acceptable: { min: number; label: string; color: string };
     poor: { min: number; label: string; color: string };
   };
-  target: number;              // Meta de desempenho (%)
+  target: number; // Meta de desempenho (%)
   action_deadlines: {
-    review: number; // Horas úteis para revisão
-    contestation: number; // Horas úteis para contestação
+    review: number;          // Horas úteis para revisão
+    contestation: number;   // Horas úteis para contestação
     manager_review: number; // Horas úteis para gestor
     quality_review: number; // Horas úteis para gestor qualidade
   };
   businessHours: {
-    start: string;             // "08:00"
-    end: string;               // "18:00"
+    start: string; // "08:00"
+    end: string;   // "18:00"
   };
   holidays: Array<{
-    date: string;              // "2026-01-01"
-    name: string;              // "Ano Novo"
+    date: string; // "2026-01-01"
+    name: string; // "Ano Novo"
   }>;
 }
 ```
@@ -39,9 +38,9 @@ interface QualityConfig {
 ```typescript
 const DEFAULT_CONFIG = {
   levels: {
-    excellent: { min: 90, label: 'Excelente', color: '#10B981' },
-    acceptable: { min: 70, label: 'Aceitável', color: '#F59E0B' },
-    poor: { min: 0, label: 'Ruim', color: '#EF4444' },
+    excellent: { min: 90, label: 'Excelente', color: 'text-level-excelente' },
+    acceptable: { min: 70, label: 'Aceitável', color: 'text-level-aceitavel' },
+    poor: { min: 0, label: 'Ruim', color: 'text-level-ruim' },
   },
   target: 85,
   action_deadlines: {
@@ -55,9 +54,11 @@ const DEFAULT_CONFIG = {
 };
 ```
 
+> Cores de nível usam classes `text-level-*`/`bg-level-*` com `.dark` overrides (pastel). No dark mode, cores saturadas são substituídas por versões pastel (ex: ruim = `#FCA5A5`).
+
 ## Context Provider + Hook `useQualityConfig()`
 
-> **Arquitetura**: `useQualityConfig` agora é um **Context singleton**. O componente `QualityConfigProvider` (em `useQualityConfig.tsx`) envolve `MainApp` em `App.tsx` e faz **1 único fetch** a `quality_configs`. Todos os consumidores usam `useQualityConfig()` para ler do Context — não há mais múltiplos fetches independentes.
+> **Arquitetura**: `useQualityConfig` é um **Context singleton**. O componente `QualityConfigProvider` (em `useQualityConfig.tsx`) envolve `MainApp` em `App.tsx` e faz **1 único fetch** a `quality_configs`. Todos os consumidores usam `useQualityConfig()` para ler do Context — não há mais múltiplos fetches independentes.
 
 ### `QualityConfigProvider`
 - Deve envolver a árvore de componentes que precisa da config (atualmente em `App.tsx` envolvendo `<MainApp>`)
@@ -81,6 +82,8 @@ Quando o admin altera as horas de prazo de ação, o sistema:
 3. Usa `addBusinessHours()` com novos horários comerciais e feriados
 4. Atualiza em batch no banco
 
+> `recalculateActiveDeadlines()` é **pesada** — dispare apenas no save da configuração. Exibe confirmação ao admin antes de executar.
+
 ## Tabela SQL
 
 ```sql
@@ -99,13 +102,14 @@ CREATE TABLE quality_configs (
 ## UI (QualityConfigManagement)
 
 ### Seções
-1. **Faixas de Classificação** — Inputs numéricos para thresholds
-2. **Meta de Desempenho** — Slider ou input numérico
-3. **Prazo de Ação por Etapa** — Inputs de horas úteis para cada fase
-4. **Horário Comercial** — Inputs de hora início/fim
-5. **Feriados** — Lista com data e nome, add/remove
+1. **Faixas de Classificação** — Inputs numéricos para thresholds (Excelente, Aceitável, Ruim)
+2. **Meta de Desempenho** — Slider ou input numérico (target %)
+3. **Prazo de Ação por Etapa** — Inputs de horas úteis para cada fase (revisão, contestação, gestor, qualidade)
+4. **Horário Comercial** — Inputs de hora início/fim (sincroniza com tabelas `business_hours`)
+5. **Feriados** — Lista com data e nome, add/remove (sincroniza com tabela `holidays`)
 
 ### Comportamento ao Salvar
 - Salva config no banco
 - Exibe confirmação se prazo de ação mudou
 - Se confirmado → `recalculateActiveDeadlines()`
+- Sincroniza `business_hours` e `holidays` nas tabelas dedicadas
