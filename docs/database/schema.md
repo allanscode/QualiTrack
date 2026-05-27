@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-O banco de dados é **PostgreSQL** gerenciado pelo **Supabase**. O schema utiliza `public` para tabelas de aplicação e `auth` para autenticação (gerenciado pelo Supabase).
+O banco de dados é **PostgreSQL** gerenciado pelo **Supabase**. O schema utiliza `public` para tabelas de aplicação e `auth` para autenticação (gerenciado pelo Supabase). Total: **10 tabelas** no schema `public`.
 
 ## Diagrama ER
 
@@ -12,17 +12,24 @@ erDiagram
     USERS ||--o{ MONITORIAS : "evaluated_id"
     TEAMS ||--o{ MONITORIAS : "team_id"
     FORMS ||--o{ MONITORIAS : "form_id"
-USERS }o--o{ TEAMS : "user_teams (N:N)"
+    USERS }o--o{ TEAMS : "user_teams (N:N)"
 
-USERS {
-uuid id PK
-text email UK
-text name
-text role
-boolean active
-boolean must_change_password
-timestamptz created_at
-}
+    USERS {
+        uuid id PK
+        text email UK
+        text name
+        text role
+        boolean active
+        boolean must_change_password
+        timestamptz created_at
+    }
+
+    USER_TEAMS {
+        uuid id PK
+        uuid user_id FK
+        uuid team_id FK
+        timestamptz created_at
+    }
 
     TEAMS {
         uuid id PK
@@ -57,6 +64,12 @@ timestamptz created_at
         text status
         jsonb history
         timestamptz action_deadline_at
+        text resolution_type
+        text contestation_result
+        jsonb form_snapshot
+        jsonb applied_config
+        jsonb selected_critical_errors
+        jsonb dissatisfaction_answers
         boolean active
         timestamptz created_at
         timestamptz updated_at
@@ -77,6 +90,27 @@ timestamptz created_at
         timestamptz created_at
         timestamptz updated_at
     }
+
+    DISSATISFACTION_FIELDS {
+        uuid id PK
+        text title
+        text type
+        jsonb options
+        boolean active
+        timestamptz created_at
+    }
+
+    BUSINESS_HOURS {
+        uuid id PK
+        text start_time
+        text end_time
+    }
+
+    HOLIDAYS {
+        uuid id PK
+        text date
+        text name
+    }
 ```
 
 ## Tabelas Detalhadas
@@ -92,14 +126,15 @@ timestamptz created_at
 | `must_change_password` | BOOLEAN | `false` | Flag para forçar troca de senha |
 | `created_at` | TIMESTAMPTZ | `now()` | Data de criação |
 
-> **Nota**: A coluna `team_ids` foi removida (migration M5). O relacionamento N:N entre usuários e equipes é feito via tabela `user_teams`. O frontend enriquece o objeto `User` com `team_ids: string[]` via `enrichUserWithTeamIds()`, mas **nunca** envia `team_ids` em payloads Supabase da tabela `users`.
+> **Nota**: A coluna `team_ids` foi removida (migration M5). O relacionamento N:N entre usuários e equipes é feito via tabela `user_teams`. O frontend enriquece o objeto `User` com `team_ids: string[]` via `enrichUserWithTeamIds()`, mas **nunca** envia `team_ids` em payloads Supabase da tabela `users`. Use `syncUserTeams()` para sincronizar.
 
 ### `public.user_teams`
-
 | Coluna | Tipo | Default | Descrição |
 |---|---|---|---|
+| `id` | UUID | PK | Identificador único do registro |
 | `user_id` | UUID | FK → users | ID do usuário |
 | `team_id` | UUID | FK → teams | ID da equipe |
+| `created_at` | TIMESTAMPTZ | `now()` | Data de criação |
 
 > Tabela N:N — um usuário pode pertencer a múltiplas equipes e uma equipe possui múltiplos usuários. PK composta `(user_id, team_id)`.
 
@@ -140,6 +175,12 @@ timestamptz created_at
 | `status` | TEXT | — | Status atual (ver MonitoriaStatus) |
 | `history` | JSONB | `[]` | Array de HistoryEntry |
 | `action_deadline_at` | TIMESTAMPTZ | — | Prazo de ação atual |
+| `resolution_type` | TEXT | — | `'human'` ou `'automatic'` (como foi concluída) |
+| `contestation_result` | TEXT | — | `'approved'`, `'rejected'` ou `'pending'` |
+| `form_snapshot` | JSONB | — | Snapshot do formulário no momento da avaliação |
+| `applied_config` | JSONB | — | Config de qualidade aplicada no cálculo |
+| `selected_critical_errors` | JSONB | — | IDs dos erros críticos selecionados |
+| `dissatisfaction_answers` | JSONB | — | Respostas de campos de insatisfação |
 | `active` | BOOLEAN | `true` | Soft-delete |
 | `created_at` | TIMESTAMPTZ | `now()` | Data de criação |
 | `updated_at` | TIMESTAMPTZ | `now()` | Última atualização |
@@ -162,6 +203,30 @@ timestamptz created_at
 | `created_at` | TIMESTAMPTZ | `now()` | Data de criação |
 | `updated_at` | TIMESTAMPTZ | `now()` | Última atualização |
 
+### `public.dissatisfaction_fields`
+| Coluna | Tipo | Default | Descrição |
+|---|---|---|---|
+| `id` | UUID | PK | Identificador único |
+| `title` | TEXT | — | Título do campo |
+| `type` | TEXT | — | `'cliente'` ou `'qualidade'` |
+| `options` | JSONB | — | Array de opções de resposta |
+| `active` | BOOLEAN | `true` | Soft-delete |
+| `created_at` | TIMESTAMPTZ | `now()` | Data de criação |
+
+### `public.business_hours`
+| Coluna | Tipo | Default | Descrição |
+|---|---|---|---|
+| `id` | UUID | PK | Identificador único |
+| `start_time` | TEXT | — | Hora início (ex: "08:00") |
+| `end_time` | TEXT | — | Hora fim (ex: "18:00") |
+
+### `public.holidays`
+| Coluna | Tipo | Default | Descrição |
+|---|---|---|---|
+| `id` | UUID | PK | Identificador único |
+| `date` | TEXT | — | Data do feriado (ex: "2026-01-01") |
+| `name` | TEXT | — | Nome do feriado (ex: "Ano Novo") |
+
 ## Campos Denormalizados
 
 As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) para performance:
@@ -177,5 +242,18 @@ As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) 
 |---|---|
 | `auth_migration.sql` | Cria admin padrão no Auth + public.users |
 | `create_quality_configs.sql` | Cria tabela quality_configs + RLS |
-| `supabase_sla_cron.sql` | Função + cron job para timeout de prazo de ação |
-| `supabase/migrations/` | Migrations SQL versionadas (timestamp) — inclui `user_teams`, `dissatisfaction_fields`, `business_hours`, `holidays`, RLS policies |
+| `rls_monitorias.sql` | RLS policies para a tabela monitorias |
+| `supabase/migrations/` | Migrations SQL versionadas (timestamp) — inclui `user_teams`, `dissatisfaction_fields`, `business_hours`, `holidays`, RLS policies, `is_admin_user()` SECURITY DEFINER |
+
+## RLS por Tabela
+
+| Tabela | SELECT | INSERT | UPDATE | DELETE |
+|--------|--------|--------|--------|--------|
+| `users` | Todos autenticados | Admin | Admin (via `is_admin_user()` SECURITY DEFINER) | Admin |
+| `user_teams` | Todos autenticados | Admin, gestores | Admin | Admin |
+| `teams` | Todos autenticados | Admin | Admin | Admin |
+| `forms` | Todos autenticados | Admin, qualidade | Admin | Admin |
+| `monitorias` | RBAC por role | Admin, gestor_qualidade, qualidade | RBAC por role | Admin |
+| `quality_configs` | Todos autenticados | Admin, gestor_qualidade | Admin, gestor_qualidade | Admin, gestor_qualidade |
+| `access_requests` | Admin, gestores | Anônimo | Admin, gestores | Admin |
+| `dissatisfaction_fields` | Todos autenticados | Admin, gestor_qualidade | Admin, gestor_qualidade | Admin, gestor_qualidade |

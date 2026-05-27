@@ -9,7 +9,6 @@ QualiTrack não possui API REST customizada. Toda comunicação é via:
 ## Supabase Client (PostgREST)
 
 ### Monitorias
-
 ```typescript
 // Listar
 supabase.from('monitorias').select('*').order('created_at', { ascending: false })
@@ -18,8 +17,11 @@ supabase.from('monitorias').select('*').order('created_at', { ascending: false }
 supabase.from('monitorias').insert({ ...monitoria })
 
 // Atualizar
-supabase.from('monitorias').update({ status, score, history, action_deadline_at, updated_at })
-  .eq('id', monitoriaId)
+supabase.from('monitorias').update({
+  status, score, history,
+  action_deadline_at, updated_at,
+  resolution_type, contestation_result
+}).eq('id', monitoriaId)
 
 // Soft-delete
 supabase.from('monitorias').update({ active: false }).eq('id', monitoriaId)
@@ -27,9 +29,28 @@ supabase.from('monitorias').update({ active: false }).eq('id', monitoriaId)
 
 ### Users
 ```typescript
+// Listar
 supabase.from('users').select('*')
+
+// Buscar por email
 supabase.from('users').select('*').eq('email', email).single()
-supabase.from('users').upsert({ id, email, name, role, team_ids, active })
+
+// Upsert (SEM team_ids!)
+supabase.from('users').upsert({ id, email, name, role, active, must_change_password })
+```
+
+> **IMPORTANTE**: Nunca envie `team_ids` no payload da tabela `users`. Use `syncUserTeams()` para sincronizar via tabela `user_teams`.
+
+### User Teams
+```typescript
+// Listar equipes de um usuário
+supabase.from('user_teams').select('*').eq('user_id', userId)
+
+// Inserir vínculo
+supabase.from('user_teams').insert({ user_id, team_id })
+
+// Deletar vínculo
+supabase.from('user_teams').delete().eq('id', recordId)
 ```
 
 ### Teams
@@ -58,6 +79,19 @@ supabase.from('access_requests').insert({ name, email, justification, status: 'p
 supabase.from('access_requests').update({ status }).eq('id', requestId)
 ```
 
+### Dissatisfaction Fields
+```typescript
+supabase.from('dissatisfaction_fields').select('*')
+supabase.from('dissatisfaction_fields').insert({ title, type, options, active: true })
+supabase.from('dissatisfaction_fields').update({ title, type, options, active }).eq('id', fieldId)
+```
+
+### Business Hours / Holidays
+```typescript
+supabase.from('business_hours').select('*')
+supabase.from('holidays').select('*')
+```
+
 ## Edge Functions
 
 ### POST `/functions/v1/admin-invite-user`
@@ -78,6 +112,12 @@ Content-Type: application/json
 }
 ```
 
+**Fluxo interno:**
+1. Valida JWT e verifica role (admin, gestor_qualidade, gestor_suporte)
+2. `auth.admin.inviteUserByEmail()` → cria user no Auth
+3. INSERT na `public.users` (SEM `team_ids`)
+4. Sincroniza `user_teams` com os `team_ids` recebidos
+
 **Response (success):**
 ```json
 { "success": true, "user": { "id": "uuid", "email": "..." } }
@@ -87,6 +127,10 @@ Content-Type: application/json
 ```json
 { "success": false, "error": "Error message", "details": {} }
 ```
+
+### POST `/functions/v1/admin-create-user`
+
+**Status**: Placeholder — retorna 501 com TODO.
 
 ### POST `/functions/v1/send-email`
 
@@ -104,6 +148,8 @@ Content-Type: application/json
 ```json
 { "success": true, "message": "E-mail enviado com sucesso" }
 ```
+
+**Credenciais**: Via env vars `SMTP_USERNAME` e `SMTP_PASSWORD`.
 
 ## Auth SDK
 
@@ -125,4 +171,33 @@ supabase.auth.getSession()
 
 // Listen to auth changes
 supabase.auth.onAuthStateChange(callback)
+
+// Refresh session (proactive, every 50min)
+supabase.auth.refreshSession()
 ```
+
+## Utility Functions
+
+### `enrichUserWithTeamIds(dbUser)`
+Consulta `user_teams` e injeta `team_ids: string[]` no user object. Usado em:
+- `App.tsx` (login, session restore, handleUserSession)
+- `DashboardContext.tsx` (data loading)
+- `AdminPanel.tsx` (data loading)
+
+### `syncUserTeams(userId, teamIds)`
+Diff-based sync da tabela `user_teams`. Usado em:
+- `UsersManagement.tsx` (criação e edição de usuários)
+- `RequestsManagement.tsx` (aprovação de solicitações)
+
+### `executeWithRetry(fn, options?)`
+Retry wrapper para operações CRUD:
+- Timeout: 15s por attempt
+- Max attempts: 2-5 (depende do contexto)
+- Backoff: exponencial
+- Toast notifications em falhas
+
+### `addBusinessHours(startDate, hours, config)`
+Cálculo de prazo de ação em horas úteis:
+- Itera hora a hora
+- Pula fins de semana, feriados, fora do horário comercial
+- Retorna data/hora final do deadline
