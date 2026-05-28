@@ -55,6 +55,9 @@ graph TB
 - Gerenciamento de sessão unificado: idle timeout (60min), idle warning (5min countdown), absolute timeout (8h), proactive refresh (50min)
 - Ref-bridge pattern para `extendSession` (useCallback não pode ser chamado dentro de useEffect)
 - `handleLogout({ silent?, message? })` — aceita options para evitar crash com MouseEvent no Sonner
+- Sidebar com popover accordion (4 seções recolhíveis: Equipes, Avatar, Aparência, Cor do Menu; single-open via `sidebarAccordion`)
+- Profile toggle com classe `profile-toggle-btn` para exclusão do click-outside handler
+- `scrollbar-gutter: stable` no container de scroll principal para evitar layout shift
 
 ### 2. Monitorias (`MonitoriaForm.tsx` + `MonitoriaList.tsx`)
 - Criação de auditorias em 4 etapas (stepper)
@@ -152,7 +155,7 @@ graph LR
 1. **Dual-mode persistence** — Mock (localStorage) + Supabase (produção)
 2. **Role-Based Access Control (RBAC)** — 5 perfis com visibilidade diferenciada
 3. **Context Providers** — Estado centralizado do dashboard e da config de qualidade
-4. **Design Tokens** — CSS custom properties para temas (light/dark) com cores pastel no dark
+4. **Design Tokens** — CSS custom properties para temas (light/dark) com cores pastel no dark + `--date-color-scheme` para date inputs
 5. **Component composition** — UI components reutilizáveis (Card, Button, Badge, CustomSelect, etc.)
 6. **Business hours action deadline** — Cálculo preciso de prazos com feriados
 7. **Ref-bridge pattern** — Solução robusta para hooks dentro de useEffect

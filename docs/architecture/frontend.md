@@ -19,9 +19,9 @@
 
 ```
 src/
-├── App.tsx                          # Entry point: Auth + Layout + Tab Navigation + Session
+├── App.tsx # Entry point: Auth + Layout + Tab Navigation + Session + Sidebar Accordion
 ├── main.tsx                         # React DOM render
-├── index.css                        # Design tokens + CSS global (Tailwind v4 @theme)
+├── index.css # Design tokens + CSS global (Tailwind v4 @theme) + date picker color-scheme
 ├── types.ts                         # Tipos TypeScript globais (User, Monitoria, Team, etc.)
 ├── lib/
 │   ├── supabase.ts                  # Cliente Supabase + MockDB (localStorage)
@@ -84,6 +84,7 @@ Estado raiz que controla:
 - `showIdleWarning` — Modal de aviso de inatividade (5 min countdown)
 - `idleCountdown` — Segundos restantes no countdown de inatividade
 - `isSidebarOpen` — Estado da sidebar (260px aberta / 80px recolhida)
+- `sidebarAccordion` — Seção aberta no popover do perfil (`'teams' | 'avatar' | 'appearance' | 'color' | null`). Apenas 1 seção aberta por vez.
 - `isSystemOnline` — Status de conectividade de rede
 - `isReconnecting` — Indicador de tentativa de reconexão ativa
 
@@ -227,7 +228,11 @@ Os perfis de usuário (roles) são mapeados de IDs técnicos para nomes amigáve
 - **Sidebar Text Flicker Fix:** `sidebarTextVisible` state — texto esconde imediatamente ao colapsar, aparece somente após `onAnimationComplete`.
 - **Perfil do Usuário:** Seção de perfil utiliza `layout` animation do Framer Motion para alternar entre `flex-row` (aberta) e `flex-col` (recolhida), permitindo que o botão de logout fique abaixo do ícone no modo compacto.
 - **Quebra de Texto:** Nomes e cargos suportam `break-words` para evitar quebra de layout com nomes extensos.
-- **Color Picker:** Sidebar com 20 presets de cor, persistidos por usuário em localStorage (`qualitrack_sidebar_color_{email}`) e `user_metadata.sidebar_color`.
+- **Sidebar Accordion:** Popover de perfil com 4 seções recolhíveis (Equipes, Avatar, Aparência, Cor do Menu). Padrão single-open via `sidebarAccordion` state. Usa `AnimatePresence initial={false}` + `motion.div` para smooth height animation. `ChevronDown` com `rotate-180` transition. Seleção de cor auto-fecha o accordion. Sem botão X — fecha ao clicar fora ou no toggle do perfil.
+- **Profile Toggle:** Botões de avatar e nome no sidebar usam classe `profile-toggle-btn` para exclusão do click-outside handler. Toggle abre/fecha o popover corretamente sem conflito com o handler de click-outside.
+- **Color Picker:** Um dos 4 accordion sections. 20 presets de cor, persistidos por usuário em localStorage (`qualitrack_sidebar_color_{email}`) e `user_metadata.sidebar_color`. Seleção auto-fecha o accordion.
+- **Date Picker (Dark Mode):** `input[type="date"]` usa `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark` em `index.css`. Previne flash preto ao abrir calendário em light mode.
+- **Scrollbar Gutter:** Container de scroll principal usa `scrollbar-gutter: stable` (inline style) para evitar layout shift quando scrollbar aparece/desaparece.
 
 ### Tipografia
 - **Fonte**: Inter (Google Fonts) com fallback para system-ui
@@ -236,10 +241,10 @@ Os perfis de usuário (roles) são mapeados de IDs técnicos para nomes amigáve
 ### Padrões UI Recorrentes
 - **Cards**: `rounded-3xl` ou `rounded-[32px]` com `border border-surface-border shadow-premium`
 - **Botões**: `rounded-2xl` com `font-black uppercase tracking-widest`
-- **Inputs**: `rounded-2xl` com `bg-surface-subtle border border-surface-border`
+- **Inputs**: `rounded-2xl` com `bg-surface-subtle border border-surface-border`. Para `input[type="date"]`, usar `color-scheme: var(--date-color-scheme, light)`.
 - **Labels**: `text-[10px] font-black uppercase tracking-widest text-brand-muted`
 - **Modais**: `fixed inset-0 bg-black/40 backdrop-blur-sm` com card central
-- **Animações**: `motion/react` para enter/exit de componentes
+- **Animações**: `motion/react` para enter/exit de componentes. Sidebar accordion usa `AnimatePresence initial={false}` com smooth height animation.
 
 ## Componentes UI (`src/components/ui/`)
 
@@ -264,7 +269,7 @@ graph TD
     app -->|"!currentUser"| login["Login / Auth Views"]
     app -->|"currentUser"| mainApp["MainApp Component"]
 
-    mainApp --> sidebar["Sidebar<br/>(role-colored, 20 presets)"]
+    mainApp --> sidebar["Sidebar<br/>(role-colored, accordion, 20 presets)"]
     mainApp --> header["Header<br/>(greeting + date + online status)"]
     mainApp --> content["Content Area"]
 

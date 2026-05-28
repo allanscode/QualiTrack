@@ -167,6 +167,9 @@ Use **sempre** os tokens semânticos definidos em `index.css`. Nunca hardcode co
 - **Sombras**: `shadow-premium` para cards flutuantes
 - **Animações**: Use `motion` (Framer Motion) para transitions. Evite CSS bruto para montar/desmontar componentes.
 - **Dark Mode**: Configurado via classe `.dark` no `<html>`. Teste sempre em ambos os modos.
+- **Date Picker (Dark Mode)**: `input[type="date"]` usa `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark` em `index.css`. Previne flash preto ao abrir calendário em light mode.
+- **Sidebar Accordion**: Popover de perfil usa padrão accordion single-open (`sidebarAccordion` state: `'teams' | 'avatar' | 'appearance' | 'color' | null`). Seções expandem com `AnimatePresence initial={false}` + `ChevronDown` com `rotate-180`. Seleção de cor auto-fecha o accordion. Sem botão X — fecha ao clicar fora ou no toggle do perfil.
+- **Scrollbar Gutter**: Container de scroll principal usa `scrollbar-gutter: stable` para evitar layout shift quando scrollbar aparece/desaparece.
 
 ### Ícones
 Use **apenas** `lucide-react`. Nunca introduza outra lib de ícones. Tamanho padrão: `w-5 h-5`.
@@ -386,7 +389,7 @@ DISABLE_HMR                # (opcional) "true" para desativar HMR
 Antes de commitar qualquer alteração, verifique:
 
 - [ ] Não quebra o fluxo de prazo de ação (`addBusinessHours`)?
-- [ ] O componente funciona em Light **e** Dark mode?
+- [ ] O componente funciona em Light **e** Dark mode? (Inputs `type="date"` usam `--date-color-scheme` pattern?)
 - [ ] Se adicionou filtro no dashboard, aplicou em `DashboardContext.tsx` e não apenas localmente?
 - [ ] Testou o fluxo com o Role correto? (Componente para `suporte` não pode exibir dados de outros agentes)
 - [ ] Usou `lucide-react` para ícones?
@@ -425,6 +428,10 @@ Antes de commitar qualquer alteração, verifique:
 | Ícones invisíveis (bg = text color) | **ALTA** | ✅ Resolvido | Classes `.bg-icon-*` separadas de `bg-brand-*` em `index.css` |
 | Tema não persistia após F5 | **ALTA** | ✅ Resolvido | Removido `setTheme('system')` do useEffect de `currentUser` |
 | Tooltip ComparativeBarChart sem contraste | **MÉDIA** | ✅ Resolvido | `color: var(--brand-on-primary)` + `itemStyle` com cor explícita |
+| Date picker flash preto em light mode | **MÉDIA** | ✅ Resolvido | `color-scheme: var(--date-color-scheme, light)` + `.dark` override em `index.css` |
+| Sidebar popover sem accordion (UX confusa) | **MÉDIA** | ✅ Resolvido | Refatorado para accordion com 4 seções, single-open, AnimatePresence |
+| Profile toggle conflito com click-outside | **MÉDIA** | ✅ Resolvido | Classe `profile-toggle-btn` nos dois botões (avatar + nome) para exclusão no handler |
+| Layout shift por scrollbar | **BAIXA** | ✅ Resolvido | `scrollbar-gutter: stable` no container de scroll principal |
 
 ---
 
@@ -458,6 +465,9 @@ Antes de commitar qualquer alteração, verifique:
 - **Gráficos**: Cores via `chartPalette()`/`chartColorArray()`/`chartColorMap()` de `chartColors.ts` — lê CSS vars em runtime, funciona em light e dark mode.
 - **Ícones Dashboard**: Fundos de ícone usam classes `.bg-icon-*` (ex: `bg-icon-primary`, `bg-icon-accent`, `bg-icon-highlight`) — cores claras/pastel que contrastam com `text-brand-*`. NUNCA use `bg-brand-*` para fundo de ícone, pois estas classes usam as mesmas CSS vars de `text-brand-*` (ícone ficaria invisível).
 - **Tooltips Recharts**: Usar `backgroundColor: 'var(--brand-primary)'` + `color: 'var(--brand-on-primary)'` — garante contraste em light e dark mode.
+- **Date Picker**: `input[type="date"]` deve usar `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark` para evitar flash preto ao abrir calendário em light mode.
+- **Sidebar Accordion**: Seções colapsáveis no popover de perfil seguem padrão single-open (`sidebarAccordion` state). `AnimatePresence initial={false}` + `ChevronDown` com `rotate-180`. Seleção de cor auto-fecha. Botoes toggle do perfil usam classe `profile-toggle-btn` para exclusão do click-outside handler.
+- **Scrollbar Gutter**: Container de scroll principal usa `scrollbar-gutter: stable` para evitar layout shift quando scrollbar aparece/desaparece.
 - **Git**: Branch por feature/fix; delete merged branches; PR via GitHub.
 
 ---

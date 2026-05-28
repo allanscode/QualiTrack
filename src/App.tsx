@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase, mockDb } from './lib/supabase';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -912,6 +912,7 @@ function MainApp({
 }: any) {
   const [teams, setTeams] = React.useState<any[]>([]);
   const [showTeamList, setShowTeamList] = React.useState(false);
+  const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | 'color' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
 
   const toggleSidebar = () => {
@@ -958,7 +959,10 @@ function MainApp({
 
   // Fechar o menu de equipes/configurações ao clicar fora
   useEffect(() => {
-    if (!showTeamList) return;
+    if (!showTeamList) {
+      setSidebarAccordion(null);
+      return;
+    }
     const handleOutsideClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('.interactive-sidebar-popover') && !target.closest('.profile-toggle-btn')) {
@@ -1077,19 +1081,19 @@ function MainApp({
     <div className="p-3 border-t border-white/5 interactive-sidebar-item">
       <div className="relative interactive-sidebar-item">
         <div className="flex items-center gap-3 p-2 rounded-xl bg-black/10 overflow-hidden">
-          <button
-            onClick={() => setShowTeamList(!showTeamList)}
-            className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 hover:bg-white/20 transition-all relative cursor-pointer"
-          >
+        <button
+          onClick={() => setShowTeamList(!showTeamList)}
+          className="profile-toggle-btn w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 hover:bg-white/20 transition-all relative cursor-pointer"
+        >
             <UserIcon className="w-5 h-5" />
             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
           </button>
 
           <div className="flex-1 flex items-center gap-2 min-w-0 overflow-hidden" style={{ opacity: sidebarTextVisible ? 1 : 0, maxWidth: sidebarTextVisible ? undefined : 0, transition: 'opacity 0.15s ease' }}>
-            <button
-              onClick={() => setShowTeamList(!showTeamList)}
-              className="min-w-0 flex-1 py-1 text-left cursor-pointer hover:opacity-80 transition-opacity"
-            >
+        <button
+          onClick={() => setShowTeamList(!showTeamList)}
+          className="profile-toggle-btn min-w-0 flex-1 py-1 text-left cursor-pointer hover:opacity-80 transition-opacity"
+        >
               <p className="text-xs font-bold text-white leading-tight truncate">{userData?.name}</p>
               <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5 leading-tight truncate">
                 {userData ? ROLE_LABELS[userData.role] : ''}
@@ -1106,116 +1110,203 @@ function MainApp({
           </div>
         </div>
 
-        {/* Team List & Settings Popover */}
-            <AnimatePresence>
-              {showTeamList && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className={`absolute w-56 bg-surface-card border border-surface-border rounded-2xl shadow-premium p-4 z-50 text-brand-primary interactive-sidebar-popover ${
-                    isSidebarOpen ? 'bottom-full left-0 mb-2' : 'bottom-0 left-full ml-2'
-                  }`}
+{/* Team List & Settings Popover */}
+      <AnimatePresence>
+        {showTeamList && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className={`absolute w-56 bg-surface-card border border-surface-border rounded-2xl shadow-premium z-50 text-brand-primary interactive-sidebar-popover overflow-hidden ${isSidebarOpen ? 'bottom-full left-0 mb-2' : 'bottom-0 left-full ml-2' }`}
+          >
+            <div className="p-3 space-y-0.5">
+              {/* ── Teams Accordion ── */}
+              <div>
+                <button
+                  onClick={() => setSidebarAccordion(sidebarAccordion === 'teams' ? null : 'teams')}
+                  className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
                 >
-                  <button 
-                    onClick={() => setShowTeamList(false)}
-                    className="absolute top-3.5 right-3.5 text-brand-muted hover:text-brand-primary p-1 rounded-lg hover:bg-surface-subtle transition-colors cursor-pointer"
-                    title="Fechar"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-
-                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-surface-border">
+                  <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-brand-accent" />
-                    <span className="text-xs font-black uppercase tracking-wider">Suas Equipes</span>
+                    <span className="text-[11px] font-black uppercase tracking-wider">Equipes</span>
                   </div>
-                  <div className="space-y-1">
-                    {userTeams.length > 0 ? userTeams.map(t => (
-                      <div key={t.id} className="text-xs py-1.5 px-2 hover:bg-surface-subtle rounded-lg font-bold">
-                        • {t.name}
+                  <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'teams' ? 'rotate-180' : ''}`} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {sidebarAccordion === 'teams' && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pb-2 px-2 space-y-0.5">
+                        {userTeams.length > 0 ? userTeams.map(t => (
+                          <div key={t.id} className="text-[11px] py-1 px-2 rounded-lg font-semibold text-brand-muted">{t.name}</div>
+                        )) : (
+                          <div className="text-[10px] text-brand-muted italic px-2 py-1">Nenhuma equipe vinculada</div>
+                        )}
                       </div>
-                    )) : (
-                      <div className="text-[10px] text-brand-muted italic p-2">Nenhuma equipe vinculada</div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* ── Avatar Accordion ── */}
+              <div className="border-t border-surface-border">
+                <button
+                  onClick={() => setSidebarAccordion(sidebarAccordion === 'avatar' ? null : 'avatar')}
+                  className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <UserIcon className="w-4 h-4 text-brand-accent" />
+                    <span className="text-[11px] font-black uppercase tracking-wider">Avatar</span>
+                  </div>
+                  <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'avatar' ? 'rotate-180' : ''}`} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {sidebarAccordion === 'avatar' && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pb-2 px-2">
+                        <div className="text-[10px] text-brand-muted italic py-1">Em breve</div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* ── Appearance Accordion ── */}
+              <div className="border-t border-surface-border">
+                <button
+                  onClick={() => setSidebarAccordion(sidebarAccordion === 'appearance' ? null : 'appearance')}
+                  className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    {theme === 'dark' ? <Moon className="w-4 h-4 text-brand-accent" /> : theme === 'light' ? <Sun className="w-4 h-4 text-brand-accent" /> : <Monitor className="w-4 h-4 text-brand-accent" />}
+                    <span className="text-[11px] font-black uppercase tracking-wider">Aparência</span>
+                    <span className="text-[10px] font-semibold text-brand-muted normal-case tracking-normal">
+                      {theme === 'light' ? 'Claro' : theme === 'dark' ? 'Escuro' : 'Sistema'}
+                    </span>
+                  </div>
+                  <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'appearance' ? 'rotate-180' : ''}`} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {sidebarAccordion === 'appearance' && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pb-2 px-2">
+                        <div className="grid grid-cols-3 gap-1 bg-surface-subtle p-1 rounded-xl border border-surface-border">
+                          {[
+                            { value: 'light', label: 'Claro', icon: Sun },
+                            { value: 'dark', label: 'Escuro', icon: Moon },
+                            { value: 'system', label: 'Sistema', icon: Monitor }
+                          ].map(opt => {
+                            const Icon = opt.icon;
+                            const isActive = theme === opt.value;
+                            return (
+                              <button
+                                key={opt.value}
+                                onClick={(e) => { e.stopPropagation(); setTheme(opt.value as any); }}
+                                className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                  isActive
+                                    ? 'bg-surface-card text-brand-primary shadow-sm border border-surface-border'
+                                    : 'text-brand-muted hover:text-brand-primary hover:bg-surface-card/30 border border-transparent'
+                                }`}
+                              >
+                                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-brand-accent' : 'text-brand-muted'}`} />
+                                <span>{opt.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* ── Color Accordion ── */}
+              <div className="border-t border-surface-border">
+                <button
+                  onClick={() => setSidebarAccordion(sidebarAccordion === 'color' ? null : 'color')}
+                  className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-brand-accent" />
+                    <span className="text-[11px] font-black uppercase tracking-wider">Cor do Menu</span>
+                    {sidebarColor && (
+                      <span className="w-3.5 h-3.5 rounded-full flex-shrink-0 border border-surface-border" style={{ backgroundColor: sidebarColor }} />
                     )}
                   </div>
-
-                  {/* Theme Selector Section */}
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-surface-border mb-2">
-                    {theme === 'dark' ? <Moon className="w-4 h-4 text-brand-accent" /> : theme === 'light' ? <Sun className="w-4 h-4 text-brand-accent" /> : <Monitor className="w-4 h-4 text-brand-accent" />}
-                    <span className="text-xs font-black uppercase tracking-wider">Aparência</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1 bg-surface-subtle p-1 rounded-xl border border-surface-border">
-                    {[
-                      { value: 'light', label: 'Claro', icon: Sun },
-                      { value: 'dark', label: 'Escuro', icon: Moon },
-                      { value: 'system', label: 'Sistema', icon: Monitor }
-                    ].map(opt => {
-                      const Icon = opt.icon;
-                      const isActive = theme === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setTheme(opt.value as any);
-                          }}
-                          className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                            isActive 
-                              ? 'bg-surface-card text-brand-primary shadow-sm border border-surface-border' 
-                              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-card/30 border border-transparent'
-                          }`}
-                        >
-                          <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-brand-accent' : 'text-brand-muted'}`} />
-                          <span>{opt.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Color Selector Section */}
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-surface-border mb-2">
-                    <Palette className="w-4 h-4 text-brand-accent" />
-                    <span className="text-xs font-black uppercase tracking-wider">Cor do Menu</span>
-                  </div>
-                  <div className="grid grid-cols-5 gap-1.5 pt-1">
-                    {[
-                      { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
-                      { value: '#475569', label: 'Slate', hex: 'bg-[#475569]' },
-                      { value: '#1E293B', label: 'Escuro', hex: 'bg-[#1E293B]' },
-                      { value: '#111827', label: 'Carvão', hex: 'bg-[#111827]' },
-                      { value: '#0F172A', label: 'Meia-noite', hex: 'bg-[#0F172A]' },
-                      { value: '#047857', label: 'Esmeralda', hex: 'bg-[#047857]' },
-                      { value: '#14532D', label: 'Floresta', hex: 'bg-[#14532D]' },
-                      { value: '#0D9488', label: 'Menta', hex: 'bg-[#0D9488]' },
-                      { value: '#1E40AF', label: 'Azul', hex: 'bg-[#1E40AF]' },
-                      { value: '#0284C7', label: 'Céu', hex: 'bg-[#0284C7]' },
-                      { value: '#881337', label: 'Vinho', hex: 'bg-[#881337]' },
-                      { value: '#E11D48', label: 'Rubi', hex: 'bg-[#E11D48]' },
-                      { value: '#6D28D9', label: 'Roxo', hex: 'bg-[#6D28D9]' },
-                      { value: '#5B21B6', label: 'Lavanda', hex: 'bg-[#5B21B6]' },
-                      { value: '#86198F', label: 'Fúcsia', hex: 'bg-[#86198F]' },
-                      { value: '#B45309', label: 'Bronze', hex: 'bg-[#B45309]' },
-                      { value: '#EA580C', label: 'Pôr do Sol', hex: 'bg-[#EA580C]' },
-                      { value: '#3F6212', label: 'Oliva', hex: 'bg-[#3F6212]' },
-                      { value: '#451A03', label: 'Café', hex: 'bg-[#451A03]' },
-                      { value: '#1D4ED8', label: 'Safira', hex: 'bg-[#1D4ED8]' }
-                    ].map(opt => {
-                      const isActive = sidebarColor === opt.value;
-                      return (
-                        <button
-                          key={opt.label}
-                          onClick={() => handleSidebarColorChange(opt.value)}
-                          className={`w-7 h-7 rounded-full ${opt.hex} border-2 hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer ${isActive ? 'border-brand-accent shadow-md scale-105' : 'border-surface-border'}`}
-                          title={opt.label}
-                        >
-                          {isActive && <Check className="w-3.5 h-3.5 text-white drop-shadow" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'color' ? 'rotate-180' : ''}`} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {sidebarAccordion === 'color' && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pb-2 px-2">
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {[
+                            { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
+                            { value: '#475569', label: 'Slate', hex: 'bg-[#475569]' },
+                            { value: '#1E293B', label: 'Escuro', hex: 'bg-[#1E293B]' },
+                            { value: '#111827', label: 'Carvão', hex: 'bg-[#111827]' },
+                            { value: '#0F172A', label: 'Meia-noite', hex: 'bg-[#0F172A]' },
+                            { value: '#047857', label: 'Esmeralda', hex: 'bg-[#047857]' },
+                            { value: '#14532D', label: 'Floresta', hex: 'bg-[#14532D]' },
+                            { value: '#0D9488', label: 'Menta', hex: 'bg-[#0D9488]' },
+                            { value: '#1E40AF', label: 'Azul', hex: 'bg-[#1E40AF]' },
+                            { value: '#0284C7', label: 'Céu', hex: 'bg-[#0284C7]' },
+                            { value: '#881337', label: 'Vinho', hex: 'bg-[#881337]' },
+                            { value: '#E11D48', label: 'Rubi', hex: 'bg-[#E11D48]' },
+                            { value: '#6D28D9', label: 'Roxo', hex: 'bg-[#6D28D9]' },
+                            { value: '#5B21B6', label: 'Lavanda', hex: 'bg-[#5B21B6]' },
+                            { value: '#86198F', label: 'Fúcsia', hex: 'bg-[#86198F]' },
+                            { value: '#B45309', label: 'Bronze', hex: 'bg-[#B45309]' },
+                            { value: '#EA580C', label: 'Pôr do Sol', hex: 'bg-[#EA580C]' },
+                            { value: '#3F6212', label: 'Oliva', hex: 'bg-[#3F6212]' },
+                            { value: '#451A03', label: 'Café', hex: 'bg-[#451A03]' },
+                            { value: '#1D4ED8', label: 'Safira', hex: 'bg-[#1D4ED8]' }
+                          ].map(opt => {
+                            const isActive = sidebarColor === opt.value;
+                            return (
+                              <button
+                                key={opt.label}
+                                onClick={() => { handleSidebarColorChange(opt.value); setSidebarAccordion(null); }}
+                                className={`w-7 h-7 rounded-full ${opt.hex} border-2 hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer ${isActive ? 'border-brand-accent shadow-md scale-105' : 'border-surface-border'}`}
+                                title={opt.label}
+                              >
+                                {isActive && <Check className="w-3.5 h-3.5 text-white drop-shadow" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
           </div>
         </div>
       </motion.aside>
@@ -1282,7 +1373,7 @@ function MainApp({
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto px-8 pb-8 pt-6 min-w-0">
+        <div className="flex-1 overflow-auto px-8 pb-8 pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
           <div className={activeTab === 'dashboard' ? 'block animate-fade-in' : 'hidden'}>
             <DashboardMain user={userData} activeTab={activeTab} />
           </div>

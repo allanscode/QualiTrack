@@ -190,7 +190,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
               placeholder="Buscar usuário..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-xs font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
+              className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-[11px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
             />
           </div>
           <div className="h-10 flex items-center gap-2">

@@ -1,8 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Calendar, X, RefreshCw, ChevronDown, UserCheck } from 'lucide-react';
+import { Calendar, X, RefreshCw } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
 import CustomSelect from '../ui/CustomSelect';
-import Button from '../ui/Button';
 
 export default function FilterBar() {
   const { filters, setFilters, users, teams, loading, refresh, user, allMonitorias } = useDashboard();
@@ -83,35 +82,35 @@ export default function FilterBar() {
 
       <div className="bg-surface-card rounded-3xl border border-surface-border shadow-premium p-6">
         <div className="flex flex-wrap items-center gap-3">
-          
+
           {/* Date Range Group (Always First) */}
-          <div className="flex-1 min-w-[280px]">
-            <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-10 shadow-sm group hover:border-brand-accent transition-all relative">
+          <div className="flex-1 min-w-[280px] h-10">
+            <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-full shadow-sm group hover:border-brand-accent transition-all relative">
               <div className="flex items-center gap-2 relative flex-1">
                 <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
-                <input 
-                  type="date" 
-                  value={filters.startDate} 
-                  onChange={e => setFilters({ ...filters, startDate: e.target.value })} 
-                  className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0" 
+                <input
+                  type="date"
+                  value={filters.startDate}
+                  onChange={e => setFilters({ ...filters, startDate: e.target.value })}
+                  className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0"
                 />
               </div>
               <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest mx-0.5">até</span>
               <div className="flex items-center gap-2 relative flex-1">
                 <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
-                <input 
-                  type="date" 
-                  value={filters.endDate} 
-                  onChange={e => setFilters({ ...filters, endDate: e.target.value })} 
-                  className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0" 
+                <input
+                  type="date"
+                  value={filters.endDate}
+                  onChange={e => setFilters({ ...filters, endDate: e.target.value })}
+                  className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0"
                 />
               </div>
             </div>
           </div>
 
           {/* Dropdowns */}
-          <div className="flex-1 min-w-[160px] h-10">
-            <CustomSelect 
+          <div className="flex-1 min-w-[160px]">
+            <CustomSelect
               value={filters.teamId}
               options={[{ value: '', label: 'Equipe' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
               onChange={(val: string) => setFilters({ ...filters, teamId: val, agentId: '' })}
@@ -120,11 +119,11 @@ export default function FilterBar() {
           </div>
 
           {user?.role !== 'suporte' && (
-            <div className="flex-1 min-w-[160px] h-10">
-              <CustomSelect 
+            <div className="flex-1 min-w-[160px]">
+              <CustomSelect
                 value={filters.agentId}
                 options={[
-                  { value: '', label: 'Agentes' }, 
+                  { value: '', label: 'Agentes' },
                   ...activeAgents
                     .filter(a => !filters.teamId || (a.team_ids && a.team_ids.includes(filters.teamId)))
                     .map(a => ({ value: a.id, label: a.name }))
@@ -136,8 +135,8 @@ export default function FilterBar() {
           )}
 
           {user?.role !== 'suporte' && user?.role !== 'qualidade' && user?.role !== 'gestor_suporte' && (
-            <div className="flex-1 min-w-[160px] h-10">
-              <CustomSelect 
+            <div className="flex-1 min-w-[160px]">
+              <CustomSelect
                 value={filters.auditorId}
                 options={[
                   { value: '', label: 'Monitores' },
@@ -149,8 +148,8 @@ export default function FilterBar() {
             </div>
           )}
 
-          <div className="flex-1 min-w-[180px] h-10">
-            <CustomSelect 
+          <div className="flex-1 min-w-[180px]">
+            <CustomSelect
               value={filters.status}
               options={[
                 { value: '', label: 'Status' },
@@ -165,18 +164,16 @@ export default function FilterBar() {
             />
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Action Buttons — always reserve space for clear button */}
+          <div className="flex items-center gap-2 flex-shrink-0 w-10 h-10 justify-center">
             {hasChanged && (
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
                 onClick={handleClear}
-                icon={<X className="w-3.5 h-3.5" />}
-                className="text-functional-error hover:bg-functional-error uppercase text-[10px] tracking-widest font-black"
+                className="w-8 h-8 rounded-full bg-functional-error/10 text-functional-error hover:bg-functional-error hover:text-white transition-all flex items-center justify-center shadow-sm"
+                title="Limpar filtros"
               >
-                Limpar
-              </Button>
+                <X className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
         </div>

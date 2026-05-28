@@ -61,10 +61,10 @@ Se as variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` não estiverem c
 ```
 QualiTrack/
 ├── src/
-│   ├── App.tsx              # Componente raiz (auth, layout, sidebar, routing, tema, sessão)
-│   ├── main.tsx             # Entry point React DOM
-│   ├── types.ts             # Todos os tipos TypeScript do domínio
-│   ├── index.css            # Design system tokens + Tailwind v4 @theme
+│ ├── App.tsx # Componente raiz (auth, layout, sidebar, routing, tema, sessão)
+│ ├── main.tsx # Entry point React DOM
+│ ├── types.ts # Todos os tipos TypeScript do domínio
+│ ├── index.css # Design system tokens + Tailwind v4 @theme + date picker color-scheme
 │   ├── lib/
 │   │   ├── supabase.ts      # Cliente Supabase + mockDb completo (localStorage)
 │   │   ├── chartColors.ts   # Utilitário de cores de gráfico (lê CSS vars, theme-aware)
@@ -100,13 +100,15 @@ QualiTrack/
 - **Imports**: Use alias `@/` que mapeia para a raiz do projeto
 - **Componentes**: Functional components com hooks. Sem class components
 - **Estado**: React Context para estado global, `useState` para estado local
-- **CSS**: Tailwind v4 classes + tokens semânticos. Nunca CSS-in-JS ou styled-components
+- **CSS**: Tailwind v4 classes + tokens semânticos. Nunca CSS-in-JS ou styled-components. Para `input[type="date"]`, use `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark`.
 - **Ícones**: Apenas `lucide-react`. Tamanho padrão: `w-5 h-5`
 - **Tipos**: Todos os tipos de domínio em `src/types.ts`. Não crie tipos inline
 - **Hooks**: Sempre no topo do componente, nunca condicionais, nunca dentro de `useEffect`
 - **Constantes**: Usadas em `useState` devem estar no escopo do módulo (fora do componente)
 - **Cores**: Nunca hardcode hex. Use tokens semânticos (`bg-surface-card`, `text-brand-primary`, etc.)
 - **Equipes**: Nunca envie `team_ids` no payload da tabela `users`. Use `syncUserTeams()`
+- **Sidebar Accordion**: Popover de perfil usa padrão single-open (`sidebarAccordion` state). `AnimatePresence initial={false}` + `ChevronDown` rotation. Seleção de cor auto-fecha.
+- **Profile Toggle**: Botões toggle do sidebar usam classe `profile-toggle-btn` para exclusão do click-outside handler.
 
 ## Deploy de Edge Functions
 
@@ -137,6 +139,7 @@ npx supabase functions deploy send-email
 - Verifique se `.dark` está sendo aplicado ao `<html>` element
 - Cores de nível devem ser pastel no dark mode (ex: ruim = `#FCA5A5`)
 - Tokens CSS custom properties estão em `src/index.css`
+- Se inputs de data ficam com flash preto em light mode, verifique se `input[type="date"]` usa `color-scheme: var(--date-color-scheme, light)` e se `.dark` aplica `--date-color-scheme: dark`
 
 ### Sessão expira inesperadamente
 - Idle timeout: 60 min sem atividade → logout automático
