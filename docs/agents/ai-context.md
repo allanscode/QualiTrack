@@ -22,10 +22,11 @@
 ## 2. Padrões de UI / UX
 
 - **Cores**: Use os tokens semânticos definidos em `index.css` (ex: `bg-surface-card`, `text-brand-primary`, `text-level-*`, `text-functional-*`). Não hardcode cores hexadecimais no JSX.
-- **Dark Mode**: Configurado via classe `.dark` no `<html>`. As cores de nível de qualidade são **pastel/soft** no dark mode (ex: `#FCA5A5` para ruim). Nunca use cores saturadas em indicadores.
+- **Dark Mode**: Configurado via classe `.dark` no `<html>`. As cores de nível de qualidade são **pastel/soft** no dark mode (ex: `#FCA5A5` para ruim). Nunca use cores saturadas em indicadores. Para `input[type="date"]`, use `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark` para evitar flash preto ao abrir calendário em light mode.
 - **Tipografia**: Use sempre `uppercase tracking-widest text-[10px] font-black` para labels, pequenos headers e badges.
 - **Bordas e Shadows**: Use `rounded-2xl` ou `rounded-3xl` (nunca bordas quadradas) e `shadow-premium` para cards flutuantes.
-- **Animações**: Use `motion` (Framer Motion) para transitions. Evite transições CSS brutas para montar/desmontar componentes.
+- **Animações**: Use `motion` (Framer Motion) para transitions. Evite transições CSS brutas para montar/desmontar componentes. Sidebar accordion usa `AnimatePresence initial={false}` + `motion.div` com smooth height animation + `ChevronDown` com `rotate-180`.
+- **Profile Toggle**: Botões de avatar e nome no sidebar usam classe `profile-toggle-btn` para exclusão do click-outside handler. Ao adicionar novos botões toggle no sidebar, inclua essa classe.
 - **Ícones**: Use **apenas** `lucide-react`, tamanho padrão `w-5 h-5`. Nunca introduza outra lib de ícones.
 - **Dashboard — Categorias Semânticas de Ícones**:
   - Score/Nota → `Target` + cor derivada do nível (level-*)
@@ -45,7 +46,7 @@
 Antes de commitar/sugerir uma alteração:
 
 - [ ] Não quebra o fluxo de prazo de ação (`addBusinessHours`)?
-- [ ] O componente funciona em Light **e** Dark mode?
+- [ ] O componente funciona em Light **e** Dark mode? (Inputs `type="date"` usam `--date-color-scheme` pattern?)
 - [ ] Se adicionou filtro no dashboard, aplicou em `DashboardContext.tsx` e não apenas localmente?
 - [ ] Testou o fluxo com o Role correto? (Componente para `suporte` não pode exibir dados de outros agentes)
 - [ ] Usou `lucide-react` para ícones (tamanho `w-5 h-5`)?
@@ -74,6 +75,10 @@ Se você for debugar algo, verifique estes pontos conhecidos primeiro:
 11. **CustomSelect**: Usa React Portal (`createPortal`) para evitar clipping em containers scrolláveis. Possui type-ahead: ao abrir o dropdown, o usuário pode digitar para filtrar opções em tempo real (case-insensitive), sem campo de busca visível. O trigger é `<div>` com `<input>` inline.
 12. **Z-index e Clipping**: Resolvido — `CustomSelect` usa React Portal. Se criar novos dropdowns, siga o mesmo padrão.
 13. **RLS Infinite Recursion**: A função `is_admin_user()` é `SECURITY DEFINER` para evitar recursão infinita nas policies RLS da tabela `users`. Não modifique sem entender o padrão.
+14. **Date Picker Flash**: `input[type="date"]` usa `color-scheme: var(--date-color-scheme, light)` com `.dark` override. Se adicionar novos date inputs, siga este padrão para evitar flash preto em light mode.
+15. **Sidebar Accordion**: Popover de perfil usa `sidebarAccordion` state (single-open). Se adicionar novas seções, siga o padrão `AnimatePresence initial={false}` + `ChevronDown` rotation. Seleção de cor auto-fecha o accordion.
+16. **Profile Toggle**: Botões de toggle do sidebar (avatar + nome) usam classe `profile-toggle-btn` para exclusão do click-outside handler. Sem isso, o click-outside fecha o popover antes do toggle.
+17. **Scrollbar Gutter**: O container de scroll principal usa `scrollbar-gutter: stable` (inline style) para evitar layout shift quando scrollbar aparece/desaparece.
 
 ---
 

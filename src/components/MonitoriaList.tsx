@@ -359,11 +359,10 @@ if (user?.role === 'gestor_suporte') {
   }, [monitorias, user, tab, search, statusFilter, teamFilter, auditorFilter, dateType, startDate, endDate]);
 
   const hasActiveFilters = useMemo(() => {
-    const isDefaultDate = startDate === new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0] && 
-                          endDate === new Date().toISOString().split('T')[0];
-    // statusFilter ('active'/'removed') and tab selection don't trigger the "Clear" button visibility
-    return search !== '' || teamFilter !== '' || suporteFilter !== '' || auditorFilter !== '' || !isDefaultDate;
-  }, [search, teamFilter, suporteFilter, auditorFilter, startDate, endDate]);
+    const isDefaultDate = startDate === new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0] &&
+      endDate === new Date().toISOString().split('T')[0];
+    return search !== '' || teamFilter !== '' || suporteFilter !== '' || auditorFilter !== '' || !isDefaultDate || statusFilter !== 'active';
+  }, [search, teamFilter, suporteFilter, auditorFilter, startDate, endDate, statusFilter]);
 
   const clearFilters = () => {
     setSearch('');
@@ -514,144 +513,149 @@ if (user?.role === 'gestor_suporte') {
   return (
     <div className="space-y-6 animate-fade-in pb-8">
       {/* Block 1: Filters & Status Joined */}
-      <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card rounded-3xl">
-        <div className="p-6 space-y-6">
-          <div className="flex flex-col space-y-4">
-            {/* Row 1: Date and Dropdowns */}
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Search (Now First) */}
-              <div className="flex-1 min-w-[240px] h-10">
-                <div className="relative h-full">
-                  <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
-                  <input 
-                    type="text"
-                    placeholder="Buscar ticket ou monitoria..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className="w-full h-full bg-surface-subtle border border-surface-border rounded-2xl pl-11 pr-4 text-[11px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent transition-all outline-none"
+    <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card rounded-3xl">
+      <div className="p-6 space-y-6">
+        <div className="flex flex-col space-y-4">
+          {/* Row 1: Date and Dropdowns */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Search */}
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative h-10">
+                <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
+                <input
+                  type="text"
+                  placeholder="Buscar ticket ou monitoria..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-[11px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent transition-all outline-none shadow-sm"
+                />
+              </div>
+            </div>
+
+            {/* Date Filter */}
+            <div className="flex-1 min-w-[260px]">
+              <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-10 group hover:border-brand-accent transition-all relative shadow-sm">
+                <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
+                  <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0"
+                  />
+                </div>
+                <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest mx-0.5">até</span>
+                <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
+                  <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0"
                   />
                 </div>
               </div>
+            </div>
 
-              {/* Date Filter */}
-              <div className="flex-1 min-w-[280px]">
-                <div className="flex items-center gap-2 bg-surface-subtle border border-surface-border rounded-2xl px-3 h-10 group hover:border-brand-accent transition-all relative">
-                  <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
-                    <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
-                    <input 
-                      type="date" 
-                      value={startDate} 
-                      onChange={e => setStartDate(e.target.value)} 
-                      className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0" 
-                    />
-                  </div>
-                  <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest mx-0.5">até</span>
-                  <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
-                    <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
-                    <input 
-                      type="date" 
-                      value={endDate} 
-                      onChange={e => setEndDate(e.target.value)} 
-                      className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0" 
-                    />
-                  </div>
-                </div>
-              </div>
+            {/* Dropdowns */}
+            <div className="flex-1 min-w-[140px]">
+              <CustomSelect
+                value={teamFilter}
+                onChange={val => setTeamFilter(val)}
+                options={[{ value: '', label: 'Todas Equipes' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
+                className="w-full"
+              />
+            </div>
 
-              {/* Dropdowns */}
-              <div className="flex-1 min-w-[160px] h-10">
-                <CustomSelect 
-                  value={teamFilter}
-                  onChange={val => setTeamFilter(val)}
-                  options={[{ value: '', label: 'Todas Equipes' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
+            {user?.role !== 'suporte' && (
+              <div className="flex-1 min-w-[140px]">
+                <CustomSelect
+                  value={suporteFilter}
+                  onChange={val => setSuporteFilter(val)}
+                  options={[{ value: '', label: 'Agentes' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
                   className="w-full"
                 />
               </div>
+            )}
 
-              {user?.role !== 'suporte' && (
-                <div className="flex-1 min-w-[160px] h-10">
-                  <CustomSelect 
-                    value={suporteFilter}
-                    onChange={val => setSuporteFilter(val)}
-                    options={[{ value: '', label: 'Agentes' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
-                    className="w-full"
-                  />
-                </div>
-              )}
+            {['admin', 'gestor_qualidade'].includes(user?.role || '') && (
+              <div className="flex-1 min-w-[140px]">
+                <CustomSelect
+                  value={auditorFilter}
+                  onChange={val => setAuditorFilter(val)}
+                  options={[{ value: '', label: 'Monitores' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
+                  className="w-full"
+                />
+              </div>
+            )}
 
-              {['admin', 'gestor_qualidade'].includes(user?.role || '') && (
-                <div className="flex-1 min-w-[160px] h-10">
-                  <CustomSelect 
-                    value={auditorFilter}
-                    onChange={val => setAuditorFilter(val)}
-                    options={[{ value: '', label: 'Monitores' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
-                    className="w-full"
-                  />
-                </div>
-              )}
+            {user?.role === 'admin' && (
+              <div className="flex-1 min-w-[140px]">
+                <CustomSelect
+                  value={statusFilter}
+                  onChange={val => setStatusFilter(val as any)}
+                  options={[
+                    { value: 'active', label: 'Ativas' },
+                    { value: 'removed', label: 'Removidas' }
+                  ]}
+                  className="w-full"
+                />
+              </div>
+            )}
 
-              {user?.role === 'admin' && (
-                <div className="flex-1 min-w-[160px] h-10">
-                  <CustomSelect 
-                    value={statusFilter}
-                    onChange={val => setStatusFilter(val as any)}
-                    options={[
-                      { value: 'active', label: 'Monitorias Ativas' },
-                      { value: 'removed', label: 'Monitorias Removidas' }
-                    ]}
-                    className="w-full"
-                  />
-                </div>
-              )}
-
+            {/* Clear button — always reserve space */}
+            <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center">
               {hasActiveFilters && (
-                <button 
+                <button
                   onClick={clearFilters}
-                  className="p-2.5 rounded-2xl bg-red-50 text-error hover:bg-error hover:text-white transition-all group flex-shrink-0 shadow-sm"
+                  className="w-8 h-8 rounded-full bg-functional-error/10 text-functional-error hover:bg-functional-error hover:text-white transition-all flex items-center justify-center shadow-sm"
                   title="Limpar Filtros"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
           </div>
+        </div>
 
           {/* Status Tabs (Unified inside) */}
-          <div className="pt-4 border-t border-surface-border/50 flex flex-wrap gap-2">
-      {['todas', 'pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade', 'concluida', 'expiradas_prazo'].map(t => {
-        const count = monitorias.filter(m => {
-          const matchesActiveStatus = statusFilter === 'active' ? m.active !== false : m.active === false;
+        <div className="pt-4 border-t border-surface-border/50 flex flex-wrap gap-2">
+          {['todas', 'pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade', 'concluida', 'expiradas_prazo'].map(t => {
+          const count = monitorias.filter(m => {
+            const matchesActiveStatus = statusFilter === 'active' ? m.active !== false : m.active === false;
 
-          let matchesTab = false;
-          if (t === 'todas') {
-            matchesTab = true;
-          } else if (t === 'pendente_revisao') {
-            matchesTab = m.status === 'pendente_revisao' || m.status === 'contestacao_negada';
-          } else if (t === 'expiradas_prazo') {
-            matchesTab = m.status === 'concluida' && m.resolution_type === 'automatic';
-          } else if (t === 'concluida') {
-            const isTimeout = m.status === 'concluida' && m.resolution_type === 'automatic';
-            matchesTab = m.status === 'concluida' && !isTimeout;
-          } else {
-            matchesTab = m.status === t;
-          }
-                
-                return matchesActiveStatus && matchesTab;
-              }).length;
+            let matchesTab = false;
+            if (t === 'todas') {
+              matchesTab = true;
+            } else if (t === 'pendente_revisao') {
+              matchesTab = m.status === 'pendente_revisao' || m.status === 'contestacao_negada';
+            } else if (t === 'expiradas_prazo') {
+              matchesTab = m.status === 'concluida' && m.resolution_type === 'automatic';
+            } else if (t === 'concluida') {
+              const isTimeout = m.status === 'concluida' && m.resolution_type === 'automatic';
+              matchesTab = m.status === 'concluida' && !isTimeout;
+            } else {
+              matchesTab = m.status === t;
+            }
 
-              return (
-                <button
-                  key={t}
-                  onClick={() => setTab(t as any)}
-                  className={`flex-1 min-w-[130px] px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-between gap-3 ${tab === t ? 'bg-brand-primary text-brand-on-primary shadow-lg' : 'bg-surface-subtle text-brand-primary hover:bg-surface-card border border-surface-border/50'}`}
-                >
-                  <span className="truncate">{t === 'todas' ? 'Tudo' : getStatusConfig(t as any).label}</span>
-                  <span className={`px-2 py-0.5 rounded-lg text-[9px] flex-shrink-0 ${tab === t ? 'bg-black/10 text-brand-on-primary' : 'bg-surface-card text-brand-primary shadow-sm'}`}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+            return matchesActiveStatus && matchesTab;
+          }).length;
+
+          const tabLabel = t === 'todas' ? 'Tudo' : t === 'expiradas_prazo' ? 'Concluída Sist.' : getStatusConfig(t as any).label;
+
+          return (
+            <button
+              key={t}
+              onClick={() => setTab(t as any)}
+              className={`flex-1 min-w-[110px] px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-between gap-2 ${tab === t ? 'bg-brand-primary text-brand-on-primary shadow-lg' : 'bg-surface-subtle text-brand-primary hover:bg-surface-card border border-surface-border/50'}`}
+            >
+              <span className="truncate">{tabLabel}</span>
+              <span className={`px-1.5 py-0.5 rounded-lg text-[8px] flex-shrink-0 ${tab === t ? 'bg-black/10 text-brand-on-primary' : 'bg-surface-card text-brand-primary shadow-sm'}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
           </div>
         </div>
       </Card>
@@ -659,60 +663,70 @@ if (user?.role === 'gestor_suporte') {
       {/* Block 2: The List */}
       <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card overflow-hidden">
         <div className="divide-y divide-surface-subtle">
-          {filtered.length > 0 ? filtered.map(m => {
-            const config = getStatusConfig(m.status);
-            const isExpanded = expandedId === m.id;
-            const level = getLevelForScore(m.score || 0);
-            const scoreColor = m.score !== undefined ? level.color : 'text-brand-muted';
+        {filtered.length > 0 ? filtered.map(m => {
+          const config = getStatusConfig(m.status);
+          const isExpanded = expandedId === m.id;
+          const level = getLevelForScore(m.score || 0);
+          const scoreColor = m.score !== undefined ? level.color : 'text-brand-muted';
 
-            return (
-              <div key={m.id} className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
-                <div className="flex items-center justify-between gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : m.id)}>
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className={`w-11 h-11 rounded-[1.25rem] flex items-center justify-center flex-shrink-0 bg-surface-bg text-brand-muted shadow-sm`}>
-                      <config.icon className="w-5 h-5" />
+          return (
+            <div key={m.id} className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
+              <div className="flex items-center gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : m.id)}>
+                {/* Left: Status Icon */}
+                <div className={`w-11 h-11 rounded-[1.25rem] flex items-center justify-center flex-shrink-0 bg-surface-bg text-brand-muted shadow-sm`}>
+                  <config.icon className="w-5 h-5" />
+                </div>
+
+                {/* Center: Info Block with fixed widths */}
+                <div className="flex-1 min-w-0 flex items-center gap-4">
+                  {/* ID + Ticket + Names */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[10px] font-black text-brand-muted/70 uppercase tracking-widest">#{m.display_id || m.id.slice(0,4)}</span>
+                      <span className="text-brand-muted/30">•</span>
+                      <span className="font-mono text-xs font-black text-brand-primary tracking-tight">{m.ticket_id}</span>
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-4 mb-1">
-                        <div className="flex items-center gap-2 w-44">
-                          <span className="text-[10px] font-black text-brand-muted/70 uppercase tracking-widest">#{m.display_id || m.id.slice(0,4)}</span>
-                          <span className="text-brand-muted/30">•</span>
-                          <span className="font-mono text-xs font-black text-brand-primary tracking-tight">TICKET {m.ticket_id}</span>
-                        </div>
-                        <div className="w-48 flex justify-center">
-            {(() => {
-              const isDeadlineExpired = m.status === 'concluida' && m.resolution_type === 'automatic';
-              return (
-                <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">
-                  {isDeadlineExpired ? 'Concluída pelo Sistema' : config.label}
-                </Badge>
-              );
-            })()}
-                        </div>
-                        <div className="w-36">
-                          {m.active !== false && <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status} />}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 text-[10px] font-bold text-brand-muted uppercase tracking-tight">
-                <span className="flex items-center gap-1.5"><UserIcon className="w-3 h-3 text-brand-highlight" /> {getName(m.evaluated_id, false, m.evaluated_name)}</span>
-                <span className="text-brand-muted/20">•</span>
-                <span className="flex items-center gap-1.5"><Shield className="w-3 h-3 text-brand-highlight" /> {getName(m.evaluator_id, true, m.evaluator_name)}</span>
-                <span className="text-brand-muted/20">•</span>
-                <span className="flex items-center gap-1.5"><Tag className="w-3 h-3 text-brand-highlight" /> {m.team_name || teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
-                      </div>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-brand-muted uppercase tracking-tight flex-wrap">
+                      <span className="flex items-center gap-1"><UserIcon className="w-3 h-3 text-brand-highlight" />{getName(m.evaluated_id, false, m.evaluated_name)}</span>
+                      <span className="text-brand-muted/20">•</span>
+                      <span className="flex items-center gap-1"><Tag className="w-3 h-3 text-brand-highlight" />{m.team_name || teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
+                      <span className="text-brand-muted/20">•</span>
+                      <span className="flex items-center gap-1"><Shield className="w-3 h-3 text-brand-highlight" />{getName(m.evaluator_id, true, m.evaluator_name)}</span>
                     </div>
                   </div>
+                </div>
 
-                  <div className="flex items-center gap-8">
-                    <div className="text-right">
+                {/* 3-column fixed layout: Deadline | Status | Score */}
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    {/* Col 1: Deadline — center, fixed width */}
+                    <div className="min-w-[140px] flex justify-center">
+                      {m.active !== false && <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status} />}
+                    </div>
+
+                    {/* Col 2: Status badge — center, fixed width */}
+                    <div className="min-w-[120px] flex justify-center">
+                      {(() => {
+                        const isDeadlineExpired = m.status === 'concluida' && m.resolution_type === 'automatic';
+                        return (
+                          <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">
+                            {isDeadlineExpired ? 'Concluída Sist.' : config.label}
+                          </Badge>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Col 3: Score + Date — right-aligned, fixed width */}
+                    <div className="min-w-[70px] text-right">
                       <p className={`text-xl font-black ${scoreColor} tracking-tighter`}>{m.score !== undefined ? `${m.score}%` : '—'}</p>
                       <p className="text-[9px] font-black text-brand-muted uppercase tracking-widest opacity-60 mt-0.5">{format(new Date(m.created_at), 'dd MMM yyyy', { locale: ptBR })}</p>
                     </div>
+
+                    {/* Expand Chevron */}
                     <div className={`p-2 rounded-xl transition-colors ${isExpanded ? 'bg-brand-primary/5 text-brand-primary' : 'text-brand-highlight'}`}>
                       {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                     </div>
                   </div>
-                </div>
+              </div>
 
                 <AnimatePresence>
                   {isExpanded && (

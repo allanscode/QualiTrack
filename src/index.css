@@ -34,7 +34,8 @@
 }
 
 :root {
-  /* Light Theme (Default) */
+color-scheme: light;
+/* Light Theme (Default) */
   --brand-primary: #2D3A3A;
   --brand-highlight: #A7C0A5;
   --brand-accent: #8E9B7B;
@@ -79,7 +80,8 @@
 }
 
 .dark {
-  /* Dark Theme Overrides */
+color-scheme: dark;
+/* Dark Theme Overrides */
   --brand-primary: #F9F9F6;
   --brand-highlight: #A7C0A5;
   --brand-accent: #8E9B7B;
@@ -153,7 +155,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   margin: 0;
   padding: 0;
   cursor: pointer;
-  opacity: 0; /* Totalmente invisível mas cobre a área */
+  opacity: 0;
+}
+
+input[type="date"] {
+  color-scheme: var(--date-color-scheme, light);
+}
+
+.dark input[type="date"] {
+  --date-color-scheme: dark;
 }
 
 /* ── Focus ring standardization ── */
