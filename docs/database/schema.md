@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-O banco de dados é **PostgreSQL** gerenciado pelo **Supabase**. O schema utiliza `public` para tabelas de aplicação e `auth` para autenticação (gerenciado pelo Supabase). Total: **10 tabelas** no schema `public`.
+O banco de dados é **PostgreSQL** gerenciado pelo **Supabase**. O schema utiliza `public` para tabelas de aplicação e `auth` para autenticação (gerenciado pelo Supabase). Total: **11 tabelas** no schema `public`.
 
 ## Diagrama ER
 
@@ -106,11 +106,17 @@ erDiagram
         text end_time
     }
 
-    HOLIDAYS {
-        uuid id PK
-        text date
-        text name
-    }
+  HOLIDAYS {
+    uuid id PK
+    text date
+    text name
+  }
+
+  USER_PREFERENCES {
+    uuid user_id PK FK
+    jsonb preferences
+    timestamptz updated_at
+  }
 ```
 
 ## Tabelas Detalhadas
@@ -227,6 +233,24 @@ erDiagram
 | `date` | TEXT | — | Data do feriado (ex: "2026-01-01") |
 | `name` | TEXT | — | Nome do feriado (ex: "Ano Novo") |
 
+### `public.user_preferences`
+| Coluna | Tipo | Default | Descrição |
+|---|---|---|---|
+| `user_id` | UUID | PK, FK → users | ID do usuário (1:1 com `users`) |
+| `preferences` | JSONB | `'{}'` | Preferências de UI (theme, sidebar_color, avatar_url, etc.) |
+| `updated_at` | TIMESTAMPTZ | `now()` | Última atualização |
+
+> **Campo JSONB `preferences`** — estrutura esperada:
+> - `theme`: `'light'` \| `'dark'` — tema de aparência do usuário (nunca `'system'`)
+> - `sidebar_color`: string hex (ex: `'#475569'`) — cor do sidebar
+> - `avatar_url`: string — URL do avatar (futuro)
+>
+> **Extensibilidade**: Novas preferências são adicionadas como chaves no JSONB sem necessidade de migration. O frontend usa `upsertUserPreferences()` para fazer merge parcial.
+>
+> **RLS**: Cada usuário só pode ler/escrever a própria linha (`user_id = auth.uid()`).
+>
+> **Fallback `user_metadata`**: Na primeira leitura, se `sidebar_color` não existir no JSONB mas existir em `auth.users.user_metadata.sidebar_color`, o sistema migra automaticamente para o banco.
+
 ## Campos Denormalizados
 
 As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) para performance:
@@ -243,7 +267,7 @@ As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) 
 | `auth_migration.sql` | Cria admin padrão no Auth + public.users |
 | `create_quality_configs.sql` | Cria tabela quality_configs + RLS |
 | `rls_monitorias.sql` | RLS policies para a tabela monitorias |
-| `supabase/migrations/` | Migrations SQL versionadas (timestamp) — inclui `user_teams`, `dissatisfaction_fields`, `business_hours`, `holidays`, RLS policies, `is_admin_user()` SECURITY DEFINER |
+| `supabase/migrations/` | Migrations SQL versionadas (timestamp) — inclui `user_teams`, `dissatisfaction_fields`, `business_hours`, `holidays`, `user_preferences`, RLS policies, `is_admin_user()` SECURITY DEFINER |
 
 ## RLS por Tabela
 
@@ -257,3 +281,4 @@ As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) 
 | `quality_configs` | Todos autenticados | Admin, gestor_qualidade | Admin, gestor_qualidade | Admin, gestor_qualidade |
 | `access_requests` | Admin, gestores | Anônimo | Admin, gestores | Admin |
 | `dissatisfaction_fields` | Todos autenticados | Admin, gestor_qualidade | Admin, gestor_qualidade | Admin, gestor_qualidade |
+| `user_preferences` | Próprio usuário (`user_id = auth.uid()`) | Próprio usuário | Próprio usuário | Próprio usuário |

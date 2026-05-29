@@ -1,4 +1,4 @@
-# AGENTS.md — Guia para Agentes de IA no QualiTrack
+﻿# AGENTS.md — Guia para Agentes de IA no QualiTrack
 
 > Leia este documento **inteiro** antes de modificar qualquer arquivo do projeto.
 
@@ -51,37 +51,38 @@ QualiTrack/
 │   ├── App.tsx                      # Componente raiz (auth, layout, sidebar, routing, tema, sessão)
 │   ├── main.tsx                     # Entry point React DOM
 │   ├── types.ts                     # Todos os tipos TypeScript do domínio
-│   ├── index.css                    # Design system tokens + Tailwind v4 @theme
+│   ├── index.css # Design system tokens + Tailwind v4 @theme
 │   ├── lib/
-│   │   ├── supabase.ts              # Cliente Supabase + mockDb completo (localStorage)
-│   │   ├── chartColors.ts           # Utilitário de cores de gráfico (lê CSS vars, theme-aware)
-│   │   ├── businessHours.ts         # Cálculo de prazos de ação em horas úteis
-│   │   ├── contestation.ts          # Funções unificadas de contestação (isApprovalAction/isRejectionAction)
-│   │   └── useQualityConfig.tsx     # Context Provider singleton + hook de config de qualidade
+│   │   ├── supabase.ts # Cliente Supabase + mockDb completo (localStorage) + upsertUserPreferences()
+│   │   ├── chartColors.ts # Utilitário de cores de gráfico (lê CSS vars, theme-aware)
+│   │   ├── businessHours.ts # Cálculo de prazos de ação em horas úteis
+│   │   ├── contestation.ts # Funções unificadas de contestação (isApprovalAction/isRejectionAction)
+│   │   ├── StaticDataContext.tsx # Context Provider — cadastro (6 tabelas) + userPreferences
+│   │   └── useQualityConfig.tsx # Context Provider singleton + hook de config de qualidade
 │   └── components/
-│       ├── MonitoriaList.tsx        # Listagem, filtros, transições de status
-│       ├── MonitoriaForm.tsx        # Formulário 4 etapas, cálculo de score, reavaliação
-│       ├── AdminPanel.tsx           # Container admin com 6 sub-tabs
-│       ├── QualityConfigManagement.tsx  # Editor de configuração de qualidade
-│       ├── ui/                      # Componentes reutilizáveis
-│       │   ├── Card.tsx
-│       │   ├── Button.tsx
-│       │   ├── Badge.tsx
-│       │   ├── CustomSelect.tsx     # Dropdown com portal + type-ahead
-│       │   ├── Select.tsx           # Select nativo estilizado
-│       │   └── ActionDeadlineClock.tsx  # Relógio de contagem regressiva de prazo
-│       ├── dashboard/
-│       │   ├── DashboardMain.tsx    # Router de dashboard por role
-│       │   ├── DashboardContext.tsx # Estado central (filtros, dados, queries RBAC, presença)
-│       │   ├── FilterBar.tsx        # Barra de filtros global
-│       │   ├── roles/               # 5 dashboards específicos por perfil
-│       │   └── widgets/             # 8 widgets (StatCard, TrendChart, etc.)
-│       └── admin/                   # Sub-componentes do AdminPanel
-│           ├── UsersManagement.tsx
-│           ├── TeamsManagement.tsx
-│           ├── FormsManagement.tsx
-│           ├── RequestsManagement.tsx
-│           └── DissatisfactionFieldsManagement.tsx
+│   ├── MonitoriaList.tsx # Listagem, filtros, transições de status
+│   ├── MonitoriaForm.tsx # Formulário 4 etapas, cálculo de score, reavaliação
+│   ├── AdminPanel.tsx # Container admin com 6 sub-tabs
+│   ├── QualityConfigManagement.tsx # Editor de configuração de qualidade
+│   ├── ui/ # Componentes reutilizáveis
+│   │   ├── Card.tsx
+│   │   ├── Button.tsx
+│   │   ├── Badge.tsx
+│   │   ├── CustomSelect.tsx # Dropdown com portal + type-ahead
+│   │   ├── Select.tsx # Select nativo estilizado
+│   │   └── ActionDeadlineClock.tsx # Relógio de contagem regressiva de prazo
+│   ├── dashboard/
+│   │   ├── DashboardMain.tsx # Router de dashboard por role
+│   │   ├── DashboardContext.tsx # Estado central (filtros, dados, queries RBAC, presença)
+│   │   ├── FilterBar.tsx # Barra de filtros global
+│   │   ├── roles/ # 5 dashboards específicos por perfil
+│   │   └── widgets/ # 8 widgets (StatCard, TrendChart, etc.)
+│   └── admin/ # Sub-componentes do AdminPanel
+│   ├── UsersManagement.tsx
+│   ├── TeamsManagement.tsx
+│   ├── FormsManagement.tsx
+│   ├── RequestsManagement.tsx
+│   └── DissatisfactionFieldsManagement.tsx
 ├── supabase/
 │   ├── config.toml                  # Configuração do projeto Supabase
 │   ├── migrations/                  # Migrations SQL versionadas (timestamp)
@@ -111,6 +112,8 @@ QualiTrack/
 8. **Hooks nunca dentro de `useEffect`**: `useCallback`, `useMemo`, `useRef` etc. não podem ser chamados dentro de callbacks de `useEffect`. Use refs como ponte (ex: `extendSessionRef.current = fn` dentro do effect, `useCallback(() => ref.current())` fora). Incidente: `useCallback` dentro de `useEffect` de session management.
 9. **Seleção Agente↔Equipe nunca limpa automaticamente**: No `MonitoriaForm`, ao selecionar Agente ou Equipe, o outro campo NUNCA deve ser limpo automaticamente. Se o usuário tentar trocar um campo enquanto o outro está selecionado com valor incompatível, bloqueie com toast informativo. O usuário deve primeiro desselecionar (escolher placeholder) para depois alterar o relacionamento.
 10. **Nunca enviar `team_ids` em payload da tabela `users`**: O relacionamento N:N usuário↔equipe é feito via tabela `user_teams`. O frontend enriquece o objeto `User` com `team_ids: string[]` via `enrichUserWithTeamIds()`, mas **nunca** envia `team_ids` em upsert/update Supabase da tabela `users`. Use `syncUserTeams()` para sincronizar.
+11. **`StaticDataContext` é a única fonte de dados cadastrais**: Users, teams, forms, dissatisfaction_fields, user_teams e user_preferences são carregados **1x** por `StaticDataProvider`. Nenhum componente deve fazer fetch independente dessas tabelas. Preferências de usuário (tema, sidebar_color) são lidas de `useStaticData().userPreferences` — nunca via query Supabase direta. Escrita via `upsertUserPreferences()` apenas em ação explícita do usuário (nunca em sync de leitura). Use `lastDbThemeRef` (module-level) para prevenir auto-save loop.
+12. **Fetch guards contra fetch storms**: Todo componente que faz fetch de dados dinâmicos (monitorias, etc.) deve usar `fetchingRef` para impedir fetchs paralelos/re-entrantes. StaticDataContext já usa `fetchingRef` + `fetchedRef`. DashboardContext e MonitoriaList usam `fetchingRef` + `hasLoadedOnce`.
 
 ---
 
@@ -275,7 +278,7 @@ Mock mode persiste sessão em `localStorage` com chave `qualitrack_session` (`{u
 ### Seed Data
 - 2 equipes padrão: Alpha (`team-alpha`), Beta (`team-beta`)
 - `user_teams` auto-seeded para usuários suporte/gestor_suporte no init
-- Coleções mock: `monitorias`, `users`, `teams`, `forms`, `quality_configs`, `access_requests`, `user_teams`, `dissatisfaction_fields`, `business_hours`, `holidays`
+- Coleções mock: `monitorias`, `users`, `teams`, `forms`, `quality_configs`, `access_requests`, `user_teams`, `dissatisfaction_fields`, `business_hours`, `holidays`, `user_preferences`
 
 ---
 
@@ -331,7 +334,7 @@ Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handle
 - **Supabase**: SDK `persistSession: true` + `localStorage` — `INITIAL_SESSION` com session restaura login
 - **Mock**: `localStorage` chave `qualitrack_session` — `{userId, sessionStartedAt, sessionExpiresAt}`
 - **Last Activity**: `localStorage` chave `qualitrack_last_activity` — timestamp da última atividade do usuário. Ao restaurar sessão (F5), o sistema verifica se o idle já expirou comparando `Date.now() - lastActivity`. Se ≥ 60 min, sessão é descartada e usuário redirecionado ao login.
-- **Tema/Aparência**: `localStorage` chave `qualitrack_theme` — valor `'light'` | `'dark'` | `'system'`. Restaurado incondicionalmente no `useState` initializer (sem depender de sessão). NÃO resetar tema no `useEffect` de `currentUser` — o estado transiente `currentUser = null` durante restauração de sessão causava reset prematuro para `'system'`.
+- **Tema/Aparência**: `localStorage` chave `qualitrack_theme` — valor `'light'` | `'dark'` | `'system'`. Restaurado incondicionalmente no `useState` initializer (sem depender de sessão). NÃO resetar tema no `useEffect` de `currentUser` — o estado transiente `currentUser = null` durante restauração de sessão causava reset prematuro para `'system'`. Fonte de verdade: tabela `user_preferences` (DB). `localStorage` é cache instantâneo (evita flash no F5). Escrita via `upsertUserPreferences()` apenas em ação explícita do usuário. `lastDbThemeRef` (module-level) previne auto-save loop (write-back do valor lido do banco). Logout limpa `localStorage` + `lastDbThemeRef.current = null`; DB preserva para próximo login.
 
 ### Resiliência de Sessão
 - Heartbeat ping ao Supabase a cada 2 min
@@ -365,7 +368,7 @@ DISABLE_HMR                # (opcional) "true" para desativar HMR
 | `docs/architecture/system-overview.md` | Visão geral da arquitetura |
 | `docs/architecture/frontend.md` | Arquitetura do frontend |
 | `docs/architecture/backend.md` | Arquitetura do backend |
-| `docs/database/schema.md` | Schema do banco (10 tabelas) |
+| `docs/database/schema.md` | Schema do banco (11 tabelas) |
 | `docs/specs/monitoria.md` | Spec de monitorias (status, score, prazos, form) |
 | `docs/specs/dashboard.md` | Spec de dashboards (5 layouts, 8 widgets, RBAC) |
 | `docs/specs/admin.md` | Spec do painel admin (6 tabs) |
