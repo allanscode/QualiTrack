@@ -85,7 +85,7 @@ export default function FilterBar() {
 
           {/* Date Range Group (Always First) */}
           <div className="flex-1 min-w-[280px] h-10">
-            <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-full shadow-sm group hover:border-brand-accent transition-all relative">
+            <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-full shadow-sm group hover:border-brand-accent transition-colors relative">
               <div className="flex items-center gap-2 relative flex-1">
                 <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
                 <input

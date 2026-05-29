@@ -51,6 +51,9 @@ color-scheme: light;
   --shadow-premium: 0 10px 40px -10px rgba(45, 58, 58, 0.1);
   --shadow-premium-sm: 0 4px 20px -5px rgba(45, 58, 58, 0.05);
 
+  /* Date color-scheme token (explicit in :root to eliminate var() fallback delay) */
+  --date-color-scheme: light;
+
   /* Role Sidebar Colors (Light Mode Default) */
   --sidebar-bg-admin: #2D3A3A;
   --sidebar-bg-qualidade: #065F46;
@@ -160,10 +163,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 input[type="date"] {
   color-scheme: var(--date-color-scheme, light);
+  transition: none;
 }
 
 .dark input[type="date"] {
   --date-color-scheme: dark;
+}
+
+input[type="date"]::-webkit-datetime-edit {
+  color: var(--brand-primary);
 }
 
 /* ── Focus ring standardization ── */
@@ -252,9 +260,6 @@ select {
 .dark .bg-level-roxo { background-color: #2E1A4E; }
 .dark .text-level-azul { color: #93C5FD; }
 .dark .bg-level-azul { background-color: #1A2A4E; }
-
-.dark .text-level-atencao { color: #FCD34D; }
-.dark .bg-level-atencao { background-color: #3B2F0A; }
 
 /* ── Functional text helpers (theme-aware) ── */
 .text-functional-error { color: var(--error-color); }
