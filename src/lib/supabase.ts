@@ -134,7 +134,8 @@ const INITIAL_DATA: { [key: string]: any[] } = {
     { id: generateId(), holiday_date: '2026-11-02', description: 'Finados' },
     { id: generateId(), holiday_date: '2026-11-15', description: 'Proclamação da República' },
     { id: generateId(), holiday_date: '2026-12-25', description: 'Natal' }
-  ]
+  ],
+  user_preferences: []
 };
 
   if (typeof window !== 'undefined') {
@@ -244,4 +245,33 @@ export function findMockUserById(id: string): any | undefined {
   if (typeof window === 'undefined') return undefined;
   const users = getMockData('users');
   return users.find((u: any) => u.id === id);
+}
+
+export async function upsertUserPreferences(userId: string, partial: Record<string, any>): Promise<void> {
+  if (!supabase) {
+    const rows = getMockData('user_preferences');
+    const existing = rows.find((r: any) => r.user_id === userId);
+    if (existing) {
+      existing.preferences = { ...(existing.preferences || {}), ...partial };
+      existing.updated_at = new Date().toISOString();
+      setMockData('user_preferences', rows);
+    } else {
+      rows.push({
+        user_id: userId,
+        preferences: { ...partial },
+        updated_at: new Date().toISOString()
+      });
+      setMockData('user_preferences', rows);
+    }
+  } else {
+    const { data: existing } = await supabase
+      .from('user_preferences')
+      .select('preferences')
+      .eq('user_id', userId)
+      .single();
+    const merged = { ...(existing?.preferences || {}), ...partial };
+    await supabase
+      .from('user_preferences')
+      .upsert({ user_id: userId, preferences: merged }, { onConflict: 'user_id' });
+  }
 }
