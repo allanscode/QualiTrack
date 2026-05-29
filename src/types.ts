@@ -8,6 +8,12 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   suporte: 'Agente de Atendimento'
 };
 
+export interface UserPreferences {
+  theme?: 'light' | 'dark';
+  sidebar_color?: string;
+  avatar_url?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -16,6 +22,7 @@ export interface User {
   team_ids?: string[];
   active: boolean;
   must_change_password?: boolean;
+  preferences?: UserPreferences;
   created_at: string;
 }
 

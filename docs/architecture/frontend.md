@@ -23,12 +23,7 @@ src/
 ├── main.tsx                         # React DOM render
 ├── index.css # Design tokens + CSS global (Tailwind v4 @theme) + date picker color-scheme
 ├── types.ts                         # Tipos TypeScript globais (User, Monitoria, Team, etc.)
-├── lib/
-│   ├── supabase.ts                  # Cliente Supabase + MockDB (localStorage)
-│   ├── useQualityConfig.tsx         # Context Provider singleton + hook de config de qualidade
-│   ├── businessHours.ts             # Utilitários de horário comercial/prazo de ação
-│   ├── contestation.ts              # Funções unificadas de contestação (isApprovalAction/isRejectionAction)
-│   └── chartColors.ts               # Utilitário de cores de gráfico (lê CSS vars, theme-aware)
+├── lib/ 27: │   ├── supabase.ts # Cliente Supabase + MockDB (localStorage) + upsertUserPreferences() 28: │   ├── useQualityConfig.tsx # Context Provider singleton + hook de config de qualidade 29: │   ├── businessHours.ts # Utilitários de horário comercial/prazo de ação 30: │   ├── contestation.ts # Funções unificadas de contestação (isApprovalAction/isRejectionAction) 31: │   ├── chartColors.ts # Utilitário de cores de gráfico (lê CSS vars, theme-aware) 32: │   └── StaticDataContext.tsx # Context Provider — cadastro (6 tabelas) + userPreferences
 ├── utils/                           # (Vazio — não utilizado atualmente)
 └── components/
     ├── AdminPanel.tsx               # Painel administrativo (222 linhas, 6 sub-tabs)
@@ -88,30 +83,54 @@ Estado raiz que controla:
 - `isSystemOnline` — Status de conectividade de rede
 - `isReconnecting` — Indicador de tentativa de reconexão ativa
 
-### 2. Estado do Dashboard (`DashboardContext.tsx`)
+### 2. Dados Estáticos / Cadastro (`StaticDataContext.tsx`)
+
+Context Provider que envolve `<MainApp>` em `App.tsx` (filho de `<QualityConfigProvider>`). Faz **1 único fetch** de 6 tabelas em paralelo:
+
+- `users` — enriquecidos com `team_ids` via `enrichUsersWithTeams()` e `preferences` via `prefsMap`
+- `teams`
+- `forms`
+- `dissatisfaction_fields`
+- `user_teams` — usado para mapeamento N:N
+- `user_preferences` — mapeado em `prefsMap: Record<string, UserPreferences>` e injetado em cada `User.preferences`
+
+**Travas contra fetch storms:**
+- `fetchingRef` — impede fetch paralelo (StrictMode double-render, re-renders rápidos)
+- `fetchedRef` — impede re-fetch quando dados já estão disponíveis
+- `refreshAll()` — trigger manual via `refreshTrigger` (nunca auto-disparado)
+
+**Consumidores**: `MainApp` (sidebar, theme sync), `DashboardContext`, `MonitoriaList`, `MonitoriaForm`, `AdminPanel`. Nenhum componente faz fetch independente dessas tabelas.
+
+### 3. Estado do Dashboard (`DashboardContext.tsx`)
 Context Provider que centraliza:
 - `filters` — Filtros globais (data, equipe, agente, auditor, status, canal) — debounced 300ms
 - `monitorias` — Lista filtrada (RBAC + filtros UI)
 - `allMonitorias` — Lista completa pós-RBAC (antes de filtros UI)
-- `users`, `teams`, `forms` — Dados de referência (users enriquecidos com `team_ids`)
+- `users`, `teams`, `forms` — Dados de referência via `useStaticData()` (não faz fetch próprio)
 - `globalAvg` — Média global de score (date/status/channel filtered, NOT RBAC-scoped)
 - `loading`, `refresh` — Controle de loading e refresh
 - `onlineUsers` — Usuários online (merge local + Supabase Presence)
 - `dissatisfactionFields` — Definições de campos de insatisfação
-- Realtime subscription no canal `monitorias-realtime-dash`
-- Reload triggers: `activeTab` change, `qualitrack:reconnected`, `qualitrack:refresh-monitorias`
+- Realtime subscription no canal `monitorias-realtime-dash` (300ms debounce)
+- Reload triggers: `activeTab` change, `qualitrack:reconnected`
 
-### 3. Configuração de Qualidade (`QualityConfigProvider` — `useQualityConfig.tsx`)
+**Travas contra fetch storms:**
+- `fetchingRef` — impede fetch paralelo de monitorias (re-entrant guard)
+- `hasLoadedOnce` — distingue primeira carga de reloads silenciosos
+- `userRef`, `filtersRef`, `staticDataRef` — estabilizam callback `loadData`, evitam cascade re-renders
+- Realtime `deps=[user]` — canal reconecta apenas quando usuário muda, callback via `loadDataRef`
+
+### 4. Configuração de Qualidade (`QualityConfigProvider` — `useQualityConfig.tsx`)
 Context Provider singleton que envolve `<MainApp>` em `App.tsx`:
 - Faz **1 único fetch** a `quality_configs` (Supabase ou mockDb) no mount
 - Fornece `config`, `oldConfig`, `saveConfig`, `getLevelForScore`, `isAboveTarget`, `recalculateActiveActionDeadlines`
 - Consumido por 9+ componentes via `useQualityConfig()` hook (não há mais fetches independentes por componente)
 - Cores de nível usam classes `text-level-*`/`bg-level-*` com `.dark` overrides (pastel)
 
-### 4. Estado Local (Componentes)
+### 5. Estado Local (Componentes)
 Cada componente major (AdminPanel, MonitoriaForm, MonitoriaList) mantém seu próprio estado local via `useState`.
 
-### 5. Gerenciamento de Sessão (`App.tsx`)
+### 6. Gerenciamento de Sessão (`App.tsx`)
 
 O `App.tsx` implementa um sistema unificado de gerenciamento de sessão com 4 mecanismos:
 
@@ -150,7 +169,33 @@ O `App.tsx` implementa um sistema unificado de gerenciamento de sessão com 4 me
 
 **Enriquecimento de equipe**: `enrichUserWithTeamIds()` consulta a tabela N:N `user_teams` e injeta `team_ids` no `userData` em todas as entradas: login, restauração de sessão e `handleUserSession`. A coluna `users.team_ids` foi removida (migration M5) — nunca enviar `team_ids` em payload Supabase da tabela `users`.
 
-**`handleLogout(options?)`**: Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handleLogout}`) seja passado como string para Sonner. Limpa `MOCK_SESSION_KEY` e `LAST_ACTIVITY_KEY` do `localStorage`.
+**`handleLogout(options?)`**: Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handleLogout}`) seja passado como string para Sonner. Limpa `MOCK_SESSION_KEY`, `LAST_ACTIVITY_KEY` e `qualitrack_theme` do `localStorage`. Reseta `lastDbThemeRef.current = null` e `setTheme('system')`.
+
+### 7. Preferências de Usuário (`user_preferences`)
+
+A tabela `user_preferences` (JSONB) é a **fonte de verdade** para preferências de UI (tema, cor do sidebar, avatar). O fluxo otimizado:
+
+**Leitura (pós-login / F5):**
+1. `StaticDataContext` faz 1 fetch paralelo de `user_preferences` junto com as outras 5 tabelas de cadastro
+2. Os dados são expostos como `userPreferences: Record<string, UserPreferences>` no context
+3. `MainApp` lê `userPreferences[userId]` para sincronizar tema e sidebar_color — **nunca faz fetch independente**
+4. `lastDbThemeRef` (module-level) é setado **antes** de `setTheme()` para prevenir auto-save loop
+
+**Escrita (explicit user action only):**
+1. Tema: `App.tsx` theme effect salva via `upsertUserPreferences()` **apenas** quando `resolved !== lastDbThemeRef.current` (guard contra write-back do valor recém-lido do banco)
+2. Sidebar color: `handleSidebarColorChange()` salva via `upsertUserPreferences()` — só dispara por click do usuário
+3. Primeiro login (sem preferência no banco): resolve OS (`prefers-color-scheme`) → salva `'light'` ou `'dark'` (nunca `'system'`)
+4. Fallback `user_metadata.sidebar_color`: migrado automaticamente para DB na primeira leitura
+
+**Travas contra auto-save loop:**
+- `lastDbThemeRef` — module-level object compartilhado entre `App` e `MainApp`. Setado antes de `setTheme()` na sincronização do banco, verificado no theme effect antes de `upsertUserPreferences()`
+- Logout reseta `lastDbThemeRef.current = null` em todas as 3 saídas (manual, idle timeout, absolute timeout)
+- `upsertUserPreferences()` faz JSONB merge (read existing → spread partial → upsert), nunca sobrescreve chaves não-relacionadas
+
+**`localStorage` como cache instantâneo:**
+- `qualitrack_theme` — resolve flash de tema no F5 (blocking `<script>` em `index.html` lê antes do React)
+- `qualitrack_sidebar_color_{email}` — cache local da cor do sidebar
+- Ambos são limpos no logout (DB preserva para o próximo login)
 
 ## Navegação / Roteamento
 
@@ -230,7 +275,7 @@ Os perfis de usuário (roles) são mapeados de IDs técnicos para nomes amigáve
 - **Quebra de Texto:** Nomes e cargos suportam `break-words` para evitar quebra de layout com nomes extensos.
 - **Sidebar Accordion:** Popover de perfil com 4 seções recolhíveis (Equipes, Avatar, Aparência, Cor do Menu). Padrão single-open via `sidebarAccordion` state. Usa `AnimatePresence initial={false}` + `motion.div` para smooth height animation. `ChevronDown` com `rotate-180` transition. Seleção de cor auto-fecha o accordion. Sem botão X — fecha ao clicar fora ou no toggle do perfil.
 - **Profile Toggle:** Botões de avatar e nome no sidebar usam classe `profile-toggle-btn` para exclusão do click-outside handler. Toggle abre/fecha o popover corretamente sem conflito com o handler de click-outside.
-- **Color Picker:** Um dos 4 accordion sections. 20 presets de cor, persistidos por usuário em localStorage (`qualitrack_sidebar_color_{email}`) e `user_metadata.sidebar_color`. Seleção auto-fecha o accordion.
+- **Color Picker:** Um dos 4 accordion sections. 20 presets de cor, persistidos via `upsertUserPreferences()` na tabela `user_preferences` (JSONB `sidebar_color`). Cache local em `localStorage` (`qualitrack_sidebar_color_{email}`). Fallback: `user_metadata.sidebar_color` migrado para DB automaticamente. Seleção auto-fecha o accordion.
 - **Date Picker (Dark Mode):** `input[type="date"]` usa `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark` em `index.css`. Previne flash preto ao abrir calendário em light mode.
 - **Scrollbar Gutter:** Container de scroll principal usa `scrollbar-gutter: stable` (inline style) para evitar layout shift quando scrollbar aparece/desaparece.
 
@@ -261,29 +306,30 @@ Os perfis de usuário (roles) são mapeados de IDs técnicos para nomes amigáve
 
 ```mermaid
 graph TD
-    main["main.tsx<br/>createRoot().render()"]
-    app["App.tsx<br/>Auth State Machine"]
+main["main.tsx<br/>createRoot().render()"]
+app["App.tsx<br/>Auth State Machine"]
 
-    main --> app
+main --> app
 
-    app -->|"!currentUser"| login["Login / Auth Views"]
-    app -->|"currentUser"| mainApp["MainApp Component"]
+app -->|"!currentUser"| login["Login / Auth Views"]
+app -->|"currentUser"| mainApp["MainApp Component"]
 
-    mainApp --> sidebar["Sidebar<br/>(role-colored, accordion, 20 presets)"]
-    mainApp --> header["Header<br/>(greeting + date + online status)"]
-    mainApp --> content["Content Area"]
+mainApp --> staticCtx["StaticDataProvider<br/>(6 tabelas cadastro + userPreferences)"]
+staticCtx --> sidebar["Sidebar<br/>(role-colored, accordion, 20 presets)"]
+staticCtx --> header["Header<br/>(greeting + date + online status)"]
+staticCtx --> content["Content Area"]
 
-    content -->|"tab=dashboard"| dashMain["DashboardMain"]
-    content -->|"tab=monitorias"| monList["MonitoriaList"]
-    content -->|"tab=admin"| admin["AdminPanel"]
+content -->|"tab=dashboard"| dashMain["DashboardMain"]
+content -->|"tab=monitorias"| monList["MonitoriaList"]
+content -->|"tab=admin"| admin["AdminPanel"]
 
-    dashMain --> provider["DashboardProvider<br/>(Context + Realtime)"]
-    provider --> filterBar["FilterBar"]
-    provider --> router["DashboardRouter"]
+dashMain --> provider["DashboardProvider<br/>(Context + Realtime)"]
+provider --> filterBar["FilterBar"]
+provider --> router["DashboardRouter"]
 
-    router -->|"suporte"| agentDash["AgentDashboard"]
-    router -->|"qualidade"| qualDash["QualityDashboard"]
-    router -->|"gestor_suporte"| supMgr["SupportManagerDashboard"]
-    router -->|"gestor_qualidade"| qualMgr["QualityManagerDashboard"]
-    router -->|"admin"| adminDash["AdminDashboard"]
+router -->|"suporte"| agentDash["AgentDashboard"]
+router -->|"qualidade"| qualDash["QualityDashboard"]
+router -->|"gestor_suporte"| supMgr["SupportManagerDashboard"]
+router -->|"gestor_qualidade"| qualMgr["QualityManagerDashboard"]
+router -->|"admin"| adminDash["AdminDashboard"]
 ```

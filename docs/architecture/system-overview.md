@@ -8,14 +8,15 @@ QualiTrack é uma **SPA monolítica** (Single Page Application) que se comunica 
 
 ```mermaid
 graph TB
-    subgraph Cliente ["🖥️ Frontend (React SPA)"]
-        App["App.tsx<br/>Auth + Layout + Routing + Session"]
-        Dashboard["DashboardMain<br/>+ DashboardContext"]
-        MonList["MonitoriaList"]
-        MonForm["MonitoriaForm"]
-        Admin["AdminPanel (6 tabs)"]
-        QConfig["QualityConfigManagement"]
-    end
+subgraph Cliente ["🖥️ Frontend (React SPA)"]
+App["App.tsx<br/>Auth + Layout + Routing + Session"]
+StaticCtx["StaticDataContext<br/>(6 tabelas cadastro + userPreferences)"]
+Dashboard["DashboardMain<br/>+ DashboardContext"]
+MonList["MonitoriaList"]
+MonForm["MonitoriaForm"]
+Admin["AdminPanel (6 tabs)"]
+QConfig["QualityConfigManagement"]
+end
 
     subgraph Supabase ["☁️ Supabase (BaaS)"]
         Auth["Supabase Auth"]
@@ -31,9 +32,11 @@ graph TB
         SendEmail["send-email"]
     end
 
-    App --> Auth
-    App --> DB
-    Admin --> Edge
+App --> Auth
+App --> StaticCtx
+StaticCtx --> DB
+App --> DB
+Admin --> Edge
     Edge --> InviteUser
     Edge --> SendEmail
     InviteUser --> Auth
@@ -73,6 +76,8 @@ graph TB
 
 ### 3. Dashboard (`dashboard/`)
 - Context Provider centralizado (`DashboardContext`) — RBAC, filtros, dados, presença online
+- Dados de cadastro via `useStaticData()` (não faz fetch próprio de users/teams/forms)
+- `userPreferences` via `useStaticData().userPreferences` (não faz fetch independente)
 - Roteamento por role (5 dashboards diferentes)
 - Filtros globais (data, equipe, agente, auditor, status, canal) — debounced 300ms
 - Widgets reutilizáveis com ícones padronizados por categoria semântica
@@ -96,6 +101,22 @@ graph TB
 - Prazo de ação por etapa do fluxo (horas úteis)
 - Horário comercial e feriados
 - Recálculo automático de deadlines ao alterar configuração
+
+### 6. Dados Estáticos / Cadastro (`StaticDataContext.tsx`)
+- Context Provider singleton que envolve `<MainApp>` — 1 fetch paralelo de 6 tabelas
+- Tabelas: `users`, `teams`, `forms`, `dissatisfaction_fields`, `user_teams`, `user_preferences`
+- `enrichUsersWithTeams()` centralizado (elimina 4 cópias anteriores)
+- `userPreferences` mapeado e injetado em `User.preferences`
+- Travas contra fetch storms: `fetchingRef` + `fetchedRef`
+- `refreshAll()` manual — dados estáticos nunca auto-recarregam
+
+### 7. Preferências de Usuário (`user_preferences`)
+- Tabela JSONB — fonte de verdade para tema, cor do sidebar, avatar (futuro)
+- Leitura centralizada via `StaticDataContext` — nenhum componente faz fetch independente
+- Escrita via `upsertUserPreferences()` — apenas em ação explícita do usuário
+- `lastDbThemeRef` (module-level) — guard contra auto-save loop (write-back do valor lido do banco)
+- `localStorage` como cache instantâneo (evita flash no F5)
+- Logout limpa `localStorage`; DB preserva para próximo login
 
 ## Bounded Contexts
 
@@ -138,23 +159,28 @@ graph LR
 
 ## Comunicação entre Módulos
 
-| Origem | Destino | Mecanismo |
-|--------|---------|-----------|
-| App → Dashboard | Props + Context | `DashboardProvider` recebe `user`, provê dados filtrados |
-| App → MonitoriaList | Props | `user` e callback `onNew` |
-| App → AdminPanel | Props | `user` |
-| MonitoriaList → MonitoriaForm | State | `viewingMonitoria` renderiza o form inline |
-| AdminPanel → Edge Functions | HTTP | `supabase.functions.invoke()` |
-| DashboardContext → Widgets | Context | `useDashboard()` hook |
-| QualityConfigProvider → Todos | Context | Config compartilhada via Context Provider (1 fetch, consumido via `useQualityConfig()`) |
-| Custom Events | Múltiplos | `qualitrack:reconnected`, `qualitrack:refresh-monitorias` |
+| Origem | Destino | Mecanismo | Descrição |
+|--------|---------|-----------|-----------|
+| App → StaticDataContext | DB | 1 fetch paralelo (6 tabelas) | Cadastro + preferências |
+| StaticDataContext → DashboardContext | Context | `useStaticData()` | Users, teams, forms, prefs |
+| StaticDataContext → MonitoriaList | Context | `useStaticData()` | Users, teams, forms |
+| StaticDataContext → AdminPanel | Context | `useStaticData()` | Users, teams, forms |
+| StaticDataContext → MainApp | Context | `useStaticData()` | Teams, userPreferences |
+| App → Dashboard | Props + Context | `DashboardProvider` recebe `user`, provê dados filtrados | |
+| App → MonitoriaList | Props | `user` e callback `onNew` | |
+| App → AdminPanel | Props | `user` | |
+| MonitoriaList → MonitoriaForm | State | `viewingMonitoria` renderiza o form inline | |
+| AdminPanel → Edge Functions | HTTP | `supabase.functions.invoke()` | |
+| DashboardContext → Widgets | Context | `useDashboard()` hook | |
+| QualityConfigProvider → Todos | Context | Config compartilhada via Context Provider (1 fetch, consumido via `useQualityConfig()`) | |
+| Custom Events | Múltiplos | `qualitrack:reconnected` | Reload após reconexão |
 
 ## Padrões Arquiteturais Observados
 
 ### ✅ Padrões Positivos
 1. **Dual-mode persistence** — Mock (localStorage) + Supabase (produção)
 2. **Role-Based Access Control (RBAC)** — 5 perfis com visibilidade diferenciada
-3. **Context Providers** — Estado centralizado do dashboard e da config de qualidade
+3. **Context Providers** — Estado centralizado: cadastro (`StaticDataContext`), dashboard (`DashboardContext`), config (`QualityConfigProvider`)
 4. **Design Tokens** — CSS custom properties para temas (light/dark) com cores pastel no dark + `--date-color-scheme` para date inputs
 5. **Component composition** — UI components reutilizáveis (Card, Button, Badge, CustomSelect, etc.)
 6. **Business hours action deadline** — Cálculo preciso de prazos com feriados
@@ -162,6 +188,9 @@ graph LR
 8. **Semantic icon categories** — Dashboard com ícones padronizados por categoria
 9. **`getIconBg()` map** — Deriva automaticamente bg do accent color
 10. **Online presence** — Merge local (localStorage) + Supabase Presence, deduplicado por user ID
+11. **StaticDataContext centralizado** — 1 fetch paralelo de 6 tabelas cadastro, `enrichUsersWithTeams()` centralizado, elimina fetches independentes
+12. **Fetch storm guards** — `fetchingRef` em StaticDataContext, DashboardContext e MonitoriaList; `lastDbThemeRef` contra auto-save loop
+13. **UserPreferences DB-backed** — Tabela `user_preferences` (JSONB) como fonte de verdade; `localStorage` como cache instantâneo; escrita apenas em ação explícita do usuário
 
 ### ⚠️ Trade-offs e Limitações
 1. **Sem routing library** — Navegação por estado (`activeTab`), sem URLs
@@ -193,13 +222,15 @@ sequenceDiagram
     participant E as Edge Functions
     participant SMTP as Gmail SMTP
 
-    U->>F: Login (email/senha)
-    F->>S: auth.signInWithPassword()
-    S-->>F: Session + JWT
-    F->>S: SELECT * FROM users WHERE email=...
-    F->>S: SELECT * FROM user_teams WHERE user_id=...
-    S-->>F: User data + team_ids (enriquecido)
-    F->>F: Renderiza dashboard por role
+U->>F: Login (email/senha)
+F->>S: auth.signInWithPassword()
+S-->>F: Session + JWT
+F->>S: SELECT * FROM users WHERE email=...
+F->>S: SELECT * FROM user_teams WHERE user_id=...
+S-->>F: User data + team_ids (enriquecido)
+F->>S: SELECT * FROM user_preferences WHERE user_id=...
+S-->>F: Preferences (theme, sidebar_color)
+F->>F: Renderiza dashboard por role
 
     Note over F,S: Criação de Monitoria
     U->>F: Preenche formulário (4 etapas)

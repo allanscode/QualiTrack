@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus, DissatisfactionField, UserTeam } from '../types';
+import { useStaticData } from '../lib/StaticDataContext';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -43,11 +44,12 @@ export default function MonitoriaForm({
   initialData?: Monitoria;
 }) {
   const { config: qualityConfig, getLevelForScore, isAboveTarget } = useQualityConfig();
+  const staticData = useStaticData();
   const isAdmin = user?.role === 'admin';
   const isViewOnly = !!initialData && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit;
   const isReevaluating = !!(initialData as any)?._reevaluate;
   const isAdminEdit = !!(initialData as any)?._adminEdit;
-  
+
   const [step, setStep] = useState(1);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -57,13 +59,23 @@ export default function MonitoriaForm({
     }
   }, [step]);
 
-  const [forms, setForms] = useState<EvaluationForm[]>([]);
-  const [agents, setAgents] = useState<User[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
   const [saving, setSaving] = useState(false);
-  const [dissatisfactionFields, setDissatisfactionFields] = useState<DissatisfactionField[]>([]);
   const [dissatisfactionAnswers, setDissatisfactionAnswers] = useState<Record<string, string[]>>(initialData?.dissatisfaction_answers || {});
+
+  const forms = useMemo(() =>
+    staticData.forms.filter(f => f.active !== false).sort((a, b) => a.title.localeCompare(b.title)),
+    [staticData.forms]
+  );
+  const allUsers = staticData.users;
+  const agents = useMemo(() =>
+    staticData.users.filter(u => u.role === 'suporte' && u.active === true).sort((a, b) => a.name.localeCompare(b.name)),
+    [staticData.users]
+  );
+  const teams = useMemo(() =>
+    staticData.teams.filter(t => t.active !== false).sort((a, b) => a.name.localeCompare(b.name)),
+    [staticData.teams]
+  );
+  const dissatisfactionFields = staticData.dissatisfactionFields;
 
   const clientFieldsToShow = useMemo(() => {
     return dissatisfactionFields.filter(f => 
@@ -119,58 +131,6 @@ export default function MonitoriaForm({
   const [criticalErrors, setCriticalErrors] = useState<Record<string, boolean>>(
     (initialData?.selected_critical_errors || []).reduce((acc: any, id: string) => ({ ...acc, [id]: true }), {})
   );
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        if (!supabase) {
-          const [fRes, aRes, tRes, dfRes, utRes] = await Promise.all([
-            mockDb.get('forms'),
-            mockDb.get('users'),
-            mockDb.get('teams'),
-            mockDb.get('dissatisfaction_fields'),
-            mockDb.get('user_teams')
-          ]);
-          setForms((fRes.data || []).filter((f: any) => f.active !== false));
-          const usersList = (aRes.data || []) as User[];
-          const userTeamDocs = (utRes.data || []) as UserTeam[];
-          const teamIdsByUser: Record<string, string[]> = {};
-          userTeamDocs.forEach((ut: UserTeam) => {
-            if (!teamIdsByUser[ut.user_id]) teamIdsByUser[ut.user_id] = [];
-            teamIdsByUser[ut.user_id].push(ut.team_id);
-          });
-          const enriched = usersList.map(u => ({ ...u, team_ids: u.team_ids?.length ? u.team_ids : (teamIdsByUser[u.id] || []) }));
-          setAllUsers(enriched);
-          setAgents(enriched.filter((u: User) => u.role === 'suporte' && u.active !== false));
-          setTeams((tRes.data || []).filter((t: any) => t.active !== false));
-          setDissatisfactionFields(dfRes.data || []);
-        } else {
-          const [{ data: fData }, { data: aData }, { data: tData }, { data: utData }] = await Promise.all([
-            supabase.from('forms').select('*').eq('active', true),
-            supabase.from('users').select('*'),
-            supabase.from('teams').select('*').eq('active', true),
-            supabase.from('user_teams').select('*'),
-          ]);
-          const dfRes = await supabase.from('dissatisfaction_fields').select('*');
-          const dfData = dfRes.error?.code === 'PGRST205' ? [] : (dfRes.data || []);
-          setForms((fData || []).sort((a: any, b: any) => a.title.localeCompare(b.title)));
-          const usersList = (aData || []) as User[];
-          const userTeamDocs = (utData || []) as UserTeam[];
-          const teamIdsByUser: Record<string, string[]> = {};
-          userTeamDocs.forEach((ut: UserTeam) => {
-            if (!teamIdsByUser[ut.user_id]) teamIdsByUser[ut.user_id] = [];
-            teamIdsByUser[ut.user_id].push(ut.team_id);
-          });
-          const enriched = usersList.map(u => ({ ...u, team_ids: u.team_ids?.length ? u.team_ids : (teamIdsByUser[u.id] || []) }));
-          setAllUsers(enriched);
-          setAgents(enriched.filter(u => u.role === 'suporte' && u.active === true).sort((a, b) => a.name.localeCompare(b.name)));
-          setTeams((tData || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
-          setDissatisfactionFields(dfData);
-        }
-      } catch (e) { console.error('Erro ao carregar dados:', e); }
-    };
-    loadData();
-  }, []);
 
   const selectedForm = useMemo(() => {
     if (initialData?.form_snapshot) return initialData.form_snapshot;
@@ -365,7 +325,6 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
         else await supabase.from('monitorias').insert([payload]);
       }
       toast.success('Monitoria salva com sucesso!');
-      window.dispatchEvent(new CustomEvent('qualitrack:refresh-monitorias'));
       onSaved();
     } catch (e: any) {
       toast.error('Não foi possível salvar a monitoria. Tente novamente.');
@@ -526,7 +485,7 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                       value={header.ticket_date} 
                       onChange={e => setHeader({...header, ticket_date: e.target.value})} 
                       disabled={isViewOnly} 
-                      className="w-full bg-surface-subtle border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none" 
+                      className="w-full bg-surface-subtle border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-colors outline-none" 
                     />
                   </div>
                 </div>
