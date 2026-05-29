@@ -4,14 +4,15 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { supabase, mockDb } from './lib/supabase';
+import { supabase, mockDb, upsertUserPreferences } from './lib/supabase';
 import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
-import { User, ROLE_LABELS } from './types';
+import { User, ROLE_LABELS, UserPreferences } from './types';
 import { QualityConfigProvider } from './lib/useQualityConfig';
+import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
 
 // Components
 import DashboardMain from './components/dashboard/DashboardMain';
@@ -27,6 +28,7 @@ const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 const SESSION_REFRESH_MS = 50 * 60 * 1000;
 const MOCK_SESSION_KEY = 'qualitrack_session';
 const LAST_ACTIVITY_KEY = 'qualitrack_last_activity';
+const lastDbThemeRef = { current: null as ('light' | 'dark' | null) };
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -42,7 +44,6 @@ export default function App() {
     return 'system';
   });
 
-  // Efeito para aplicar o tema no root (html)
   useEffect(() => {
     const root = document.documentElement;
     const applyTheme = () => {
@@ -63,7 +64,17 @@ export default function App() {
     };
 
     applyTheme();
-    localStorage.setItem('qualitrack_theme', theme);
+
+    if (currentUser) {
+      localStorage.setItem('qualitrack_theme', theme);
+      const resolved = theme === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' as const : 'light' as const)
+        : theme;
+      if (resolved !== lastDbThemeRef.current && userData?.id) {
+        lastDbThemeRef.current = resolved;
+        upsertUserPreferences(userData.id, { theme: resolved });
+      }
+    }
 
     if (theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -71,7 +82,9 @@ export default function App() {
       mediaQuery.addEventListener('change', listener);
       return () => mediaQuery.removeEventListener('change', listener);
     }
-  }, [theme]);
+  }, [theme, currentUser, userData?.id]);
+
+  const prevUserIdRef = useRef<string | null>(null);
 
   const [credentials, setCredentials] = useState({ email: '', password: '' });
   const [requestData, setRequestData] = useState({ name: '', email: '' });
@@ -204,10 +217,14 @@ export default function App() {
           clearTimeout(initializationTimeout);
           return;
         }
-        setCurrentUser(null);
-        setUserData(null);
-        setAuthView('login');
-      } else if (event === 'TOKEN_REFRESHED') {
+    setCurrentUser(null);
+    setUserData(null);
+setAuthView('login');
+  localStorage.removeItem('qualitrack_theme');
+  lastDbThemeRef.current = null;
+  setTheme('system');
+  prevUserIdRef.current = null;
+  } else if (event === 'TOKEN_REFRESHED') {
         // Token renovado silenciosamente — sem ação necessária
       }
       setLoading(false);
@@ -293,41 +310,20 @@ export default function App() {
     // Ping inicial
     pingSupabase().then(ok => handleOnlineStatusChange(ok));
 
-    // Tab Focus Recovery: quando o usuário volta para a aba
-    const handleVisibilityChange = async () => {
-      const now = Date.now();
-      if (document.visibilityState === 'visible') {
-        console.log('[System] Aba focada. Disparando recarregamento de dados...');
-        window.dispatchEvent(new CustomEvent('qualitrack:refresh-monitorias'));
-        
-        if (now - lastFocusCheck > 15000) {
-          lastFocusCheck = now;
-          console.log('[System] Verificando conexão...');
-          setIsReconnecting(true);
-          const ok = await pingSupabase();
-          if (ok) {
-            // Se a sessão está quase expirando, renova
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              if (session) {
-                const timeToExpiry = (session.expires_at || 0) - Math.floor(now / 1000);
-                if (timeToExpiry < 900) await supabase.auth.refreshSession();
-              }
-            } catch {}
-            setIsSystemOnline(true);
-            setIsReconnecting(false);
-            // Se estava offline, notifica reconexão
-            if (wasOffline) {
-              wasOffline = false;
-              if (reconnectInterval) { clearInterval(reconnectInterval); reconnectInterval = null; }
-              window.dispatchEvent(new CustomEvent('qualitrack:reconnected'));
-            }
-          } else {
-            handleOnlineStatusChange(false);
-          }
+  // Tab Focus Recovery: verifica sessão ao focar a aba, sem recarregar dados
+  const handleVisibilityChange = async () => {
+    const now = Date.now();
+    if (document.visibilityState === 'visible' && now - lastFocusCheck > 15000) {
+      lastFocusCheck = now;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const timeToExpiry = (session.expires_at || 0) - Math.floor(now / 1000);
+          if (timeToExpiry < 900) await supabase.auth.refreshSession();
         }
-      }
-    };
+      } catch {}
+    }
+  };
 
     // Listeners nativos do navegador para online/offline
     const handleBrowserOnline = () => {
@@ -339,19 +335,17 @@ export default function App() {
       handleOnlineStatusChange(false);
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleVisibilityChange);
-    window.addEventListener('online', handleBrowserOnline);
-    window.addEventListener('offline', handleBrowserOffline);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('online', handleBrowserOnline);
+  window.addEventListener('offline', handleBrowserOffline);
 
-    return () => {
-      clearInterval(heartbeatInterval);
-      if (reconnectInterval) clearInterval(reconnectInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleVisibilityChange);
-      window.removeEventListener('online', handleBrowserOnline);
-      window.removeEventListener('offline', handleBrowserOffline);
-    };
+  return () => {
+    clearInterval(heartbeatInterval);
+    if (reconnectInterval) clearInterval(reconnectInterval);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('online', handleBrowserOnline);
+    window.removeEventListener('offline', handleBrowserOffline);
+  };
   }, [isMockMode, currentUser]);
 
   // --- Unified Session Management: Idle Timeout + Warning + Absolute Timeout + Proactive Refresh ---
@@ -368,11 +362,15 @@ export default function App() {
     let refreshTimerId: NodeJS.Timeout;
     let lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_KEY)) || Date.now();
 
-    const forceLogout = async (reason: string) => {
-      setShowIdleWarning(false);
-      localStorage.removeItem(MOCK_SESSION_KEY);
-      localStorage.removeItem(LAST_ACTIVITY_KEY);
-      if (!isMockMode && supabase) {
+  const forceLogout = async (reason: string) => {
+    setShowIdleWarning(false);
+    localStorage.removeItem(MOCK_SESSION_KEY);
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
+localStorage.removeItem('qualitrack_theme');
+  lastDbThemeRef.current = null;
+  setTheme('system');
+  prevUserIdRef.current = null;
+    if (!isMockMode && supabase) {
         isCleaningSessionRef.current = true;
         await supabase.auth.signOut();
       }
@@ -616,7 +614,11 @@ export default function App() {
     setCredentials({ email: '', password: '' });
     setShowIdleWarning(false);
     sessionStartTimeRef.current = null;
-    localStorage.removeItem(MOCK_SESSION_KEY);
+prevUserIdRef.current = null;
+  localStorage.removeItem(MOCK_SESSION_KEY);
+  localStorage.removeItem('qualitrack_theme');
+  lastDbThemeRef.current = null;
+  setTheme('system');
     if (!isMockMode && supabase) {
       supabase.auth.signOut().catch(console.error);
     }
@@ -872,6 +874,7 @@ export default function App() {
             className="h-screen w-full"
           >
         <QualityConfigProvider>
+        <StaticDataProvider>
         <MainApp
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
@@ -886,8 +889,9 @@ export default function App() {
             setTheme={setTheme}
             isSystemOnline={isSystemOnline}
             isReconnecting={isReconnecting}
-          />
-        </QualityConfigProvider>
+        />
+        </StaticDataProvider>
+      </QualityConfigProvider>
           </motion.div>
         )}
       </AnimatePresence>
@@ -910,7 +914,7 @@ function MainApp({
   isSystemOnline,
   isReconnecting
 }: any) {
-  const [teams, setTeams] = React.useState<any[]>([]);
+  const { teams, userPreferences } = useStaticData();
   const [showTeamList, setShowTeamList] = React.useState(false);
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | 'color' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
@@ -931,7 +935,7 @@ function MainApp({
   }, [userData?.role]);
   const [sidebarColor, setSidebarColor] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-    const email = userData?.email || currentUser?.email || '';
+      const email = userData?.email || currentUser?.email || '';
       if (email) {
         return localStorage.getItem(`qualitrack_sidebar_color_${email}`) || '';
       }
@@ -939,23 +943,51 @@ function MainApp({
     return '';
   });
 
-  useEffect(() => {
-    const email = userData?.email || currentUser?.email;
-    if (email) {
-      const cached = localStorage.getItem(`qualitrack_sidebar_color_${email}`);
-      if (cached !== null) {
-        setSidebarColor(cached);
-      } else {
-        const metadataColor = currentUser?.user_metadata?.sidebar_color || userData?.sidebar_color;
-        if (metadataColor) {
-          setSidebarColor(metadataColor);
-          localStorage.setItem(`qualitrack_sidebar_color_${email}`, metadataColor);
-        } else {
-          setSidebarColor('');
-        }
+  const prevThemeUserIdRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!userData?.id) return;
+    const userId = userData.id;
+    const isLogin = prevThemeUserIdRef.current !== userId;
+    prevThemeUserIdRef.current = userId;
+
+    const myPrefs = userPreferences[userId];
+    const dbTheme = myPrefs?.theme;
+
+    if (dbTheme) {
+      lastDbThemeRef.current = dbTheme;
+      setTheme(dbTheme);
+      localStorage.setItem('qualitrack_theme', dbTheme);
+    } else if (isLogin) {
+      const osDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const resolved = osDark ? 'dark' as const : 'light' as const;
+      lastDbThemeRef.current = resolved;
+      setTheme(resolved);
+      localStorage.setItem('qualitrack_theme', resolved);
+      upsertUserPreferences(userId, { theme: resolved });
+    }
+  }, [userData?.id, userPreferences]);
+
+  // Sincroniza sidebar_color do banco (com fallback user_metadata) ao logar / F5
+  React.useEffect(() => {
+    if (!userData?.id) return;
+    const userId = userData.id;
+    const email = userData.email || currentUser?.email;
+
+    const myPrefs = userPreferences[userId];
+    let dbColor: string | undefined = myPrefs?.sidebar_color;
+
+    if (!dbColor) {
+      const metadataColor = currentUser?.user_metadata?.sidebar_color;
+      if (metadataColor) {
+        dbColor = metadataColor;
+        upsertUserPreferences(userId, { sidebar_color: metadataColor });
       }
     }
-  }, [userData?.email, currentUser?.user_metadata?.sidebar_color, userData?.sidebar_color, currentUser?.email]);
+
+    const finalColor = dbColor || '';
+    setSidebarColor(finalColor);
+    if (email) localStorage.setItem(`qualitrack_sidebar_color_${email}`, finalColor);
+  }, [userData?.id, userPreferences]);
 
   // Fechar o menu de equipes/configurações ao clicar fora
   useEffect(() => {
@@ -983,30 +1015,11 @@ function MainApp({
     const email = userData?.email || currentUser?.email;
     if (email) {
       localStorage.setItem(`qualitrack_sidebar_color_${email}`, color);
-      if (!supabase) {
-        if (userData?.id) {
-          await mockDb.update('users', userData.id, { sidebar_color: color });
-        }
-      } else {
-        await supabase.auth.updateUser({
-          data: { sidebar_color: color }
-        });
-      }
+    }
+    if (userData?.id) {
+      await upsertUserPreferences(userData.id, { sidebar_color: color });
     }
   };
-
-  useEffect(() => {
-    const loadTeams = async () => {
-      if (!supabase) {
-        const { data } = await mockDb.get('teams');
-        setTeams(data || []);
-      } else {
-        const { data } = await supabase.from('teams').select('*');
-        setTeams(data || []);
-      }
-    };
-    loadTeams();
-  }, []);
 
   const userTeams = teams.filter(t => (userData?.team_ids || []).includes(t.id));
   const teamNames = userTeams.map(t => t.name).join(', ');

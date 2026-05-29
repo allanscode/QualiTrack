@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, User, Team, EvaluationForm, MonitoriaHistoryEntry } from '../types';
+import { useStaticData } from '../lib/StaticDataContext';
 import { resolveContestationResult } from '../lib/contestation';
 import { 
   Search, 
@@ -41,10 +42,8 @@ import { useQualityConfig } from '../lib/useQualityConfig';
 
 export default function MonitoriaList({ user, onNew, activeTab }: { user: User | null; onNew: () => void; activeTab?: string }) {
   const { config: qualityConfig, getLevelForScore } = useQualityConfig();
+  const staticData = useStaticData();
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MonitoriaStatus | 'todas' | 'expiradas_prazo'>('todas');
   const [search, setSearch] = useState('');
@@ -63,42 +62,42 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
   const [submitting, setSubmitting] = useState(false);
 
   const hasLoadedOnce = useRef(false);
+  const fetchingRef = useRef(false);
+  const userRef = useRef(user);
+  userRef.current = user;
 
   const load = useCallback(async (silent = false) => {
-    if (!user) return;
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+    if (fetchingRef.current) {
+      console.log('[Monitorias] Fetch já em andamento, ignorando...');
+      return;
+    }
+    fetchingRef.current = true;
     if (!silent && !hasLoadedOnce.current) setLoading(true);
     try {
       let fetchedMonitorias: any[] = [];
-      let fetchedUsers: any[] = [];
-      let fetchedTeams: any[] = [];
-      let fetchedForms: any[] = [];
 
       if (!supabase) {
         const { data: d } = await mockDb.get('monitorias');
-        const { data: u } = await mockDb.get('users');
-        const { data: t } = await mockDb.get('teams');
-        const { data: f } = await mockDb.get('forms');
         fetchedMonitorias = d || [];
-        fetchedUsers = u || [];
-        fetchedTeams = t || [];
-        fetchedForms = f || [];
       } else {
         const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
           try {
-            console.log(`[Monitorias] Buscando dados (Tentativa ${retryCount + 1})...`);
+            console.log(`[Monitorias] Buscando monitorias (Tentativa ${retryCount + 1})...`);
             const controller = new AbortController();
-            
+
             let monitoriasQuery = supabase.from('monitorias').select('*').order('created_at', { ascending: false });
 
-            const myTeamIds = user.team_ids || [];
+            const myTeamIds = currentUser.team_ids || [];
 
-            if (user.role === 'suporte') {
+            if (currentUser.role === 'suporte') {
               if (myTeamIds.length > 0) {
-                monitoriasQuery = monitoriasQuery.or(`evaluated_id.eq.${user.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`);
+                monitoriasQuery = monitoriasQuery.or(`evaluated_id.eq.${currentUser.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`);
               } else {
-                monitoriasQuery = monitoriasQuery.eq('evaluated_id', user.id);
+                monitoriasQuery = monitoriasQuery.eq('evaluated_id', currentUser.id);
               }
-            } else if (user.role === 'gestor_suporte') {
+            } else if (currentUser.role === 'gestor_suporte') {
               if (myTeamIds.length > 0) {
                 monitoriasQuery = monitoriasQuery.in('team_id', myTeamIds);
               } else {
@@ -108,16 +107,10 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
 
             const fetchPromise = Promise.all([
               monitoriasQuery.abortSignal(controller.signal),
-              supabase.from('users').select('*').abortSignal(controller.signal),
-              supabase.from('teams').select('*').abortSignal(controller.signal),
-              supabase.from('forms').select('*').abortSignal(controller.signal)
             ]);
-            
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => {
-                controller.abort();
-                reject(new Error('timeout'));
-              }, 15000)
+
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000)
             );
 
             const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
@@ -127,7 +120,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
             return results;
           } catch (err: any) {
             console.error(`[Monitorias] Erro na tentativa ${retryCount + 1}:`, err);
-            if (retryCount < 4) { // Até 5 tentativas
+            if (retryCount < 4) {
               const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
               toast.loading(`Recuperando monitorias... (${retryCount + 1}/5)`, { id: 'mon-retry' });
               await supabase.auth.getSession();
@@ -140,19 +133,16 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
           }
         };
 
-        const [mRes, uRes, tRes, fRes] = await executeWithRetry();
+        const [mRes] = await executeWithRetry();
         fetchedMonitorias = mRes.data || [];
-        fetchedUsers = uRes.data || [];
-        fetchedTeams = tRes.data || [];
-        fetchedForms = fRes.data || [];
       }
 
       // Check for expired monitorias and auto-finalize them
-      const expired = fetchedMonitorias.filter((m: any) => 
-        m.active !== false && 
-        !['concluida', 'finalizada_alterada'].includes(m.status) && 
-      m.action_deadline_at &&
-      new Date(m.action_deadline_at) < new Date()
+      const expired = fetchedMonitorias.filter((m: any) =>
+        m.active !== false &&
+        !['concluida', 'finalizada_alterada'].includes(m.status) &&
+        m.action_deadline_at &&
+        new Date(m.action_deadline_at) < new Date()
       );
 
       if (expired.length > 0) {
@@ -161,25 +151,25 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
         for (const m of expired) {
           const isQualityTurn = ['em_contestacao', 'aguardando_gestor_qualidade', 'reavaliacao_solicitada'].includes(m.status);
           const newScore = isQualityTurn ? 100 : m.score;
-          const note = isQualityTurn 
-            ? 'Monitoria aprovada automaticamente (nota 100%) por perda de prazo da Equipe de Qualidade.' 
+          const note = isQualityTurn
+            ? 'Monitoria aprovada automaticamente (nota 100%) por perda de prazo da Equipe de Qualidade.'
             : 'Monitoria aprovada automaticamente por perda de prazo da Equipe de Suporte.';
-          
-        const historyEntry: MonitoriaHistoryEntry = {
-          action: 'Finalização Automática (Prazo)',
-          by_id: 'system',
-          by_name: 'Sistema Automático',
-          at: nowStr,
-          note
-        };
 
-        const update = {
-          status: 'concluida',
-          score: newScore,
-          resolution_type: 'automatic',
-          updated_at: nowStr,
-          history: [...(m.history || []), historyEntry]
-        };
+          const historyEntry: MonitoriaHistoryEntry = {
+            action: 'Finalização Automática (Prazo)',
+            by_id: 'system',
+            by_name: 'Sistema Automático',
+            at: nowStr,
+            note
+          };
+
+          const update = {
+            status: 'concluida',
+            score: newScore,
+            resolution_type: 'automatic',
+            updated_at: nowStr,
+            history: [...(m.history || []), historyEntry]
+          };
 
           if (!supabase) {
             await mockDb.update('monitorias', m.id, update);
@@ -187,30 +177,29 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
             await supabase.from('monitorias').update(update).eq('id', m.id);
           }
         }
-        
-        // Re-load silently
-        setTimeout(() => {
-          load(true);
-        }, 50);
+
+        setTimeout(() => { loadRef.current(true); }, 50);
         return;
       }
 
       setMonitorias(fetchedMonitorias.map((r: any) => ({ ...r, history: r.history || [], answers: r.answers || {} })));
-      setUsers(fetchedUsers as User[]);
-      setTeams(fetchedTeams || []);
-      setForms(fetchedForms || []);
-    } catch (e: any) { 
+    } catch (e: any) {
       console.error(e);
       if (e.message === 'timeout') {
         toast.error('O servidor não respondeu. Tente alternar entre os menus para recarregar.');
       }
     }
-    finally { 
-      setLoading(false); 
-      hasLoadedOnce.current = true;
-      toast.dismiss('mon-retry');
-    }
-  }, [user]);
+finally {
+    setLoading(false);
+    hasLoadedOnce.current = true;
+    fetchingRef.current = false;
+    toast.dismiss('mon-retry');
+  }
+  }, []);
+
+  // Ref-bridge para load — callback estável para Realtime e reconexão
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   // Failsafe contra skeletons infinitos (comum em abas suspensas)
   useEffect(() => {
@@ -227,59 +216,65 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
     return () => clearTimeout(timer);
   }, [loading]);
 
-  // Recarrega sempre que a aba de monitorias for focada/exibida
+  // Carrega monitorias quando user está disponível (1x apenas)
   useEffect(() => {
-    if (activeTab === 'monitorias') {
+    if (user) {
+      load();
+    }
+  }, [user, load]);
+
+  // Recarrega quando volta para a aba monitorias (só se já carregou antes)
+  useEffect(() => {
+    if (activeTab === 'monitorias' && user && hasLoadedOnce.current) {
       console.log('[Monitorias] Aba selecionada, recarregando...');
       load();
     }
-  }, [activeTab, load]);
+  }, [activeTab, user, load]);
 
-  // Listener de reconexão automática e recarga de monitorias
+  // Listener de reconexão automática
   useEffect(() => {
     const handleReconnect = () => {
-      console.log('[Monitorias] 🔄 Reconexão detectada. Recarregando dados...');
-      load();
-    };
-    const handleRefresh = () => {
-      console.log('[Monitorias] 🔄 Notificação de nova monitoria recebida. Recarregando dados...');
-      load(true);
+      console.log('[Monitorias] Reconexão detectada. Recarregando monitorias...');
+      hasLoadedOnce.current = false;
+      loadRef.current();
     };
     window.addEventListener('qualitrack:reconnected', handleReconnect);
-    window.addEventListener('qualitrack:refresh-monitorias', handleRefresh);
     return () => {
       window.removeEventListener('qualitrack:reconnected', handleReconnect);
-      window.removeEventListener('qualitrack:refresh-monitorias', handleRefresh);
     };
-  }, [load]);
+  }, []);
 
-  // Realtime Supabase updates
+  // Realtime Supabase updates — canal conecta 1x por user, callback via ref
   useEffect(() => {
-    if (!supabase) return;
-    
-    console.log('[Monitorias] 🔌 Conectando canal Realtime Postgres...');
+    if (!supabase || !user) return;
+
+    let mounted = true;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
     const channel = supabase
       .channel('monitorias-realtime-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, (payload) => {
-        console.log('[Monitorias] ⚡ Alteração Postgres recebida via Realtime:', payload);
-        load(true);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, () => {
+        if (!mounted) return;
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          loadRef.current(true);
+        }, 300);
       })
       .subscribe();
 
     return () => {
-      console.log('[Monitorias] 🔌 Desconectando canal Realtime Postgres...');
+      mounted = false;
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
-  }, [load]);
-
-  useEffect(() => { load(); }, [load]);
+  }, [user]);
 
   const getName = (id: string, isEvaluator?: boolean, snapshotName?: string) => {
     if (isEvaluator && (user?.role === 'suporte' || user?.role === 'gestor_suporte')) {
       return 'Equipe de Qualidade';
     }
     if (snapshotName) return snapshotName;
-    return users.find(u => u.id === id)?.name || id;
+    return staticData.users.find(u => u.id === id)?.name || id;
   };
 
   const filtered = useMemo(() => {
@@ -466,32 +461,31 @@ if (user?.role === 'gestor_suporte') {
       setActionModal(null);
       setActionNote('');
       load();
-      window.dispatchEvent(new CustomEvent('qualitrack:refresh-monitorias'));
     } catch (e: any) {
       toast.error('Erro: ' + e.message);
     } finally { setSubmitting(false); }
   };
 
   const activeTeams = useMemo(() => {
-    let filtered = teams.filter(t => t.active !== false);
-  if (user?.role === 'gestor_suporte' && user.team_ids?.length) {
-    filtered = filtered.filter(t => user.team_ids!.includes(t.id));
-  }
+    let filtered = staticData.teams.filter(t => t.active !== false);
+    if (user?.role === 'gestor_suporte' && user.team_ids?.length) {
+      filtered = filtered.filter(t => user.team_ids!.includes(t.id));
+    }
     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [teams, user]);
+  }, [staticData.teams, user]);
 
   const activeSuportes = useMemo(() => {
-    let filtered = users.filter(u => u.role === 'suporte' && u.active !== false);
-  if (user?.role === 'gestor_suporte' && user.team_ids?.length) {
-    filtered = filtered.filter(u => u.team_ids?.some(tid => user.team_ids!.includes(tid)));
-  }
+    let filtered = staticData.users.filter(u => u.role === 'suporte' && u.active !== false);
+    if (user?.role === 'gestor_suporte' && user.team_ids?.length) {
+      filtered = filtered.filter(u => u.team_ids?.some(tid => user.team_ids!.includes(tid)));
+    }
     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [users, user]);
+  }, [staticData.users, user]);
 
   const activeAuditors = useMemo(() => {
-    const list = users.filter(u => ['qualidade', 'gestor_qualidade', 'admin'].includes(u.role) && u.active !== false);
+    const list = staticData.users.filter(u => ['qualidade', 'gestor_qualidade', 'admin'].includes(u.role) && u.active !== false);
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [users]);
+  }, [staticData.users]);
 
   if (loading) return (
     <div className="space-y-4">
@@ -534,7 +528,7 @@ if (user?.role === 'gestor_suporte') {
 
             {/* Date Filter */}
             <div className="flex-1 min-w-[260px]">
-              <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-10 group hover:border-brand-accent transition-all relative shadow-sm">
+              <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-10 group hover:border-brand-accent transition-colors relative shadow-sm">
                 <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
                   <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
                   <input
@@ -689,7 +683,7 @@ if (user?.role === 'gestor_suporte') {
                     <div className="flex items-center gap-2 text-[10px] font-bold text-brand-muted uppercase tracking-tight flex-wrap">
                       <span className="flex items-center gap-1"><UserIcon className="w-3 h-3 text-brand-highlight" />{getName(m.evaluated_id, false, m.evaluated_name)}</span>
                       <span className="text-brand-muted/20">•</span>
-                      <span className="flex items-center gap-1"><Tag className="w-3 h-3 text-brand-highlight" />{m.team_name || teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
+                      <span className="flex items-center gap-1"><Tag className="w-3 h-3 text-brand-highlight" />{m.team_name || staticData.teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
                       <span className="text-brand-muted/20">•</span>
                       <span className="flex items-center gap-1"><Shield className="w-3 h-3 text-brand-highlight" />{getName(m.evaluator_id, true, m.evaluator_name)}</span>
                     </div>
@@ -755,7 +749,7 @@ if (user?.role === 'gestor_suporte') {
                                         <span className="text-[11px] font-bold text-brand-primary leading-none">{h.action}</span>
                                         <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70">
                                           {(() => {
-                                            const actor = users.find(u => u.id === h.by_id);
+                                            const actor = staticData.users.find(u => u.id === h.by_id);
                                             const isSupportView = user?.role === 'suporte' || user?.role === 'gestor_suporte';
                                             const isQualityActor = actor && ['qualidade', 'gestor_qualidade'].includes(actor.role);
                                             return (isSupportView && isQualityActor) ? 'Equipe de Qualidade' : h.by_name;
