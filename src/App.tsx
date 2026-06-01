@@ -66,14 +66,10 @@ export default function App() {
     applyTheme();
 
     if (currentUser) {
-      localStorage.setItem('qualitrack_theme', theme);
       const resolved = theme === 'system'
         ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' as const : 'light' as const)
         : theme;
-      if (resolved !== lastDbThemeRef.current && userData?.id) {
-        lastDbThemeRef.current = resolved;
-        upsertUserPreferences(userData.id, { theme: resolved });
-      }
+      localStorage.setItem('qualitrack_theme', resolved);
     }
 
     if (theme === 'system') {
@@ -82,7 +78,7 @@ export default function App() {
       mediaQuery.addEventListener('change', listener);
       return () => mediaQuery.removeEventListener('change', listener);
     }
-  }, [theme, currentUser, userData?.id]);
+  }, [theme, currentUser]);
 
   const prevUserIdRef = useRef<string | null>(null);
 
@@ -914,7 +910,7 @@ function MainApp({
   isSystemOnline,
   isReconnecting
 }: any) {
-  const { teams, userPreferences } = useStaticData();
+  const { teams, userPreferences, loading: staticDataLoading } = useStaticData();
   const [showTeamList, setShowTeamList] = React.useState(false);
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | 'color' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
@@ -946,6 +942,8 @@ function MainApp({
   const prevThemeUserIdRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!userData?.id) return;
+    if (staticDataLoading) return;
+
     const userId = userData.id;
     const isLogin = prevThemeUserIdRef.current !== userId;
     prevThemeUserIdRef.current = userId;
@@ -957,7 +955,7 @@ function MainApp({
       lastDbThemeRef.current = dbTheme;
       setTheme(dbTheme);
       localStorage.setItem('qualitrack_theme', dbTheme);
-    } else if (isLogin) {
+    } else if (isLogin && myPrefs !== undefined) {
       const osDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const resolved = osDark ? 'dark' as const : 'light' as const;
       lastDbThemeRef.current = resolved;
@@ -965,7 +963,25 @@ function MainApp({
       localStorage.setItem('qualitrack_theme', resolved);
       upsertUserPreferences(userId, { theme: resolved });
     }
-  }, [userData?.id, userPreferences]);
+  }, [userData?.id, userPreferences, staticDataLoading]);
+
+  // Persiste tema no DB quando usuário muda manualmente (após sync inicial)
+  const prevThemeForDbRef = React.useRef<'light' | 'dark' | 'system' | null>(null);
+  React.useEffect(() => {
+    if (!userData?.id) return;
+    if (staticDataLoading) return;
+    if (theme === prevThemeForDbRef.current) return;
+    prevThemeForDbRef.current = theme;
+
+    const resolved = theme === 'system'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' as const : 'light' as const)
+      : theme;
+
+    if (resolved !== lastDbThemeRef.current) {
+      lastDbThemeRef.current = resolved;
+      upsertUserPreferences(userData.id, { theme: resolved });
+    }
+  }, [theme, userData?.id, staticDataLoading]);
 
   // Sincroniza sidebar_color do banco (com fallback user_metadata) ao logar / F5
   React.useEffect(() => {
