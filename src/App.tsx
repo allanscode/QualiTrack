@@ -14,6 +14,21 @@ import { User, ROLE_LABELS, UserPreferences } from './types';
 import { QualityConfigProvider } from './lib/useQualityConfig';
 import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
 
+// --- Theme Context ---
+type Theme = 'light' | 'dark' | 'system';
+interface ThemeContextType {
+  theme: Theme;
+  setTheme: React.Dispatch<React.SetStateAction<Theme>>;
+  resolvedTheme: 'light' | 'dark';
+}
+const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
+export const useTheme = () => {
+  const context = React.useContext(ThemeContext);
+  if (!context) throw new Error('useTheme must be used within a ThemeProvider');
+  return context;
+};
+// --- Fim do Theme Context ---
+
 // Components
 import DashboardMain from './components/dashboard/DashboardMain';
 import MonitoriaList from './components/MonitoriaList';
@@ -28,9 +43,72 @@ const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 const SESSION_REFRESH_MS = 50 * 60 * 1000;
 const MOCK_SESSION_KEY = 'qualitrack_session';
 const LAST_ACTIVITY_KEY = 'qualitrack_last_activity';
+
+// Componente do Provedor de Tema
+const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('qualitrack_theme');
+    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+    return 'system';
+  });
+
+  const resolvedTheme = React.useMemo(() => {
+    if (theme === 'system') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return theme;
+  }, [theme]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (resolvedTheme === 'dark') {
+      root.classList.add('dark');
+      root.style.colorScheme = 'dark';
+    } else {
+      root.classList.remove('dark');
+      root.style.colorScheme = 'light';
+    }
+  }, [resolvedTheme]);
+
+  // Listener para mudança de tema do OS
+  useEffect(() => {
+    if (theme !== 'system') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const listener = () => {
+      // Força um re-render para que `resolvedTheme` seja recalculado
+      setTheme('system');
+    };
+    mediaQuery.addEventListener('change', listener);
+    return () => mediaQuery.removeEventListener('change', listener);
+  }, [theme]);
+
+  // Salva no localStorage
+  useEffect(() => {
+    // Salva apenas o valor resolvido quando logado, para consistência com o script do index.html
+    // A persistência no banco é tratada separadamente no MainApp
+    if (localStorage.getItem('qualitrack_session') || localStorage.getItem('sb-amyfyngzkqqzixmreeih-auth-token')) {
+       localStorage.setItem('qualitrack_theme', resolvedTheme);
+    }
+  }, [resolvedTheme]);
+
+
+  const value = { theme, setTheme, resolvedTheme };
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+};
+
 const lastDbThemeRef = { current: null as ('light' | 'dark' | null) };
 
 export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
+function AppContent() {
+  const { theme, setTheme } = useTheme();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userData, setUserData] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,47 +116,6 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
-    const saved = localStorage.getItem('qualitrack_theme');
-    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
-    return 'system';
-  });
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const applyTheme = () => {
-      let isDark = false;
-      if (theme === 'system') {
-        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      } else {
-        isDark = theme === 'dark';
-      }
-
-      if (isDark) {
-        root.classList.add('dark');
-        root.style.colorScheme = 'dark';
-      } else {
-        root.classList.remove('dark');
-        root.style.colorScheme = 'light';
-      }
-    };
-
-    applyTheme();
-
-    if (currentUser) {
-      const resolved = theme === 'system'
-        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' as const : 'light' as const)
-        : theme;
-      localStorage.setItem('qualitrack_theme', resolved);
-    }
-
-    if (theme === 'system') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const listener = () => applyTheme();
-      mediaQuery.addEventListener('change', listener);
-      return () => mediaQuery.removeEventListener('change', listener);
-    }
-  }, [theme, currentUser]);
 
   const prevUserIdRef = useRef<string | null>(null);
 

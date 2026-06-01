@@ -2,8 +2,10 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Calendar, X, RefreshCw } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
 import CustomSelect from '../ui/CustomSelect';
+import { useTheme } from '../../App';
 
 export default function FilterBar() {
+  const { resolvedTheme } = useTheme();
   const { filters, setFilters, users, teams, loading, refresh, user, allMonitorias } = useDashboard();
 
   const defaults = useMemo(() => ({
@@ -90,6 +92,7 @@ export default function FilterBar() {
                 <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
                 <input
                   type="date"
+                  style={{ colorScheme: resolvedTheme }}
                   value={filters.startDate}
                   onChange={e => setFilters({ ...filters, startDate: e.target.value })}
                   className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0"
@@ -100,6 +103,7 @@ export default function FilterBar() {
                 <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
                 <input
                   type="date"
+                  style={{ colorScheme: resolvedTheme }}
                   value={filters.endDate}
                   onChange={e => setFilters({ ...filters, endDate: e.target.value })}
                   className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0"
