@@ -19,7 +19,7 @@
 
 ```
 src/
-├── App.tsx # Entry point: Auth + Layout + Tab Navigation + Session + Sidebar Accordion
+├── App.tsx # Entry point: Auth + Layout + Tab Navigation + Session + Sidebar Accordion + isDarkColor (module scope)
 ├── main.tsx                         # React DOM render
 ├── index.css # Design tokens + CSS global (Tailwind v4 @theme) + date picker color-scheme
 ├── types.ts                         # Tipos TypeScript globais (User, Monitoria, Team, etc.)
@@ -278,6 +278,33 @@ Os perfis de usuário (roles) são mapeados de IDs técnicos para nomes amigáve
 - **Color Picker:** Um dos 4 accordion sections. 20 presets de cor, persistidos via `upsertUserPreferences()` na tabela `user_preferences` (JSONB `sidebar_color`). Cache local em `localStorage` (`qualitrack_sidebar_color_{email}`). Fallback: `user_metadata.sidebar_color` migrado para DB automaticamente. Seleção auto-fecha o accordion.
 - **Date Picker (Dark Mode):** `input[type="date"]` usa `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark` em `index.css`. Previne flash preto ao abrir calendário em light mode.
 - **Scrollbar Gutter:** Container de scroll principal usa `scrollbar-gutter: stable` (inline style) para evitar layout shift quando scrollbar aparece/desaparece.
+
+### Sidebar Contrast (YIQ Luminance)
+
+A sidebar suporta cores customizadas (20 presets de cor). O contraste de texto, ícones e bordas é determinado dinamicamente por um cálculo YIQ de luminância, garantindo legibilidade tanto em sidebars claras quanto escuras.
+
+**Função utilitária** (`isDarkColor`):
+- Definida no **escopo do módulo** de `App.tsx` (fora de qualquer componente)
+- Assinatura: `isDarkColor(hex: string, resolvedTheme: 'light' | 'dark') => boolean`
+- Calcula a luminância YIQ: `(r*299 + g*587 + b*114) / 1000`
+- Retorna `true` se luma < 128 (cor escura) ou se o hex é inválido/vazio e o tema é dark
+- Recebe `resolvedTheme` como parâmetro explícito (nunca depende de closure de componente)
+
+**Variantes derivadas** (computadas em `MainApp` via `const { resolvedTheme } = useTheme()`):
+
+| Variável | Light Sidebar | Dark Sidebar |
+|----------|---------------|--------------|
+| `sidebarContrastClass` | `'text-slate-900'` | `'text-white'` |
+| `sidebarBorderClass` | `'border-black/5'` | `'border-white/5'` |
+| `sidebarContrastSubtle` | `'text-slate-700/60'` | `'text-white/40'` |
+| `sidebarIsDark` | `false` | `true` |
+
+- `motion.aside` usa `${sidebarContrastClass}` para texto e `${sidebarBorderClass}` para borda
+- `NavItem` recebe `isDark={sidebarIsDark}` como prop — alterna classes de hover/active/background
+- Footer/Logout buttons usam ternárias com `sidebarIsDark`
+- Logo div usa `sidebarIsDark` para `bg-white/10` vs `bg-black/10`
+
+**Fallback**: cor vazia/inválida em light mode → sidebar clara (texto escuro); cor vazia/inválida em dark mode → sidebar escura (texto branco). Isso garante que a sidebar padrão (sem cor customizada) sempre tenha contraste correto.
 
 ### Tipografia
 - **Fonte**: Inter (Google Fonts) com fallback para system-ui

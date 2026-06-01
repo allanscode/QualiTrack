@@ -29,6 +29,17 @@ export const useTheme = () => {
 };
 // --- Fim do Theme Context ---
 
+// --- Sidebar Contrast Utility ---
+const isDarkColor = (hex: string, resolvedTheme: 'light' | 'dark') => {
+  if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return resolvedTheme === 'dark';
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq < 128;
+};
+// --- Fim do Sidebar Contrast Utility ---
+
 // Components
 import DashboardMain from './components/dashboard/DashboardMain';
 import MonitoriaList from './components/MonitoriaList';
@@ -947,6 +958,7 @@ function MainApp({
   isSystemOnline,
   isReconnecting
 }: any) {
+  const { resolvedTheme } = useTheme();
   const { teams, userPreferences, loading: staticDataLoading } = useStaticData();
   const [showTeamList, setShowTeamList] = React.useState(false);
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | 'color' | null>(null);
@@ -1078,16 +1090,7 @@ function MainApp({
   const teamNames = userTeams.map(t => t.name).join(', ');
 
   // Contrast logic
-  const isDarkColor = (hex: string) => {
-    if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return theme === 'dark';
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-    return yiq < 128;
-  };
-  
-  const isSidebarLight = !isDarkColor(sidebarColor);
+  const isSidebarLight = !isDarkColor(sidebarColor, resolvedTheme);
   const sidebarIsDark = !isSidebarLight;
   const sidebarContrastClass = isSidebarLight ? 'text-slate-900' : 'text-white';
   const sidebarContrastSubtle = isSidebarLight ? 'text-slate-700/60' : 'text-white/40';
