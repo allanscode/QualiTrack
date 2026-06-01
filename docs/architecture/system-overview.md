@@ -59,6 +59,7 @@ Admin --> Edge
 - Ref-bridge pattern para `extendSession` (useCallback não pode ser chamado dentro de useEffect)
 - `handleLogout({ silent?, message? })` — aceita options para evitar crash com MouseEvent no Sonner
 - Sidebar com popover accordion (4 seções recolhíveis: Equipes, Avatar, Aparência, Cor do Menu; single-open via `sidebarAccordion`)
+- Sidebar contrast dinâmico via `isDarkColor()` (YIQ luminance) — função no escopo do módulo, variantes derivadas em `MainApp`
 - Profile toggle com classe `profile-toggle-btn` para exclusão do click-outside handler
 - `scrollbar-gutter: stable` no container de scroll principal para evitar layout shift
 

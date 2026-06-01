@@ -114,6 +114,7 @@ QualiTrack/
 10. **Nunca enviar `team_ids` em payload da tabela `users`**: O relacionamento N:N usuário↔equipe é feito via tabela `user_teams`. O frontend enriquece o objeto `User` com `team_ids: string[]` via `enrichUserWithTeamIds()`, mas **nunca** envia `team_ids` em upsert/update Supabase da tabela `users`. Use `syncUserTeams()` para sincronizar.
 11. **`StaticDataContext` é a única fonte de dados cadastrais**: Users, teams, forms, dissatisfaction_fields, user_teams e user_preferences são carregados **1x** por `StaticDataProvider`. Nenhum componente deve fazer fetch independente dessas tabelas. Preferências de usuário (tema, sidebar_color) são lidas de `useStaticData().userPreferences` — nunca via query Supabase direta. Escrita via `upsertUserPreferences()` apenas em ação explícita do usuário (nunca em sync de leitura). Use `lastDbThemeRef` (module-level) para prevenir auto-save loop.
 12. **Fetch guards contra fetch storms**: Todo componente que faz fetch de dados dinâmicos (monitorias, etc.) deve usar `fetchingRef` para impedir fetchs paralelos/re-entrantes. StaticDataContext já usa `fetchingRef` + `fetchedRef`. DashboardContext e MonitoriaList usam `fetchingRef` + `hasLoadedOnce`.
+13. **Utilitários de contraste no escopo do módulo**: `isDarkColor(hex, resolvedTheme)` deve ser declarada **fora** de qualquer componente (escopo do módulo em `App.tsx`), recebendo `resolvedTheme` como parâmetro explícito em vez de depender do closure do componente. Dentro de `MainApp`, use `const { resolvedTheme } = useTheme()` para obter o valor. Variantes derivadas (`sidebarContrastClass`, `sidebarBorderClass`, `sidebarContrastSubtle`, `sidebarIsDark`) são computadas dentro de `MainApp` a partir de `isDarkColor(sidebarColor, resolvedTheme)`. Nunca defina `isDarkColor` dentro de um componente — risk de ReferenceError e re-criação a cada render.
 
 ---
 
@@ -176,6 +177,17 @@ Use **sempre** os tokens semânticos definidos em `index.css`. Nunca hardcode co
 
 ### Ícones
 Use **apenas** `lucide-react`. Nunca introduza outra lib de ícones. Tamanho padrão: `w-5 h-5`.
+
+### Sidebar Contrast (YIQ Luminance)
+A sidebar suporta cores customizadas (20 presets). O contraste de texto/ícones é determinado por cálculo YIQ de luminância:
+
+- **`isDarkColor(hex, resolvedTheme)`** — função no escopo do módulo (fora de componentes). Retorna `true` se a cor é escura (luma < 128) ou se o hex é inválido/vazio e o tema é dark.
+- **Variantes derivadas** (computadas em `MainApp`):
+  - `sidebarContrastClass` — `'text-slate-900'` (light sidebar) ou `'text-white'` (dark sidebar)
+  - `sidebarBorderClass` — `'border-black/5'` ou `'border-white/5'`
+  - `sidebarContrastSubtle` — `'text-slate-700/60'` ou `'text-white/40'`
+  - `sidebarIsDark` — repassado como prop `isDark` para `NavItem`
+- **Fallback**: cor vazia/inválida em light mode → sidebar light; cor vazia/inválida em dark mode → sidebar dark (texto branco)
 
 ---
 
@@ -435,6 +447,10 @@ Antes de commitar qualquer alteração, verifique:
 | Sidebar popover sem accordion (UX confusa) | **MÉDIA** | ✅ Resolvido | Refatorado para accordion com 4 seções, single-open, AnimatePresence |
 | Profile toggle conflito com click-outside | **MÉDIA** | ✅ Resolvido | Classe `profile-toggle-btn` nos dois botões (avatar + nome) para exclusão no handler |
 | Layout shift por scrollbar | **BAIXA** | ✅ Resolvido | `scrollbar-gutter: stable` no container de scroll principal |
+| Sidebar sem contraste dinâmico (YIQ) | **MÉDIA** | ✅ Resolvido | `isDarkColor(hex, resolvedTheme)` no escopo do módulo + variantes derivadas em `MainApp` |
+| Theme race condition (F5) | **ALTA** | ✅ Resolvido | `lastDbThemeRef` module-level + dedicated manual-theme-persist effect |
+| Datepicker flash preto em light mode | **MÉDIA** | ✅ Resolvido | `style={{ colorScheme: resolvedTheme }}` inline + CSS global `html:not(.dark)` rule |
+| `isDarkColor` dentro de componente (ReferenceError risk) | **ALTA** | ✅ Resolvido | Movida para escopo do módulo com `resolvedTheme` como parâmetro explícito |
 
 ---
 
@@ -471,6 +487,7 @@ Antes de commitar qualquer alteração, verifique:
 - **Date Picker**: `input[type="date"]` deve usar `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark` para evitar flash preto ao abrir calendário em light mode.
 - **Sidebar Accordion**: Seções colapsáveis no popover de perfil seguem padrão single-open (`sidebarAccordion` state). `AnimatePresence initial={false}` + `ChevronDown` com `rotate-180`. Seleção de cor auto-fecha. Botoes toggle do perfil usam classe `profile-toggle-btn` para exclusão do click-outside handler.
 - **Scrollbar Gutter**: Container de scroll principal usa `scrollbar-gutter: stable` para evitar layout shift quando scrollbar aparece/desaparece.
+- **Sidebar Contrast**: `isDarkColor(hex, resolvedTheme)` no escopo do módulo — recebe `resolvedTheme` como parâmetro. Em `MainApp`, use `const { resolvedTheme } = useTheme()`. Variantes: `sidebarContrastClass`, `sidebarBorderClass`, `sidebarContrastSubtle`, `sidebarIsDark`. `NavItem` recebe `isDark` prop. Nunca defina `isDarkColor` dentro de um componente.
 - **Git**: Branch por feature/fix; delete merged branches; PR via GitHub.
 
 ---
