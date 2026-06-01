@@ -1077,6 +1077,19 @@ function MainApp({
   const userTeams = teams.filter(t => (userData?.team_ids || []).includes(t.id));
   const teamNames = userTeams.map(t => t.name).join(', ');
 
+  // Contrast logic
+  const isDarkColor = (hex: string) => {
+    if (!hex) return true;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+    return yiq < 128;
+  };
+  
+  const sidebarIsDark = sidebarColor ? isDarkColor(sidebarColor) : true;
+  const sidebarContrastClass = sidebarIsDark ? 'text-white' : 'text-slate-900';
+
   const sidebarStyle = {
     backgroundColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})`,
   };
@@ -1106,7 +1119,7 @@ function MainApp({
       }
       toggleSidebar();
     }}
-        className="text-white flex flex-col relative z-20 transition-all border-r border-white/5 group/sidebar cursor-pointer"
+        className={`${sidebarContrastClass} flex flex-col relative z-20 transition-all border-r ${sidebarIsDark ? 'border-white/5' : 'border-black/5'} group/sidebar cursor-pointer`}
       >
         {/* Floating toggle button on hover */}
         <div 

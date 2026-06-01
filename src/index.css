@@ -125,6 +125,11 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-brand-accent); }
 
 /* ── Date input ── */
+html:not(.dark) input[type="date"],
+html:not(.dark) input[type="date"]::-webkit-calendar-picker-indicator {
+    color-scheme: light !important;
+}
+
 input[type="date"]::-webkit-calendar-picker-indicator {
   position: absolute;
   left: 0;
