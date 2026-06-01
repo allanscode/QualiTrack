@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus, DissatisfactionField, UserTeam } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
-import { 
+import { useTheme } from '../App';
+import {  
   ChevronRight, 
   ChevronLeft, 
   Save, 
@@ -43,6 +44,7 @@ export default function MonitoriaForm({
   onSaved: () => void;
   initialData?: Monitoria;
 }) {
+  const { resolvedTheme } = useTheme();
   const { config: qualityConfig, getLevelForScore, isAboveTarget } = useQualityConfig();
   const staticData = useStaticData();
   const isAdmin = user?.role === 'admin';
@@ -480,13 +482,14 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Data do Ticket *</label>
                   <div className="relative">
                     <Calendar className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted/50" />
-                    <input 
-                      type="date" 
-                      value={header.ticket_date} 
-                      onChange={e => setHeader({...header, ticket_date: e.target.value})} 
-                      disabled={isViewOnly} 
-                      className="w-full bg-surface-subtle border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-colors outline-none" 
-                    />
+    <input
+      type="date"
+      style={{ colorScheme: resolvedTheme }}
+      value={header.ticket_date}
+      onChange={e => setHeader({...header, ticket_date: e.target.value})}
+      disabled={isViewOnly}
+      className="w-full bg-surface-subtle border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-colors outline-none"
+    />
                   </div>
                 </div>
 

@@ -51,30 +51,6 @@ color-scheme: light;
   --shadow-premium: 0 10px 40px -10px rgba(45, 58, 58, 0.1);
   --shadow-premium-sm: 0 4px 20px -5px rgba(45, 58, 58, 0.05);
 
-  /* Date color-scheme token (explicit in :root to eliminate var() fallback delay) */
-  --date-color-scheme: light;
-
-  /* Role Sidebar Colors (Light Mode Default) */
-  --sidebar-bg-admin: #2D3A3A;
-  --sidebar-bg-qualidade: #065F46;
-  --sidebar-bg-gestor-qualidade: #4338CA;
-  --sidebar-bg-gestor-suporte: #B45309;
-  --sidebar-bg-suporte: #1E40AF;
-
-  /* Functional color tokens (light mode) */
-  --error-color: #DC2626;
-  --error-bg: #FEF2F2;
-  --error-pastel: #FCA5A5;
-  --error-pastel-bg: #3B1C1C;
-  --warning-color: #D97706;
-  --warning-bg: #FFFBEB;
-  --warning-pastel: #FCD34D;
-  --warning-pastel-bg: #3B2F0A;
-  --success-color: #059669;
-  --success-bg: #ECFDF5;
-  --success-pastel: #6EE7B7;
-  --success-pastel-bg: #1A3A2A;
-
   /* Chart palette (light mode) */
   --chart-excelente: #818CF8;
   --chart-aceitavel: #34D399;
@@ -159,15 +135,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   padding: 0;
   cursor: pointer;
   opacity: 0;
-}
-
-input[type="date"] {
-  color-scheme: var(--date-color-scheme, light);
-  transition: none;
-}
-
-.dark input[type="date"] {
-  --date-color-scheme: dark;
 }
 
 input[type="date"]::-webkit-datetime-edit {

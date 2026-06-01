@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase, mockDb } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, User, Team, EvaluationForm, MonitoriaHistoryEntry } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
+import { useTheme } from '../App';
 import { resolveContestationResult } from '../lib/contestation';
 import { 
   Search, 
@@ -41,6 +42,7 @@ import ActionDeadlineClock from './ui/ActionDeadlineClock';
 import { useQualityConfig } from '../lib/useQualityConfig';
 
 export default function MonitoriaList({ user, onNew, activeTab }: { user: User | null; onNew: () => void; activeTab?: string }) {
+  const { resolvedTheme } = useTheme();
   const { config: qualityConfig, getLevelForScore } = useQualityConfig();
   const staticData = useStaticData();
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
@@ -532,21 +534,23 @@ if (user?.role === 'gestor_suporte') {
                 <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
                   <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
                   <input
-                    type="date"
-                    value={startDate}
-                    onChange={e => setStartDate(e.target.value)}
-                    className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0"
-                  />
+                      type="date"
+                      style={{ colorScheme: resolvedTheme }}
+                      value={startDate}
+                      onChange={e => setStartDate(e.target.value)}
+                      className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0"
+                    />
                 </div>
                 <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest mx-0.5">até</span>
                 <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
                   <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
                   <input
-                    type="date"
-                    value={endDate}
-                    onChange={e => setEndDate(e.target.value)}
-                    className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0"
-                  />
+                      type="date"
+                      style={{ colorScheme: resolvedTheme }}
+                      value={endDate}
+                      onChange={e => setEndDate(e.target.value)}
+                      className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0"
+                    />
                 </div>
               </div>
             </div>
