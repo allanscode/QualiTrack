@@ -1077,6 +1077,22 @@ function MainApp({
   const userTeams = teams.filter(t => (userData?.team_ids || []).includes(t.id));
   const teamNames = userTeams.map(t => t.name).join(', ');
 
+  // Contrast logic
+  const isDarkColor = (hex: string) => {
+    if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return theme === 'dark';
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+    return yiq < 128;
+  };
+  
+  const isSidebarLight = !isDarkColor(sidebarColor);
+  const sidebarIsDark = !isSidebarLight;
+  const sidebarContrastClass = isSidebarLight ? 'text-slate-900' : 'text-white';
+  const sidebarContrastSubtle = isSidebarLight ? 'text-slate-700/60' : 'text-white/40';
+  const sidebarBorderClass = isSidebarLight ? 'border-black/5' : 'border-white/5';
+
   const sidebarStyle = {
     backgroundColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})`,
   };
@@ -1093,7 +1109,7 @@ function MainApp({
         )}
       </AnimatePresence>
 
-  <motion.aside
+    <motion.aside
     initial={false}
     animate={{ width: isSidebarOpen ? 260 : 80 }}
     transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -1106,7 +1122,7 @@ function MainApp({
       }
       toggleSidebar();
     }}
-        className="text-white flex flex-col relative z-20 transition-all border-r border-white/5 group/sidebar cursor-pointer"
+        className={`${sidebarContrastClass} flex flex-col relative z-20 transition-all border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
       >
         {/* Floating toggle button on hover */}
         <div 
@@ -1136,10 +1152,10 @@ function MainApp({
 
         {/* Navigation */}
         <nav className="flex-1 px-3 space-y-1 py-4">
-        <NavItem icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
-        <NavItem icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
+        <NavItem isDark={sidebarIsDark} icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
+        <NavItem isDark={sidebarIsDark} icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
         {userData?.role === 'admin' && (
-          <NavItem icon={<Settings className="w-5 h-5" />} label="Configurações" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} isOpen={sidebarTextVisible} />
+          <NavItem isDark={sidebarIsDark} icon={<Settings className="w-5 h-5" />} label="Configurações" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} isOpen={sidebarTextVisible} />
         )}
         </nav>
 
@@ -1149,7 +1165,7 @@ function MainApp({
         <div className="flex items-center gap-3 p-2 rounded-xl bg-black/10 overflow-hidden">
         <button
           onClick={() => setShowTeamList(!showTeamList)}
-          className="profile-toggle-btn w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 hover:bg-white/20 transition-all relative cursor-pointer"
+          className="profile-toggle-btn w-9 h-9 rounded-lg bg-black/10 flex items-center justify-center flex-shrink-0 hover:bg-black/20 transition-all relative cursor-pointer"
         >
             <UserIcon className="w-5 h-5" />
             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
@@ -1160,15 +1176,15 @@ function MainApp({
           onClick={() => setShowTeamList(!showTeamList)}
           className="profile-toggle-btn min-w-0 flex-1 py-1 text-left cursor-pointer hover:opacity-80 transition-opacity"
         >
-              <p className="text-xs font-bold text-white leading-tight truncate">{userData?.name}</p>
-              <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mt-0.5 leading-tight truncate">
+              <p className="text-xs font-bold leading-tight truncate">{userData?.name}</p>
+              <p className={`text-[10px] font-medium ${sidebarContrastSubtle} uppercase tracking-wider mt-0.5 leading-tight truncate`}>
                 {userData ? ROLE_LABELS[userData.role] : ''}
               </p>
             </button>
 
             <button
               onClick={handleLogout}
-              className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-colors cursor-pointer flex-shrink-0"
+              className={`p-1.5 ${sidebarIsDark ? 'hover:bg-white/10 text-white/40 hover:text-white' : 'hover:bg-black/10 text-slate-900/40 hover:text-slate-900'} rounded-lg transition-colors cursor-pointer flex-shrink-0`}
               title="Sair"
             >
               <LogOut className="w-4 h-4" />
@@ -1457,24 +1473,24 @@ function MainApp({
   );
 }
 
-function NavItem({ icon, label, active, onClick, isOpen }: any) {
+function NavItem({ icon, label, active, onClick, isOpen, isDark }: any) {
   return (
     <button 
       onClick={onClick}
       className={`
         w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative
         ${active 
-          ? 'bg-white/10 text-white' 
-          : 'text-white/40 hover:text-white hover:bg-white/5'}
+          ? (isDark ? 'bg-white/10 text-white' : 'bg-black/10 text-slate-900') 
+          : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
       `}
     >
       {active && (
         <motion.div 
           layoutId="active-bar"
-          className="absolute left-0 w-1 h-6 bg-white rounded-full"
+          className={`absolute left-0 w-1 h-6 rounded-full ${isDark ? 'bg-white' : 'bg-slate-900'}`}
         />
       )}
-      <div className={`flex-shrink-0 ${active ? 'text-white' : 'text-white/30 group-hover:text-white'}`}>
+      <div className={`${active ? 'text-current' : (isDark ? 'text-white/30 group-hover:text-white' : 'text-slate-900/30 group-hover:text-slate-900')}`}>
         {icon}
       </div>
       <div className={`flex-1 overflow-hidden transition-all duration-300 ${isOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
