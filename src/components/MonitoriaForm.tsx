@@ -30,6 +30,7 @@ import Button from './ui/Button';
 import Badge from './ui/Badge';
 import Select from './ui/Select';
 import CustomSelect from './ui/CustomSelect';
+import CustomDatepicker from './ui/CustomDatepicker';
 
 const CHANNELS = ['Chat', 'Email', 'Telefone', 'WhatsApp'] as const;
 
@@ -480,16 +481,13 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Data do Ticket *</label>
-                  <div className="relative">
-                    <Calendar className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted/50" />
-        <input
-          type="date"
-          value={header.ticket_date}
-      onChange={e => setHeader({...header, ticket_date: e.target.value})}
-      disabled={isViewOnly}
-      className="w-full bg-surface-subtle border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-colors outline-none"
-    />
-                  </div>
+                  <CustomDatepicker
+                    value={header.ticket_date}
+                    onChange={(val: string) => setHeader({...header, ticket_date: val})}
+                    disabled={isViewOnly}
+                    placeholder="Selecione a data do ticket..."
+                    className="w-full"
+                  />
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
