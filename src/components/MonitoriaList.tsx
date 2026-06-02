@@ -5,6 +5,7 @@ import { Monitoria, MonitoriaStatus, User, Team, EvaluationForm, MonitoriaHistor
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../App';
 import { resolveContestationResult } from '../lib/contestation';
+import { getStatusConfig } from '../lib/statusHelper';
 import { 
   Search, 
   Eye, 
@@ -373,22 +374,6 @@ if (user?.role === 'gestor_suporte') {
     setTab('todas');
   };
 
-  const getStatusConfig = (status: MonitoriaStatus | 'expiradas_prazo') => {
-    switch (status) {
-      case 'pendente_revisao': return { label: 'Revisão', variant: 'warning' as const, icon: Clock };
-      case 'em_contestacao': return { label: 'Reanálise', variant: 'error' as const, icon: AlertTriangle };
-      case 'aguardando_gestor_suporte': return { label: 'Gestão Sup.', variant: 'info' as const, icon: Shield };
-      case 'aguardando_gestor_qualidade': return { label: 'Gestão Qual.', variant: 'info' as const, icon: Shield };
-      case 'concluida': return { label: 'Concluída', variant: 'success' as const, icon: CheckCircle2 };
-      case 'finalizada_alterada': return { label: 'Alterada', variant: 'success' as const, icon: CheckCircle2 };
-      case 'contestacao_aceita': return { label: 'Aceita', variant: 'success' as const, icon: CheckCircle2 };
-      case 'contestacao_negada': return { label: 'Negada', variant: 'error' as const, icon: XCircle };
-      case 'reavaliacao_solicitada': return { label: 'Reavaliação', variant: 'error' as const, icon: AlertTriangle };
-      case 'expiradas_prazo': return { label: 'Prazo Expirado', variant: 'error' as const, icon: Clock };
-      default: return { label: status, variant: 'neutral' as const, icon: AlertCircle };
-    }
-  };
-
   const handleAction = async () => {
     if (!actionModal || !user) return;
     setSubmitting(true);
@@ -630,7 +615,7 @@ if (user?.role === 'gestor_suporte') {
             return matchesActiveStatus && matchesTab;
           }).length;
 
-          const tabLabel = t === 'todas' ? 'Tudo' : t === 'expiradas_prazo' ? 'Concluída Sist.' : getStatusConfig(t as any).label;
+          const tabLabel = t === 'todas' ? 'Tudo' : t === 'expiradas_prazo' ? 'Concluída Sist.' : getStatusConfig(t as any).shortLabel;
 
           return (
             <button
@@ -698,7 +683,7 @@ if (user?.role === 'gestor_suporte') {
                         const isDeadlineExpired = m.status === 'concluida' && m.resolution_type === 'automatic';
                         return (
                           <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">
-                            {isDeadlineExpired ? 'Concluída Sist.' : config.label}
+                            {isDeadlineExpired ? 'Concluída Sist.' : config.shortLabel}
                           </Badge>
                         );
                       })()}

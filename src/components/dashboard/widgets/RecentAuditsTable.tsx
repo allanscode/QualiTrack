@@ -3,8 +3,10 @@ import { useDashboard } from '../DashboardContext';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { Monitoria, User } from '../../../types';
 import Card from '../../ui/Card';
+import Badge from '../../ui/Badge';
 import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
 import { Clock, ClipboardList } from 'lucide-react';
+import { getStatusConfig } from '../../../lib/statusHelper';
 
 interface RecentAuditsTableProps {
   monitorias: Monitoria[];
@@ -12,16 +14,6 @@ interface RecentAuditsTableProps {
   title?: string;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  pendente_revisao: { label: 'Aguardando Suporte', color: 'text-functional-warning', bg: 'bg-functional-warning' },
-  em_contestacao: { label: 'Em Reanálise', color: 'text-level-atencao', bg: 'bg-level-atencao' },
-  aguardando_gestor_suporte: { label: 'Aguardando Gestor', color: 'text-functional-success', bg: 'bg-functional-success' },
-  aguardando_gestor_qualidade: { label: 'Aguardando Qualidade', color: 'text-level-roxo', bg: 'bg-level-roxo' },
-  concluida: { label: 'Concluída', color: 'text-functional-success', bg: 'bg-functional-success' },
-  contestacao_aceita: { label: 'Contestação Aceita', color: 'text-functional-success', bg: 'bg-functional-success' },
-  contestacao_negada: { label: 'Contestação Negada', color: 'text-functional-error', bg: 'bg-functional-error' },
-  finalizada_alterada: { label: 'Concluída Alterada', color: 'text-functional-success', bg: 'bg-functional-success' },
-};
 
 export default function RecentAuditsTable({ monitorias, users, title = 'Monitorias Recentes' }: RecentAuditsTableProps) {
   const { user: currentUser } = useDashboard();
@@ -83,7 +75,7 @@ export default function RecentAuditsTable({ monitorias, users, title = 'Monitori
           </thead>
           <tbody>
             {displayList.map((m) => {
-              const cfg = STATUS_CONFIG[m.status] || { label: m.status, color: 'text-brand-muted', bg: 'bg-surface-subtle' };
+              const config = getStatusConfig(m.status);
               const sc = m.score || 0;
               const level = getLevelForScore(sc);
               return (
@@ -98,12 +90,12 @@ export default function RecentAuditsTable({ monitorias, users, title = 'Monitori
                     </span>
                   </td>
                 <td className="px-6 py-3.5">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${cfg.bg} ${cfg.color}`}>
-                    {cfg.label}
+                  <Badge variant={config.variant} size="xs" className="gap-1 px-2.5 py-1">
+                    {m.status === 'concluida' && m.resolution_type === 'automatic' ? 'Concluída Sist.' : config.label}
                     {m.resolution_type === 'automatic' && (
                       <Clock className="w-3 h-3 opacity-70" />
                     )}
-                  </span>
+                  </Badge>
                 </td>
                   <td className="px-6 py-3.5">
                     <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status} />

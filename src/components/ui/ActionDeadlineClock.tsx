@@ -61,17 +61,17 @@ export default function ActionDeadlineClock({ actionDeadlineAt, status }: Action
       title={actionDeadlineAt ? `Prazo Limite: ${new Date(actionDeadlineAt).toLocaleString('pt-BR')}` : undefined}
       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 font-mono text-[10px] font-black tabular-nums transition-all shadow-sm ${
       isLate
-        ? 'bg-red-100 border-red-500 text-red-700 animate-pulse'
+        ? 'bg-functional-error/10 border-functional-error/20 text-functional-error animate-pulse'
         : isWarning
-        ? 'bg-red-50 border-red-300 text-red-600'
-        : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+        ? 'bg-functional-warning/10 border-functional-warning/20 text-functional-warning'
+        : 'bg-functional-success/10 border-functional-success/20 text-functional-success'
       }`}>
       <div className={`w-1.5 h-1.5 rounded-full ${
       isLate
-        ? 'bg-red-600 animate-ping'
+        ? 'bg-functional-error animate-ping'
         : isWarning
-        ? 'bg-red-500'
-        : 'bg-emerald-500'
+        ? 'bg-functional-warning'
+        : 'bg-functional-success'
       }`} />
       <Clock className="w-3.5 h-3.5 opacity-70" />
       <span>Prazo: {timeLeft || '--:--:--'}</span>

@@ -487,6 +487,7 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                     disabled={isViewOnly}
                     placeholder="Selecione a data do ticket..."
                     className="w-full"
+                    size="sm"
                   />
                 </div>
 
@@ -697,16 +698,16 @@ const getSolidBg = (textColor: string) => {
 
               {selectedForm.critical_errors?.length > 0 && (
                 <div className="pt-10 border-t border-error/10">
-                  <h3 className="text-lg font-black text-error flex items-center gap-2 mb-6 uppercase tracking-tight"><AlertOctagon className="w-6 h-6" /> Itens Fatais (Erros Críticos)</h3>
-                  <div className="grid grid-cols-1 gap-6">
+                  <h3 className="text-sm font-black text-error flex items-center gap-1.5 mb-4 uppercase tracking-wider"><AlertOctagon className="w-4 h-4" /> Itens Fatais (Erros Críticos)</h3>
+                  <div className="grid grid-cols-1 gap-3">
                     {selectedForm.critical_errors.map(ce => (
-                      <div key={ce.id} className="space-y-3">
-                        <label className={`flex items-center gap-4 p-5 rounded-[24px] border-2 transition-all cursor-pointer ${criticalErrors[ce.id] ? 'bg-error/5 border-error' : 'bg-surface-card border-surface-border hover:border-error/30'}`}>
-                          <input type="checkbox" checked={!!criticalErrors[ce.id]} onChange={e => !isViewOnly && setCriticalErrors({...criticalErrors, [ce.id]: e.target.checked})} disabled={isViewOnly} className="w-6 h-6 rounded-lg text-error focus:ring-error" />
-                          <span className="text-sm font-black text-brand-primary uppercase tracking-tight">{ce.text}</span>
+                      <div key={ce.id} className="space-y-2">
+                        <label className={`flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all cursor-pointer ${criticalErrors[ce.id] ? 'bg-error/5 border-error' : 'bg-surface-card border-surface-border hover:border-error/30'}`}>
+                          <input type="checkbox" checked={!!criticalErrors[ce.id]} onChange={e => !isViewOnly && setCriticalErrors({...criticalErrors, [ce.id]: e.target.checked})} disabled={isViewOnly} className="w-4.5 h-4.5 rounded text-error focus:ring-error" />
+                          <span className="text-[11px] font-black text-brand-primary uppercase tracking-wider">{ce.text}</span>
                         </label>
                         {criticalErrors[ce.id] && (
-                          <textarea value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa técnica obrigatória para a aplicação deste erro crítico..." className="w-full border-error/20 border-2 rounded-2xl p-4 text-sm font-medium focus:border-error focus:outline-none bg-error/5" disabled={isViewOnly} />
+                          <textarea value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa técnica obrigatória para a aplicação deste erro crítico..." className="w-full border-error/20 border-2 rounded-xl p-3 text-xs font-medium focus:border-error focus:outline-none bg-error/5" disabled={isViewOnly} />
                         )}
                       </div>
                     ))}
