@@ -118,11 +118,31 @@ export default function App() {
   );
 }
 
+function resolveSystemTheme(): 'light' | 'dark' {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyThemeToDOM(resolved: 'light' | 'dark') {
+  const root = document.documentElement;
+  if (resolved === 'dark') {
+    root.classList.add('dark');
+    root.style.colorScheme = 'dark';
+  } else {
+    root.classList.remove('dark');
+    root.style.colorScheme = 'light';
+  }
+}
+
 function AppContent() {
   const { theme, setTheme } = useTheme();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userData, setUserData] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [appReady, setAppReady] = useState(() => {
+    const saved = localStorage.getItem('qualitrack_theme');
+    return !!saved && saved !== 'system';
+  });
+  const [prefetchedSidebarColor, setPrefetchedSidebarColor] = useState('');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'monitorias' | 'admin'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -261,13 +281,15 @@ function AppContent() {
           clearTimeout(initializationTimeout);
           return;
         }
-    setCurrentUser(null);
-    setUserData(null);
-setAuthView('login');
-  localStorage.removeItem('qualitrack_theme');
-  lastDbThemeRef.current = null;
-  setTheme('system');
-  prevUserIdRef.current = null;
+      setAppReady(false);
+      setCurrentUser(null);
+      setUserData(null);
+      setAuthView('login');
+      localStorage.setItem('qualitrack_theme', 'system');
+      setTheme('system');
+      applyThemeToDOM(resolveSystemTheme());
+      lastDbThemeRef.current = null;
+      prevUserIdRef.current = null;
   } else if (event === 'TOKEN_REFRESHED') {
         // Token renovado silenciosamente — sem ação necessária
       }
@@ -408,22 +430,24 @@ setAuthView('login');
 
   const forceLogout = async (reason: string) => {
     setShowIdleWarning(false);
+    setAppReady(false);
     localStorage.removeItem(MOCK_SESSION_KEY);
     localStorage.removeItem(LAST_ACTIVITY_KEY);
-localStorage.removeItem('qualitrack_theme');
-  lastDbThemeRef.current = null;
-  setTheme('system');
-  prevUserIdRef.current = null;
+    localStorage.setItem('qualitrack_theme', 'system');
+    setTheme('system');
+    applyThemeToDOM(resolveSystemTheme());
+    lastDbThemeRef.current = null;
+    prevUserIdRef.current = null;
     if (!isMockMode && supabase) {
-        isCleaningSessionRef.current = true;
-        await supabase.auth.signOut();
-      }
-      setCurrentUser(null);
-      setUserData(null);
-      setAuthView('login');
-      sessionStartTimeRef.current = null;
-      toast.error(reason);
-    };
+      isCleaningSessionRef.current = true;
+      await supabase.auth.signOut();
+    }
+    setCurrentUser(null);
+    setUserData(null);
+    setAuthView('login');
+    sessionStartTimeRef.current = null;
+    toast.error(reason);
+  };
 
     // Verifica se a sessão já expirou por inatividade ou tempo absoluto
     const idleElapsed = Date.now() - lastActivity;
@@ -557,6 +581,33 @@ localStorage.removeItem('qualitrack_theme');
 
   const handleUserSession = async (user: any) => {
     try {
+      let resolvedTheme: 'light' | 'dark' = 'light';
+      let resolvedSidebarColor = '';
+
+      if (isMockMode) {
+        const { data: prefRows } = await mockDb.get('user_preferences');
+        const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
+        resolvedTheme = myPref?.preferences?.theme === 'dark' ? 'dark' : 'light';
+        resolvedSidebarColor = myPref?.preferences?.sidebar_color || '';
+      } else if (supabase) {
+        const { data: prefData } = await supabase
+          .from('user_preferences')
+          .select('preferences')
+          .eq('user_id', user.id)
+          .single();
+        resolvedTheme = prefData?.preferences?.theme === 'dark' ? 'dark' : 'light';
+        resolvedSidebarColor = prefData?.preferences?.sidebar_color || '';
+      }
+
+      localStorage.setItem('qualitrack_theme', resolvedTheme);
+      setTheme(resolvedTheme);
+      applyThemeToDOM(resolvedTheme);
+      setPrefetchedSidebarColor(resolvedSidebarColor);
+      if (user.email) {
+        localStorage.setItem(`qualitrack_sidebar_color_${user.email}`, resolvedSidebarColor);
+      }
+      setAppReady(true);
+
       if (isMockMode) {
         const { data } = await mockDb.get('users');
         const dbUser = data.find((u: any) => u.email === user.email && u.active);
@@ -573,8 +624,8 @@ localStorage.removeItem('qualitrack_theme');
           }));
           localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
         }
-      } else {
-        const { data, error } = await supabase!.from('users').select('*').eq('email', user.email).single();
+      } else if (supabase) {
+        const { data, error } = await supabase.from('users').select('*').eq('email', user.email).single();
         if (data && data.active) {
           const enriched = await enrichUserWithTeamIds(data);
           setUserData(enriched);
@@ -583,12 +634,14 @@ localStorage.removeItem('qualitrack_theme');
           if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now();
           localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
         } else if (error && error.code === 'PGRST116') {
-          await supabase!.auth.signOut();
+          setAppReady(false);
+          await supabase.auth.signOut();
           setAuthView('login');
         } else if (error) {
           console.error('[App] Erro crítico em handleUserSession:', error);
           toast.error('Erro de conexão ao carregar seu perfil. O sistema está tentando reconectar.');
         } else {
+          setAppReady(false);
           setAuthView('request-access');
           setRequestData({ name: user.name || '', email: user.email });
         }
@@ -617,12 +670,24 @@ localStorage.removeItem('qualitrack_theme');
             setLoading(false);
             return toast.error('Esta conta está desativada.');
           }
+
+        const { data: prefRows } = await mockDb.get('user_preferences');
+        const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
+        const resolvedTheme: 'light' | 'dark' = myPref?.preferences?.theme === 'dark' ? 'dark' : 'light';
+        const resolvedSidebarColor: string = myPref?.preferences?.sidebar_color || '';
+        localStorage.setItem('qualitrack_theme', resolvedTheme);
+        setTheme(resolvedTheme);
+        applyThemeToDOM(resolvedTheme);
+        setPrefetchedSidebarColor(resolvedSidebarColor);
+        localStorage.setItem(`qualitrack_sidebar_color_${user.email}`, resolvedSidebarColor);
+        setAppReady(true);
+
           const enriched = await enrichUserWithTeamIds(user);
           setCurrentUser(enriched);
           setUserData(enriched);
-        setActiveTab('dashboard');
-        setCredentials({ email: '', password: '' });
-        sessionStartTimeRef.current = Date.now();
+          setActiveTab('dashboard');
+          setCredentials({ email: '', password: '' });
+          sessionStartTimeRef.current = Date.now();
           localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({
             userId: user.id,
             sessionStartedAt: sessionStartTimeRef.current,
@@ -651,18 +716,21 @@ localStorage.removeItem('qualitrack_theme');
   };
 
   const handleLogout = async (options?: { silent?: boolean; message?: string }) => {
+    setAppReady(false);
     setCurrentUser(null);
     setUserData(null);
     setActiveTab('dashboard');
     setAuthView('login');
+    setPrefetchedSidebarColor('');
     setCredentials({ email: '', password: '' });
     setShowIdleWarning(false);
     sessionStartTimeRef.current = null;
-prevUserIdRef.current = null;
-  localStorage.removeItem(MOCK_SESSION_KEY);
-  localStorage.removeItem('qualitrack_theme');
-  lastDbThemeRef.current = null;
-  setTheme('system');
+    prevUserIdRef.current = null;
+    localStorage.removeItem(MOCK_SESSION_KEY);
+    localStorage.setItem('qualitrack_theme', 'system');
+    setTheme('system');
+    applyThemeToDOM(resolveSystemTheme());
+    lastDbThemeRef.current = null;
     if (!isMockMode && supabase) {
       supabase.auth.signOut().catch(console.error);
     }
@@ -906,9 +974,24 @@ prevUserIdRef.current = null;
                   )}
                 </AnimatePresence>
               </div>
-            </div>
-          </motion.div>
-        ) : (
+      </div>
+      </motion.div>
+      ) : !appReady ? (
+        <motion.div
+          key="app-transition"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="h-screen w-screen flex items-center justify-center bg-surface-bg"
+        >
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full"
+          />
+        </motion.div>
+      ) : (
           <motion.div
             key="app-main"
             initial={{ opacity: 0, scale: 0.98 }}
@@ -923,16 +1006,17 @@ prevUserIdRef.current = null;
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
           currentUser={currentUser}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            userData={userData}
-            handleLogout={handleLogout}
-            isFormOpen={isFormOpen}
-            setIsFormOpen={setIsFormOpen}
-            theme={theme}
-            setTheme={setTheme}
-            isSystemOnline={isSystemOnline}
-            isReconnecting={isReconnecting}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          userData={userData}
+          handleLogout={handleLogout}
+          isFormOpen={isFormOpen}
+          setIsFormOpen={setIsFormOpen}
+          theme={theme}
+          setTheme={setTheme}
+          isSystemOnline={isSystemOnline}
+          isReconnecting={isReconnecting}
+          prefetchedSidebarColor={prefetchedSidebarColor}
         />
         </StaticDataProvider>
       </QualityConfigProvider>
@@ -956,7 +1040,8 @@ function MainApp({
   theme,
   setTheme,
   isSystemOnline,
-  isReconnecting
+  isReconnecting,
+  prefetchedSidebarColor
 }: any) {
   const { resolvedTheme } = useTheme();
   const { teams, userPreferences, loading: staticDataLoading } = useStaticData();
@@ -979,6 +1064,7 @@ function MainApp({
     }
   }, [userData?.role]);
   const [sidebarColor, setSidebarColor] = useState<string>(() => {
+    if (prefetchedSidebarColor) return prefetchedSidebarColor;
     if (typeof window !== 'undefined') {
       const email = userData?.email || currentUser?.email || '';
       if (email) {
@@ -1125,7 +1211,7 @@ function MainApp({
       }
       toggleSidebar();
     }}
-        className={`${sidebarContrastClass} flex flex-col relative z-20 transition-all border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
+        className={`${sidebarContrastClass} flex flex-col relative z-20 transition-all transition-colors duration-300 border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
       >
         {/* Floating toggle button on hover */}
         <div 
@@ -1171,7 +1257,7 @@ function MainApp({
           className="profile-toggle-btn w-9 h-9 rounded-lg bg-black/10 flex items-center justify-center flex-shrink-0 hover:bg-black/20 transition-all relative cursor-pointer"
         >
             <UserIcon className="w-5 h-5" />
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
+            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full transition-colors duration-300" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
           </button>
 
           <div className="flex-1 flex items-center gap-2 min-w-0 overflow-hidden" style={{ opacity: sidebarTextVisible ? 1 : 0, maxWidth: sidebarTextVisible ? undefined : 0, transition: 'opacity 0.15s ease' }}>

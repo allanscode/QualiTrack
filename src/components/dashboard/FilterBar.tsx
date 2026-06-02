@@ -90,22 +90,20 @@ export default function FilterBar() {
             <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-full shadow-sm group hover:border-brand-accent transition-colors relative">
               <div className="flex items-center gap-2 relative flex-1">
                 <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
-                <input
-                  type="date"
-                  style={{ colorScheme: resolvedTheme }}
-                  value={filters.startDate}
-                  onChange={e => setFilters({ ...filters, startDate: e.target.value })}
+          <input
+          type="date"
+          value={filters.startDate}
+          onChange={e => setFilters({ ...filters, startDate: e.target.value })}
                   className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0"
                 />
               </div>
               <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest mx-0.5">até</span>
               <div className="flex items-center gap-2 relative flex-1">
                 <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
-                <input
-                  type="date"
-                  style={{ colorScheme: resolvedTheme }}
-                  value={filters.endDate}
-                  onChange={e => setFilters({ ...filters, endDate: e.target.value })}
+          <input
+          type="date"
+          value={filters.endDate}
+          onChange={e => setFilters({ ...filters, endDate: e.target.value })}
                   className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0"
                 />
               </div>

@@ -124,10 +124,17 @@ body {
 .thin-scrollbar::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-brand-accent); }
 
-/* ── Date input ── */
-html:not(.dark) input[type="date"],
-html:not(.dark) input[type="date"]::-webkit-calendar-picker-indicator {
-    color-scheme: light !important;
+/* ── Date input Contrast Fix ── */
+input[type="date"] {
+  color-scheme: light;
+}
+
+html.dark input[type="date"] {
+  color-scheme: dark;
+}
+
+html:not(.dark) input[type="date"] {
+  color-scheme: light !important;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator {

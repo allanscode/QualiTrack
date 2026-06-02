@@ -171,7 +171,7 @@ Use **sempre** os tokens semânticos definidos em `index.css`. Nunca hardcode co
 - **Sombras**: `shadow-premium` para cards flutuantes
 - **Animações**: Use `motion` (Framer Motion) para transitions. Evite CSS bruto para montar/desmontar componentes.
 - **Dark Mode**: Configurado via classe `.dark` no `<html>`. Teste sempre em ambos os modos.
-- **Date Picker (Dark Mode)**: `input[type="date"]` usa `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark` em `index.css`. Previne flash preto ao abrir calendário em light mode.
+- **Date Picker (Dark Mode)**: `input[type="date"]` NUNCA usa `style={{ colorScheme }}` inline. `color-scheme` é 100% CSS-driven via regras em `index.css`: `input[type="date"] { color-scheme: light; }`, `html.dark input[type="date"] { color-scheme: dark; }`, `html:not(.dark) input[type="date"] { color-scheme: light !important; }`. Previne flash preto ao abrir calendário em light mode.
 - **Sidebar Accordion**: Popover de perfil usa padrão accordion single-open (`sidebarAccordion` state: `'teams' | 'avatar' | 'appearance' | 'color' | null`). Seções expandem com `AnimatePresence initial={false}` + `ChevronDown` com `rotate-180`. Seleção de cor auto-fecha o accordion. Sem botão X — fecha ao clicar fora ou no toggle do perfil.
 - **Scrollbar Gutter**: Container de scroll principal usa `scrollbar-gutter: stable` para evitar layout shift quando scrollbar aparece/desaparece.
 
@@ -331,22 +331,59 @@ const extendSession = useCallback(() => {
 |-----------|------|-----|
 | `showIdleWarning` | `boolean` | Controla visibilidade do modal de aviso |
 | `idleCountdown` | `number` | Segundos restantes no countdown (M:SS) |
+| `appReady` | `boolean` | Double barrier — `MainApp` só renderiza quando tema E sidebar_color estão resolvidos. `true` no F5 (cache existe), `false` em login fresco |
+| `prefetchedSidebarColor` | `string` | Cor do sidebar extraída de `user_preferences` no login — sidebar nasce com a cor correta, sem flash |
 | `sessionStartTimeRef` | `Ref<number>` | Timestamp de início da sessão (8h limit) |
 | `isCleaningSessionRef` | `Ref<boolean>` | Previne race condition em logout forçado |
 | `extendSessionRef` | `Ref<fn>` | Ponte entre useEffect e useCallback |
 | `isPasswordRecoveryRef` | `Ref<boolean>` | Gates entre recovery e invite no change-password |
 | `isInviteFlowRef` | `Ref<boolean>` | Detecta `type=invite` no hash para fluxo de convite |
 
+### `appReady` — Double Barrier (Theme Gate)
+
+`appReady` é o estado que controla quando `MainApp` pode renderizar. Previne que o painel renderize com tema do OS antes da preferência do DB chegar.
+
+**Inicialização (lazy initializer):**
+- `const saved = localStorage.getItem('qualitrack_theme')`
+- `true` se `saved` existe e não é `'system'` (F5 com cache)
+- `false` se ausente ou `'system'` (login fresco)
+
+**Fluxo de login:** `handleUserSession()` consulta `user_preferences` → resolve `theme` + `sidebar_color` → `localStorage.setItem('qualitrack_theme', resolved)` + `setTheme(resolved)` + `applyThemeToDOM(resolved)` + `setPrefetchedSidebarColor(color)` + `setAppReady(true)`
+
+**Fluxo de F5:** `appReady` já é `true` (cache) → `MainApp` renderiza imediatamente com tema do `localStorage` → effect de sync corrige se DB divergir
+
+**Render gate:** `loading ? spinner : !currentUser ? auth : !appReady ? spinner : MainApp`
+
+### Logout Curtain Pattern
+
+As 3 saídas (`SIGNED_OUT`, `forceLogout`, `handleLogout`) seguem o padrão curtain — spinner cobre a transição visual de tema:
+
+1. `setAppReady(false)` — dispara spinner imediatamente
+2. `setPrefetchedSidebarColor('')` — limpa cor para próximo login
+3. `localStorage.setItem('qualitrack_theme', 'system')` — cache volta para system
+4. `setTheme('system')` — estado React
+5. `applyThemeToDOM(resolveSystemTheme())` — DOM segue OS imediatamente
+6. `lastDbThemeRef.current = null` — limpa guard
+7. `setCurrentUser(null)` — volta para auth
+
+O spinner esconde a reorganização do DOM — sem flash visual.
+
+### Módulo-Scope Theme Helpers
+
+- **`resolveSystemTheme()`** — retorna `'light'` ou `'dark'` via `matchMedia('(prefers-color-scheme: dark)')`. Usada em logout e no blocking script de `index.html`.
+- **`applyThemeToDOM(resolved)`** — aplica `.dark`/`.light` + `colorScheme` no `<html>` imediatamente, sem esperar React.
+
 ### `handleLogout(options?)`
 
-Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handleLogout}`) seja passado como string para Sonner (crash). Após reset de senha: `handleLogout({ silent: true })` + toast contextual.
+Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handleLogout}`) seja passado como string para Sonner (crash). Após reset de senha: `handleLogout({ silent: true })` + toast contextual. Segue o logout curtain pattern (ver acima).
 
 ### Persistência de Sessão (F5)
 
 - **Supabase**: SDK `persistSession: true` + `localStorage` — `INITIAL_SESSION` com session restaura login
 - **Mock**: `localStorage` chave `qualitrack_session` — `{userId, sessionStartedAt, sessionExpiresAt}`
 - **Last Activity**: `localStorage` chave `qualitrack_last_activity` — timestamp da última atividade do usuário. Ao restaurar sessão (F5), o sistema verifica se o idle já expirou comparando `Date.now() - lastActivity`. Se ≥ 60 min, sessão é descartada e usuário redirecionado ao login.
-- **Tema/Aparência**: `localStorage` chave `qualitrack_theme` — valor `'light'` | `'dark'` | `'system'`. Restaurado incondicionalmente no `useState` initializer (sem depender de sessão). NÃO resetar tema no `useEffect` de `currentUser` — o estado transiente `currentUser = null` durante restauração de sessão causava reset prematuro para `'system'`. Fonte de verdade: tabela `user_preferences` (DB). `localStorage` é cache instantâneo (evita flash no F5). Escrita via `upsertUserPreferences()` apenas em ação explícita do usuário. `lastDbThemeRef` (module-level) previne auto-save loop (write-back do valor lido do banco). Logout limpa `localStorage` + `lastDbThemeRef.current = null`; DB preserva para próximo login.
+- **Tema/Aparência**: `localStorage` chave `qualitrack_theme` — valor `'light'` | `'dark'` | `'system'`. Restaurado incondicionalmente no `useState` initializer (sem depender de sessão). NÃO resetar tema no `useEffect` de `currentUser` — o estado transiente `currentUser = null` durante restauração de sessão causava reset prematuro para `'system'`. Fonte de verdade: tabela `user_preferences` (DB). `localStorage` é cache instantâneo (evita flash no F5). Escrita via `upsertUserPreferences()` apenas em ação explícita do usuário. `lastDbThemeRef` (module-level) previne auto-save loop (write-back do valor lido do banco). Logout seta `'system'` (não remove) + `applyThemeToDOM(resolveSystemTheme())`; DB preserva para próximo login.
+- **Sidebar Color**: `localStorage` chave `qualitrack_sidebar_color_{email}` — cache instantâneo. Em login, `handleUserSession()` extrai de `user_preferences` e salva no cache + `prefetchedSidebarColor` state. `MainApp` usa prioridade: `prefetchedSidebarColor` → cache por email → `''`.
 
 ### Resiliência de Sessão
 - Heartbeat ping ao Supabase a cada 2 min
@@ -404,7 +441,7 @@ DISABLE_HMR                # (opcional) "true" para desativar HMR
 Antes de commitar qualquer alteração, verifique:
 
 - [ ] Não quebra o fluxo de prazo de ação (`addBusinessHours`)?
-- [ ] O componente funciona em Light **e** Dark mode? (Inputs `type="date"` usam `--date-color-scheme` pattern?)
+- [ ] O componente funciona em Light **e** Dark mode? (Inputs `type="date"` NUNCA usam `style={{ colorScheme }}` inline — CSS-driven via `index.css`)
 - [ ] Se adicionou filtro no dashboard, aplicou em `DashboardContext.tsx` e não apenas localmente?
 - [ ] Testou o fluxo com o Role correto? (Componente para `suporte` não pode exibir dados de outros agentes)
 - [ ] Usou `lucide-react` para ícones?
@@ -443,14 +480,15 @@ Antes de commitar qualquer alteração, verifique:
 | Ícones invisíveis (bg = text color) | **ALTA** | ✅ Resolvido | Classes `.bg-icon-*` separadas de `bg-brand-*` em `index.css` |
 | Tema não persistia após F5 | **ALTA** | ✅ Resolvido | Removido `setTheme('system')` do useEffect de `currentUser` |
 | Tooltip ComparativeBarChart sem contraste | **MÉDIA** | ✅ Resolvido | `color: var(--brand-on-primary)` + `itemStyle` com cor explícita |
-| Date picker flash preto em light mode | **MÉDIA** | ✅ Resolvido | `color-scheme: var(--date-color-scheme, light)` + `.dark` override em `index.css` |
+| Date picker flash preto em light mode | **MÉDIA** | ✅ Resolvido | CSS-only `color-scheme` rules em `index.css` (sem inline `style`) |
 | Sidebar popover sem accordion (UX confusa) | **MÉDIA** | ✅ Resolvido | Refatorado para accordion com 4 seções, single-open, AnimatePresence |
 | Profile toggle conflito com click-outside | **MÉDIA** | ✅ Resolvido | Classe `profile-toggle-btn` nos dois botões (avatar + nome) para exclusão no handler |
 | Layout shift por scrollbar | **BAIXA** | ✅ Resolvido | `scrollbar-gutter: stable` no container de scroll principal |
 | Sidebar sem contraste dinâmico (YIQ) | **MÉDIA** | ✅ Resolvido | `isDarkColor(hex, resolvedTheme)` no escopo do módulo + variantes derivadas em `MainApp` |
 | Theme race condition (F5) | **ALTA** | ✅ Resolvido | `lastDbThemeRef` module-level + dedicated manual-theme-persist effect |
-| Datepicker flash preto em light mode | **MÉDIA** | ✅ Resolvido | `style={{ colorScheme: resolvedTheme }}` inline + CSS global `html:not(.dark)` rule |
+| Datepicker flash preto em light mode | **MÉDIA** | ✅ Resolvido | CSS-only `color-scheme` rules em `index.css` — sem inline `style={{ colorScheme }}` |
 | `isDarkColor` dentro de componente (ReferenceError risk) | **ALTA** | ✅ Resolvido | Movida para escopo do módulo com `resolvedTheme` como parâmetro explícito |
+| Dark flash on login (OS dark + user pref light) | **ALTA** | ✅ Resolvido | `appReady` double barrier + `resolveSystemTheme()`/`applyThemeToDOM()` + logout curtain |
 
 ---
 
@@ -484,10 +522,14 @@ Antes de commitar qualquer alteração, verifique:
 - **Gráficos**: Cores via `chartPalette()`/`chartColorArray()`/`chartColorMap()` de `chartColors.ts` — lê CSS vars em runtime, funciona em light e dark mode.
 - **Ícones Dashboard**: Fundos de ícone usam classes `.bg-icon-*` (ex: `bg-icon-primary`, `bg-icon-accent`, `bg-icon-highlight`) — cores claras/pastel que contrastam com `text-brand-*`. NUNCA use `bg-brand-*` para fundo de ícone, pois estas classes usam as mesmas CSS vars de `text-brand-*` (ícone ficaria invisível).
 - **Tooltips Recharts**: Usar `backgroundColor: 'var(--brand-primary)'` + `color: 'var(--brand-on-primary)'` — garante contraste em light e dark mode.
-- **Date Picker**: `input[type="date"]` deve usar `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark` para evitar flash preto ao abrir calendário em light mode.
+- **Date Picker**: `input[type="date"]` NUNCA usa `style={{ colorScheme }}` inline. `color-scheme` é 100% CSS-driven via regras em `index.css`: `input[type="date"] { color-scheme: light; }`, `html.dark input[type="date"] { color-scheme: dark; }`, `html:not(.dark) input[type="date"] { color-scheme: light !important; }`. Isso elimina race condition JS no Chromium calendar popup.
 - **Sidebar Accordion**: Seções colapsáveis no popover de perfil seguem padrão single-open (`sidebarAccordion` state). `AnimatePresence initial={false}` + `ChevronDown` com `rotate-180`. Seleção de cor auto-fecha. Botoes toggle do perfil usam classe `profile-toggle-btn` para exclusão do click-outside handler.
 - **Scrollbar Gutter**: Container de scroll principal usa `scrollbar-gutter: stable` para evitar layout shift quando scrollbar aparece/desaparece.
 - **Sidebar Contrast**: `isDarkColor(hex, resolvedTheme)` no escopo do módulo — recebe `resolvedTheme` como parâmetro. Em `MainApp`, use `const { resolvedTheme } = useTheme()`. Variantes: `sidebarContrastClass`, `sidebarBorderClass`, `sidebarContrastSubtle`, `sidebarIsDark`. `NavItem` recebe `isDark` prop. Nunca defina `isDarkColor` dentro de um componente.
+- **Theme Gate (`appReady`)**: `MainApp` só renderiza quando `appReady === true`. Login fresco: `appReady` começa `false`, setado `true` após `handleUserSession` resolver tema + sidebar_color do DB. F5: `appReady` inicializado `true` (localStorage cache). Nunca renderize `MainApp` sem tema resolvido — causa dark flash.
+- **Logout Curtain**: Sempre `setAppReady(false)` ANTES de `setTheme('system')`/`setCurrentUser(null)` — spinner cobre a transição visual de tema. Nunca `localStorage.removeItem('qualitrack_theme')` — use `setItem('qualitrack_theme', 'system')` para que `index.html` blocking script faça fallback para OS.
+- **Module-Scope Theme Helpers**: `resolveSystemTheme()` e `applyThemeToDOM(resolved)` são funções puras no escopo do módulo de `App.tsx`. Usadas em logout, login, e `index.html` blocking script. Nunca as defina dentro de componentes.
+- **`prefetchedSidebarColor`**: Extraída de `user_preferences` em `handleUserSession` — sidebar nasce com a cor correta, sem flash. `MainApp` prioriza: `prefetchedSidebarColor` → `localStorage` por email → `''`. Logout limpa com `setPrefetchedSidebarColor('')`.
 - **Git**: Branch por feature/fix; delete merged branches; PR via GitHub.
 
 ---

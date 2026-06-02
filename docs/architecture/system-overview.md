@@ -113,11 +113,13 @@ Admin --> Edge
 
 ### 7. Preferências de Usuário (`user_preferences`)
 - Tabela JSONB — fonte de verdade para tema, cor do sidebar, avatar (futuro)
-- Leitura centralizada via `StaticDataContext` — nenhum componente faz fetch independente
+- Leitura: `handleUserSession()` consulta `user_preferences` **antes** de renderizar `MainApp` → resolve `theme` + `sidebar_color` → `setAppReady(true)` (double barrier). `StaticDataContext` faz fetch paralelo para consumo geral dos componentes — nenhum componente faz fetch independente
 - Escrita via `upsertUserPreferences()` — apenas em ação explícita do usuário
 - `lastDbThemeRef` (module-level) — guard contra auto-save loop (write-back do valor lido do banco)
-- `localStorage` como cache instantâneo (evita flash no F5)
-- Logout limpa `localStorage`; DB preserva para próximo login
+- `localStorage` como cache instantâneo (evita flash no F5). `qualitrack_theme` é setado como `'system'` no logout (nunca removido) — `index.html` blocking script faz fallback para OS
+- `appReady` double barrier — `MainApp` só renderiza após tema + sidebar_color resolvidos. Login fresco: `appReady=false` até DB responder. F5: `appReady=true` (cache)
+- Logout curtain pattern — spinner cobre transição visual de tema, sem flash
+- `prefetchedSidebarColor` — sidebar nasce com a cor correta extraída do DB no login
 
 ## Bounded Contexts
 
@@ -192,6 +194,7 @@ graph LR
 11. **StaticDataContext centralizado** — 1 fetch paralelo de 6 tabelas cadastro, `enrichUsersWithTeams()` centralizado, elimina fetches independentes
 12. **Fetch storm guards** — `fetchingRef` em StaticDataContext, DashboardContext e MonitoriaList; `lastDbThemeRef` contra auto-save loop
 13. **UserPreferences DB-backed** — Tabela `user_preferences` (JSONB) como fonte de verdade; `localStorage` como cache instantâneo; escrita apenas em ação explícita do usuário
+14. **`appReady` double barrier** — `MainApp` só renderiza após tema + sidebar_color resolvidos do DB; logout curtain pattern previne dark flash visual
 
 ### ⚠️ Trade-offs e Limitações
 1. **Sem routing library** — Navegação por estado (`activeTab`), sem URLs
