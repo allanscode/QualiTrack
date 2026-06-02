@@ -161,6 +161,11 @@ export default function AgentDashboard() {
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
           accent={level.color}
+          badge={
+            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-black rounded-md ${isAboveTarget(avgScore) ? 'bg-functional-success/10 text-functional-success' : 'bg-functional-error/10 text-functional-error'}`}>
+              {isAboveTarget(avgScore) ? '↑' : '↓'}
+            </span>
+          }
         />
         <StatCard
           title="Média Equipe"
@@ -203,8 +208,8 @@ export default function AgentDashboard() {
           value={pendingCount.toString()}
           sub="Aguardando sua ação"
           good={pendingCount === 0}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-functional-error"
+          icon={pendingCount === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+          accent={pendingCount === 0 ? 'text-functional-success' : 'text-functional-error'}
         />
         <StatCard
           title="Solicitadas"

@@ -204,6 +204,11 @@ export default function SupportManagerDashboard() {
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
           accent={getLevelForScore(avgScore, 'goal').color}
+          badge={
+            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-black rounded-md ${isAboveTarget(avgScore) ? 'bg-functional-success/10 text-functional-success' : 'bg-functional-error/10 text-functional-error'}`}>
+              {isAboveTarget(avgScore) ? '↑' : '↓'}
+            </span>
+          }
         />
         <StatCard
           title="Média Global"
@@ -238,16 +243,16 @@ export default function SupportManagerDashboard() {
           value={pendingAgent}
           sub="Aguardando ciência do suporte"
           good={pendingAgent === 0}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-functional-warning"
+          icon={pendingAgent === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+          accent={pendingAgent === 0 ? 'text-functional-success' : 'text-functional-warning'}
         />
         <StatCard
           title="Minhas Ações"
           value={pendingManager}
           sub="Aguardando minha decisão"
           good={pendingManager === 0}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-functional-error"
+          icon={pendingManager === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+          accent={pendingManager === 0 ? 'text-functional-success' : 'text-functional-error'}
         />
       </div>
 

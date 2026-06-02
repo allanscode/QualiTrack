@@ -147,14 +147,19 @@ export default function QualityDashboard() {
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
           accent={getLevelForScore(avgScore, 'goal').color}
+          badge={
+            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-black rounded-md ${isAboveTarget(avgScore) ? 'bg-functional-success/10 text-functional-success' : 'bg-functional-error/10 text-functional-error'}`}>
+              {isAboveTarget(avgScore) ? '↑' : '↓'}
+            </span>
+          }
         />
         <StatCard
           title="Pendente Ação"
           value={pendingActions}
           sub="Aguardando reanálise"
           good={pendingActions === 0}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-functional-error"
+          icon={pendingActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+          accent={pendingActions === 0 ? 'text-functional-success' : 'text-functional-error'}
         />
       </div>
 
@@ -205,8 +210,8 @@ export default function QualityDashboard() {
             value={pendingAuditsCount}
             sub="Aguardando Conclusão"
             good={pendingAuditsCount === 0}
-            icon={<AlertTriangle className="w-5 h-5" />}
-            accent="text-functional-warning"
+            icon={pendingAuditsCount === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+            accent={pendingAuditsCount === 0 ? 'text-functional-success' : 'text-functional-warning'}
           />
         </div>
       </div>
@@ -247,7 +252,6 @@ export default function QualityDashboard() {
             subtitle="Itens que você mais despontuou"
             monitorias={myMonitorias} 
             forms={forms} 
-            limit={12} 
           />
         </div>
       </div>

@@ -241,20 +241,25 @@ export default function AdminDashboard() {
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Média Geral (Admin)"
+          title="Média Geral"
           value={`${avgScore.toFixed(2)}%`}
           sub="Performance global da operação"
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
           accent={getLevelForScore(avgScore, 'goal').color}
+          badge={
+            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-black rounded-md ${isAboveTarget(avgScore) ? 'bg-functional-success/10 text-functional-success' : 'bg-functional-error/10 text-functional-error'}`}>
+              {isAboveTarget(avgScore) ? '↑' : '↓'}
+            </span>
+          }
         />
         <StatCard
           title="Total Pendentes"
           value={pendingActions}
           sub="Ações em todos os perfis"
           good={pendingActions === 0}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-functional-error"
+          icon={pendingActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+          accent={pendingActions === 0 ? 'text-functional-success' : 'text-functional-error'}
         />
         <StatCard
           title="Usuários Online"
@@ -356,7 +361,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="h-[420px]">
-        <OfensoresChart monitorias={monitorias} forms={forms} limit={12} />
+        <OfensoresChart monitorias={monitorias} forms={forms} />
       </div>
 
       {dissatisfactionFields.length > 0 && (() => {
