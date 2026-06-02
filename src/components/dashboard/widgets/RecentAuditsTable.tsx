@@ -47,7 +47,8 @@ export default function RecentAuditsTable({ monitorias, users, title = 'Monitori
         const dateA = new Date(a.created_at).getTime();
         const dateB = new Date(b.created_at).getTime();
         return dateB - dateA;
-      });
+      })
+      .slice(0, 20);
   }, [monitorias]);
 
   return (

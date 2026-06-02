@@ -122,7 +122,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
       if (supabase) {
         const { data } = await supabase.from('quality_configs').select('*').single();
         if (data) {
-          const cfg = migrateSlaToActionDeadline(data.config) as QualityConfig;
+          const cfg = migrateLegacyLevelColors(migrateSlaToActionDeadline(data.config)) as QualityConfig;
           setConfig(cfg);
           setOldConfig(cfg);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
@@ -130,7 +130,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
       } else {
         const { data } = await mockDb.get('quality_configs');
         if (data && data.length > 0) {
-          const cfg = migrateSlaToActionDeadline(data[0].config) as QualityConfig;
+          const cfg = migrateLegacyLevelColors(migrateSlaToActionDeadline(data[0].config)) as QualityConfig;
           setConfig(cfg);
           setOldConfig(cfg);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
