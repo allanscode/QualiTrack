@@ -24,6 +24,8 @@ const BG_MAP: Record<string, string> = {
   'text-info': 'bg-surface-subtle',
   'text-warning': 'bg-functional-warning/10',
   'text-success': 'bg-functional-success/10',
+  'text-slate-400': 'bg-slate-100 dark:bg-slate-800/50',
+  'text-slate-500': 'bg-slate-50 dark:bg-slate-800/30',
 };
 
 function getIconBg(accent: string): string {
@@ -40,8 +42,8 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
   const [isHovered, setIsHovered] = useState(false);
 
   return (
-    <Card onClick={onClick}>
-      <div className="flex items-start justify-between mb-4">
+    <Card onClick={onClick} padding="none" className="px-5 py-4 flex flex-col justify-between min-h-[100px]">
+      <div className="flex items-start justify-between mb-3">
         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
           {title}
         </span>
@@ -68,7 +70,7 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
           </AnimatePresence>
         </div>
       </div>
-      <div className="flex items-baseline gap-2 mb-1">
+      <div className="flex items-center gap-2 mt-auto">
         <p className="text-3xl font-black leading-none text-slate-900 dark:text-slate-50">
           {value}
         </p>

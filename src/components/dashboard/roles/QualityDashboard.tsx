@@ -127,6 +127,12 @@ export default function QualityDashboard() {
     return myMonitorias.filter(m => m.status === 'em_contestacao').length;
   }, [myMonitorias]);
 
+  const scoreDiff = avgScore - config.targetScore;
+  const diffSign = scoreDiff >= 0 ? '↑' : '↓';
+  const diffColorClass = scoreDiff >= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
+
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
 
@@ -137,8 +143,8 @@ export default function QualityDashboard() {
           value={myMonitorias.length}
           sub="no período"
           good={true}
-      icon={<ClipboardCheck className="w-5 h-5" />}
-      accent="text-brand-primary"
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          accent="text-slate-500"
         />
         <StatCard
           title="Nota Média"
@@ -146,10 +152,10 @@ export default function QualityDashboard() {
           sub="Média das notas aplicadas"
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
-          accent={getLevelForScore(avgScore, 'goal').color}
+          accent="text-slate-500"
           badge={
-            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-black rounded-md ${isAboveTarget(avgScore) ? 'bg-functional-success/10 text-functional-success' : 'bg-functional-error/10 text-functional-error'}`}>
-              {isAboveTarget(avgScore) ? '↑' : '↓'}
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${diffColorClass}`}>
+              {diffSign} {Math.abs(scoreDiff).toFixed(2)}%
             </span>
           }
         />
@@ -187,7 +193,7 @@ export default function QualityDashboard() {
           sub="Total de contestações"
           good={true}
           icon={<History className="w-5 h-5" />}
-          accent="text-brand-muted"
+          accent="text-slate-500"
         />
       </div>
 

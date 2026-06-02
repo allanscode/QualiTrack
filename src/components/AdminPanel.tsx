@@ -9,7 +9,9 @@ import {
   UserPlus,
   BarChart3,
   Sliders,
-  RefreshCw
+  RefreshCw,
+  Calendar,
+  Target
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -22,7 +24,7 @@ import DissatisfactionFieldsManagement from './admin/DissatisfactionFieldsManage
 
 export default function AdminPanel({ user: currentUser }: { user: User | null }) {
   const staticData = useStaticData();
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests' | 'qualidade' | 'campos_extras'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras'>('users');
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -97,7 +99,8 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           { key: 'teams', label: 'Equipes', icon: Shield },
           { key: 'forms', label: 'Formulários', icon: ClipboardList },
           { key: 'requests', label: 'Solicitações', icon: UserPlus },
-          { key: 'qualidade', label: 'Configurações', icon: BarChart3 },
+          { key: 'operacao', label: 'Operação', icon: Calendar },
+          { key: 'metas', label: 'Metas', icon: Target },
           { key: 'campos_extras', label: 'Campos Extras', icon: Sliders },
         ].map((item) => {
           const Icon = item.icon;
@@ -132,7 +135,8 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           {activeSubTab === 'teams' && <TeamsManagement teams={staticData.teams} users={staticData.users} loadData={loadAllData} />}
           {activeSubTab === 'forms' && <FormsManagement currentUser={currentUser} teams={staticData.teams} loadData={loadAllData} />}
           {activeSubTab === 'requests' && <RequestsManagement requests={requests} users={staticData.users} teams={staticData.teams} loadData={loadAllData} />}
-          {activeSubTab === 'qualidade' && <QualityConfigManagement />}
+          {activeSubTab === 'operacao' && <QualityConfigManagement mode="operacao" />}
+          {activeSubTab === 'metas' && <QualityConfigManagement mode="metas" />}
           {activeSubTab === 'campos_extras' && <DissatisfactionFieldsManagement />}
         </motion.div>
       </AnimatePresence>

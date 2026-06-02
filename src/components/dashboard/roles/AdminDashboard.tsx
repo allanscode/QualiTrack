@@ -237,6 +237,12 @@ export default function AdminDashboard() {
 
   if (!user) return null;
 
+  const scoreDiff = avgScore - config.targetScore;
+  const diffSign = scoreDiff >= 0 ? '↑' : '↓';
+  const diffColorClass = scoreDiff >= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -246,10 +252,10 @@ export default function AdminDashboard() {
           sub="Performance global da operação"
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
-          accent={getLevelForScore(avgScore, 'goal').color}
+          accent="text-slate-500"
           badge={
-            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-black rounded-md ${isAboveTarget(avgScore) ? 'bg-functional-success/10 text-functional-success' : 'bg-functional-error/10 text-functional-error'}`}>
-              {isAboveTarget(avgScore) ? '↑' : '↓'}
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${diffColorClass}`}>
+              {diffSign} {Math.abs(scoreDiff).toFixed(2)}%
             </span>
           }
         />
@@ -267,15 +273,15 @@ export default function AdminDashboard() {
           sub={onlineSub}
           good={true}
           icon={<Activity className="w-5 h-5" />}
-          accent="text-functional-success"
+          accent="text-slate-500"
         />
         <StatCard
           title="Tendência"
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`}
           sub="Evolução global"
           good={trendPercentage >= 0}
-      icon={<TrendingUp className="w-5 h-5" />}
-      accent="text-functional-success"
+          icon={<TrendingUp className="w-5 h-5" />}
+          accent="text-functional-success"
         />
       </div>
 
@@ -286,7 +292,7 @@ export default function AdminDashboard() {
           sub="Total de contestações"
           good={true}
           icon={<History className="w-5 h-5" />}
-          accent="text-brand-muted"
+          accent="text-slate-500"
         />
     <StatCard
       title="Taxa Reversão"
