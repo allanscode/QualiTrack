@@ -51,6 +51,14 @@ color-scheme: light;
   --shadow-premium: 0 10px 40px -10px rgba(45, 58, 58, 0.1);
   --shadow-premium-sm: 0 4px 20px -5px rgba(45, 58, 58, 0.05);
 
+  /* Functional color tokens (light mode) */
+  --error-color: #EF4444;
+  --error-bg: #FEF2F2;
+  --warning-color: #F59E0B;
+  --warning-bg: #FFFBEB;
+  --success-color: #10B981;
+  --success-bg: #ECFDF5;
+
   /* Chart palette (light mode) */
   --chart-excelente: #818CF8;
   --chart-aceitavel: #34D399;
@@ -84,6 +92,13 @@ color-scheme: dark;
   --sidebar-bg-suporte: #1E3A8A;
 
   /* Functional color tokens (dark mode — pastel/soft) */
+  --error-pastel: #FCA5A5;
+  --error-pastel-bg: #3B1C1C;
+  --warning-pastel: #FCD34D;
+  --warning-pastel-bg: #3B2F0A;
+  --success-pastel: #6EE7B7;
+  --success-pastel-bg: #1A3A2A;
+
   --error-color: var(--error-pastel);
   --error-bg: var(--error-pastel-bg);
   --warning-color: var(--warning-pastel);

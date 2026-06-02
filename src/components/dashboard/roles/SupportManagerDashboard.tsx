@@ -203,7 +203,7 @@ export default function SupportManagerDashboard() {
           sub={isAboveTarget(avgScore) ? 'Dentro da meta' : 'Abaixo da meta'}
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
-          accent={getLevelForScore(avgScore).color}
+          accent={getLevelForScore(avgScore, 'goal').color}
         />
         <StatCard
           title="Média Global"
@@ -259,7 +259,7 @@ export default function SupportManagerDashboard() {
       sub="Contestações Procedentes"
       good={reversalRate <= 20}
       icon={<Target className="w-5 h-5" />}
-      accent={getLevelForScore(reversalRate).color}
+      accent={reversalRate <= 20 ? 'text-functional-success' : 'text-functional-error'}
     />
         <StatCard
           title="Reav. Solicitadas"

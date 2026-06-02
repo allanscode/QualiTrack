@@ -44,7 +44,7 @@ export default function StatCard({ title, value, sub, good, icon, accent, onClic
           {icon}
         </div>
       </div>
-      <p className="text-3xl font-black text-brand-primary leading-none mb-2">{value}</p>
+      <p className={`text-3xl font-black leading-none mb-2 ${accent}`}>{value}</p>
       <div className={`text-[10px] font-bold uppercase tracking-wider ${good ? 'text-brand-muted' : 'text-functional-error'}`}>{sub}</div>
     </Card>
   );

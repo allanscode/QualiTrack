@@ -286,7 +286,7 @@ export default function QualityManagerDashboard() {
           sub={isAboveTarget(avgScore) ? 'Meta atingida' : 'Abaixo da meta'}
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
-          accent={getLevelForScore(avgScore).color}
+          accent={getLevelForScore(avgScore, 'goal').color}
         />
         <StatCard
           title="Minhas Ações"
@@ -330,7 +330,7 @@ export default function QualityManagerDashboard() {
       sub="Contestações Procedentes"
       good={reversalRate <= 15}
       icon={<Target className="w-5 h-5" />}
-      accent={getLevelForScore(reversalRate).color}
+      accent={reversalRate <= 15 ? 'text-functional-success' : 'text-functional-error'}
     />
         <StatCard
           title="Reav. Aceitas"

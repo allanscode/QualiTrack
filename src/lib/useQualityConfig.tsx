@@ -102,7 +102,7 @@ interface QualityConfigContextValue {
   config: QualityConfig;
   oldConfig: QualityConfig;
   saveConfig: (newConfig: QualityConfig) => Promise<void>;
-  getLevelForScore: (score: number) => QualityLevel;
+  getLevelForScore: (score: number, type?: 'goal' | 'status') => QualityLevel;
   isAboveTarget: (score: number) => boolean;
   recalculateActiveActionDeadlines: (previousConfig: QualityConfig, newConfig: QualityConfig) => Promise<void>;
 }
@@ -122,7 +122,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
       if (supabase) {
         const { data } = await supabase.from('quality_configs').select('*').single();
         if (data) {
-          const cfg = migrateSlaToActionDeadline(data.config) as QualityConfig;
+          const cfg = migrateLegacyLevelColors(migrateSlaToActionDeadline(data.config)) as QualityConfig;
           setConfig(cfg);
           setOldConfig(cfg);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
@@ -130,7 +130,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
       } else {
         const { data } = await mockDb.get('quality_configs');
         if (data && data.length > 0) {
-          const cfg = migrateSlaToActionDeadline(data[0].config) as QualityConfig;
+          const cfg = migrateLegacyLevelColors(migrateSlaToActionDeadline(data[0].config)) as QualityConfig;
           setConfig(cfg);
           setOldConfig(cfg);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
@@ -162,10 +162,24 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
     setOldConfig(newConfig);
   }, []);
 
-  const getLevelForScore = useCallback((score: number): QualityLevel => {
+  const getLevelForScore = useCallback((score: number, type: 'goal' | 'status' = 'status'): QualityLevel => {
+    if (type === 'goal') {
+      const isTargetMet = score >= config.targetScore;
+      if (isTargetMet) {
+        const sorted = [...config.levels].sort((a, b) => b.minScore - a.minScore);
+        const targetLevel = sorted.find(l => config.targetScore >= l.minScore && config.targetScore <= l.maxScore);
+        if (targetLevel) return targetLevel;
+      } else {
+        const sorted = [...config.levels].sort((a, b) => b.minScore - a.minScore);
+        const targetLevelIdx = sorted.findIndex(l => config.targetScore >= l.minScore && config.targetScore <= l.maxScore);
+        if (targetLevelIdx !== -1 && targetLevelIdx + 1 < sorted.length) {
+          return sorted[targetLevelIdx + 1];
+        }
+      }
+    }
     const sorted = [...config.levels].sort((a, b) => b.minScore - a.minScore);
     return sorted.find(l => score >= l.minScore && score <= l.maxScore) || config.levels[config.levels.length - 1];
-  }, [config.levels]);
+  }, [config.levels, config.targetScore]);
 
   const isAboveTarget = useCallback((score: number) => score >= config.targetScore, [config.targetScore]);
 

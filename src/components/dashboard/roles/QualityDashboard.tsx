@@ -146,7 +146,7 @@ export default function QualityDashboard() {
           sub="Média das notas aplicadas"
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
-          accent={getLevelForScore(avgScore).color}
+          accent={getLevelForScore(avgScore, 'goal').color}
         />
         <StatCard
           title="Pendente Ação"
