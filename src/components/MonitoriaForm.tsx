@@ -482,10 +482,9 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Data do Ticket *</label>
                   <div className="relative">
                     <Calendar className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted/50" />
-    <input
-      type="date"
-      style={{ colorScheme: resolvedTheme }}
-      value={header.ticket_date}
+        <input
+          type="date"
+          value={header.ticket_date}
       onChange={e => setHeader({...header, ticket_date: e.target.value})}
       disabled={isViewOnly}
       className="w-full bg-surface-subtle border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-colors outline-none"

@@ -533,10 +533,9 @@ if (user?.role === 'gestor_suporte') {
               <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-10 group hover:border-brand-accent transition-colors relative shadow-sm">
                 <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
                   <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
-                  <input
-                      type="date"
-                      style={{ colorScheme: resolvedTheme }}
-                      value={startDate}
+        <input
+          type="date"
+          value={startDate}
                       onChange={e => setStartDate(e.target.value)}
                       className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0"
                     />
@@ -544,10 +543,9 @@ if (user?.role === 'gestor_suporte') {
                 <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest mx-0.5">até</span>
                 <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
                   <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
-                  <input
-                      type="date"
-                      style={{ colorScheme: resolvedTheme }}
-                      value={endDate}
+        <input
+          type="date"
+          value={endDate}
                       onChange={e => setEndDate(e.target.value)}
                       className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0"
                     />

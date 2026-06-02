@@ -150,6 +150,28 @@ O `App.tsx` implementa um sistema unificado de gerenciamento de sessão com 4 me
 - `isPasswordRecoveryRef` — Gates entre recovery e invite no change-password
 - `isInviteFlowRef` — Detecta `type=invite` no hash para fluxo de convite
 
+**`appReady` — Double Barrier (Theme Gate)**: Estado booleano em `AppContent` que controla quando `MainApp` pode renderizar. Previne que o painel renderize com tema do OS antes da preferência do DB chegar.
+
+- **Lazy initializer**: `!!localStorage.getItem('qualitrack_theme') && saved !== 'system'` — `true` no F5 (cache existe), `false` em login fresco
+- **Login flow**: `handleUserSession()` consulta `user_preferences` → resolve `theme` + `sidebar_color` → `localStorage.setItem('qualitrack_theme', resolved)` + `setTheme(resolved)` + `applyThemeToDOM(resolved)` + `setPrefetchedSidebarColor(color)` + `setAppReady(true)`
+- **F5 flow**: `appReady` já é `true` → `MainApp` renderiza imediatamente com tema do `localStorage` → effect de sync corrige se DB divergir
+- **Render gate**: `loading ? spinner : !currentUser ? auth : !appReady ? spinner : MainApp`
+
+**`prefetchedSidebarColor`**: State string em `AppContent`. Extraída de `user_preferences` em `handleUserSession` (ambos branches: mock e Supabase) e em `handleLogin` (mock). Passada como prop para `MainApp`. `MainApp` usa prioridade: `prefetchedSidebarColor` → `localStorage` por email → `''`. Sidebar nasce com a cor correta, sem flash.
+
+**Logout Curtain Pattern**: As 3 saídas (`SIGNED_OUT`, `forceLogout`, `handleLogout`) seguem o padrão curtain — spinner cobre a transição visual de tema:
+1. `setAppReady(false)` — dispara spinner imediatamente
+2. `setPrefetchedSidebarColor('')` — limpa cor para próximo login
+3. `localStorage.setItem('qualitrack_theme', 'system')` — cache volta para system (nunca `removeItem`)
+4. `setTheme('system')` — estado React
+5. `applyThemeToDOM(resolveSystemTheme())` — DOM segue OS imediatamente
+6. `lastDbThemeRef.current = null` — limpa guard
+7. `setCurrentUser(null)` — volta para auth
+
+**Module-Scope Theme Helpers** (definidas fora de componentes em `App.tsx`):
+- `resolveSystemTheme()` — retorna `'light'` ou `'dark'` via `matchMedia('(prefers-color-scheme: dark)')`. Usada em logout e no blocking script de `index.html`.
+- `applyThemeToDOM(resolved)` — aplica `.dark`/`.light` + `colorScheme` no `<html>` imediatamente, sem esperar React.
+
 **Persistência de sessão (F5)**:
 - **Supabase**: SDK `persistSession: true` + `localStorage` — evento `INITIAL_SESSION` com session restaura login
 - **Mock**: `localStorage` chave `qualitrack_session` (`{userId, sessionStartedAt, sessionExpiresAt}`)
@@ -169,17 +191,18 @@ O `App.tsx` implementa um sistema unificado de gerenciamento de sessão com 4 me
 
 **Enriquecimento de equipe**: `enrichUserWithTeamIds()` consulta a tabela N:N `user_teams` e injeta `team_ids` no `userData` em todas as entradas: login, restauração de sessão e `handleUserSession`. A coluna `users.team_ids` foi removida (migration M5) — nunca enviar `team_ids` em payload Supabase da tabela `users`.
 
-**`handleLogout(options?)`**: Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handleLogout}`) seja passado como string para Sonner. Limpa `MOCK_SESSION_KEY`, `LAST_ACTIVITY_KEY` e `qualitrack_theme` do `localStorage`. Reseta `lastDbThemeRef.current = null` e `setTheme('system')`.
+**`handleLogout(options?)`**: Aceita `{ silent?, message? }` para evitar que `MouseEvent` (de `onClick={handleLogout}`) seja passado como string para Sonner. Segue o logout curtain pattern (ver acima): `setAppReady(false)` → `setPrefetchedSidebarColor('')` → `localStorage.setItem('qualitrack_theme', 'system')` → `setTheme('system')` → `applyThemeToDOM(resolveSystemTheme())` → `lastDbThemeRef.current = null` → `setCurrentUser(null)`.
 
 ### 7. Preferências de Usuário (`user_preferences`)
 
 A tabela `user_preferences` (JSONB) é a **fonte de verdade** para preferências de UI (tema, cor do sidebar, avatar). O fluxo otimizado:
 
 **Leitura (pós-login / F5):**
-1. `StaticDataContext` faz 1 fetch paralelo de `user_preferences` junto com as outras 5 tabelas de cadastro
-2. Os dados são expostos como `userPreferences: Record<string, UserPreferences>` no context
-3. `MainApp` lê `userPreferences[userId]` para sincronizar tema e sidebar_color — **nunca faz fetch independente**
-4. `lastDbThemeRef` (module-level) é setado **antes** de `setTheme()` para prevenir auto-save loop
+1. `handleUserSession()` consulta `user_preferences` **antes** de setar `userData`/`setCurrentUser` → resolve `theme` + `sidebar_color` → `localStorage.setItem('qualitrack_theme', resolved)` + `setTheme(resolved)` + `applyThemeToDOM(resolved)` + `setPrefetchedSidebarColor(color)` + `setAppReady(true)`
+2. `StaticDataContext` faz 1 fetch paralelo de `user_preferences` junto com as outras 5 tabelas de cadastro (para consumo geral dos componentes)
+3. Os dados são expostos como `userPreferences: Record<string, UserPreferences>` no context
+4. `MainApp` lê `userPreferences[userId]` para sincronizar tema e sidebar_color — **nunca faz fetch independente**
+5. `lastDbThemeRef` (module-level) é setado **antes** de `setTheme()` para prevenir auto-save loop
 
 **Escrita (explicit user action only):**
 1. Tema: `App.tsx` theme effect salva via `upsertUserPreferences()` **apenas** quando `resolved !== lastDbThemeRef.current` (guard contra write-back do valor recém-lido do banco)
@@ -193,9 +216,9 @@ A tabela `user_preferences` (JSONB) é a **fonte de verdade** para preferências
 - `upsertUserPreferences()` faz JSONB merge (read existing → spread partial → upsert), nunca sobrescreve chaves não-relacionadas
 
 **`localStorage` como cache instantâneo:**
-- `qualitrack_theme` — resolve flash de tema no F5 (blocking `<script>` em `index.html` lê antes do React)
-- `qualitrack_sidebar_color_{email}` — cache local da cor do sidebar
-- Ambos são limpos no logout (DB preserva para o próximo login)
+- `qualitrack_theme` — resolve flash de tema no F5 (blocking `<script>` em `index.html` lê antes do React). Logout seta `'system'` (nunca `removeItem`) para que `index.html` blocking script faça fallback para OS
+- `qualitrack_sidebar_color_{email}` — cache local da cor do sidebar. Em login, `handleUserSession()` extrai de `user_preferences` e salva no cache + `prefetchedSidebarColor` state
+- DB preserva preferências para o próximo login (logout não remove do banco)
 
 ## Navegação / Roteamento
 
@@ -276,7 +299,7 @@ Os perfis de usuário (roles) são mapeados de IDs técnicos para nomes amigáve
 - **Sidebar Accordion:** Popover de perfil com 4 seções recolhíveis (Equipes, Avatar, Aparência, Cor do Menu). Padrão single-open via `sidebarAccordion` state. Usa `AnimatePresence initial={false}` + `motion.div` para smooth height animation. `ChevronDown` com `rotate-180` transition. Seleção de cor auto-fecha o accordion. Sem botão X — fecha ao clicar fora ou no toggle do perfil.
 - **Profile Toggle:** Botões de avatar e nome no sidebar usam classe `profile-toggle-btn` para exclusão do click-outside handler. Toggle abre/fecha o popover corretamente sem conflito com o handler de click-outside.
 - **Color Picker:** Um dos 4 accordion sections. 20 presets de cor, persistidos via `upsertUserPreferences()` na tabela `user_preferences` (JSONB `sidebar_color`). Cache local em `localStorage` (`qualitrack_sidebar_color_{email}`). Fallback: `user_metadata.sidebar_color` migrado para DB automaticamente. Seleção auto-fecha o accordion.
-- **Date Picker (Dark Mode):** `input[type="date"]` usa `color-scheme: var(--date-color-scheme, light)` com `.dark` override `--date-color-scheme: dark` em `index.css`. Previne flash preto ao abrir calendário em light mode.
+- **Date Picker (Dark Mode):** `input[type="date"]` NUNCA usa `style={{ colorScheme }}` inline. `color-scheme` é 100% CSS-driven via regras em `index.css`: `input[type="date"] { color-scheme: light; }`, `html.dark input[type="date"] { color-scheme: dark; }`, `html:not(.dark) input[type="date"] { color-scheme: light !important; }`. Previne flash preto ao abrir calendário em light mode — elimina race condition JS no Chromium calendar popup.
 - **Scrollbar Gutter:** Container de scroll principal usa `scrollbar-gutter: stable` (inline style) para evitar layout shift quando scrollbar aparece/desaparece.
 
 ### Sidebar Contrast (YIQ Luminance)
@@ -313,7 +336,7 @@ A sidebar suporta cores customizadas (20 presets de cor). O contraste de texto, 
 ### Padrões UI Recorrentes
 - **Cards**: `rounded-3xl` ou `rounded-[32px]` com `border border-surface-border shadow-premium`
 - **Botões**: `rounded-2xl` com `font-black uppercase tracking-widest`
-- **Inputs**: `rounded-2xl` com `bg-surface-subtle border border-surface-border`. Para `input[type="date"]`, usar `color-scheme: var(--date-color-scheme, light)`.
+- **Inputs**: `rounded-2xl` com `bg-surface-subtle border border-surface-border`. Para `input[type="date"]`, `color-scheme` é 100% CSS-driven via `index.css` (nunca inline `style={{ colorScheme }}`).
 - **Labels**: `text-[10px] font-black uppercase tracking-widest text-brand-muted`
 - **Modais**: `fixed inset-0 bg-black/40 backdrop-blur-sm` com card central
 - **Animações**: `motion/react` para enter/exit de componentes. Sidebar accordion usa `AnimatePresence initial={false}` com smooth height animation.
