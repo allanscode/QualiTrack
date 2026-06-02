@@ -143,10 +143,40 @@ function AppContent() {
     return !!saved && saved !== 'system';
   });
   const [prefetchedSidebarColor, setPrefetchedSidebarColor] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'monitorias' | 'admin'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'monitorias' | 'admin'>(() => {
+    const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
+    if (hash === 'dashboard' || hash === 'monitorias' || hash === 'admin') {
+      return hash as 'dashboard' | 'monitorias' | 'admin';
+    }
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('qualitrack_active_tab') : null;
+    if (saved === 'dashboard' || saved === 'monitorias' || saved === 'admin') {
+      return saved as 'dashboard' | 'monitorias' | 'admin';
+    }
+    return 'dashboard';
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
+
+  // --- Sincronização da aba ativa com localStorage e hash da URL ---
+  useEffect(() => {
+    localStorage.setItem('qualitrack_active_tab', activeTab);
+    const currentHash = window.location.hash.replace('#', '');
+    if (currentHash !== activeTab) {
+      window.location.hash = activeTab;
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (hash === 'dashboard' || hash === 'monitorias' || hash === 'admin') {
+        setActiveTab(hash as 'dashboard' | 'monitorias' | 'admin');
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   const prevUserIdRef = useRef<string | null>(null);
 
@@ -195,7 +225,10 @@ function AppContent() {
                     const enriched = await enrichUserWithTeamIds(dbUser);
                     setCurrentUser(enriched);
                     setUserData(enriched);
-                    setActiveTab('dashboard');
+                    const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
+                    if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin') {
+                      setActiveTab(savedTab as any);
+                    }
                     sessionStartTimeRef.current = parsed.sessionStartedAt || now;
                   } else {
                     localStorage.removeItem(MOCK_SESSION_KEY);
@@ -615,7 +648,12 @@ function AppContent() {
           const enriched = await enrichUserWithTeamIds(dbUser);
           setUserData(enriched);
           setCurrentUser(user);
-          setActiveTab('dashboard');
+          const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
+          if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin') {
+            setActiveTab(savedTab as any);
+          } else {
+            setActiveTab('dashboard');
+          }
           if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now();
           localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({
             userId: dbUser.id,
@@ -630,7 +668,12 @@ function AppContent() {
           const enriched = await enrichUserWithTeamIds(data);
           setUserData(enriched);
           setCurrentUser(user);
-          setActiveTab('dashboard');
+          const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
+          if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin') {
+            setActiveTab(savedTab as any);
+          } else {
+            setActiveTab('dashboard');
+          }
           if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now();
           localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
         } else if (error && error.code === 'PGRST116') {
@@ -686,6 +729,8 @@ function AppContent() {
           setCurrentUser(enriched);
           setUserData(enriched);
           setActiveTab('dashboard');
+          localStorage.setItem('qualitrack_active_tab', 'dashboard');
+          window.location.hash = 'dashboard';
           setCredentials({ email: '', password: '' });
           sessionStartTimeRef.current = Date.now();
           localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({
@@ -720,6 +765,8 @@ function AppContent() {
     setCurrentUser(null);
     setUserData(null);
     setActiveTab('dashboard');
+    localStorage.removeItem('qualitrack_active_tab');
+    window.location.hash = 'dashboard';
     setAuthView('login');
     setPrefetchedSidebarColor('');
     setCredentials({ email: '', password: '' });
