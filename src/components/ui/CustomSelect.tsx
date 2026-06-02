@@ -15,6 +15,7 @@ interface CustomSelectProps {
   className?: string;
   disabled?: boolean;
   label?: string;
+  size?: 'md' | 'sm';
 }
 
 export default function CustomSelect({
@@ -24,7 +25,8 @@ export default function CustomSelect({
   placeholder = 'Selecionar...',
   className = '',
   disabled = false,
-  label
+  label,
+  size = 'md'
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -128,16 +130,22 @@ export default function CustomSelect({
     ? (query || '')
     : (selectedOption ? selectedOption.label : placeholder);
 
+  const isCompact = size === 'sm';
+
   return (
-    <div className={`flex flex-col gap-1 ${className}`}>
+    <div className={`flex flex-col gap-1 flex-1 min-w-[120px] ${className}`}>
       {label && <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">{label}</label>}
       <div className={disabled ? 'opacity-60 cursor-not-allowed' : ''}>
         <div
           ref={triggerRef}
           onClick={handleToggle}
-          className={`flex items-center justify-between w-full bg-surface-card border border-surface-border rounded-2xl px-3 h-10 text-[11px] font-bold text-brand-primary transition-all shadow-sm ${!disabled ? 'hover:border-brand-accent cursor-pointer' : 'cursor-not-allowed'} ${isOpen ? 'ring-2 ring-brand-accent/20 border-brand-accent' : ''}`}
+          className={`flex items-center justify-between w-full bg-surface-card border border-surface-border px-3 transition-all shadow-sm ${
+            isCompact ? 'h-9 rounded-xl px-2.5 text-[10px]' : 'h-10 rounded-2xl px-3 text-[11px]'
+          } ${!disabled ? 'hover:border-brand-accent cursor-pointer' : 'cursor-not-allowed'} ${
+            isOpen ? 'ring-2 ring-brand-accent/20 border-brand-accent' : ''
+          }`}
         >
-          <span className="truncate flex-1 min-w-0">
+          <span className="truncate flex-1 min-w-0 font-bold text-brand-primary">
             {isOpen ? (
               <input
                 ref={inputRef}
@@ -145,25 +153,35 @@ export default function CustomSelect({
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder={selectedOption ? selectedOption.label : placeholder}
-                className="w-full bg-transparent outline-none text-[11px] font-bold text-brand-primary placeholder:text-brand-muted/60"
+                className={`w-full bg-transparent outline-none font-bold text-brand-primary placeholder:text-brand-muted/60 ${
+                  isCompact ? 'text-[10px]' : 'text-[11px]'
+                }`}
                 onClick={e => e.stopPropagation()}
               />
             ) : (
               displayText || placeholder
             )}
           </span>
-          <ChevronDown className={`w-3.5 h-3.5 ml-1.5 shrink-0 transition-transform ${isOpen ? 'rotate-180 text-brand-accent' : 'text-brand-muted'}`} />
+          <ChevronDown
+            className={`shrink-0 transition-transform ${
+              isCompact ? 'w-3 h-3 ml-1' : 'w-3.5 h-3.5 ml-1.5'
+            } ${isOpen ? 'rotate-180 text-brand-accent' : 'text-brand-muted'}`}
+          />
         </div>
 
         {isOpen && !disabled && createPortal(
           <div
             ref={dropdownRef}
             style={posRef.current}
-            className="bg-surface-card border border-surface-border rounded-2xl shadow-premium-lg max-h-60 overflow-auto py-1 no-scrollbar"
+            className={`bg-surface-card border border-surface-border shadow-premium-lg max-h-60 overflow-auto py-1 no-scrollbar ${
+              isCompact ? 'rounded-xl' : 'rounded-2xl'
+            }`}
             onWheel={e => e.stopPropagation()}
           >
             {filtered.length === 0 ? (
-              <div className="px-3 py-2 text-[11px] font-bold text-brand-muted">Nenhum resultado</div>
+              <div className={`font-bold text-brand-muted ${isCompact ? 'px-2.5 py-1.5 text-[10px]' : 'px-3 py-2 text-[11px]'}`}>
+                Nenhum resultado
+              </div>
             ) : (
               filtered.map((opt) => (
                 <button
@@ -173,7 +191,9 @@ export default function CustomSelect({
                     onChange(opt.value.toString());
                     setIsOpen(false);
                   }}
-                  className={`w-full text-left px-3 py-2 text-[11px] font-bold transition-colors hover:bg-brand-highlight/20 truncate ${value === opt.value ? 'text-brand-primary bg-brand-highlight/10' : 'text-brand-muted hover:text-brand-primary'}`}
+                  className={`w-full text-left font-bold transition-colors hover:bg-brand-highlight/20 truncate ${
+                    isCompact ? 'px-2.5 py-1.5 text-[10px]' : 'px-3 py-2 text-[11px]'
+                  } ${value === opt.value ? 'text-brand-primary bg-brand-highlight/10' : 'text-brand-muted hover:text-brand-primary'}`}
                 >
                   {opt.label}
                 </button>

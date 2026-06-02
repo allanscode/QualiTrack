@@ -2,7 +2,9 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Calendar, X, RefreshCw } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
 import CustomSelect from '../ui/CustomSelect';
+import CustomDatepicker from '../ui/CustomDatepicker';
 import { useTheme } from '../../App';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function FilterBar() {
   const { resolvedTheme } = useTheme();
@@ -83,101 +85,93 @@ export default function FilterBar() {
       </div>
 
       <div className="bg-surface-card rounded-3xl border border-surface-border shadow-premium p-6">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
 
           {/* Date Range Group (Always First) */}
-          <div className="flex-1 min-w-[280px] h-10">
-            <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-full shadow-sm group hover:border-brand-accent transition-colors relative">
-              <div className="flex items-center gap-2 relative flex-1">
-                <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
-          <input
-          type="date"
-          value={filters.startDate}
-          onChange={e => setFilters({ ...filters, startDate: e.target.value })}
-                  className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0"
-                />
-              </div>
-              <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest mx-0.5">até</span>
-              <div className="flex items-center gap-2 relative flex-1">
-                <Calendar className="w-3.5 h-3.5 text-brand-muted relative z-10 pointer-events-none" />
-          <input
-          type="date"
-          value={filters.endDate}
-          onChange={e => setFilters({ ...filters, endDate: e.target.value })}
-                  className="bg-transparent border-none p-0 text-[11px] font-bold text-brand-primary focus:ring-0 w-full cursor-pointer relative z-0"
-                />
-              </div>
-            </div>
+          <div className="flex items-center gap-x-2 flex-[1.8] min-w-[260px]">
+            <CustomDatepicker
+              value={filters.startDate}
+              onChange={(val: string) => setFilters({ ...filters, startDate: val })}
+              placeholder="Data inicial"
+              size="sm"
+            />
+            <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest shrink-0">até</span>
+            <CustomDatepicker
+              value={filters.endDate}
+              onChange={(val: string) => setFilters({ ...filters, endDate: val })}
+              placeholder="Data final"
+              size="sm"
+            />
           </div>
 
           {/* Dropdowns */}
-          <div className="flex-1 min-w-[160px]">
-            <CustomSelect
-              value={filters.teamId}
-              options={[{ value: '', label: 'Equipe' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
-              onChange={(val: string) => setFilters({ ...filters, teamId: val, agentId: '' })}
-              className="w-full"
-            />
-          </div>
+          <CustomSelect
+            value={filters.teamId}
+            options={[{ value: '', label: 'Equipe' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
+            onChange={(val: string) => setFilters({ ...filters, teamId: val, agentId: '' })}
+            size="sm"
+          />
 
           {user?.role !== 'suporte' && (
-            <div className="flex-1 min-w-[160px]">
-              <CustomSelect
-                value={filters.agentId}
-                options={[
-                  { value: '', label: 'Agentes' },
-                  ...activeAgents
-                    .filter(a => !filters.teamId || (a.team_ids && a.team_ids.includes(filters.teamId)))
-                    .map(a => ({ value: a.id, label: a.name }))
-                ]}
-                onChange={(val: string) => setFilters({ ...filters, agentId: val })}
-                className="w-full"
-              />
-            </div>
+            <CustomSelect
+              value={filters.agentId}
+              options={[
+                { value: '', label: 'Agentes' },
+                ...activeAgents
+                  .filter(a => !filters.teamId || (a.team_ids && a.team_ids.includes(filters.teamId)))
+                  .map(a => ({ value: a.id, label: a.name }))
+              ]}
+              onChange={(val: string) => setFilters({ ...filters, agentId: val })}
+              size="sm"
+            />
           )}
 
           {user?.role !== 'suporte' && user?.role !== 'qualidade' && user?.role !== 'gestor_suporte' && (
-            <div className="flex-1 min-w-[160px]">
-              <CustomSelect
-                value={filters.auditorId}
-                options={[
-                  { value: '', label: 'Monitores' },
-                  ...activeAuditors.map(a => ({ value: a.id, label: a.name }))
-                ]}
-                onChange={(val: string) => setFilters({ ...filters, auditorId: val })}
-                className="w-full"
-              />
-            </div>
+            <CustomSelect
+              value={filters.auditorId}
+              options={[
+                { value: '', label: 'Monitores' },
+                ...activeAuditors.map(a => ({ value: a.id, label: a.name }))
+              ]}
+              onChange={(val: string) => setFilters({ ...filters, auditorId: val })}
+              size="sm"
+            />
           )}
 
-          <div className="flex-1 min-w-[180px]">
-            <CustomSelect
-              value={filters.status}
-              options={[
-                { value: '', label: 'Status' },
-                { value: 'pendente_revisao', label: 'Aguardando Revisão' },
-                { value: 'em_contestacao', label: 'Em Reanálise' },
-                { value: 'aguardando_gestor_suporte', label: 'Aguardando Gestor' },
-                { value: 'concluida', label: 'Concluída' },
-                { value: 'contestacao_negada', label: 'Contestação Negada' }
-              ]}
-              onChange={(val: string) => setFilters({ ...filters, status: val })}
-              className="w-full"
-            />
-          </div>
+          <CustomSelect
+            value={filters.status}
+            options={[
+              { value: '', label: 'Status' },
+              { value: 'pendente_revisao', label: 'Aguardando Revisão' },
+              { value: 'em_contestacao', label: 'Em Reanálise' },
+              { value: 'aguardando_gestor_suporte', label: 'Aguardando Gestor' },
+              { value: 'concluida', label: 'Concluída' },
+              { value: 'contestacao_negada', label: 'Contestação Negada' }
+            ]}
+            onChange={(val: string) => setFilters({ ...filters, status: val })}
+            size="sm"
+          />
 
-          {/* Action Buttons — always reserve space for clear button */}
-          <div className="flex items-center gap-2 flex-shrink-0 w-10 h-10 justify-center">
+          {/* Action Buttons — animated clean button */}
+          <AnimatePresence>
             {hasChanged && (
-              <button
-                onClick={handleClear}
-                className="w-8 h-8 rounded-full bg-functional-error/10 text-functional-error hover:bg-functional-error hover:text-white transition-all flex items-center justify-center shadow-sm"
-                title="Limpar filtros"
+              <motion.div
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 28, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className="overflow-hidden flex-shrink-0 flex items-center justify-center"
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
+                <button
+                  onClick={handleClear}
+                  className="w-7 h-7 rounded-full bg-functional-error/10 text-functional-error hover:bg-functional-error hover:text-white transition-all flex items-center justify-center shadow-sm cursor-pointer"
+                  title="Limpar filtros"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </motion.div>
             )}
-          </div>
+          </AnimatePresence>
         </div>
       </div>
     </div>

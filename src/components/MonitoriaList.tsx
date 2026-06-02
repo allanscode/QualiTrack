@@ -38,6 +38,7 @@ import Card from './ui/Card';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
 import CustomSelect from './ui/CustomSelect'; 
+import CustomDatepicker from './ui/CustomDatepicker';
 import ActionDeadlineClock from './ui/ActionDeadlineClock';
 import { useQualityConfig } from '../lib/useQualityConfig';
 
@@ -511,106 +512,98 @@ if (user?.role === 'gestor_suporte') {
       {/* Block 1: Filters & Status Joined */}
     <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card rounded-3xl">
       <div className="p-6 space-y-6">
-        <div className="flex flex-col space-y-4">
-          {/* Row 1: Date and Dropdowns */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Search */}
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative h-10">
-                <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
-                <input
-                  type="text"
-                  placeholder="Buscar ticket ou monitoria..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-[11px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent transition-all outline-none shadow-sm"
-                />
-              </div>
-            </div>
-
-            {/* Date Filter */}
-            <div className="flex-1 min-w-[260px]">
-              <div className="flex items-center gap-2 bg-surface-card border border-surface-border rounded-2xl px-3 h-10 group hover:border-brand-accent transition-colors relative shadow-sm">
-                <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
-                  <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
-        <input
-          type="date"
-          value={startDate}
-                      onChange={e => setStartDate(e.target.value)}
-                      className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0"
-                    />
-                </div>
-                <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest mx-0.5">até</span>
-                <div className="flex items-center gap-2 text-brand-muted group-hover:text-brand-accent transition-colors relative flex-1">
-                  <Calendar className="w-3.5 h-3.5 relative z-10 pointer-events-none" />
-        <input
-          type="date"
-          value={endDate}
-                      onChange={e => setEndDate(e.target.value)}
-                      className="bg-transparent border-none p-0 text-[11px] font-bold w-full focus:ring-0 cursor-pointer relative z-0"
-                    />
-                </div>
-              </div>
-            </div>
-
-            {/* Dropdowns */}
-            <div className="flex-1 min-w-[140px]">
-              <CustomSelect
-                value={teamFilter}
-                onChange={val => setTeamFilter(val)}
-                options={[{ value: '', label: 'Todas Equipes' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
-                className="w-full"
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full">
+          {/* Busca (col-span-12 lg:col-span-4) */}
+          <div className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-1">
+            <div className="relative h-9">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+              <input
+                type="text"
+                placeholder="Buscar ticket..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full h-full bg-surface-card border border-surface-border rounded-xl pl-9 pr-3 text-[10px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent transition-all outline-none shadow-sm"
               />
             </div>
+          </div>
+
+          {/* Grupo Datas (col-span-12 lg:col-span-4) */}
+          <div className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-2 flex items-center gap-2 w-full">
+            <CustomDatepicker
+              value={startDate}
+              onChange={(val: string) => setStartDate(val)}
+              placeholder="Data inicial"
+              size="sm"
+            />
+            <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest shrink-0">até</span>
+            <CustomDatepicker
+              value={endDate}
+              onChange={(val: string) => setEndDate(val)}
+              placeholder="Data final"
+              size="sm"
+            />
+          </div>
+
+          {/* Bloco de Apoio (Direita - col-span-12 lg:col-span-8) */}
+          <div className="col-span-12 lg:col-span-8 lg:col-start-5 lg:row-start-1 lg:row-span-2 flex flex-wrap items-center gap-2 w-full self-end">
+            {/* Dropdowns */}
+            <CustomSelect
+              value={teamFilter}
+              onChange={val => setTeamFilter(val)}
+              options={[{ value: '', label: 'Todas Equipes' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
+              size="sm"
+            />
 
             {user?.role !== 'suporte' && (
-              <div className="flex-1 min-w-[140px]">
-                <CustomSelect
-                  value={suporteFilter}
-                  onChange={val => setSuporteFilter(val)}
-                  options={[{ value: '', label: 'Agentes' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
-                  className="w-full"
-                />
-              </div>
+              <CustomSelect
+                value={suporteFilter}
+                onChange={val => setSuporteFilter(val)}
+                options={[{ value: '', label: 'Agentes' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
+                size="sm"
+              />
             )}
 
             {['admin', 'gestor_qualidade'].includes(user?.role || '') && (
-              <div className="flex-1 min-w-[140px]">
-                <CustomSelect
-                  value={auditorFilter}
-                  onChange={val => setAuditorFilter(val)}
-                  options={[{ value: '', label: 'Monitores' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
-                  className="w-full"
-                />
-              </div>
+              <CustomSelect
+                value={auditorFilter}
+                onChange={val => setAuditorFilter(val)}
+                options={[{ value: '', label: 'Monitores' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
+                size="sm"
+              />
             )}
 
             {user?.role === 'admin' && (
-              <div className="flex-1 min-w-[140px]">
-                <CustomSelect
-                  value={statusFilter}
-                  onChange={val => setStatusFilter(val as any)}
-                  options={[
-                    { value: 'active', label: 'Ativas' },
-                    { value: 'removed', label: 'Removidas' }
-                  ]}
-                  className="w-full"
-                />
-              </div>
+              <CustomSelect
+                value={statusFilter}
+                onChange={val => setStatusFilter(val as any)}
+                options={[
+                  { value: 'active', label: 'Ativas' },
+                  { value: 'removed', label: 'Removidas' }
+                ]}
+                size="sm"
+              />
             )}
 
-            {/* Clear button — always reserve space */}
-            <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center">
+            {/* Clear button — animated clean button pushed to the right */}
+            <AnimatePresence>
               {hasActiveFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="w-8 h-8 rounded-full bg-functional-error/10 text-functional-error hover:bg-functional-error hover:text-white transition-all flex items-center justify-center shadow-sm"
-                  title="Limpar Filtros"
+                <motion.div
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: 28, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  className="overflow-hidden flex-shrink-0 flex items-center justify-center ml-auto"
                 >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                  <button
+                    onClick={clearFilters}
+                    className="w-7 h-7 rounded-full bg-functional-error/10 text-functional-error hover:bg-functional-error hover:text-white transition-all flex items-center justify-center shadow-sm cursor-pointer"
+                    title="Limpar Filtros"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
           </div>
         </div>
 

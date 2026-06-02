@@ -2,7 +2,7 @@
 
 ## Arquivos Envolvidos
 - `src/components/MonitoriaForm.tsx` — Formulário de criação/reavaliação (684 linhas)
-- `src/components/MonitoriaList.tsx` — Lista com ações e filtros (676 linhas)
+- `src/components/MonitoriaList.tsx` — Lista com ações e filtros (1015 linhas)
 - `src/components/ui/ActionDeadlineClock.tsx` — Widget de contagem regressiva
 - `src/components/ui/CustomSelect.tsx` — Dropdown com portal + type-ahead
 - `src/lib/businessHours.ts` — Cálculo de prazos de ação
