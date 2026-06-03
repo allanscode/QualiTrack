@@ -260,14 +260,14 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                         <input 
                           type="text" 
                           placeholder="Buscar..." 
-                          className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg pl-6 pr-2 text-[10px] font-medium text-slate-900 dark:text-slate-50 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                          className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg pl-6 pr-2 text-[10px] font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                           value={teamSearch}
                           onChange={e => setTeamSearch(e.target.value)}
                         />
                       </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-40 overflow-y-auto scrollbar-thin">
+                  <div className="flex flex-col gap-3 px-4 pb-4 pt-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-40 overflow-y-auto scrollbar-thin">
                     {teams
                       .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                       .sort((a, b) => a.name.localeCompare(b.name))
@@ -284,7 +284,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                             setApproveData({ ...approveData, team_ids: newIds });
                           }}
                         />
-                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide group-hover:text-slate-900 dark:group-hover:text-white transition-colors truncate">
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
                           {t.name}
                         </span>
                       </label>
