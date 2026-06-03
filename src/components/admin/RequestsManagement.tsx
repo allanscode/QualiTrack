@@ -99,7 +99,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
 
   const confirmReject = async () => {
     if (!rejectReason.trim()) {
-      toast.error('Por favor, informe o motivo da rejeição.');
+      toast.error('Por favor, informe o motivo da recusa.');
       return;
     }
 
@@ -129,7 +129,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
       setIsRejectModalOpen(false);
       await handleRefresh();
     } catch (e: any) {
-      toast.error('Não foi possível processar a rejeição da solicitação.');
+      toast.error('Não foi possível processar a recusa da solicitação.');
     } finally {
       setSaving(false);
     }
@@ -309,7 +309,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
               <header className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2 text-error">
                   <AlertCircle className="w-5 h-5" />
-                  <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Recusar Solicitação</h3>
+                  <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">RECUSAR SOLICITAÇÃO</h3>
                 </div>
                 <button onClick={() => setIsRejectModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
               </header>
@@ -319,7 +319,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                   Informe abaixo o motivo da recusa, que será enviado por e-mail para o usuário.
                 </p>
                 <div className="flex flex-col">
-                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Motivo da Recusa</label>
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">MOTIVO DA RECUSA</label>
                   <textarea 
                     className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-red-500 dark:focus:border-red-500 focus:outline-none focus:ring-0 min-h-[120px] resize-none shadow-sm transition-all"
                     placeholder="Ex: E-mail não corporativo ou setor não autorizado."
