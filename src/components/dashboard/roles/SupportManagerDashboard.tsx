@@ -198,6 +198,12 @@ export default function SupportManagerDashboard() {
     ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
     : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
 
+  const revDiff = reversalRate - config.targetReversalRate;
+  const revSign = revDiff <= 0 ? '↓' : '↑';
+  const revColorClass = revDiff <= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
+
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
 
@@ -268,9 +274,14 @@ export default function SupportManagerDashboard() {
       title="Taxa de Reversão"
       value={`${reversalRate.toFixed(2)}%`}
       sub="Contestações Procedentes"
-      good={reversalRate <= 20}
+      good={reversalRate <= config.targetReversalRate}
       icon={<Target className="w-5 h-5" />}
-      accent={reversalRate <= 20 ? 'text-functional-success' : 'text-functional-error'}
+      accent={reversalRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
+      badge={
+        <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${revColorClass}`}>
+          {revSign} {Math.abs(revDiff).toFixed(2)}%
+        </span>
+      }
     />
         <StatCard
           title="Reav. Solicitadas"

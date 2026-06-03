@@ -243,6 +243,12 @@ export default function AdminDashboard() {
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
     : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
 
+  const revDiff = reversalRate - config.targetReversalRate;
+  const revSign = revDiff <= 0 ? '↓' : '↑';
+  const revColorClass = revDiff <= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -294,14 +300,19 @@ export default function AdminDashboard() {
           icon={<History className="w-5 h-5" />}
           accent="text-slate-500"
         />
-    <StatCard
-      title="Taxa Reversão"
-      value={`${reversalRate.toFixed(2)}%`}
-      sub="Qualidade das monitorias"
-      good={reversalRate <= 15}
-      icon={<Target className="w-5 h-5" />}
-      accent={reversalRate <= 15 ? 'text-functional-success' : 'text-functional-error'}
-    />
+        <StatCard
+          title="Taxa Reversão"
+          value={`${reversalRate.toFixed(2)}%`}
+          sub="Qualidade das monitorias"
+          good={reversalRate <= config.targetReversalRate}
+          icon={<Target className="w-5 h-5" />}
+          accent={reversalRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${revColorClass}`}>
+              {revSign} {Math.abs(revDiff).toFixed(2)}%
+            </span>
+          }
+        />
         <StatCard
           title="Reav. Aprovadas"
           value={reavAccepted}

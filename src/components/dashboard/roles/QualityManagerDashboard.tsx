@@ -272,6 +272,23 @@ export default function QualityManagerDashboard() {
       };
     }).sort((a, b) => (b.Aceitas + b.Recusadas) - (a.Aceitas + a.Recusadas));
   }, [monitorias, users]);
+  const uniqueEvaluators = useMemo(() => {
+    const ids = new Set(monitorias.map(m => m.evaluator_id).filter(Boolean));
+    return ids.size || 1;
+  }, [monitorias]);
+
+  const targetTeamVolume = config.targetVolume * uniqueEvaluators;
+  const volDiff = monitorias.length - targetTeamVolume;
+  const volSign = volDiff >= 0 ? '↑' : '↓';
+  const volColorClass = volDiff >= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
+
+  const revDiff = reversalRate - config.targetReversalRate;
+  const revSign = revDiff <= 0 ? '↓' : '↑';
+  const revColorClass = revDiff <= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
 
   if (!user) return null;
 
@@ -311,9 +328,14 @@ export default function QualityManagerDashboard() {
           title="Monitorias"
           value={monitorias.length}
           sub="Volume total do período"
-          good={true}
+          good={volDiff >= 0}
           icon={<ClipboardCheck className="w-5 h-5" />}
-          accent="text-slate-500"
+          accent={volDiff >= 0 ? 'text-functional-success' : 'text-functional-error'}
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${volColorClass}`}>
+              {volSign} {Math.abs(volDiff)}
+            </span>
+          }
         />
     <StatCard
       title="Tendência"
@@ -335,14 +357,19 @@ export default function QualityManagerDashboard() {
           icon={pendingActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
           accent={pendingActions === 0 ? 'text-functional-success' : 'text-functional-warning'}
         />
-    <StatCard
-      title="Taxa de Reversão"
-      value={`${reversalRate.toFixed(2)}%`}
-      sub="Contestações Procedentes"
-      good={reversalRate <= 15}
-      icon={<Target className="w-5 h-5" />}
-      accent={reversalRate <= 15 ? 'text-functional-success' : 'text-functional-error'}
-    />
+        <StatCard
+          title="Taxa de Reversão"
+          value={`${reversalRate.toFixed(2)}%`}
+          sub="Contestações Procedentes"
+          good={reversalRate <= config.targetReversalRate}
+          icon={<Target className="w-5 h-5" />}
+          accent={reversalRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${revColorClass}`}>
+              {revSign} {Math.abs(revDiff).toFixed(2)}%
+            </span>
+          }
+        />
         <StatCard
           title="Reav. Aceitas"
           value={reavAccepted}
