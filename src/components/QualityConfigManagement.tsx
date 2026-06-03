@@ -367,21 +367,21 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
       ) : (
         <>
           <div>
-            <h2 className="text-2xl font-black text-brand-primary tracking-tight">Metas e Indicadores</h2>
-            <p className="text-sm text-brand-muted mt-1 font-medium">
+            <h2 className="text-xl font-black text-brand-primary tracking-tight">Metas e Indicadores</h2>
+            <p className="text-xs text-brand-muted mt-1 font-medium">
               Gerencie as metas de desempenho do suporte, metas operacionais da auditoria e as faixas de classificação.
             </p>
           </div>
 
           {/* Target Score */}
-          <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
-            <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Meta de Desempenho</h3>
-            <p className="text-sm text-brand-muted mb-6 font-medium">
+          <div className="bg-surface-card rounded-2xl border border-surface-border p-6 shadow-premium-sm">
+            <h3 className="font-black text-brand-primary text-base mb-1 uppercase tracking-tight">Meta de Desempenho</h3>
+            <p className="text-xs text-brand-muted mb-4 font-medium">
               Score mínimo para o suporte ser considerado dentro da meta. Usado nos rankings Top, Medianos e Oportunidades.
             </p>
-            <div className="flex items-center gap-6 flex-wrap">
-              <div className="flex-1 max-w-32 w-full">
-                <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">Score mínimo (%)</label>
+            <div className="flex flex-col gap-1">
+              <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">Score Mínimo</label>
+              <div className="relative max-w-[100px] w-full">
                 <input
                   type="number"
                   min={0}
@@ -391,128 +391,129 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     const val = e.target.value === '' ? '' : Number(e.target.value);
                     setLocalConfig(c => ({ ...c, targetScore: val as any }));
                   }}
-                  className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                  className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
                 />
-              </div>
-              <div className={`px-6 py-3 rounded-xl border flex flex-col justify-center shrink-0 ${
-                localConfig.targetScore >= 75 
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30' 
-                  : 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30'
-              }`}>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5 opacity-80">Meta atual</p>
-                <p className="text-xl font-black">{localConfig.targetScore}%</p>
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-400 dark:text-zinc-500">%</span>
               </div>
             </div>
           </div>
 
           {/* Auditor Goal configuration */}
-          <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
-            <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Metas da Auditoria</h3>
-            <p className="text-sm text-brand-muted mb-6 font-medium">
+          <div className="bg-surface-card rounded-2xl border border-surface-border p-6 shadow-premium-sm">
+            <h3 className="font-black text-brand-primary text-base mb-1 uppercase tracking-tight">Metas da Auditoria</h3>
+            <p className="text-xs text-brand-muted mb-4 font-medium">
               Defina as metas operacionais para a equipe de monitoria/qualidade para o período.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl">
               {/* Taxa de Reversão */}
-              <div className="space-y-4 flex flex-col max-w-md w-full">
-                <div className="flex-1">
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">
-                    Meta de Taxa de Reversão (%)
+              <div className="space-y-2 flex flex-col max-w-md w-full">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">
+                    Taxa de Reversão
                   </label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={localConfig.targetReversalRate ?? ''}
-                    onChange={e => {
-                      const val = e.target.value === '' ? '' : Number(e.target.value);
-                      setLocalConfig(c => ({ ...c, targetReversalRate: val as any }));
-                    }}
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
-                    placeholder="Ex: 15"
-                  />
+                  <div className="relative max-w-[100px] w-full">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={localConfig.targetReversalRate ?? ''}
+                      onChange={e => {
+                        const val = e.target.value === '' ? '' : Number(e.target.value);
+                        setLocalConfig(c => ({ ...c, targetReversalRate: val as any }));
+                      }}
+                      className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
+                      placeholder="15"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-400 dark:text-zinc-500">%</span>
+                  </div>
                   <p className="text-[11px] text-brand-muted mt-2 font-medium">
                     Percentual máximo tolerável de contestações consideradas procedentes/aceitas.
                   </p>
                 </div>
-                <div className="px-6 py-3 rounded-xl border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/10 flex flex-col justify-center w-full shadow-sm shrink-0">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-0.5">Tolerância Máxima</p>
-                  <p className="text-xl font-black text-blue-700 dark:text-blue-300">{localConfig.targetReversalRate ?? 15}%</p>
-                </div>
               </div>
 
               {/* Volumetria */}
-              <div className="space-y-4 flex flex-col max-w-md w-full">
-                <div className="flex-1">
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">
-                    Meta de Volumetria (Qtd)
+              <div className="space-y-2 flex flex-col max-w-md w-full">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">
+                    Volumetria
                   </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={localConfig.targetVolume ?? ''}
-                    onChange={e => {
-                      const val = e.target.value === '' ? '' : Number(e.target.value);
-                      setLocalConfig(c => ({ ...c, targetVolume: val as any }));
-                    }}
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
-                    placeholder="Ex: 30"
-                  />
+                  <div className="relative max-w-[120px] w-full">
+                    <input
+                      type="number"
+                      min={1}
+                      value={localConfig.targetVolume ?? ''}
+                      onChange={e => {
+                        const val = e.target.value === '' ? '' : Number(e.target.value);
+                        setLocalConfig(c => ({ ...c, targetVolume: val as any }));
+                      }}
+                      className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-10 transition-all shadow-sm"
+                      placeholder="30"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-400 dark:text-zinc-500 uppercase">Qtd</span>
+                  </div>
                   <p className="text-[11px] text-brand-muted mt-2 font-medium">
                     Quantidade alvo de monitorias que cada auditor deve realizar por período.
                   </p>
-                </div>
-                <div className="px-6 py-3 rounded-xl border border-indigo-100 bg-indigo-50/50 dark:border-indigo-900/30 dark:bg-indigo-950/10 flex flex-col justify-center w-full shadow-sm shrink-0">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-0.5">Meta de Quantidade</p>
-                  <p className="text-xl font-black text-indigo-700 dark:text-indigo-300">{localConfig.targetVolume ?? 30} monitorias</p>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Quality Level Bands */}
-          <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
-            <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Faixas de Classificação</h3>
-            <p className="text-sm text-brand-muted mb-6 font-medium">
+          <div className="bg-surface-card rounded-2xl border border-surface-border p-6 shadow-premium-sm">
+            <h3 className="font-black text-brand-primary text-base mb-1 uppercase tracking-tight">Faixas de Classificação</h3>
+            <p className="text-xs text-brand-muted mb-4 font-medium">
               Configure os intervalos de score para cada nível. As faixas não podem se sobrepor.
             </p>
             <div className="space-y-4">
               {localConfig.levels.map((level, idx) => (
-                <div key={idx} className="bg-surface-subtle/40 rounded-2xl p-6 border border-surface-border group hover:border-brand-accent transition-all">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-end">
-                    <div>
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">Nome do Nível</label>
+                <div key={idx} className="bg-surface-subtle/40 rounded-xl p-3.5 border border-surface-border group hover:border-brand-accent/40 transition-all">
+                  <div className="flex flex-col lg:flex-row lg:items-center gap-4 w-full">
+                    {/* Nome do Nível */}
+                    <div className="flex-1 min-w-[150px] w-full">
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">Nome do Nível</label>
                       <input
                         type="text"
                         value={level.label}
                         onChange={e => updateLevel(idx, 'label', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
+                        className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">Score Min (%)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={level.minScore ?? ''}
-                        onChange={e => updateLevel(idx, 'minScore', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
-                      />
+                    {/* Score Min */}
+                    <div className="max-w-[100px] w-full">
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5 text-center">Mínimo</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={level.minScore ?? ''}
+                          onChange={e => updateLevel(idx, 'minScore', e.target.value)}
+                          className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400 dark:text-zinc-500">%</span>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">Score Max (%)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={level.maxScore ?? ''}
-                        onChange={e => updateLevel(idx, 'maxScore', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
-                      />
+                    {/* Score Max */}
+                    <div className="max-w-[100px] w-full">
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5 text-center">Máximo</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={level.maxScore ?? ''}
+                          onChange={e => updateLevel(idx, 'maxScore', e.target.value)}
+                          className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400 dark:text-zinc-500">%</span>
+                      </div>
                     </div>
-                    <div>
+                    {/* Cor de Destaque */}
+                    <div className="w-full lg:w-44">
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">Cor de Destaque</label>
                       <CustomSelect
-                        label="Cor de Destaque"
                         value={level.color + '||' + level.bgColor}
                         onChange={val => {
                           const parts = val.split('||');
@@ -526,21 +527,23 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                           value: c.color + '||' + c.bgColor,
                           label: c.label
                         }))}
+                        className="[&>div>div]:!rounded-lg [&_span]:!text-sm [&_span]:!font-normal [&_input]:!text-sm [&_input]:!font-normal [&>div>div]:h-10 [&_svg]:w-4 [&_svg]:h-4"
                       />
                     </div>
-                  </div>
-                  <div className="mt-4 flex items-center gap-3">
-                    <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${level.bgColor} ${level.color}`}>
-                      <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />
-                      {level.label}: {level.minScore}% - {level.maxScore}%
-                    </span>
+                    {/* Preview Badge inline */}
+                    <div className="flex items-center shrink-0 self-end h-10 pb-0.5 pl-2">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${level.bgColor} ${level.color} border border-current/15 shadow-sm`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />
+                        {level.label || 'Nível'}: {level.minScore ?? 0}% - {level.maxScore ?? 0}%
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="mt-8 p-6 bg-surface-subtle rounded-3xl border border-surface-border/50">
-              <p className="font-black text-brand-primary text-xs mb-2 uppercase tracking-widest">Regras de Validação</p>
-              <ul className="space-y-1.5 text-xs text-brand-muted font-medium">
+            <div className="mt-6 p-4 bg-surface-subtle rounded-xl border border-surface-border/50">
+              <p className="font-black text-brand-primary text-[10px] mb-2 uppercase tracking-widest">Regras de Validação</p>
+              <ul className="space-y-1 text-[11px] text-brand-muted font-medium">
                 <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-brand-accent" /> As faixas de score não podem se sobrepor</li>
                 <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-brand-accent" /> Recomenda-se cobrir o intervalo de 0% a 100%</li>
                 <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-brand-accent" /> As alterações são aplicadas imediatamente após salvar</li>
@@ -555,7 +558,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
         <button
           onClick={handleSave}
           disabled={saving}
-          className="bg-brand-primary text-brand-on-primary px-12 py-4 rounded-2xl font-black uppercase tracking-widest shadow-premium hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-3 active:scale-[0.98]"
+          className="bg-brand-primary text-brand-on-primary h-10 px-8 rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-2 shadow-sm active:scale-[0.98]"
         >
           {saving ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
           {saving ? 'Salvando...' : 'Salvar Alterações'}
