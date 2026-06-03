@@ -36,7 +36,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
   const [openColorPickerIdx, setOpenColorPickerIdx] = React.useState<number | null>(null);
 
   const [calendarOpen, setCalendarOpen] = React.useState(false);
-  const [currentMonth, setCurrentMonth] = React.useState<Date>(() => new Date(2024, 0, 1)); // Anchor on year 2024 (leap year)
+  const [currentMonth, setCurrentMonth] = React.useState<Date>(() => new Date()); // Start dynamically in current month and year
   const triggerRef = React.useRef<HTMLDivElement>(null);
   const datepickerRef = React.useRef<HTMLDivElement>(null);
   const [pos, setPos] = React.useState<React.CSSProperties>({});
@@ -145,8 +145,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
     if (!holidayInput) return null;
     const [day, month] = holidayInput.split('/').map(Number);
     if (!day || !month || isNaN(day) || isNaN(month)) return null;
-    return new Date(2024, month - 1, day);
-  }, [holidayInput]);
+    return new Date(currentMonth.getFullYear(), month - 1, day);
+  }, [holidayInput, currentMonth]);
 
   const weekdays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
@@ -339,35 +339,42 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
               Defina o período de funcionamento para o cálculo preciso do prazo.
             </p>
             
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              <div className="lg:col-span-7 space-y-8">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50 max-w-32 w-full">
-                    <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">
-                      Início
-                    </label>
-                    <input
-                      type="time"
-                      value={localConfig.businessHours?.start || '08:00'}
-                      onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, start: e.target.value } }))}
-                      className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
-                    />
-                  </div>
-                  <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50 max-w-32 w-full">
-                    <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">
-                      Fim
-                    </label>
-                    <input
-                      type="time"
-                      value={localConfig.businessHours?.end || '17:00'}
-                      onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, end: e.target.value } }))}
-                      className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
-                    />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* COLUNA DA ESQUERDA: Horários e Dias Úteis */}
+              <div className="lg:col-span-5 space-y-4">
+                {/* Horários: Início e Fim compactos lado a lado */}
+                <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 max-w-[120px]">
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">
+                        Início
+                      </label>
+                      <input
+                        type="time"
+                        value={localConfig.businessHours?.start || '08:00'}
+                        onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, start: e.target.value } }))}
+                        className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                      />
+                    </div>
+                    <div className="flex-1 max-w-[120px]">
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">
+                        Fim
+                      </label>
+                      <input
+                        type="time"
+                        value={localConfig.businessHours?.end || '17:00'}
+                        onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, end: e.target.value } }))}
+                        className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                      />
+                    </div>
                   </div>
                 </div>
 
+                {/* Dias Úteis da Semana */}
                 <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50">
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-3 ml-0.5">Dias Úteis da Semana</label>
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-3 ml-0.5">
+                    Dias Úteis da Semana
+                  </label>
                   <div className="flex flex-wrap gap-2">
                     {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, idx) => {
                       const isSelected = localConfig.businessHours?.days.includes(idx);
@@ -396,7 +403,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 </div>
               </div>
 
-              <div className="lg:col-span-5 bg-surface-subtle/40 rounded-xl p-4 border border-surface-border/50 flex flex-col">
+              {/* COLUNA DA DIREITA: Feriados */}
+              <div className="lg:col-span-7 bg-surface-subtle/40 rounded-xl p-4 border border-surface-border/50 flex flex-col">
                 <div className="mb-4">
                   <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">
                     Feriados (DD/MM)
