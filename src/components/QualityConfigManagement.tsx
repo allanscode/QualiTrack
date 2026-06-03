@@ -468,11 +468,11 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
             </p>
             <div className="space-y-4">
               {localConfig.levels.map((level, idx) => (
-                <div key={idx} className="bg-surface-subtle/40 rounded-xl p-3.5 border border-surface-border group hover:border-brand-accent/40 transition-all">
-                  <div className="flex flex-col lg:flex-row lg:items-center gap-4 w-full">
+                <div key={idx} className="bg-surface-subtle/40 rounded-xl p-4 border border-surface-border group hover:border-brand-accent/40 transition-all">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end w-full">
                     {/* Nome do Nível */}
-                    <div className="flex-1 min-w-[150px] w-full">
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">Nome do Nível</label>
+                    <div className="col-span-12 lg:col-span-4">
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">Nome do Nível</label>
                       <input
                         type="text"
                         value={level.label}
@@ -481,8 +481,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       />
                     </div>
                     {/* Score Min */}
-                    <div className="max-w-[100px] w-full">
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5 text-center">Mínimo</label>
+                    <div className="col-span-6 lg:col-span-2">
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5 text-center">Mínimo</label>
                       <div className="relative">
                         <input
                           type="number"
@@ -496,8 +496,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       </div>
                     </div>
                     {/* Score Max */}
-                    <div className="max-w-[100px] w-full">
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5 text-center">Máximo</label>
+                    <div className="col-span-6 lg:col-span-2">
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5 text-center">Máximo</label>
                       <div className="relative">
                         <input
                           type="number"
@@ -511,8 +511,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       </div>
                     </div>
                     {/* Cor de Destaque */}
-                    <div className="w-full lg:w-44">
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">Cor de Destaque</label>
+                    <div className="col-span-12 lg:col-span-2">
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">Cor de Destaque</label>
                       <CustomSelect
                         value={level.color + '||' + level.bgColor}
                         onChange={val => {
@@ -531,8 +531,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       />
                     </div>
                     {/* Preview Badge inline */}
-                    <div className="flex items-center shrink-0 self-end h-10 pb-0.5 pl-2">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${level.bgColor} ${level.color} border border-current/15 shadow-sm`}>
+                    <div className="col-span-12 lg:col-span-2 flex items-center justify-start lg:justify-end h-10 pb-0.5">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${level.bgColor} ${level.color} border border-current/15 shadow-sm w-full lg:w-auto justify-center`}>
                         <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />
                         {level.label || 'Nível'}: {level.minScore ?? 0}% - {level.maxScore ?? 0}%
                       </span>
