@@ -200,16 +200,16 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
       {mode === 'operacao' ? (
         <>
           <div>
-            <h2 className="text-2xl font-black text-brand-primary tracking-tight">Configuração de Operação</h2>
-            <p className="text-sm text-brand-muted mt-1 font-medium">
+            <h2 className="text-xl font-black text-brand-primary tracking-tight">Configuração de Operação</h2>
+            <p className="text-xs text-brand-muted mt-1 font-medium">
               Gerencie os prazos limite do fluxo de monitoria, horários de expediente, dias úteis e feriados cadastrados.
             </p>
           </div>
 
           {/* Action Deadline Configuration */}
-          <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
-            <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Prazos de Ação</h3>
-            <p className="text-sm text-brand-muted mb-6 font-medium">
+          <div className="bg-surface-card rounded-2xl border border-surface-border p-6 shadow-premium-sm">
+            <h3 className="font-black text-brand-primary text-base mb-1 uppercase tracking-tight">Prazos de Ação</h3>
+            <p className="text-xs text-brand-muted mb-4 font-medium">
               Configure o tempo limite (em horas úteis) para cada ação no fluxo da monitoria.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -220,8 +220,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 { label: 'Gestor Qualidade', field: 'manager_quality' }
               ].map(deadline => (
                 <div key={deadline.field}>
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">{deadline.label}</label>
-                  <div className="relative max-w-24">
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">{deadline.label}</label>
+                  <div className="relative max-w-[100px] w-full">
                     <input
                       type="number"
                       min={1}
@@ -236,9 +236,9 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                         const val = e.target.value === '' ? '' : Math.max(1, Math.floor(Number(e.target.value)));
                         setLocalConfig(c => ({ ...c, action_deadline: { ...c.action_deadline, [deadline.field]: val as any } }));
                       }}
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-2.5 text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
+                      className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
                     />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">h</span>
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">h</span>
                   </div>
                 </div>
               ))}
@@ -246,41 +246,41 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
           </div>
 
           {/* Business Hours & Holidays Configuration */}
-          <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
-            <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Horário Comercial e Feriados</h3>
-            <p className="text-sm text-brand-muted mb-6 font-medium">
+          <div className="bg-surface-card rounded-2xl border border-surface-border p-6 shadow-premium-sm">
+            <h3 className="font-black text-brand-primary text-base mb-1 uppercase tracking-tight">Horário Comercial e Feriados</h3>
+            <p className="text-xs text-brand-muted mb-4 font-medium">
               Defina o período de funcionamento para o cálculo preciso do prazo.
             </p>
             
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               <div className="lg:col-span-7 space-y-8">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50 max-w-32 w-full">
-                    <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">
+                  <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50 max-w-32 w-full">
+                    <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">
                       Início
                     </label>
                     <input
                       type="time"
                       value={localConfig.businessHours?.start || '08:00'}
                       onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, start: e.target.value } }))}
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                      className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     />
                   </div>
-                  <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50 max-w-32 w-full">
-                    <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">
+                  <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50 max-w-32 w-full">
+                    <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">
                       Fim
                     </label>
                     <input
                       type="time"
                       value={localConfig.businessHours?.end || '17:00'}
                       onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, end: e.target.value } }))}
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                      className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     />
                   </div>
                 </div>
 
-                <div className="bg-surface-subtle/40 p-6 rounded-2xl border border-surface-border/50">
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-4 ml-0.5">Dias Úteis da Semana</label>
+                <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50">
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-3 ml-0.5">Dias Úteis da Semana</label>
                   <div className="flex flex-wrap gap-2">
                     {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, idx) => {
                       const isSelected = localConfig.businessHours?.days.includes(idx);
@@ -294,13 +294,13 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                               : [...currentDays, idx].sort();
                             setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, days: newDays } }));
                           }}
-                          className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 flex items-center gap-2 ${
+                          className={`px-3 h-10 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 ${
                             isSelected 
-                              ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-premium-sm' 
+                              ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-sm' 
                               : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent/40'
                           }`}
                         >
-                          {isSelected && <Check className="w-3 h-3" />}
+                          {isSelected && <Check className="w-3.5 h-3.5" />}
                           {day}
                         </button>
                       );
@@ -309,9 +309,9 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 </div>
               </div>
 
-              <div className="lg:col-span-5 bg-surface-subtle/40 rounded-2xl p-6 border border-surface-border/50 flex flex-col">
+              <div className="lg:col-span-5 bg-surface-subtle/40 rounded-xl p-4 border border-surface-border/50 flex flex-col">
                 <div className="mb-4">
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2 ml-0.5">
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">
                     Feriados (DD/MM)
                   </label>
                   <div className="flex items-center gap-2">
@@ -321,7 +321,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       value={holidayInput}
                       onChange={handleHolidayInputChange}
                       onKeyDown={handleHolidayKeyDown}
-                      className={`w-24 bg-white dark:bg-slate-900/40 border text-slate-900 dark:text-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-center focus:outline-none focus:ring-0 shadow-sm transition-all ${
+                      className={`w-24 h-10 bg-white dark:bg-slate-900/40 border text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium text-center focus:outline-none focus:ring-0 shadow-sm transition-all ${
                         isHolidayInvalid 
                           ? 'border-red-400 dark:border-red-500 focus:border-red-400 dark:focus:border-red-500' 
                           : 'border-slate-200 dark:border-slate-800 focus:border-slate-400 dark:focus:border-slate-600'
@@ -330,7 +330,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     <button 
                       onClick={handleAddHoliday}
                       disabled={isHolidayInvalid || !holidayInput}
-                      className="h-[38px] w-10 bg-brand-accent text-brand-on-primary rounded-xl hover:opacity-90 disabled:opacity-50 transition-all shadow-sm flex items-center justify-center shrink-0"
+                      className="h-10 w-10 bg-brand-accent text-brand-on-primary rounded-lg hover:opacity-90 disabled:opacity-50 transition-all shadow-sm flex items-center justify-center shrink-0"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
@@ -340,26 +340,26 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 <div className="flex-1 flex flex-wrap gap-2 max-h-[220px] overflow-y-auto no-scrollbar content-start">
                   {(localConfig.businessHours?.holidays || []).length > 0 ? (
                     localConfig.businessHours?.holidays.map(h => (
-                      <div key={h} className="group bg-surface-card border border-surface-border rounded-xl pl-3 pr-1 py-1.5 flex items-center gap-2 shadow-sm hover:border-error/40 transition-all">
-                        <span className="text-[11px] font-black text-brand-primary">{h}</span>
+                      <div key={h} className="group bg-surface-card border border-surface-border rounded-lg pl-3 pr-1 h-8 flex items-center gap-1.5 shadow-sm hover:border-error/40 transition-all">
+                        <span className="text-[11px] font-bold text-brand-primary">{h}</span>
                         <button 
                           onClick={() => {
                             const newHolidays = (localConfig.businessHours.holidays as string[]).filter(item => item !== h);
                             setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: newHolidays } }));
                           }}
-                          className="p-1.5 text-brand-muted hover:text-error transition-colors"
+                          className="p-1 text-brand-muted hover:text-error transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))
                   ) : (
-                    <div className="w-full py-10 text-center border-2 border-dashed border-surface-border/50 rounded-xl">
-                      <p className="text-[10px] font-black text-brand-muted uppercase opacity-30 italic tracking-widest">Nenhum feriado cadastrado</p>
+                    <div className="w-full py-10 text-center border border-dashed border-surface-border/50 rounded-lg">
+                      <p className="text-sm font-normal text-slate-500 dark:text-slate-500">Nenhum feriado cadastrado.</p>
                     </div>
                   )}
                 </div>
-                <p className="mt-4 text-[9px] text-brand-muted/50 font-bold uppercase tracking-wider">DD/MM para feriados anuais recorrentes.</p>
+                <p className="mt-3 text-[10px] text-brand-muted/50 font-semibold uppercase tracking-wider">DD/MM para feriados anuais recorrentes.</p>
               </div>
             </div>
           </div>
