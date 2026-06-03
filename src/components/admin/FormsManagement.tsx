@@ -288,15 +288,15 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/60 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col bg-surface-card rounded-[32px] shadow-2xl">
-              <header className="flex items-center justify-between p-8 border-b border-surface-border bg-surface-card sticky top-0 z-10">
-                <div className="flex items-center gap-6">
-                  <div className="w-14 h-14 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
-                    <ClipboardList className="w-7 h-7" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-3xl w-full h-[650px] max-h-[90vh] overflow-hidden flex flex-col bg-surface-card rounded-[32px] shadow-2xl">
+              <header className="flex items-center justify-between p-6 border-b border-surface-border bg-surface-card sticky top-0 z-10">
+                <div className="flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
+                    <ClipboardList className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Editor de Formulário</h3>
-                    <div className="flex items-center gap-2 mt-1">
+                    <h3 className="text-lg font-black text-brand-primary tracking-tight uppercase">Editor de Formulário</h3>
+                    <div className="flex items-center gap-2 mt-0.5">
                       <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${totalWeight === 100 ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
                         Peso Total: {totalWeight}% {totalWeight !== 100 && '(Incompleto)'}
                       </span>
@@ -305,10 +305,10 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                     </div>
                   </div>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="p-3 rounded-2xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><X className="w-6 h-6" /></button>
+                <button onClick={() => setIsModalOpen(false)} className="p-2.5 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><X className="w-5 h-5" /></button>
               </header>
 
-              <div className="flex border-b border-slate-200 dark:border-slate-800 px-8 gap-6 pb-0">
+              <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 gap-6 pb-0">
                 {[
                   { id: 'geral', label: '1. Informações Gerais', icon: Shield },
                   { id: 'pilares', label: '2. Estrutura de Pilares', icon: BarChart3 },
@@ -325,7 +325,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                 ))}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-surface-bg/10">
+              <div className="flex-1 overflow-y-auto pl-6 pr-3 py-6 space-y-6 bg-surface-bg/10">
                 {activeTab === 'geral' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-8 py-4">
                     <div className="grid grid-cols-1 gap-8">
@@ -375,41 +375,41 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                     <div className="grid grid-cols-1 gap-6">
                       {editingForm.sections?.map((section, sIdx) => (
                         <div key={section.id} className="bg-surface-card rounded-[32px] border border-surface-border shadow-premium-sm overflow-hidden border-l-8 border-l-brand-accent">
-                          <div className="p-6 border-b border-surface-border bg-surface-subtle/10 flex items-center justify-between gap-6">
-                            <div className="flex items-center gap-4 flex-1">
+                          <div className="py-3 px-5 border-b border-surface-border bg-surface-subtle/10 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3 flex-1">
                               <span className="text-[10px] font-black text-brand-muted/40 uppercase tracking-widest">#{sIdx + 1}</span>
                               <input 
-                                className="bg-transparent border-none p-0 text-lg font-black text-brand-primary dark:text-white uppercase tracking-tight focus:ring-0 w-full placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                                className="bg-transparent border-none p-0 text-sm font-black text-brand-primary dark:text-white uppercase tracking-tight focus:ring-0 w-full placeholder:text-slate-400 dark:placeholder:text-slate-500"
                                 value={section.title}
                                 onChange={e => updateSection(section.id, 'title', e.target.value)}
                                 placeholder="NOME DO PILAR (Ex: QUALIDADE)"
                               />
                             </div>
-                            <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-4">
                               <div className="flex flex-col items-end">
-                                <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-200 uppercase tracking-wider mb-1">Peso do Pilar</label>
-                                <div className="flex items-center gap-2 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 shadow-sm">
+                                <label className="text-[9px] font-semibold text-slate-500 dark:text-slate-200 uppercase tracking-wider mb-0.5">Peso do Pilar</label>
+                                <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 shadow-sm">
                                   <input 
                                     type="number" 
-                                    className="w-10 bg-transparent border-none p-0 text-sm font-black text-brand-primary dark:text-white focus:ring-0 text-center"
+                                    className="w-8 bg-transparent border-none p-0 text-xs font-bold text-brand-primary dark:text-white focus:ring-0 text-center"
                                     value={section.weight || 0}
                                     onChange={e => updateSection(section.id, 'weight', parseInt(e.target.value) || 0)}
                                   />
-                                  <span className="text-[10px] font-black text-brand-muted">%</span>
+                                  <span className="text-[10px] font-bold text-brand-muted">%</span>
                                 </div>
                               </div>
-                              <button onClick={() => removeSection(section.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-brand-muted/40 hover:text-error transition-all"><Trash2 className="w-5 h-5" /></button>
+                              <button onClick={() => removeSection(section.id)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-brand-muted/40 hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
                             </div>
                           </div>
                           
-                          <div className="p-6 bg-surface-bg/5 space-y-3">
+                          <div className="p-4 bg-surface-bg/5 space-y-2.5">
                             {section.questions.map((q, qIdx) => {
                               const itemWeightInPilar = section.questions.length > 0 ? (100 / section.questions.length).toFixed(1) : 0;
                               const itemImpactInTotal = section.questions.length > 0 ? ((section.weight || 0) / section.questions.length).toFixed(1) : 0;
  
                               return (
-                                <div key={q.id} className="flex items-center gap-4 p-4 rounded-2xl bg-surface-card border border-surface-border group hover:border-brand-accent/40 transition-all shadow-sm">
-                                  <div className="w-8 h-8 rounded-lg bg-surface-subtle flex items-center justify-center text-[10px] font-black text-brand-muted">{qIdx + 1}</div>
+                                <div key={q.id} className="flex items-center gap-3 py-3 px-4 rounded-xl bg-surface-card border border-surface-border group hover:border-brand-accent/40 transition-all shadow-sm">
+                                  <div className="w-7 h-7 rounded-lg bg-surface-subtle flex items-center justify-center text-sm font-bold text-brand-muted">{qIdx + 1}</div>
                                   <div className="flex-1">
                                     <input 
                                       className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary dark:text-white w-full focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500"
@@ -417,15 +417,15 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                                       onChange={e => updateQuestion(section.id, q.id, 'text', e.target.value)}
                                       placeholder="Ex: Utilizou a saudação padrão corretamente?"
                                     />
-                                    <div className="flex items-center gap-4 mt-1.5 opacity-60">
-                                      <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Peso no Pilar: {itemWeightInPilar}%</span>
-                                      <span className="text-brand-muted/20">•</span>
-                                      <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Impacto Global: {itemImpactInTotal}%</span>
+                                    <div className="flex items-center gap-4 mt-1">
+                                      <span className="text-xs font-medium text-slate-400">Peso no Pilar: {itemWeightInPilar}%</span>
+                                      <span className="text-slate-300 dark:text-slate-700">•</span>
+                                      <span className="text-xs font-medium text-slate-400">Impacto Global: {itemImpactInTotal}%</span>
                                     </div>
                                     {expandedDescriptions[q.id] && (
-                                      <div className="mt-3">
+                                      <div className="mt-2.5">
                                         <textarea
-                                          className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 dark:text-white focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all resize-none shadow-sm placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                                          className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 dark:text-white focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all resize-none shadow-sm placeholder:text-slate-400 dark:placeholder:text-slate-500"
                                           placeholder="Descreva detalhadamente o que este critério avalia (será exibido como dica durante a monitoria)..."
                                           rows={2}
                                           value={q.description || ''}
@@ -452,7 +452,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                             
                             <button 
                               onClick={() => addQuestion(section.id)}
-                              className="w-full py-4 rounded-2xl border-2 border-dashed border-surface-border/60 text-brand-muted text-[10px] font-black uppercase tracking-widest hover:border-brand-accent/40 hover:text-brand-accent hover:bg-brand-accent/5 transition-all flex items-center justify-center gap-2"
+                              className="w-full py-2 rounded-xl border border-dashed border-surface-border/60 text-brand-muted text-sm font-semibold hover:border-brand-accent/40 hover:text-brand-accent hover:bg-brand-accent/5 transition-all flex items-center justify-center gap-2"
                             >
                               <Plus className="w-3.5 h-3.5" /> Adicionar Critério ao Pilar
                             </button>
@@ -489,11 +489,11 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
 
                     <div className="grid grid-cols-1 gap-4">
                       {editingForm.critical_errors?.map((ce, idx) => (
-                        <div key={ce.id} className="flex items-center gap-4 p-5 rounded-2xl bg-surface-card border border-surface-border border-l-8 border-l-error group hover:border-error/20 transition-all shadow-sm">
-                          <div className="w-10 h-10 rounded-xl bg-error/5 text-error flex items-center justify-center text-[10px] font-black">{idx + 1}</div>
+                        <div key={ce.id} className="flex items-center gap-3 py-3 px-4 rounded-xl bg-surface-card border border-surface-border border-l-8 border-l-error group hover:border-error/20 transition-all shadow-sm">
+                          <div className="w-7 h-7 rounded-lg bg-error/5 text-error flex items-center justify-center text-sm font-bold">{idx + 1}</div>
                           <div className="flex-1">
                             <input 
-                              className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary dark:text-white w-full focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                              className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary dark:text-white w-full focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                               value={ce.text}
                               onChange={e => updateCriticalError(ce.id, 'text', e.target.value)}
                               placeholder="Ex: Fraude ou quebra de protocolo de segurança..."
@@ -514,7 +514,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                 )}
               </div>
               
-              <footer className="p-8 border-t border-surface-border bg-surface-card flex items-center justify-between sticky bottom-0">
+              <footer className="p-6 border-t border-surface-border bg-surface-card flex items-center justify-between sticky bottom-0">
                 <div className="flex items-center gap-4">
                   {(() => {
                     if (totalWeight !== 100) return (
