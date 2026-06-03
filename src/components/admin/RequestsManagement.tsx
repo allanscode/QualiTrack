@@ -331,7 +331,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                   <Button variant="outline" className="flex-1 hover:bg-slate-50 dark:hover:bg-slate-900/40" onClick={() => setIsRejectModalOpen(false)}>Cancelar</Button>
                   <Button 
                     variant="ghost" 
-                    className="flex-1 !bg-transparent border border-red-500/20 text-red-500 dark:text-red-400 hover:border-red-500/40 hover:bg-red-500/5 active:scale-[0.98] transition-all" 
+                    className="flex-1 bg-transparent border border-red-500/20 text-red-500 dark:text-red-400 hover:!border-red-600 hover:!bg-red-600 hover:!text-white active:scale-[0.98] transition-colors duration-200" 
                     onClick={confirmReject} 
                     disabled={saving}
                   >
