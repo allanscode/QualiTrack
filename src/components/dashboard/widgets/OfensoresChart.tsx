@@ -13,7 +13,7 @@ interface OfensoresChartProps {
   subtitle?: string;
 }
 
-export default function OfensoresChart({ monitorias, forms, limit = 8, title = 'Maiores Ofensores', subtitle = 'Critérios com mais falhas no período' }: OfensoresChartProps) {
+export default function OfensoresChart({ monitorias, forms, limit = 5, title = 'Maiores Ofensores', subtitle = 'Critérios com mais falhas no período' }: OfensoresChartProps) {
   const ofensores = useMemo(() => {
     const map: Record<string, { text: string; naoCount: number; totalAnswered: number }> = {};
 

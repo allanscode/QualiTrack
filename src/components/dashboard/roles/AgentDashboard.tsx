@@ -150,6 +150,18 @@ export default function AgentDashboard() {
   const { globalAvg } = useDashboard();
   const level = getLevelForScore(avgScore);
 
+  const scoreDiff = avgScore - config.targetScore;
+  const diffSign = scoreDiff >= 0 ? '↑' : '↓';
+  const diffColorClass = scoreDiff >= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
+
+  const volDiff = myMonitorias.length - config.targetVolume;
+  const volSign = volDiff >= 0 ? '↑' : '↓';
+  const volColorClass = volDiff >= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Linha 1: Benchmarks de Performance */}
@@ -160,7 +172,12 @@ export default function AgentDashboard() {
           sub={level.label}
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
-          accent={level.color}
+          accent="text-slate-500"
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${diffColorClass}`}>
+              {diffSign} {Math.abs(scoreDiff).toFixed(2)}%
+            </span>
+          }
         />
         <StatCard
           title="Média Equipe"
@@ -168,7 +185,7 @@ export default function AgentDashboard() {
           sub={avgScore >= teamAvgScore ? 'Acima da média' : 'Abaixo da média'}
           good={avgScore >= teamAvgScore}
           icon={<Users className="w-5 h-5" />}
-          accent="text-brand-muted"
+          accent="text-slate-500"
         />
         <StatCard
           title="Média Global"
@@ -176,35 +193,40 @@ export default function AgentDashboard() {
           sub="Empresa"
           good={avgScore >= globalAvg}
           icon={<Users className="w-5 h-5" />}
-          accent="text-brand-muted"
+          accent="text-slate-500"
         />
         <StatCard
           title="Tendência"
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(1)}%`}
           sub="Evolução no período"
           good={trendPercentage >= 0}
-      icon={<TrendingUp className="w-5 h-5" />}
-      accent="text-functional-success"
-    />
-  </div>
+          icon={<TrendingUp className="w-5 h-5" />}
+          accent="text-functional-success"
+        />
+      </div>
 
-  {/* Linha 2: Volume e Contestações (Contagem Única por Monitoria) */}
-  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-    <StatCard
-      title="Monitorias"
-      value={myMonitorias.length.toString()}
-      sub="Total no período"
-      good={true}
-      icon={<ClipboardCheck className="w-5 h-5" />}
-      accent="text-brand-primary"
+      {/* Linha 2: Volume e Contestações (Contagem Única por Monitoria) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <StatCard
+          title="Monitorias"
+          value={myMonitorias.length.toString()}
+          sub="Total no período"
+          good={volDiff >= 0}
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          accent={volDiff >= 0 ? 'text-functional-success' : 'text-functional-error'}
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${volColorClass}`}>
+              {volSign} {Math.abs(volDiff)}
+            </span>
+          }
         />
         <StatCard
           title="Total Pendentes"
           value={pendingCount.toString()}
           sub="Aguardando sua ação"
           good={pendingCount === 0}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-functional-error"
+          icon={pendingCount === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+          accent={pendingCount === 0 ? 'text-functional-success' : 'text-functional-error'}
         />
         <StatCard
           title="Solicitadas"
@@ -212,7 +234,7 @@ export default function AgentDashboard() {
           sub="Contestações abertas"
           good={true}
           icon={<ClipboardCheck className="w-5 h-5" />}
-          accent="text-brand-muted"
+          accent="text-slate-500"
         />
         <StatCard
           title="Aprovadas"

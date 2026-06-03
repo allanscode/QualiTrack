@@ -14,10 +14,14 @@ const COLORS = [
   { color: 'text-level-azul', bgColor: 'bg-level-azul', label: 'Azul' },
 ];
 
-export default function QualityConfigManagement() {
+export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 'operacao' | 'metas' }) {
   const { config, oldConfig, saveConfig, recalculateActiveActionDeadlines } = useQualityConfig();
   const [localConfig, setLocalConfig] = React.useState(config);
   const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    setLocalConfig(config);
+  }, [config]);
 
   const updateLevel = (idx: number, field: string, value: any) => {
     const newLevels = [...localConfig.levels];
@@ -46,6 +50,20 @@ export default function QualityConfigManagement() {
     // Validate targetScore
     if (typeof localConfig.targetScore !== 'number' || isNaN(localConfig.targetScore) || localConfig.targetScore < 0 || localConfig.targetScore > 100) {
       toast.error('A meta de desempenho deve ser um número válido entre 0 e 100.');
+      setSaving(false);
+      return;
+    }
+
+    // Validate targetReversalRate
+    if (typeof localConfig.targetReversalRate !== 'number' || isNaN(localConfig.targetReversalRate) || localConfig.targetReversalRate < 0 || localConfig.targetReversalRate > 100) {
+      toast.error('A meta de taxa de reversão deve ser um número válido entre 0 e 100.');
+      setSaving(false);
+      return;
+    }
+
+    // Validate targetVolume
+    if (typeof localConfig.targetVolume !== 'number' || isNaN(localConfig.targetVolume) || localConfig.targetVolume < 1) {
+      toast.error('A meta de volumetria deve ser um número inteiro positivo maior ou igual a 1.');
       setSaving(false);
       return;
     }
@@ -115,291 +133,369 @@ export default function QualityConfigManagement() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-black text-brand-primary tracking-tight">Configuração de Qualidade</h2>
-        <p className="text-sm text-brand-muted mt-1 font-medium">
-          Defina as faixas de classificação e a meta de desempenho. Alterações afetam dashboards e rankings imediatamente.
-        </p>
-      </div>
-
-      {/* Target Score */}
-      <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
-        <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Meta de Desempenho</h3>
-        <p className="text-sm text-brand-muted mb-6 font-medium">
-          Score mínimo para o suporte ser considerado dentro da meta. Usado nos rankings Top, Medianos e Oportunidades.
-        </p>
-        <div className="flex items-center gap-6 flex-wrap">
-          <div className="flex-1 max-w-xs">
-            <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Score mínimo (%)</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={localConfig.targetScore ?? ''}
-              onChange={e => {
-                const val = e.target.value === '' ? '' : Number(e.target.value);
-                setLocalConfig(c => ({ ...c, targetScore: val as any }));
-              }}
-              className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
-            />
+      {mode === 'operacao' ? (
+        <>
+          <div>
+            <h2 className="text-2xl font-black text-brand-primary tracking-tight">Configuração de Operação</h2>
+            <p className="text-sm text-brand-muted mt-1 font-medium">
+              Gerencie os prazos limite do fluxo de monitoria, horários de expediente, dias úteis e feriados cadastrados.
+            </p>
           </div>
-          <div className={`px-8 py-5 rounded-2xl border-2 flex flex-col justify-center ${localConfig.targetScore >= 75 ? 'bg-success/5 border-success/20 text-success' : 'bg-warning/5 border-warning/20 text-warning'}`}>
-            <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-70">Meta atual</p>
-            <p className="text-4xl font-black">{localConfig.targetScore}%</p>
-          </div>
-        </div>
-      </div>
 
-    {/* Action Deadline Configuration */}
-    <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
-      <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Prazos de Ação</h3>
-      <p className="text-sm text-brand-muted mb-6 font-medium">
-        Configure o tempo limite (em horas úteis) para cada ação no fluxo da monitoria.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: 'Ciência do Suporte', field: 'agent_review' },
-          { label: 'Reanálise Qualidade', field: 'auditor_reevaluation' },
-          { label: 'Gestor Suporte', field: 'manager_support' },
-          { label: 'Gestor Qualidade', field: 'manager_quality' }
-        ].map(deadline => (
-          <div key={deadline.field}>
-            <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">{deadline.label}</label>
-            <div className="relative">
-              <input
-                type="number"
-                min={1}
-                value={(localConfig.action_deadline as any)?.[deadline.field] ?? ''}
-                onChange={e => {
-                  const val = e.target.value === '' ? '' : Number(e.target.value);
-                  setLocalConfig(c => ({ ...c, action_deadline: { ...c.action_deadline, [deadline.field]: val as any } }));
-                }}
-                className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none pr-12 transition-all"
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand-muted uppercase tracking-widest opacity-50">h</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-
-      {/* Business Hours & Holidays Configuration */}
-      <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
-        <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Horário Comercial e Feriados</h3>
-        <p className="text-sm text-brand-muted mb-6 font-medium">
-          Defina o período de funcionamento para o cálculo preciso do prazo.
-        </p>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-7 space-y-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50">
-                <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3 flex items-center gap-2 ml-1">
-                  <Clock className="w-3.5 h-3.5" /> Início do Expediente
-                </label>
-                <input
-                  type="time"
-                  value={localConfig.businessHours?.start || '08:00'}
-                  onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, start: e.target.value } }))}
-                  className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-6 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all shadow-sm"
-                />
-              </div>
-              <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50">
-                <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3 flex items-center gap-2 ml-1">
-                  <Clock className="w-3.5 h-3.5" /> Fim do Expediente
-                </label>
-                <input
-                  type="time"
-                  value={localConfig.businessHours?.end || '17:00'}
-                  onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, end: e.target.value } }))}
-                  className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-6 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all shadow-sm"
-                />
-              </div>
-            </div>
-
-            <div className="bg-surface-subtle/40 p-6 rounded-2xl border border-surface-border/50">
-              <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-4 ml-1">Dias Úteis da Semana</label>
-              <div className="flex flex-wrap gap-2">
-                {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, idx) => {
-                  const isSelected = localConfig.businessHours?.days.includes(idx);
-                  return (
-                    <button
-                      key={day}
-                      onClick={() => {
-                        const currentDays = localConfig.businessHours?.days || [];
-                        const newDays = isSelected 
-                          ? currentDays.filter(d => d !== idx)
-                          : [...currentDays, idx].sort();
-                        setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, days: newDays } }));
+          {/* Action Deadline Configuration */}
+          <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
+            <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Prazos de Ação</h3>
+            <p className="text-sm text-brand-muted mb-6 font-medium">
+              Configure o tempo limite (em horas úteis) para cada ação no fluxo da monitoria.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[
+                { label: 'Ciência do Suporte', field: 'agent_review' },
+                { label: 'Reanálise Qualidade', field: 'auditor_reevaluation' },
+                { label: 'Gestor Suporte', field: 'manager_support' },
+                { label: 'Gestor Qualidade', field: 'manager_quality' }
+              ].map(deadline => (
+                <div key={deadline.field}>
+                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">{deadline.label}</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={1}
+                      value={(localConfig.action_deadline as any)?.[deadline.field] ?? ''}
+                      onChange={e => {
+                        const val = e.target.value === '' ? '' : Number(e.target.value);
+                        setLocalConfig(c => ({ ...c, action_deadline: { ...c.action_deadline, [deadline.field]: val as any } }));
                       }}
-                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 flex items-center gap-2 ${
-                        isSelected 
-                          ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-premium-sm' 
-                          : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent/40'
-                      }`}
-                    >
-                      {isSelected && <Check className="w-3 h-3" />}
-                      {day}
-                    </button>
-                  );
-                })}
-              </div>
+                      className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none pr-12 transition-all"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand-muted uppercase tracking-widest opacity-50">h</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="lg:col-span-5 bg-surface-subtle/40 rounded-2xl p-6 border border-surface-border/50 flex flex-col">
-            <div className="flex items-center justify-between mb-6">
-              <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest flex items-center gap-2">
-                <Calendar className="w-3.5 h-3.5" /> Feriados (DD/MM)
-              </label>
-              <div className="flex items-center gap-2">
-                <input 
-                  type="text" 
-                  placeholder="Ex: 25/12"
-                  id="new-holiday"
-                  className="w-24 bg-surface-card border border-surface-border rounded-xl px-3 py-2 text-xs font-bold text-brand-primary focus:outline-none focus:border-brand-accent shadow-sm"
-                  onKeyPress={e => {
-                    if (e.key === 'Enter') {
-                      const val = (e.target as HTMLInputElement).value;
-                      if (/^\d{2}\/\d{2}$/.test(val)) {
-                        const currentHolidays = localConfig.businessHours?.holidays || [];
-                        if (!currentHolidays.includes(val)) {
-                          setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: [...currentHolidays, val].sort() } }));
-                          (e.target as HTMLInputElement).value = '';
-                        }
-                      } else {
-                        toast.error('Formato inválido. Use DD/MM (ex: 25/12)');
-                      }
-                    }
-                  }}
-                />
-                <button 
-                  onClick={() => {
-                    const el = document.getElementById('new-holiday') as HTMLInputElement;
-                    const val = el.value;
-                    if (/^\d{2}\/\d{2}$/.test(val)) {
-                      const currentHolidays = localConfig.businessHours?.holidays || [];
-                      if (!currentHolidays.includes(val)) {
-                        setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: [...currentHolidays, val].sort() } }));
-                        el.value = '';
-                      }
-                    } else {
-                      toast.error('Formato inválido. Use DD/MM (ex: 25/12)');
-                    }
-                  }}
-                  className="p-2 bg-brand-accent text-brand-on-primary rounded-xl hover:opacity-90 transition-all shadow-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+          {/* Business Hours & Holidays Configuration */}
+          <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
+            <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Horário Comercial e Feriados</h3>
+            <p className="text-sm text-brand-muted mb-6 font-medium">
+              Defina o período de funcionamento para o cálculo preciso do prazo.
+            </p>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              <div className="lg:col-span-7 space-y-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50">
+                    <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3 flex items-center gap-2 ml-1">
+                      <Clock className="w-3.5 h-3.5" /> Início do Expediente
+                    </label>
+                    <input
+                      type="time"
+                      value={localConfig.businessHours?.start || '08:00'}
+                      onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, start: e.target.value } }))}
+                      className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-6 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all shadow-sm"
+                    />
+                  </div>
+                  <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50">
+                    <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3 flex items-center gap-2 ml-1">
+                      <Clock className="w-3.5 h-3.5" /> Fim do Expediente
+                    </label>
+                    <input
+                      type="time"
+                      value={localConfig.businessHours?.end || '17:00'}
+                      onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, end: e.target.value } }))}
+                      className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-6 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all shadow-sm"
+                    />
+                  </div>
+                </div>
 
-            <div className="flex-1 flex flex-wrap gap-2 max-h-[220px] overflow-y-auto no-scrollbar content-start">
-              {(localConfig.businessHours?.holidays || []).length > 0 ? (
-                localConfig.businessHours?.holidays.map(h => (
-                  <div key={h} className="group bg-surface-card border border-surface-border rounded-xl pl-3 pr-1 py-1.5 flex items-center gap-2 shadow-sm hover:border-error/40 transition-all">
-                    <span className="text-[11px] font-black text-brand-primary">{h}</span>
+                <div className="bg-surface-subtle/40 p-6 rounded-2xl border border-surface-border/50">
+                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-4 ml-1">Dias Úteis da Semana</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, idx) => {
+                      const isSelected = localConfig.businessHours?.days.includes(idx);
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => {
+                            const currentDays = localConfig.businessHours?.days || [];
+                            const newDays = isSelected 
+                              ? currentDays.filter(d => d !== idx)
+                              : [...currentDays, idx].sort();
+                            setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, days: newDays } }));
+                          }}
+                          className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 flex items-center gap-2 ${
+                            isSelected 
+                              ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-premium-sm' 
+                              : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent/40'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3" />}
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-5 bg-surface-subtle/40 rounded-2xl p-6 border border-surface-border/50 flex flex-col">
+                <div className="flex items-center justify-between mb-6">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5" /> Feriados (DD/MM)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Ex: 25/12"
+                      id="new-holiday"
+                      className="w-24 bg-surface-card border border-surface-border rounded-xl px-3 py-2 text-xs font-bold text-brand-primary focus:outline-none focus:border-brand-accent shadow-sm"
+                      onKeyPress={e => {
+                        if (e.key === 'Enter') {
+                          const val = (e.target as HTMLInputElement).value;
+                          if (/^\d{2}\/\d{2}$/.test(val)) {
+                            const currentHolidays = localConfig.businessHours?.holidays || [];
+                            if (!currentHolidays.includes(val)) {
+                              setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: [...currentHolidays, val].sort() } }));
+                              (e.target as HTMLInputElement).value = '';
+                            }
+                          } else {
+                            toast.error('Formato inválido. Use DD/MM (ex: 25/12)');
+                          }
+                        }
+                      }}
+                    />
                     <button 
                       onClick={() => {
-                        const newHolidays = (localConfig.businessHours.holidays as string[]).filter(item => item !== h);
-                        setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: newHolidays } }));
+                        const el = document.getElementById('new-holiday') as HTMLInputElement;
+                        const val = el.value;
+                        if (/^\d{2}\/\d{2}$/.test(val)) {
+                          const currentHolidays = localConfig.businessHours?.holidays || [];
+                          if (!currentHolidays.includes(val)) {
+                            setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: [...currentHolidays, val].sort() } }));
+                            el.value = '';
+                          }
+                        } else {
+                          toast.error('Formato inválido. Use DD/MM (ex: 25/12)');
+                        }
                       }}
-                      className="p-1.5 text-brand-muted hover:text-error transition-colors"
+                      className="p-2 bg-brand-accent text-brand-on-primary rounded-xl hover:opacity-90 transition-all shadow-sm"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Plus className="w-4 h-4" />
                     </button>
                   </div>
-                ))
-              ) : (
-                <div className="w-full py-10 text-center border-2 border-dashed border-surface-border/50 rounded-xl">
-                  <p className="text-[10px] font-black text-brand-muted uppercase opacity-30 italic tracking-widest">Nenhum feriado cadastrado</p>
                 </div>
-              )}
+
+                <div className="flex-1 flex flex-wrap gap-2 max-h-[220px] overflow-y-auto no-scrollbar content-start">
+                  {(localConfig.businessHours?.holidays || []).length > 0 ? (
+                    localConfig.businessHours?.holidays.map(h => (
+                      <div key={h} className="group bg-surface-card border border-surface-border rounded-xl pl-3 pr-1 py-1.5 flex items-center gap-2 shadow-sm hover:border-error/40 transition-all">
+                        <span className="text-[11px] font-black text-brand-primary">{h}</span>
+                        <button 
+                          onClick={() => {
+                            const newHolidays = (localConfig.businessHours.holidays as string[]).filter(item => item !== h);
+                            setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: newHolidays } }));
+                          }}
+                          className="p-1.5 text-brand-muted hover:text-error transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="w-full py-10 text-center border-2 border-dashed border-surface-border/50 rounded-xl">
+                      <p className="text-[10px] font-black text-brand-muted uppercase opacity-30 italic tracking-widest">Nenhum feriado cadastrado</p>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-4 text-[9px] text-brand-muted/50 font-bold uppercase tracking-wider">DD/MM para feriados anuais recorrentes.</p>
+              </div>
             </div>
-            <p className="mt-4 text-[9px] text-brand-muted/50 font-bold uppercase tracking-wider">DD/MM para feriados anuais recorrentes.</p>
           </div>
-        </div>
-      </div>
+        </>
+      ) : (
+        <>
+          <div>
+            <h2 className="text-2xl font-black text-brand-primary tracking-tight">Metas e Indicadores</h2>
+            <p className="text-sm text-brand-muted mt-1 font-medium">
+              Gerencie as metas de desempenho do suporte, metas operacionais da auditoria e as faixas de classificação.
+            </p>
+          </div>
 
-      {/* Quality Level Bands */}
-      <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
-        <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Faixas de Classificação</h3>
-        <p className="text-sm text-brand-muted mb-6 font-medium">
-          Configure os intervalos de score para cada nível. As faixas não podem se sobrepor.
-        </p>
-        <div className="space-y-4">
-          {localConfig.levels.map((level, idx) => (
-            <div key={idx} className="bg-surface-subtle/40 rounded-2xl p-6 border border-surface-border group hover:border-brand-accent transition-all">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-end">
-                <div>
-                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Nome do Nível</label>
-                  <input
-                    type="text"
-                    value={level.label}
-                    onChange={e => updateLevel(idx, 'label', e.target.value)}
-                    className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Score Min (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={level.minScore ?? ''}
-                    onChange={e => updateLevel(idx, 'minScore', e.target.value)}
-                    className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Score Max (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={level.maxScore ?? ''}
-                    onChange={e => updateLevel(idx, 'maxScore', e.target.value)}
-                    className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
-                  />
-                </div>
-                <div>
-                  <CustomSelect
-                    label="Cor de Destaque"
-                    value={level.color + '||' + level.bgColor}
-                    onChange={val => {
-                      const parts = val.split('||');
-                      const color = parts[0];
-                      const bgColor = parts[1];
-                      const newLevels = [...localConfig.levels];
-                      newLevels[idx] = { ...newLevels[idx], color, bgColor };
-                      setLocalConfig(c => ({ ...c, levels: newLevels }));
-                    }}
-                    options={COLORS.map(c => ({
-                      value: c.color + '||' + c.bgColor,
-                      label: c.label
-                    }))}
-                  />
-                </div>
+          {/* Target Score */}
+          <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
+            <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Meta de Desempenho</h3>
+            <p className="text-sm text-brand-muted mb-6 font-medium">
+              Score mínimo para o suporte ser considerado dentro da meta. Usado nos rankings Top, Medianos e Oportunidades.
+            </p>
+            <div className="flex items-center gap-6 flex-wrap">
+              <div className="flex-1 max-w-xs">
+                <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Score mínimo (%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={localConfig.targetScore ?? ''}
+                  onChange={e => {
+                    const val = e.target.value === '' ? '' : Number(e.target.value);
+                    setLocalConfig(c => ({ ...c, targetScore: val as any }));
+                  }}
+                  className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
+                />
               </div>
-              <div className="mt-4 flex items-center gap-3">
-      <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${level.bgColor} ${level.color}`}>
-      <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />
-                  {level.label}: {level.minScore}% - {level.maxScore}%
-                </span>
+              <div className={`px-8 py-5 rounded-2xl border-2 flex flex-col justify-center ${localConfig.targetScore >= 75 ? 'bg-success/5 border-success/20 text-success' : 'bg-warning/5 border-warning/20 text-warning'}`}>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-70">Meta atual</p>
+                <p className="text-4xl font-black">{localConfig.targetScore}%</p>
               </div>
             </div>
-          ))}
-        </div>
-        <div className="mt-8 p-6 bg-surface-subtle rounded-3xl border border-surface-border/50">
-          <p className="font-black text-brand-primary text-xs mb-2 uppercase tracking-widest">Regras de Validação</p>
-          <ul className="space-y-1.5 text-xs text-brand-muted font-medium">
-            <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-brand-accent" /> As faixas de score não podem se sobrepor</li>
-            <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-brand-accent" /> Recomenda-se cobrir o intervalo de 0% a 100%</li>
-            <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-brand-accent" /> As alterações são aplicadas imediatamente após salvar</li>
-          </ul>
-        </div>
-      </div>
+          </div>
 
+          {/* Auditor Goal configuration */}
+          <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
+            <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Metas da Auditoria</h3>
+            <p className="text-sm text-brand-muted mb-6 font-medium">
+              Defina as metas operacionais para a equipe de monitoria/qualidade para o período.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Taxa de Reversão */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">
+                    Meta de Taxa de Reversão (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={localConfig.targetReversalRate ?? ''}
+                    onChange={e => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
+                      setLocalConfig(c => ({ ...c, targetReversalRate: val as any }));
+                    }}
+                    className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
+                    placeholder="Ex: 15"
+                  />
+                  <p className="text-[11px] text-brand-muted mt-2 font-medium">
+                    Percentual máximo tolerável de contestações consideradas procedentes/aceitas.
+                  </p>
+                </div>
+                <div className="px-6 py-4 rounded-xl border border-surface-border bg-surface-subtle/50 flex flex-col justify-center w-fit">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-brand-muted mb-0.5">Tolerância Máxima</p>
+                  <p className="text-2xl font-black text-brand-primary">{localConfig.targetReversalRate ?? 15}%</p>
+                </div>
+              </div>
+
+              {/* Volumetria */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">
+                    Meta de Volumetria (Qtd)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={localConfig.targetVolume ?? ''}
+                    onChange={e => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
+                      setLocalConfig(c => ({ ...c, targetVolume: val as any }));
+                    }}
+                    className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
+                    placeholder="Ex: 30"
+                  />
+                  <p className="text-[11px] text-brand-muted mt-2 font-medium">
+                    Quantidade alvo de monitorias que cada auditor deve realizar por período.
+                  </p>
+                </div>
+                <div className="px-6 py-4 rounded-xl border border-surface-border bg-surface-subtle/50 flex flex-col justify-center w-fit">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-brand-muted mb-0.5">Meta de Quantidade</p>
+                  <p className="text-2xl font-black text-brand-primary">{localConfig.targetVolume ?? 30} monitorias</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quality Level Bands */}
+          <div className="bg-surface-card rounded-3xl border border-surface-border p-8 shadow-premium-sm">
+            <h3 className="font-black text-brand-primary text-lg mb-2 uppercase tracking-tight">Faixas de Classificação</h3>
+            <p className="text-sm text-brand-muted mb-6 font-medium">
+              Configure os intervalos de score para cada nível. As faixas não podem se sobrepor.
+            </p>
+            <div className="space-y-4">
+              {localConfig.levels.map((level, idx) => (
+                <div key={idx} className="bg-surface-subtle/40 rounded-2xl p-6 border border-surface-border group hover:border-brand-accent transition-all">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-end">
+                    <div>
+                      <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Nome do Nível</label>
+                      <input
+                        type="text"
+                        value={level.label}
+                        onChange={e => updateLevel(idx, 'label', e.target.value)}
+                        className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Score Min (%)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={level.minScore ?? ''}
+                        onChange={e => updateLevel(idx, 'minScore', e.target.value)}
+                        className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Score Max (%)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={level.maxScore ?? ''}
+                        onChange={e => updateLevel(idx, 'maxScore', e.target.value)}
+                        className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
+                      />
+                    </div>
+                    <div>
+                      <CustomSelect
+                        label="Cor de Destaque"
+                        value={level.color + '||' + level.bgColor}
+                        onChange={val => {
+                          const parts = val.split('||');
+                          const color = parts[0];
+                          const bgColor = parts[1];
+                          const newLevels = [...localConfig.levels];
+                          newLevels[idx] = { ...newLevels[idx], color, bgColor };
+                          setLocalConfig(c => ({ ...c, levels: newLevels }));
+                        }}
+                        options={COLORS.map(c => ({
+                          value: c.color + '||' + c.bgColor,
+                          label: c.label
+                        }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center gap-3">
+                    <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${level.bgColor} ${level.color}`}>
+                      <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />
+                      {level.label}: {level.minScore}% - {level.maxScore}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-8 p-6 bg-surface-subtle rounded-3xl border border-surface-border/50">
+              <p className="font-black text-brand-primary text-xs mb-2 uppercase tracking-widest">Regras de Validação</p>
+              <ul className="space-y-1.5 text-xs text-brand-muted font-medium">
+                <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-brand-accent" /> As faixas de score não podem se sobrepor</li>
+                <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-brand-accent" /> Recomenda-se cobrir o intervalo de 0% a 100%</li>
+                <li className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-brand-accent" /> As alterações são aplicadas imediatamente após salvar</li>
+              </ul>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Save Button */}
       <div className="flex justify-end pt-4 pb-10">
         <button
           onClick={handleSave}

@@ -127,6 +127,18 @@ export default function QualityDashboard() {
     return myMonitorias.filter(m => m.status === 'em_contestacao').length;
   }, [myMonitorias]);
 
+  const scoreDiff = avgScore - config.targetScore;
+  const diffSign = scoreDiff >= 0 ? '↑' : '↓';
+  const diffColorClass = scoreDiff >= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
+
+  const volDiff = myMonitorias.length - config.targetVolume;
+  const volSign = volDiff >= 0 ? '↑' : '↓';
+  const volColorClass = volDiff >= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
+
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
 
@@ -136,9 +148,14 @@ export default function QualityDashboard() {
           title="Meu Volume"
           value={myMonitorias.length}
           sub="no período"
-          good={true}
-      icon={<ClipboardCheck className="w-5 h-5" />}
-      accent="text-brand-primary"
+          good={volDiff >= 0}
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          accent={volDiff >= 0 ? 'text-functional-success' : 'text-functional-error'}
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${volColorClass}`}>
+              {volSign} {Math.abs(volDiff)}
+            </span>
+          }
         />
         <StatCard
           title="Nota Média"
@@ -146,15 +163,20 @@ export default function QualityDashboard() {
           sub="Média das notas aplicadas"
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
-          accent={getLevelForScore(avgScore, 'goal').color}
+          accent="text-slate-500"
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${diffColorClass}`}>
+              {diffSign} {Math.abs(scoreDiff).toFixed(2)}%
+            </span>
+          }
         />
         <StatCard
           title="Pendente Ação"
           value={pendingActions}
           sub="Aguardando reanálise"
           good={pendingActions === 0}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-functional-error"
+          icon={pendingActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+          accent={pendingActions === 0 ? 'text-functional-success' : 'text-functional-error'}
         />
       </div>
 
@@ -182,7 +204,7 @@ export default function QualityDashboard() {
           sub="Total de contestações"
           good={true}
           icon={<History className="w-5 h-5" />}
-          accent="text-brand-muted"
+          accent="text-slate-500"
         />
       </div>
 
@@ -205,8 +227,8 @@ export default function QualityDashboard() {
             value={pendingAuditsCount}
             sub="Aguardando Conclusão"
             good={pendingAuditsCount === 0}
-            icon={<AlertTriangle className="w-5 h-5" />}
-            accent="text-functional-warning"
+            icon={pendingAuditsCount === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+            accent={pendingAuditsCount === 0 ? 'text-functional-success' : 'text-functional-warning'}
           />
         </div>
       </div>
@@ -247,7 +269,6 @@ export default function QualityDashboard() {
             subtitle="Itens que você mais despontuou"
             monitorias={myMonitorias} 
             forms={forms} 
-            limit={12} 
           />
         </div>
       </div>

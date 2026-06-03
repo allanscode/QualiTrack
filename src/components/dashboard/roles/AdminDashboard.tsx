@@ -237,24 +237,41 @@ export default function AdminDashboard() {
 
   if (!user) return null;
 
+  const scoreDiff = avgScore - config.targetScore;
+  const diffSign = scoreDiff >= 0 ? '↑' : '↓';
+  const diffColorClass = scoreDiff >= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+
+  const revDiff = reversalRate - config.targetReversalRate;
+  const revSign = revDiff <= 0 ? '↓' : '↑';
+  const revColorClass = revDiff <= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Média Geral (Admin)"
+          title="Média Geral"
           value={`${avgScore.toFixed(2)}%`}
           sub="Performance global da operação"
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
-          accent={getLevelForScore(avgScore, 'goal').color}
+          accent="text-slate-500"
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${diffColorClass}`}>
+              {diffSign} {Math.abs(scoreDiff).toFixed(2)}%
+            </span>
+          }
         />
         <StatCard
           title="Total Pendentes"
           value={pendingActions}
           sub="Ações em todos os perfis"
           good={pendingActions === 0}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accent="text-functional-error"
+          icon={pendingActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+          accent={pendingActions === 0 ? 'text-functional-success' : 'text-functional-error'}
         />
         <StatCard
           title="Usuários Online"
@@ -262,15 +279,15 @@ export default function AdminDashboard() {
           sub={onlineSub}
           good={true}
           icon={<Activity className="w-5 h-5" />}
-          accent="text-functional-success"
+          accent="text-slate-500"
         />
         <StatCard
           title="Tendência"
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`}
           sub="Evolução global"
           good={trendPercentage >= 0}
-      icon={<TrendingUp className="w-5 h-5" />}
-      accent="text-functional-success"
+          icon={<TrendingUp className="w-5 h-5" />}
+          accent="text-functional-success"
         />
       </div>
 
@@ -281,16 +298,21 @@ export default function AdminDashboard() {
           sub="Total de contestações"
           good={true}
           icon={<History className="w-5 h-5" />}
-          accent="text-brand-muted"
+          accent="text-slate-500"
         />
-    <StatCard
-      title="Taxa Reversão"
-      value={`${reversalRate.toFixed(2)}%`}
-      sub="Qualidade das monitorias"
-      good={reversalRate <= 15}
-      icon={<Target className="w-5 h-5" />}
-      accent={reversalRate <= 15 ? 'text-functional-success' : 'text-functional-error'}
-    />
+        <StatCard
+          title="Taxa Reversão"
+          value={`${reversalRate.toFixed(2)}%`}
+          sub="Qualidade das monitorias"
+          good={reversalRate <= config.targetReversalRate}
+          icon={<Target className="w-5 h-5" />}
+          accent={reversalRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${revColorClass}`}>
+              {revSign} {Math.abs(revDiff).toFixed(2)}%
+            </span>
+          }
+        />
         <StatCard
           title="Reav. Aprovadas"
           value={reavAccepted}
@@ -356,7 +378,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="h-[420px]">
-        <OfensoresChart monitorias={monitorias} forms={forms} limit={12} />
+        <OfensoresChart monitorias={monitorias} forms={forms} />
       </div>
 
       {dissatisfactionFields.length > 0 && (() => {

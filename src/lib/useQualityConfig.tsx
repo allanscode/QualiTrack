@@ -13,6 +13,8 @@ export interface QualityLevel {
 export interface QualityConfig {
   levels: QualityLevel[];
   targetScore: number;
+  targetReversalRate: number; // Meta de taxa de reversão da auditoria (%)
+  targetVolume: number;       // Meta de volumetria de monitoria (Qtd)
   action_deadline: {
     agent_review: number;
     auditor_reevaluation: number;
@@ -29,6 +31,8 @@ export interface QualityConfig {
 
 const DEFAULT_CONFIG: QualityConfig = {
   targetScore: 75,
+  targetReversalRate: 15,
+  targetVolume: 30,
   levels: [
     { label: 'Excelente', minScore: 96, maxScore: 100, color: 'text-level-excelente', bgColor: 'bg-level-excelente' },
     { label: 'Aceitável', minScore: 75, maxScore: 95, color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel' },
@@ -85,14 +89,24 @@ function migrateLegacyLevelColors(cfg: any): any {
   return cfg;
 }
 
+function normalizeConfig(cfg: any): QualityConfig {
+  if (!cfg) return DEFAULT_CONFIG;
+  const migrated = migrateLegacyLevelColors(migrateSlaToActionDeadline(cfg));
+  if (migrated.targetReversalRate === undefined || migrated.targetReversalRate === null) {
+    migrated.targetReversalRate = 15;
+  }
+  if (migrated.targetVolume === undefined || migrated.targetVolume === null) {
+    migrated.targetVolume = 30;
+  }
+  return migrated as QualityConfig;
+}
+
 function loadFromStorage(): QualityConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      migrateSlaToActionDeadline(parsed);
-      migrateLegacyLevelColors(parsed);
-      return parsed as QualityConfig;
+      return normalizeConfig(parsed);
     }
   } catch {}
   return DEFAULT_CONFIG;
@@ -122,7 +136,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
       if (supabase) {
         const { data } = await supabase.from('quality_configs').select('*').single();
         if (data) {
-          const cfg = migrateLegacyLevelColors(migrateSlaToActionDeadline(data.config)) as QualityConfig;
+          const cfg = normalizeConfig(data.config);
           setConfig(cfg);
           setOldConfig(cfg);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
@@ -130,7 +144,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
       } else {
         const { data } = await mockDb.get('quality_configs');
         if (data && data.length > 0) {
-          const cfg = migrateLegacyLevelColors(migrateSlaToActionDeadline(data[0].config)) as QualityConfig;
+          const cfg = normalizeConfig(data[0].config);
           setConfig(cfg);
           setOldConfig(cfg);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
