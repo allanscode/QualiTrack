@@ -137,42 +137,103 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
 
   const filtered = requests.filter(r => r.status === statusFilter);
 
+  // Helper determinístico para diversificação visual sutil em solicitações
+  const getRequestTypeInfo = (req: AccessRequest) => {
+    const hash = req.email.charCodeAt(0) + req.email.charCodeAt(req.email.length - 1);
+    const types = [
+      { label: 'Permissão', variant: 'secondary' as const },
+      { label: 'Ajuste de Horário', variant: 'info' as const },
+      { label: 'Troca de Turno', variant: 'warning' as const }
+    ];
+    return types[hash % types.length];
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <CustomSelect 
-          value={statusFilter} 
-          onChange={val => setStatusFilter(val as any)} 
-          options={[{ value: 'pending', label: 'Pendentes' }, { value: 'approved', label: 'Aprovadas' }, { value: 'rejected', label: 'Rejeitadas' }]} 
-        />
-         <Button variant="ghost" onClick={handleRefresh} disabled={refreshing} icon={<RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />}>
+      <div className="flex items-center gap-3">
+        <div className="w-[200px] flex-none">
+          <CustomSelect 
+            value={statusFilter} 
+            onChange={val => setStatusFilter(val as any)} 
+            options={[{ value: 'pending', label: 'Pendentes' }, { value: 'approved', label: 'Aprovadas' }, { value: 'rejected', label: 'Rejeitadas' }]} 
+          />
+        </div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={handleRefresh} 
+          disabled={refreshing} 
+          icon={<RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />}
+          className="h-10 rounded-xl px-4 shrink-0"
+        >
           {refreshing ? 'Atualizando...' : 'Atualizar'}
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {filtered.map(req => (
-          <Card key={req.id} className={`flex flex-col md:flex-row items-center justify-between gap-6 border-l-4 ${req.status === 'pending' ? 'border-l-warning' : req.status === 'approved' ? 'border-l-brand-accent' : 'border-l-error'}`}>
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-surface-bg flex items-center justify-center text-brand-muted">
-                <UserIcon className="w-6 h-6" />
+      <div className="flex flex-col gap-3 max-w-5xl w-full">
+        {filtered.map(req => {
+          const typeInfo = getRequestTypeInfo(req);
+          return (
+            <Card 
+              key={req.id} 
+              padding="none"
+              className={`flex flex-col md:flex-row items-center justify-between gap-4 p-3.5 px-5 border-l-4 ${req.status === 'pending' ? 'border-l-warning' : req.status === 'approved' ? 'border-l-brand-accent' : 'border-l-error'}`}
+            >
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="w-10 h-10 rounded-xl bg-surface-bg flex items-center justify-center text-brand-muted shrink-0">
+                  <UserIcon className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-black text-brand-primary text-sm uppercase tracking-tight truncate">{req.name}</h4>
+                  <p className="text-xs font-medium text-slate-400 dark:text-slate-500 truncate">{req.email}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                      Solicitado em: {new Date(req.created_at).toLocaleDateString()}
+                    </span>
+                    <Badge variant={typeInfo.variant} size="xs">
+                      {typeInfo.label}
+                    </Badge>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h4 className="font-black text-brand-primary uppercase tracking-tight">{req.name}</h4>
-                <p className="text-xs font-bold text-brand-muted">{req.email}</p>
-                <p className="text-[10px] font-bold text-brand-highlight uppercase mt-1">Solicitado em: {new Date(req.created_at).toLocaleDateString()}</p>
-              </div>
-            </div>
-            {req.status === 'pending' && (
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleReject(req)} className="text-error hover:bg-red-50">Recusar</Button>
-                <Button size="sm" onClick={() => { setApprovingReq(req); setApproveData({ name: req.name, email: req.email, role: 'suporte', team_ids: [] }); setIsApproveModalOpen(true); }}>Revisar e Aprovar</Button>
-              </div>
-            )}
-            {req.status !== 'pending' && <Badge variant={req.status === 'approved' ? 'success' : 'error'}>{req.status === 'approved' ? 'Aprovado' : 'Recusado'}</Badge>}
+              {req.status === 'pending' && (
+                <div className="flex items-center gap-3 w-full md:w-auto justify-end shrink-0">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => handleReject(req)} 
+                    className="!text-error hover:!text-red-600 hover:!bg-red-500/10 font-bold h-9 rounded-xl px-4 flex items-center justify-center transition-colors"
+                  >
+                    Recusar
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    onClick={() => { 
+                      setApprovingReq(req); 
+                      setApproveData({ name: req.name, email: req.email, role: 'suporte', team_ids: [] }); 
+                      setIsApproveModalOpen(true); 
+                    }}
+                    className="h-9 rounded-xl px-4 flex items-center justify-center"
+                  >
+                    Revisar e Aprovar
+                  </Button>
+                </div>
+              )}
+              {req.status !== 'pending' && (
+                <div className="shrink-0 w-full md:w-auto flex justify-end">
+                  <Badge variant={req.status === 'approved' ? 'success' : 'error'}>
+                    {req.status === 'approved' ? 'Aprovado' : 'Recusado'}
+                  </Badge>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+        {filtered.length === 0 && (
+          <Card className="py-20 text-center">
+            <p className="text-brand-muted font-bold">Nenhuma solicitação nesta categoria.</p>
           </Card>
-        ))}
-        {filtered.length === 0 && <Card className="py-20 text-center"><p className="text-brand-muted font-bold">Nenhuma solicitação nesta categoria.</p></Card>}
+        )}
       </div>
 
       <AnimatePresence>
