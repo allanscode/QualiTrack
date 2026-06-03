@@ -222,7 +222,7 @@ export default function CustomDatepicker({
           ref={triggerRef}
           onClick={handleToggle}
           className={`flex items-center justify-between w-full bg-surface-card border border-surface-border px-3 transition-all shadow-sm ${
-            size === 'sm' ? 'h-9 rounded-xl px-2.5 text-[10px]' : 'h-10 rounded-2xl px-3 text-[11px]'
+            size === 'sm' ? 'h-9 rounded-lg px-2.5 text-[10px]' : 'h-10 rounded-lg px-3 text-[11px]'
           } ${
             !disabled ? 'hover:border-brand-accent cursor-pointer' : 'cursor-not-allowed'
           } ${isOpen ? 'ring-2 ring-brand-accent/20 border-brand-accent' : ''}`}
@@ -251,7 +251,7 @@ export default function CustomDatepicker({
             ref={datepickerRef}
             style={posRef.current}
             onWheel={e => e.stopPropagation()}
-            className="bg-surface-card border border-surface-border rounded-2xl shadow-premium-lg overflow-hidden select-none"
+            className="bg-surface-card border border-surface-border rounded-lg shadow-premium-lg overflow-hidden select-none"
           >
             <AnimatePresence initial={false}>
               <motion.div
@@ -266,17 +266,17 @@ export default function CustomDatepicker({
                   <button
                     type="button"
                     onClick={handlePrevMonth}
-                    className="p-1.5 rounded-xl hover:bg-surface-subtle border border-surface-border/50 text-brand-muted hover:text-brand-primary transition-colors flex items-center justify-center"
+                    className="p-1.5 rounded-lg hover:bg-surface-subtle border border-surface-border/50 text-brand-muted hover:text-brand-primary hover:opacity-80 active:scale-95 transition-all duration-200 flex items-center justify-center cursor-pointer"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-xs font-black text-brand-primary uppercase tracking-wider">
+                  <span className="text-xs font-black text-brand-primary uppercase tracking-wider hover:text-brand-accent transition-all duration-200 cursor-pointer select-none">
                     {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
                   </span>
                   <button
                     type="button"
                     onClick={handleNextMonth}
-                    className="p-1.5 rounded-xl hover:bg-surface-subtle border border-surface-border/50 text-brand-muted hover:text-brand-primary transition-colors flex items-center justify-center"
+                    className="p-1.5 rounded-lg hover:bg-surface-subtle border border-surface-border/50 text-brand-muted hover:text-brand-primary hover:opacity-80 active:scale-95 transition-all duration-200 flex items-center justify-center cursor-pointer"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -306,17 +306,17 @@ export default function CustomDatepicker({
                         key={idx}
                         type="button"
                         onClick={() => handleSelectDay(day)}
-                        className={`text-[10px] h-7 w-7 rounded-xl flex items-center justify-center transition-all ${
+                        className={`text-[10px] h-7 w-7 rounded-lg flex items-center justify-center transition-all duration-200 cursor-pointer ${
                           isSelected 
-                            ? 'bg-brand-primary text-brand-on-primary font-black shadow-premium-sm scale-105' 
+                            ? 'bg-brand-primary text-brand-on-primary font-black shadow-premium-sm scale-105 hover:opacity-90' 
                             : `${
                                 !isCurrentMonth 
-                                  ? 'text-brand-muted/30 hover:bg-brand-highlight/10 font-bold' 
-                                  : 'text-brand-primary font-bold'
+                                  ? 'text-brand-muted/30 hover:bg-slate-100 dark:hover:bg-slate-800/50 font-bold' 
+                                  : 'text-brand-primary hover:bg-slate-100 dark:hover:bg-slate-800/50 font-bold'
                               } ${
                                 isCurrentDay 
                                   ? 'border border-brand-accent/50 text-brand-accent font-black' 
-                                  : isCurrentMonth ? 'hover:bg-brand-highlight/20 cursor-pointer' : 'cursor-pointer'
+                                  : ''
                               }`
                         }`}
                       >

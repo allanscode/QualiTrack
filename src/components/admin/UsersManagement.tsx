@@ -184,16 +184,16 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative w-64 h-10">
-            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               placeholder="Buscar usuário..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-xs font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+              className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg pl-9 pr-4 text-sm font-normal text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
             />
           </div>
-          <div className="h-10 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <CustomSelect 
               value={statusFilter}
               onChange={val => setStatusFilter(val as any)}
@@ -263,13 +263,26 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                     {ROLE_LABELS[u.role] || u.role}
                   </Badge>
                 </td>
-                <td className="px-6 py-4 text-xs font-bold text-brand-muted">
-                  {u.team_ids && u.team_ids.length > 0
-                    ? u.team_ids
-                        .map(id => teams.find(t => t.id === id && t.active !== false)?.name)
-                        .filter(Boolean)
-                        .join(', ') || 'Sem equipe'
-                    : 'Sem equipe'}
+                <td className="px-6 py-4 text-xs font-bold text-brand-muted whitespace-nowrap">
+                  {(() => {
+                    if (!u.team_ids || u.team_ids.length === 0) return 'Sem equipe';
+                    const activeTeamNames = u.team_ids
+                      .map(id => teams.find(t => t.id === id && t.active !== false)?.name)
+                      .filter(Boolean) as string[];
+                    
+                    if (activeTeamNames.length === 0) return 'Sem equipe';
+                    if (activeTeamNames.length <= 2) {
+                      return activeTeamNames.join(', ');
+                    }
+                    return (
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate max-w-[150px]">{activeTeamNames.slice(0, 2).join(', ')}</span>
+                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-black text-slate-500 dark:text-slate-400">
+                          +{activeTeamNames.length - 2}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-1">
@@ -323,12 +336,12 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
 
               <div className="space-y-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome Completo</label>
-                  <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Nome Completo</label>
+                  <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Email</label>
-                  <input type="email" disabled={!!editingUser.id} className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Email</label>
+                  <input type="email" disabled={!!editingUser.id} className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
                 </div>
                 <CustomSelect 
                   label="Perfil"
@@ -344,7 +357,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                 />
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between ml-1 mb-1">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Equipes</label>
+                    <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold ml-0.5">Equipes</label>
                     {teams.filter(t => t.active !== false).length > 8 && (
                       <div className="relative w-32 h-7">
                         <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
@@ -358,15 +371,15 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2 p-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-32 overflow-y-auto no-scrollbar">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-40 overflow-y-auto scrollbar-thin">
                     {teams.filter(t => t.active !== false)
                       .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map(t => (
-                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${editingUser.team_ids?.includes(t.id) ? 'bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 border-slate-900 dark:border-slate-50 shadow-sm' : 'bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200/60 dark:border-slate-800/60 hover:border-slate-400 dark:hover:border-slate-600'}`}>
+                      <label key={t.id} className="flex items-center gap-3 py-1 px-1 cursor-pointer group">
                         <input
                           type="checkbox"
-                          className="hidden"
+                          className="w-4 h-4 rounded border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-slate-500/20 focus:ring-offset-0 accent-slate-900 dark:accent-slate-50 transition-all cursor-pointer"
                           checked={editingUser.team_ids?.includes(t.id) || false}
                           onChange={(e) => {
                             const newIds = e.target.checked
@@ -375,14 +388,16 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                             setEditingUser({ ...editingUser, team_ids: newIds });
                           }}
                         />
-                        {t.name}
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide group-hover:text-slate-900 dark:group-hover:text-white transition-colors truncate">
+                          {t.name}
+                        </span>
                       </label>
                     ))}
                     {teams.filter(t => t.active !== false).length === 0 && (
-                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2">Nenhuma equipe ativa cadastrada.</p>
+                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 col-span-2 text-center">Nenhuma equipe ativa cadastrada.</p>
                     )}
                     {teams.filter(t => t.active !== false).length > 0 && teams.filter(t => t.active !== false).filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
-                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 w-full text-center">Nenhuma equipe encontrada.</p>
+                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 col-span-2 text-center">Nenhuma equipe encontrada.</p>
                     )}
                   </div>
                 </div>

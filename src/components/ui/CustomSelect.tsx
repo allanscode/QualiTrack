@@ -134,13 +134,13 @@ export default function CustomSelect({
 
   return (
     <div className={`flex flex-col gap-1 flex-1 min-w-[120px] ${className}`}>
-      {label && <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">{label}</label>}
+      {label && <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">{label}</label>}
       <div className={disabled ? 'opacity-60 cursor-not-allowed' : ''}>
         <div
           ref={triggerRef}
           onClick={handleToggle}
           className={`flex items-center justify-between w-full bg-surface-card border border-surface-border px-3 transition-all shadow-sm ${
-            isCompact ? 'h-9 rounded-xl px-2.5 text-[10px]' : 'h-10 rounded-2xl px-3 text-[11px]'
+            isCompact ? 'h-9 rounded-lg px-2.5 text-[10px]' : 'h-10 rounded-lg px-3 text-[11px]'
           } ${!disabled ? 'hover:border-brand-accent cursor-pointer' : 'cursor-not-allowed'} ${
             isOpen ? 'ring-2 ring-brand-accent/20 border-brand-accent' : ''
           }`}
@@ -153,7 +153,7 @@ export default function CustomSelect({
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder={selectedOption ? selectedOption.label : placeholder}
-                className={`w-full bg-transparent outline-none font-bold text-brand-primary placeholder:text-brand-muted/60 ${
+                className={`w-full bg-transparent border-none p-0 focus:ring-0 focus:outline-none shadow-none outline-none font-bold text-brand-primary placeholder:text-brand-muted/60 ${
                   isCompact ? 'text-[10px]' : 'text-[11px]'
                 }`}
                 onClick={e => e.stopPropagation()}
@@ -174,7 +174,7 @@ export default function CustomSelect({
             ref={dropdownRef}
             style={posRef.current}
             className={`bg-surface-card border border-surface-border shadow-premium-lg max-h-60 overflow-auto py-1 no-scrollbar ${
-              isCompact ? 'rounded-xl' : 'rounded-2xl'
+              isCompact ? 'rounded-lg' : 'rounded-lg'
             }`}
             onWheel={e => e.stopPropagation()}
           >

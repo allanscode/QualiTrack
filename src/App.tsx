@@ -892,9 +892,9 @@ function AppContent() {
             <p className="text-xs text-brand-muted mb-6">Clique no botão abaixo para continuar conectado.</p>
             <button
               onClick={extendSession}
-              className="w-full bg-brand-accent text-white py-3.5 rounded-2xl font-bold shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all"
+              className="w-full bg-brand-accent text-white py-3.5 rounded-lg font-bold uppercase tracking-wider shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all"
             >
-              Continuar conectado
+              Continuar Conectado
             </button>
           </motion.div>
         </motion.div>
@@ -935,16 +935,16 @@ function AppContent() {
                       <form onSubmit={handleLogin} className="space-y-4 text-left">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">E-mail corporativo</label>
-                          <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={credentials.email} onChange={e => setCredentials({...credentials, email: e.target.value})} />
+                          <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={credentials.email} onChange={e => setCredentials({...credentials, email: e.target.value})} />
                         </div>
                         <div>
                           <div className="flex justify-between mb-2">
                             <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Senha</label>
                             <button type="button" onClick={() => setAuthView('forgot-password')} className="text-[10px] font-bold text-brand-accent hover:text-brand-primary transition-colors">Esqueci a senha</button>
                           </div>
-                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={credentials.password} onChange={e => setCredentials({...credentials, password: e.target.value})} />
+                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={credentials.password} onChange={e => setCredentials({...credentials, password: e.target.value})} />
                         </div>
-                        <button className="w-full bg-brand-accent text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
+                        <button className="w-full bg-brand-accent text-white py-4 rounded-lg font-bold uppercase tracking-wider shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
                           <span className="text-white">Entrar</span>
                         </button>
                       </form>
@@ -958,13 +958,13 @@ function AppContent() {
                       <form onSubmit={handleRequestAccess} className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Nome completo</label>
-                          <input type="text" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={requestData.name} onChange={e => setRequestData({...requestData, name: e.target.value})} />
+                          <input type="text" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={requestData.name} onChange={e => setRequestData({...requestData, name: e.target.value})} />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">E-mail corporativo</label>
-                          <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={requestData.email} onChange={e => setRequestData({...requestData, email: e.target.value})} />
+                          <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={requestData.email} onChange={e => setRequestData({...requestData, email: e.target.value})} />
                         </div>
-                        <button className="w-full bg-brand-accent text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
+                        <button className="w-full bg-brand-accent text-white py-4 rounded-lg font-bold uppercase tracking-wider shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
                           <span className="text-white">Enviar Solicitação</span>
                         </button>
                         <button type="button" onClick={() => setAuthView('login')} className="w-full text-sm font-bold text-brand-muted hover:text-brand-primary transition-colors mt-2 text-center">Voltar para Login</button>
@@ -979,7 +979,7 @@ function AppContent() {
                       </div>
                       <h3 className="text-xl font-bold text-brand-primary">Solicitação Enviada</h3>
                       <p className="text-sm text-brand-muted">Aguarde a aprovação do administrador. Você receberá um e-mail em breve.</p>
-                      <button onClick={() => setAuthView('login')} className="w-full bg-brand-accent text-white py-4 rounded-2xl font-bold shadow-lg transition-all flex items-center justify-center">
+                      <button onClick={() => setAuthView('login')} className="w-full bg-brand-accent text-white py-4 rounded-lg font-bold uppercase tracking-wider shadow-lg transition-all flex items-center justify-center">
                         <span className="text-white">Voltar para o Início</span>
                       </button>
                     </motion.div>
@@ -991,13 +991,13 @@ function AppContent() {
                       <form onSubmit={handleUpdatePassword} className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Nova senha</label>
-                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Confirmar nova senha</label>
-                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
                         </div>
-                        <button className="w-full bg-brand-accent text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
+                        <button className="w-full bg-brand-accent text-white py-4 rounded-lg font-bold uppercase tracking-wider shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
                           <span className="text-white">Definir Nova Senha</span>
                         </button>
                       </form>
@@ -1010,9 +1010,9 @@ function AppContent() {
                       <form onSubmit={handleForgotPassword} className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">E-mail cadastrado</label>
-                          <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
+                          <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
                         </div>
-                        <button className="w-full bg-brand-accent text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
+                        <button className="w-full bg-brand-accent text-white py-4 rounded-lg font-bold uppercase tracking-wider shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
                           <span className="text-white">Enviar Link</span>
                         </button>
                         <button type="button" onClick={() => setAuthView('login')} className="w-full py-4 text-brand-muted font-bold hover:text-brand-primary transition-colors text-center">Voltar</button>

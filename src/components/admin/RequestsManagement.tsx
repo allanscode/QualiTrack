@@ -99,7 +99,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
 
   const confirmReject = async () => {
     if (!rejectReason.trim()) {
-      toast.error('Por favor, informe o motivo da rejeição.');
+      toast.error('Por favor, informe o motivo da recusa.');
       return;
     }
 
@@ -129,7 +129,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
       setIsRejectModalOpen(false);
       await handleRefresh();
     } catch (e: any) {
-      toast.error('Não foi possível processar a rejeição da solicitação.');
+      toast.error('Não foi possível processar a recusa da solicitação.');
     } finally {
       setSaving(false);
     }
@@ -138,41 +138,90 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
   const filtered = requests.filter(r => r.status === statusFilter);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <CustomSelect 
-          value={statusFilter} 
-          onChange={val => setStatusFilter(val as any)} 
-          options={[{ value: 'pending', label: 'Pendentes' }, { value: 'approved', label: 'Aprovadas' }, { value: 'rejected', label: 'Rejeitadas' }]} 
-        />
-         <Button variant="ghost" onClick={handleRefresh} disabled={refreshing} icon={<RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />}>
+    <div className="space-y-6 max-w-4xl w-full">
+      <div className="flex items-center gap-3">
+        <div className="w-[200px] flex-none">
+          <CustomSelect 
+            value={statusFilter} 
+            onChange={val => setStatusFilter(val as any)} 
+            options={[{ value: 'pending', label: 'Pendentes' }, { value: 'approved', label: 'Aprovadas' }, { value: 'rejected', label: 'Rejeitadas' }]} 
+          />
+        </div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={handleRefresh} 
+          disabled={refreshing} 
+          icon={<RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />}
+          className="h-10 px-4 shrink-0"
+        >
           {refreshing ? 'Atualizando...' : 'Atualizar'}
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {filtered.map(req => (
-          <Card key={req.id} className={`flex flex-col md:flex-row items-center justify-between gap-6 border-l-4 ${req.status === 'pending' ? 'border-l-warning' : req.status === 'approved' ? 'border-l-brand-accent' : 'border-l-error'}`}>
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-surface-bg flex items-center justify-center text-brand-muted">
-                <UserIcon className="w-6 h-6" />
+      <div className="flex flex-col gap-3 max-w-4xl w-full">
+        {filtered.map(req => {
+          return (
+            <Card 
+              key={req.id} 
+              padding="none"
+              className={`flex flex-col md:flex-row items-center justify-between gap-4 p-3.5 px-5 border-l-4 ${req.status === 'pending' ? 'border-l-warning' : req.status === 'approved' ? 'border-l-brand-accent' : 'border-l-error'}`}
+            >
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="w-10 h-10 rounded-xl bg-surface-bg flex items-center justify-center text-brand-muted shrink-0">
+                  <UserIcon className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-black text-brand-primary text-sm uppercase tracking-tight truncate">{req.name}</h4>
+                  <p className="text-xs font-medium text-slate-400 dark:text-slate-500 truncate">{req.email}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                      Solicitado em: {new Date(req.created_at).toLocaleDateString()}
+                    </span>
+                    <span className="bg-slate-900 border border-slate-800 text-slate-300 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-lg">
+                      Solicitação de Acesso
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h4 className="font-black text-brand-primary uppercase tracking-tight">{req.name}</h4>
-                <p className="text-xs font-bold text-brand-muted">{req.email}</p>
-                <p className="text-[10px] font-bold text-brand-highlight uppercase mt-1">Solicitado em: {new Date(req.created_at).toLocaleDateString()}</p>
-              </div>
-            </div>
-            {req.status === 'pending' && (
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleReject(req)} className="text-error hover:bg-red-50">Recusar</Button>
-                <Button size="sm" onClick={() => { setApprovingReq(req); setApproveData({ name: req.name, email: req.email, role: 'suporte', team_ids: [] }); setIsApproveModalOpen(true); }}>Revisar e Aprovar</Button>
-              </div>
-            )}
-            {req.status !== 'pending' && <Badge variant={req.status === 'approved' ? 'success' : 'error'}>{req.status === 'approved' ? 'Aprovado' : 'Recusado'}</Badge>}
+              {req.status === 'pending' && (
+                <div className="flex items-center gap-3 w-full md:w-auto justify-end shrink-0">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => handleReject(req)} 
+                    className="!text-error hover:!text-red-600 hover:!bg-red-500/10 font-bold h-9 px-4 flex items-center justify-center transition-colors"
+                  >
+                    Recusar
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    onClick={() => { 
+                      setApprovingReq(req); 
+                      setApproveData({ name: req.name, email: req.email, role: 'suporte', team_ids: [] }); 
+                      setIsApproveModalOpen(true); 
+                    }}
+                    className="h-9 px-4 flex items-center justify-center transition-all duration-200 cursor-pointer hover:bg-opacity-90 dark:hover:bg-neutral-200"
+                  >
+                    Revisar e Aprovar
+                  </Button>
+                </div>
+              )}
+              {req.status !== 'pending' && (
+                <div className="shrink-0 w-full md:w-auto flex justify-end">
+                  <Badge variant={req.status === 'approved' ? 'success' : 'error'}>
+                    {req.status === 'approved' ? 'Aprovado' : 'Recusado'}
+                  </Badge>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+        {filtered.length === 0 && (
+          <Card className="py-20 text-center">
+            <p className="text-brand-muted font-bold">Nenhuma solicitação nesta categoria.</p>
           </Card>
-        ))}
-        {filtered.length === 0 && <Card className="py-20 text-center"><p className="text-brand-muted font-bold">Nenhuma solicitação nesta categoria.</p></Card>}
+        )}
       </div>
 
       <AnimatePresence>
@@ -185,9 +234,9 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
               </header>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome</label>
-                    <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
+                  <div className="flex flex-col">
+                    <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Nome</label>
+                    <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
                   </div>
                   <CustomSelect 
                     label="Perfil" 
@@ -204,39 +253,51 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                 </div>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between ml-1 mb-1">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Equipes</label>
+                    <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold ml-0.5">Equipes</label>
                     {teams.length > 8 && (
                       <div className="relative w-32 h-7">
                         <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                         <input 
                           type="text" 
                           placeholder="Buscar..." 
-                          className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg pl-6 pr-2 text-[10px] font-medium text-slate-900 dark:text-slate-50 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                          className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg pl-6 pr-2 text-[10px] font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                           value={teamSearch}
                           onChange={e => setTeamSearch(e.target.value)}
                         />
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2 p-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-32 overflow-y-auto no-scrollbar">
+                  <div className="flex flex-col gap-3 px-4 pb-4 pt-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-lg max-h-40 overflow-y-auto scrollbar-thin">
                     {teams
                       .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map(t => (
-                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${approveData.team_ids?.includes(t.id) ? 'bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 border-slate-900 dark:border-slate-50 shadow-sm' : 'bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200/60 dark:border-slate-800/60 hover:border-slate-400 dark:hover:border-slate-600'}`}>
-                        <input type="checkbox" className="hidden" checked={approveData.team_ids?.includes(t.id)} onChange={e => {
-                          const newIds = e.target.checked ? [...approveData.team_ids, t.id] : approveData.team_ids.filter(id => id !== t.id);
-                          setApproveData({...approveData, team_ids: newIds});
-                        }} />
-                        {t.name}
+                      <label key={t.id} className="flex items-center gap-3 py-1 px-1 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-slate-500/20 focus:ring-offset-0 accent-slate-900 dark:accent-slate-50 transition-all cursor-pointer"
+                          checked={approveData.team_ids?.includes(t.id) || false}
+                          onChange={e => {
+                            const newIds = e.target.checked
+                              ? [...(approveData.team_ids || []), t.id]
+                              : (approveData.team_ids || []).filter(id => id !== t.id);
+                            setApproveData({ ...approveData, team_ids: newIds });
+                          }}
+                        />
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+                          {t.name}
+                        </span>
                       </label>
                     ))}
+                    {teams.length === 0 && (
+                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 col-span-2 text-center">Nenhuma equipe cadastrada.</p>
+                    )}
                     {teams.length > 0 && teams.filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
-                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 w-full text-center">Nenhuma equipe encontrada.</p>
+                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 col-span-2 text-center">Nenhuma equipe encontrada.</p>
                     )}
                   </div>
                 </div>
-                <Button className="w-full mt-4" onClick={handleApprove} disabled={saving} icon={<Check className="w-4 h-4" />}>{saving ? 'Processando...' : 'Confirmar Aprovação'}</Button>
+                <Button className="w-full mt-4 transition-all duration-200 cursor-pointer hover:bg-opacity-90 dark:hover:bg-neutral-200" onClick={handleApprove} disabled={saving} icon={<Check className="w-4 h-4" />}>{saving ? 'Processando...' : 'Confirmar Aprovação'}</Button>
               </div>
             </Card>
           </div>
@@ -248,7 +309,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
               <header className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2 text-error">
                   <AlertCircle className="w-5 h-5" />
-                  <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Rejeitar Solicitação</h3>
+                  <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">RECUSAR SOLICITAÇÃO</h3>
                 </div>
                 <button onClick={() => setIsRejectModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
               </header>
@@ -257,18 +318,23 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                   Você está recusando o acesso de <span className="text-brand-primary font-bold">{rejectingReq?.name}</span>.
                   Informe abaixo o motivo da recusa, que será enviado por e-mail para o usuário.
                 </p>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Motivo da Rejeição</label>
+                <div className="flex flex-col">
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">MOTIVO DA RECUSA</label>
                   <textarea 
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-50 focus:border-red-500 dark:focus:border-red-500 focus:outline-none focus:ring-0 min-h-[120px] resize-none shadow-sm transition-all"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-red-500 dark:focus:border-red-500 focus:outline-none focus:ring-0 min-h-[120px] resize-none shadow-sm transition-all"
                     placeholder="Ex: E-mail não corporativo ou setor não autorizado."
                     value={rejectReason}
                     onChange={e => setRejectReason(e.target.value)}
                   />
                 </div>
                 <div className="flex gap-3 mt-4">
-                  <Button variant="outline" className="flex-1" onClick={() => setIsRejectModalOpen(false)}>Cancelar</Button>
-                  <Button className="flex-1 bg-error hover:bg-red-700" onClick={confirmReject} disabled={saving}>
+                  <Button variant="outline" className="flex-1 hover:bg-slate-50 dark:hover:bg-slate-900/40" onClick={() => setIsRejectModalOpen(false)}>Cancelar</Button>
+                  <Button 
+                    variant="ghost" 
+                    className="flex-1 bg-transparent border border-red-500/20 text-red-500 dark:text-red-400 hover:!border-red-600 hover:!bg-red-600 hover:!text-white active:scale-[0.98] transition-colors duration-200" 
+                    onClick={confirmReject} 
+                    disabled={saving}
+                  >
                     {saving ? 'Enviando...' : 'Confirmar Recusa'}
                   </Button>
                 </div>

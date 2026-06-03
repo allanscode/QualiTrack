@@ -61,16 +61,16 @@ export default function RecentAuditsTable({ monitorias, users, title = 'Monitori
 
       <div className="overflow-x-auto overflow-y-auto max-h-[450px] custom-scrollbar">
         <table className="w-full text-left">
-          <thead className="bg-surface-subtle/30 sticky top-0 z-10">
-            <tr className="text-[10px] uppercase tracking-widest text-brand-muted font-black border-b border-surface-border">
-              <th className="px-6 py-3">#</th>
-              <th className="px-6 py-3">Ticket</th>
-              <th className="px-6 py-3">Qualidade</th>
-              <th className="px-6 py-3">Suporte</th>
-              <th className="px-6 py-3">Score</th>
-              <th className="px-6 py-3">Status</th>
-              <th className="px-6 py-3">Prazo</th>
-              <th className="px-6 py-3">Data</th>
+          <thead>
+            <tr className="text-[10px] uppercase tracking-widest text-brand-muted font-black">
+              <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">#</th>
+              <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">Ticket</th>
+              <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">Qualidade</th>
+              <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">Suporte</th>
+              <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">Score</th>
+              <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">Status</th>
+              <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">Prazo</th>
+              <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">Data</th>
             </tr>
           </thead>
           <tbody>
