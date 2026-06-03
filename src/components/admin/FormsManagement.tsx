@@ -351,7 +351,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                         <div className="flex flex-col gap-2">
                           <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Descrição do Propósito</label>
                           <textarea 
-                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all min-h-[120px] shadow-sm leading-relaxed" 
+                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all min-h-[120px] resize-y shadow-sm leading-relaxed" 
                             value={editingForm.description || ''} 
                             onChange={e => setEditingForm({...editingForm, description: e.target.value})} 
                             placeholder="Descreva detalhadamente o que este formulário avalia e quais os objetivos..." 

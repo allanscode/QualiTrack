@@ -218,21 +218,33 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2 p-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-32 overflow-y-auto no-scrollbar">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-40 overflow-y-auto scrollbar-thin">
                     {teams
                       .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map(t => (
-                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${approveData.team_ids?.includes(t.id) ? 'bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 border-slate-900 dark:border-slate-50 shadow-sm' : 'bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200/60 dark:border-slate-800/60 hover:border-slate-400 dark:hover:border-slate-600'}`}>
-                        <input type="checkbox" className="hidden" checked={approveData.team_ids?.includes(t.id)} onChange={e => {
-                          const newIds = e.target.checked ? [...approveData.team_ids, t.id] : approveData.team_ids.filter(id => id !== t.id);
-                          setApproveData({...approveData, team_ids: newIds});
-                        }} />
-                        {t.name}
+                      <label key={t.id} className="flex items-center gap-3 py-1 px-1 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-slate-500/20 focus:ring-offset-0 accent-slate-900 dark:accent-slate-50 transition-all cursor-pointer"
+                          checked={approveData.team_ids?.includes(t.id) || false}
+                          onChange={e => {
+                            const newIds = e.target.checked
+                              ? [...(approveData.team_ids || []), t.id]
+                              : (approveData.team_ids || []).filter(id => id !== t.id);
+                            setApproveData({ ...approveData, team_ids: newIds });
+                          }}
+                        />
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide group-hover:text-slate-900 dark:group-hover:text-white transition-colors truncate">
+                          {t.name}
+                        </span>
                       </label>
                     ))}
+                    {teams.length === 0 && (
+                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 col-span-2 text-center">Nenhuma equipe cadastrada.</p>
+                    )}
                     {teams.length > 0 && teams.filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
-                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 w-full text-center">Nenhuma equipe encontrada.</p>
+                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 col-span-2 text-center">Nenhuma equipe encontrada.</p>
                     )}
                   </div>
                 </div>

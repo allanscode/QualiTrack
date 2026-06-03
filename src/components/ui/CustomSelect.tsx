@@ -140,7 +140,7 @@ export default function CustomSelect({
           ref={triggerRef}
           onClick={handleToggle}
           className={`flex items-center justify-between w-full bg-surface-card border border-surface-border px-3 transition-all shadow-sm ${
-            isCompact ? 'h-9 rounded-xl px-2.5 text-[10px]' : 'h-10 rounded-2xl px-3 text-[11px]'
+            isCompact ? 'h-9 rounded-xl px-2.5 text-[10px]' : 'h-10 rounded-xl px-3 text-[11px]'
           } ${!disabled ? 'hover:border-brand-accent cursor-pointer' : 'cursor-not-allowed'} ${
             isOpen ? 'ring-2 ring-brand-accent/20 border-brand-accent' : ''
           }`}
@@ -174,7 +174,7 @@ export default function CustomSelect({
             ref={dropdownRef}
             style={posRef.current}
             className={`bg-surface-card border border-surface-border shadow-premium-lg max-h-60 overflow-auto py-1 no-scrollbar ${
-              isCompact ? 'rounded-xl' : 'rounded-2xl'
+              isCompact ? 'rounded-xl' : 'rounded-xl'
             }`}
             onWheel={e => e.stopPropagation()}
           >

@@ -322,8 +322,8 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Sigla</label>
                     <input 
                       type="text" 
-                      maxLength={5}
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all text-center uppercase" 
+                      maxLength={4}
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all uppercase" 
                       value={editingTeam.sigla} 
                       onChange={e => setEditingTeam({ ...editingTeam, sigla: e.target.value.toUpperCase() })} 
                       placeholder="SUP1"

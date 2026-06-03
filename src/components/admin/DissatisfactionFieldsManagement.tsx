@@ -219,7 +219,7 @@ export default function DissatisfactionFieldsManagement() {
             />
           </div>
         </div>
-        <Button onClick={handleOpenNew} icon={<Plus className="w-4 h-4" />}>
+        <Button onClick={handleOpenNew} icon={<Plus className="w-4 h-4" />} className="h-10 rounded-xl !py-0 flex items-center">
           Adicionar Campo Extra
         </Button>
       </div>
@@ -256,12 +256,17 @@ export default function DissatisfactionFieldsManagement() {
                   </Badge>
                 </td>
                 <td className="px-6 py-4 max-w-xs md:max-w-md">
-                  <div className="flex flex-wrap gap-1.5">
-                    {f.options.map((opt, i) => (
-                      <span key={i} className="text-[10px] bg-surface-card border border-surface-border text-brand-primary font-bold px-2 py-0.5 rounded-lg">
+                  <div className="flex flex-row items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-none">
+                    {f.options.slice(0, 4).map((opt, i) => (
+                      <span key={i} className="text-[10px] bg-surface-card border border-surface-border text-brand-primary font-bold px-2 py-0.5 rounded-lg shrink-0">
                         {opt}
                       </span>
                     ))}
+                    {f.options.length > 4 && (
+                      <span className="text-[10px] bg-brand-subtle text-brand-primary font-extrabold px-2 py-0.5 rounded-lg shrink-0">
+                        +{f.options.length - 4}
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-right">
@@ -342,7 +347,7 @@ export default function DissatisfactionFieldsManagement() {
                     <input 
                       type="text" 
                       placeholder="Adicione uma opção (ex: Processo)"
-                      className="flex-1 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
+                      className="flex-1 h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
                       value={newOption}
                       onChange={e => setNewOption(e.target.value)}
                       onKeyDown={e => {
@@ -352,7 +357,7 @@ export default function DissatisfactionFieldsManagement() {
                         }
                       }}
                     />
-                    <Button onClick={handleAddOption} variant="outline" icon={<Plus className="w-4 h-4" />}>
+                    <Button onClick={handleAddOption} variant="outline" icon={<Plus className="w-4 h-4" />} className="h-10 rounded-xl !py-0 flex items-center shrink-0">
                       Adicionar
                     </Button>
                   </div>
@@ -360,24 +365,26 @@ export default function DissatisfactionFieldsManagement() {
 
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Opções Adicionadas</label>
-                  <div className="flex flex-wrap gap-2 p-4 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl min-h-[80px] max-h-[160px] overflow-y-auto no-scrollbar">
+                  <div className={`flex flex-wrap gap-1.5 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl min-h-[50px] max-h-[160px] overflow-y-auto no-scrollbar transition-all ${
+                    (!editingField.options || editingField.options.length === 0) ? 'py-2 px-4' : 'p-3'
+                  }`}>
                     {editingField.options?.map((opt, i) => (
                       <span 
                         key={i} 
-                        className="inline-flex items-center gap-1.5 text-[10px] bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 font-bold uppercase tracking-tight px-3 py-1.5 rounded-lg shadow-sm"
+                        className="inline-flex items-center gap-1 text-[10px] bg-surface-subtle border border-surface-border text-brand-primary font-bold px-2 py-0.5 rounded-lg shadow-sm animate-in fade-in zoom-in-95 duration-150 shrink-0"
                       >
                         {opt}
                         <button 
                           type="button" 
                           onClick={() => handleRemoveOption(i)} 
-                          className="hover:text-error transition-colors ml-0.5"
+                          className="hover:text-error hover:bg-error/10 rounded-full p-0.5 transition-all ml-1 inline-flex items-center justify-center text-brand-muted"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-2.5 h-2.5" />
                         </button>
                       </span>
                     ))}
                     {(!editingField.options || editingField.options.length === 0) && (
-                      <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 w-full text-center">Nenhuma opção adicionada ainda.</p>
+                      <p className="text-[10px] font-bold text-brand-muted uppercase italic py-1 w-full text-center">Nenhuma opção adicionada ainda.</p>
                     )}
                   </div>
                 </div>

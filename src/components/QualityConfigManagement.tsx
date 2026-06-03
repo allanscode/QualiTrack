@@ -18,6 +18,44 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
   const { config, oldConfig, saveConfig, recalculateActiveActionDeadlines } = useQualityConfig();
   const [localConfig, setLocalConfig] = React.useState(config);
   const [saving, setSaving] = React.useState(false);
+  const [holidayInput, setHolidayInput] = React.useState('');
+
+  const handleHolidayInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/\D/g, ''); // keep only digits
+    if (val.length > 4) {
+      val = val.slice(0, 4);
+    }
+    if (val.length > 2) {
+      val = `${val.slice(0, 2)}/${val.slice(2)}`;
+    }
+    setHolidayInput(val);
+  };
+
+  const handleAddHoliday = () => {
+    const val = holidayInput;
+    if (!/^\d{2}\/\d{2}$/.test(val)) {
+      toast.error('Formato inválido. Use DD/MM (ex: 25/12)');
+      return;
+    }
+    const [day, month] = val.split('/').map(Number);
+    if (day < 1 || day > 31 || month < 1 || month > 12) {
+      toast.error('Data inválida. Use DD/MM com limites válidos (dia 01-31, mês 01-12).');
+      return;
+    }
+    const currentHolidays = localConfig.businessHours?.holidays || [];
+    if (currentHolidays.includes(val)) {
+      toast.warning('Este feriado já está cadastrado.');
+      return;
+    }
+    setLocalConfig(c => ({ 
+      ...c, 
+      businessHours: { 
+        ...c.businessHours, 
+        holidays: [...currentHolidays, val].sort() 
+      } 
+    }));
+    setHolidayInput('');
+  };
 
   React.useEffect(() => {
     setLocalConfig(config);
@@ -157,18 +195,24 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
               ].map(deadline => (
                 <div key={deadline.field}>
                   <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">{deadline.label}</label>
-                  <div className="relative">
+                  <div className="relative max-w-[120px]">
                     <input
                       type="number"
                       min={1}
+                      step={1}
+                      onKeyDown={e => {
+                        if (['.', ',', '-', '+', 'e', 'E'].includes(e.key)) {
+                          e.preventDefault();
+                        }
+                      }}
                       value={(localConfig.action_deadline as any)?.[deadline.field] ?? ''}
                       onChange={e => {
-                        const val = e.target.value === '' ? '' : Number(e.target.value);
+                        const val = e.target.value === '' ? '' : Math.max(1, Math.floor(Number(e.target.value)));
                         setLocalConfig(c => ({ ...c, action_deadline: { ...c.action_deadline, [deadline.field]: val as any } }));
                       }}
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-2xl py-3 px-6 text-base font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-12 transition-all shadow-sm"
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-3 text-sm font-semibold text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-8 transition-all shadow-sm"
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">h</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">h</span>
                   </div>
                 </div>
               ))}
@@ -248,38 +292,19 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     <input 
                       type="text" 
                       placeholder="Ex: 25/12"
-                      id="new-holiday"
-                      className="w-24 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:border-slate-400 dark:focus:border-slate-600 focus:ring-0 shadow-sm"
-                      onKeyPress={e => {
+                      value={holidayInput}
+                      onChange={handleHolidayInputChange}
+                      className="w-24 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl px-3 py-2 text-xs font-semibold text-center focus:outline-none focus:border-slate-400 dark:focus:border-slate-600 focus:ring-0 shadow-sm"
+                      onKeyDown={e => {
                         if (e.key === 'Enter') {
-                          const val = (e.target as HTMLInputElement).value;
-                          if (/^\d{2}\/\d{2}$/.test(val)) {
-                            const currentHolidays = localConfig.businessHours?.holidays || [];
-                            if (!currentHolidays.includes(val)) {
-                              setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: [...currentHolidays, val].sort() } }));
-                              (e.target as HTMLInputElement).value = '';
-                            }
-                          } else {
-                            toast.error('Formato inválido. Use DD/MM (ex: 25/12)');
-                          }
+                          e.preventDefault();
+                          handleAddHoliday();
                         }
                       }}
                     />
                     <button 
-                      onClick={() => {
-                        const el = document.getElementById('new-holiday') as HTMLInputElement;
-                        const val = el.value;
-                        if (/^\d{2}\/\d{2}$/.test(val)) {
-                          const currentHolidays = localConfig.businessHours?.holidays || [];
-                          if (!currentHolidays.includes(val)) {
-                            setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: [...currentHolidays, val].sort() } }));
-                            el.value = '';
-                          }
-                        } else {
-                          toast.error('Formato inválido. Use DD/MM (ex: 25/12)');
-                        }
-                      }}
-                      className="p-2 bg-brand-accent text-brand-on-primary rounded-xl hover:opacity-90 transition-all shadow-sm"
+                      onClick={handleAddHoliday}
+                      className="p-2 bg-brand-accent text-brand-on-primary rounded-xl hover:opacity-90 transition-all shadow-sm flex items-center justify-center"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
@@ -340,7 +365,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     const val = e.target.value === '' ? '' : Number(e.target.value);
                     setLocalConfig(c => ({ ...c, targetScore: val as any }));
                   }}
-                  className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-2xl py-3 px-6 text-base font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                  className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                 />
               </div>
               <div className={`px-6 py-4 rounded-xl border flex flex-col justify-center ${
@@ -362,8 +387,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Taxa de Reversão */}
-              <div className="space-y-4">
-                <div>
+              <div className="space-y-4 flex flex-col">
+                <div className="flex-1">
                   <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">
                     Meta de Taxa de Reversão (%)
                   </label>
@@ -376,22 +401,22 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       const val = e.target.value === '' ? '' : Number(e.target.value);
                       setLocalConfig(c => ({ ...c, targetReversalRate: val as any }));
                     }}
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-2xl py-3 px-6 text-base font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     placeholder="Ex: 15"
                   />
                   <p className="text-[11px] text-brand-muted mt-2 font-medium">
                     Percentual máximo tolerável de contestações consideradas procedentes/aceitas.
                   </p>
                 </div>
-                <div className="px-6 py-4 rounded-xl border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/10 flex flex-col justify-center w-fit">
+                <div className="px-6 py-4 rounded-xl border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/10 flex flex-col justify-center w-full shadow-sm">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-0.5">Tolerância Máxima</p>
                   <p className="text-2xl font-black text-blue-700 dark:text-blue-300">{localConfig.targetReversalRate ?? 15}%</p>
                 </div>
               </div>
 
               {/* Volumetria */}
-              <div className="space-y-4">
-                <div>
+              <div className="space-y-4 flex flex-col">
+                <div className="flex-1">
                   <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">
                     Meta de Volumetria (Qtd)
                   </label>
@@ -403,14 +428,14 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       const val = e.target.value === '' ? '' : Number(e.target.value);
                       setLocalConfig(c => ({ ...c, targetVolume: val as any }));
                     }}
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-2xl py-3 px-6 text-base font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     placeholder="Ex: 30"
                   />
                   <p className="text-[11px] text-brand-muted mt-2 font-medium">
                     Quantidade alvo de monitorias que cada auditor deve realizar por período.
                   </p>
                 </div>
-                <div className="px-6 py-4 rounded-xl border border-indigo-100 bg-indigo-50/50 dark:border-indigo-900/30 dark:bg-indigo-950/10 flex flex-col justify-center w-fit">
+                <div className="px-6 py-4 rounded-xl border border-indigo-100 bg-indigo-50/50 dark:border-indigo-900/30 dark:bg-indigo-950/10 flex flex-col justify-center w-full shadow-sm">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-0.5">Meta de Quantidade</p>
                   <p className="text-2xl font-black text-indigo-700 dark:text-indigo-300">{localConfig.targetVolume ?? 30} monitorias</p>
                 </div>
