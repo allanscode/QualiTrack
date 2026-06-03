@@ -339,13 +339,13 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
               Defina o período de funcionamento para o cálculo preciso do prazo.
             </p>
             
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* COLUNA DA ESQUERDA: Horários e Dias Úteis */}
-              <div className="lg:col-span-5 space-y-4">
-                {/* Horários: Início e Fim compactos lado a lado */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
+              {/* COLUNA DA ESQUERDA (Ocupando col-span-7): Horários e Dias Úteis */}
+              <div className="lg:col-span-7 flex flex-col gap-6">
+                {/* SUB-BLOCO 1: Horários (Início e Fim compactos lado a lado) */}
                 <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50">
                   <div className="flex items-center gap-4">
-                    <div className="flex-1 max-w-[120px]">
+                    <div className="w-[140px]">
                       <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">
                         Início
                       </label>
@@ -356,7 +356,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                         className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                       />
                     </div>
-                    <div className="flex-1 max-w-[120px]">
+                    <div className="w-[140px]">
                       <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">
                         Fim
                       </label>
@@ -370,12 +370,12 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                   </div>
                 </div>
 
-                {/* Dias Úteis da Semana */}
+                {/* SUB-BLOCO 2: Dias Úteis da Semana (Única linha horizontal contínua) */}
                 <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50">
                   <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-3 ml-0.5">
                     Dias Úteis da Semana
                   </label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-row gap-2 items-center w-full">
                     {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, idx) => {
                       const isSelected = localConfig.businessHours?.days.includes(idx);
                       return (
@@ -388,14 +388,14 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                               : [...currentDays, idx].sort();
                             setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, days: newDays } }));
                           }}
-                          className={`px-3 h-10 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 ${
+                          className={`flex-1 h-10 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border flex items-center justify-center gap-1 ${
                             isSelected 
                               ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-sm shadow-brand-primary/10' 
                               : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent/40 hover:text-brand-primary'
                           }`}
                         >
-                          {isSelected && <Check className="w-3.5 h-3.5" />}
-                          {day}
+                          {isSelected && <Check className="w-3 h-3 shrink-0" />}
+                          <span>{day}</span>
                         </button>
                       );
                     })}
@@ -403,18 +403,18 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 </div>
               </div>
 
-              {/* COLUNA DA DIREITA: Feriados */}
-              <div className="lg:col-span-7 bg-surface-subtle/40 rounded-xl p-4 border border-surface-border/50 flex flex-col">
-                <div className="mb-4">
+              {/* COLUNA DA DIREITA (Ocupando col-span-5): Feriados */}
+              <div className="lg:col-span-5 bg-surface-subtle/40 rounded-xl p-4 border border-surface-border/50 flex flex-col justify-between">
+                <div>
                   <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">
                     Feriados (DD/MM)
                   </label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 w-full">
                     {/* Floating Calendar Trigger */}
                     <div
                       ref={triggerRef}
                       onClick={() => setCalendarOpen(prev => !prev)}
-                      className="flex items-center justify-between w-36 h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-medium text-slate-900 dark:text-slate-50 cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm select-none"
+                      className="flex items-center justify-between w-36 h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-medium text-slate-900 dark:text-slate-50 cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm select-none shrink-0"
                     >
                       <div className="flex items-center gap-2 truncate">
                         <Calendar className="w-4 h-4 text-brand-muted" />
@@ -439,7 +439,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     <button 
                       onClick={handleAddHoliday}
                       disabled={!holidayInput}
-                      className="h-10 px-4 bg-brand-accent text-brand-on-primary rounded-lg hover:opacity-90 disabled:opacity-50 transition-all shadow-sm flex items-center justify-center gap-1.5 font-semibold text-xs shrink-0 cursor-pointer"
+                      className="flex-1 h-10 px-4 bg-brand-accent text-brand-on-primary rounded-lg hover:opacity-90 disabled:opacity-50 transition-all shadow-sm flex items-center justify-center gap-1.5 font-semibold text-xs cursor-pointer shrink-0"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Adicionar Feriado</span>
@@ -447,7 +447,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                   </div>
                 </div>
 
-                <div className="flex-1 flex flex-wrap gap-2 max-h-[220px] overflow-y-auto no-scrollbar content-start">
+                <div className="mt-4 flex-1 flex flex-wrap gap-2 max-h-[160px] overflow-y-auto no-scrollbar content-start">
                   {(localConfig.businessHours?.holidays || []).length > 0 ? (
                     localConfig.businessHours?.holidays.map(h => (
                       <div 
@@ -467,7 +467,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       </div>
                     ))
                   ) : (
-                    <div className="w-full py-10 text-center border border-dashed border-surface-border/50 rounded-lg">
+                    <div className="w-full py-6 text-center border border-dashed border-surface-border/50 rounded-lg flex flex-col justify-center items-center h-full min-h-[100px]">
                       <p className="text-sm font-normal text-slate-500 dark:text-slate-500">Nenhum feriado cadastrado.</p>
                     </div>
                   )}
@@ -529,13 +529,14 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       {daysGrid.map((day, idx) => {
                         const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
                         const isCurrentMonth = isSameMonth(day, currentMonth);
+                        const isToday = isSameDay(day, new Date());
                         
                         return (
                           <button
                             key={idx}
                             type="button"
                             onClick={() => handleSelectDay(day)}
-                            className={`text-[10px] h-7 w-7 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                            className={`text-[10px] h-7 w-7 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer ${
                               isSelected 
                                 ? 'bg-brand-accent text-brand-on-primary font-black shadow-premium-sm scale-105' 
                                 : `${
@@ -543,9 +544,12 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                                       ? 'text-slate-300 dark:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-900/40 font-bold' 
                                       : 'text-slate-900 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900/60 font-bold'
                                   }`
-                            }`}
+                            } ${isToday && !isSelected ? 'border border-brand-accent/40 dark:border-brand-accent/40 bg-brand-accent/5 dark:bg-brand-accent/10' : ''}`}
                           >
-                            {format(day, 'd')}
+                            <span className={isToday ? 'relative -top-0.5' : ''}>{format(day, 'd')}</span>
+                            {isToday && (
+                              <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${isSelected ? 'bg-white' : 'bg-brand-accent animate-pulse'}`} />
+                            )}
                           </button>
                         );
                       })}
