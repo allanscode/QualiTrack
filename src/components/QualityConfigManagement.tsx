@@ -166,9 +166,9 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                         const val = e.target.value === '' ? '' : Number(e.target.value);
                         setLocalConfig(c => ({ ...c, action_deadline: { ...c.action_deadline, [deadline.field]: val as any } }));
                       }}
-                      className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none pr-12 transition-all"
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-2xl py-3 px-6 text-base font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-12 transition-all shadow-sm"
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand-muted uppercase tracking-widest opacity-50">h</span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">h</span>
                   </div>
                 </div>
               ))}
@@ -193,7 +193,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       type="time"
                       value={localConfig.businessHours?.start || '08:00'}
                       onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, start: e.target.value } }))}
-                      className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-6 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all shadow-sm"
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     />
                   </div>
                   <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50">
@@ -204,7 +204,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       type="time"
                       value={localConfig.businessHours?.end || '17:00'}
                       onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, end: e.target.value } }))}
-                      className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-6 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all shadow-sm"
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     />
                   </div>
                 </div>
@@ -249,7 +249,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       type="text" 
                       placeholder="Ex: 25/12"
                       id="new-holiday"
-                      className="w-24 bg-surface-card border border-surface-border rounded-xl px-3 py-2 text-xs font-bold text-brand-primary focus:outline-none focus:border-brand-accent shadow-sm"
+                      className="w-24 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:border-slate-400 dark:focus:border-slate-600 focus:ring-0 shadow-sm"
                       onKeyPress={e => {
                         if (e.key === 'Enter') {
                           const val = (e.target as HTMLInputElement).value;
@@ -340,12 +340,16 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     const val = e.target.value === '' ? '' : Number(e.target.value);
                     setLocalConfig(c => ({ ...c, targetScore: val as any }));
                   }}
-                  className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
+                  className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-2xl py-3 px-6 text-base font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                 />
               </div>
-              <div className={`px-8 py-5 rounded-2xl border-2 flex flex-col justify-center ${localConfig.targetScore >= 75 ? 'bg-success/5 border-success/20 text-success' : 'bg-warning/5 border-warning/20 text-warning'}`}>
-                <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-70">Meta atual</p>
-                <p className="text-4xl font-black">{localConfig.targetScore}%</p>
+              <div className={`px-6 py-4 rounded-xl border flex flex-col justify-center ${
+                localConfig.targetScore >= 75 
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30' 
+                  : 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30'
+              }`}>
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5 opacity-80">Meta atual</p>
+                <p className="text-2xl font-black">{localConfig.targetScore}%</p>
               </div>
             </div>
           </div>
@@ -372,16 +376,16 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       const val = e.target.value === '' ? '' : Number(e.target.value);
                       setLocalConfig(c => ({ ...c, targetReversalRate: val as any }));
                     }}
-                    className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-2xl py-3 px-6 text-base font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     placeholder="Ex: 15"
                   />
                   <p className="text-[11px] text-brand-muted mt-2 font-medium">
                     Percentual máximo tolerável de contestações consideradas procedentes/aceitas.
                   </p>
                 </div>
-                <div className="px-6 py-4 rounded-xl border border-surface-border bg-surface-subtle/50 flex flex-col justify-center w-fit">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-brand-muted mb-0.5">Tolerância Máxima</p>
-                  <p className="text-2xl font-black text-brand-primary">{localConfig.targetReversalRate ?? 15}%</p>
+                <div className="px-6 py-4 rounded-xl border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/10 flex flex-col justify-center w-fit">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-0.5">Tolerância Máxima</p>
+                  <p className="text-2xl font-black text-blue-700 dark:text-blue-300">{localConfig.targetReversalRate ?? 15}%</p>
                 </div>
               </div>
 
@@ -399,16 +403,16 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       const val = e.target.value === '' ? '' : Number(e.target.value);
                       setLocalConfig(c => ({ ...c, targetVolume: val as any }));
                     }}
-                    className="w-full bg-surface-subtle border border-surface-border rounded-2xl py-3 px-6 text-lg font-black text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-2xl py-3 px-6 text-base font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     placeholder="Ex: 30"
                   />
                   <p className="text-[11px] text-brand-muted mt-2 font-medium">
                     Quantidade alvo de monitorias que cada auditor deve realizar por período.
                   </p>
                 </div>
-                <div className="px-6 py-4 rounded-xl border border-surface-border bg-surface-subtle/50 flex flex-col justify-center w-fit">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-brand-muted mb-0.5">Meta de Quantidade</p>
-                  <p className="text-2xl font-black text-brand-primary">{localConfig.targetVolume ?? 30} monitorias</p>
+                <div className="px-6 py-4 rounded-xl border border-indigo-100 bg-indigo-50/50 dark:border-indigo-900/30 dark:bg-indigo-950/10 flex flex-col justify-center w-fit">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-0.5">Meta de Quantidade</p>
+                  <p className="text-2xl font-black text-indigo-700 dark:text-indigo-300">{localConfig.targetVolume ?? 30} monitorias</p>
                 </div>
               </div>
             </div>
@@ -430,7 +434,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                         type="text"
                         value={level.label}
                         onChange={e => updateLevel(idx, 'label', e.target.value)}
-                        className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
+                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
                       />
                     </div>
                     <div>
@@ -441,7 +445,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                         max={100}
                         value={level.minScore ?? ''}
                         onChange={e => updateLevel(idx, 'minScore', e.target.value)}
-                        className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
+                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
                       />
                     </div>
                     <div>
@@ -452,7 +456,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                         max={100}
                         value={level.maxScore ?? ''}
                         onChange={e => updateLevel(idx, 'maxScore', e.target.value)}
-                        className="w-full bg-surface-card border border-surface-border rounded-xl py-3 px-4 text-sm font-black text-brand-primary focus:border-brand-accent focus:outline-none shadow-sm transition-all"
+                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
                       />
                     </div>
                     <div>

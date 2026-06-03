@@ -242,7 +242,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
               placeholder="Buscar equipe..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-[11px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
+              className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-xs font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
             />
           </div>
           <div className="h-10 flex items-center">
@@ -265,18 +265,20 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
               {t.active === false && <div className="absolute inset-0 bg-surface-bg/60 backdrop-blur-[1px] z-10 flex items-center justify-center"><Badge variant="error">Desativada</Badge></div>}
               <div className="flex justify-between items-center gap-3">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-brand-subtle flex items-center justify-center text-brand-primary shrink-0 shadow-sm group-hover:bg-brand-primary group-hover:text-brand-on-primary transition-colors">
-                    <TeamIcon className="w-5 h-5" />
+                  <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                    <TeamIcon className="w-5 h-5 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-col gap-0.5">
                       <h4 className="font-black text-[11px] text-brand-primary uppercase tracking-tight leading-tight break-words">{t.name}</h4>
                       {t.sigla && <span className="w-fit px-1 py-0.5 rounded-md bg-surface-subtle text-[7px] font-black text-brand-muted border border-surface-border">{t.sigla}</span>}
                     </div>
-                    <p className="text-[9px] font-bold text-brand-muted uppercase mt-0.5 flex items-center gap-1">
-                      <Users className="w-2.5 h-2.5" />
-                      {users.filter(u => u.team_ids?.includes(t.id)).length} Agentes
-                    </p>
+                    <div className="mt-1 flex">
+                      <span className="inline-flex items-center gap-1 bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-800/60 px-2 py-0.5 rounded text-[11px] font-medium leading-none">
+                        <Users className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                        <span>{users.filter(u => u.team_ids?.includes(t.id)).length} {users.filter(u => u.team_ids?.includes(t.id)).length === 1 ? 'Agente' : 'Agentes'}</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -308,9 +310,9 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                 <div className="grid grid-cols-3 gap-4">
                   <div className="col-span-2 flex flex-col gap-1">
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome da Equipe</label>
-                    <input 
+                     <input 
                       type="text" 
-                      className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none" 
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all" 
                       value={editingTeam.name} 
                       onChange={e => setEditingTeam({ ...editingTeam, name: e.target.value })} 
                       placeholder="Ex: Suporte Nível 1"
@@ -321,7 +323,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                     <input 
                       type="text" 
                       maxLength={5}
-                      className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-black uppercase focus:border-brand-accent focus:outline-none text-center" 
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all text-center uppercase" 
                       value={editingTeam.sigla} 
                       onChange={e => setEditingTeam({ ...editingTeam, sigla: e.target.value.toUpperCase() })} 
                       placeholder="SUP1"
@@ -331,13 +333,13 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
 
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Ícone da Equipe ({TEAM_ICONS_LIST.length} opções)</label>
-                  <div className="grid grid-cols-8 gap-2 p-3 bg-surface-bg border border-surface-border rounded-2xl max-h-48 overflow-y-auto custom-scrollbar">
+                  <div className="grid grid-cols-8 gap-2 p-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-48 overflow-y-auto scrollbar-thin">
                     {TEAM_ICONS_LIST.map(item => (
                       <button
                         key={item.id}
                         type="button"
                         onClick={() => setEditingTeam({ ...editingTeam, icon: item.id })}
-                        className={`p-2 rounded-lg flex items-center justify-center transition-all ${editingTeam.icon === item.id ? 'bg-brand-primary text-brand-on-primary shadow-md' : 'bg-surface-subtle text-brand-muted hover:bg-surface-border'}`}
+                        className={`p-2 rounded-lg flex items-center justify-center transition-all ${editingTeam.icon === item.id ? 'bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 shadow-md' : 'bg-slate-50 dark:bg-slate-900/60 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600'}`}
                       >
                         <item.icon className="w-4 h-4" />
                       </button>

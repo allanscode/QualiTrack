@@ -219,7 +219,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
               placeholder="Buscar formulário..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-[11px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
+              className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-xs font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
             />
           </div>
           <div className="h-10 flex items-center">
@@ -308,7 +308,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                 <button onClick={() => setIsModalOpen(false)} className="p-3 rounded-2xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><X className="w-6 h-6" /></button>
               </header>
 
-              <div className="flex border-b border-surface-border bg-surface-bg/30 px-8">
+              <div className="flex border-b border-slate-200 dark:border-slate-800 px-8 gap-6 pb-0">
                 {[
                   { id: 'geral', label: '1. Informações Gerais', icon: Shield },
                   { id: 'pilares', label: '2. Estrutura de Pilares', icon: BarChart3 },
@@ -317,7 +317,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                   <button
                     key={t.id}
                     onClick={() => setActiveTab(t.id as any)}
-                    className={`flex items-center gap-2 px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all border-b-2 -mb-[1px] ${activeTab === t.id ? 'border-brand-primary text-brand-primary' : 'border-transparent text-brand-muted hover:text-brand-primary'}`}
+                    className={`flex items-center gap-2 px-1 pb-3 text-sm transition-all border-b-2 -mb-px ${activeTab === t.id ? 'border-slate-900 dark:border-white text-slate-900 dark:text-white font-semibold' : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 font-medium'}`}
                   >
                     <t.icon className="w-4 h-4" />
                     {t.label}
@@ -334,7 +334,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                           <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Título do Formulário</label>
                           <input 
                             type="text" 
-                            className="w-full bg-surface-bg border border-surface-border rounded-2xl px-6 py-4 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all shadow-sm" 
+                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
                             value={editingForm.title || ''} 
                             onChange={e => setEditingForm({...editingForm, title: e.target.value})} 
                             placeholder="Ex: Monitoria de Atendimento Chat" 
@@ -351,7 +351,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                         <div className="flex flex-col gap-2">
                           <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Descrição do Propósito</label>
                           <textarea 
-                            className="w-full bg-surface-bg border border-surface-border rounded-3xl px-6 py-4 text-sm font-bold text-brand-primary focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 outline-none transition-all min-h-[150px] shadow-sm leading-relaxed" 
+                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all min-h-[120px] shadow-sm leading-relaxed" 
                             value={editingForm.description || ''} 
                             onChange={e => setEditingForm({...editingForm, description: e.target.value})} 
                             placeholder="Descreva detalhadamente o que este formulário avalia e quais os objetivos..." 
@@ -388,7 +388,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                             <div className="flex items-center gap-6">
                               <div className="flex flex-col items-end">
                                 <label className="text-[8px] font-black text-brand-muted uppercase tracking-[0.2em] mb-1">Peso do Pilar</label>
-                                <div className="flex items-center gap-2 bg-surface-bg border border-surface-border rounded-xl px-3 py-1.5 shadow-sm">
+                                <div className="flex items-center gap-2 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 shadow-sm">
                                   <input 
                                     type="number" 
                                     className="w-10 bg-transparent border-none p-0 text-sm font-black text-brand-primary focus:ring-0 text-center"
@@ -425,7 +425,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                                     {expandedDescriptions[q.id] && (
                                       <div className="mt-3">
                                         <textarea
-                                          className="w-full bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-xs font-semibold text-brand-primary focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/10 outline-none transition-all resize-none shadow-sm placeholder:text-brand-muted/40"
+                                          className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-semibold text-slate-900 dark:text-slate-50 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all resize-none shadow-sm placeholder:text-slate-400 dark:placeholder:text-slate-500"
                                           placeholder="Descreva detalhadamente o que este critério avalia (será exibido como dica durante a monitoria)..."
                                           rows={2}
                                           value={q.description || ''}
