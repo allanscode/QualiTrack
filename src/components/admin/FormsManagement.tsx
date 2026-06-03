@@ -308,7 +308,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                 <button onClick={() => setIsModalOpen(false)} className="p-2.5 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><X className="w-5 h-5" /></button>
               </header>
 
-              <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 gap-6 pb-0">
+              <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 gap-6 pt-4 pb-0">
                 {[
                   { id: 'geral', label: '1. Informações Gerais', icon: Shield },
                   { id: 'pilares', label: '2. Estrutura de Pilares', icon: BarChart3 },
@@ -369,7 +369,6 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                         <h4 className="text-sm font-black text-brand-primary uppercase tracking-widest">Definição da Estrutura</h4>
                         <p className="text-[10px] font-bold text-brand-muted uppercase mt-1">Crie os pilares de avaliação e distribua os pesos.</p>
                       </div>
-                      <Button variant="outline" size="sm" onClick={addSection} icon={<Plus className="w-4 h-4" />} className="rounded-2xl border-brand-accent/30 text-brand-accent hover:bg-brand-accent/5">Novo Pilar</Button>
                     </div>
                     
                     <div className="grid grid-cols-1 gap-6">
@@ -388,14 +387,16 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                             <div className="flex items-center gap-4">
                               <div className="flex flex-col items-end">
                                 <label className="text-[9px] font-semibold text-slate-500 dark:text-slate-200 uppercase tracking-wider mb-0.5">Peso do Pilar</label>
-                                <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 shadow-sm">
-                                  <input 
-                                    type="number" 
-                                    className="w-8 bg-transparent border-none p-0 text-xs font-bold text-brand-primary dark:text-white focus:ring-0 text-center"
-                                    value={section.weight || 0}
-                                    onChange={e => updateSection(section.id, 'weight', parseInt(e.target.value) || 0)}
-                                  />
-                                  <span className="text-[10px] font-bold text-brand-muted">%</span>
+                                <div className="flex items-center gap-1">
+                                  <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 shadow-sm">
+                                    <input 
+                                      type="number" 
+                                      className="w-12 bg-transparent border-none p-0 text-xs font-bold text-brand-primary dark:text-white focus:ring-0 text-center"
+                                      value={section.weight || 0}
+                                      onChange={e => updateSection(section.id, 'weight', parseInt(e.target.value) || 0)}
+                                    />
+                                  </div>
+                                  <span className="text-xs font-bold text-brand-muted">%</span>
                                 </div>
                               </div>
                               <button onClick={() => removeSection(section.id)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-brand-muted/40 hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
@@ -460,6 +461,20 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                         </div>
                       ))}
 
+                      {editingForm.sections && editingForm.sections.length > 0 && (
+                        <div className="flex justify-end mt-2 pr-1">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={addSection} 
+                            icon={<Plus className="w-4 h-4" />} 
+                            className="rounded-2xl border-brand-accent/30 text-brand-accent hover:bg-brand-accent/5"
+                          >
+                            Novo Pilar
+                          </Button>
+                        </div>
+                      )}
+
                       {(!editingForm.sections || editingForm.sections.length === 0) && (
                         <div className="bg-surface-bg/50 p-16 rounded-[40px] border-2 border-dashed border-surface-border text-center">
                           <div className="w-20 h-20 rounded-[2.5rem] bg-surface-card shadow-premium flex items-center justify-center mx-auto mb-6">
@@ -514,8 +529,9 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                 )}
               </div>
               
-              <footer className="p-6 border-t border-surface-border bg-surface-card flex items-center justify-between sticky bottom-0">
-                <div className="flex items-center gap-4">
+              <footer className="p-6 border-t border-surface-border bg-surface-card flex items-center justify-between sticky bottom-0 z-10">
+                {/* EXTREMA ESQUERDA: Status/Alerta do Peso */}
+                <div className="flex-1 flex items-center justify-start min-w-[200px]">
                   {(() => {
                     if (totalWeight !== 100) return (
                       <div className="flex items-center gap-2 text-error dark:text-red-400 animate-pulse">
@@ -543,26 +559,29 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                     );
                   })()}
                 </div>
-                <div className="flex gap-3">
-                  <div className="flex gap-2 mr-4 border-r border-surface-border pr-4">
-                    <Button 
-                      variant="ghost" 
-                      onClick={() => setActiveTab(activeTab === 'criticos' ? 'pilares' : activeTab === 'pilares' ? 'geral' : 'geral')} 
-                      disabled={activeTab === 'geral'}
-                      className="rounded-2xl px-4 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 font-semibold"
-                    >
-                      <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      onClick={() => setActiveTab(activeTab === 'geral' ? 'pilares' : 'criticos')} 
-                      disabled={activeTab === 'criticos'}
-                      className="rounded-2xl px-4 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 font-semibold"
-                    >
-                      Próximo <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  </div>
 
+                {/* CENTRO: Navegação entre etapas */}
+                <div className="flex items-center justify-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => setActiveTab(activeTab === 'criticos' ? 'pilares' : activeTab === 'pilares' ? 'geral' : 'geral')} 
+                    disabled={activeTab === 'geral'}
+                    className="rounded-2xl px-4 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 font-semibold"
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => setActiveTab(activeTab === 'geral' ? 'pilares' : 'criticos')} 
+                    disabled={activeTab === 'criticos'}
+                    className="rounded-2xl px-4 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 font-semibold"
+                  >
+                    Próximo <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+
+                {/* EXTREMA DIREITA: Ações definitivas */}
+                <div className="flex-1 flex items-center justify-end gap-3 min-w-[200px]">
                   <Button variant="ghost" onClick={() => setIsModalOpen(false)} className="rounded-2xl px-6 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold">
                     Cancelar
                   </Button>
@@ -570,8 +589,8 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                   <Button 
                     onClick={handleSaveForm} 
                     disabled={saving || !isValid} 
-                    variant={isValid ? 'secondary' : 'outline'}
-                    className="rounded-2xl px-10 shadow-premium transition-all disabled:opacity-100 disabled:border-slate-300 disabled:dark:border-slate-700 disabled:text-slate-400 disabled:dark:text-slate-500"
+                    variant={isValid ? 'primary' : 'outline'}
+                    className="rounded-2xl px-10 shadow-premium transition-all"
                   >
                     {saving ? 'Publicando...' : (editingForm.id ? 'Salvar Alterações' : 'Publicar Formulário')}
                   </Button>
