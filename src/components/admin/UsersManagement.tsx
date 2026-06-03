@@ -193,7 +193,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
               className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-xs font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
             />
           </div>
-          <div className="h-10 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <CustomSelect 
               value={statusFilter}
               onChange={val => setStatusFilter(val as any)}
@@ -336,12 +336,12 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
 
               <div className="space-y-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome Completo</label>
-                  <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Nome Completo</label>
+                  <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Email</label>
-                  <input type="email" disabled={!!editingUser.id} className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Email</label>
+                  <input type="email" disabled={!!editingUser.id} className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
                 </div>
                 <CustomSelect 
                   label="Perfil"
@@ -357,7 +357,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                 />
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between ml-1 mb-1">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Equipes</label>
+                    <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold ml-0.5">Equipes</label>
                     {teams.filter(t => t.active !== false).length > 8 && (
                       <div className="relative w-32 h-7">
                         <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />

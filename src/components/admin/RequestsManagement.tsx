@@ -185,9 +185,9 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
               </header>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome</label>
-                    <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
+                  <div className="flex flex-col">
+                    <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Nome</label>
+                    <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
                   </div>
                   <CustomSelect 
                     label="Perfil" 
@@ -204,7 +204,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                 </div>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between ml-1 mb-1">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Equipes</label>
+                    <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold ml-0.5">Equipes</label>
                     {teams.length > 8 && (
                       <div className="relative w-32 h-7">
                         <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
@@ -269,10 +269,10 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                   Você está recusando o acesso de <span className="text-brand-primary font-bold">{rejectingReq?.name}</span>.
                   Informe abaixo o motivo da recusa, que será enviado por e-mail para o usuário.
                 </p>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Motivo da Rejeição</label>
+                <div className="flex flex-col">
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Motivo da Rejeição</label>
                   <textarea 
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-50 focus:border-red-500 dark:focus:border-red-500 focus:outline-none focus:ring-0 min-h-[120px] resize-none shadow-sm transition-all"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 focus:border-red-500 dark:focus:border-red-500 focus:outline-none focus:ring-0 min-h-[120px] resize-none shadow-sm transition-all"
                     placeholder="Ex: E-mail não corporativo ou setor não autorizado."
                     value={rejectReason}
                     onChange={e => setRejectReason(e.target.value)}

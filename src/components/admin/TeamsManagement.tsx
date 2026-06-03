@@ -245,7 +245,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
               className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-xs font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
             />
           </div>
-          <div className="h-10 flex items-center">
+          <div className="flex items-center animate-in fade-in duration-200">
             <CustomSelect 
               value={statusFilter}
               onChange={val => setStatusFilter(val as any)}
@@ -307,23 +307,23 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                 <button onClick={() => setIsModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
               </header>
               <div className="space-y-6">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="col-span-2 flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome da Equipe</label>
+                <div className="flex items-start gap-4">
+                  <div className="flex-1 flex flex-col">
+                    <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Nome da Equipe</label>
                      <input 
                       type="text" 
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all" 
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all" 
                       value={editingTeam.name} 
                       onChange={e => setEditingTeam({ ...editingTeam, name: e.target.value })} 
                       placeholder="Ex: Suporte Nível 1"
                     />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Sigla</label>
+                  <div className="w-32 flex flex-col shrink-0">
+                    <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Sigla</label>
                     <input 
                       type="text" 
                       maxLength={4}
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all uppercase" 
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all uppercase" 
                       value={editingTeam.sigla} 
                       onChange={e => setEditingTeam({ ...editingTeam, sigla: e.target.value.toUpperCase() })} 
                       placeholder="SUP1"
@@ -332,7 +332,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Ícone da Equipe ({TEAM_ICONS_LIST.length} opções)</label>
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Ícone da Equipe ({TEAM_ICONS_LIST.length} opções)</label>
                   <div className="grid grid-cols-8 gap-2 p-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-48 overflow-y-auto scrollbar-thin">
                     {TEAM_ICONS_LIST.map(item => (
                       <button

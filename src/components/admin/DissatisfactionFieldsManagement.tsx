@@ -200,7 +200,7 @@ export default function DissatisfactionFieldsManagement() {
               className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-xs font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
             />
           </div>
-          <div className="h-10 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <CustomSelect 
               value={statusFilter}
               onChange={val => setStatusFilter(val as any)}
@@ -258,12 +258,12 @@ export default function DissatisfactionFieldsManagement() {
                 <td className="px-6 py-4 max-w-xs md:max-w-md">
                   <div className="flex flex-row items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-none">
                     {f.options.slice(0, 4).map((opt, i) => (
-                      <span key={i} className="text-[10px] bg-surface-card border border-surface-border text-brand-primary font-bold px-2 py-0.5 rounded-lg shrink-0">
+                      <span key={i} className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 border-none">
                         {opt}
                       </span>
                     ))}
                     {f.options.length > 4 && (
-                      <span className="text-[10px] bg-brand-subtle text-brand-primary font-extrabold px-2 py-0.5 rounded-lg shrink-0">
+                      <span className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 border-none">
                         +{f.options.length - 4}
                       </span>
                     )}
@@ -321,11 +321,11 @@ export default function DissatisfactionFieldsManagement() {
 
               <div className="space-y-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Título do Campo *</label>
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Título do Campo *</label>
                   <input 
                     type="text" 
                     placeholder="Ex: Motivo da Insatisfação - Cliente"
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
                     value={editingField.title} 
                     onChange={e => setEditingField({ ...editingField, title: e.target.value })} 
                   />
@@ -342,12 +342,12 @@ export default function DissatisfactionFieldsManagement() {
                 />
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Adicionar Opções *</label>
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Adicionar Opções *</label>
                   <div className="flex gap-2">
                     <input 
                       type="text" 
                       placeholder="Adicione uma opção (ex: Processo)"
-                      className="flex-1 h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
+                      className="flex-1 h-9 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
                       value={newOption}
                       onChange={e => setNewOption(e.target.value)}
                       onKeyDown={e => {
@@ -357,21 +357,21 @@ export default function DissatisfactionFieldsManagement() {
                         }
                       }}
                     />
-                    <Button onClick={handleAddOption} variant="outline" icon={<Plus className="w-4 h-4" />} className="h-10 rounded-xl !py-0 flex items-center shrink-0">
+                    <Button onClick={handleAddOption} variant="outline" icon={<Plus className="w-4 h-4" />} className="h-9 rounded-xl !py-0 flex items-center shrink-0">
                       Adicionar
                     </Button>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Opções Adicionadas</label>
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Opções Adicionadas</label>
                   <div className={`flex flex-wrap gap-1.5 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl min-h-[50px] max-h-[160px] overflow-y-auto no-scrollbar transition-all ${
-                    (!editingField.options || editingField.options.length === 0) ? 'py-2 px-4' : 'p-3'
+                    (!editingField.options || editingField.options.length === 0) ? 'py-2 px-3' : 'p-3'
                   }`}>
                     {editingField.options?.map((opt, i) => (
                       <span 
                         key={i} 
-                        className="inline-flex items-center gap-1 text-[10px] bg-surface-subtle border border-surface-border text-brand-primary font-bold px-2 py-0.5 rounded-lg shadow-sm animate-in fade-in zoom-in-95 duration-150 shrink-0"
+                        className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 border-none shadow-sm animate-in fade-in zoom-in-95 duration-150"
                       >
                         {opt}
                         <button 

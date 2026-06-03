@@ -222,7 +222,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
               className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-xs font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
             />
           </div>
-          <div className="h-10 flex items-center">
+          <div className="flex items-center">
             <CustomSelect 
               value={statusFilter}
               onChange={val => setStatusFilter(val as any)}
@@ -330,28 +330,28 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-8 py-4">
                     <div className="grid grid-cols-1 gap-8">
                       <div className="space-y-6">
-                        <div className="flex flex-col gap-2">
-                          <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Título do Formulário</label>
+                        <div className="flex flex-col">
+                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Título do Formulário</label>
                           <input 
                             type="text" 
-                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
+                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
                             value={editingForm.title || ''} 
                             onChange={e => setEditingForm({...editingForm, title: e.target.value})} 
                             placeholder="Ex: Monitoria de Atendimento Chat" 
                           />
                         </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Equipe Vinculada</label>
+                        <div className="flex flex-col">
+                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Equipe Vinculada</label>
                           <CustomSelect 
                             value={editingForm.team_id || ''} 
                             onChange={val => setEditingForm({...editingForm, team_id: val})} 
                             options={[{ value: '', label: 'Geral (Todas as Equipes)' }, ...teams.map(t => ({ value: t.id, label: t.name }))]} 
                           />
                         </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Descrição do Propósito</label>
+                        <div className="flex flex-col">
+                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Descrição do Propósito</label>
                           <textarea 
-                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all min-h-[120px] resize-y shadow-sm leading-relaxed" 
+                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all min-h-[120px] resize-y shadow-sm leading-relaxed" 
                             value={editingForm.description || ''} 
                             onChange={e => setEditingForm({...editingForm, description: e.target.value})} 
                             placeholder="Descreva detalhadamente o que este formulário avalia e quais os objetivos..." 
@@ -387,7 +387,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                             </div>
                             <div className="flex items-center gap-6">
                               <div className="flex flex-col items-end">
-                                <label className="text-[8px] font-black text-brand-muted uppercase tracking-[0.2em] mb-1">Peso do Pilar</label>
+                                <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Peso do Pilar</label>
                                 <div className="flex items-center gap-2 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 shadow-sm">
                                   <input 
                                     type="number" 
@@ -425,7 +425,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                                     {expandedDescriptions[q.id] && (
                                       <div className="mt-3">
                                         <textarea
-                                          className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-semibold text-slate-900 dark:text-slate-50 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all resize-none shadow-sm placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                                          className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 dark:text-slate-50 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all resize-none shadow-sm placeholder:text-slate-400 dark:placeholder:text-slate-500"
                                           placeholder="Descreva detalhadamente o que este critério avalia (será exibido como dica durante a monitoria)..."
                                           rows={2}
                                           value={q.description || ''}

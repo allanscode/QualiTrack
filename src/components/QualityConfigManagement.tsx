@@ -31,15 +31,41 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
     setHolidayInput(val);
   };
 
+  const isHolidayInvalid = React.useMemo(() => {
+    if (!holidayInput) return false;
+    const parts = holidayInput.split('/');
+    if (parts[0] && parts[0].length === 2) {
+      const day = Number(parts[0]);
+      if (isNaN(day) || day < 1 || day > 31) return true;
+    }
+    if (parts[1] && parts[1].length === 2) {
+      const month = Number(parts[1]);
+      if (isNaN(month) || month < 1 || month > 12) return true;
+    }
+    return false;
+  }, [holidayInput]);
+
+  const handleHolidayKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      const val = (e.target as HTMLInputElement).value;
+      if (val.endsWith('/')) {
+        e.preventDefault();
+        setHolidayInput(val.slice(0, -2));
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddHoliday();
+    }
+  };
+
   const handleAddHoliday = () => {
     const val = holidayInput;
-    if (!/^\d{2}\/\d{2}$/.test(val)) {
-      toast.error('Formato inválido. Use DD/MM (ex: 25/12)');
+    if (val.length < 5) {
+      toast.error('Formato incompleto. Use DD/MM (ex: 25/12)');
       return;
     }
-    const [day, month] = val.split('/').map(Number);
-    if (day < 1 || day > 31 || month < 1 || month > 12) {
-      toast.error('Data inválida. Use DD/MM com limites válidos (dia 01-31, mês 01-12).');
+    if (isHolidayInvalid) {
+      toast.error('Data de feriado inválida. Verifique os valores.');
       return;
     }
     const currentHolidays = localConfig.businessHours?.holidays || [];
@@ -194,8 +220,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 { label: 'Gestor Qualidade', field: 'manager_quality' }
               ].map(deadline => (
                 <div key={deadline.field}>
-                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">{deadline.label}</label>
-                  <div className="relative max-w-[120px]">
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">{deadline.label}</label>
+                  <div className="relative max-w-24">
                     <input
                       type="number"
                       min={1}
@@ -210,9 +236,9 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                         const val = e.target.value === '' ? '' : Math.max(1, Math.floor(Number(e.target.value)));
                         setLocalConfig(c => ({ ...c, action_deadline: { ...c.action_deadline, [deadline.field]: val as any } }));
                       }}
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-3 text-sm font-semibold text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-8 transition-all shadow-sm"
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-2.5 text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">h</span>
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">h</span>
                   </div>
                 </div>
               ))}
@@ -229,32 +255,32 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               <div className="lg:col-span-7 space-y-8">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50">
-                    <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3 flex items-center gap-2 ml-1">
-                      <Clock className="w-3.5 h-3.5" /> Início do Expediente
+                  <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50 max-w-32 w-full">
+                    <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">
+                      Início
                     </label>
                     <input
                       type="time"
                       value={localConfig.businessHours?.start || '08:00'}
                       onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, start: e.target.value } }))}
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     />
                   </div>
-                  <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50">
-                    <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-3 flex items-center gap-2 ml-1">
-                      <Clock className="w-3.5 h-3.5" /> Fim do Expediente
+                  <div className="bg-surface-subtle/40 p-4 rounded-2xl border border-surface-border/50 max-w-32 w-full">
+                    <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">
+                      Fim
                     </label>
                     <input
                       type="time"
                       value={localConfig.businessHours?.end || '17:00'}
                       onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, end: e.target.value } }))}
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     />
                   </div>
                 </div>
 
                 <div className="bg-surface-subtle/40 p-6 rounded-2xl border border-surface-border/50">
-                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-4 ml-1">Dias Úteis da Semana</label>
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-4 ml-0.5">Dias Úteis da Semana</label>
                   <div className="flex flex-wrap gap-2">
                     {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, idx) => {
                       const isSelected = localConfig.businessHours?.days.includes(idx);
@@ -284,9 +310,9 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
               </div>
 
               <div className="lg:col-span-5 bg-surface-subtle/40 rounded-2xl p-6 border border-surface-border/50 flex flex-col">
-                <div className="flex items-center justify-between mb-6">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest flex items-center gap-2">
-                    <Calendar className="w-3.5 h-3.5" /> Feriados (DD/MM)
+                <div className="mb-4">
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2 ml-0.5">
+                    Feriados (DD/MM)
                   </label>
                   <div className="flex items-center gap-2">
                     <input 
@@ -294,17 +320,17 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       placeholder="Ex: 25/12"
                       value={holidayInput}
                       onChange={handleHolidayInputChange}
-                      className="w-24 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl px-3 py-2 text-xs font-semibold text-center focus:outline-none focus:border-slate-400 dark:focus:border-slate-600 focus:ring-0 shadow-sm"
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddHoliday();
-                        }
-                      }}
+                      onKeyDown={handleHolidayKeyDown}
+                      className={`w-24 bg-white dark:bg-slate-900/40 border text-slate-900 dark:text-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-center focus:outline-none focus:ring-0 shadow-sm transition-all ${
+                        isHolidayInvalid 
+                          ? 'border-red-400 dark:border-red-500 focus:border-red-400 dark:focus:border-red-500' 
+                          : 'border-slate-200 dark:border-slate-800 focus:border-slate-400 dark:focus:border-slate-600'
+                      }`}
                     />
                     <button 
                       onClick={handleAddHoliday}
-                      className="p-2 bg-brand-accent text-brand-on-primary rounded-xl hover:opacity-90 transition-all shadow-sm flex items-center justify-center"
+                      disabled={isHolidayInvalid || !holidayInput}
+                      className="h-[38px] w-10 bg-brand-accent text-brand-on-primary rounded-xl hover:opacity-90 disabled:opacity-50 transition-all shadow-sm flex items-center justify-center shrink-0"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
@@ -354,8 +380,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
               Score mínimo para o suporte ser considerado dentro da meta. Usado nos rankings Top, Medianos e Oportunidades.
             </p>
             <div className="flex items-center gap-6 flex-wrap">
-              <div className="flex-1 max-w-xs">
-                <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Score mínimo (%)</label>
+              <div className="flex-1 max-w-32 w-full">
+                <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">Score mínimo (%)</label>
                 <input
                   type="number"
                   min={0}
@@ -365,16 +391,16 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     const val = e.target.value === '' ? '' : Number(e.target.value);
                     setLocalConfig(c => ({ ...c, targetScore: val as any }));
                   }}
-                  className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                  className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                 />
               </div>
-              <div className={`px-6 py-4 rounded-xl border flex flex-col justify-center ${
+              <div className={`px-6 py-3 rounded-xl border flex flex-col justify-center shrink-0 ${
                 localConfig.targetScore >= 75 
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30' 
                   : 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30'
               }`}>
                 <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5 opacity-80">Meta atual</p>
-                <p className="text-2xl font-black">{localConfig.targetScore}%</p>
+                <p className="text-xl font-black">{localConfig.targetScore}%</p>
               </div>
             </div>
           </div>
@@ -385,11 +411,11 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
             <p className="text-sm text-brand-muted mb-6 font-medium">
               Defina as metas operacionais para a equipe de monitoria/qualidade para o período.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl">
               {/* Taxa de Reversão */}
-              <div className="space-y-4 flex flex-col">
+              <div className="space-y-4 flex flex-col max-w-md w-full">
                 <div className="flex-1">
-                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">
                     Meta de Taxa de Reversão (%)
                   </label>
                   <input
@@ -401,23 +427,23 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       const val = e.target.value === '' ? '' : Number(e.target.value);
                       setLocalConfig(c => ({ ...c, targetReversalRate: val as any }));
                     }}
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     placeholder="Ex: 15"
                   />
                   <p className="text-[11px] text-brand-muted mt-2 font-medium">
                     Percentual máximo tolerável de contestações consideradas procedentes/aceitas.
                   </p>
                 </div>
-                <div className="px-6 py-4 rounded-xl border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/10 flex flex-col justify-center w-full shadow-sm">
+                <div className="px-6 py-3 rounded-xl border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/10 flex flex-col justify-center w-full shadow-sm shrink-0">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-0.5">Tolerância Máxima</p>
-                  <p className="text-2xl font-black text-blue-700 dark:text-blue-300">{localConfig.targetReversalRate ?? 15}%</p>
+                  <p className="text-xl font-black text-blue-700 dark:text-blue-300">{localConfig.targetReversalRate ?? 15}%</p>
                 </div>
               </div>
 
               {/* Volumetria */}
-              <div className="space-y-4 flex flex-col">
+              <div className="space-y-4 flex flex-col max-w-md w-full">
                 <div className="flex-1">
-                  <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">
+                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">
                     Meta de Volumetria (Qtd)
                   </label>
                   <input
@@ -428,16 +454,16 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       const val = e.target.value === '' ? '' : Number(e.target.value);
                       setLocalConfig(c => ({ ...c, targetVolume: val as any }));
                     }}
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                     placeholder="Ex: 30"
                   />
                   <p className="text-[11px] text-brand-muted mt-2 font-medium">
                     Quantidade alvo de monitorias que cada auditor deve realizar por período.
                   </p>
                 </div>
-                <div className="px-6 py-4 rounded-xl border border-indigo-100 bg-indigo-50/50 dark:border-indigo-900/30 dark:bg-indigo-950/10 flex flex-col justify-center w-full shadow-sm">
+                <div className="px-6 py-3 rounded-xl border border-indigo-100 bg-indigo-50/50 dark:border-indigo-900/30 dark:bg-indigo-950/10 flex flex-col justify-center w-full shadow-sm shrink-0">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-0.5">Meta de Quantidade</p>
-                  <p className="text-2xl font-black text-indigo-700 dark:text-indigo-300">{localConfig.targetVolume ?? 30} monitorias</p>
+                  <p className="text-xl font-black text-indigo-700 dark:text-indigo-300">{localConfig.targetVolume ?? 30} monitorias</p>
                 </div>
               </div>
             </div>
@@ -454,34 +480,34 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 <div key={idx} className="bg-surface-subtle/40 rounded-2xl p-6 border border-surface-border group hover:border-brand-accent transition-all">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-end">
                     <div>
-                      <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Nome do Nível</label>
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">Nome do Nível</label>
                       <input
                         type="text"
                         value={level.label}
                         onChange={e => updateLevel(idx, 'label', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
+                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Score Min (%)</label>
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">Score Min (%)</label>
                       <input
                         type="number"
                         min={0}
                         max={100}
                         value={level.minScore ?? ''}
                         onChange={e => updateLevel(idx, 'minScore', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
+                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 ml-1">Score Max (%)</label>
+                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5">Score Max (%)</label>
                       <input
                         type="number"
                         min={0}
                         max={100}
                         value={level.maxScore ?? ''}
                         onChange={e => updateLevel(idx, 'maxScore', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2.5 px-4 text-sm font-semibold focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
+                        className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-xl py-2 px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
                       />
                     </div>
                     <div>

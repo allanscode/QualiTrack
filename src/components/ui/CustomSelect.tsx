@@ -134,7 +134,7 @@ export default function CustomSelect({
 
   return (
     <div className={`flex flex-col gap-1 flex-1 min-w-[120px] ${className}`}>
-      {label && <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">{label}</label>}
+      {label && <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">{label}</label>}
       <div className={disabled ? 'opacity-60 cursor-not-allowed' : ''}>
         <div
           ref={triggerRef}
