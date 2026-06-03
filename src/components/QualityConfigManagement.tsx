@@ -6,12 +6,12 @@ import { useQualityConfig } from '../lib/useQualityConfig';
 import CustomSelect from './ui/CustomSelect';
 
 const COLORS = [
-  { color: 'text-level-excelente', bgColor: 'bg-level-excelente', label: 'Indigo' },
-  { color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel', label: 'Verde' },
-  { color: 'text-level-atencao', bgColor: 'bg-level-atencao', label: 'Ambar' },
-  { color: 'text-level-ruim', bgColor: 'bg-level-ruim', label: 'Vermelho' },
-  { color: 'text-level-roxo', bgColor: 'bg-level-roxo', label: 'Roxo' },
-  { color: 'text-level-azul', bgColor: 'bg-level-azul', label: 'Azul' },
+  { color: 'text-level-excelente', bgColor: 'bg-level-excelente', label: 'Indigo', hex: '#6366F1' },
+  { color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel', label: 'Verde', hex: '#10B981' },
+  { color: 'text-level-atencao', bgColor: 'bg-level-atencao', label: 'Ambar', hex: '#F59E0B' },
+  { color: 'text-level-ruim', bgColor: 'bg-level-ruim', label: 'Vermelho', hex: '#EF4444' },
+  { color: 'text-level-roxo', bgColor: 'bg-level-roxo', label: 'Roxo', hex: '#8B5CF6' },
+  { color: 'text-level-azul', bgColor: 'bg-level-azul', label: 'Azul', hex: '#3B82F6' },
 ];
 
 export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 'operacao' | 'metas' }) {
@@ -19,6 +19,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
   const [localConfig, setLocalConfig] = React.useState(config);
   const [saving, setSaving] = React.useState(false);
   const [holidayInput, setHolidayInput] = React.useState('');
+  const [openColorPickerIdx, setOpenColorPickerIdx] = React.useState<number | null>(null);
 
   const handleHolidayInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value.replace(/\D/g, ''); // keep only digits
@@ -467,79 +468,148 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
               Configure os intervalos de score para cada nível. As faixas não podem se sobrepor.
             </p>
             <div className="space-y-4">
-              {localConfig.levels.map((level, idx) => (
-                <div key={idx} className="bg-surface-subtle/40 rounded-xl p-4 border border-surface-border group hover:border-brand-accent/40 transition-all">
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end w-full">
-                    {/* Nome do Nível */}
-                    <div className="col-span-12 lg:col-span-4">
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">Nome do Nível</label>
-                      <input
-                        type="text"
-                        value={level.label}
-                        onChange={e => updateLevel(idx, 'label', e.target.value)}
-                        className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
-                      />
-                    </div>
-                    {/* Score Min */}
-                    <div className="col-span-6 lg:col-span-2">
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5 text-center">Mínimo</label>
-                      <div className="relative">
+              {/* Header Row for Large Screens */}
+              <div className="hidden lg:grid grid-cols-12 gap-4 px-4 mb-2 w-full select-none">
+                <div className="col-span-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 pl-0.5">Nome do Nível</div>
+                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 text-center pl-0.5">Mínimo</div>
+                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 text-center pl-0.5">Máximo</div>
+                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 pl-0.5">Cor de Destaque</div>
+                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 text-right pr-0.5">Preview</div>
+              </div>
+
+              {localConfig.levels.map((level, idx) => {
+                const activeColor = COLORS.find(c => c.color === level.color) || COLORS[0];
+                return (
+                  <div key={idx} className="bg-surface-subtle/40 rounded-xl p-4 border border-surface-border group hover:border-brand-accent/40 transition-all">
+                    <div className="grid grid-cols-12 gap-4 items-center w-full">
+                      {/* Nome do Nível */}
+                      <div className="col-span-4">
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden">Nome do Nível</label>
                         <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={level.minScore ?? ''}
-                          onChange={e => updateLevel(idx, 'minScore', e.target.value)}
-                          className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
+                          type="text"
+                          value={level.label}
+                          onChange={e => updateLevel(idx, 'label', e.target.value)}
+                          className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all"
                         />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400 dark:text-zinc-500">%</span>
                       </div>
-                    </div>
-                    {/* Score Max */}
-                    <div className="col-span-6 lg:col-span-2">
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5 text-center">Máximo</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={level.maxScore ?? ''}
-                          onChange={e => updateLevel(idx, 'maxScore', e.target.value)}
-                          className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
-                        />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400 dark:text-zinc-500">%</span>
+
+                      {/* Score Min */}
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden text-center">Mínimo</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={level.minScore ?? ''}
+                            onChange={e => updateLevel(idx, 'minScore', e.target.value)}
+                            className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
+                          />
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400 dark:text-zinc-500">%</span>
+                        </div>
                       </div>
-                    </div>
-                    {/* Cor de Destaque */}
-                    <div className="col-span-12 lg:col-span-2">
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">Cor de Destaque</label>
-                      <CustomSelect
-                        value={level.color + '||' + level.bgColor}
-                        onChange={val => {
-                          const parts = val.split('||');
-                          const color = parts[0];
-                          const bgColor = parts[1];
-                          const newLevels = [...localConfig.levels];
-                          newLevels[idx] = { ...newLevels[idx], color, bgColor };
-                          setLocalConfig(c => ({ ...c, levels: newLevels }));
-                        }}
-                        options={COLORS.map(c => ({
-                          value: c.color + '||' + c.bgColor,
-                          label: c.label
-                        }))}
-                        className="[&>div>div]:!rounded-lg [&_span]:!text-sm [&_span]:!font-normal [&_input]:!text-sm [&_input]:!font-normal [&>div>div]:h-10 [&_svg]:w-4 [&_svg]:h-4"
-                      />
-                    </div>
-                    {/* Preview Badge inline */}
-                    <div className="col-span-12 lg:col-span-2 flex items-center justify-start lg:justify-end h-10 pb-0.5">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${level.bgColor} ${level.color} border border-current/15 shadow-sm w-full lg:w-auto justify-center`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />
-                        {level.label || 'Nível'}: {level.minScore ?? 0}% - {level.maxScore ?? 0}%
-                      </span>
+
+                      {/* Score Max */}
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden text-center">Máximo</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={level.maxScore ?? ''}
+                            onChange={e => updateLevel(idx, 'maxScore', e.target.value)}
+                            className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg text-sm font-medium text-center focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 pr-6 transition-all shadow-sm"
+                          />
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400 dark:text-zinc-500">%</span>
+                        </div>
+                      </div>
+
+                      {/* Cor de Destaque */}
+                      <div className="col-span-2 relative">
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden">Cor de Destaque</label>
+                        
+                        {/* Custom modern trigger button */}
+                        <div
+                          onClick={() => setOpenColorPickerIdx(openColorPickerIdx === idx ? null : idx)}
+                          className="h-10 w-full bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-between px-3 shadow-sm select-none cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-4 h-4 rounded-full border border-black/10 dark:border-white/10 shrink-0" 
+                              style={{ backgroundColor: activeColor.hex }}
+                            />
+                            <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                              {activeColor.hex}
+                            </span>
+                          </div>
+                          {/* Dropdown caret */}
+                          <svg className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500 shrink-0 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </div>
+
+                        {/* Color Picker Popover */}
+                        {openColorPickerIdx === idx && (
+                          <>
+                            {/* Fullscreen click-away overlay */}
+                            <div 
+                              className="fixed inset-0 z-40" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenColorPickerIdx(null);
+                              }} 
+                            />
+                            <div className="absolute left-0 right-0 mt-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-premium py-1 z-50 animate-fade-in w-full max-h-60 overflow-y-auto thin-scrollbar">
+                              {COLORS.map(c => {
+                                const isSelected = level.color === c.color;
+                                return (
+                                  <button
+                                    key={c.label}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const newLevels = [...localConfig.levels];
+                                      newLevels[idx] = { ...newLevels[idx], color: c.color, bgColor: c.bgColor };
+                                      setLocalConfig(prev => ({ ...prev, levels: newLevels }));
+                                      setOpenColorPickerIdx(null);
+                                    }}
+                                    className={`w-full px-3 py-2 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-colors ${
+                                      isSelected ? 'bg-slate-50/50 dark:bg-slate-900/40 font-semibold' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <div 
+                                        className="w-4 h-4 rounded-full border border-black/10 dark:border-white/10" 
+                                        style={{ backgroundColor: c.hex }} 
+                                      />
+                                      <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">
+                                        {c.label}
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                                      {c.hex}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Preview Badge inline */}
+                      <div className="col-span-2 flex items-center justify-end h-10 pb-0.5">
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden w-full">Preview</label>
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${level.bgColor} ${level.color} border border-current/15 shadow-sm w-full lg:w-auto justify-center`}>
+                          <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />
+                          {level.label || 'Nível'}: {level.minScore ?? 0}% - {level.maxScore ?? 0}%
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="mt-6 p-4 bg-surface-subtle rounded-xl border border-surface-border/50">
               <p className="font-black text-brand-primary text-[10px] mb-2 uppercase tracking-widest">Regras de Validação</p>
