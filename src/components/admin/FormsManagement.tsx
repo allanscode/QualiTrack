@@ -261,14 +261,14 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                   <Button variant="outline" size="sm" onClick={() => handleToggleStatus(f.id, true)} icon={<RefreshCw className="w-3.5 h-3.5" />}>Reativar</Button>
                 ) : (
                   <>
-                    <button onClick={() => { setEditingForm(f); setIsModalOpen(true); }} className="p-2 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => { setEditingForm(f); setIsModalOpen(true); }} className="p-2 rounded-xl hover:bg-surface-subtle text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-all"><Pencil className="w-4 h-4" /></button>
                     {deleteConfirmId === f.id ? (
                       <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
                         <button onClick={(e) => { e.stopPropagation(); handleToggleStatus(f.id, false); }} className="px-2.5 py-1.5 rounded-lg bg-error text-white text-[10px] font-black uppercase">Sim</button>
                         <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="px-2.5 py-1.5 rounded-lg bg-surface-subtle text-brand-muted text-[10px] font-black uppercase tracking-widest">Não</button>
                       </div>
                     ) : (
-                      <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(f.id); }} className="p-2.5 rounded-xl hover:bg-red-50 text-brand-muted hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(f.id); }} className="p-2.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-error dark:hover:text-red-400 transition-all"><Trash2 className="w-4 h-4" /></button>
                     )}
                   </>
                 )}
@@ -277,8 +277,8 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
             <div onClick={() => { setEditingForm(f); setIsModalOpen(true); }} className="cursor-pointer">
               <p className="text-xs text-brand-muted line-clamp-2 mb-4">{f.description}</p>
               <div className="flex items-center gap-4">
-                <span className="text-[10px] font-black uppercase text-brand-highlight">{f.sections.length} Pilares</span>
-                <span className="text-[10px] font-black uppercase text-brand-highlight">Peso Total: {f.sections.reduce((acc, s) => acc + (s.weight || 0), 0)}%</span>
+                <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-300">{f.sections.length} Pilares</span>
+                <span className="text-[10px] font-black uppercase text-slate-500 dark:text-emerald-400">Peso Total: {f.sections.reduce((acc, s) => acc + (s.weight || 0), 0)}%</span>
               </div>
             </div>
           </Card>
@@ -317,7 +317,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                   <button
                     key={t.id}
                     onClick={() => setActiveTab(t.id as any)}
-                    className={`flex items-center gap-2 px-1 pb-3 text-sm transition-colors duration-200 border-b-2 -mb-px ${activeTab === t.id ? 'border-slate-900 dark:border-white text-slate-900 dark:text-white font-semibold' : 'border-transparent text-slate-400 hover:text-slate-600 dark:text-zinc-400 dark:hover:text-zinc-200 font-medium'}`}
+                    className={`flex items-center gap-2 px-1 pb-3 text-sm transition-colors duration-200 border-b-2 -mb-px ${activeTab === t.id ? 'border-slate-900 dark:border-white text-slate-900 dark:text-white font-bold' : 'border-transparent text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 font-medium'}`}
                   >
                     <t.icon className="w-4 h-4" />
                     {t.label}
@@ -331,7 +331,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                     <div className="grid grid-cols-1 gap-8">
                       <div className="space-y-6">
                         <div className="flex flex-col">
-                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Título do Formulário</label>
+                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-300 font-semibold mb-1.5 ml-0.5 block">Título do Formulário</label>
                           <input 
                             type="text" 
                             className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
@@ -341,7 +341,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                           />
                         </div>
                         <div className="flex flex-col">
-                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Equipe Vinculada</label>
+                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-300 font-semibold mb-1.5 ml-0.5 block">Equipe Vinculada</label>
                           <CustomSelect 
                             value={editingForm.team_id || ''} 
                             onChange={val => setEditingForm({...editingForm, team_id: val})} 
@@ -349,7 +349,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                           />
                         </div>
                         <div className="flex flex-col">
-                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Descrição do Propósito</label>
+                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-300 font-semibold mb-1.5 ml-0.5 block">Descrição do Propósito</label>
                           <textarea 
                             className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all min-h-[120px] resize-y shadow-sm leading-relaxed" 
                             value={editingForm.description || ''} 
@@ -379,7 +379,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                             <div className="flex items-center gap-4 flex-1">
                               <span className="text-[10px] font-black text-brand-muted/40 uppercase tracking-widest">#{sIdx + 1}</span>
                               <input 
-                                className="bg-transparent border-none p-0 text-lg font-black text-brand-primary uppercase tracking-tight focus:ring-0 w-full placeholder:text-brand-muted/30"
+                                className="bg-transparent border-none p-0 text-lg font-black text-brand-primary uppercase tracking-tight focus:ring-0 w-full placeholder:text-slate-400 dark:placeholder:text-slate-500"
                                 value={section.title}
                                 onChange={e => updateSection(section.id, 'title', e.target.value)}
                                 placeholder="NOME DO PILAR (Ex: QUALIDADE)"
@@ -387,7 +387,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                             </div>
                             <div className="flex items-center gap-6">
                               <div className="flex flex-col items-end">
-                                <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Peso do Pilar</label>
+                                <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wider mb-1">Peso do Pilar</label>
                                 <div className="flex items-center gap-2 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 shadow-sm">
                                   <input 
                                     type="number" 
@@ -406,13 +406,13 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                             {section.questions.map((q, qIdx) => {
                               const itemWeightInPilar = section.questions.length > 0 ? (100 / section.questions.length).toFixed(1) : 0;
                               const itemImpactInTotal = section.questions.length > 0 ? ((section.weight || 0) / section.questions.length).toFixed(1) : 0;
-
+ 
                               return (
                                 <div key={q.id} className="flex items-center gap-4 p-4 rounded-2xl bg-surface-card border border-surface-border group hover:border-brand-accent/40 transition-all shadow-sm">
                                   <div className="w-8 h-8 rounded-lg bg-surface-subtle flex items-center justify-center text-[10px] font-black text-brand-muted">{qIdx + 1}</div>
                                   <div className="flex-1">
                                     <input 
-                                      className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary w-full focus:ring-0 placeholder:text-brand-muted/30"
+                                      className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary w-full focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                                       value={q.text}
                                       onChange={e => updateQuestion(section.id, q.id, 'text', e.target.value)}
                                       placeholder="Ex: Utilizou a saudação padrão corretamente?"
@@ -493,7 +493,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                           <div className="w-10 h-10 rounded-xl bg-error/5 text-error flex items-center justify-center text-[10px] font-black">{idx + 1}</div>
                           <div className="flex-1">
                             <input 
-                              className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary w-full focus:ring-0 placeholder:text-brand-muted/30"
+                              className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary w-full focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                               value={ce.text}
                               onChange={e => updateCriticalError(ce.id, 'text', e.target.value)}
                               placeholder="Ex: Fraude ou quebra de protocolo de segurança..."
@@ -518,25 +518,25 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                 <div className="flex items-center gap-4">
                   {(() => {
                     if (totalWeight !== 100) return (
-                      <div className="flex items-center gap-2 text-error animate-pulse">
+                      <div className="flex items-center gap-2 text-error dark:text-red-400 animate-pulse">
                         <AlertTriangle className="w-4 h-4" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Peso Total incorreto ({totalWeight}%)</span>
                       </div>
                     );
                     if ((editingForm.sections || []).some(s => (Number(s.weight) || 0) <= 0)) return (
-                      <div className="flex items-center gap-2 text-error animate-pulse">
+                      <div className="flex items-center gap-2 text-error dark:text-red-400 animate-pulse">
                         <AlertTriangle className="w-4 h-4" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Pilar com Valor Zerado</span>
                       </div>
                     );
                     if ((editingForm.sections || []).some(s => !s.questions || s.questions.length === 0)) return (
-                      <div className="flex items-center gap-2 text-error animate-pulse">
+                      <div className="flex items-center gap-2 text-error dark:text-red-400 animate-pulse">
                         <AlertTriangle className="w-4 h-4" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Pilar sem Critério</span>
                       </div>
                     );
                     return (
-                      <div className="flex items-center gap-2 text-success">
+                      <div className="flex items-center gap-2 text-success dark:text-emerald-400">
                         <Check className="w-4 h-4" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Estrutura válida</span>
                       </div>
@@ -549,7 +549,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                       variant="ghost" 
                       onClick={() => setActiveTab(activeTab === 'criticos' ? 'pilares' : activeTab === 'pilares' ? 'geral' : 'geral')} 
                       disabled={activeTab === 'geral'}
-                      className="rounded-2xl px-4 text-brand-muted hover:text-brand-primary disabled:opacity-30"
+                      className="rounded-2xl px-4 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 font-semibold"
                     >
                       <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
                     </Button>
@@ -557,13 +557,13 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                       variant="ghost" 
                       onClick={() => setActiveTab(activeTab === 'geral' ? 'pilares' : 'criticos')} 
                       disabled={activeTab === 'criticos'}
-                      className="rounded-2xl px-4 text-brand-muted hover:text-brand-primary disabled:opacity-30"
+                      className="rounded-2xl px-4 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 font-semibold"
                     >
                       Próximo <ChevronRight className="w-4 h-4 ml-1" />
                     </Button>
                   </div>
 
-                  <Button variant="ghost" onClick={() => setIsModalOpen(false)} className="rounded-2xl px-6 text-brand-muted hover:text-brand-primary">
+                  <Button variant="ghost" onClick={() => setIsModalOpen(false)} className="rounded-2xl px-6 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold">
                     Cancelar
                   </Button>
                   
@@ -571,7 +571,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                     onClick={handleSaveForm} 
                     disabled={saving || !isValid} 
                     variant={isValid ? 'secondary' : 'outline'}
-                    className="rounded-2xl px-10 shadow-premium transition-all"
+                    className="rounded-2xl px-10 shadow-premium transition-all disabled:opacity-100 disabled:border-slate-300 disabled:dark:border-slate-700 disabled:text-slate-400 disabled:dark:text-slate-500"
                   >
                     {saving ? 'Publicando...' : (editingForm.id ? 'Salvar Alterações' : 'Publicar Formulário')}
                   </Button>
