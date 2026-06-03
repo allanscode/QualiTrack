@@ -190,7 +190,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
               placeholder="Buscar usuário..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-[11px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
+              className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-xs font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
             />
           </div>
           <div className="h-10 flex items-center gap-2">
@@ -324,11 +324,11 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
               <div className="space-y-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome Completo</label>
-                  <input type="text" className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
+                  <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Email</label>
-                  <input type="email" disabled={!!editingUser.id} className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
+                  <input type="email" disabled={!!editingUser.id} className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
                 </div>
                 <CustomSelect 
                   label="Perfil"
@@ -347,23 +347,23 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Equipes</label>
                     {teams.filter(t => t.active !== false).length > 8 && (
                       <div className="relative w-32 h-7">
-                        <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-brand-muted/50" />
+                        <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                         <input 
                           type="text" 
                           placeholder="Buscar..." 
-                          className="w-full h-full bg-surface-subtle border border-surface-border rounded-lg pl-6 pr-2 text-[10px] font-bold text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
+                          className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg pl-6 pr-2 text-[10px] font-medium text-slate-900 dark:text-slate-50 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all"
                           value={teamSearch}
                           onChange={e => setTeamSearch(e.target.value)}
                         />
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2 p-3 bg-surface-bg border border-surface-border rounded-xl max-h-32 overflow-y-auto no-scrollbar">
+                  <div className="flex flex-wrap gap-2 p-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-32 overflow-y-auto no-scrollbar">
                     {teams.filter(t => t.active !== false)
                       .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map(t => (
-                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${editingUser.team_ids?.includes(t.id) ? 'bg-brand-primary text-brand-on-primary border-brand-primary shadow-sm' : 'bg-surface-subtle text-brand-muted border-surface-border hover:border-brand-highlight'}`}>
+                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${editingUser.team_ids?.includes(t.id) ? 'bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 border-slate-900 dark:border-slate-50 shadow-sm' : 'bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200/60 dark:border-slate-800/60 hover:border-slate-400 dark:hover:border-slate-600'}`}>
                         <input
                           type="checkbox"
                           className="hidden"

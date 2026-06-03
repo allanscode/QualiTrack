@@ -93,7 +93,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-2 bg-surface-card p-1.5 rounded-2xl border border-surface-border shadow-premium-sm w-fit overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-6 border-b border-slate-200 dark:border-slate-800 w-full overflow-x-auto no-scrollbar pb-0">
         {[
           { key: 'users', label: 'Usuários', icon: Users },
           { key: 'teams', label: 'Equipes', icon: Shield },
@@ -110,14 +110,14 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
               key={item.key}
               onClick={() => setActiveSubTab(item.key as any)}
               className={`
-              flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+              flex items-center gap-2 px-1 pb-3 text-sm transition-all -mb-px border-b-2
               ${active
-                ? 'bg-brand-primary text-brand-on-primary shadow-premium'
-                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'}
+                ? 'text-slate-900 dark:text-white font-semibold border-slate-900 dark:border-white'
+                : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 border-transparent font-medium'}
             `}
             >
               <Icon className="w-4 h-4" />
-              {item.label}
+              <span>{item.label}</span>
             </button>
           );
         })}

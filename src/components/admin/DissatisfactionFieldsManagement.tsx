@@ -197,7 +197,7 @@ export default function DissatisfactionFieldsManagement() {
               placeholder="Buscar campo..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-full bg-surface-card border border-surface-border rounded-2xl pl-11 pr-4 text-[11px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent focus:outline-none transition-all"
+              className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-xs font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
             />
           </div>
           <div className="h-10 flex items-center gap-2">
@@ -320,7 +320,7 @@ export default function DissatisfactionFieldsManagement() {
                   <input 
                     type="text" 
                     placeholder="Ex: Motivo da Insatisfação - Cliente"
-                    className="w-full bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none" 
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
                     value={editingField.title} 
                     onChange={e => setEditingField({ ...editingField, title: e.target.value })} 
                   />
@@ -342,7 +342,7 @@ export default function DissatisfactionFieldsManagement() {
                     <input 
                       type="text" 
                       placeholder="Adicione uma opção (ex: Processo)"
-                      className="flex-1 bg-surface-bg border border-surface-border rounded-xl py-3 px-4 text-sm font-semibold focus:border-brand-accent focus:outline-none" 
+                      className="flex-1 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-4 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
                       value={newOption}
                       onChange={e => setNewOption(e.target.value)}
                       onKeyDown={e => {
@@ -360,11 +360,11 @@ export default function DissatisfactionFieldsManagement() {
 
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Opções Adicionadas</label>
-                  <div className="flex flex-wrap gap-2 p-4 bg-surface-bg border border-surface-border rounded-xl min-h-[80px] max-h-[160px] overflow-y-auto no-scrollbar">
+                  <div className="flex flex-wrap gap-2 p-4 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl min-h-[80px] max-h-[160px] overflow-y-auto no-scrollbar">
                     {editingField.options?.map((opt, i) => (
                       <span 
                         key={i} 
-                        className="inline-flex items-center gap-1 text-[10px] bg-brand-primary text-brand-on-primary font-black uppercase tracking-tight px-3 py-1.5 rounded-lg shadow-sm"
+                        className="inline-flex items-center gap-1.5 text-[10px] bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 font-bold uppercase tracking-tight px-3 py-1.5 rounded-lg shadow-sm"
                       >
                         {opt}
                         <button 

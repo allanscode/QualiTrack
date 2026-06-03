@@ -187,7 +187,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                 <div className="grid grid-cols-1 gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome</label>
-                    <input type="text" className="w-full bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-brand-accent focus:outline-none" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
+                    <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
                   </div>
                   <CustomSelect 
                     label="Perfil" 
@@ -207,23 +207,23 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Equipes</label>
                     {teams.length > 8 && (
                       <div className="relative w-32 h-7">
-                        <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-brand-muted/50" />
+                        <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                         <input 
                           type="text" 
                           placeholder="Buscar..." 
-                          className="w-full h-full bg-surface-subtle border border-surface-border rounded-lg pl-6 pr-2 text-[10px] font-bold text-brand-primary focus:border-brand-accent focus:outline-none transition-all"
+                          className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg pl-6 pr-2 text-[10px] font-medium text-slate-900 dark:text-slate-50 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                           value={teamSearch}
                           onChange={e => setTeamSearch(e.target.value)}
                         />
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2 p-3 bg-surface-bg border border-surface-border rounded-xl max-h-32 overflow-y-auto no-scrollbar">
+                  <div className="flex flex-wrap gap-2 p-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-32 overflow-y-auto no-scrollbar">
                     {teams
                       .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map(t => (
-                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${approveData.team_ids?.includes(t.id) ? 'bg-brand-primary text-brand-on-primary border-brand-primary' : 'bg-surface-subtle text-brand-muted border-surface-border'}`}>
+                      <label key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all ${approveData.team_ids?.includes(t.id) ? 'bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 border-slate-900 dark:border-slate-50 shadow-sm' : 'bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200/60 dark:border-slate-800/60 hover:border-slate-400 dark:hover:border-slate-600'}`}>
                         <input type="checkbox" className="hidden" checked={approveData.team_ids?.includes(t.id)} onChange={e => {
                           const newIds = e.target.checked ? [...approveData.team_ids, t.id] : approveData.team_ids.filter(id => id !== t.id);
                           setApproveData({...approveData, team_ids: newIds});
@@ -260,7 +260,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Motivo da Rejeição</label>
                   <textarea 
-                    className="w-full bg-surface-bg border border-surface-border rounded-xl px-4 py-3 text-sm font-semibold focus:border-error focus:outline-none min-h-[120px] resize-none"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-50 focus:border-red-500 dark:focus:border-red-500 focus:outline-none focus:ring-0 min-h-[120px] resize-none shadow-sm transition-all"
                     placeholder="Ex: E-mail não corporativo ou setor não autorizado."
                     value={rejectReason}
                     onChange={e => setRejectReason(e.target.value)}
