@@ -309,7 +309,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
               <header className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2 text-error">
                   <AlertCircle className="w-5 h-5" />
-                  <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Rejeitar Solicitação</h3>
+                  <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Recusar Solicitação</h3>
                 </div>
                 <button onClick={() => setIsRejectModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
               </header>
@@ -319,17 +319,22 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                   Informe abaixo o motivo da recusa, que será enviado por e-mail para o usuário.
                 </p>
                 <div className="flex flex-col">
-                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Motivo da Rejeição</label>
+                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Motivo da Recusa</label>
                   <textarea 
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 focus:border-red-500 dark:focus:border-red-500 focus:outline-none focus:ring-0 min-h-[120px] resize-none shadow-sm transition-all"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-red-500 dark:focus:border-red-500 focus:outline-none focus:ring-0 min-h-[120px] resize-none shadow-sm transition-all"
                     placeholder="Ex: E-mail não corporativo ou setor não autorizado."
                     value={rejectReason}
                     onChange={e => setRejectReason(e.target.value)}
                   />
                 </div>
                 <div className="flex gap-3 mt-4">
-                  <Button variant="outline" className="flex-1" onClick={() => setIsRejectModalOpen(false)}>Cancelar</Button>
-                  <Button className="flex-1 bg-error hover:bg-red-700" onClick={confirmReject} disabled={saving}>
+                  <Button variant="outline" className="flex-1 hover:bg-slate-50 dark:hover:bg-slate-900/40" onClick={() => setIsRejectModalOpen(false)}>Cancelar</Button>
+                  <Button 
+                    variant="ghost" 
+                    className="flex-1 !bg-transparent border border-red-500/20 text-red-500 dark:text-red-400 hover:border-red-500/40 hover:bg-red-500/5 active:scale-[0.98] transition-all" 
+                    onClick={confirmReject} 
+                    disabled={saving}
+                  >
                     {saving ? 'Enviando...' : 'Confirmar Recusa'}
                   </Button>
                 </div>
