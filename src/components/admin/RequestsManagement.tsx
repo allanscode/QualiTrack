@@ -137,19 +137,8 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
 
   const filtered = requests.filter(r => r.status === statusFilter);
 
-  // Helper determinístico para diversificação visual sutil em solicitações
-  const getRequestTypeInfo = (req: AccessRequest) => {
-    const hash = req.email.charCodeAt(0) + req.email.charCodeAt(req.email.length - 1);
-    const types = [
-      { label: 'Permissão', variant: 'secondary' as const },
-      { label: 'Ajuste de Horário', variant: 'info' as const },
-      { label: 'Troca de Turno', variant: 'warning' as const }
-    ];
-    return types[hash % types.length];
-  };
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-4xl w-full">
       <div className="flex items-center gap-3">
         <div className="w-[200px] flex-none">
           <CustomSelect 
@@ -170,9 +159,8 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
         </Button>
       </div>
 
-      <div className="flex flex-col gap-3 max-w-5xl w-full">
+      <div className="flex flex-col gap-3 max-w-4xl w-full">
         {filtered.map(req => {
-          const typeInfo = getRequestTypeInfo(req);
           return (
             <Card 
               key={req.id} 
@@ -190,9 +178,9 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                     <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                       Solicitado em: {new Date(req.created_at).toLocaleDateString()}
                     </span>
-                    <Badge variant={typeInfo.variant} size="xs">
-                      {typeInfo.label}
-                    </Badge>
+                    <span className="bg-slate-900 border border-slate-800 text-slate-300 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-lg">
+                      Solicitação de Acesso
+                    </span>
                   </div>
                 </div>
               </div>
