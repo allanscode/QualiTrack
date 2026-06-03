@@ -188,16 +188,16 @@ export default function DissatisfactionFieldsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex items-center justify-between w-full gap-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative w-64 h-10">
-            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               placeholder="Buscar campo..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl pl-11 pr-4 text-xs font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+              className="w-full h-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg pl-9 pr-4 text-sm font-normal text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -219,7 +219,7 @@ export default function DissatisfactionFieldsManagement() {
             />
           </div>
         </div>
-        <Button onClick={handleOpenNew} icon={<Plus className="w-4 h-4" />} className="h-10 rounded-xl !py-0 flex items-center">
+        <Button onClick={handleOpenNew} icon={<Plus className="w-4 h-4" />} className="h-10 !rounded-lg !py-0 flex items-center shrink-0">
           Adicionar Campo Extra
         </Button>
       </div>
@@ -228,10 +228,10 @@ export default function DissatisfactionFieldsManagement() {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-surface-bg border-b border-surface-border">
-              <th className="px-6 py-4 text-[10px] font-black uppercase text-brand-muted tracking-widest">Título do Campo</th>
-              <th className="px-6 py-4 text-[10px] font-black uppercase text-brand-muted tracking-widest">Tipo / Exibição</th>
-              <th className="px-6 py-4 text-[10px] font-black uppercase text-brand-muted tracking-widest">Opções Cadastradas</th>
-              <th className="px-6 py-4 text-right text-[10px] font-black uppercase text-brand-muted tracking-widest">Ações</th>
+              <th className="px-6 py-4 text-left text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-zinc-500">Título do Campo</th>
+              <th className="px-6 py-4 text-left text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-zinc-500">Tipo / Exibição</th>
+              <th className="px-6 py-4 text-left text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-zinc-500">Opções Cadastradas</th>
+              <th className="px-6 py-4 text-right text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-zinc-500">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-surface-subtle">
@@ -251,43 +251,50 @@ export default function DissatisfactionFieldsManagement() {
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <Badge variant="neutral" className="bg-surface-subtle text-brand-primary uppercase text-[9px] tracking-wider font-extrabold">
+                  <span className="inline-flex items-center text-xs font-medium text-slate-500 dark:text-zinc-400 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 px-2.5 py-1 rounded-md">
                     {f.type === 'cliente' ? 'Visão do Cliente' : 'Visão do Monitor'}
-                  </Badge>
+                  </span>
                 </td>
                 <td className="px-6 py-4 max-w-xs md:max-w-md">
                   <div className="flex flex-row items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-none">
                     {f.options.slice(0, 4).map((opt, i) => (
-                      <span key={i} className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 border-none">
+                      <span key={i} className="bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800/80 text-slate-500 dark:text-zinc-300 text-xs px-2 py-0.5 rounded-md font-normal shrink-0">
                         {opt}
                       </span>
                     ))}
                     {f.options.length > 4 && (
-                      <span className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 border-none">
+                      <span className="bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800/80 text-slate-500 dark:text-zinc-300 text-xs px-2 py-0.5 rounded-md font-normal shrink-0">
                         +{f.options.length - 4}
                       </span>
                     )}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <div className="flex justify-end gap-1">
+                  <div className="flex justify-end items-center gap-1.5">
                     {f.active === false ? (
-                      <Button variant="outline" size="sm" onClick={() => handleToggleStatus(f.id, true)} icon={<RefreshCw className="w-3.5 h-3.5" />}>Reativar</Button>
+                      <Button variant="outline" size="sm" onClick={() => handleToggleStatus(f.id, true)} icon={<RefreshCw className="w-3.5 h-3.5" />} className="!rounded-lg h-8 text-xs font-normal">Reativar</Button>
                     ) : (
                       <>
                         <button 
                           onClick={() => handleOpenEdit(f)} 
-                          className="p-2.5 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all animate-in fade-in"
+                          className="p-1.5 rounded-md text-slate-400 hover:text-slate-900 dark:text-zinc-500 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800/40 transition-colors duration-150"
+                          title="Editar"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         {deleteConfirmId === f.id ? (
                           <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
-                            <button onClick={() => handleToggleStatus(f.id, false)} className="px-2.5 py-1.5 rounded-lg bg-error text-white text-[10px] font-black uppercase">Sim</button>
-                            <button onClick={() => setDeleteConfirmId(null)} className="px-2.5 py-1.5 rounded-lg bg-surface-subtle text-brand-muted text-[10px] font-black uppercase tracking-widest">Não</button>
+                            <button onClick={() => handleToggleStatus(f.id, false)} className="px-2 py-1 rounded bg-error text-white text-[10px] font-semibold uppercase">Sim</button>
+                            <button onClick={() => setDeleteConfirmId(null)} className="px-2 py-1 rounded bg-surface-subtle text-brand-muted text-[10px] font-semibold uppercase">Não</button>
                           </div>
                         ) : (
-                          <button onClick={() => setDeleteConfirmId(f.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-brand-muted hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
+                          <button 
+                            onClick={() => setDeleteConfirmId(f.id)} 
+                            className="p-1.5 rounded-md text-slate-400 hover:text-error dark:text-zinc-500 dark:hover:text-error hover:bg-slate-100 dark:hover:bg-zinc-800/40 transition-colors duration-150"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         )}
                       </>
                     )}
@@ -297,7 +304,7 @@ export default function DissatisfactionFieldsManagement() {
             ))}
             {filteredFields.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-xs font-bold text-brand-muted uppercase tracking-widest opacity-40">
+                <td colSpan={4} className="px-6 py-12 text-center text-xs font-normal text-slate-500 dark:text-slate-500">
                   Nenhum campo de insatisfação encontrado.
                 </td>
               </tr>
@@ -309,45 +316,48 @@ export default function DissatisfactionFieldsManagement() {
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <Card className="max-w-lg w-full animate-in zoom-in-95 duration-200">
+            <Card className="max-w-md w-full animate-in zoom-in-95 duration-200" padding="lg">
               <header className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">
+                <h3 className="text-base font-bold text-brand-primary tracking-tight uppercase">
                   {editingField.id ? 'Editar Campo Extra' : 'Novo Campo Extra'}
                 </h3>
-                <button onClick={() => setIsModalOpen(false)} className="text-brand-muted hover:text-brand-primary">
-                  <X className="w-6 h-6" />
+                <button onClick={() => setIsModalOpen(false)} className="text-brand-muted hover:text-brand-primary transition-colors cursor-pointer">
+                  <X className="w-5 h-5" />
                 </button>
               </header>
 
               <div className="space-y-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Título do Campo *</label>
+                  <label className="uppercase text-[10px] font-medium text-slate-400 dark:text-slate-500 tracking-wide mb-1.5 ml-0.5 block">Título do Campo *</label>
                   <input 
                     type="text" 
                     placeholder="Ex: Motivo da Insatisfação - Cliente"
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
+                    className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-normal text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
                     value={editingField.title} 
                     onChange={e => setEditingField({ ...editingField, title: e.target.value })} 
                   />
                 </div>
 
-                <CustomSelect 
-                  label="Tipo / Onde exibir"
-                  value={editingField.type}
-                  onChange={val => setEditingField({ ...editingField, type: val as any })}
-                  options={[
-                    { value: 'cliente', label: 'Visão do Cliente' },
-                    { value: 'qualidade', label: 'Visão do Monitor' }
-                  ]}
-                />
+                <div className="flex flex-col gap-1">
+                  <label className="uppercase text-[10px] font-medium text-slate-400 dark:text-slate-500 tracking-wide mb-1.5 ml-0.5 block">Tipo / Onde Exibir</label>
+                  <CustomSelect 
+                    value={editingField.type}
+                    onChange={val => setEditingField({ ...editingField, type: val as any })}
+                    options={[
+                      { value: 'cliente', label: 'Visão do Cliente' },
+                      { value: 'qualidade', label: 'Visão do Monitor' }
+                    ]}
+                    className="[&>div>div]:!rounded-lg [&_span]:!text-sm [&_span]:!font-normal [&_input]:!text-sm [&_input]:!font-normal [&>div>div]:h-10 [&_svg]:w-4 [&_svg]:h-4"
+                  />
+                </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Adicionar Opções *</label>
-                  <div className="flex gap-2">
+                  <label className="uppercase text-[10px] font-medium text-slate-400 dark:text-slate-500 tracking-wide mb-1.5 ml-0.5 block">Adicionar Opções *</label>
+                  <div className="flex items-center gap-2">
                     <input 
                       type="text" 
                       placeholder="Adicione uma opção (ex: Processo)"
-                      className="flex-1 h-9 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
+                      className="flex-1 h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-normal text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
                       value={newOption}
                       onChange={e => setNewOption(e.target.value)}
                       onKeyDown={e => {
@@ -357,15 +367,20 @@ export default function DissatisfactionFieldsManagement() {
                         }
                       }}
                     />
-                    <Button onClick={handleAddOption} variant="outline" icon={<Plus className="w-4 h-4" />} className="h-9 rounded-xl !py-0 flex items-center shrink-0">
+                    <Button 
+                      onClick={handleAddOption} 
+                      variant="outline" 
+                      icon={<Plus className="w-4 h-4" />} 
+                      className="h-10 !rounded-lg !py-0 px-4 flex items-center justify-center shrink-0 text-sm font-normal"
+                    >
                       Adicionar
                     </Button>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Opções Adicionadas</label>
-                  <div className={`flex flex-wrap gap-1.5 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl min-h-[50px] max-h-[160px] overflow-y-auto no-scrollbar transition-all ${
+                  <label className="uppercase text-[10px] font-medium text-slate-400 dark:text-slate-500 tracking-wide mb-1.5 ml-0.5 block">Opções Adicionadas</label>
+                  <div className={`flex flex-wrap gap-1.5 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-lg min-h-[50px] max-h-[160px] overflow-y-auto no-scrollbar transition-all ${
                     (!editingField.options || editingField.options.length === 0) ? 'py-2 px-3' : 'p-3'
                   }`}>
                     {editingField.options?.map((opt, i) => (
@@ -384,12 +399,17 @@ export default function DissatisfactionFieldsManagement() {
                       </span>
                     ))}
                     {(!editingField.options || editingField.options.length === 0) && (
-                      <p className="text-[10px] font-bold text-brand-muted uppercase italic py-1 w-full text-center">Nenhuma opção adicionada ainda.</p>
+                      <p className="text-sm font-normal text-slate-500 dark:text-slate-500 py-1 w-full text-center">Nenhuma opção adicionada ainda.</p>
                     )}
                   </div>
                 </div>
 
-                <Button className="w-full mt-4" onClick={handleSaveField} disabled={saving} icon={<Save className="w-4 h-4" />}>
+                <Button 
+                  className="w-full h-10 !rounded-lg mt-4 flex items-center justify-center text-sm font-medium" 
+                  onClick={handleSaveField} 
+                  disabled={saving} 
+                  icon={<Save className="w-4 h-4" />}
+                >
                   {saving ? 'Salvando...' : 'Salvar Campo'}
                 </Button>
               </div>

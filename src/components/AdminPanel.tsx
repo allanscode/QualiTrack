@@ -110,10 +110,10 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
               key={item.key}
               onClick={() => setActiveSubTab(item.key as any)}
               className={`
-              flex items-center gap-2 px-1 pb-3 text-sm transition-all -mb-px border-b-2
+              flex items-center gap-2 px-1 pb-3 text-sm transition-colors duration-200 -mb-px border-b-2
               ${active
                 ? 'text-slate-900 dark:text-white font-semibold border-slate-900 dark:border-white'
-                : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 border-transparent font-medium'}
+                : 'text-slate-400 hover:text-slate-600 dark:text-zinc-400 dark:hover:text-zinc-200 border-transparent font-medium'}
             `}
             >
               <Icon className="w-4 h-4" />

@@ -273,3 +273,80 @@ select {
 .dark .bg-icon-highlight { background-color: #2A3529; }
 .dark .bg-icon-accent { background-color: #2A2D24; }
 .dark .bg-icon-primary { background-color: #3D4136; }
+
+/* ── Universal SaaS Input & Textarea Standards (Light & Dark Mode) ── */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="email"],
+input[type="search"],
+textarea {
+  border-radius: 0.5rem !important; /* rounded-lg */
+  font-size: 0.875rem !important; /* text-sm */
+  font-weight: 400 !important; /* font-normal */
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Light mode defaults */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="email"],
+input[type="search"],
+textarea {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E4D8 !important; /* border-slate-200 / surface-border */
+  color: #0F172A !important; /* text-slate-900 */
+}
+
+input[type="text"]::placeholder,
+input[type="number"]::placeholder,
+input[type="password"]::placeholder,
+input[type="email"]::placeholder,
+input[type="search"]::placeholder,
+textarea::placeholder {
+  color: #94A3B8 !important; /* text-slate-400 */
+}
+
+/* Dark mode overrides */
+.dark input[type="text"],
+.dark input[type="number"],
+.dark input[type="password"],
+.dark input[type="email"],
+.dark input[type="search"],
+.dark textarea {
+  background-color: rgba(2, 6, 23, 0.6) !important; /* dark:bg-slate-950/60 */
+  border: 1px solid rgba(30, 41, 59, 0.8) !important; /* dark:border-slate-800/80 */
+  color: #F1F5F9 !important; /* text-slate-100 */
+}
+
+.dark input[type="text"]::placeholder,
+.dark input[type="number"]::placeholder,
+.dark input[type="password"]::placeholder,
+.dark input[type="email"]::placeholder,
+.dark input[type="search"]::placeholder,
+.dark textarea::placeholder {
+  color: #64748B !important; /* dark:placeholder-slate-500 */
+}
+
+/* Focus States */
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="search"]:focus,
+textarea:focus {
+  outline: none !important;
+  border-color: #94A3B8 !important; /* border-slate-400 */
+  box-shadow: 0 0 0 1px #94A3B8 !important; /* ring-slate-400 */
+}
+
+.dark input[type="text"]:focus,
+.dark input[type="number"]:focus,
+.dark input[type="password"]:focus,
+.dark input[type="email"]:focus,
+.dark input[type="search"]:focus,
+.dark textarea:focus {
+  border-color: #475569 !important; /* focus:border-slate-600 */
+  box-shadow: 0 0 0 1px #475569 !important; /* focus:ring-slate-600 */
+}
