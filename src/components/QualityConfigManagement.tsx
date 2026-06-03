@@ -1,9 +1,23 @@
 import React from 'react';
-import { Save, Plus, Trash2, Calendar, Clock, Check } from 'lucide-react';
-import { motion } from 'motion/react';
+import { createPortal } from 'react-dom';
+import { Save, Plus, Calendar, Check, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import CustomSelect from './ui/CustomSelect';
+import { 
+  format, 
+  addMonths, 
+  subMonths, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek, 
+  endOfWeek, 
+  eachDayOfInterval, 
+  isSameMonth, 
+  isSameDay 
+} from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const COLORS = [
   { color: 'text-level-excelente', bgColor: 'bg-level-excelente', label: 'Indigo', hex: '#6366F1' },
@@ -21,56 +35,128 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
   const [holidayInput, setHolidayInput] = React.useState('');
   const [openColorPickerIdx, setOpenColorPickerIdx] = React.useState<number | null>(null);
 
-  const handleHolidayInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, ''); // keep only digits
-    if (val.length > 4) {
-      val = val.slice(0, 4);
+  const [calendarOpen, setCalendarOpen] = React.useState(false);
+  const [currentMonth, setCurrentMonth] = React.useState<Date>(() => new Date(2024, 0, 1)); // Anchor on year 2024 (leap year)
+  const triggerRef = React.useRef<HTMLDivElement>(null);
+  const datepickerRef = React.useRef<HTMLDivElement>(null);
+  const [pos, setPos] = React.useState<React.CSSProperties>({});
+
+  const calcPosition = React.useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const viewportH = window.innerHeight;
+    const viewportW = window.innerWidth;
+    
+    const dropdownHeight = 310;
+    const dropdownWidth = 280;
+    
+    const spaceBelow = viewportH - rect.bottom;
+    const spaceAbove = rect.top;
+    
+    const openUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+    const leftPos = Math.max(8, Math.min(rect.left, viewportW - dropdownWidth - 8));
+
+    setPos({
+      position: 'fixed',
+      left: leftPos,
+      width: dropdownWidth,
+      zIndex: 9999,
+      ...(openUpward
+        ? { bottom: viewportH - rect.top + 4 }
+        : { top: rect.bottom + 4 }),
+    });
+  }, []);
+
+  React.useEffect(() => {
+    if (calendarOpen) {
+      calcPosition();
     }
-    if (val.length > 2) {
-      val = `${val.slice(0, 2)}/${val.slice(2)}`;
+  }, [calendarOpen, calcPosition]);
+
+  React.useEffect(() => {
+    if (!calendarOpen) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        datepickerRef.current && !datepickerRef.current.contains(target)
+      ) {
+        setCalendarOpen(false);
+      }
     }
-    setHolidayInput(val);
+
+    function handlePageScroll(event: Event) {
+      const target = event.target as Node;
+      if (datepickerRef.current && datepickerRef.current.contains(target)) return;
+      setCalendarOpen(false);
+    }
+
+    function handleResize() {
+      calcPosition();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setCalendarOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handlePageScroll, true);
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handlePageScroll, true);
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [calendarOpen, calcPosition]);
+
+  const daysGrid = React.useMemo(() => {
+    const monthStart = startOfMonth(currentMonth);
+    const monthEnd = endOfMonth(currentMonth);
+    const gridStart = startOfWeek(monthStart, { weekStartsOn: 0 }); // Domingo
+    const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });       // Sábado
+    
+    return eachDayOfInterval({ start: gridStart, end: gridEnd });
+  }, [currentMonth]);
+
+  const handlePrevMonth = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentMonth(prev => subMonths(prev, 1));
   };
 
-  const isHolidayInvalid = React.useMemo(() => {
-    if (!holidayInput) return false;
-    const parts = holidayInput.split('/');
-    if (parts[0] && parts[0].length === 2) {
-      const day = Number(parts[0]);
-      if (isNaN(day) || day < 1 || day > 31) return true;
-    }
-    if (parts[1] && parts[1].length === 2) {
-      const month = Number(parts[1]);
-      if (isNaN(month) || month < 1 || month > 12) return true;
-    }
-    return false;
+  const handleNextMonth = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentMonth(prev => addMonths(prev, 1));
+  };
+
+  const handleSelectDay = (date: Date) => {
+    const formatted = format(date, 'dd/MM');
+    setHolidayInput(formatted);
+    setCalendarOpen(false);
+  };
+
+  const selectedDate = React.useMemo(() => {
+    if (!holidayInput) return null;
+    const [day, month] = holidayInput.split('/').map(Number);
+    if (!day || !month || isNaN(day) || isNaN(month)) return null;
+    return new Date(2024, month - 1, day);
   }, [holidayInput]);
 
-  const handleHolidayKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace') {
-      const val = (e.target as HTMLInputElement).value;
-      if (val.endsWith('/')) {
-        e.preventDefault();
-        setHolidayInput(val.slice(0, -2));
-      }
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      handleAddHoliday();
-    }
-  };
+  const weekdays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
   const handleAddHoliday = () => {
-    const val = holidayInput;
-    if (val.length < 5) {
-      toast.error('Formato incompleto. Use DD/MM (ex: 25/12)');
-      return;
-    }
-    if (isHolidayInvalid) {
-      toast.error('Data de feriado inválida. Verifique os valores.');
+    if (!holidayInput) {
+      toast.error('Selecione uma data no calendário.');
       return;
     }
     const currentHolidays = localConfig.businessHours?.holidays || [];
-    if (currentHolidays.includes(val)) {
+    if (currentHolidays.includes(holidayInput)) {
       toast.warning('Este feriado já está cadastrado.');
       return;
     }
@@ -78,7 +164,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
       ...c, 
       businessHours: { 
         ...c.businessHours, 
-        holidays: [...currentHolidays, val].sort() 
+        holidays: [...currentHolidays, holidayInput].sort() 
       } 
     }));
     setHolidayInput('');
@@ -213,16 +299,16 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
             <p className="text-xs text-brand-muted mb-4 font-medium">
               Configure o tempo limite (em horas úteis) para cada ação no fluxo da monitoria.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="flex flex-wrap gap-6 items-center justify-start">
               {[
                 { label: 'Ciência do Suporte', field: 'agent_review' },
                 { label: 'Reanálise Qualidade', field: 'auditor_reevaluation' },
                 { label: 'Gestor Suporte', field: 'manager_support' },
                 { label: 'Gestor Qualidade', field: 'manager_quality' }
               ].map(deadline => (
-                <div key={deadline.field}>
+                <div key={deadline.field} className="flex flex-col gap-1">
                   <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">{deadline.label}</label>
-                  <div className="relative max-w-[100px] w-full">
+                  <div className="relative max-w-[120px] w-full">
                     <input
                       type="number"
                       min={1}
@@ -297,8 +383,8 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                           }}
                           className={`px-3 h-10 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 ${
                             isSelected 
-                              ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-sm' 
-                              : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent/40'
+                              ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-sm shadow-brand-primary/10' 
+                              : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent/40 hover:text-brand-primary'
                           }`}
                         >
                           {isSelected && <Check className="w-3.5 h-3.5" />}
@@ -316,24 +402,39 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     Feriados (DD/MM)
                   </label>
                   <div className="flex items-center gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="Ex: 25/12"
-                      value={holidayInput}
-                      onChange={handleHolidayInputChange}
-                      onKeyDown={handleHolidayKeyDown}
-                      className={`w-24 h-10 bg-white dark:bg-slate-900/40 border text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium text-center focus:outline-none focus:ring-0 shadow-sm transition-all ${
-                        isHolidayInvalid 
-                          ? 'border-red-400 dark:border-red-500 focus:border-red-400 dark:focus:border-red-500' 
-                          : 'border-slate-200 dark:border-slate-800 focus:border-slate-400 dark:focus:border-slate-600'
-                      }`}
-                    />
+                    {/* Floating Calendar Trigger */}
+                    <div
+                      ref={triggerRef}
+                      onClick={() => setCalendarOpen(prev => !prev)}
+                      className="flex items-center justify-between w-36 h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-medium text-slate-900 dark:text-slate-50 cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm select-none"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <Calendar className="w-4 h-4 text-brand-muted" />
+                        <span className={holidayInput ? "text-slate-900 dark:text-slate-50 font-bold" : "text-slate-400 dark:text-zinc-500 font-bold"}>
+                          {holidayInput || 'DD/MM'}
+                        </span>
+                      </div>
+                      {holidayInput && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setHolidayInput('');
+                          }}
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-slate-300 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
                     <button 
                       onClick={handleAddHoliday}
-                      disabled={isHolidayInvalid || !holidayInput}
-                      className="h-10 w-10 bg-brand-accent text-brand-on-primary rounded-lg hover:opacity-90 disabled:opacity-50 transition-all shadow-sm flex items-center justify-center shrink-0"
+                      disabled={!holidayInput}
+                      className="h-10 px-4 bg-brand-accent text-brand-on-primary rounded-lg hover:opacity-90 disabled:opacity-50 transition-all shadow-sm flex items-center justify-center gap-1.5 font-semibold text-xs shrink-0 cursor-pointer"
                     >
                       <Plus className="w-4 h-4" />
+                      <span>Adicionar Feriado</span>
                     </button>
                   </div>
                 </div>
@@ -341,16 +442,19 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 <div className="flex-1 flex flex-wrap gap-2 max-h-[220px] overflow-y-auto no-scrollbar content-start">
                   {(localConfig.businessHours?.holidays || []).length > 0 ? (
                     localConfig.businessHours?.holidays.map(h => (
-                      <div key={h} className="group bg-surface-card border border-surface-border rounded-lg pl-3 pr-1 h-8 flex items-center gap-1.5 shadow-sm hover:border-error/40 transition-all">
-                        <span className="text-[11px] font-bold text-brand-primary">{h}</span>
+                      <div 
+                        key={h} 
+                        className="group flex items-center gap-2 px-2.5 py-1 bg-slate-900/40 border border-slate-800 rounded-md text-xs font-normal text-slate-300 shadow-sm transition-all"
+                      >
+                        <span>{h}</span>
                         <button 
                           onClick={() => {
                             const newHolidays = (localConfig.businessHours.holidays as string[]).filter(item => item !== h);
                             setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: newHolidays } }));
                           }}
-                          className="p-1 text-brand-muted hover:text-error transition-colors"
+                          className="text-slate-500 hover:text-red-400 transition-colors"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))
@@ -363,6 +467,86 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 <p className="mt-3 text-[10px] text-brand-muted/50 font-semibold uppercase tracking-wider">DD/MM para feriados anuais recorrentes.</p>
               </div>
             </div>
+
+            {calendarOpen && createPortal(
+              <div
+                ref={datepickerRef}
+                style={pos}
+                onWheel={e => e.stopPropagation()}
+                className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-premium-lg overflow-hidden select-none animate-fade-in"
+              >
+                <AnimatePresence initial={false}>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                    transition={{ duration: 0.12, ease: 'easeOut' }}
+                    className="p-4"
+                  >
+                    {/* Calendar Header (Month navigation) */}
+                    <div className="flex items-center justify-between mb-4">
+                      <button
+                        type="button"
+                        onClick={handlePrevMonth}
+                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800/50 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors flex items-center justify-center cursor-pointer"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="text-xs font-black text-slate-900 dark:text-slate-200 uppercase tracking-wider">
+                        {format(currentMonth, 'MMMM', { locale: ptBR })}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleNextMonth}
+                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800/50 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors flex items-center justify-center cursor-pointer"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Weekdays */}
+                    <div className="grid grid-cols-7 gap-1 text-center mb-1">
+                      {weekdays.map((day, idx) => (
+                        <span
+                          key={idx}
+                          className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest h-6 flex items-center justify-center"
+                        >
+                          {day}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Days Grid */}
+                    <div className="grid grid-cols-7 gap-1 text-center">
+                      {daysGrid.map((day, idx) => {
+                        const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
+                        const isCurrentMonth = isSameMonth(day, currentMonth);
+                        
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectDay(day)}
+                            className={`text-[10px] h-7 w-7 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                              isSelected 
+                                ? 'bg-brand-accent text-brand-on-primary font-black shadow-premium-sm scale-105' 
+                                : `${
+                                    !isCurrentMonth 
+                                      ? 'text-slate-300 dark:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-900/40 font-bold' 
+                                      : 'text-slate-900 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900/60 font-bold'
+                                  }`
+                            }`}
+                          >
+                            {format(day, 'd')}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+              </div>,
+              document.body
+            )}
           </div>
         </>
       ) : (
