@@ -288,7 +288,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D3A3A]/60 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col bg-surface-card rounded-[32px] shadow-2xl">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col bg-surface-card rounded-[32px] shadow-2xl">
               <header className="flex items-center justify-between p-8 border-b border-surface-border bg-surface-card sticky top-0 z-10">
                 <div className="flex items-center gap-6">
                   <div className="w-14 h-14 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
@@ -317,7 +317,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                   <button
                     key={t.id}
                     onClick={() => setActiveTab(t.id as any)}
-                    className={`flex items-center gap-2 px-1 pb-3 text-sm transition-colors duration-200 border-b-2 -mb-px ${activeTab === t.id ? 'border-slate-900 dark:border-white text-slate-900 dark:text-white font-bold' : 'border-transparent text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 font-medium'}`}
+                    className={`flex items-center gap-2 px-1 pb-3 text-sm transition-colors duration-200 border-b-2 -mb-px ${activeTab === t.id ? 'border-slate-900 dark:border-white text-slate-900 dark:text-white font-bold' : 'border-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 font-medium'}`}
                   >
                     <t.icon className="w-4 h-4" />
                     {t.label}
@@ -331,17 +331,17 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                     <div className="grid grid-cols-1 gap-8">
                       <div className="space-y-6">
                         <div className="flex flex-col">
-                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-300 font-semibold mb-1.5 ml-0.5 block">Título do Formulário</label>
+                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-200 font-semibold mb-1.5 ml-0.5 block">Título do Formulário</label>
                           <input 
                             type="text" 
-                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
+                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" 
                             value={editingForm.title || ''} 
                             onChange={e => setEditingForm({...editingForm, title: e.target.value})} 
                             placeholder="Ex: Monitoria de Atendimento Chat" 
                           />
                         </div>
                         <div className="flex flex-col">
-                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-300 font-semibold mb-1.5 ml-0.5 block">Equipe Vinculada</label>
+                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-200 font-semibold mb-1.5 ml-0.5 block">Equipe Vinculada</label>
                           <CustomSelect 
                             value={editingForm.team_id || ''} 
                             onChange={val => setEditingForm({...editingForm, team_id: val})} 
@@ -349,9 +349,9 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                           />
                         </div>
                         <div className="flex flex-col">
-                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-300 font-semibold mb-1.5 ml-0.5 block">Descrição do Propósito</label>
+                          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-200 font-semibold mb-1.5 ml-0.5 block">Descrição do Propósito</label>
                           <textarea 
-                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all min-h-[120px] resize-y shadow-sm leading-relaxed" 
+                            className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all min-h-[120px] resize-y shadow-sm leading-relaxed" 
                             value={editingForm.description || ''} 
                             onChange={e => setEditingForm({...editingForm, description: e.target.value})} 
                             placeholder="Descreva detalhadamente o que este formulário avalia e quais os objetivos..." 
@@ -379,7 +379,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                             <div className="flex items-center gap-4 flex-1">
                               <span className="text-[10px] font-black text-brand-muted/40 uppercase tracking-widest">#{sIdx + 1}</span>
                               <input 
-                                className="bg-transparent border-none p-0 text-lg font-black text-brand-primary uppercase tracking-tight focus:ring-0 w-full placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                                className="bg-transparent border-none p-0 text-lg font-black text-brand-primary dark:text-white uppercase tracking-tight focus:ring-0 w-full placeholder:text-slate-400 dark:placeholder:text-slate-500"
                                 value={section.title}
                                 onChange={e => updateSection(section.id, 'title', e.target.value)}
                                 placeholder="NOME DO PILAR (Ex: QUALIDADE)"
@@ -387,11 +387,11 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                             </div>
                             <div className="flex items-center gap-6">
                               <div className="flex flex-col items-end">
-                                <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wider mb-1">Peso do Pilar</label>
+                                <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-200 uppercase tracking-wider mb-1">Peso do Pilar</label>
                                 <div className="flex items-center gap-2 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 shadow-sm">
                                   <input 
                                     type="number" 
-                                    className="w-10 bg-transparent border-none p-0 text-sm font-black text-brand-primary focus:ring-0 text-center"
+                                    className="w-10 bg-transparent border-none p-0 text-sm font-black text-brand-primary dark:text-white focus:ring-0 text-center"
                                     value={section.weight || 0}
                                     onChange={e => updateSection(section.id, 'weight', parseInt(e.target.value) || 0)}
                                   />
@@ -412,7 +412,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                                   <div className="w-8 h-8 rounded-lg bg-surface-subtle flex items-center justify-center text-[10px] font-black text-brand-muted">{qIdx + 1}</div>
                                   <div className="flex-1">
                                     <input 
-                                      className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary w-full focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                                      className="bg-transparent border-none p-0 text-xs font-bold text-brand-primary dark:text-white w-full focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                                       value={q.text}
                                       onChange={e => updateQuestion(section.id, q.id, 'text', e.target.value)}
                                       placeholder="Ex: Utilizou a saudação padrão corretamente?"
@@ -425,7 +425,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                                     {expandedDescriptions[q.id] && (
                                       <div className="mt-3">
                                         <textarea
-                                          className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 dark:text-slate-50 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all resize-none shadow-sm placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                                          className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 dark:text-white focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all resize-none shadow-sm placeholder:text-slate-400 dark:placeholder:text-slate-500"
                                           placeholder="Descreva detalhadamente o que este critério avalia (será exibido como dica durante a monitoria)..."
                                           rows={2}
                                           value={q.description || ''}
@@ -482,7 +482,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                           <AlertOctagon className="w-5 h-5" />
                           Erros Críticos (Zeradores)
                         </h4>
-                        <p className="text-[10px] font-bold text-brand-muted uppercase mt-1">Itens que, se marcados como 'NÃO', zeram automaticamente a monitoria.</p>
+                        <p className="text-[10px] font-bold text-brand-muted dark:text-slate-300 uppercase mt-1">Itens que, se marcados como 'NÃO', zeram automaticamente a monitoria.</p>
                       </div>
                       <Button variant="outline" size="sm" onClick={addCriticalError} icon={<Plus className="w-4 h-4" />} className="rounded-2xl border-error/30 text-error hover:bg-red-50 hover:border-error">Novo Erro Crítico</Button>
                     </div>
@@ -493,7 +493,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                           <div className="w-10 h-10 rounded-xl bg-error/5 text-error flex items-center justify-center text-[10px] font-black">{idx + 1}</div>
                           <div className="flex-1">
                             <input 
-                              className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary w-full focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                              className="bg-transparent border-none p-0 text-sm font-bold text-brand-primary dark:text-white w-full focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                               value={ce.text}
                               onChange={e => updateCriticalError(ce.id, 'text', e.target.value)}
                               placeholder="Ex: Fraude ou quebra de protocolo de segurança..."
@@ -504,9 +504,9 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                       ))}
                       
                       {(!editingForm.critical_errors || editingForm.critical_errors.length === 0) && (
-                        <div className="py-20 text-center border-2 border-dashed border-surface-border/40 rounded-[40px] bg-surface-bg/30">
-                          <AlertOctagon className="w-12 h-12 text-brand-muted/20 mx-auto mb-4" />
-                          <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Nenhum erro crítico foi configurado para este formulário</p>
+                        <div className="py-20 text-center border-2 border-dashed border-surface-border/40 dark:border-slate-700 rounded-[40px] bg-surface-bg/30">
+                          <AlertOctagon className="w-12 h-12 text-brand-muted/20 dark:text-slate-400 mx-auto mb-4" />
+                          <p className="text-[10px] font-black text-brand-muted dark:text-slate-400 uppercase tracking-widest">Nenhum erro crítico foi configurado para este formulário</p>
                         </div>
                       )}
                     </div>
