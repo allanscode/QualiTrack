@@ -272,7 +272,6 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
     await saveConfig(localConfig);
     
     if (holidaysChanged || daysChanged || hoursChanged) {
-      toast.info('Recalculando prazos ativos por alteração no calendário...', { duration: 4000 });
       await recalculateActiveActionDeadlines(oldConfig, localConfig);
       toast.success('Prazos recalculados com sucesso!');
     } else {
