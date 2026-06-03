@@ -534,19 +534,21 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                           onClick={() => setOpenColorPickerIdx(openColorPickerIdx === idx ? null : idx)}
                           className="h-10 w-full bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-between px-3 shadow-sm select-none cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all"
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 overflow-hidden mr-1 min-w-0">
                             <div 
                               className="w-4 h-4 rounded-full border border-black/10 dark:border-white/10 shrink-0" 
                               style={{ backgroundColor: activeColor.hex }}
                             />
-                            <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
-                              {activeColor.hex}
+                            <span className="text-xs text-slate-700 dark:text-slate-200 font-medium truncate">
+                              {activeColor.label}
                             </span>
                           </div>
-                          {/* Dropdown caret */}
-                          <svg className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500 shrink-0 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                            <polyline points="6 9 12 15 18 9" />
-                          </svg>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Dropdown caret */}
+                            <svg className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </div>
                         </div>
 
                         {/* Color Picker Popover */}
@@ -574,21 +576,16 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                                       setLocalConfig(prev => ({ ...prev, levels: newLevels }));
                                       setOpenColorPickerIdx(null);
                                     }}
-                                    className={`w-full px-3 py-2 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-colors ${
+                                    className={`w-full px-3 py-2 flex items-center gap-2 text-left hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-colors ${
                                       isSelected ? 'bg-slate-50/50 dark:bg-slate-900/40 font-semibold' : ''
                                     }`}
                                   >
-                                    <div className="flex items-center gap-2">
-                                      <div 
-                                        className="w-4 h-4 rounded-full border border-black/10 dark:border-white/10" 
-                                        style={{ backgroundColor: c.hex }} 
-                                      />
-                                      <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">
-                                        {c.label}
-                                      </span>
-                                    </div>
-                                    <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
-                                      {c.hex}
+                                    <div 
+                                      className="w-4 h-4 rounded-full border border-black/10 dark:border-white/10 shrink-0" 
+                                      style={{ backgroundColor: c.hex }} 
+                                    />
+                                    <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">
+                                      {c.label}
                                     </span>
                                   </button>
                                 );
@@ -599,12 +596,14 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       </div>
 
                       {/* Preview Badge inline */}
-                      <div className="col-span-2 flex items-center justify-end h-10 pb-0.5">
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden w-full">Preview</label>
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${level.bgColor} ${level.color} border border-current/15 shadow-sm w-full lg:w-auto justify-center`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />
-                          {level.label || 'Nível'}: {level.minScore ?? 0}% - {level.maxScore ?? 0}%
-                        </span>
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden text-center">Preview</label>
+                        <div className="flex items-center h-10 pb-0.5 w-full">
+                          <span className={`flex items-center gap-1.5 px-3 h-10 rounded-lg text-[10px] font-bold uppercase tracking-wider ${level.bgColor} ${level.color} border border-current/15 shadow-sm w-full justify-center text-center`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />
+                            {level.label || 'Nível'}: {level.minScore ?? 0}% - {level.maxScore ?? 0}%
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
