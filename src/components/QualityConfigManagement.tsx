@@ -389,7 +389,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                           }}
                           className={`flex-1 h-10 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border flex items-center justify-center gap-1 ${
                             isSelected 
-                              ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-sm shadow-brand-primary/10' 
+                              ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-sm shadow-brand-primary/10 hover:opacity-90' 
                               : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent/40 hover:text-brand-primary'
                           }`}
                         >
@@ -413,7 +413,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     <div
                       ref={triggerRef}
                       onClick={() => setCalendarOpen(prev => !prev)}
-                      className="flex items-center justify-between w-36 h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-medium text-slate-900 dark:text-slate-50 cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm select-none shrink-0"
+                      className="flex items-center justify-between w-36 h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-medium text-slate-900 dark:text-slate-50 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 shadow-sm select-none shrink-0"
                     >
                       <div className="flex items-center gap-2 truncate">
                         <Calendar className="w-4 h-4 text-brand-muted" />
@@ -428,7 +428,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                             e.stopPropagation();
                             setHolidayInput('');
                           }}
-                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-slate-300 transition-colors"
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-slate-300 transition-all duration-200"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -438,7 +438,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     <button 
                       onClick={handleAddHoliday}
                       disabled={!holidayInput}
-                      className="flex-1 h-10 px-4 bg-brand-accent text-brand-on-primary rounded-lg hover:opacity-90 disabled:opacity-50 transition-all shadow-sm flex items-center justify-center gap-1.5 font-semibold text-xs cursor-pointer shrink-0"
+                      className="flex-1 h-10 px-4 bg-brand-primary text-brand-on-primary rounded-lg hover:bg-opacity-90 dark:hover:bg-neutral-200 disabled:opacity-50 transition-all duration-200 shadow-sm flex items-center justify-center gap-1.5 font-semibold text-xs cursor-pointer shrink-0 active:scale-[0.98]"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Adicionar Feriado</span>
@@ -459,7 +459,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                             const newHolidays = (localConfig.businessHours.holidays as string[]).filter(item => item !== h);
                             setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, holidays: newHolidays } }));
                           }}
-                          className="text-slate-500 hover:text-red-400 transition-colors"
+                          className="text-slate-500 hover:text-red-400 dark:text-zinc-500 dark:hover:text-red-400 transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -495,17 +495,17 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       <button
                         type="button"
                         onClick={handlePrevMonth}
-                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800/50 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors flex items-center justify-center cursor-pointer"
+                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800/50 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-slate-200 hover:opacity-80 active:scale-95 transition-all duration-200 flex items-center justify-center cursor-pointer"
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </button>
-                      <span className="text-xs font-black text-slate-900 dark:text-slate-200 uppercase tracking-wider">
+                      <span className="text-xs font-black text-slate-900 dark:text-slate-200 uppercase tracking-wider hover:text-brand-accent transition-all duration-200 cursor-pointer select-none">
                         {format(currentMonth, 'MMMM', { locale: ptBR })}
                       </span>
                       <button
                         type="button"
                         onClick={handleNextMonth}
-                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800/50 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors flex items-center justify-center cursor-pointer"
+                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800/50 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-slate-200 hover:opacity-80 active:scale-95 transition-all duration-200 flex items-center justify-center cursor-pointer"
                       >
                         <ChevronRight className="w-4 h-4" />
                       </button>
@@ -535,13 +535,13 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                             key={idx}
                             type="button"
                             onClick={() => handleSelectDay(day)}
-                            className={`text-[10px] h-7 w-7 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer ${
+                            className={`text-[10px] h-7 w-7 rounded-xl flex flex-col items-center justify-center relative transition-all duration-200 cursor-pointer ${
                               isSelected 
-                                ? 'bg-brand-accent text-brand-on-primary font-black shadow-premium-sm scale-105' 
+                                ? 'bg-brand-accent text-brand-on-primary font-black shadow-premium-sm scale-105 hover:opacity-90' 
                                 : `${
                                     !isCurrentMonth 
-                                      ? 'text-slate-300 dark:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-900/40 font-bold' 
-                                      : 'text-slate-900 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900/60 font-bold'
+                                      ? 'text-slate-300 dark:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800/50 font-bold' 
+                                      : 'text-slate-900 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/50 font-bold'
                                   }`
                             } ${isToday && !isSelected ? 'border border-brand-accent/40 dark:border-brand-accent/40 bg-brand-accent/5 dark:bg-brand-accent/10' : ''}`}
                           >

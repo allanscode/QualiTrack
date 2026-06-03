@@ -153,7 +153,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
           onClick={handleRefresh} 
           disabled={refreshing} 
           icon={<RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />}
-          className="h-10 rounded-xl px-4 shrink-0"
+          className="h-10 px-4 shrink-0"
         >
           {refreshing ? 'Atualizando...' : 'Atualizar'}
         </Button>
@@ -190,7 +190,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                     variant="ghost" 
                     size="sm" 
                     onClick={() => handleReject(req)} 
-                    className="!text-error hover:!text-red-600 hover:!bg-red-500/10 font-bold h-9 rounded-xl px-4 flex items-center justify-center transition-colors"
+                    className="!text-error hover:!text-red-600 hover:!bg-red-500/10 font-bold h-9 px-4 flex items-center justify-center transition-colors"
                   >
                     Recusar
                   </Button>
@@ -201,7 +201,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                       setApproveData({ name: req.name, email: req.email, role: 'suporte', team_ids: [] }); 
                       setIsApproveModalOpen(true); 
                     }}
-                    className="h-9 rounded-xl px-4 flex items-center justify-center"
+                    className="h-9 px-4 flex items-center justify-center transition-all duration-200 cursor-pointer hover:bg-opacity-90 dark:hover:bg-neutral-200"
                   >
                     Revisar e Aprovar
                   </Button>
@@ -236,7 +236,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                 <div className="grid grid-cols-1 gap-4">
                   <div className="flex flex-col">
                     <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Nome</label>
-                    <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
+                    <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={approveData.name} onChange={e => setApproveData({...approveData, name: e.target.value})} />
                   </div>
                   <CustomSelect 
                     label="Perfil" 
@@ -267,7 +267,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col gap-3 px-4 pb-4 pt-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-40 overflow-y-auto scrollbar-thin">
+                  <div className="flex flex-col gap-3 px-4 pb-4 pt-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-lg max-h-40 overflow-y-auto scrollbar-thin">
                     {teams
                       .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                       .sort((a, b) => a.name.localeCompare(b.name))
@@ -297,7 +297,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                     )}
                   </div>
                 </div>
-                <Button className="w-full mt-4" onClick={handleApprove} disabled={saving} icon={<Check className="w-4 h-4" />}>{saving ? 'Processando...' : 'Confirmar Aprovação'}</Button>
+                <Button className="w-full mt-4 transition-all duration-200 cursor-pointer hover:bg-opacity-90 dark:hover:bg-neutral-200" onClick={handleApprove} disabled={saving} icon={<Check className="w-4 h-4" />}>{saving ? 'Processando...' : 'Confirmar Aprovação'}</Button>
               </div>
             </Card>
           </div>
@@ -321,7 +321,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                 <div className="flex flex-col">
                   <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">MOTIVO DA RECUSA</label>
                   <textarea 
-                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-red-500 dark:focus:border-red-500 focus:outline-none focus:ring-0 min-h-[120px] resize-none shadow-sm transition-all"
+                    className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-red-500 dark:focus:border-red-500 focus:outline-none focus:ring-0 min-h-[120px] resize-none shadow-sm transition-all"
                     placeholder="Ex: E-mail não corporativo ou setor não autorizado."
                     value={rejectReason}
                     onChange={e => setRejectReason(e.target.value)}

@@ -219,7 +219,7 @@ export default function DissatisfactionFieldsManagement() {
             />
           </div>
         </div>
-        <Button onClick={handleOpenNew} icon={<Plus className="w-4 h-4" />} className="h-10 !rounded-lg !py-0 flex items-center shrink-0">
+        <Button onClick={handleOpenNew} icon={<Plus className="w-4 h-4" />} className="h-10 !rounded-lg !py-0 flex items-center shrink-0 hover:bg-opacity-90 dark:hover:bg-neutral-200">
           Adicionar Campo Extra
         </Button>
       </div>
@@ -405,7 +405,7 @@ export default function DissatisfactionFieldsManagement() {
                 </div>
 
                 <Button 
-                  className="w-full h-10 !rounded-lg mt-4 flex items-center justify-center text-sm font-medium" 
+                  className="w-full h-10 !rounded-lg mt-4 flex items-center justify-center text-sm font-medium hover:bg-opacity-90 dark:hover:bg-neutral-200" 
                   onClick={handleSaveField} 
                   disabled={saving} 
                   icon={<Save className="w-4 h-4" />}

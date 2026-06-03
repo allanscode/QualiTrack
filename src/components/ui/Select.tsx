@@ -13,7 +13,7 @@ export default function Select({ label, options, className = '', ...props }: Sel
         className={`
           bg-surface-card 
           border border-surface-border 
-          rounded-2xl 
+          rounded-lg 
           px-4 py-2 
           text-sm font-semibold text-brand-primary 
           focus:border-brand-accent focus:outline-none 

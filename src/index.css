@@ -315,9 +315,36 @@ textarea::placeholder {
 .dark input[type="email"],
 .dark input[type="search"],
 .dark textarea {
-  background-color: rgba(2, 6, 23, 0.6) !important; /* dark:bg-slate-950/60 */
-  border: 1px solid rgba(30, 41, 59, 0.8) !important; /* dark:border-slate-800/80 */
-  color: #F1F5F9 !important; /* text-slate-100 */
+  background-color: #1A1C16 !important; /* dark:bg-surface-bg */
+  border: 1px solid #3D4136 !important; /* dark:border-surface-border */
+  color: #F9F9F6 !important; /* text-brand-primary */
+}
+
+/* Specific exceptions to keep transparent bg and border-none working despite the global override */
+input[type="text"].bg-transparent,
+input[type="number"].bg-transparent,
+input[type="password"].bg-transparent,
+input[type="email"].bg-transparent,
+input[type="search"].bg-transparent,
+textarea.bg-transparent,
+input.bg-transparent {
+  background-color: transparent !important;
+}
+
+input.border-none,
+textarea.border-none {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Ensure focus states don't re-introduce borders or shadows on border-none or bg-transparent elements */
+input.border-none:focus,
+textarea.border-none:focus,
+input.bg-transparent:focus,
+textarea.bg-transparent:focus {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 .dark input[type="text"]::placeholder,
@@ -326,7 +353,7 @@ textarea::placeholder {
 .dark input[type="email"]::placeholder,
 .dark input[type="search"]::placeholder,
 .dark textarea::placeholder {
-  color: #64748B !important; /* dark:placeholder-slate-500 */
+  color: rgba(163, 166, 154, 0.5) !important; /* dark:placeholder-brand-muted/50 */
 }
 
 /* Focus States */

@@ -507,7 +507,7 @@ if (user?.role === 'gestor_suporte') {
                 placeholder="Buscar ticket..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full h-full bg-surface-card border border-surface-border rounded-xl pl-9 pr-3 text-[10px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent transition-all outline-none shadow-sm"
+                className="w-full h-full bg-surface-card border border-surface-border rounded-lg pl-9 pr-3 text-[10px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent transition-all outline-none shadow-sm"
               />
             </div>
           </div>
@@ -621,7 +621,7 @@ if (user?.role === 'gestor_suporte') {
             <button
               key={t}
               onClick={() => setTab(t as any)}
-              className={`flex-1 min-w-[110px] px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-between gap-2 ${tab === t ? 'bg-brand-primary text-brand-on-primary shadow-lg' : 'bg-surface-subtle text-brand-primary hover:bg-surface-card border border-surface-border/50'}`}
+              className={`flex-1 min-w-[110px] px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-between gap-2 ${tab === t ? 'bg-brand-primary text-brand-on-primary shadow-lg' : 'bg-surface-subtle text-brand-primary hover:bg-surface-card border border-surface-border/50'}`}
             >
               <span className="truncate">{tabLabel}</span>
               <span className={`px-1.5 py-0.5 rounded-lg text-[8px] flex-shrink-0 ${tab === t ? 'bg-black/10 text-brand-on-primary' : 'bg-surface-card text-brand-primary shadow-sm'}`}>
@@ -958,7 +958,7 @@ if (user?.role === 'gestor_suporte') {
                     <select 
                       value={reopenStatus}
                       onChange={e => setReopenStatus(e.target.value as any)}
-                      className="w-full bg-surface-bg border border-surface-border rounded-xl p-3 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/50 transition-all mb-4"
+                      className="w-full bg-surface-bg border border-surface-border rounded-lg p-3 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/50 transition-all mb-4"
                     >
                       <option value="pendente_revisao">Pendente Revisão (Agente de Suporte)</option>
                       <option value="em_contestacao">Em Contestação (Monitor de Qualidade)</option>
@@ -972,7 +972,7 @@ if (user?.role === 'gestor_suporte') {
                   <div className="mb-6">
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 block">Justificativa / Motivo</label>
                     <textarea 
-                      className="w-full bg-surface-bg border border-surface-border rounded-[24px] p-5 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all min-h-[120px]"
+                      className="w-full bg-surface-bg border border-surface-border rounded-lg p-5 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all min-h-[120px]"
                       placeholder="Descreva detalhadamente o motivo desta ação..."
                       value={actionNote}
                       onChange={e => setActionNote(e.target.value)}
@@ -981,8 +981,8 @@ if (user?.role === 'gestor_suporte') {
                 )}
 
                 <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1 rounded-[20px]" onClick={() => setActionModal(null)}>Cancelar</Button>
-                  <Button className="flex-1 rounded-[20px] bg-brand-primary" onClick={handleAction} disabled={submitting}>
+                  <Button variant="outline" className="flex-1" onClick={() => setActionModal(null)}>Cancelar</Button>
+                  <Button className="flex-1 bg-brand-primary" onClick={handleAction} disabled={submitting}>
                     {submitting ? 'Processando...' : 'Confirmar Ação'}
                   </Button>
                 </div>
