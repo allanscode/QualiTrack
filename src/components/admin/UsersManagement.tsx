@@ -19,6 +19,13 @@ import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import CustomSelect from '../ui/CustomSelect';
 
+const getInitials = (name: string) => {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0 || !parts[0]) return '';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 interface UsersManagementProps {
   users: User[];
   teams: Team[];
@@ -239,15 +246,16 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
               <th className="px-6 py-4 text-[10px] font-black uppercase text-brand-muted tracking-widest">Perfil</th>
               <th className="px-6 py-4 text-[10px] font-black uppercase text-brand-muted tracking-widest">Equipe</th>
               <th className="px-6 py-4 text-right text-[10px] font-black uppercase text-brand-muted tracking-widest">Ações</th>
+              <th className="px-6 py-4 w-12"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-surface-subtle">
             {filteredUsers.map(u => (
               <tr key={u.id} className="hover:bg-surface-bg/50 transition-colors group">
-                <td className="px-6 py-4">
+                <td className="px-6 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-brand-subtle flex items-center justify-center text-brand-primary font-black">
-                      {u.name.slice(0,1)}
+                    <div className="w-10 h-10 rounded-full bg-brand-subtle flex items-center justify-center text-brand-primary text-xs font-black shrink-0 shadow-sm">
+                      {getInitials(u.name)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -258,12 +266,12 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-6 py-3">
                   <Badge variant="neutral" className="bg-surface-subtle text-brand-primary">
                     {ROLE_LABELS[u.role] || u.role}
                   </Badge>
                 </td>
-                <td className="px-6 py-4 text-xs font-bold text-brand-muted whitespace-nowrap">
+                <td className="px-6 py-3 text-xs font-bold text-brand-muted whitespace-nowrap">
                   {(() => {
                     if (!u.team_ids || u.team_ids.length === 0) return 'Sem equipe';
                     const activeTeamNames = u.team_ids
@@ -284,7 +292,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                     );
                   })()}
                 </td>
-                <td className="px-6 py-4 text-right">
+                <td className="px-6 py-3 text-right">
                   <div className="flex justify-end gap-1">
                     {u.active === false ? (
                       <Button variant="outline" size="sm" onClick={() => handleToggleStatus(u.id, true)} icon={<RefreshCw className="w-3.5 h-3.5" />}>Reativar</Button>
@@ -293,7 +301,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                         <button 
                           onClick={() => handleResetPassword(u.email)} 
                           title="Reenviar Senha"
-                          className="p-2.5 rounded-xl hover:bg-brand-subtle text-brand-muted hover:text-brand-primary transition-all"
+                          className="p-2.5 rounded-lg hover:bg-brand-subtle text-brand-muted hover:text-brand-primary transition-all duration-200 cursor-pointer"
                         >
                           <Key className="w-4 h-4" />
                         </button>
@@ -303,21 +311,33 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                             setEditingUser({...u, team_ids: activeTeamIds}); 
                             setIsModalOpen(true); 
                           }} 
-                          className="p-2.5 rounded-xl hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all"
+                          className="p-2.5 rounded-lg hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all duration-200 cursor-pointer"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        {deleteConfirmId === u.id ? (
-                          <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
-                            <button onClick={() => handleToggleStatus(u.id, false)} className="px-2.5 py-1.5 rounded-lg bg-error text-white text-[10px] font-black uppercase">Sim</button>
-                            <button onClick={() => setDeleteConfirmId(null)} className="px-2.5 py-1.5 rounded-lg bg-surface-subtle text-brand-muted text-[10px] font-black uppercase tracking-widest">Não</button>
-                          </div>
-                        ) : (
-                          <button onClick={() => setDeleteConfirmId(u.id)} className="p-2.5 rounded-xl hover:bg-red-50 text-brand-muted hover:text-error transition-all"><Trash2 className="w-4 h-4" /></button>
-                        )}
                       </>
                     )}
                   </div>
+                </td>
+                <td className="px-6 py-3 text-right w-12">
+                  {u.active !== false && (
+                    <div className="flex justify-end">
+                      {deleteConfirmId === u.id ? (
+                        <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
+                          <button onClick={() => handleToggleStatus(u.id, false)} className="px-2.5 py-1.5 rounded-lg bg-error text-white text-[10px] font-black uppercase">Sim</button>
+                          <button onClick={() => setDeleteConfirmId(null)} className="px-2.5 py-1.5 rounded-lg bg-surface-subtle text-brand-muted text-[10px] font-black uppercase tracking-widest">Não</button>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => setDeleteConfirmId(u.id)} 
+                          title="Desativar Usuário"
+                          className="p-2.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-brand-muted hover:text-error opacity-40 group-hover:opacity-70 hover:!opacity-100 transition-all duration-200 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -337,11 +357,11 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
               <div className="space-y-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Nome Completo</label>
-                  <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
+                  <input type="text" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Email</label>
-                  <input type="email" disabled={!!editingUser.id} className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
+                  <input type="email" disabled={!!editingUser.id} className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
                 </div>
                 <CustomSelect 
                   label="Perfil"
@@ -371,12 +391,12 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                       </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-40 overflow-y-auto scrollbar-thin">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-lg max-h-40 overflow-y-auto scrollbar-thin">
                     {teams.filter(t => t.active !== false)
                       .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map(t => (
-                      <label key={t.id} className="flex items-center gap-3 py-1 px-1 cursor-pointer group">
+                      <label key={t.id} className="flex items-center gap-3 py-2.5 px-1 cursor-pointer group">
                         <input
                           type="checkbox"
                           className="w-4 h-4 rounded border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-slate-500/20 focus:ring-offset-0 accent-slate-900 dark:accent-slate-50 transition-all cursor-pointer"

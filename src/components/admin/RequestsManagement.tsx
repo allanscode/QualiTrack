@@ -16,6 +16,13 @@ import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import CustomSelect from '../ui/CustomSelect';
 
+const getInitials = (name: string) => {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0 || !parts[0]) return '';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 interface RequestsManagementProps {
   requests: AccessRequest[];
   users: User[];
@@ -165,11 +172,11 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
             <Card 
               key={req.id} 
               padding="none"
-              className={`flex flex-col md:flex-row items-center justify-between gap-4 p-3.5 px-5 border-l-4 ${req.status === 'pending' ? 'border-l-warning' : req.status === 'approved' ? 'border-l-brand-accent' : 'border-l-error'}`}
+              className={`flex flex-col md:flex-row items-center justify-between gap-4 py-4.5 px-5 border-l-4 ${req.status === 'pending' ? 'border-l-warning' : req.status === 'approved' ? 'border-l-brand-accent' : 'border-l-error'}`}
             >
               <div className="flex items-center gap-4 w-full md:w-auto">
-                <div className="w-10 h-10 rounded-xl bg-surface-bg flex items-center justify-center text-brand-muted shrink-0">
-                  <UserIcon className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-full bg-brand-subtle flex items-center justify-center text-brand-primary text-xs font-black shrink-0 shadow-sm">
+                  {getInitials(req.name)}
                 </div>
                 <div className="min-w-0">
                   <h4 className="font-black text-brand-primary text-sm uppercase tracking-tight truncate">{req.name}</h4>
@@ -272,7 +279,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                       .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map(t => (
-                      <label key={t.id} className="flex items-center gap-3 py-1 px-1 cursor-pointer group">
+                      <label key={t.id} className="flex items-center gap-3 py-2.5 px-1 cursor-pointer group">
                         <input
                           type="checkbox"
                           className="w-4 h-4 rounded border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-slate-500/20 focus:ring-offset-0 accent-slate-900 dark:accent-slate-50 transition-all cursor-pointer"

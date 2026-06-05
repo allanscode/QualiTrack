@@ -312,7 +312,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                     <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Nome da Equipe</label>
                      <input 
                       type="text" 
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all" 
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all" 
                       value={editingTeam.name} 
                       onChange={e => setEditingTeam({ ...editingTeam, name: e.target.value })} 
                       placeholder="Ex: Suporte Nível 1"
@@ -323,7 +323,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                     <input 
                       type="text" 
                       maxLength={4}
-                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all uppercase" 
+                      className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 shadow-sm transition-all uppercase" 
                       value={editingTeam.sigla} 
                       onChange={e => setEditingTeam({ ...editingTeam, sigla: e.target.value.toUpperCase() })} 
                       placeholder="SUP1"
@@ -333,7 +333,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
 
                 <div className="flex flex-col gap-2">
                   <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Ícone da Equipe ({TEAM_ICONS_LIST.length} opções)</label>
-                  <div className="grid grid-cols-8 gap-2 p-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl max-h-48 overflow-y-auto scrollbar-thin">
+                  <div className="grid grid-cols-8 gap-2 p-3 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-lg max-h-48 overflow-y-auto scrollbar-thin">
                     {TEAM_ICONS_LIST.map(item => (
                       <button
                         key={item.id}
