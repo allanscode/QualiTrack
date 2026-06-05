@@ -292,11 +292,11 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                       </span>
                     );
                     
-                    const displayedTeams = activeTeamNames.slice(0, 2);
-                    const remainingTeams = activeTeamNames.slice(2);
+                    const displayedTeams = activeTeamNames.slice(0, 1);
+                    const remainingTeams = activeTeamNames.slice(1);
 
                     return (
-                      <div className="flex flex-wrap gap-1.5 items-center">
+                      <div className="flex items-center gap-1.5">
                         {displayedTeams.map((name, idx) => (
                           <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-[10px] font-black text-blue-600 dark:text-blue-400 border border-blue-100/50 dark:border-blue-900/30 uppercase tracking-wider">
                             {name}
