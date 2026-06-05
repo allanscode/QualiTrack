@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase, mockDb, upsertUserPreferences } from './lib/supabase';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1291,7 +1291,18 @@ function MainApp({
         <NavItem isDark={sidebarIsDark} icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
         <NavItem isDark={sidebarIsDark} icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
         {userData?.role === 'admin' && (
-          <NavItem isDark={sidebarIsDark} icon={<Settings className="w-5 h-5" />} label="Configurações" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} isOpen={sidebarTextVisible} />
+          <>
+            <NavItem 
+              isDark={sidebarIsDark} 
+              icon={<BarChart3 className="w-5 h-5" />} 
+              label="Dashboards Personalizados" 
+              active={false} 
+              onClick={() => toast.info('O recurso de Dashboards Personalizados está em construção e estará disponível em breve!')} 
+              isOpen={sidebarTextVisible} 
+              badge="EM BREVE" 
+            />
+            <NavItem isDark={sidebarIsDark} icon={<Settings className="w-5 h-5" />} label="Configurações" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} isOpen={sidebarTextVisible} />
+          </>
         )}
         </nav>
 
@@ -1609,7 +1620,7 @@ function MainApp({
   );
 }
 
-function NavItem({ icon, label, active, onClick, isOpen, isDark }: any) {
+function NavItem({ icon, label, active, onClick, isOpen, isDark, badge }: any) {
   return (
     <button 
       onClick={onClick}
@@ -1629,10 +1640,15 @@ function NavItem({ icon, label, active, onClick, isOpen, isDark }: any) {
       <div className={`${active ? 'text-current' : (isDark ? 'text-white/30 group-hover:text-white' : 'text-slate-900/30 group-hover:text-slate-900')}`}>
         {icon}
       </div>
-      <div className={`flex-1 overflow-hidden transition-all duration-300 ${isOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
+      <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${isOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
         <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
           {label}
         </span>
+        {badge && (
+          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-dashed ml-2 leading-none whitespace-nowrap ${isDark ? 'border-white/10 text-white/40 bg-white/5' : 'border-slate-300/60 text-slate-500/80 bg-slate-50'}`}>
+            {badge}
+          </span>
+        )}
       </div>
     </button>
   );

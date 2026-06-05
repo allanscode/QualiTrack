@@ -244,7 +244,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
         </Button>
       </div>
 
-      <Card padding="none" className="overflow-hidden">
+      <Card padding="none" className="overflow-visible">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-surface-bg border-b border-surface-border">
