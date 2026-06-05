@@ -140,7 +140,7 @@ export default function QualityDashboard() {
     : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
 
   return (
-    <div className="space-y-6 animate-fade-in min-w-0 overflow-hidden">
+    <div className="space-y-6 animate-fade-in min-w-0 overflow-visible">
 
       {/* Row 1: Key Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
