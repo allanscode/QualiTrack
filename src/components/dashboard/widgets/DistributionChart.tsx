@@ -22,7 +22,7 @@ export default function DistributionChart({ title, data }: DistributionChartProp
     dashboardContext = useDashboard();
   } catch (e) {}
   const user = dashboardContext?.user;
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = dashboardContext?.loggedInUser?.role === 'admin' || user?.role === 'admin';
 
   const myUniqueId = `chart-${title}`;
   const isEditing = dashboardContext?.activeEditingId === myUniqueId;

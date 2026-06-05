@@ -55,7 +55,7 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
   const [isHovered, setIsHovered] = useState(false);
   const [tempSub, setTempSub] = useState('');
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = dashboardContext?.loggedInUser?.role === 'admin' || user?.role === 'admin';
   const isEditable = typeof sub === 'string' || sub === undefined || sub === null;
   const customSub = (isEditable && config?.statCardExplanations?.[title] !== undefined && config.statCardExplanations[title] !== '')
     ? config.statCardExplanations[title]

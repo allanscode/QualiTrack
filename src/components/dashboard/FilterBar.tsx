@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function FilterBar() {
   const { resolvedTheme } = useTheme();
-  const { filters, setFilters, users, teams, loading, refresh, user, allMonitorias } = useDashboard();
+  const { filters, setFilters, users, teams, loading, refresh, user, allMonitorias, dashboardRole } = useDashboard();
 
   const defaults = useMemo(() => ({
     startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0],
@@ -42,29 +42,29 @@ export default function FilterBar() {
   const activeTeams = useMemo(() => {
     let list = teams.filter(t => t.active !== false);
     
-    // Filtro para Supervisor de Atendimento ou Agente
-    if (user?.role === 'suporte' || user?.role === 'gestor_suporte') {
-      const myInfo = users.find(u => u.id === user.id);
-      let myTeamIds = myInfo?.team_ids || user.team_ids || [];
+    // Filtro para Supervisor de Atendimento ou Agente baseado no dashboardRole
+    if (dashboardRole === 'suporte' || dashboardRole === 'gestor_suporte') {
+      const myInfo = users.find(u => u.id === user?.id);
+      let myTeamIds = myInfo?.team_ids || user?.team_ids || [];
       
-      if (myTeamIds.length === 0 && user?.role === 'suporte') {
-        const fromRecords = allMonitorias.filter(m => m.evaluated_id === user.id && m.team_id).map(m => m.team_id!);
+      if (myTeamIds.length === 0 && dashboardRole === 'suporte') {
+        const fromRecords = allMonitorias.filter(m => m.evaluated_id === user?.id && m.team_id).map(m => m.team_id!);
         myTeamIds = Array.from(new Set(fromRecords));
       }
       
       list = list.filter(t => myTeamIds.includes(t.id));
     }
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [teams, user, users, allMonitorias]);
+  }, [teams, user, users, allMonitorias, dashboardRole]);
 
   const activeAgents = useMemo(() => {
     let list = users.filter(u => u.role === 'suporte' && u.active !== false);
-    if (user?.role === 'gestor_suporte') {
-      const myTeamIds = user.team_ids || [];
+    if (dashboardRole === 'gestor_suporte') {
+      const myTeamIds = user?.team_ids || [];
       list = list.filter(u => u.team_ids?.some(tid => myTeamIds.includes(tid)));
     }
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [users, user]);
+  }, [users, user, dashboardRole]);
 
   const activeAuditors = useMemo(() => {
     const list = users.filter(u => (u.role === 'qualidade' || u.role === 'gestor_qualidade' || u.role === 'admin') && u.active !== false);
@@ -112,7 +112,7 @@ export default function FilterBar() {
             size="sm"
           />
 
-          {user?.role !== 'suporte' && (
+          {dashboardRole !== 'suporte' && (
             <CustomSelect
               value={filters.agentId}
               options={[
@@ -126,7 +126,7 @@ export default function FilterBar() {
             />
           )}
 
-          {user?.role !== 'suporte' && user?.role !== 'qualidade' && user?.role !== 'gestor_suporte' && (
+          {dashboardRole !== 'suporte' && dashboardRole !== 'qualidade' && dashboardRole !== 'gestor_suporte' && (
             <CustomSelect
               value={filters.auditorId}
               options={[

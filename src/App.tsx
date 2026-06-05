@@ -1096,6 +1096,8 @@ function MainApp({
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | 'color' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(activeTab === 'admin');
+  const [simulatedRole, setSimulatedRole] = React.useState<'admin' | 'gestor_qualidade' | 'gestor_suporte' | 'qualidade' | 'suporte' | null>(null);
+  const [isDashboardDropdownOpen, setIsDashboardDropdownOpen] = React.useState(activeTab === 'dashboard');
 
   const toggleSidebar = () => {
     const willBeOpen = !isSidebarOpen;
@@ -1114,12 +1116,25 @@ function MainApp({
     }
   };
 
-  // Reset activeTab to dashboard if user doesn't have admin role
+  const handleDashboardClick = () => {
+    if (!isSidebarOpen) {
+      toggleSidebar();
+      setIsDashboardDropdownOpen(true);
+    } else {
+      setIsDashboardDropdownOpen(!isDashboardDropdownOpen);
+    }
+  };
+
+  // Reset activeTab to dashboard if user doesn't have admin role, and clear simulation
   React.useEffect(() => {
     if (userData && userData.role !== 'admin' && activeTab === 'admin') {
       setActiveTab('dashboard');
     }
-  }, [userData?.role]);
+    if (userData && userData.role !== 'admin') {
+      setSimulatedRole(null);
+      setIsDashboardDropdownOpen(false);
+    }
+  }, [userData?.role, activeTab]);
   const [sidebarColor, setSidebarColor] = useState<string>(() => {
     if (prefetchedSidebarColor) return prefetchedSidebarColor;
     if (typeof window !== 'undefined') {
@@ -1298,7 +1313,100 @@ function MainApp({
 
         {/* Navigation */}
         <nav className="flex-1 px-3 space-y-1 py-4">
-        <NavItem isDark={sidebarIsDark} icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
+        {userData?.role === 'admin' ? (
+          <div className="space-y-1">
+            <button 
+              onClick={handleDashboardClick}
+              className={`
+                w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
+                ${(activeTab === 'dashboard' && !isDashboardDropdownOpen)
+                  ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-slate-900') 
+                  : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
+              `}
+            >
+              {activeTab === 'dashboard' && !isDashboardDropdownOpen && (
+                <motion.div 
+                  layoutId="active-bar"
+                  className={`absolute left-0 w-1 h-6 rounded-full ${sidebarIsDark ? 'bg-white' : 'bg-slate-900'}`}
+                />
+              )}
+              <div className={`${(activeTab === 'dashboard' && !isDashboardDropdownOpen) ? 'text-current' : (sidebarIsDark ? 'text-white/30 group-hover:text-white' : 'text-slate-900/30 group-hover:text-slate-900')}`}>
+                <DashboardIcon className="w-5 h-5" />
+              </div>
+              <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${sidebarTextVisible ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
+                <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
+                  Dashboard
+                </span>
+                <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isDashboardDropdownOpen ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+            
+            <AnimatePresence initial={false}>
+              {isDashboardDropdownOpen && sidebarTextVisible && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  className="overflow-hidden pl-1 space-y-1"
+                >
+                  <SubNavItem 
+                    label="Executivo" 
+                    active={activeTab === 'dashboard' && simulatedRole === null} 
+                    onClick={() => {
+                      setActiveTab('dashboard');
+                      setSimulatedRole(null);
+                    }} 
+                    isOpen={sidebarTextVisible} 
+                    isDark={sidebarIsDark} 
+                  />
+                  <SubNavItem 
+                    label="Visão Gestor Qualidade" 
+                    active={activeTab === 'dashboard' && simulatedRole === 'gestor_qualidade'} 
+                    onClick={() => {
+                      setActiveTab('dashboard');
+                      setSimulatedRole('gestor_qualidade');
+                    }} 
+                    isOpen={sidebarTextVisible} 
+                    isDark={sidebarIsDark} 
+                  />
+                  <SubNavItem 
+                    label="Visão Gestor Suporte" 
+                    active={activeTab === 'dashboard' && simulatedRole === 'gestor_suporte'} 
+                    onClick={() => {
+                      setActiveTab('dashboard');
+                      setSimulatedRole('gestor_suporte');
+                    }} 
+                    isOpen={sidebarTextVisible} 
+                    isDark={sidebarIsDark} 
+                  />
+                  <SubNavItem 
+                    label="Visão Monitor" 
+                    active={activeTab === 'dashboard' && simulatedRole === 'qualidade'} 
+                    onClick={() => {
+                      setActiveTab('dashboard');
+                      setSimulatedRole('qualidade');
+                    }} 
+                    isOpen={sidebarTextVisible} 
+                    isDark={sidebarIsDark} 
+                  />
+                  <SubNavItem 
+                    label="Visão Agente" 
+                    active={activeTab === 'dashboard' && simulatedRole === 'suporte'} 
+                    onClick={() => {
+                      setActiveTab('dashboard');
+                      setSimulatedRole('suporte');
+                    }} 
+                    isOpen={sidebarTextVisible} 
+                    isDark={sidebarIsDark} 
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        ) : (
+          <NavItem isDark={sidebarIsDark} icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
+        )}
         <NavItem isDark={sidebarIsDark} icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
         {userData?.role === 'admin' && (
           <div className="space-y-1">
@@ -1657,7 +1765,7 @@ function MainApp({
 
         <div className="flex-1 overflow-auto px-8 pb-8 pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
           <div className={activeTab === 'dashboard' ? 'block animate-fade-in' : 'hidden'}>
-            <DashboardMain user={userData} activeTab={activeTab} />
+            <DashboardMain user={userData} activeTab={activeTab} simulatedRole={simulatedRole} />
           </div>
           <div className={activeTab === 'monitorias' ? 'block animate-fade-in' : 'hidden'}>
             <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} activeTab={activeTab} />

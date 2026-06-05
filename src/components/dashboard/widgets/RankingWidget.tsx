@@ -53,7 +53,7 @@ export default function RankingWidget({ title, subtitle, data, type = 'score', i
     dashboardContext = useDashboard();
   } catch (e) {}
   const user = dashboardContext?.user;
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = dashboardContext?.loggedInUser?.role === 'admin' || user?.role === 'admin';
 
   const myUniqueId = `chart-${title}`;
   const isEditing = dashboardContext?.activeEditingId === myUniqueId;
