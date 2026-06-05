@@ -10,7 +10,8 @@ import {
   Trash2, 
   X, 
   Save, 
-  RefreshCw 
+  RefreshCw,
+  Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -35,7 +36,7 @@ interface UsersManagementProps {
 export default function UsersManagement({ users, teams, loadData }: UsersManagementProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
-  const [editingUser, setEditingUser] = useState<{ name: string, email: string, role: string, team_ids: string[], password?: string, id?: string }>({ name: '', email: '', role: 'suporte', team_ids: [], password: '' });
+  const [editingUser, setEditingUser] = useState<{ name: string, email: string, role: string, team_ids: string[], primary_team_id?: string, password?: string, id?: string }>({ name: '', email: '', role: 'suporte', team_ids: [], primary_team_id: '', password: '' });
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,6 +113,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
           name: editingUser.name,
           email: emailLower,
           role: editingUser.role,
+          primary_team_id: editingUser.primary_team_id || null,
           active: true
         };
 
@@ -234,7 +236,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
           </div>
         </div>
         <Button 
-          onClick={() => { setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' }); setIsModalOpen(true); }} 
+          onClick={() => { setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], primary_team_id: '', password: '' }); setIsModalOpen(true); }} 
           icon={<UserPlus className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
           className="group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200"
         >
@@ -282,36 +284,37 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                         Sem equipe
                       </span>
                     );
-                    const activeTeamNames = u.team_ids
-                      .map(id => teams.find(t => t.id === id && t.active !== false)?.name)
-                      .filter(Boolean) as string[];
                     
-                    if (activeTeamNames.length === 0) return (
+                    const activeTeams = u.team_ids
+                      .map(id => teams.find(t => t.id === id && t.active !== false))
+                      .filter(Boolean) as Team[];
+                    
+                    if (activeTeams.length === 0) return (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-surface-subtle text-[10px] font-black text-brand-muted uppercase tracking-wider">
                         Sem equipe
                       </span>
                     );
                     
-                    const displayedTeams = activeTeamNames.slice(0, 1);
-                    const remainingTeams = activeTeamNames.slice(1);
+                    const primaryTeam = activeTeams.find(t => t.id === u.primary_team_id) || activeTeams[0];
+                    const remainingTeamNames = activeTeams
+                      .filter(t => t.id !== primaryTeam.id)
+                      .map(t => t.name);
 
                     return (
                       <div className="flex items-center gap-1.5">
-                        {displayedTeams.map((name, idx) => (
-                          <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-[10px] font-black text-blue-600 dark:text-blue-400 border border-blue-100/50 dark:border-blue-900/30 uppercase tracking-wider">
-                            {name}
-                          </span>
-                        ))}
-                        {remainingTeams.length > 0 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-[10px] font-black text-blue-600 dark:text-blue-400 border border-blue-100/50 dark:border-blue-900/30 uppercase tracking-wider">
+                          {primaryTeam.name}
+                        </span>
+                        {remainingTeamNames.length > 0 && (
                           <div className="relative group/popover">
                             <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-lg bg-brand-accent/10 dark:bg-brand-accent/20 text-[10px] font-black text-brand-accent hover:bg-brand-accent hover:text-white transition-all cursor-pointer">
-                              +{remainingTeams.length}
+                              +{remainingTeamNames.length}
                             </span>
                             {/* Popover */}
                             <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/popover:block z-50 min-w-[160px] bg-surface-card border border-surface-border rounded-xl shadow-premium-lg p-2.5 animate-in fade-in slide-in-from-bottom-2 duration-150 text-left">
                               <p className="text-[9px] font-black text-brand-muted uppercase tracking-widest border-b border-surface-border pb-1.5 mb-1.5">Outras Equipes</p>
                               <div className="space-y-1 max-h-36 overflow-y-auto no-scrollbar animate-in fade-in duration-200">
-                                {remainingTeams.map((name, idx) => (
+                                {remainingTeamNames.map((name, idx) => (
                                   <div key={idx} className="text-[10px] font-black text-brand-primary py-1 px-1.5 hover:bg-surface-bg rounded-md transition-colors uppercase tracking-wider">
                                     {name}
                                   </div>
@@ -342,7 +345,8 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                         <button 
                           onClick={() => { 
                             const activeTeamIds = u.team_ids?.filter(id => teams.find(t => t.id === id)?.active !== false) || [];
-                            setEditingUser({...u, team_ids: activeTeamIds}); 
+                            const primaryTeamId = u.primary_team_id || activeTeamIds[0] || '';
+                            setEditingUser({...u, team_ids: activeTeamIds, primary_team_id: primaryTeamId}); 
                             setIsModalOpen(true); 
                           }} 
                           className="group p-2.5 rounded-lg hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all duration-200 cursor-pointer"
@@ -425,28 +429,55 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                       </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-lg max-h-40 overflow-y-auto scrollbar-thin">
+                  <div className="grid grid-cols-1 gap-y-2 p-4 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-lg max-h-40 overflow-y-auto scrollbar-thin">
                     {teams.filter(t => t.active !== false)
                       .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                       .sort((a, b) => a.name.localeCompare(b.name))
-                      .map(t => (
-                      <label key={t.id} className="flex items-center gap-3 py-2.5 px-1 cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-slate-500/20 focus:ring-offset-0 accent-slate-900 dark:accent-slate-50 transition-all cursor-pointer"
-                          checked={editingUser.team_ids?.includes(t.id) || false}
-                          onChange={(e) => {
-                            const newIds = e.target.checked
-                              ? [...(editingUser.team_ids || []), t.id]
-                              : (editingUser.team_ids || []).filter(id => id !== t.id);
-                            setEditingUser({ ...editingUser, team_ids: newIds });
-                          }}
-                        />
-                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide group-hover:text-slate-900 dark:group-hover:text-white transition-colors truncate">
-                          {t.name}
-                        </span>
-                      </label>
-                    ))}
+                      .map(t => {
+                        const isChecked = editingUser.team_ids?.includes(t.id) || false;
+                        const isPrimary = editingUser.primary_team_id === t.id;
+
+                        return (
+                          <div key={t.id} className="flex items-center justify-between py-1 px-2 hover:bg-slate-50 dark:hover:bg-slate-900/30 rounded-lg transition-colors group">
+                            <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-slate-500/20 focus:ring-offset-0 accent-slate-900 dark:accent-slate-50 transition-all cursor-pointer shrink-0"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const newIds = e.target.checked
+                                    ? [...(editingUser.team_ids || []), t.id]
+                                    : (editingUser.team_ids || []).filter(id => id !== t.id);
+                                  
+                                  let newPrimary = editingUser.primary_team_id;
+                                  if (!e.target.checked && newPrimary === t.id) {
+                                    newPrimary = newIds[0] || '';
+                                  } else if (e.target.checked && !newPrimary) {
+                                    newPrimary = t.id;
+                                  }
+                                  
+                                  setEditingUser({ ...editingUser, team_ids: newIds, primary_team_id: newPrimary });
+                                }}
+                              />
+                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide group-hover:text-slate-900 dark:group-hover:text-white transition-colors truncate">
+                                {t.name}
+                              </span>
+                            </label>
+                            {isChecked && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingUser({ ...editingUser, primary_team_id: t.id });
+                                }}
+                                title={isPrimary ? "Equipe Principal" : "Definir como Principal"}
+                                className="p-1 text-slate-400 dark:text-slate-500 hover:text-amber-500 dark:hover:text-amber-400 transition-colors shrink-0"
+                              >
+                                <Star className={`w-3.5 h-3.5 ${isPrimary ? 'text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400' : ''}`} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     {teams.filter(t => t.active !== false).length === 0 && (
                       <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 col-span-2 text-center">Nenhuma equipe ativa cadastrada.</p>
                     )}

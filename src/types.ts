@@ -20,6 +20,7 @@ export interface User {
   email: string;
   role: UserRole;
   team_ids?: string[];
+  primary_team_id?: string;
   active: boolean;
   must_change_password?: boolean;
   preferences?: UserPreferences;
