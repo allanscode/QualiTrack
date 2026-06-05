@@ -56,6 +56,8 @@ export default function MonitoriaForm({
   const [step, setStep] = useState(1);
   const contentRef = useRef<HTMLDivElement>(null);
 
+
+
   useEffect(() => {
     if (contentRef.current) {
       contentRef.current.scrollTop = 0;
@@ -335,17 +337,17 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 overflow-y-auto">
       <motion.div 
         initial={{ opacity: 0, scale: 0.98, y: 10 }} 
         animate={{ opacity: 1, scale: 1, y: 0 }} 
-        className="bg-surface-bg rounded-[32px] shadow-2xl w-full max-w-5xl flex flex-col overflow-hidden" 
-        style={{ height: '92vh' }}
+        className="bg-surface-bg rounded-2xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col overflow-hidden" 
+        style={{ height: '90vh' }}
       >
         {/* Top Header */}
         <div className="p-6 border-b border-surface-border flex items-center justify-between bg-surface-card">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-brand-subtle flex items-center justify-center text-brand-primary">
+            <div className="w-10 h-10 rounded-xl bg-brand-subtle flex items-center justify-center text-brand-primary">
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
@@ -368,11 +370,11 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
               { n: 3, label: 'Avaliação' },
               { n: 4, label: 'Registro/Log' }
             ].map(s => (
-              <div key={s.n} className="flex flex-col items-center gap-2 group">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black transition-all ${step >= s.n ? 'bg-brand-primary text-brand-on-primary shadow-premium' : 'bg-surface-subtle text-brand-muted'}`}>
+              <div key={s.n} className="flex flex-col items-center gap-1.5 group">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black transition-all ${step >= s.n ? 'bg-brand-primary text-brand-on-primary shadow-sm' : 'bg-surface-subtle text-brand-muted'}`}>
                   {s.n}
                 </div>
-                <span className={`text-[10px] font-black uppercase tracking-widest ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
+                <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
               </div>
             ))}
           </div>
@@ -462,7 +464,7 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                       value={header.ticket_id} 
                       onChange={e => setHeader({...header, ticket_id: e.target.value})} 
                       disabled={isViewOnly || isReevaluating} 
-                      className="w-full bg-surface-subtle border border-surface-border rounded-2xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary placeholder:text-brand-muted/40 focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none" 
+                      className="w-full bg-surface-subtle border border-surface-border rounded-xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary placeholder:text-brand-muted/40 focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none" 
                       placeholder="Digite o número do ticket" 
                     />
                   </div>
@@ -493,7 +495,7 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
 
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 text-center block">Data Atual (Análise)</label>
-                  <div className="bg-brand-subtle/30 rounded-2xl py-3 text-center border border-brand-subtle">
+                  <div className="bg-brand-subtle/30 rounded-xl py-2.5 text-center border border-brand-subtle">
                     <span className="text-xs font-black text-brand-primary uppercase tracking-widest">
                       {header.analysis_date.split('-').reverse().join('/')}
                     </span>
@@ -506,29 +508,36 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
           {step === 2 && (
             <section className="animate-fade-in space-y-10 max-w-4xl mx-auto">
               <div className="space-y-4">
-                <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1 text-center">Pesquisa de Satisfação</p>
-                <div className="grid grid-cols-3 gap-4">
+                <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1 text-center">Pesquisa de Satisfação</p>
+                <div className="grid grid-cols-3 gap-3.5">
                   {(['Positiva', 'Negativa', 'Sem pesquisa'] as const).map(opt => (
                     <button 
                       key={opt} 
                       onClick={() => !isViewOnly && !isReevaluating && setHeader({...header, satisfaction_result: opt})} 
-                      className={`p-6 rounded-[24px] border-2 flex flex-col items-center gap-3 transition-all ${header.satisfaction_result === opt ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-premium' : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-highlight'}`} 
+                      className={`py-3 px-4 rounded-xl border flex items-center justify-center transition-all text-xs font-black uppercase tracking-widest cursor-pointer ${header.satisfaction_result === opt ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-premium-sm' : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent hover:text-brand-primary'}`} 
                       disabled={isViewOnly || isReevaluating}
                     >
-                      <span className="text-sm font-black uppercase tracking-tight">{opt}</span>
+                      {opt}
                     </button>
                   ))}
                 </div>
               </div>
 
               {header.satisfaction_result && header.satisfaction_result !== 'Sem pesquisa' && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-                  <Card className="bg-surface-card p-8 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-bold text-brand-primary">O cliente deixou algum registro (elogio/reclamação)?</p>
-                      <div className="flex gap-2 bg-surface-subtle p-1 rounded-xl border border-surface-border">
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <Card className="bg-surface-card p-5 space-y-4 rounded-xl">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="text-xs font-black text-brand-primary uppercase tracking-wider">O cliente deixou algum registro (elogio/reclamação)?</p>
+                      <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
                         {[true, false].map(v => (
-                          <button key={v ? 'y' : 'n'} onClick={() => !isViewOnly && setHeader({...header, satisfaction_has_record: v})} className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${header.satisfaction_has_record === v ? 'bg-brand-primary text-brand-on-primary shadow-sm' : 'text-brand-muted hover:bg-surface-card'}`} disabled={isViewOnly}>{v ? 'SIM' : 'NÃO'}</button>
+                          <button 
+                            key={v ? 'y' : 'n'} 
+                            onClick={() => !isViewOnly && setHeader({...header, satisfaction_has_record: v})} 
+                            className={`px-3.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${header.satisfaction_has_record === v ? 'bg-brand-primary text-brand-on-primary shadow-sm' : 'text-brand-muted hover:bg-surface-card'}`} 
+                            disabled={isViewOnly}
+                          >
+                            {v ? 'SIM' : 'NÃO'}
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -540,7 +549,7 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                           value={header.satisfaction_record_text} 
                           onChange={e => setHeader({...header, satisfaction_record_text: e.target.value})} 
                           disabled={isViewOnly}
-                          className="w-full bg-surface-bg border border-surface-border rounded-2xl p-4 text-sm font-medium min-h-[100px] focus:border-brand-accent focus:outline-none" 
+                          className="w-full bg-surface-bg border border-surface-border rounded-xl p-4 text-xs font-medium min-h-[100px] focus:border-brand-accent focus:outline-none placeholder:text-brand-muted/40 text-brand-primary" 
                           placeholder="Transcreva aqui o comentário do cliente..."
                         />
                       </div>
@@ -548,12 +557,19 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                   </Card>
 
                   {header.satisfaction_result === 'Negativa' && (
-                    <Card className="bg-error/5 border-error/20 p-8 space-y-6">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-bold text-error">Conseguimos contato com o cliente?</p>
-                        <div className="flex gap-2 bg-surface-card p-1 rounded-xl border border-error/10">
+                    <Card className="bg-error/5 border-error/20 p-5 space-y-4 rounded-xl">
+                      <div className="flex items-center justify-between gap-4">
+                        <p className="text-xs font-black text-error uppercase tracking-wider">Conseguimos contato com o cliente?</p>
+                        <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
                           {[true, false].map(v => (
-                            <button key={v ? 'y' : 'n'} onClick={() => !isViewOnly && setHeader({...header, client_contact_success: v})} className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${header.client_contact_success === v ? 'bg-error text-white shadow-sm' : 'text-brand-muted hover:bg-surface-subtle'}`} disabled={isViewOnly}>{v ? 'SIM' : 'NÃO'}</button>
+                            <button 
+                              key={v ? 'y' : 'n'} 
+                              onClick={() => !isViewOnly && setHeader({...header, client_contact_success: v})} 
+                              className={`px-3.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${header.client_contact_success === v ? 'bg-error text-white shadow-sm' : 'text-brand-muted hover:bg-surface-card'}`} 
+                              disabled={isViewOnly}
+                            >
+                              {v ? 'SIM' : 'NÃO'}
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -564,7 +580,7 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                             value={header.client_contact_log} 
                             onChange={e => setHeader({...header, client_contact_log: e.target.value})} 
                             disabled={isViewOnly}
-                            className="w-full bg-surface-bg border border-surface-border rounded-2xl p-4 text-sm font-medium min-h-[100px] focus:border-brand-accent focus:outline-none" 
+                            className="w-full bg-surface-bg border border-surface-border rounded-xl p-4 text-xs font-medium min-h-[100px] focus:border-brand-accent focus:outline-none placeholder:text-brand-muted/40 text-brand-primary" 
                             placeholder="Descreva como foi o contato ou o motivo do insucesso..."
                           />
                         </div>
@@ -574,20 +590,20 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
 
                   {header.satisfaction_result === 'Negativa' && (header.satisfaction_has_record || header.client_contact_success) && clientFieldsToShow.length > 0 && (
                     <div className="space-y-6 pt-4 animate-fade-in">
-                      <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1 text-center">Campos Extras do Cliente</p>
+                      <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1 text-center">Campos Extras do Cliente</p>
                       {clientFieldsToShow.map(field => (
-                        <Card key={field.id} className="bg-surface-card p-6 border border-surface-border space-y-4 shadow-premium-sm">
-                          <p className="text-sm font-bold text-brand-primary">{field.title} *</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Card key={field.id} className="bg-surface-card p-5 border border-surface-border space-y-4 shadow-premium-sm rounded-xl">
+                          <p className="text-xs font-black text-brand-primary uppercase tracking-wider">{field.title} *</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             {field.options.map(opt => {
                               const isChecked = (dissatisfactionAnswers[field.id] || []).includes(opt);
                               return (
                                 <label 
                                   key={opt} 
-                                  className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                                  className={`flex items-center gap-2.5 py-2.5 px-3.5 rounded-lg border transition-all cursor-pointer ${
                                     isChecked 
-                                      ? 'bg-brand-subtle/40 border-brand-primary/60 text-brand-primary' 
-                                      : 'bg-surface-bg border-surface-border text-brand-muted hover:border-brand-highlight'
+                                      ? 'bg-surface-subtle border-brand-primary/40 text-brand-primary' 
+                                      : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent hover:text-brand-primary'
                                   }`}
                                 >
                                   <input 
@@ -595,9 +611,9 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                                     checked={isChecked} 
                                     onChange={e => handleCheckboxChange(field.id, opt, e.target.checked)} 
                                     disabled={isViewOnly} 
-                                    className="w-5 h-5 rounded-lg text-brand-primary focus:ring-brand-primary" 
+                                    className="w-4.5 h-4.5 rounded text-brand-primary border-surface-border focus:ring-brand-primary" 
                                   />
-                                  <span className="text-xs font-bold uppercase tracking-tight">{opt}</span>
+                                  <span className="text-[11px] font-black uppercase tracking-wider">{opt}</span>
                                 </label>
                               );
                             })}
@@ -617,31 +633,42 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                 const level = getLevelForScore(score);
                 const isTarget = isAboveTarget(score);
                 
-                // Mapeamento para cores sólidas vibrantes baseadas na configuração
-const getSolidBg = (textColor: string) => {
-  if (textColor.includes('excelente') || textColor.includes('indigo')) return 'bg-indigo-600';
-  if (textColor.includes('aceitavel') || textColor.includes('emerald')) return 'bg-emerald-600';
-  if (textColor.includes('atencao') || textColor.includes('amber')) return 'bg-amber-500';
-  if (textColor.includes('ruim') || textColor.includes('red')) return 'bg-red-600';
-  if (textColor.includes('purple')) return 'bg-purple-600';
-  if (textColor.includes('blue')) return 'bg-blue-600';
-  return 'bg-brand-primary';
-};
+                // Helper to resolve clean background and text color based on level
+                const getSubtleBgClass = (textColor: string) => {
+                  if (textColor.includes('excelente')) return 'bg-level-excelente/10 text-level-excelente';
+                  if (textColor.includes('aceitavel')) return 'bg-level-aceitavel/10 text-level-aceitavel';
+                  if (textColor.includes('atencao')) return 'bg-level-atencao/10 text-level-atencao';
+                  if (textColor.includes('ruim')) return 'bg-level-ruim/10 text-level-ruim';
+                  if (textColor.includes('roxo')) return 'bg-level-roxo/10 text-level-roxo';
+                  return 'bg-brand-subtle/10 text-brand-primary';
+                };
+
+                const subtleClass = getSubtleBgClass(level.color);
+                const [bgClass, textClass] = subtleClass.split(' ');
 
                 return (
-                  <div className={`p-10 rounded-[40px] flex flex-col md:flex-row items-center justify-between text-white shadow-premium transition-all duration-700 relative overflow-hidden ${getSolidBg(level.color)}`}>
-                    <div className="absolute top-0 right-0 p-8 opacity-10">
-                      <Target className="w-32 h-32" />
+                  <div className="p-6 rounded-2xl border border-surface-border flex flex-col sm:flex-row items-center justify-between bg-surface-card shadow-premium-sm gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bgClass}`}>
+                        <Target className={`w-6 h-6 ${textClass}`} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em]">Score de Avaliação</p>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className={`text-3xl font-black tabular-nums ${textClass}`}>
+                            {score.toFixed(2)}%
+                          </span>
+                          <span className="text-[10px] font-black text-brand-muted uppercase tracking-wider">
+                            - {level.label}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="relative z-10 text-center md:text-left mb-6 md:mb-0">
-                      <p className="text-[10px] font-black uppercase opacity-70 tracking-[0.3em] mb-2">{level.label}</p>
-                      <p className="text-7xl font-black tabular-nums">{score.toFixed(2)}<span className="text-2xl opacity-50 ml-1">%</span></p>
-                    </div>
-                    <div className="relative z-10 text-center md:text-right">
-                      <Badge variant="secondary" className="bg-white/20 text-white border-white/30 px-6 py-2 text-xs backdrop-blur-sm">
+                    <div className="text-center sm:text-right">
+                      <Badge variant={isTarget ? 'success' : 'error'} className="px-3.5 py-1 text-[10px] font-black uppercase tracking-wider">
                         {isTarget ? 'Meta Atingida' : 'Abaixo da Meta'}
                       </Badge>
-                      <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mt-4">Calculado automaticamente</p>
+                      <p className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1.5">Calculado em tempo real</p>
                     </div>
                   </div>
                 );
@@ -650,7 +677,7 @@ const getSolidBg = (textColor: string) => {
               {selectedForm.sections.map((section, sIdx) => (
                 <div key={section.id} className="space-y-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-brand-primary text-white flex items-center justify-center font-black">{sIdx + 1}</div>
+                    <div className="w-8 h-8 rounded-xl bg-brand-primary text-white flex items-center justify-center text-xs font-black">{sIdx + 1}</div>
                     <div>
                       <h3 className="text-lg font-black text-brand-primary tracking-tight uppercase">{section.title}</h3>
                       <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Peso desta seção: {section.weight}%</p>
@@ -658,7 +685,7 @@ const getSolidBg = (textColor: string) => {
                   </div>
                   <div className="grid grid-cols-1 gap-4">
                     {section.questions.map(q => (
-                      <Card key={q.id} className={`bg-surface-card hover:border-brand-accent transition-all group ${q.is_critical && scores[q.id] === 'NAO' ? 'border-error ring-4 ring-error/5' : ''}`}>
+                      <Card key={q.id} className={`bg-surface-card rounded-xl p-5 hover:border-brand-accent transition-all group ${q.is_critical && scores[q.id] === 'NAO' ? 'border-error ring-4 ring-error/5' : ''}`}>
                         <div className="flex flex-col md:flex-row justify-between gap-6">
                           <div className="flex-1">
                             <div className="flex items-start gap-3">
@@ -668,9 +695,9 @@ const getSolidBg = (textColor: string) => {
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="text-sm font-bold text-brand-primary leading-relaxed">{q.text}</p>
                                 {q.description && (
-                                  <div className="relative group/info">
+                                  <div className="relative z-20 hover:z-50 group/info">
                                     <Info className="w-4 h-4 text-brand-muted hover:text-brand-accent cursor-help transition-colors" />
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-surface-card border border-surface-border rounded-xl shadow-premium opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all z-50 pointer-events-none text-center">
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-surface-card border border-surface-border rounded-xl shadow-premium opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all z-50 pointer-events-none group-hover/info:pointer-events-auto text-center">
                                       <p className="text-[11px] font-bold text-brand-muted leading-relaxed">{q.description}</p>
                                     </div>
                                   </div>
@@ -683,13 +710,20 @@ const getSolidBg = (textColor: string) => {
                               </span>
                             </div>
                           </div>
-                          <div className="flex gap-1 bg-surface-subtle p-1 rounded-2xl h-fit border border-surface-border">
+                          <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
                             {(['SIM', 'NAO', 'NA'] as const).map(opt => (
-                              <button key={opt} onClick={() => !isViewOnly && setScores({...scores, [q.id]: opt})} className={`px-5 py-2 rounded-xl text-xs font-black transition-all ${scores[q.id] === opt ? (opt === 'NAO' && q.is_critical ? 'bg-error text-white shadow-premium' : 'bg-brand-primary text-brand-on-primary shadow-premium') : 'text-brand-muted hover:bg-surface-card'}`} disabled={isViewOnly}>{opt}</button>
+                              <button 
+                                key={opt} 
+                                onClick={() => !isViewOnly && setScores({...scores, [q.id]: opt})} 
+                                className={`px-3.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${scores[q.id] === opt ? (opt === 'NAO' && q.is_critical ? 'bg-error text-white shadow-sm' : 'bg-brand-primary text-brand-on-primary shadow-sm') : 'text-brand-muted hover:bg-surface-card'}`} 
+                                disabled={isViewOnly}
+                              >
+                                {opt}
+                              </button>
                             ))}
                           </div>
                         </div>
-                        <textarea value={observations[q.id] || ''} onChange={e => !isViewOnly && setObservations({...observations, [q.id]: e.target.value})} placeholder="Adicionar observação específica para este item..." className="w-full mt-4 bg-surface-subtle border border-surface-border rounded-xl p-4 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all" disabled={isViewOnly} />
+                        <textarea value={observations[q.id] || ''} onChange={e => !isViewOnly && setObservations({...observations, [q.id]: e.target.value})} placeholder="Adicionar observação específica para este item..." className="w-full mt-4 bg-surface-subtle border border-surface-border rounded-lg p-3 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all" disabled={isViewOnly} />
                       </Card>
                     ))}
                   </div>
@@ -702,12 +736,12 @@ const getSolidBg = (textColor: string) => {
                   <div className="grid grid-cols-1 gap-3">
                     {selectedForm.critical_errors.map(ce => (
                       <div key={ce.id} className="space-y-2">
-                        <label className={`flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all cursor-pointer ${criticalErrors[ce.id] ? 'bg-error/5 border-error' : 'bg-surface-card border-surface-border hover:border-error/30'}`}>
+                        <label className={`flex items-center gap-2.5 p-2.5 rounded-lg border transition-all cursor-pointer ${criticalErrors[ce.id] ? 'bg-error/5 border-error' : 'bg-surface-card border-surface-border hover:border-error/30'}`}>
                           <input type="checkbox" checked={!!criticalErrors[ce.id]} onChange={e => !isViewOnly && setCriticalErrors({...criticalErrors, [ce.id]: e.target.checked})} disabled={isViewOnly} className="w-4.5 h-4.5 rounded text-error focus:ring-error" />
                           <span className="text-[11px] font-black text-brand-primary uppercase tracking-wider">{ce.text}</span>
                         </label>
                         {criticalErrors[ce.id] && (
-                          <textarea value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa técnica obrigatória para a aplicação deste erro crítico..." className="w-full border-error/20 border-2 rounded-xl p-3 text-xs font-medium focus:border-error focus:outline-none bg-error/5" disabled={isViewOnly} />
+                          <textarea value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa técnica obrigatória para a aplicação deste erro crítico..." className="w-full border border-error/20 rounded-lg p-3 text-xs font-medium focus:border-error focus:outline-none bg-error/5" disabled={isViewOnly} />
                         )}
                       </div>
                     ))}
@@ -721,20 +755,20 @@ const getSolidBg = (textColor: string) => {
             <section className="space-y-10 animate-fade-in max-w-4xl mx-auto w-full">
               {qualityFieldsToShow.length > 0 && (
                 <div className="space-y-6 animate-fade-in">
-                  <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Campos Extras da Qualidade</p>
+                  <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1">Campos Extras da Qualidade</p>
                   {qualityFieldsToShow.map(field => (
-                    <Card key={field.id} className="bg-surface-card p-6 border border-surface-border space-y-4 shadow-premium-sm">
-                      <p className="text-sm font-bold text-brand-primary">{field.title} *</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Card key={field.id} className="bg-surface-card p-5 border border-surface-border space-y-4 shadow-premium-sm rounded-xl">
+                      <p className="text-xs font-black text-brand-primary uppercase tracking-wider">{field.title} *</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {field.options.map(opt => {
                           const isChecked = (dissatisfactionAnswers[field.id] || []).includes(opt);
                           return (
                             <label 
                               key={opt} 
-                              className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                              className={`flex items-center gap-2.5 py-2.5 px-3.5 rounded-lg border transition-all cursor-pointer ${
                                 isChecked 
-                                  ? 'bg-brand-subtle/40 border-brand-primary/60 text-brand-primary' 
-                                  : 'bg-surface-bg border-surface-border text-brand-muted hover:border-brand-highlight'
+                                  ? 'bg-surface-subtle border-brand-primary/40 text-brand-primary' 
+                                  : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent hover:text-brand-primary'
                               }`}
                             >
                               <input 
@@ -742,9 +776,9 @@ const getSolidBg = (textColor: string) => {
                                 checked={isChecked} 
                                 onChange={e => handleCheckboxChange(field.id, opt, e.target.checked)} 
                                 disabled={isViewOnly} 
-                                className="w-5 h-5 rounded-lg text-brand-primary focus:ring-brand-primary" 
+                                className="w-4.5 h-4.5 rounded text-brand-primary border-surface-border focus:ring-brand-primary" 
                               />
-                              <span className="text-xs font-bold uppercase tracking-tight">{opt}</span>
+                              <span className="text-[11px] font-black uppercase tracking-wider">{opt}</span>
                             </label>
                           );
                         })}
@@ -760,7 +794,7 @@ const getSolidBg = (textColor: string) => {
                   value={header.evaluator_note} 
                   onChange={e => setHeader({...header, evaluator_note: e.target.value})} 
                   disabled={isViewOnly || isReevaluating} 
-                  className="w-full bg-surface-card border border-surface-border rounded-[24px] p-8 text-sm font-medium min-h-[200px] focus:border-brand-accent focus:outline-none shadow-premium-sm" 
+                  className="w-full bg-surface-card border border-surface-border rounded-xl p-5 text-xs font-medium min-h-[150px] focus:border-brand-accent focus:outline-none shadow-premium-sm" 
                   placeholder="Escreva aqui as observações gerais da auditoria..." 
                 />
               </div>
@@ -797,8 +831,8 @@ const getSolidBg = (textColor: string) => {
                   </div>
                   <div className="space-y-4">
                     {initialData.history.map((h, i) => (
-                      <div key={i} className="flex items-start gap-4 bg-surface-card p-6 rounded-[24px] border border-surface-border shadow-sm">
-                        <div className="w-10 h-10 rounded-2xl bg-surface-subtle flex items-center justify-center flex-shrink-0 text-brand-muted">
+                      <div key={i} className="flex items-start gap-4 bg-surface-card p-4 rounded-xl border border-surface-border shadow-premium-sm">
+                        <div className="w-8 h-8 rounded-xl bg-surface-subtle flex items-center justify-center flex-shrink-0 text-brand-muted">
                           <UserIcon className="w-5 h-5" />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -818,7 +852,7 @@ const getSolidBg = (textColor: string) => {
                             })()}
                           </p>
                           {h.note && (
-                            <div className="bg-surface-bg/50 rounded-xl p-4 border border-surface-border/50">
+                            <div className="bg-surface-bg/50 rounded-lg p-3 border border-surface-border/50">
                               <p className="text-xs text-brand-primary font-medium italic leading-relaxed">"{h.note}"</p>
                             </div>
                           )}
@@ -834,17 +868,17 @@ const getSolidBg = (textColor: string) => {
 
         {/* Footer Actions */}
         <div className="p-8 bg-surface-card border-t border-surface-border flex items-center justify-between">
-          <Button variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4" />}>
+          <Button variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5" />}>
             Voltar
           </Button>
           
           <div className="flex gap-4">
             {step < 4 ? (
-              <Button onClick={() => { if (validateStep(step)) setStep(s => Math.min(4, s + 1)); }} icon={<ChevronRight className="w-4 h-4" />}>
+              <Button onClick={() => { if (validateStep(step)) setStep(s => Math.min(4, s + 1)); }} icon={<ChevronRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />}>
                 Continuar
               </Button>
             ) : (
-              <Button onClick={handleSave} disabled={saving || isViewOnly} variant="primary" className="px-12" icon={<Save className="w-4 h-4" />}>
+              <Button onClick={handleSave} disabled={saving || isViewOnly} variant="primary" className="px-12" icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}>
                 {saving ? 'Processando...' : 'Finalizar Monitoria'}
               </Button>
             )}

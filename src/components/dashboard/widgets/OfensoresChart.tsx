@@ -1,9 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import Card from '../../ui/Card';
 import { AlertOctagon } from 'lucide-react';
 import { Monitoria, EvaluationForm } from '../../../types';
 import { chartPalette } from '../chartColors';
+import { useQualityConfig } from '../../../lib/useQualityConfig';
+import { useDashboard } from '../DashboardContext';
+import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface OfensoresChartProps {
   monitorias: Monitoria[];
@@ -11,9 +15,88 @@ interface OfensoresChartProps {
   limit?: number;
   title?: string;
   subtitle?: string;
+  isCustomizing?: boolean;
+  profile?: string;
+  activeEditingId?: string | null;
+  setActiveEditingId?: (id: string | null) => void;
 }
 
-export default function OfensoresChart({ monitorias, forms, limit = 5, title = 'Maiores Ofensores', subtitle = 'Critérios com mais falhas no período' }: OfensoresChartProps) {
+export default function OfensoresChart({ 
+  monitorias, 
+  forms, 
+  limit = 5, 
+  title = 'Maiores Ofensores', 
+  subtitle = 'Critérios com mais falhas no período',
+  isCustomizing = false,
+  profile,
+  activeEditingId,
+  setActiveEditingId
+}: OfensoresChartProps) {
+  const { config, saveConfig } = useQualityConfig();
+  const [isHovered, setIsHovered] = useState(false);
+  const [tempSub, setTempSub] = useState('');
+
+  let dashboardContext = null;
+  try {
+    dashboardContext = useDashboard();
+  } catch (e) {}
+  const user = dashboardContext?.user;
+  const canEdit = isCustomizing;
+
+  const myUniqueId = `chart-${title}`;
+  const isEditing = activeEditingId !== undefined
+    ? activeEditingId === myUniqueId
+    : dashboardContext?.activeEditingId === myUniqueId;
+
+  const lookupKey = profile ? `${profile}_${title}` : (user?.role ? `${user.role}_${title}` : title);
+  const customSub = (config?.statCardExplanations?.[lookupKey] !== undefined && config.statCardExplanations[lookupKey] !== '')
+    ? config.statCardExplanations[lookupKey]
+    : (config?.statCardExplanations?.[title] !== undefined && config.statCardExplanations[title] !== '')
+      ? config.statCardExplanations[title]
+      : (subtitle || 'Critérios com mais falhas no período');
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTempSub(typeof customSub === 'string' ? customSub.slice(0, 35) : '');
+    if (setActiveEditingId) {
+      setActiveEditingId(myUniqueId);
+    } else {
+      dashboardContext?.setActiveEditingId(myUniqueId);
+    }
+    setIsHovered(false);
+  };
+
+  const handleSave = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const updatedExplanations = {
+        ...(config.statCardExplanations || {}),
+        [lookupKey]: tempSub,
+      };
+      await saveConfig({
+        ...config,
+        statCardExplanations: updatedExplanations,
+      });
+      toast.success('Descrição atualizada com sucesso!');
+      if (setActiveEditingId) {
+        setActiveEditingId(null);
+      } else {
+        dashboardContext?.setActiveEditingId(null);
+      }
+    } catch (err) {
+      toast.error('Erro ao salvar descrição.');
+    }
+  };
+
+  const handleCancel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (setActiveEditingId) {
+      setActiveEditingId(null);
+    } else {
+      dashboardContext?.setActiveEditingId(null);
+    }
+  };
+
   const ofensores = useMemo(() => {
     const map: Record<string, { text: string; naoCount: number; totalAnswered: number }> = {};
 
@@ -59,15 +142,74 @@ export default function OfensoresChart({ monitorias, forms, limit = 5, title = '
   };
 
   const Header = () => (
-    <div className="flex items-center gap-3 mb-5">
-      <div className="w-9 h-9 rounded-xl bg-functional-error flex items-center justify-center flex-shrink-0 text-functional-error">
-        <AlertOctagon className="w-5 h-5" />
-      </div>
-      <div>
-        <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">{title}</h3>
-        <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>
-      </div>
-    </div>
+    <>
+      {isEditing ? (
+        <div className="flex flex-col gap-2 mb-5 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+          <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
+            Editar Descrição: {title}
+          </span>
+          <textarea
+            value={tempSub}
+            onChange={(e) => setTempSub(e.target.value.slice(0, 35))}
+            maxLength={35}
+            className="w-full text-xs p-1.5 rounded-lg border border-surface-border bg-surface-bg text-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-accent resize-none h-12"
+            placeholder="Digite a descrição (máx. 35 caracteres)..."
+            autoFocus
+          />
+          <div className="text-[10px] text-brand-muted text-right -mt-1">
+            {tempSub.length}/35
+          </div>
+          <div className="flex justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md text-brand-muted hover:bg-surface-subtle transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md bg-brand-accent text-white hover:bg-brand-accent/90 transition-colors cursor-pointer"
+            >
+              Salvar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 mb-5 min-w-0">
+          <div 
+            onClick={canEdit ? handleEditClick : undefined}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            className={`relative w-9 h-9 rounded-xl bg-functional-error flex items-center justify-center flex-shrink-0 text-functional-error ${
+              canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
+            }`}
+            title=""
+          >
+            <AlertOctagon className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
+            <AnimatePresence>
+              {isHovered && customSub && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                  transition={{ duration: 0.12, ease: 'easeOut' }}
+                  className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
+                >
+                  {customSub}{canEdit ? " (Clique para editar)" : ""}
+                  {/* Subtle upward pointing arrow */}
+                  <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight truncate" title="">{title}</h3>
+          </div>
+        </div>
+      )}
+    </>
   );
 
   if (ofensores.length === 0) {

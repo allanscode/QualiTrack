@@ -753,7 +753,7 @@ if (user?.role === 'gestor_suporte') {
                               variant="ghost" 
                               size="sm" 
                               onClick={() => setViewingMonitoria(m)} 
-                              icon={<Eye className="w-4 h-4" />}
+                              icon={<Eye className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
                               className="w-full md:w-auto shadow-sm border border-surface-border/50"
                             >
                               Visualizar Avaliação Completa
@@ -771,7 +771,7 @@ if (user?.role === 'gestor_suporte') {
                                   variant="secondary" 
                                   size="sm" 
                                   onClick={() => setActionModal({ id: m.id, type: 'aceitar' })} 
-                                  icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                                  icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                                   className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
                                 >
                                   Aprovar
@@ -781,7 +781,7 @@ if (user?.role === 'gestor_suporte') {
                                     variant="outline" 
                                     size="sm" 
                                     onClick={() => setActionModal({ id: m.id, type: 'contestar' })} 
-                                    icon={<AlertTriangle className="w-3.5 h-3.5" />}
+                                    icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                                     className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
                                   >
                                     Contestar
@@ -792,7 +792,7 @@ if (user?.role === 'gestor_suporte') {
                                     variant="outline" 
                                     size="sm" 
                                     onClick={() => setActionModal({ id: m.id, type: 'recusar_agente' })} 
-                                    icon={<XCircle className="w-3.5 h-3.5" />}
+                                    icon={<XCircle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                                     className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
                                   >
                                     Apelar
@@ -808,7 +808,7 @@ if (user?.role === 'gestor_suporte') {
                                   variant="secondary" 
                                   size="sm" 
                                   onClick={() => setActionModal({ id: m.id, type: 'aprovar' })} 
-                                  icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                                  icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                                   className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
                                 >
                                   Aprovar
@@ -817,7 +817,7 @@ if (user?.role === 'gestor_suporte') {
                                   variant="outline" 
                                   size="sm" 
                                   onClick={() => setActionModal({ id: m.id, type: 'escalar' })} 
-                                  icon={<AlertTriangle className="w-3.5 h-3.5" />}
+                                  icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-y-0.5" />}
                                   className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
                                 >
                                   Escalar
@@ -832,7 +832,7 @@ if (user?.role === 'gestor_suporte') {
                                   variant="secondary" 
                                   size="sm" 
                                   onClick={() => setViewingMonitoria({ ...m, _reevaluate: true } as any)} 
-                                  icon={<Pencil className="w-4 h-4" />}
+                                  icon={<Pencil className="w-4 h-4 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />}
                                   className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
                                 >
                                   Reavaliar
@@ -842,7 +842,7 @@ if (user?.role === 'gestor_suporte') {
                                     variant="outline" 
                                     size="sm" 
                                     onClick={() => setActionModal({ id: m.id, type: 'manter' })} 
-                                    icon={<XCircle className="w-4 h-4" />}
+                                    icon={<XCircle className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
                                     className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
                                   >
                                     Recusar
@@ -858,7 +858,7 @@ if (user?.role === 'gestor_suporte') {
                                   variant="secondary" 
                                   size="sm" 
                                   onClick={() => setActionModal({ id: m.id, type: 'aprovar' })} 
-                                  icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                                  icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                                   className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
                                 >
                                   Aprovar
@@ -867,7 +867,7 @@ if (user?.role === 'gestor_suporte') {
                                   variant="outline" 
                                   size="sm" 
                                   onClick={() => setActionModal({ id: m.id, type: 'solicitar_reavaliacao' })} 
-                                  icon={<Pencil className="w-3.5 h-3.5" />}
+                                  icon={<Pencil className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />}
                                   className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
                                 >
                                   Solicitar
@@ -883,17 +883,17 @@ if (user?.role === 'gestor_suporte') {
                                   variant="outline" 
                                   size="sm" 
                                   onClick={() => setActionModal({ id: m.id, type: 'reabrir' })} 
-                                  className="w-full md:w-auto"
-                                  icon={<RotateCcw className="w-4 h-4" />}
-                                >
-                                  Reabrir
-                                </Button>
+                                  className="w-full md:w-auto font-black uppercase text-[10px] tracking-widest h-10"
+                                  icon={<RotateCcw className="w-4 h-4 transition-transform duration-200 group-hover:rotate-[-45deg]" />}
+                              >
+                                Reabrir
+                              </Button>
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={() => setActionModal({ id: m.id, type: 'excluir' })} 
-                                className="text-error hover:bg-red-50 w-full md:w-auto"
-                                icon={<Trash2 className="w-4 h-4" />}
+                                className="text-functional-error hover:bg-functional-error/10 dark:hover:bg-functional-error/20 w-full md:w-auto font-black uppercase text-[10px] tracking-widest h-10"
+                                icon={<Trash2 className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
                               >
                                 Excluir
                               </Button>
@@ -986,8 +986,8 @@ if (user?.role === 'gestor_suporte') {
                 )}
 
                 <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1" onClick={() => setActionModal(null)}>Cancelar</Button>
-                  <Button className="flex-1 bg-brand-primary" onClick={handleAction} disabled={submitting}>
+                  <Button variant="outline" className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest" onClick={() => setActionModal(null)}>Cancelar</Button>
+                  <Button variant="primary" className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest" onClick={handleAction} disabled={submitting}>
                     {submitting ? 'Processando...' : 'Confirmar Ação'}
                   </Button>
                 </div>

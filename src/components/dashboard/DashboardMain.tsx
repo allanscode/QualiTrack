@@ -11,7 +11,7 @@ import QualityManagerDashboard from './roles/QualityManagerDashboard';
 import AdminDashboard from './roles/AdminDashboard';
 
 function DashboardRouter() {
-  const { user, loading } = useDashboard();
+  const { user, dashboardRole, loading } = useDashboard();
 
   if (loading) {
     return (
@@ -26,8 +26,8 @@ function DashboardRouter() {
 
   if (!user) return null;
 
-  // RBAC Routing
-  switch (user.role) {
+  // RBAC Routing based on simulated dashboardRole
+  switch (dashboardRole) {
     case 'suporte':
       return <AgentDashboard />;
     case 'qualidade':
@@ -47,7 +47,13 @@ function DashboardRouter() {
   }
 }
 
-export default function DashboardMain({ user, activeTab }: { user: User | null; activeTab?: string }) {
+export default function DashboardMain({ 
+  user, 
+  activeTab
+}: { 
+  user: User | null; 
+  activeTab?: string; 
+}) {
   if (!user) return null;
 
   return (

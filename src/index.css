@@ -108,11 +108,11 @@ color-scheme: dark;
   --success-color: var(--success-pastel);
   --success-bg: var(--success-pastel-bg);
 
-  /* Chart palette (dark mode — pastel) */
-  --chart-excelente: #A5B4FC;
-  --chart-aceitavel: #6EE7B7;
-  --chart-atencao: #FCD34D;
-  --chart-ruim: #FCA5A5;
+  /* Chart palette (dark mode — vibrant) */
+  --chart-excelente: #818CF8;
+  --chart-aceitavel: #34D399;
+  --chart-atencao: #FBBF24;
+  --chart-ruim: #F87171;
 }
 
 

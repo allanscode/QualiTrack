@@ -17,6 +17,9 @@ export interface DashboardFilters {
 
 interface DashboardContextType {
   user: User | null;
+  loggedInUser: User | null;
+  dashboardRole: 'admin' | 'gestor_qualidade' | 'gestor_suporte' | 'qualidade' | 'suporte';
+  isSimulated: boolean;
   filters: DashboardFilters;
   setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
   monitorias: Monitoria[];
@@ -29,12 +32,26 @@ interface DashboardContextType {
   refresh: () => void;
   onlineUsers: User[];
   dissatisfactionFields: DissatisfactionField[];
+  activeEditingId: string | null;
+  setActiveEditingId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
-export function DashboardProvider({ user, activeTab, children }: { user: User | null, activeTab?: string, children: ReactNode }) {
+export function DashboardProvider({ 
+  user: loggedInUser, 
+  activeTab, 
+  children 
+}: { 
+  user: User | null, 
+  activeTab?: string, 
+  children: ReactNode 
+}) {
   const staticData = useStaticData();
+
+  const dashboardRole = loggedInUser?.role || 'suporte';
+  const isSimulated = false;
+  const user = loggedInUser;
 
   const [filters, setFilters] = useState<DashboardFilters>({
     startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0],
@@ -52,6 +69,7 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
   const [loading, setLoading] = useState(true);
   const [globalAvg, setGlobalAvg] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
   const fetchingRef = useRef(false);
   const filtersRef = useRef(filters);
@@ -422,6 +440,9 @@ const loadData = useCallback(async () => {
   return (
     <DashboardContext.Provider value={{
       user,
+      loggedInUser,
+      dashboardRole,
+      isSimulated,
       filters,
       setFilters,
       monitorias,
@@ -433,7 +454,9 @@ const loadData = useCallback(async () => {
       globalAvg,
       refresh,
       onlineUsers,
-      dissatisfactionFields: staticData.dissatisfactionFields
+      dissatisfactionFields: staticData.dissatisfactionFields,
+      activeEditingId,
+      setActiveEditingId
     }}>
       {children}
     </DashboardContext.Provider>
