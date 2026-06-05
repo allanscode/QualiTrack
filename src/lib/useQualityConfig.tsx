@@ -28,6 +28,7 @@ export interface QualityConfig {
     holidays: string[];
   };
   statCardExplanations?: Record<string, string>;
+  dashboardWidgetTitles?: Record<string, string>;
 }
 
 const DEFAULT_CONFIG: QualityConfig = {
@@ -51,7 +52,8 @@ const DEFAULT_CONFIG: QualityConfig = {
     days: [1, 2, 3, 4, 5],
     holidays: ['01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12']
   },
-  statCardExplanations: {}
+  statCardExplanations: {},
+  dashboardWidgetTitles: {}
 };
 
 const STORAGE_KEY = 'qualitrack_quality_config';
@@ -102,6 +104,9 @@ function normalizeConfig(cfg: any): QualityConfig {
   }
   if (!migrated.statCardExplanations) {
     migrated.statCardExplanations = {};
+  }
+  if (!migrated.dashboardWidgetTitles) {
+    migrated.dashboardWidgetTitles = {};
   }
   return migrated as QualityConfig;
 }

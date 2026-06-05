@@ -1095,6 +1095,7 @@ function MainApp({
   const [showTeamList, setShowTeamList] = React.useState(false);
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | 'color' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(activeTab === 'admin');
 
   const toggleSidebar = () => {
     const willBeOpen = !isSidebarOpen;
@@ -1102,6 +1103,15 @@ function MainApp({
       setSidebarTextVisible(false);
     }
     setIsSidebarOpen(willBeOpen);
+  };
+
+  const handleSettingsClick = () => {
+    if (!isSidebarOpen) {
+      toggleSidebar();
+      setIsSettingsOpen(true);
+    } else {
+      setIsSettingsOpen(!isSettingsOpen);
+    }
   };
 
   // Reset activeTab to dashboard if user doesn't have admin role
@@ -1291,18 +1301,61 @@ function MainApp({
         <NavItem isDark={sidebarIsDark} icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
         <NavItem isDark={sidebarIsDark} icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
         {userData?.role === 'admin' && (
-          <>
-            <NavItem 
-              isDark={sidebarIsDark} 
-              icon={<BarChart3 className="w-5 h-5" />} 
-              label="Dashboards Personalizados" 
-              active={false} 
-              onClick={() => toast.info('O recurso de Dashboards Personalizados está em construção e estará disponível em breve!')} 
-              isOpen={sidebarTextVisible} 
-              badge="EM BREVE" 
-            />
-            <NavItem isDark={sidebarIsDark} icon={<Settings className="w-5 h-5" />} label="Configurações" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} isOpen={sidebarTextVisible} />
-          </>
+          <div className="space-y-1">
+            <button 
+              onClick={handleSettingsClick}
+              className={`
+                w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
+                ${(activeTab === 'admin' && !isSettingsOpen)
+                  ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-slate-900') 
+                  : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
+              `}
+            >
+              {activeTab === 'admin' && !isSettingsOpen && (
+                <motion.div 
+                  layoutId="active-bar"
+                  className={`absolute left-0 w-1 h-6 rounded-full ${sidebarIsDark ? 'bg-white' : 'bg-slate-900'}`}
+                />
+              )}
+              <div className={`${(activeTab === 'admin' && !isSettingsOpen) ? 'text-current' : (sidebarIsDark ? 'text-white/30 group-hover:text-white' : 'text-slate-900/30 group-hover:text-slate-900')}`}>
+                <Settings className="w-5 h-5" />
+              </div>
+              <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${sidebarTextVisible ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
+                <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
+                  Configurações
+                </span>
+                <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isSettingsOpen ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+            
+            <AnimatePresence initial={false}>
+              {isSettingsOpen && sidebarTextVisible && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  className="overflow-hidden pl-1 space-y-1"
+                >
+                  <SubNavItem 
+                    label="Geral" 
+                    active={activeTab === 'admin'} 
+                    onClick={() => setActiveTab('admin')} 
+                    isOpen={sidebarTextVisible} 
+                    isDark={sidebarIsDark} 
+                  />
+                  <SubNavItem 
+                    label="Customizar Dashboards" 
+                    active={false} 
+                    onClick={() => toast.info('O recurso de Customizar Dashboards está em construção e estará disponível em breve!')} 
+                    isOpen={sidebarTextVisible} 
+                    isDark={sidebarIsDark} 
+                    badge="EM BREVE" 
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         )}
         </nav>
 
@@ -1650,6 +1703,34 @@ function NavItem({ icon, label, active, onClick, isOpen, isDark, badge }: any) {
           </span>
         )}
       </div>
+    </button>
+  );
+}
+
+function SubNavItem({ label, active, onClick, isOpen, isDark, badge }: any) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`
+        w-full flex items-center justify-between pl-11 pr-4 h-9 rounded-xl transition-all font-medium text-xs group relative
+        ${active 
+          ? (isDark ? 'bg-white/5 text-white font-bold' : 'bg-black/5 text-slate-900 font-bold') 
+          : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
+      `}
+    >
+      {active && (
+        <div 
+          className={`absolute left-5 w-1 h-4 rounded-full ${isDark ? 'bg-white' : 'bg-slate-900'}`}
+        />
+      )}
+      <span className="tracking-tight whitespace-nowrap block">
+        {label}
+      </span>
+      {badge && (
+        <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full border border-dashed ml-2 leading-none whitespace-nowrap ${isDark ? 'border-white/10 text-white/40 bg-white/5' : 'border-slate-300/60 text-slate-500/80 bg-slate-50'}`}>
+          {badge}
+        </span>
+      )}
     </button>
   );
 }

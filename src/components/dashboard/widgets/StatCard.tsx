@@ -89,18 +89,22 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
 
   if (isEditing) {
     return (
-      <Card padding="none" className="px-5 py-4 flex flex-col justify-between min-h-[120px] border-brand-accent/50 bg-surface-card shadow-lg animate-fade-in relative z-50">
+      <Card padding="none" className="px-5 py-4 flex flex-col justify-between min-h-[135px] border-brand-accent/50 bg-surface-card shadow-lg animate-fade-in relative z-50">
         <div className="flex flex-col h-full gap-2" onClick={(e) => e.stopPropagation()}>
           <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
             Editar Descrição: {title}
           </span>
           <textarea
             value={tempSub}
-            onChange={(e) => setTempSub(e.target.value)}
+            onChange={(e) => setTempSub(e.target.value.slice(0, 35))}
+            maxLength={35}
             className="w-full text-xs p-1.5 rounded-lg border border-surface-border bg-surface-bg text-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-accent resize-none h-12"
-            placeholder="Digite a descrição da métrica..."
+            placeholder="Digite a descrição da métrica (máx. 35 caracteres)..."
             autoFocus
           />
+          <div className="text-[10px] text-brand-muted text-right -mt-1">
+            {tempSub.length}/35
+          </div>
           <div className="flex justify-end gap-1.5 mt-auto">
             <button
               type="button"
@@ -129,20 +133,17 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
             {title}
           </span>
-          {isAdmin && isEditable && (
-            <button
-              onClick={handleEditClick}
-              className="text-slate-400 hover:text-brand-accent p-0.5 rounded transition-all hover:scale-105 active:scale-95 cursor-pointer flex-shrink-0"
-              title="Editar descrição"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
         <div
-          className={`relative w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 ${accent} cursor-help`}
+          onClick={isAdmin && isEditable ? handleEditClick : undefined}
+          className={`relative w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 ${accent} ${
+            isAdmin && isEditable 
+              ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' 
+              : 'cursor-help'
+          }`}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
+          title={isAdmin && isEditable ? "Clique para editar descrição" : undefined}
         >
           {icon}
           <AnimatePresence>
@@ -154,7 +155,7 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
                 transition={{ duration: 0.12, ease: 'easeOut' }}
                 className="absolute bottom-full right-0 mb-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
               >
-                {customSub}
+                {customSub}{isAdmin && isEditable ? " (Clique para editar)" : ""}
                 {/* Subtle downward pointing arrow */}
                 <div className="absolute top-full right-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45 -translate-y-1" />
               </motion.div>

@@ -1,9 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import Card from '../../ui/Card';
 import { AlertOctagon } from 'lucide-react';
 import { Monitoria, EvaluationForm } from '../../../types';
 import { chartPalette } from '../chartColors';
+import { useQualityConfig } from '../../../lib/useQualityConfig';
+import { useDashboard } from '../DashboardContext';
+import { toast } from 'sonner';
 
 interface OfensoresChartProps {
   monitorias: Monitoria[];
@@ -14,6 +17,45 @@ interface OfensoresChartProps {
 }
 
 export default function OfensoresChart({ monitorias, forms, limit = 5, title = 'Maiores Ofensores', subtitle = 'Critérios com mais falhas no período' }: OfensoresChartProps) {
+  const { config, saveConfig } = useQualityConfig();
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempTitle, setTempTitle] = useState('');
+
+  let dashboardContext = null;
+  try {
+    dashboardContext = useDashboard();
+  } catch (e) {}
+  const user = dashboardContext?.user;
+  const isAdmin = user?.role === 'admin';
+
+  const customTitle = (config?.dashboardWidgetTitles?.[title] !== undefined && config.dashboardWidgetTitles[title] !== '')
+    ? config.dashboardWidgetTitles[title]
+    : title;
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTempTitle(customTitle);
+    setIsEditing(true);
+  };
+
+  const handleSave = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const updatedTitles = {
+        ...(config.dashboardWidgetTitles || {}),
+        [title]: tempTitle,
+      };
+      await saveConfig({
+        ...config,
+        dashboardWidgetTitles: updatedTitles,
+      });
+      toast.success('Título atualizado com sucesso!');
+      setIsEditing(false);
+    } catch (err) {
+      toast.error('Erro ao salvar título.');
+    }
+  };
+
   const ofensores = useMemo(() => {
     const map: Record<string, { text: string; naoCount: number; totalAnswered: number }> = {};
 
@@ -59,15 +101,59 @@ export default function OfensoresChart({ monitorias, forms, limit = 5, title = '
   };
 
   const Header = () => (
-    <div className="flex items-center gap-3 mb-5">
-      <div className="w-9 h-9 rounded-xl bg-functional-error flex items-center justify-center flex-shrink-0 text-functional-error">
-        <AlertOctagon className="w-5 h-5" />
-      </div>
-      <div>
-        <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">{title}</h3>
-        <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">{subtitle}</p>
-      </div>
-    </div>
+    <>
+      {isEditing ? (
+        <div className="flex flex-col gap-2 mb-5 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+          <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
+            Editar Título:
+          </span>
+          <input
+            type="text"
+            value={tempTitle}
+            onChange={(e) => setTempTitle(e.target.value.slice(0, 35))}
+            maxLength={35}
+            className="w-full text-xs p-1.5 rounded-lg border border-surface-border bg-surface-bg text-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-accent h-8"
+            placeholder="Digite o título (máx. 35 caracteres)..."
+            autoFocus
+          />
+          <div className="text-[10px] text-brand-muted text-right -mt-1">
+            {tempTitle.length}/35
+          </div>
+          <div className="flex justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md text-brand-muted hover:bg-surface-subtle transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md bg-brand-accent text-white hover:bg-brand-accent/90 transition-colors cursor-pointer"
+            >
+              Salvar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 mb-5 min-w-0">
+          <div 
+            onClick={isAdmin ? handleEditClick : undefined}
+            className={`w-9 h-9 rounded-xl bg-functional-error flex items-center justify-center flex-shrink-0 text-functional-error ${
+              isAdmin ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : ''
+            }`}
+            title={isAdmin ? "Clique para editar título" : undefined}
+          >
+            <AlertOctagon className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight truncate">{customTitle}</h3>
+            {subtitle && <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5 truncate">{subtitle}</p>}
+          </div>
+        </div>
+      )}
+    </>
   );
 
   if (ofensores.length === 0) {
