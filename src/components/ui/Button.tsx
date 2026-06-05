@@ -18,11 +18,11 @@ export default function Button({
   ...props 
 }: ButtonProps) {
   const variants = {
-    primary: 'bg-brand-primary text-brand-on-primary hover:bg-opacity-90 shadow-premium active:scale-[0.98]',
-    secondary: 'bg-brand-accent text-brand-primary hover:bg-opacity-90 shadow-premium active:scale-[0.98]',
-    outline: 'bg-transparent border border-surface-border text-brand-primary hover:bg-surface-subtle dark:hover:bg-slate-800/50 active:scale-[0.98]',
-    danger: 'bg-error text-white hover:bg-opacity-90 shadow-premium active:scale-[0.98]',
-    ghost: 'bg-transparent text-brand-muted hover:text-brand-primary hover:bg-surface-subtle dark:hover:bg-slate-800/50 active:scale-[0.98]'
+    primary: 'bg-brand-primary text-brand-on-primary hover:bg-brand-primary/90 hover:brightness-110 dark:hover:brightness-125 shadow-premium hover:scale-[1.02] active:scale-[0.98]',
+    secondary: 'bg-brand-accent text-brand-primary hover:bg-brand-accent/90 hover:brightness-110 dark:hover:brightness-125 shadow-premium hover:scale-[1.02] active:scale-[0.98]',
+    outline: 'bg-transparent border border-surface-border text-brand-primary hover:bg-surface-subtle dark:hover:bg-slate-800/50 hover:scale-[1.02] active:scale-[0.98]',
+    danger: 'bg-error text-white hover:bg-error/90 hover:brightness-110 dark:hover:brightness-125 shadow-premium hover:scale-[1.02] active:scale-[0.98]',
+    ghost: 'bg-transparent text-brand-muted hover:text-brand-primary hover:bg-surface-subtle dark:hover:bg-slate-800/50 hover:scale-[1.02] active:scale-[0.98]'
   };
 
   const sizes = {
@@ -33,11 +33,11 @@ export default function Button({
 
   return (
     <button 
-      className={`inline-flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`group inline-flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
       disabled={props.disabled || loading}
       {...props}
     >
-      {icon && <span className="flex-shrink-0">{icon}</span>}
+      {icon && <span className="flex-shrink-0 transition-transform duration-200">{icon}</span>}
       {children}
     </button>
   );

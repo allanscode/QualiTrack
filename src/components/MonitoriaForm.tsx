@@ -834,17 +834,17 @@ const getSolidBg = (textColor: string) => {
 
         {/* Footer Actions */}
         <div className="p-8 bg-surface-card border-t border-surface-border flex items-center justify-between">
-          <Button variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4" />}>
+          <Button variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5" />}>
             Voltar
           </Button>
           
           <div className="flex gap-4">
             {step < 4 ? (
-              <Button onClick={() => { if (validateStep(step)) setStep(s => Math.min(4, s + 1)); }} icon={<ChevronRight className="w-4 h-4" />}>
+              <Button onClick={() => { if (validateStep(step)) setStep(s => Math.min(4, s + 1)); }} icon={<ChevronRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />}>
                 Continuar
               </Button>
             ) : (
-              <Button onClick={handleSave} disabled={saving || isViewOnly} variant="primary" className="px-12" icon={<Save className="w-4 h-4" />}>
+              <Button onClick={handleSave} disabled={saving || isViewOnly} variant="primary" className="px-12" icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}>
                 {saving ? 'Processando...' : 'Finalizar Monitoria'}
               </Button>
             )}
