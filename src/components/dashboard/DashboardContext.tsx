@@ -29,6 +29,8 @@ interface DashboardContextType {
   refresh: () => void;
   onlineUsers: User[];
   dissatisfactionFields: DissatisfactionField[];
+  activeEditingId: string | null;
+  setActiveEditingId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -52,6 +54,7 @@ export function DashboardProvider({ user, activeTab, children }: { user: User | 
   const [loading, setLoading] = useState(true);
   const [globalAvg, setGlobalAvg] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
   const fetchingRef = useRef(false);
   const filtersRef = useRef(filters);
@@ -433,7 +436,9 @@ const loadData = useCallback(async () => {
       globalAvg,
       refresh,
       onlineUsers,
-      dissatisfactionFields: staticData.dissatisfactionFields
+      dissatisfactionFields: staticData.dissatisfactionFields,
+      activeEditingId,
+      setActiveEditingId
     }}>
       {children}
     </DashboardContext.Provider>

@@ -332,7 +332,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[300px]">
+        <div className="lg:col-span-2 h-[380px]">
           <TrendChart
             title="Performance Histórica"
             subtitle="Visão administrativa de score global"
@@ -340,7 +340,7 @@ export default function AdminDashboard() {
             dataKeys={[{ key: 'ScoreMedio', name: 'Média Global', color: chartPalette().excelente }]}
           />
         </div>
-        <div className="h-[300px]">
+        <div className="h-[380px]">
           <DistributionChart
             title="Curva de Qualidade"
             data={gradeDistribution}
@@ -406,10 +406,10 @@ export default function AdminDashboard() {
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-[300px]">
+            <div className="h-[360px]">
               <DistributionChart title="Insatisfação — Visão do Cliente" data={clientData} />
             </div>
-            <div className="h-[300px]">
+            <div className="h-[360px]">
               <DistributionChart title="Insatisfação — Visão da Qualidade" data={qualityData} />
             </div>
           </div>

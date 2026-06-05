@@ -18,27 +18,26 @@ interface StatCardProps {
 }
 
 const BG_MAP: Record<string, string> = {
-  'text-functional-error': 'bg-functional-error/10',
-  'text-functional-warning': 'bg-functional-warning/10',
-  'text-functional-success': 'bg-functional-success/10',
+  'text-functional-error': 'bg-functional-error',
+  'text-functional-warning': 'bg-functional-warning',
+  'text-functional-success': 'bg-functional-success',
   'text-brand-accent': 'bg-icon-accent',
   'text-brand-highlight': 'bg-icon-highlight',
-  'text-brand-muted': 'bg-surface-subtle',
+  'text-brand-muted': 'bg-slate-100 dark:bg-white/[0.04]',
   'text-brand-primary': 'bg-icon-primary',
-  'text-info': 'bg-surface-subtle',
-  'text-warning': 'bg-functional-warning/10',
-  'text-success': 'bg-functional-success/10',
-  'text-slate-400': 'bg-slate-100 dark:bg-slate-800/50',
-  'text-slate-500': 'bg-slate-50 dark:bg-slate-800/30',
+  'text-info': 'bg-slate-100 dark:bg-white/[0.04]',
+  'text-warning': 'bg-functional-warning',
+  'text-success': 'bg-functional-success',
+  'text-slate-400': 'bg-slate-100 dark:bg-white/[0.04]',
+  'text-slate-500': 'bg-slate-100 dark:bg-white/[0.04]',
 };
 
 function getIconBg(accent: string): string {
   if (BG_MAP[accent]) return BG_MAP[accent];
   if (accent.startsWith('text-level-')) {
-    const level = accent.replace('text-level-', 'bg-level-');
-    return level;
+    return accent.replace('text-level-', 'bg-level-');
   }
-  return 'bg-surface-subtle';
+  return 'bg-slate-100 dark:bg-white/[0.04]';
 }
 
 export default function StatCard({ title, value, sub, icon, accent, onClick, badge }: StatCardProps) {
@@ -54,7 +53,6 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
 
   const iconBg = getIconBg(accent);
   const [isHovered, setIsHovered] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [tempSub, setTempSub] = useState('');
 
   const isAdmin = user?.role === 'admin';
@@ -63,10 +61,14 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
     ? config.statCardExplanations[title]
     : sub;
 
+  const myUniqueId = `stat-card-${title}`;
+  const isEditing = dashboardContext?.activeEditingId === myUniqueId;
+
   const handleEditClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setTempSub(typeof customSub === 'string' ? customSub : '');
-    setIsEditing(true);
+    setTempSub(typeof customSub === 'string' ? customSub.slice(0, 35) : '');
+    dashboardContext?.setActiveEditingId(myUniqueId);
+    setIsHovered(false);
   };
 
   const handleSave = async (e: React.MouseEvent) => {
@@ -80,8 +82,8 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
         ...config,
         statCardExplanations: updatedExplanations,
       });
-      toast.success('Descrição atualizada com sucesso!');
-      setIsEditing(false);
+      toast.success('Descrição updated successfully!');
+      dashboardContext?.setActiveEditingId(null);
     } catch (err) {
       toast.error('Erro ao salvar descrição.');
     }
@@ -108,7 +110,7 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
           <div className="flex justify-end gap-1.5 mt-auto">
             <button
               type="button"
-              onClick={() => setIsEditing(false)}
+              onClick={() => dashboardContext?.setActiveEditingId(null)}
               className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md text-brand-muted hover:bg-surface-subtle transition-colors cursor-pointer"
             >
               Cancelar
@@ -126,14 +128,18 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
     );
   }
 
+  const clonedIcon = React.isValidElement(icon)
+    ? React.cloneElement(icon as React.ReactElement<any>, {
+        className: 'w-5 h-5 fill-current fill-opacity-15',
+        strokeWidth: 2,
+        fill: 'currentColor',
+        fillOpacity: 0.15,
+      })
+    : icon;
+
   return (
     <Card onClick={onClick} padding="none" className="px-5 py-4 flex flex-col justify-between min-h-[100px] relative z-10 hover:z-30 transition-all duration-200">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
-            {title}
-          </span>
-        </div>
+      <div className="flex items-center gap-3 mb-3 min-w-0">
         <div
           onClick={isAdmin && isEditable ? handleEditClick : undefined}
           className={`relative w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 ${accent} ${
@@ -143,24 +149,29 @@ export default function StatCard({ title, value, sub, icon, accent, onClick, bad
           }`}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
-          title={isAdmin && isEditable ? "Clique para editar descrição" : undefined}
+          title=""
         >
-          {icon}
+          {clonedIcon}
           <AnimatePresence>
             {isHovered && customSub && (
               <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95 }}
                 transition={{ duration: 0.12, ease: 'easeOut' }}
-                className="absolute bottom-full right-0 mb-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
+                className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
               >
                 {customSub}{isAdmin && isEditable ? " (Clique para editar)" : ""}
-                {/* Subtle downward pointing arrow */}
-                <div className="absolute top-full right-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45 -translate-y-1" />
+                {/* Subtle upward pointing arrow */}
+                <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+        <div className="min-w-0 flex-1">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate block" title="">
+            {title}
+          </span>
         </div>
       </div>
       <div className="flex items-center gap-2 mt-auto">

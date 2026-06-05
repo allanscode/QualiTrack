@@ -19,8 +19,7 @@ import {
   Calendar,
   AlertTriangle,
   History,
-  Target,
-  Pencil
+  Target
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -57,81 +56,7 @@ export default function MonitoriaForm({
   const [step, setStep] = useState(1);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Dynamic instruction / balloon description editing for Admin role
-  const [localDescriptions, setLocalDescriptions] = useState<Record<string, string>>({});
-  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
-  const [tempDescription, setTempDescription] = useState<string>('');
-  const [savingDescId, setSavingDescId] = useState<string | null>(null);
 
-  const handleSaveDescription = async (questionId: string) => {
-    if (!selectedForm?.id) return;
-    setSavingDescId(questionId);
-    try {
-      const formToUpdate = staticData.forms.find(f => f.id === selectedForm.id);
-      if (!formToUpdate) {
-        toast.error('Formulário não encontrado para atualização.');
-        return;
-      }
-
-      const updatedSections = formToUpdate.sections.map(sec => ({
-        ...sec,
-        questions: sec.questions.map(qu => {
-          if (qu.id === questionId) {
-            return { ...qu, description: tempDescription.trim() };
-          }
-          return qu;
-        })
-      }));
-
-      if (!supabase) {
-        await mockDb.update('forms', formToUpdate.id, { sections: updatedSections });
-      } else {
-        const { error } = await supabase
-          .from('forms')
-          .update({ sections: updatedSections })
-          .eq('id', formToUpdate.id);
-        if (error) throw error;
-      }
-
-      // Also update current form snapshot if we are in an evaluation with snapshot
-      if (initialData?.id) {
-        const updatedSnapshot = {
-          ...selectedForm,
-          sections: selectedForm.sections.map((sec: any) => ({
-            ...sec,
-            questions: sec.questions.map((qu: any) => {
-              if (qu.id === questionId) {
-                return { ...qu, description: tempDescription.trim() };
-              }
-              return qu;
-            })
-          }))
-        };
-        if (!supabase) {
-          await mockDb.update('monitorias', initialData.id, { form_snapshot: updatedSnapshot });
-        } else {
-          await supabase
-            .from('monitorias')
-            .update({ form_snapshot: updatedSnapshot })
-            .eq('id', initialData.id);
-        }
-      }
-
-      setLocalDescriptions(prev => ({
-        ...prev,
-        [questionId]: tempDescription.trim()
-      }));
-
-      toast.success('Instrução persistida com sucesso!');
-      setEditingQuestionId(null);
-      staticData.refreshAll();
-    } catch (err: any) {
-      console.error('[AdminEdit] Error saving description:', err);
-      toast.error('Não foi possível persistir a alteração.');
-    } finally {
-      setSavingDescId(null);
-    }
-  };
 
   useEffect(() => {
     if (contentRef.current) {
@@ -744,69 +669,16 @@ const getSolidBg = (textColor: string) => {
                               )}
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="text-sm font-bold text-brand-primary leading-relaxed">{q.text}</p>
-                                {(() => {
-                                  const currentDesc = localDescriptions[q.id] !== undefined ? localDescriptions[q.id] : q.description;
-                                  return (
-                                    <>
-                                      {currentDesc && (
-                                        <div className="relative z-20 hover:z-50 group/info">
-                                          <Info className="w-4 h-4 text-brand-muted hover:text-brand-accent cursor-help transition-colors" />
-                                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-surface-card border border-surface-border rounded-xl shadow-premium opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all z-50 pointer-events-none group-hover/info:pointer-events-auto text-center">
-                                            <p className="text-[11px] font-bold text-brand-muted leading-relaxed">{currentDesc}</p>
-                                          </div>
-                                        </div>
-                                      )}
-                                      {isAdmin && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setEditingQuestionId(q.id);
-                                            setTempDescription(currentDesc || '');
-                                          }}
-                                          className="p-1 rounded-lg hover:bg-surface-subtle text-brand-muted hover:text-brand-accent transition-all duration-200 hover:scale-110"
-                                          title="Editar instrução (Administrador)"
-                                        >
-                                          <Pencil className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                    </>
-                                  );
-                                })()}
+                                {q.description && (
+                                  <div className="relative z-20 hover:z-50 group/info">
+                                    <Info className="w-4 h-4 text-brand-muted hover:text-brand-accent cursor-help transition-colors" />
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-surface-card border border-surface-border rounded-xl shadow-premium opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all z-50 pointer-events-none group-hover/info:pointer-events-auto text-center">
+                                      <p className="text-[11px] font-bold text-brand-muted leading-relaxed">{q.description}</p>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                            {editingQuestionId === q.id && (
-                              <div className="mt-3 p-3.5 bg-surface-subtle border border-surface-border rounded-2xl space-y-3">
-                                <label className="block text-[10px] font-black text-brand-primary uppercase tracking-widest">
-                                  Editar Instrução do Critério (Administrador)
-                                </label>
-                                <textarea
-                                  value={tempDescription}
-                                  onChange={e => setTempDescription(e.target.value)}
-                                  placeholder="Escreva a instrução ou explicação que aparecerá no balão de informações..."
-                                  className="w-full bg-surface-card border border-surface-border rounded-xl p-3 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all min-h-[72px]"
-                                />
-                                <div className="flex justify-end gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    type="button"
-                                    onClick={() => setEditingQuestionId(null)}
-                                    className="px-3 py-1.5 text-[10px]"
-                                  >
-                                    Cancelar
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    type="button"
-                                    onClick={() => handleSaveDescription(q.id)}
-                                    className="px-3 py-1.5 text-[10px] bg-brand-accent text-white font-black"
-                                    loading={savingDescId === q.id}
-                                  >
-                                    Salvar
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
                             <div className="flex items-center gap-4 mt-2">
                               <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">
                                 Impacto: {((section.weight || 0) / (section.questions.filter(qu => scores[qu.id] !== 'NA').length || section.questions.length)).toFixed(1)}%

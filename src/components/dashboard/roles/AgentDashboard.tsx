@@ -255,7 +255,7 @@ export default function AgentDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[350px]">
+        <div className="lg:col-span-2 h-[380px]">
           <TrendChart 
             data={trendData} 
             title="Evolução Comparativa"
@@ -266,7 +266,7 @@ export default function AgentDashboard() {
       ]}
           />
         </div>
-        <div className="lg:col-span-1 h-[350px]">
+        <div className="lg:col-span-1 h-[380px]">
           <DistributionChart 
             title="Minha Classificação"
             data={config.levels.map(l => ({
@@ -279,7 +279,7 @@ export default function AgentDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 min-h-[400px]">
+        <div className="lg:col-span-2 h-[420px]">
           <OfensoresChart 
             monitorias={myMonitorias}
             forms={forms}
@@ -288,7 +288,7 @@ export default function AgentDashboard() {
             limit={5}
           />
         </div>
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 h-[420px]">
 <ActionDeadlineWidget
           title="Aguardando Minha Ação"
           monitorias={myAllMonitorias}

@@ -7,6 +7,7 @@ import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard } from '../DashboardContext';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface ActionDeadlineWidgetProps {
   title: string;
@@ -16,8 +17,8 @@ interface ActionDeadlineWidgetProps {
 
 export default function ActionDeadlineWidget({ title, monitorias, targetStatus }: ActionDeadlineWidgetProps) {
   const { config, saveConfig } = useQualityConfig();
-  const [isEditing, setIsEditing] = useState(false);
-  const [tempTitle, setTempTitle] = useState('');
+  const [isHovered, setIsHovered] = useState(false);
+  const [tempSub, setTempSub] = useState('');
 
   let dashboardContext = null;
   try {
@@ -26,31 +27,35 @@ export default function ActionDeadlineWidget({ title, monitorias, targetStatus }
   const user = dashboardContext?.user;
   const isAdmin = user?.role === 'admin';
 
-  const customTitle = (config?.dashboardWidgetTitles?.[title] !== undefined && config.dashboardWidgetTitles[title] !== '')
-    ? config.dashboardWidgetTitles[title]
-    : title;
+  const myUniqueId = `chart-${title}`;
+  const isEditing = dashboardContext?.activeEditingId === myUniqueId;
+
+  const customSub = (config?.statCardExplanations?.[title] !== undefined && config.statCardExplanations[title] !== '')
+    ? config.statCardExplanations[title]
+    : 'Controle de prazos de ação ativos';
 
   const handleEditClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setTempTitle(customTitle);
-    setIsEditing(true);
+    setTempSub(typeof customSub === 'string' ? customSub.slice(0, 35) : '');
+    dashboardContext?.setActiveEditingId(myUniqueId);
+    setIsHovered(false);
   };
 
   const handleSave = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const updatedTitles = {
-        ...(config.dashboardWidgetTitles || {}),
-        [title]: tempTitle,
+      const updatedExplanations = {
+        ...(config.statCardExplanations || {}),
+        [title]: tempSub,
       };
       await saveConfig({
         ...config,
-        dashboardWidgetTitles: updatedTitles,
+        statCardExplanations: updatedExplanations,
       });
-      toast.success('Título atualizado com sucesso!');
-      setIsEditing(false);
+      toast.success('Descrição atualizada com sucesso!');
+      dashboardContext?.setActiveEditingId(null);
     } catch (err) {
-      toast.error('Erro ao salvar título.');
+      toast.error('Erro ao salvar descrição.');
     }
   };
 
@@ -71,24 +76,23 @@ export default function ActionDeadlineWidget({ title, monitorias, targetStatus }
       {isEditing ? (
         <div className="flex flex-col gap-2 mb-5 animate-fade-in" onClick={(e) => e.stopPropagation()}>
           <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
-            Editar Título:
+            Editar Descrição: {title}
           </span>
-          <input
-            type="text"
-            value={tempTitle}
-            onChange={(e) => setTempTitle(e.target.value.slice(0, 35))}
+          <textarea
+            value={tempSub}
+            onChange={(e) => setTempSub(e.target.value.slice(0, 35))}
             maxLength={35}
-            className="w-full text-xs p-1.5 rounded-lg border border-surface-border bg-surface-bg text-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-accent h-8"
-            placeholder="Digite o título (máx. 35 caracteres)..."
+            className="w-full text-xs p-1.5 rounded-lg border border-surface-border bg-surface-bg text-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-accent resize-none h-12"
+            placeholder="Digite a descrição (máx. 35 caracteres)..."
             autoFocus
           />
           <div className="text-[10px] text-brand-muted text-right -mt-1">
-            {tempTitle.length}/35
+            {tempSub.length}/35
           </div>
           <div className="flex justify-end gap-1.5">
             <button
               type="button"
-              onClick={() => setIsEditing(false)}
+              onClick={() => dashboardContext?.setActiveEditingId(null)}
               className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md text-brand-muted hover:bg-surface-subtle transition-colors cursor-pointer"
             >
               Cancelar
@@ -103,19 +107,36 @@ export default function ActionDeadlineWidget({ title, monitorias, targetStatus }
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2.5 mb-5 min-w-0">
+        <div className="flex items-center gap-3 mb-5 min-w-0">
           <div 
             onClick={isAdmin ? handleEditClick : undefined}
-            className={`w-9 h-9 rounded-xl bg-functional-warning flex items-center justify-center flex-shrink-0 text-functional-warning ${
-              isAdmin ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : ''
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            className={`relative w-9 h-9 rounded-xl bg-functional-warning flex items-center justify-center flex-shrink-0 text-functional-warning ${
+              isAdmin ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
             }`}
-            title={isAdmin ? "Clique para editar título" : undefined}
+            title=""
           >
-            <Clock className="w-5 h-5" />
+            <Clock className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
+            <AnimatePresence>
+              {isHovered && customSub && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                  transition={{ duration: 0.12, ease: 'easeOut' }}
+                  className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
+                >
+                  {customSub}{isAdmin ? " (Clique para editar)" : ""}
+                  {/* Subtle upward pointing arrow */}
+                  <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight truncate">{customTitle}</h3>
-            <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5 truncate">
+            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight truncate" title="">{title}</h3>
+            <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5 truncate" title="">
               {pending.length} pendência{pending.length !== 1 ? 's' : ''}
             </p>
           </div>

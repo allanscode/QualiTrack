@@ -390,7 +390,7 @@ export default function QualityManagerDashboard() {
 
       {/* Linha 3 — Evolução Única */}
       <div className="grid grid-cols-1 gap-6">
-        <div className="h-[300px]">
+        <div className="h-[380px]">
           <TrendChart
             title="Evolução da Qualidade"
             subtitle="Média global de score por dia"
@@ -402,19 +402,19 @@ export default function QualityManagerDashboard() {
 
       {/* Linha 4 — Curva, Precisão e Ranking */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="h-[300px]">
+        <div className="h-[380px]">
           <DistributionChart
             title="Curva de Qualidade"
             data={gradeDistribution}
           />
         </div>
-        <div className="h-[300px]">
+        <div className="h-[380px]">
           <DistributionChart
             title="Precisão da Qualidade"
             data={precisionData}
           />
         </div>
-        <div className="h-[300px]">
+        <div className="h-[380px]">
           <RankingWidget
             title="Ranking de Qualidade"
             subtitle="Por volume de auditorias realizadas"
@@ -433,14 +433,14 @@ export default function QualityManagerDashboard() {
 
       {/* Row 6 — Melhores Scores e Oportunidades */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="h-[250px]">
+        <div className="h-[420px]">
           <RankingWidget
             title="Melhores Scores (Suporte)"
             subtitle={`Acima da meta (${config.targetScore}%)`}
             data={topAgents}
           />
         </div>
-        <div className="h-[250px]">
+        <div className="h-[420px]">
         <RankingWidget
           title="Oportunidades (Suporte)"
           subtitle="Mais críticos primeiro"
@@ -453,7 +453,7 @@ export default function QualityManagerDashboard() {
 
       {/* Row 7 — Prazos de Ação e Rankings de Contestações */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="h-[320px]">
+        <div className="h-[420px]">
           <ComparativeBarChart
             title="Volume de Reavaliações"
             subtitle="Aceitas vs Recusadas no período"
@@ -464,7 +464,7 @@ export default function QualityManagerDashboard() {
             ]}
           />
         </div>
-        <div className="h-[320px]">
+        <div className="h-[420px]">
           <RankingWidget
             title="Top Reav. Aceitas (Geral)"
             subtitle="Agentes com mais notas alteradas"
@@ -472,7 +472,7 @@ export default function QualityManagerDashboard() {
             type="count"
           />
         </div>
-        <div className="h-[320px]">
+        <div className="h-[420px]">
         <RankingWidget
           title="Top Reav. Recusadas (Geral)"
           subtitle="Agentes com mais notas mantidas"
@@ -509,10 +509,10 @@ export default function QualityManagerDashboard() {
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-[300px]">
+            <div className="h-[360px]">
               <DistributionChart title="Insatisfação — Visão do Cliente" data={clientData} />
             </div>
-            <div className="h-[300px]">
+            <div className="h-[360px]">
               <DistributionChart title="Insatisfação — Visão da Qualidade" data={qualityData} />
             </div>
           </div>

@@ -311,7 +311,7 @@ export default function SupportManagerDashboard() {
 
       {/* Linha 4 — Trend chart (Agora ocupando a linha inteira) */}
       <div className="grid grid-cols-1 gap-6">
-        <div className="h-[340px]">
+        <div className="h-[380px]">
           <TrendChart
             title="Evolução do Score"
             subtitle="Nota média agregada das suas equipes"
@@ -323,14 +323,14 @@ export default function SupportManagerDashboard() {
 
       {/* Linha 5 — Rankings de Notas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="h-[280px]">
+        <div className="h-[420px]">
           <RankingWidget
             title="Melhores Notas (Time)"
             subtitle={`Agentes acima da meta (${config.targetScore}%)`}
             data={topAgents}
           />
         </div>
-        <div className="h-[280px]">
+        <div className="h-[420px]">
         <RankingWidget
           title="Oportunidades (Time)"
           subtitle={`Agentes abaixo da meta (${config.targetScore}%)`}
@@ -343,7 +343,7 @@ export default function SupportManagerDashboard() {
 
       {/* Linha 6 — Rankings de Contestações */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="h-[280px]">
+        <div className="h-[420px]">
           <RankingWidget
             title="Top Reav. Aceitas"
             subtitle="Agentes com mais notas alteradas"
@@ -351,7 +351,7 @@ export default function SupportManagerDashboard() {
             type="count"
           />
         </div>
-        <div className="h-[280px]">
+        <div className="h-[420px]">
         <RankingWidget
           title="Top Reav. Recusadas"
           subtitle="Agentes com mais notas mantidas"
@@ -388,10 +388,10 @@ export default function SupportManagerDashboard() {
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-[300px]">
+            <div className="h-[360px]">
               <DistributionChart title="Insatisfação — Visão do Cliente" data={clientData} />
             </div>
-            <div className="h-[300px]">
+            <div className="h-[360px]">
               <DistributionChart title="Insatisfação — Visão da Qualidade" data={qualityData} />
             </div>
           </div>
