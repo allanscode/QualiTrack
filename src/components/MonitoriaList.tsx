@@ -955,16 +955,21 @@ if (user?.role === 'gestor_suporte') {
                 {actionModal.type === 'reabrir' && (
                   <div className="mb-6">
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 block">Retornar para qual etapa?</label>
-                    <select 
-                      value={reopenStatus}
-                      onChange={e => setReopenStatus(e.target.value as any)}
-                      className="w-full bg-surface-bg border border-surface-border rounded-lg p-3 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/50 transition-all mb-4"
-                    >
-                      <option value="pendente_revisao">Pendente Revisão (Agente de Suporte)</option>
-                      <option value="em_contestacao">Em Contestação (Monitor de Qualidade)</option>
-                      <option value="aguardando_gestor_suporte">Gestão Suporte (Gestor de Suporte)</option>
-                      <option value="aguardando_gestor_qualidade">Gestão Qualidade (Gestor de Qualidade)</option>
-                    </select>
+                    <div className="relative mb-4">
+                      <select 
+                        value={reopenStatus}
+                        onChange={e => setReopenStatus(e.target.value as any)}
+                        className="w-full appearance-none bg-surface-bg border border-surface-border rounded-lg p-3 pr-10 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/50 transition-all"
+                      >
+                        <option value="pendente_revisao">Pendente Revisão (Agente de Suporte)</option>
+                        <option value="em_contestacao">Em Contestação (Monitor de Qualidade)</option>
+                        <option value="aguardando_gestor_suporte">Gestão Suporte (Gestor de Suporte)</option>
+                        <option value="aguardando_gestor_qualidade">Gestão Qualidade (Gestor de Qualidade)</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-brand-muted">
+                        <ChevronDown className="h-4 w-4" />
+                      </div>
+                    </div>
                   </div>
                 )}
 

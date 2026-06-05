@@ -320,33 +320,6 @@ textarea::placeholder {
   color: #F9F9F6 !important; /* text-brand-primary */
 }
 
-/* Specific exceptions to keep transparent bg and border-none working despite the global override */
-input[type="text"].bg-transparent,
-input[type="number"].bg-transparent,
-input[type="password"].bg-transparent,
-input[type="email"].bg-transparent,
-input[type="search"].bg-transparent,
-textarea.bg-transparent,
-input.bg-transparent {
-  background-color: transparent !important;
-}
-
-input.border-none,
-textarea.border-none {
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* Ensure focus states don't re-introduce borders or shadows on border-none or bg-transparent elements */
-input.border-none:focus,
-textarea.border-none:focus,
-input.bg-transparent:focus,
-textarea.bg-transparent:focus {
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
-}
-
 .dark input[type="text"]::placeholder,
 .dark input[type="number"]::placeholder,
 .dark input[type="password"]::placeholder,
@@ -376,4 +349,46 @@ textarea:focus {
 .dark textarea:focus {
   border-color: #475569 !important; /* focus:border-slate-600 */
   box-shadow: 0 0 0 1px #475569 !important; /* focus:ring-slate-600 */
+}
+
+/* Specific exceptions to keep transparent bg and border-none working despite the global override */
+input[type="text"].bg-transparent,
+input[type="number"].bg-transparent,
+input[type="password"].bg-transparent,
+input[type="email"].bg-transparent,
+input[type="search"].bg-transparent,
+textarea.bg-transparent,
+input.bg-transparent {
+  background-color: transparent !important;
+}
+
+input.border-none,
+textarea.border-none,
+input[type="text"].border-none,
+input[type="number"].border-none,
+input[type="password"].border-none,
+input[type="email"].border-none,
+input[type="search"].border-none {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Ensure focus states don't re-introduce borders or shadows on border-none or bg-transparent elements */
+input.border-none:focus,
+textarea.border-none:focus,
+input.bg-transparent:focus,
+textarea.bg-transparent:focus,
+input[type="text"].border-none:focus,
+input[type="number"].border-none:focus,
+input[type="password"].border-none:focus,
+input[type="email"].border-none:focus,
+input[type="search"].border-none:focus,
+input[type="text"].bg-transparent:focus,
+input[type="number"].bg-transparent:focus,
+input[type="password"].bg-transparent:focus,
+input[type="email"].bg-transparent:focus,
+input[type="search"].bg-transparent:focus {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
 }

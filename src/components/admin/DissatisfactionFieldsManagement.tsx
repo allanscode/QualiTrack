@@ -219,8 +219,12 @@ export default function DissatisfactionFieldsManagement() {
             />
           </div>
         </div>
-        <Button onClick={handleOpenNew} icon={<Plus className="w-4 h-4" />} className="h-10 !rounded-lg !py-0 flex items-center shrink-0 hover:bg-opacity-90 dark:hover:bg-neutral-200">
-          Adicionar Campo Extra
+        <Button 
+          onClick={handleOpenNew} 
+          icon={<Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90" />} 
+          className="group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200"
+        >
+          NOVO CAMPO EXTRA
         </Button>
       </div>
 
@@ -404,13 +408,13 @@ export default function DissatisfactionFieldsManagement() {
                   </div>
                 </div>
 
-                <Button 
-                  className="w-full h-10 !rounded-lg mt-4 flex items-center justify-center text-sm font-medium hover:bg-opacity-90 dark:hover:bg-neutral-200" 
+                 <Button 
+                  className="w-full group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:bg-surface-border dark:disabled:bg-surface-border disabled:text-brand-muted dark:disabled:text-brand-muted disabled:opacity-100 disabled:transform-none disabled:shadow-none transition-all duration-200 py-2.5 px-8 mt-4" 
                   onClick={handleSaveField} 
                   disabled={saving} 
-                  icon={<Save className="w-4 h-4" />}
+                  icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
                 >
-                  {saving ? 'Salvando...' : 'Salvar Campo'}
+                  {saving ? 'SALVANDO...' : 'SALVAR'}
                 </Button>
               </div>
             </Card>

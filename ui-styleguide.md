@@ -42,6 +42,22 @@ Para manter a consistência do ecossistema visual, todos os botões de ação pr
 </button>
 ```
 
+### Micro-interações em Botões Primários
+
+Para garantir o dinamismo visual e a elegância de alto nível sem poluir o layout ou gerar uma "salada de animações", adota-se um padrão estrito de feedback interativo para botões com ícones associados:
+
+1. **Classes do Container do Botão**:
+   * O container do botão (tag `<Button>` ou `<button>`) deve usar a classe `group` para que possamos controlar seus elementos filhos no hover do pai.
+   * O container do botão deve possuir a classe `transition-all duration-200` para transições suaves de cor e sombras.
+
+2. **Ícones de Adição (`+`) ou Criação**:
+   * Devem rotacionar suavemente no hover do botão principal.
+   * Classe do ícone (ex: `Plus` ou `UserPlus`): `transition-transform duration-300 group-hover:rotate-90`.
+
+3. **Ícones de Ação/Salvamento (como Disquete, Salvar, Confirmar ou Check)**:
+   * Devem sofrer uma leve escala de tamanho (zoom-in suave) no hover do botão principal.
+   * Classe do ícone (ex: `Save`, `Check`, `CheckCircle2` ou `Pencil`): `transition-transform duration-200 group-hover:scale-110`.
+
 ---
 
 ## 3. Elementos de Seleção, Inputs e Datepickers

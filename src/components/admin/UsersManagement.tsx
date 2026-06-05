@@ -233,8 +233,12 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
             />
           </div>
         </div>
-        <Button onClick={() => { setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' }); setIsModalOpen(true); }} icon={<UserPlus className="w-4 h-4" />}>
-          Adicionar Usuário
+        <Button 
+          onClick={() => { setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], password: '' }); setIsModalOpen(true); }} 
+          icon={<UserPlus className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
+          className="group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200"
+        >
+          NOVO USUÁRIO
         </Button>
       </div>
 
@@ -273,21 +277,51 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                 </td>
                 <td className="px-6 py-3 text-xs font-bold text-brand-muted whitespace-nowrap">
                   {(() => {
-                    if (!u.team_ids || u.team_ids.length === 0) return 'Sem equipe';
+                    if (!u.team_ids || u.team_ids.length === 0) return (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-surface-subtle text-[10px] font-black text-brand-muted uppercase tracking-wider">
+                        Sem equipe
+                      </span>
+                    );
                     const activeTeamNames = u.team_ids
                       .map(id => teams.find(t => t.id === id && t.active !== false)?.name)
                       .filter(Boolean) as string[];
                     
-                    if (activeTeamNames.length === 0) return 'Sem equipe';
-                    if (activeTeamNames.length <= 2) {
-                      return activeTeamNames.join(', ');
-                    }
+                    if (activeTeamNames.length === 0) return (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-surface-subtle text-[10px] font-black text-brand-muted uppercase tracking-wider">
+                        Sem equipe
+                      </span>
+                    );
+                    
+                    const displayedTeams = activeTeamNames.slice(0, 2);
+                    const remainingTeams = activeTeamNames.slice(2);
+
                     return (
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate max-w-[150px]">{activeTeamNames.slice(0, 2).join(', ')}</span>
-                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-black text-slate-500 dark:text-slate-400">
-                          +{activeTeamNames.length - 2}
-                        </span>
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        {displayedTeams.map((name, idx) => (
+                          <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-[10px] font-black text-blue-600 dark:text-blue-400 border border-blue-100/50 dark:border-blue-900/30 uppercase tracking-wider">
+                            {name}
+                          </span>
+                        ))}
+                        {remainingTeams.length > 0 && (
+                          <div className="relative group/popover">
+                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-lg bg-brand-accent/10 dark:bg-brand-accent/20 text-[10px] font-black text-brand-accent hover:bg-brand-accent hover:text-white transition-all cursor-pointer">
+                              +{remainingTeams.length}
+                            </span>
+                            {/* Popover */}
+                            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/popover:block z-50 min-w-[160px] bg-surface-card border border-surface-border rounded-xl shadow-premium-lg p-2.5 animate-in fade-in slide-in-from-bottom-2 duration-150 text-left">
+                              <p className="text-[9px] font-black text-brand-muted uppercase tracking-widest border-b border-surface-border pb-1.5 mb-1.5">Outras Equipes</p>
+                              <div className="space-y-1 max-h-36 overflow-y-auto no-scrollbar animate-in fade-in duration-200">
+                                {remainingTeams.map((name, idx) => (
+                                  <div key={idx} className="text-[10px] font-black text-brand-primary py-1 px-1.5 hover:bg-surface-bg rounded-md transition-colors uppercase tracking-wider">
+                                    {name}
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Arrow */}
+                              <div className="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 bg-surface-card border-r border-b border-surface-border rotate-45 -mt-1"></div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -301,9 +335,9 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                         <button 
                           onClick={() => handleResetPassword(u.email)} 
                           title="Reenviar Senha"
-                          className="p-2.5 rounded-lg hover:bg-brand-subtle text-brand-muted hover:text-brand-primary transition-all duration-200 cursor-pointer"
+                          className="group p-2.5 rounded-lg hover:bg-brand-subtle text-brand-muted hover:text-brand-primary transition-all duration-200 cursor-pointer"
                         >
-                          <Key className="w-4 h-4" />
+                          <Key className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
                         </button>
                         <button 
                           onClick={() => { 
@@ -311,9 +345,9 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                             setEditingUser({...u, team_ids: activeTeamIds}); 
                             setIsModalOpen(true); 
                           }} 
-                          className="p-2.5 rounded-lg hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all duration-200 cursor-pointer"
+                          className="group p-2.5 rounded-lg hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all duration-200 cursor-pointer"
                         >
-                          <Edit2 className="w-4 h-4" />
+                          <Edit2 className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
                         </button>
                       </>
                     )}
@@ -331,9 +365,9 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                         <button 
                           onClick={() => setDeleteConfirmId(u.id)} 
                           title="Desativar Usuário"
-                          className="p-2.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-brand-muted hover:text-error opacity-40 group-hover:opacity-70 hover:!opacity-100 transition-all duration-200 cursor-pointer"
+                          className="group p-2.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-brand-muted hover:text-error opacity-40 group-hover:opacity-70 hover:!opacity-100 transition-all duration-200 cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
                         </button>
                       )}
                     </div>
@@ -422,8 +456,13 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                   </div>
                 </div>
 
-                <Button className="w-full mt-4" onClick={handleSaveUser} disabled={saving} icon={<Save className="w-4 h-4" />}>
-                  {saving ? 'Salvando...' : 'Salvar Usuário'}
+                 <Button 
+                  className="w-full mt-4 group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:bg-surface-border dark:disabled:bg-surface-border disabled:text-brand-muted dark:disabled:text-brand-muted disabled:opacity-100 disabled:transform-none disabled:shadow-none transition-all duration-200 py-2.5 px-8" 
+                  onClick={handleSaveUser} 
+                  disabled={saving} 
+                  icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
+                >
+                  {saving ? 'SALVANDO...' : 'SALVAR'}
                 </Button>
               </div>
             </Card>

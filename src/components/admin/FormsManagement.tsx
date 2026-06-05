@@ -255,14 +255,18 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
           </div>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => { 
+        <Button 
+          onClick={() => { 
             setEditingForm({ title: '', description: '', team_id: '', sections: [], critical_errors: [] }); 
             setDraftRecoveredOrDismissed(false);
             setShowDraftBanner(!!localStorage.getItem('qualitrack_form_draft')); 
             setIsModalOpen(true); 
-          }} icon={<Plus className="w-4 h-4" />} className="transition-all duration-200 cursor-pointer hover:bg-opacity-90 dark:hover:bg-neutral-200">
-            Novo Formulário
-          </Button>
+          }} 
+          icon={<Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90" />} 
+          className="group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200"
+        >
+          NOVO FORMULÁRIO
+        </Button>
         </div>
       </div>
 
