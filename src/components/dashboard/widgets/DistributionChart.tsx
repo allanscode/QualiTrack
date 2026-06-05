@@ -10,9 +10,20 @@ import { motion, AnimatePresence } from 'motion/react';
 interface DistributionChartProps {
   title: string;
   data: { name: string; value: number; color: string }[];
+  isCustomizing?: boolean;
+  profile?: string;
+  activeEditingId?: string | null;
+  setActiveEditingId?: (id: string | null) => void;
 }
 
-export default function DistributionChart({ title, data }: DistributionChartProps) {
+export default function DistributionChart({ 
+  title, 
+  data,
+  isCustomizing = false,
+  profile,
+  activeEditingId,
+  setActiveEditingId
+}: DistributionChartProps) {
   const { config, saveConfig } = useQualityConfig();
   const [isHovered, setIsHovered] = useState(false);
   const [tempSub, setTempSub] = useState('');
@@ -22,19 +33,28 @@ export default function DistributionChart({ title, data }: DistributionChartProp
     dashboardContext = useDashboard();
   } catch (e) {}
   const user = dashboardContext?.user;
-  const isAdmin = dashboardContext?.loggedInUser?.role === 'admin' || user?.role === 'admin';
+  const canEdit = isCustomizing;
 
   const myUniqueId = `chart-${title}`;
-  const isEditing = dashboardContext?.activeEditingId === myUniqueId;
+  const isEditing = activeEditingId !== undefined
+    ? activeEditingId === myUniqueId
+    : dashboardContext?.activeEditingId === myUniqueId;
 
-  const customSub = (config?.statCardExplanations?.[title] !== undefined && config.statCardExplanations[title] !== '')
-    ? config.statCardExplanations[title]
-    : 'Curva de distribuição de qualidade';
+  const lookupKey = profile ? `${profile}_${title}` : (user?.role ? `${user.role}_${title}` : title);
+  const customSub = (config?.statCardExplanations?.[lookupKey] !== undefined && config.statCardExplanations[lookupKey] !== '')
+    ? config.statCardExplanations[lookupKey]
+    : (config?.statCardExplanations?.[title] !== undefined && config.statCardExplanations[title] !== '')
+      ? config.statCardExplanations[title]
+      : 'Curva de distribuição de qualidade';
 
   const handleEditClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setTempSub(typeof customSub === 'string' ? customSub.slice(0, 35) : '');
-    dashboardContext?.setActiveEditingId(myUniqueId);
+    if (setActiveEditingId) {
+      setActiveEditingId(myUniqueId);
+    } else {
+      dashboardContext?.setActiveEditingId(myUniqueId);
+    }
     setIsHovered(false);
   };
 
@@ -43,16 +63,29 @@ export default function DistributionChart({ title, data }: DistributionChartProp
     try {
       const updatedExplanations = {
         ...(config.statCardExplanations || {}),
-        [title]: tempSub,
+        [lookupKey]: tempSub,
       };
       await saveConfig({
         ...config,
         statCardExplanations: updatedExplanations,
       });
       toast.success('Descrição atualizada com sucesso!');
-      dashboardContext?.setActiveEditingId(null);
+      if (setActiveEditingId) {
+        setActiveEditingId(null);
+      } else {
+        dashboardContext?.setActiveEditingId(null);
+      }
     } catch (err) {
       toast.error('Erro ao salvar descrição.');
+    }
+  };
+
+  const handleCancel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (setActiveEditingId) {
+      setActiveEditingId(null);
+    } else {
+      dashboardContext?.setActiveEditingId(null);
     }
   };
 
@@ -91,7 +124,7 @@ export default function DistributionChart({ title, data }: DistributionChartProp
           <div className="flex justify-end gap-1.5">
             <button
               type="button"
-              onClick={() => dashboardContext?.setActiveEditingId(null)}
+              onClick={handleCancel}
               className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md text-brand-muted hover:bg-surface-subtle transition-colors cursor-pointer"
             >
               Cancelar
@@ -108,11 +141,11 @@ export default function DistributionChart({ title, data }: DistributionChartProp
       ) : (
         <div className="flex items-center gap-3 mb-4 min-w-0">
           <div 
-            onClick={isAdmin ? handleEditClick : undefined}
+            onClick={canEdit ? handleEditClick : undefined}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             className={`relative w-9 h-9 rounded-xl bg-icon-accent flex items-center justify-center flex-shrink-0 text-brand-accent ${
-              isAdmin ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
+              canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
             }`}
             title=""
           >
@@ -126,7 +159,7 @@ export default function DistributionChart({ title, data }: DistributionChartProp
                   transition={{ duration: 0.12, ease: 'easeOut' }}
                   className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
                 >
-                  {customSub}{isAdmin ? " (Clique para editar)" : ""}
+                  {customSub}{canEdit ? " (Clique para editar)" : ""}
                   {/* Subtle upward pointing arrow */}
                   <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
                 </motion.div>

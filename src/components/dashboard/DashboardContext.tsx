@@ -41,38 +41,17 @@ const DashboardContext = createContext<DashboardContextType | undefined>(undefin
 export function DashboardProvider({ 
   user: loggedInUser, 
   activeTab, 
-  simulatedRole, 
   children 
 }: { 
   user: User | null, 
   activeTab?: string, 
-  simulatedRole?: 'admin' | 'gestor_qualidade' | 'gestor_suporte' | 'qualidade' | 'suporte' | null, 
   children: ReactNode 
 }) {
   const staticData = useStaticData();
-  const allUsers = staticData.users;
 
-  const dashboardRole = simulatedRole || loggedInUser?.role || 'suporte';
-  const isSimulated = !!simulatedRole && loggedInUser?.role === 'admin';
-
-  const user = React.useMemo(() => {
-    if (!isSimulated || !loggedInUser) return loggedInUser;
-    
-    // Find the first active user with the simulated role
-    const found = allUsers.find(u => u.role === simulatedRole && u.active !== false);
-    if (found) {
-      return found;
-    }
-    
-    // Fallback if no user is found
-    return {
-      ...loggedInUser,
-      id: '00000000-0000-0000-0000-000000000000',
-      name: `Simulado (${simulatedRole})`,
-      role: simulatedRole,
-      team_ids: []
-    };
-  }, [isSimulated, loggedInUser, simulatedRole, allUsers]);
+  const dashboardRole = loggedInUser?.role || 'suporte';
+  const isSimulated = false;
+  const user = loggedInUser;
 
   const [filters, setFilters] = useState<DashboardFilters>({
     startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0],

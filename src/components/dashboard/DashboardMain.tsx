@@ -49,17 +49,15 @@ function DashboardRouter() {
 
 export default function DashboardMain({ 
   user, 
-  activeTab, 
-  simulatedRole 
+  activeTab
 }: { 
   user: User | null; 
   activeTab?: string; 
-  simulatedRole?: 'admin' | 'gestor_qualidade' | 'gestor_suporte' | 'qualidade' | 'suporte' | null;
 }) {
   if (!user) return null;
 
   return (
-    <DashboardProvider user={user} activeTab={activeTab} simulatedRole={simulatedRole}>
+    <DashboardProvider user={user} activeTab={activeTab}>
       <div className="space-y-4">
         <FilterBar />
         <DashboardRouter />
