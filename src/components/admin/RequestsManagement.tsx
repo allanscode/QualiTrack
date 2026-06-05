@@ -208,7 +208,7 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                       setApproveData({ name: req.name, email: req.email, role: 'suporte', team_ids: [] }); 
                       setIsApproveModalOpen(true); 
                     }}
-                    className="h-9 px-4 flex items-center justify-center transition-all duration-200 cursor-pointer hover:bg-opacity-90 dark:hover:bg-neutral-200"
+                    className="h-9 px-4 flex items-center justify-center transition-all duration-200 cursor-pointer hover:bg-slate-700 dark:hover:bg-neutral-200 hover:scale-[1.02] active:scale-[0.98]"
                   >
                     Revisar e Aprovar
                   </Button>
