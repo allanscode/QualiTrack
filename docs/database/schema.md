@@ -13,12 +13,14 @@ erDiagram
     TEAMS ||--o{ MONITORIAS : "team_id"
     FORMS ||--o{ MONITORIAS : "form_id"
     USERS }o--o{ TEAMS : "user_teams (N:N)"
+    USERS ||--o| TEAMS : "primary_team_id"
 
     USERS {
         uuid id PK
         text email UK
         text name
         text role
+        uuid primary_team_id FK
         boolean active
         boolean must_change_password
         timestamptz created_at
@@ -128,6 +130,7 @@ erDiagram
 | `email` | TEXT | UNIQUE | Email do usuário |
 | `name` | TEXT | — | Nome completo |
 | `role` | TEXT | — | `admin`, `gestor_qualidade`, `gestor_suporte`, `qualidade`, `suporte` |
+| `primary_team_id` | UUID | FK → teams | ID da equipe principal do usuário (único badge renderizado por padrão) |
 | `active` | BOOLEAN | `true` | Soft-delete |
 | `must_change_password` | BOOLEAN | `false` | Flag para forçar troca de senha |
 | `created_at` | TIMESTAMPTZ | `now()` | Data de criação |

@@ -19,21 +19,16 @@
 ## Gestão de Usuários (`UsersManagement.tsx`)
 
 ### Listagem
-- Tabela com: Usuário (avatar + nome + email), Perfil (badge), Equipe (nomes comma-separated), Ações
+- Tabela com: Usuário (avatar + nome + email), Perfil (badge), Equipe (Único badge da Equipe Principal e contador `+X` para as demais equipes vinculadas com Popover de hover), Ações
 - Filtros: status (ativo/inativo), role, equipe, busca por texto
 - Ações por linha: Reativar, Reenviar Senha, Editar, Excluir (two-step confirmation)
 
-### Criação (Convite)
-- Modal com campos: Nome, Email, Perfil (select), Equipes (multi-select com checkboxes; busca condicional se > 8 equipes)
+### Criação (Convite) e Edição
+- Modal com campos: Nome, Email, Perfil (select), Equipes (multi-select em lista com checkboxes; seletor de Equipe Principal via ícone de estrela `Star` ao lado de cada equipe selecionada; busca condicional se > 8 equipes)
 - Ao salvar → chama Edge Function `admin-invite-user` via `executeWithRetry` (até 3 attempts, 15s timeout)
-- Edge Function: cria no Auth + insere na `public.users` + sincroniza `user_teams`
-- Fallback (mock mode): insere diretamente no localStorage
-- **Importante**: `team_ids` NÃO é enviado no payload da tabela `users` — sincronizado via `syncUserTeams()`
-
-### Edição
-- Alterar nome, role, equipes
-- Não permite alterar email
-- Sincroniza equipes via `syncUserTeams()`
+- Edge Function: cria no Auth + insere na `public.users` (contendo `primary_team_id`) + sincroniza `user_teams`
+- Fallback (mock mode): insere diretamente no localStorage (incluindo `primary_team_id` no payload do usuário)
+- **Importante**: `team_ids` NÃO é enviado no payload da tabela `users` — sincronizado via `syncUserTeams()`. No entanto, a equipe marcada como principal é persistida diretamente na tabela `users` sob a propriedade `primary_team_id`.
 
 ### `syncUserTeams(userId, teamIds)`
 1. Busca `user_teams` existentes para o usuário
