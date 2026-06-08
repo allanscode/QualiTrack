@@ -454,7 +454,6 @@ export default function QualityDashboard({
           good={pendingActions === 0}
           icon={pendingActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
           accent={pendingActions === 0 ? 'text-functional-success' : 'text-functional-error'}
-          valueColorClass={pendingActions > 0 ? 'text-functional-error' : 'text-functional-success'}
           isCustomizing={isCustomizing}
           profile="qualidade"
           activeEditingId={activeEditingId}
@@ -467,7 +466,6 @@ export default function QualityDashboard({
           good={volDiff >= 0}
           icon={<ClipboardCheck className="w-5 h-5" />}
           accent={volDiff >= 0 ? 'text-functional-success' : 'text-functional-error'}
-          valueColorClass={myMonitoriasCount >= config.targetVolume ? 'text-functional-success' : 'text-functional-error'}
           badge={
             <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${volColorClass}`}>
               {volSign} {Math.abs(volDiff)}
@@ -485,7 +483,6 @@ export default function QualityDashboard({
           good={isAboveTarget(avgScore)}
           icon={<Target className="w-5 h-5" />}
           accent="text-slate-500"
-          valueColorClass={avgScore >= config.targetScore ? 'text-functional-success' : 'text-functional-error'}
           badge={
             <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${diffColorClass}`}>
               {diffSign} {Math.abs(scoreDiff).toFixed(2)}%
@@ -503,7 +500,6 @@ export default function QualityDashboard({
           good={isAboveTarget(globalAvgScore)}
           icon={<Award className="w-5 h-5" />}
           accent="text-slate-500"
-          valueColorClass={globalAvgScore >= config.targetScore ? 'text-functional-success' : 'text-functional-error'}
           badge={
             <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${globalDiffColorClass}`}>
               {globalDiffSign} {Math.abs(globalDiff).toFixed(2)}%
@@ -537,7 +533,6 @@ export default function QualityDashboard({
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
           accent="text-functional-success"
-          valueColorClass="text-functional-success"
           isCustomizing={isCustomizing}
           profile="qualidade"
           activeEditingId={activeEditingId}
@@ -550,7 +545,6 @@ export default function QualityDashboard({
           good={true}
           icon={<XCircle className="w-5 h-5" />}
           accent="text-functional-error"
-          valueColorClass="text-functional-error"
           isCustomizing={isCustomizing}
           profile="qualidade"
           activeEditingId={activeEditingId}
@@ -563,7 +557,6 @@ export default function QualityDashboard({
           good={reversionRate <= config.targetReversalRate}
           icon={<Activity className="w-5 h-5" />}
           accent={reversionRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
-          valueColorClass={reversionRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
           badge={
             <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${revColorClass}`}>
               {revSign} {Math.abs(revDiff).toFixed(2)}%
@@ -576,9 +569,9 @@ export default function QualityDashboard({
         />
       </div>
 
-      {/* LINHA 3 (Visões Operacionais de Fila - Grid lg:grid-cols-3 gap-6) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[340px]">
+      {/* LINHA 3 (Volumetria Isolada - grid-cols-1) */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="h-[340px]">
           <ComparativeBarChart
             title="Volumetria Diária"
             subtitle="Comparativo com a média da equipe"
@@ -593,6 +586,10 @@ export default function QualityDashboard({
             setActiveEditingId={setActiveEditingId}
           />
         </div>
+      </div>
+
+      {/* LINHA 4 (Filas e Prazos Operacionais - Lado a Lado - lg:grid-cols-2 gap-6) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="h-[340px]">
           <ActionDeadlineWidget
             title="Monitorias em Andamento"
@@ -604,9 +601,20 @@ export default function QualityDashboard({
             setActiveEditingId={setActiveEditingId}
           />
         </div>
+        <div className="h-[340px]">
+          <ActionDeadlineWidget
+            title="Ações Expirando"
+            monitorias={useFallback ? mockMonitoriasDeadlines : myMonitorias}
+            targetStatus={['em_contestacao']}
+            isCustomizing={isCustomizing}
+            profile="qualidade"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
       </div>
 
-      {/* LINHA 4 (O Gráfico de Critérios Amplo - grid-cols-1) */}
+      {/* LINHA 5 (O Gráfico de Critérios Amplo - grid-cols-1) */}
       <div className="grid grid-cols-1 gap-6">
         <div className="h-[420px]">
           <OfensoresChart 
@@ -622,7 +630,7 @@ export default function QualityDashboard({
         </div>
       </div>
 
-      {/* LINHA 5 (Distribuição e Calibração - lg:grid-cols-3 gap-6 com altura fixa) */}
+      {/* LINHA 6 (Distribuição e Calibração - lg:grid-cols-3 gap-6) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="h-[380px]">
           <DistributionChart 
@@ -658,7 +666,7 @@ export default function QualityDashboard({
         </div>
       </div>
 
-      {/* LINHA 6 (Linha de Visões de Insatisfação - lg:grid-cols-2 gap-6) */}
+      {/* LINHA 7 (Visões de Insatisfação Lado a Lado - lg:grid-cols-2 gap-6) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="h-[380px]">
           <DistributionChart
@@ -683,7 +691,7 @@ export default function QualityDashboard({
         </div>
       </div>
 
-      {/* LINHA 7 (Tabela Final - grid-cols-1) */}
+      {/* LINHA 8 (Tabela Base - grid-cols-1) */}
       <div className="overflow-hidden">
         <RecentAuditsTable 
           monitorias={useFallback ? mockRecentMonitorias : myMonitorias} 
