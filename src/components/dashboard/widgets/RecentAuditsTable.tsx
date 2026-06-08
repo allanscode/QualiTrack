@@ -12,11 +12,18 @@ interface RecentAuditsTableProps {
   monitorias: Monitoria[];
   users: User[];
   title?: string;
+  isCustomizing?: boolean;
 }
 
 
-export default function RecentAuditsTable({ monitorias, users, title = 'Monitorias Recentes' }: RecentAuditsTableProps) {
-  const { user: currentUser } = useDashboard();
+export default function RecentAuditsTable({ monitorias, users, title = 'Monitorias Recentes', isCustomizing = false }: RecentAuditsTableProps) {
+  let dashboardContext = null;
+  try {
+    dashboardContext = useDashboard();
+  } catch (e) {
+    // Fail-safe if used outside of DashboardProvider
+  }
+  const currentUser = dashboardContext?.user;
   const { getLevelForScore } = useQualityConfig();
 
   const getName = (id: string) => {

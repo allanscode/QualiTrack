@@ -22,8 +22,8 @@ const mockMonitoriasDeadlines = [
     id: 'm1',
     display_id: '001',
     ticket_id: '10239',
-    status: 'em_contestacao',
-    evaluated_name: 'Ana Silva',
+    status: 'pendente_revisao',
+    evaluator_name: 'Mariana Santos',
     created_at: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
     action_deadline_at: new Date(Date.now() + 45 * 60 * 1000).toISOString() // 45 min
   },
@@ -31,8 +31,8 @@ const mockMonitoriasDeadlines = [
     id: 'm2',
     display_id: '002',
     ticket_id: '10482',
-    status: 'aguardando_gestor_qualidade',
-    evaluated_name: 'Bruno Costa',
+    status: 'em_contestacao',
+    evaluated_name: 'Ana Silva',
     created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
     action_deadline_at: new Date(Date.now() + 2 * 3600 * 1000).toISOString() // 2h
   }
@@ -109,6 +109,8 @@ function SlaCountdownItem({ monitoria, users }: { monitoria: any, users: any[] }
   );
 }
 
+
+// High-fidelity mock datasets for customization mode
 const mockPrecisionData = [
   { name: 'Estáveis', value: 54, color: '#10B981' },
   { name: 'Reavaliadas', value: 6, color: '#F59E0B' }
@@ -275,17 +277,17 @@ const mockMonitoriasOfensores = [
   { answers: { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM', q5: 'NAO' } }
 ] as any[];
 
-interface QualityManagerDashboardProps {
+interface AdminDashboardViewProps {
   isCustomizing?: boolean;
   activeEditingId?: string | null;
   setActiveEditingId?: (id: string | null) => void;
 }
 
-export default function QualityManagerDashboard({
+export default function AdminDashboardView({
   isCustomizing = false,
   activeEditingId,
   setActiveEditingId
-}: QualityManagerDashboardProps) {
+}: AdminDashboardViewProps) {
   let dashboardData: any = {
     user: null,
     monitorias: [],
@@ -331,11 +333,6 @@ export default function QualityManagerDashboard({
     return monitorias.filter((m: any) =>
       ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
     ).length;
-  }, [isCustomizing, monitorias]);
-
-  const pendingMyActions = useMemo(() => {
-    if (isCustomizing) return 1;
-    return monitorias.filter((m: any) => m.status === 'aguardando_gestor_qualidade').length;
   }, [isCustomizing, monitorias]);
 
   const totalMonitorias = useMemo(() => {
@@ -413,7 +410,7 @@ export default function QualityManagerDashboard({
   }, [isCustomizing, trendData]);
 
   const colorMap = chartColorMap();
-
+  
   const gradeDistribution = useMemo(() => {
     if (isCustomizing) return mockDistributionData;
     return config.levels
@@ -445,7 +442,7 @@ export default function QualityManagerDashboard({
     const mid = Math.floor(sorted.length / 2);
     const firstHalf = sorted.slice(0, mid);
     const secondHalf = sorted.slice(mid);
-
+    
     const getExcPercent = (list: typeof sorted) => {
       if (list.length === 0) return 0;
       const exc = list.filter((m: any) => {
@@ -454,7 +451,7 @@ export default function QualityManagerDashboard({
       }).length;
       return (exc / list.length) * 100;
     };
-
+    
     const firstExc = getExcPercent(firstHalf);
     const secondExc = getExcPercent(secondHalf);
     return secondExc - firstExc;
@@ -541,7 +538,7 @@ export default function QualityManagerDashboard({
     if (isCustomizing) return mockContestationsApproved;
     const map: Record<string, number> = {};
     monitorias.forEach((m: any) => {
-      const isAccepted = m.status === 'contestacao_aceita' ||
+      const isAccepted = m.status === 'contestacao_aceita' || 
                         m.status === 'finalizada_alterada' ||
                         m.history?.some((h: any) =>
                           h.action.toLowerCase().includes('procedente') ||
@@ -550,7 +547,7 @@ export default function QualityManagerDashboard({
                           h.action.toLowerCase().includes('alterado') ||
                           h.action.toLowerCase().includes('reavaliada')
                         );
-
+      
       if (isAccepted && m.evaluated_id) {
         map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
       }
@@ -569,9 +566,9 @@ export default function QualityManagerDashboard({
     if (isCustomizing) return mockContestationsRejected;
     const map: Record<string, number> = {};
     monitorias.forEach((m: any) => {
-      const isRejected = m.status === 'contestacao_negada' ||
+      const isRejected = m.status === 'contestacao_negada' || 
                         m.history?.some((h: any) => h.action.toLowerCase().includes('negada') || h.action.toLowerCase().includes('recusada') || h.action.includes('Improcedente') || h.action.includes('Mantida'));
-
+      
       if (isRejected && m.evaluated_id) {
         map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
       }
@@ -636,6 +633,21 @@ export default function QualityManagerDashboard({
       };
     }).sort((a, b) => (b.Aceitas + b.Recusadas) - (a.Aceitas + a.Recusadas));
   }, [isCustomizing, monitorias, users]);
+
+  // Ações Expirando list
+  const sortedDeadlines = useMemo(() => {
+    const source = isCustomizing ? mockMonitoriasDeadlines : monitorias;
+    const filtered = source.filter((m: any) =>
+      ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
+      && m.action_deadline_at
+    );
+    
+    return [...filtered].sort((a, b) => {
+      const tA = new Date(a.action_deadline_at).getTime();
+      const tB = new Date(b.action_deadline_at).getTime();
+      return tA - tB;
+    });
+  }, [isCustomizing, monitorias]);
 
   // Dissatisfaction Data
   const clientDissatisfactionData = useMemo(() => {
@@ -737,7 +749,7 @@ export default function QualityManagerDashboard({
   };
 
   const getExplanation = (key: string, defaultText: string) => {
-    const lookupKey = `gestor_qualidade_${key}`;
+    const lookupKey = `admin_${key}`;
     return (config?.statCardExplanations?.[lookupKey] !== undefined && config.statCardExplanations[lookupKey] !== '')
       ? config.statCardExplanations[lookupKey]
       : (config?.statCardExplanations?.[key] !== undefined && config.statCardExplanations[key] !== '')
@@ -765,7 +777,7 @@ export default function QualityManagerDashboard({
     try {
       const updatedExplanations = {
         ...(config.statCardExplanations || {}),
-        'gestor_qualidade_Média Geral': tempMediaSub,
+        'admin_Média Geral': tempMediaSub,
       };
       await saveConfig({
         ...config,
@@ -801,7 +813,7 @@ export default function QualityManagerDashboard({
     try {
       const updatedExplanations = {
         ...(config.statCardExplanations || {}),
-        'gestor_qualidade_Curva de Qualidade': tempCurvaSub,
+        'admin_Curva de Qualidade': tempCurvaSub,
       };
       await saveConfig({
         ...config,
@@ -823,95 +835,56 @@ export default function QualityManagerDashboard({
     }
   };
 
-  // Ações Expirando list
-  const sortedDeadlines = useMemo(() => {
-    const source = isCustomizing ? mockMonitoriasDeadlines : monitorias;
-    const filtered = source.filter((m: any) =>
-      ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
-      && m.action_deadline_at
-    );
-    
-    return [...filtered].sort((a, b) => {
-      const tA = new Date(a.action_deadline_at).getTime();
-      const tB = new Date(b.action_deadline_at).getTime();
-      return tA - tB;
-    });
-  }, [isCustomizing, monitorias]);
-
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-visible">
-      {/* LINHA 1 (FOCO TOTAL NO TOPO - REQUISITO CRÍTICO): Configure com lg:grid-cols-4 gap-6 */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1">
-          <StatCard
-            title="Minhas Ações"
-            value={pendingMyActions}
-            sub={pendingMyActions === 0 ? "Fila de decisões em dia" : "Aguardando sua decisão"}
-            good={pendingMyActions === 0}
-            icon={pendingMyActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-            accent={pendingMyActions === 0 ? 'text-functional-success' : 'text-functional-error'}
-            badge={
-              pendingMyActions > 0 ? (
-                <span className="relative flex h-2 w-2 self-center">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                </span>
-              ) : undefined
-            }
-            isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
-            activeEditingId={activeEditingId}
-            setActiveEditingId={setActiveEditingId}
-          />
-        </div>
-        <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <StatCard
-            title="Média Geral"
-            value={`${avgScore.toFixed(2)}%`}
-            sub={isCustomizing ? 'Média simulada do período' : 'Média acumulada global'}
-            good={avgScore >= config.targetScore}
-            icon={<Target className="w-5 h-5" />}
-            accent="text-brand-accent"
-            badge={
-              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : diffColorClass}`}>
-                {isCustomizing ? '↑' : diffSign} {isCustomizing ? '5.42%' : Math.abs(scoreDiff).toFixed(2) + '%'}
+      {/* LINHA 1 (FOCO TOTAL NO TOPO - REQUISITO CRÍTICO): Configure com lg:grid-cols-2 gap-6 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <StatCard
+          title="Média Geral"
+          value={`${avgScore.toFixed(2)}%`}
+          sub={isCustomizing ? 'Média simulada do período' : 'Média acumulada global'}
+          good={avgScore >= config.targetScore}
+          icon={<Target className="w-5 h-5" />}
+          accent="text-brand-accent"
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : diffColorClass}`}>
+              {isCustomizing ? '↑' : diffSign} {isCustomizing ? '5.42%' : Math.abs(scoreDiff).toFixed(2) + '%'}
+            </span>
+          }
+          isCustomizing={isCustomizing}
+          profile="admin"
+          activeEditingId={activeEditingId}
+          setActiveEditingId={setActiveEditingId}
+        />
+        <StatCard
+          title="Índice de Excelência"
+          value={`${excellentPercent.toFixed(2)}%`}
+          sub={isCustomizing ? 'Percentual na faixa Excelente' : 'Percentual na faixa Excelente'}
+          good={excellentPercent >= 50}
+          icon={<Award className="w-5 h-5" />}
+          accent="text-brand-accent"
+          badge={
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-md ${
+                excellentPercent >= 50
+                  ? 'bg-functional-success/10 text-functional-success border border-functional-success/20'
+                  : 'bg-functional-warning/10 text-functional-warning border border-functional-warning/20'
+              }`}>
+                {excellentPercent >= 50 ? 'Alto' : 'Médio'}
               </span>
-            }
-            isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
-            activeEditingId={activeEditingId}
-            setActiveEditingId={setActiveEditingId}
-          />
-          <StatCard
-            title="Índice de Excelência"
-            value={`${excellentPercent.toFixed(2)}%`}
-            sub={isCustomizing ? 'Percentual na faixa Excelente' : 'Percentual na faixa Excelente'}
-            good={excellentPercent >= 50}
-            icon={<Award className="w-5 h-5" />}
-            accent="text-brand-accent"
-            badge={
-              <div className="flex items-center gap-1.5">
-                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-md ${
-                  excellentPercent >= 50
-                    ? 'bg-functional-success/10 text-functional-success border border-functional-success/20'
-                    : 'bg-functional-warning/10 text-functional-warning border border-functional-warning/20'
-                }`}>
-                  {excellentPercent >= 50 ? 'Alto' : 'Médio'}
-                </span>
-                <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : excColorClass}`}>
-                  {isCustomizing ? '↑' : excDiffSign} {isCustomizing ? '4.81%' : Math.abs(excellentTrendPercentage).toFixed(2) + '%'}
-                </span>
-              </div>
-            }
-            isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
-            activeEditingId={activeEditingId}
-            setActiveEditingId={setActiveEditingId}
-          />
-        </div>
+              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : excColorClass}`}>
+                {isCustomizing ? '↑' : excDiffSign} {isCustomizing ? '4.81%' : Math.abs(excellentTrendPercentage).toFixed(2) + '%'}
+              </span>
+            </div>
+          }
+          isCustomizing={isCustomizing}
+          profile="admin"
+          activeEditingId={activeEditingId}
+          setActiveEditingId={setActiveEditingId}
+        />
       </div>
 
-      {/* LINHA 2: Métricas Operacionais - Cards Menores (4 Blocos Simétricos) */}
+      {/* LINHA 2: Métricas Operacionais - Cards Menores (lg:grid-cols-4 gap-6) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total"
@@ -921,19 +894,19 @@ export default function QualityManagerDashboard({
           icon={<ClipboardCheck className="w-5 h-5" />}
           accent="text-brand-accent"
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
         <StatCard
           title="Total Pendentes"
           value={pendingActions}
-          sub="Ações abertas no sistema"
+          sub="Ações em todos os perfis"
           good={pendingActions === 0}
           icon={pendingActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
           accent={pendingActions === 0 ? 'text-functional-success' : 'text-functional-error'}
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
@@ -945,19 +918,19 @@ export default function QualityManagerDashboard({
           icon={<Activity className="w-5 h-5" />}
           accent="text-slate-500"
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
         <StatCard
           title="Tendência"
           value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(2)}%`}
-          sub="Evolução no período"
+          sub="Evolução global"
           good={trendPercentage >= 0}
           icon={<TrendingUp className="w-5 h-5" />}
           accent="text-functional-success"
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
@@ -973,7 +946,7 @@ export default function QualityManagerDashboard({
           icon={<History className="w-5 h-5" />}
           accent="text-slate-500"
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
@@ -985,7 +958,7 @@ export default function QualityManagerDashboard({
           icon={<CheckCircle2 className="w-5 h-5" />}
           accent="text-functional-success"
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
@@ -997,7 +970,7 @@ export default function QualityManagerDashboard({
           icon={<XCircle className="w-5 h-5" />}
           accent="text-functional-error"
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
@@ -1014,7 +987,7 @@ export default function QualityManagerDashboard({
             </span>
           }
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
@@ -1062,7 +1035,7 @@ export default function QualityManagerDashboard({
           ) : (
             <Card padding="lg" className="h-full flex flex-col">
               <div className="flex items-center gap-3 mb-4 min-w-0">
-                <div
+                <div 
                   className={`relative w-9 h-9 rounded-xl bg-icon-accent flex items-center justify-center flex-shrink-0 text-brand-accent transition-all ${
                     isCustomizing ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50' : 'cursor-help'
                   }`}
@@ -1090,7 +1063,7 @@ export default function QualityManagerDashboard({
                   Distribuição por Equipe
                 </h3>
               </div>
-
+              
               <div className="flex-1 flex flex-col min-h-0">
                 {teamMonitoriaDistribution.length > 0 ? (
                   <div className="flex-1 flex flex-col justify-between min-h-0">
@@ -1178,7 +1151,7 @@ export default function QualityManagerDashboard({
           ) : (
             <Card padding="lg" className="h-full flex flex-col">
               <div className="flex items-center gap-3 mb-4 min-w-0">
-                <div
+                <div 
                   className={`relative w-9 h-9 rounded-xl bg-icon-accent flex items-center justify-center flex-shrink-0 text-brand-accent transition-all ${
                     isCustomizing ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50' : 'cursor-help'
                   }`}
@@ -1206,7 +1179,7 @@ export default function QualityManagerDashboard({
                   Curva de Qualidade (Distribuição por Nível)
                 </h3>
               </div>
-
+              
               <div className="flex-1 flex flex-col min-h-0">
                 {gradeDistribution.length > 0 ? (
                   <div className="flex-1 flex flex-col justify-between min-h-0">
@@ -1233,7 +1206,7 @@ export default function QualityManagerDashboard({
                     {/* Compact Legend */}
                     <div className="max-h-[85px] overflow-y-auto pr-1 no-scrollbar flex flex-wrap justify-center gap-x-3 gap-y-1.5 mt-2 pt-2 border-t border-surface-border/40">
                       {gradeDistribution.map((entry: any, index: number) => {
-                        const totalVal = gradeDistribution.reduce((sum, entry) => sum + entry.value, 0);
+                        const totalVal = gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0);
                         const percent = totalVal > 0 ? ((entry.value / totalVal) * 100).toFixed(1) : '0';
                         return (
                           <div key={index} className="flex items-center gap-1.5 text-[9px] text-brand-muted font-black uppercase tracking-tight">
@@ -1260,7 +1233,7 @@ export default function QualityManagerDashboard({
             title="Precisão da Qualidade"
             data={precisionData}
             isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
+            profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
           />
@@ -1275,7 +1248,7 @@ export default function QualityManagerDashboard({
             title="Insatisfação — Visão do Cliente"
             data={clientDissatisfactionData}
             isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
+            profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
           />
@@ -1287,7 +1260,7 @@ export default function QualityManagerDashboard({
             title="Insatisfação — Visão da Qualidade"
             data={qualityDissatisfactionData}
             isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
+            profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
           />
@@ -1328,17 +1301,17 @@ export default function QualityManagerDashboard({
       <div className="h-[380px]">
         <TrendChart
           title="Performance Histórica"
-          subtitle="Média global de score por dia"
+          subtitle="Visão administrativa de score global"
           data={trendData}
           dataKeys={[{ key: 'ScoreMedio', name: 'Média Global', color: chartPalette().excelente }]}
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
       </div>
 
-      {/* LINHA 7: Volume de Reavaliações por Auditor */}
+      {/* LINHA 6: Volume de Reavaliações por Auditor */}
       <div className="h-[420px]">
         <ComparativeBarChart
           title="Volume de Reavaliações por Auditor"
@@ -1349,13 +1322,13 @@ export default function QualityManagerDashboard({
             { key: 'Recusadas', name: 'Improcedente (Mantida)', color: chartPalette().atencao }
           ]}
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
       </div>
 
-      {/* LINHA 8: Rankings Compactados (Melhores Suporte | Maiores Ofensores | Volume por Auditor | Top Reav. Aceitas | Top Reav. Recusadas) */}
+      {/* LINHA 7: Rankings Compactados (Melhores Suporte | Maiores Ofensores | Volume por Auditor | Top Reav. Aceitas | Top Reav. Recusadas) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <div className="h-[420px] py-1.5">
           <RankingWidget
@@ -1364,7 +1337,7 @@ export default function QualityManagerDashboard({
             data={topAgents}
             type="score"
             isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
+            profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
           />
@@ -1378,7 +1351,7 @@ export default function QualityManagerDashboard({
             icon={<AlertTriangle className="w-5 h-5" />}
             accent="text-functional-error"
             isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
+            profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
           />
@@ -1390,7 +1363,7 @@ export default function QualityManagerDashboard({
             data={auditorRanking}
             type="count"
             isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
+            profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
           />
@@ -1402,7 +1375,7 @@ export default function QualityManagerDashboard({
             data={topApprovedAgents}
             type="count"
             isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
+            profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
           />
@@ -1416,14 +1389,14 @@ export default function QualityManagerDashboard({
             icon={<XCircle className="w-5 h-5" />}
             accent="text-functional-error"
             isCustomizing={isCustomizing}
-            profile="gestor_qualidade"
+            profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
           />
         </div>
       </div>
 
-      {/* LINHA 9: Maiores Ofensores */}
+      {/* LINHA 8: Maiores Ofensores */}
       <div className="h-[420px]">
         <OfensoresChart
           title="Maiores Ofensores"
@@ -1431,13 +1404,13 @@ export default function QualityManagerDashboard({
           monitorias={isCustomizing ? mockMonitoriasOfensores : monitorias}
           forms={isCustomizing ? mockForms : forms}
           isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
+          profile="admin"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
       </div>
 
-      {/* LINHA 11: Últimas Auditorias do Sistema */}
+      {/* LINHA 10: Últimas Auditorias do Sistema */}
       <RecentAuditsTable
         monitorias={isCustomizing ? mockRecentMonitorias : monitorias}
         users={isCustomizing ? mockUsersList : users}

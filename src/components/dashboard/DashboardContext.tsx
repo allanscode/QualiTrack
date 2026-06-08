@@ -3,6 +3,9 @@ import { Monitoria, User, Team, EvaluationForm, DissatisfactionField } from '../
 import { supabase, mockDb } from '../../lib/supabase';
 import { useStaticData } from '../../lib/StaticDataContext';
 import { toast } from 'sonner';
+import { useQualityConfig } from '../../lib/useQualityConfig';
+import { getRemainingBusinessSeconds } from '../../lib/businessHours';
+
 
 export interface DashboardFilters {
   startDate: string;
@@ -431,6 +434,60 @@ const loadData = useCallback(async () => {
       }
     };
   }, [user]);
+
+  // SLA Notification Hook pós-login
+  const { config: qualityConfig } = useQualityConfig();
+
+  useEffect(() => {
+    if (loading || !user || allMonitorias.length === 0) return;
+
+    // Check if we have already notified in this login session
+    const notifiedKey = `qualitrack_sla_notified_${user.id}`;
+    if (sessionStorage.getItem(notifiedKey)) return;
+
+    // Calculate critical SLA monitorias (< 1 hour remaining)
+    const myTeamIds = user.team_ids || [];
+    const now = new Date();
+
+    const pendingMonitorias = allMonitorias.filter(m => {
+      if (!m.action_deadline_at) return false;
+
+      // Filter by role scope
+      let isScope = false;
+      const status = m.status || '';
+
+      if (user.role === 'suporte') {
+        isScope = m.evaluated_id === user.id && ['pendente_revisao', 'contestacao_negada'].includes(status);
+      } else if (user.role === 'qualidade') {
+        isScope = m.evaluator_id === user.id && ['em_contestacao'].includes(status);
+      } else if (user.role === 'gestor_suporte') {
+        isScope = !!(m.team_id && myTeamIds.includes(m.team_id) && ['pendente_revisao', 'contestacao_negada', 'aguardando_gestor_suporte'].includes(status));
+      } else if (user.role === 'gestor_qualidade') {
+        isScope = ['em_contestacao', 'aguardando_gestor_qualidade'].includes(status);
+      } else if (user.role === 'admin') {
+        isScope = ['pendente_revisao', 'contestacao_negada', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(status);
+      }
+
+      if (!isScope) return false;
+
+      // Calculate remaining business seconds
+      const deadline = new Date(m.action_deadline_at);
+      const remainingSeconds = getRemainingBusinessSeconds(now, deadline, qualityConfig?.businessHours);
+
+      // SLA critical if less than 1 hour (3600 seconds) and greater than 0
+      return remainingSeconds > 0 && remainingSeconds <= 3600;
+    });
+
+    if (pendingMonitorias.length > 0) {
+      toast.warning(
+        `Atenção: Você possui ${pendingMonitorias.length} monitoria(s) com SLA crítico (menos de 1 hora restante) aguardando sua ação!`,
+        { duration: 8000 }
+      );
+    }
+
+    // Set flag in sessionStorage to run once per login session
+    sessionStorage.setItem(notifiedKey, 'true');
+  }, [loading, user, allMonitorias, qualityConfig]);
 
   const refresh = useCallback(() => {
     hasLoadedOnce.current = false;

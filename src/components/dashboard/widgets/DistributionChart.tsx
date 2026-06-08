@@ -166,7 +166,7 @@ export default function DistributionChart({
               )}
             </AnimatePresence>
           </div>
-          <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest truncate flex-1 min-w-0" title="">{title}</h3>
+          <h3 className="text-[13px] font-black text-brand-primary uppercase tracking-wider whitespace-normal flex-1 leading-snug" title="">{title}</h3>
         </div>
       )}
       {data.length > 0 ? (
@@ -192,12 +192,15 @@ export default function DistributionChart({
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-3 pt-3 border-t border-surface-border/40">
-            {data.map((entry, index) => (
-              <div key={index} className="flex items-center gap-1.5 text-[10px] text-brand-muted font-black uppercase tracking-tight">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                {entry.name} ({entry.value})
-              </div>
-            ))}
+            {data.map((entry, index) => {
+              const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
+              return (
+                <div key={index} className="flex items-center gap-1.5 text-[10px] text-brand-muted font-black uppercase tracking-tight">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                  {entry.name}: {entry.value} ({percent}%)
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : (

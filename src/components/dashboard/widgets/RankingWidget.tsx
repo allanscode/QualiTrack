@@ -63,6 +63,21 @@ export default function RankingWidget({
   const [isHovered, setIsHovered] = useState(false);
   const [tempSub, setTempSub] = useState('');
 
+  const isMelhoresSuporte = title === 'Melhores Suporte';
+  const isTopReavRecusadas = title === 'Top Reav. Recusadas' || title === 'Top Reav. Aceitas';
+
+  const tooltipPositionClass = isMelhoresSuporte
+    ? 'left-0 translate-x-0'
+    : isTopReavRecusadas
+      ? 'right-0 translate-x-0'
+      : 'left-1/2 -translate-x-1/2';
+
+  const arrowPositionClass = isMelhoresSuporte
+    ? 'left-6 -translate-x-1/2'
+    : isTopReavRecusadas
+      ? 'right-6 translate-x-1/2'
+      : 'left-1/2 -translate-x-1/2';
+
   let dashboardContext = null;
   try {
     dashboardContext = useDashboard();
@@ -125,7 +140,7 @@ export default function RankingWidget({
   };
 
   return (
-    <Card padding="lg" className="h-full flex flex-col">
+    <Card padding="md" className="h-full flex flex-col overflow-visible">
       {isEditing ? (
         <div className="flex flex-col gap-2 mb-5 animate-fade-in" onClick={(e) => e.stopPropagation()}>
           <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
@@ -160,21 +175,21 @@ export default function RankingWidget({
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-3 mb-5 min-w-0">
+        <div className="flex items-center gap-3 mb-3 min-w-0">
           <div 
             onClick={canEdit ? handleEditClick : undefined}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            className={`relative w-9 h-9 rounded-xl ${accent ? getIconBg(accent) : 'bg-surface-subtle'} flex items-center justify-center flex-shrink-0 ${accent || ''} ${
+            className={`relative w-8 h-8 rounded-xl ${accent ? getIconBg(accent) : 'bg-surface-subtle'} flex items-center justify-center flex-shrink-0 ${accent || ''} ${
               canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
             }`}
             title=""
           >
             {(() => {
-              const defaultIcon = icon || <Award className="w-5 h-5" />;
+              const defaultIcon = icon || <Award className="w-4 h-4" />;
               return React.isValidElement(defaultIcon)
                 ? React.cloneElement(defaultIcon as React.ReactElement<any>, {
-                    className: 'w-5 h-5 fill-current fill-opacity-15',
+                    className: 'w-4 h-4 fill-current fill-opacity-15',
                     strokeWidth: 2,
                     fill: 'currentColor',
                     fillOpacity: 0.15,
@@ -197,13 +212,13 @@ export default function RankingWidget({
               )}
             </AnimatePresence>
           </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight truncate" title="">{title}</h3>
+          <div className="flex-1">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-tight whitespace-normal" title="">{title}</h3>
           </div>
         </div>
       )}
 
-      <div className="flex-1 space-y-2 overflow-y-auto pr-1 no-scrollbar">
+      <div className="flex-1 space-y-1.5 overflow-visible pr-1 no-scrollbar">
         {data.map((item, index) => {
           const level = item.score !== undefined ? getLevelForScore(item.score) : { color: 'text-brand-primary', label: '' };
           const isCount = type === 'count';
@@ -211,15 +226,43 @@ export default function RankingWidget({
           return (
             <div
               key={item.id}
-              className="group flex items-center gap-3 p-3 rounded-2xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle/50 transition-all duration-200"
+              className="group relative flex items-center gap-2 py-1 px-2 rounded-2xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle/50 hover:z-[10000] transition-all duration-200"
             >
+              {/* Tooltip flutuante CSS-driven premium */}
+              <div 
+                className={`absolute bottom-full ${tooltipPositionClass} mb-2.5 z-50 w-64 bg-slate-900 border border-slate-800 text-slate-100 p-2.5 rounded-lg shadow-xl pointer-events-none opacity-0 invisible scale-95 group-hover:opacity-100 group-hover:visible group-hover:scale-100 transition-all duration-150 origin-bottom dark:bg-slate-50 dark:border-slate-200 dark:text-slate-900`}
+              >
+                <p className="text-xs font-bold text-slate-200 dark:text-slate-900 leading-tight mb-1 truncate">
+                  #{index + 1}º - {item.name}
+                </p>
+                <p className="text-[11px] font-medium text-slate-400 dark:text-slate-600 leading-tight whitespace-nowrap">
+                  {(() => {
+                    const isReav = title.toLowerCase().includes('reav');
+                    const isCrit = title.toLowerCase().includes('crit') || title.toLowerCase().includes('ofensor');
+                    if (type === 'score') {
+                      return `Score Médio: ${(item.score ?? 0).toFixed(1)}% | Total: ${item.count} mon.`;
+                    } else if (isReav) {
+                      return `Reavaliações: ${item.count} Vol.`;
+                    } else if (isCrit) {
+                      return `Falhas: ${item.count} Vol.`;
+                    } else {
+                      return `Volume Total: ${item.count} Monitorias`;
+                    }
+                  })()}
+                </p>
+                {/* Seta do Balão */}
+                <div 
+                  className={`absolute top-full ${arrowPositionClass} -mt-1 w-2 h-2 border-r border-b rotate-45 pointer-events-none bg-slate-900 border-slate-800 dark:bg-slate-50 dark:border-slate-200`} 
+                />
+              </div>
+
               {/* Rank Badge */}
               <div className="relative flex-shrink-0">
-        <div className="w-9 h-9 rounded-xl bg-brand-accent text-white flex items-center justify-center font-black text-xs shadow-premium group-hover:scale-105 transition-transform">
-            {index + 1}
-          </div>
-          {index === 0 && (
-            <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-400 rounded-full border-2 border-surface-card flex items-center justify-center">
+                <div className="w-7 h-7 rounded-xl bg-brand-accent text-white flex items-center justify-center font-black text-[10px] shadow-premium group-hover:scale-105 transition-transform">
+                  {index + 1}
+                </div>
+                {index === 0 && (
+                  <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-400 rounded-full border border-surface-card flex items-center justify-center">
                     <Award className="w-2 h-2 text-white" />
                   </div>
                 )}
@@ -227,24 +270,19 @@ export default function RankingWidget({
 
               {/* Name + Count */}
               <div className="flex-1 min-w-0">
-                <p className="font-black text-brand-primary truncate text-xs uppercase tracking-tight">{item.name}</p>
+                <p className="text-[10px] font-semibold text-brand-primary uppercase tracking-tight leading-tight">{item.name}</p>
                 {!isCount && (
-                  <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mt-0.5">
-                    {item.count} monitoria{item.count !== 1 ? 's' : ''}
+                  <p className="text-[9px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">
+                    {item.count} mon.
                   </p>
                 )}
               </div>
 
               {/* Score / Volume */}
               <div className="text-right flex-shrink-0">
-                <div className={`text-sm font-black ${isCount ? 'text-brand-primary' : level.color}`}>
+                <div className={`text-xs font-bold ${isCount ? 'text-brand-primary' : level.color}`}>
                   {isCount ? `${item.count} Vol.` : `${(item.score ?? 0).toFixed(1)}%`}
                 </div>
-                {!isCount && (
-                  <div className={`text-[9px] font-black uppercase tracking-widest ${level.color} opacity-70`}>
-                    {level.label}
-                  </div>
-                )}
               </div>
             </div>
           );

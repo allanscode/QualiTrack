@@ -144,14 +144,14 @@ function AppContent() {
     return !!saved && saved !== 'system';
   });
   const [prefetchedSidebarColor, setPrefetchedSidebarColor] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'monitorias' | 'admin'>(() => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'monitorias' | 'admin' | 'custom_dashboard'>(() => {
     const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
-    if (hash === 'dashboard' || hash === 'monitorias' || hash === 'admin') {
-      return hash as 'dashboard' | 'monitorias' | 'admin';
+    if (hash === 'dashboard' || hash === 'monitorias' || hash === 'admin' || hash === 'custom_dashboard') {
+      return hash as any;
     }
     const saved = typeof window !== 'undefined' ? localStorage.getItem('qualitrack_active_tab') : null;
-    if (saved === 'dashboard' || saved === 'monitorias' || saved === 'admin') {
-      return saved as 'dashboard' | 'monitorias' | 'admin';
+    if (saved === 'dashboard' || saved === 'monitorias' || saved === 'admin' || saved === 'custom_dashboard') {
+      return saved as any;
     }
     return 'dashboard';
   });
@@ -171,8 +171,8 @@ function AppContent() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
-      if (hash === 'dashboard' || hash === 'monitorias' || hash === 'admin') {
-        setActiveTab(hash as 'dashboard' | 'monitorias' | 'admin');
+      if (hash === 'dashboard' || hash === 'monitorias' || hash === 'admin' || hash === 'custom_dashboard') {
+        setActiveTab(hash as any);
       }
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -227,7 +227,7 @@ function AppContent() {
                     setCurrentUser(enriched);
                     setUserData(enriched);
                     const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
-                    if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin') {
+                    if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin' || savedTab === 'custom_dashboard') {
                       setActiveTab(savedTab as any);
                     }
                     sessionStartTimeRef.current = parsed.sessionStartedAt || now;
@@ -650,7 +650,7 @@ function AppContent() {
           setUserData(enriched);
           setCurrentUser(user);
           const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
-          if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin') {
+          if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin' || savedTab === 'custom_dashboard') {
             setActiveTab(savedTab as any);
           } else {
             setActiveTab('dashboard');
@@ -670,7 +670,7 @@ function AppContent() {
           setUserData(enriched);
           setCurrentUser(user);
           const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
-          if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin') {
+          if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin' || savedTab === 'custom_dashboard') {
             setActiveTab(savedTab as any);
           } else {
             setActiveTab('dashboard');
