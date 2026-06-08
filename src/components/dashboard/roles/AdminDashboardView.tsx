@@ -999,8 +999,8 @@ export default function AdminDashboardView({
                     isCustomizing ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50' : 'cursor-help'
                   }`}
                   onClick={isCustomizing ? handleEditCurvaClick : undefined}
-                  onMouseEnter={() => setHoverMedia(true)}
-                  onMouseLeave={() => setHoverMedia(false)}
+                  onMouseEnter={() => setHoverCurva(true)}
+                  onMouseLeave={() => setHoverCurva(false)}
                 >
                   <PieChartIcon className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
                   <AnimatePresence>
