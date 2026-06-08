@@ -48,7 +48,7 @@ Realizamos uma auditoria minuciosa no ciclo de vida da sessão e inicialização
 ### **Diagnóstico Encontrado:**
 1.  **Carregamento Inicial:** No momento da montagem dos painéis, o `DashboardProvider` realiza o fetch unificado e armazena o escopo de monitorias relevantes em `allMonitorias` e filtros operacionais em `monitorias`. Todavia, o alerta proativo em tela pós-login sobre SLAs críticos não estava acoplado de forma automatizada ao carregamento inicial.
 2.  **Cálculo em Horas Úteis:** O sistema possui o helper `getRemainingBusinessSeconds` em `src/lib/businessHours.ts`, que calcula com precisão matemática em segundos de expediente (segunda a sexta, 08:00 às 17:00, excluindo feriados cadastrados).
-3.  **Gate de Disparo:** Faltava a amarração com `sonner` para disparar os alertas visuais (`toast.warning`) filtrados estritamente pelo papel do usuário (RBAC) e com guard em `sessionStorage` para evitar spamming em F5/atualizações de rota dentro da mesma sessão.
+3.  **Gate de Disparo:** Faltava a amarração com `sonner` para disparar os alertas visuais (`toast.warning`) filtrados estritamente pelo papel do usuário (RBAC) e com guard em `sessionStorage` para evitar spamming in F5/atualizações de rota dentro da mesma sessão.
 
 ### **Correção Implementada:**
 Adicionamos um hook global de efeito reativo no `DashboardProvider` (`src/components/dashboard/DashboardContext.tsx`) que:
@@ -121,7 +121,7 @@ Implementamos um refinamento de UX de alta fidelidade e consistência visual par
     *   Um sutil **indicador de pulsação animado** (ping pulse animado em vermelho) é exibido no topo do card ao lado do valor para chamar atenção imediata para decisões pendentes.
 *   **Comportamento com Fila Limpa (0):**
     *   O subtítulo muda de forma acolhedora para *"Fila de decisões em dia"*.
-    *   O status de sucesso (`good`) é definido como `true`, alterando o acento e o ícone para verde funcional (`text-functional-success` e `CheckCircle2`), garantindo feedback positivo ao gestor.
+    *   O status de sucesso (`good`) é definido como `true`, alterando o acento and o ícone para verde funcional (`text-functional-success` e `CheckCircle2`), garantindo feedback positivo ao gestor.
 
 ---
 
@@ -129,3 +129,35 @@ Implementamos um refinamento de UX de alta fidelidade e consistência visual par
 *   **`npm run lint`:** Concluído com 100% de sucesso (Zero erros de tipo/TypeScript).
 *   **`npm run build`:** Compilado e gerado o bundle estático com sucesso via Vite, validando a integridade estrutural de todas as alterações de layout e novas funcionalidades de notificação.
 *   **Validação de Nomenclaturas:** Confirmada a consistência do termo `Curva de Qualidade (Distribuição por Nível)` em todos os componentes de visualização.
+
+---
+
+## 8. Blueprint para a Reestruturação do Dashboard do Monitor da Qualidade (`QualityDashboard.tsx`)
+
+Deixamos registrada a blueprint estrutural e de negócios que servirá como guia para a nossa próxima sessão limpa com foco exclusivo no Auditor/Monitor da Qualidade. Este plano garante o alinhamento de grids de 4 colunas simétricas sem buracos ou vazios visuais:
+
+### LINHA 1: Foco Operacional Crítico (4 Colunas Simétricas)
+*   **Slot 1 (Primeiro Bloco):** `'Minhas Pendências de SLA'` (Antigo `'Pendente Ação'`). Indica contestações abertas sob responsabilidade direta do auditor, exigindo tomada de decisão urgente dentro do prazo.
+*   **Slot 2:** `'Meu Volume'` (Volume de monitorias realizadas pelo auditor no período com o badge de diferença versus a meta targetVolume).
+*   **Slot 3:** `'Nota Média Individual'` (Média simples das notas de monitoria aplicadas exclusivamente por ele).
+*   **Slot 4:** **[INJETAR NOVO CARD]** `'Nota Média Geral'`. Exibe a média global de todas as notas aplicadas por toda a equipe de qualidade no período, permitindo ao auditor calibrar e comparar seu nível de exigência diretamente com o do restante do time.
+
+### LINHA 2: Métricas de Contestação e Calibração (4 Colunas Simétricas)
+*   **Slot 1:** `'Total Reav. Recebidas'` (Soma das contestações concluídas).
+*   **Slot 2:** `'Reav. Aceitas'` (Total de contestações procedentes que resultaram em alteração da nota original).
+*   **Slot 3:** `'Reav. Recusadas'` (Total de contestações improcedentes em que o parecer original do auditor foi mantido).
+*   **Slot 4:** **[INJETAR NOVO CARD]** `'Taxa de Reversão Individual'`. Percentual de contestações aceitas sobre o total de reavaliações recebidas e concluídas por ele (`reavAccepted / totalReav`).
+
+### LINHA 3: Visões Analíticas e Andamentos (Grid Dividido)
+*   **Esquerda (Largo - `lg:col-span-2`):** `'Volumetria Diária'` (Gráfico comparativo de barras horizontais/verticais entre o volume individual do auditor e a média da equipe).
+*   **Direita (Compacto - `lg:col-span-1`):** `'Monitorias em Andamento'` (Antigo `'Auditorias Pendentes'`). Exibe a contagem de monitorias vinculadas a este auditor que ainda não foram concluídas/finalizadas no sistema, as quais não são necessariamente travas imediatas de SLA.
+
+### LINHA 4 E 5: Gráficos de Escopo do Monitor
+*   **Gráfico de Barras Amplo (Largura Total):** `'Maiores Ofensores — Critérios'` (Seguindo o padrão de design unificado com eixo Y de `190px` e limite de string em `55` caracteres sem truncamentos arbitrários).
+*   **Linha de Gráficos de Rosca (3 Colunas Simétricas):**
+    1.  **[INJETAR]** `'Distribuição por Equipes'`: Gráfico de rosca filtrando e exibindo a distribuição do volume apenas para as equipes que este monitor auditou no período.
+    2.  `'Minha Curva de Qualidade (Distribuição por Nível)'`
+    3.  `'Precisão da Qualidade'`
+*   **Linha de Gráficos de Insatisfação (2 Colunas Simétricas - Lado a Lado):**
+    1.  **[INJETAR]** `'Insatisfação — Visão do Cliente'`: Gráfico focado nos motivos de insatisfação do cliente, filtrado estritamente para as monitorias avaliadas por este monitor.
+    2.  **[INJETAR]** `'Insatisfação — Visão da Qualidade'`: Gráfico focado nos motivos de insatisfação da qualidade, filtrado estritamente para as monitorias avaliadas por este monitor.
