@@ -680,8 +680,8 @@ export default function AdminDashboardView({
 
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-visible">
-      {/* LINHA 1: Média Geral e Índice de Excelência (Cards menores lado a lado, lg:grid-cols-2) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
+      {/* LINHA 1 (FOCO TOTAL NO TOPO - REQUISITO CRÍTICO): Configure com lg:grid-cols-2 gap-6 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <StatCard
           title="Média Geral"
           value={`${avgScore.toFixed(2)}%`}
@@ -727,7 +727,7 @@ export default function AdminDashboardView({
         />
       </div>
 
-      {/* LINHA 2: Métricas Operacionais Críticas (Total - Total Pendentes - Usuários Online - Tendência, lg:grid-cols-4) */}
+      {/* LINHA 2: Métricas Operacionais - Cards Menores (lg:grid-cols-4 gap-6) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total"
@@ -779,7 +779,7 @@ export default function AdminDashboardView({
         />
       </div>
 
-      {/* LINHA 3: Métricas de Ciclo de Reavaliação (Total Reavaliações - Reav. Aprovadas - Reav. Recusadas - Taxa de Reversão, lg:grid-cols-4) */}
+      {/* LINHA 3: Métricas de Reavaliação (lg:grid-cols-4 gap-6) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Reavaliações"
@@ -836,22 +836,8 @@ export default function AdminDashboardView({
         />
       </div>
 
-      {/* LINHA 4: Performance Histórica */}
-      <div className="h-[380px]">
-        <TrendChart
-          title="Performance Histórica"
-          subtitle="Visão administrativa de score global"
-          data={trendData}
-          dataKeys={[{ key: 'ScoreMedio', name: 'Média Global', color: chartPalette().excelente }]}
-          isCustomizing={isCustomizing}
-          profile="admin"
-          activeEditingId={activeEditingId}
-          setActiveEditingId={setActiveEditingId}
-        />
-      </div>
-
-      {/* LINHA 5: Gráfico de Distribuição por Equipe e Gráfico da Curva de Qualidade (Cards de gráficos isolados, lg:grid-cols-2) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* LINHA 4: Gráficos de Distribuição Isolados (Distribuição por Equipe | Curva de Qualidade | Precisão da Qualidade, lg:grid-cols-3 gap-6) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bloco Distribuição por Equipe */}
         <div className="h-[380px]">
           {isEditingMedia ? (
@@ -1013,8 +999,8 @@ export default function AdminDashboardView({
                     isCustomizing ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50' : 'cursor-help'
                   }`}
                   onClick={isCustomizing ? handleEditCurvaClick : undefined}
-                  onMouseEnter={() => setHoverCurva(true)}
-                  onMouseLeave={() => setHoverCurva(false)}
+                  onMouseEnter={() => setHoverMedia(true)}
+                  onMouseLeave={() => setHoverMedia(false)}
                 >
                   <PieChartIcon className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
                   <AnimatePresence>
@@ -1033,7 +1019,7 @@ export default function AdminDashboardView({
                   </AnimatePresence>
                 </div>
                 <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest truncate flex-1 min-w-0">
-                  Curva de Qualidade / Distribuição por Nível
+                  Curva de Qualidade (Distribuição por Nível)
                 </h3>
               </div>
               
@@ -1083,13 +1069,56 @@ export default function AdminDashboardView({
             </Card>
           )}
         </div>
+
+        {/* Bloco Precisão da Qualidade */}
+        <div className="h-[380px]">
+          <DistributionChart
+            title="Precisão da Qualidade"
+            data={precisionData}
+            isCustomizing={isCustomizing}
+            profile="admin"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
       </div>
 
-      {/* LINHA 6: Rankings Compactados (Melhores Suportes - Maiores Ofensores - Volume por Auditor, lg:grid-cols-3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="h-[420px] lg:col-span-1">
+      {/* LINHA 5: Performance Histórica */}
+      <div className="h-[380px]">
+        <TrendChart
+          title="Performance Histórica"
+          subtitle="Visão administrativa de score global"
+          data={trendData}
+          dataKeys={[{ key: 'ScoreMedio', name: 'Média Global', color: chartPalette().excelente }]}
+          isCustomizing={isCustomizing}
+          profile="admin"
+          activeEditingId={activeEditingId}
+          setActiveEditingId={setActiveEditingId}
+        />
+      </div>
+
+      {/* LINHA 6: Volume de Reavaliações por Auditor */}
+      <div className="h-[420px]">
+        <ComparativeBarChart
+          title="Volume de Reavaliações por Auditor"
+          subtitle="Acompanhamento de revisões deferidas e indeferidas por monitor"
+          data={reevaluationVolumeData}
+          dataKeys={[
+            { key: 'Aceitas', name: 'Procedente (Alterada)', color: chartPalette().excelente },
+            { key: 'Recusadas', name: 'Improcedente (Mantida)', color: chartPalette().atencao }
+          ]}
+          isCustomizing={isCustomizing}
+          profile="admin"
+          activeEditingId={activeEditingId}
+          setActiveEditingId={setActiveEditingId}
+        />
+      </div>
+
+      {/* LINHA 7: Rankings Compactados (Melhores Suporte | Maiores Ofensores | Volume por Auditor | Top Reav. Aceitas | Top Reav. Recusadas) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+        <div className="h-[420px] py-1.5">
           <RankingWidget
-            title="Melhores Suportes"
+            title="Melhores Suporte"
             subtitle="Top 5 por score médio"
             data={topAgents}
             type="score"
@@ -1099,7 +1128,7 @@ export default function AdminDashboardView({
             setActiveEditingId={setActiveEditingId}
           />
         </div>
-        <div className="h-[420px] lg:col-span-1">
+        <div className="h-[420px] py-1.5">
           <RankingWidget
             title="Maiores Ofensores"
             subtitle="Pontos de melhoria"
@@ -1113,7 +1142,7 @@ export default function AdminDashboardView({
             setActiveEditingId={setActiveEditingId}
           />
         </div>
-        <div className="h-[420px] lg:col-span-1">
+        <div className="h-[420px] py-1.5">
           <RankingWidget
             title="Volume por Auditor"
             subtitle="Engajamento na plataforma"
@@ -1125,9 +1154,35 @@ export default function AdminDashboardView({
             setActiveEditingId={setActiveEditingId}
           />
         </div>
+        <div className="h-[420px] py-1.5">
+          <RankingWidget
+            title="Top Reav. Aceitas"
+            subtitle="Reavaliações procedentes"
+            data={topApprovedAgents}
+            type="count"
+            isCustomizing={isCustomizing}
+            profile="admin"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
+        <div className="h-[420px] py-1.5">
+          <RankingWidget
+            title="Top Reav. Recusadas"
+            subtitle="Reavaliações improcedentes"
+            data={topRejectedAgents}
+            type="count"
+            icon={<XCircle className="w-5 h-5" />}
+            accent="text-functional-error"
+            isCustomizing={isCustomizing}
+            profile="admin"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
       </div>
 
-      {/* LINHA 7: Maiores Ofensores */}
+      {/* LINHA 8: Maiores Ofensores */}
       <div className="h-[420px]">
         <OfensoresChart
           title="Maiores Ofensores"
@@ -1141,7 +1196,7 @@ export default function AdminDashboardView({
         />
       </div>
 
-      {/* LINHA 8: Insatisfação */}
+      {/* LINHA 9: Insatisfação */}
       {(() => {
         let clientData: any[] = [];
         let qualityData: any[] = [];
@@ -1204,7 +1259,7 @@ export default function AdminDashboardView({
         );
       })()}
 
-      {/* LINHA 9: Últimas Auditorias do Sistema */}
+      {/* LINHA 10: Últimas Auditorias do Sistema */}
       <RecentAuditsTable
         monitorias={isCustomizing ? mockRecentMonitorias : monitorias}
         users={isCustomizing ? mockUsersList : users}
