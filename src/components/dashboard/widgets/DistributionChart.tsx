@@ -96,9 +96,9 @@ export default function DistributionChart({
     const d = payload[0].payload;
     const percent = total > 0 ? ((d.value / total) * 100).toFixed(1) : 0;
     return (
-      <div className="bg-brand-primary text-brand-on-primary px-3 py-2 rounded-xl shadow-xl text-xs font-bold">
+      <div className="bg-slate-900 text-slate-50 dark:bg-white dark:text-slate-900 px-3 py-2 rounded-xl shadow-premium text-[10px] border border-black/5 dark:border-white/10 font-sans font-bold">
         <p className="mb-0.5">{d.name}</p>
-        <p className="opacity-80">{d.value} ocorrências ({percent}%)</p>
+        <p className="opacity-80 font-semibold">{d.value} ocorrência{d.value !== 1 ? 's' : ''} ({percent}%)</p>
       </div>
     );
   };

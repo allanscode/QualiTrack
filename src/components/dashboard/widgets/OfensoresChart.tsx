@@ -122,7 +122,7 @@ export default function OfensoresChart({
       .sort((a, b) => b.naoCount - a.naoCount)
       .slice(0, limit)
       .map(o => ({
-        text: o.text.length > 57 ? o.text.slice(0, 55) + '…' : o.text,
+        text: o.text.slice(0, 55),
         fullText: o.text,
         naoCount: o.naoCount,
         taxaFalha: o.totalAnswered > 0 ? Math.round((o.naoCount / o.totalAnswered) * 10000) / 100 : 0,
@@ -170,10 +170,10 @@ export default function OfensoresChart({
     if (!active || !payload?.length) return null;
     const d = payload[0].payload;
     return (
-      <div className="bg-brand-primary text-brand-on-primary px-4 py-3 rounded-2xl shadow-xl text-xs max-w-[260px]">
-        <p className="font-black mb-1">{d.fullText}</p>
-        <p className="text-functional-warning font-bold">{d.naoCount} ocorrência{d.naoCount !== 1 ? 's' : ''} de "NÃO"</p>
-        <p className="opacity-80 font-semibold">Taxa de falha: {d.taxaFalha.toFixed(1)}%</p>
+      <div className="bg-slate-900 text-slate-50 dark:bg-white dark:text-slate-900 px-3 py-2.5 rounded-xl shadow-premium text-[10px] border border-black/5 dark:border-white/10 max-w-[260px] animate-fade-in font-sans">
+        <p className="font-extrabold mb-1 leading-snug">{d.fullText}</p>
+        <p className="text-functional-warning font-black">{d.naoCount} ocorrência{d.naoCount !== 1 ? 's' : ''} de "NÃO"</p>
+        <p className="opacity-80 font-bold">Taxa de falha: {d.taxaFalha.toFixed(1)}%</p>
       </div>
     );
   };

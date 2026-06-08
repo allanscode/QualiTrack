@@ -169,8 +169,8 @@ export default function ActionDeadlineWidget({
             </AnimatePresence>
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight truncate" title="">{title}</h3>
-            <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5 truncate" title="">
+            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest whitespace-normal leading-snug" title="">{title}</h3>
+            <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5 whitespace-normal leading-snug" title="">
               {pending.length} pendência{pending.length !== 1 ? 's' : ''}
             </p>
           </div>

@@ -238,7 +238,7 @@ export default function StatCard({
             </AnimatePresence>
           </div>
           <div className="min-w-0 flex-1">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate block" title="">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-normal leading-snug block" title="">
               {title}
             </span>
           </div>

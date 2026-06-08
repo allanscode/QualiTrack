@@ -164,7 +164,7 @@ export default function ComparativeBarChart({
               </AnimatePresence>
             </div>
             <div className="min-w-0 flex-1">
-              {title && <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest truncate" title="">{title}</h3>}
+              {title && <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest whitespace-normal leading-snug" title="">{title}</h3>}
             </div>
           </div>
         )
@@ -177,8 +177,23 @@ export default function ComparativeBarChart({
             <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} />
             <Tooltip
               cursor={false}
-        contentStyle={{ backgroundColor: 'var(--brand-primary)', border: 'none', borderRadius: '12px', color: 'var(--brand-on-primary)', fontSize: '11px', fontWeight: 700, padding: '10px 14px' }}
-        itemStyle={{ fontSize: '11px', padding: '2px 0', color: 'var(--brand-on-primary)' }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                return (
+                  <div className="bg-slate-900 text-slate-50 dark:bg-white dark:text-slate-900 px-3 py-2.5 rounded-xl shadow-premium text-[10px] border border-black/5 dark:border-white/10 font-sans font-bold animate-fade-in">
+                    <p className="mb-1 leading-snug uppercase tracking-widest opacity-60 text-[8px] font-black">{label}</p>
+                    <div className="space-y-1">
+                      {payload.map((p: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.fill || p.color }} />
+                          <span className="opacity-90 font-semibold">{p.name}:</span>
+                          <span className="font-extrabold">{p.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }}
             />
             <Legend
               iconType="circle"
