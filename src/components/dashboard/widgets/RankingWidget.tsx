@@ -198,7 +198,7 @@ export default function RankingWidget({
             </AnimatePresence>
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight truncate" title="">{title}</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-tight truncate" title="">{title}</h3>
           </div>
         </div>
       )}
@@ -227,10 +227,10 @@ export default function RankingWidget({
 
               {/* Name + Count */}
               <div className="flex-1 min-w-0">
-                <p className="font-black text-brand-primary truncate text-xs uppercase tracking-tight">{item.name}</p>
+                <p className="text-xs font-medium text-brand-primary truncate uppercase tracking-tight">{item.name}</p>
                 {!isCount && (
-                  <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mt-0.5">
-                    {item.count} monitoria{item.count !== 1 ? 's' : ''}
+                  <p className="text-[10px] font-medium text-brand-muted mt-0.5">
+                    {item.count} mon.
                   </p>
                 )}
               </div>
@@ -240,11 +240,6 @@ export default function RankingWidget({
                 <div className={`text-sm font-black ${isCount ? 'text-brand-primary' : level.color}`}>
                   {isCount ? `${item.count} Vol.` : `${(item.score ?? 0).toFixed(1)}%`}
                 </div>
-                {!isCount && (
-                  <div className={`text-[9px] font-black uppercase tracking-widest ${level.color} opacity-70`}>
-                    {level.label}
-                  </div>
-                )}
               </div>
             </div>
           );

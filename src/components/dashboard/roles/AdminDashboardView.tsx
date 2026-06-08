@@ -1115,7 +1115,7 @@ export default function AdminDashboardView({
       </div>
 
       {/* LINHA 7: Rankings Compactados (Melhores Suporte | Maiores Ofensores | Volume por Auditor | Top Reav. Aceitas | Top Reav. Recusadas) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <div className="h-[420px] py-1.5">
           <RankingWidget
             title="Melhores Suporte"
