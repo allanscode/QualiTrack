@@ -417,30 +417,57 @@ export default function QualityDashboard({
     return myMonitorias.length;
   }, [useFallback, myMonitorias]);
 
+  // Fila 1: Monitorias em Andamento (all open processes under current monitor)
+  // Regra: evaluator_id === user.id (inherent to myMonitorias) AND status !== 'concluida' && status !== 'arquivada'
+  // Drafts ('rascunho') and signature states ('pendente_assinatura') must be included
+  const monitoriasEmAndamento = useMemo(() => {
+    const filterFn = (m: any) => m.status !== 'concluida' && m.status !== 'arquivada';
+    if (useFallback) {
+      return mockMonitoriasDeadlines.filter(filterFn);
+    }
+    return myMonitorias.filter(filterFn);
+  }, [useFallback, myMonitorias]);
+
+  // Fila 2: Ações Expirando (critical contestations in active dispute/re-review)
+  // Regra: evaluator_id === user.id (inherent to myMonitorias) AND (status === 'em_contestacao' || status === 'reavaliacao_pendente' || status === 'reavaliacao_solicitada')
+  // Sort by action_deadline_at ascending (most imminent deadline at the top)
+  const acoesExpirando = useMemo(() => {
+    const filterFn = (m: any) => m.status === 'em_contestacao' || m.status === 'reavaliacao_pendente' || m.status === 'reavaliacao_solicitada';
+    const sortFn = (a: any, b: any) => {
+      const timeA = a.action_deadline_at ? new Date(a.action_deadline_at).getTime() : Infinity;
+      const timeB = b.action_deadline_at ? new Date(b.action_deadline_at).getTime() : Infinity;
+      return timeA - timeB;
+    };
+    if (useFallback) {
+      return mockMonitoriasDeadlines.filter(filterFn).sort(sortFn);
+    }
+    return myMonitorias.filter(filterFn).sort(sortFn);
+  }, [useFallback, myMonitorias]);
+
   // Diffs versus Quality Config Targets
   const scoreDiff = avgScore - config.targetScore;
   const diffSign = scoreDiff >= 0 ? '↑' : '↓';
   const diffColorClass = scoreDiff >= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   const globalDiff = globalAvgScore - config.targetScore;
   const globalDiffSign = globalDiff >= 0 ? '↑' : '↓';
   const globalDiffColorClass = globalDiff >= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   const volDiff = myMonitoriasCount - config.targetVolume;
   const volSign = volDiff >= 0 ? '↑' : '↓';
   const volColorClass = volDiff >= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   const revDiff = reversionRate - config.targetReversalRate;
   const revSign = revDiff <= 0 ? '↓' : '↑'; // Lower is better
   const revColorClass = revDiff <= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-visible">
@@ -448,7 +475,7 @@ export default function QualityDashboard({
       {/* LINHA 1 (Foco Operacional e Ação Crítica - lg:grid-cols-4 gap-6) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Minhas Pendências de SLA"
+          title="Minhas Pendências"
           value={pendingActions}
           sub="Aguardando reanálise"
           good={pendingActions === 0}
@@ -555,7 +582,7 @@ export default function QualityDashboard({
           value={`${reversionRate.toFixed(2)}%`}
           sub="Qualidade de monitoramento"
           good={reversionRate <= config.targetReversalRate}
-          icon={<Activity className="w-5 h-5" />}
+          icon={<Target className="w-5 h-5" />}
           accent={reversionRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
           badge={
             <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${revColorClass}`}>
@@ -577,8 +604,8 @@ export default function QualityDashboard({
             subtitle="Comparativo com a média da equipe"
             data={resolvedComparativeData}
             dataKeys={[
-              { key: 'meuVolume', name: 'Meu Volume', color: chartPalette().excelente },
-              { key: 'mediaEquipe', name: 'Média Equipe', color: '#94a3b8' }
+              { key: 'meuVolume', name: 'Meu Volume', color: '#6366f1' },
+              { key: 'mediaEquipe', name: 'Média Equipe', color: '#2dd4bf' }
             ]}
             isCustomizing={isCustomizing}
             profile="qualidade"
@@ -593,8 +620,8 @@ export default function QualityDashboard({
         <div className="h-[340px]">
           <ActionDeadlineWidget
             title="Monitorias em Andamento"
-            monitorias={useFallback ? mockMonitoriasDeadlines : myMonitorias}
-            targetStatus={['pendente_revisao', 'contestacao_negada']}
+            monitorias={monitoriasEmAndamento}
+            preFilteredSorted={true}
             isCustomizing={isCustomizing}
             profile="qualidade"
             activeEditingId={activeEditingId}
@@ -604,8 +631,8 @@ export default function QualityDashboard({
         <div className="h-[340px]">
           <ActionDeadlineWidget
             title="Ações Expirando"
-            monitorias={useFallback ? mockMonitoriasDeadlines : myMonitorias}
-            targetStatus={['em_contestacao']}
+            monitorias={acoesExpirando}
+            preFilteredSorted={true}
             isCustomizing={isCustomizing}
             profile="qualidade"
             activeEditingId={activeEditingId}

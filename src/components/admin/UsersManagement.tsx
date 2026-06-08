@@ -369,7 +369,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                         <button 
                           onClick={() => setDeleteConfirmId(u.id)} 
                           title="Desativar Usuário"
-                          className="group p-2.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-brand-muted hover:text-error opacity-40 group-hover:opacity-70 hover:!opacity-100 transition-all duration-200 cursor-pointer"
+                          className="group p-2.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-brand-muted hover:text-error dark:hover:text-red-400 opacity-40 group-hover:opacity-70 hover:!opacity-100 transition-all duration-200 cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
                         </button>

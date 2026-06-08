@@ -277,7 +277,7 @@ export default function SupportManagerDashboard({
   const diffSign = scoreDiff >= 0 ? '↑' : '↓';
   const diffColorClass = scoreDiff >= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   // 2. Índice de Excelência (Scoped excellence index matching Admin)
   const excellentCount = useMemo(() => {
@@ -318,7 +318,7 @@ export default function SupportManagerDashboard({
   const excDiffSign = excellentTrendPercentage >= 0 ? '↑' : '↓';
   const excColorClass = excellentTrendPercentage >= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   // Total volume
   const totalMonitorias = useMemo(() => {
@@ -406,7 +406,7 @@ export default function SupportManagerDashboard({
   const revSign = revDiff <= 0 ? '↓' : '↑';
   const revColorClass = revDiff <= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   // Performance Histórica (Trend chart)
   const trendData = useMemo(() => {

@@ -295,7 +295,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                         <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="px-2.5 py-1.5 rounded-lg bg-surface-subtle text-brand-muted text-[10px] font-black uppercase tracking-widest">Não</button>
                       </div>
                     ) : (
-                      <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(f.id); }} className="p-2.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-error dark:hover:text-red-400 transition-all"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(f.id); }} className="p-2.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/50 text-slate-400 hover:text-error dark:hover:text-red-400 transition-all"><Trash2 className="w-4 h-4" /></button>
                     )}
                   </>
                 )}

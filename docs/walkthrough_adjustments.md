@@ -161,3 +161,33 @@ Deixamos registrada a blueprint estrutural e de negócios que servirá como guia
 *   **Linha de Gráficos de Insatisfação (2 Colunas Simétricas - Lado a Lado):**
     1.  **[INJETAR]** `'Insatisfação — Visão do Cliente'`: Gráfico focado nos motivos de insatisfação do cliente, filtrado estritamente para as monitorias avaliadas por este monitor.
     2.  **[INJETAR]** `'Insatisfação — Visão da Qualidade'`: Gráfico focado nos motivos de insatisfação da qualidade, filtrado estritamente para as monitorias avaliadas por este monitor.
+
+---
+
+## 9. Ajuste Global de Contraste para Elementos de Alerta/Erro (Modo Escuro)
+
+Padronizamos e otimizamos todos os elementos visuais vermelhos (erros, alertas, variações de tendência negativas e botões de exclusão) do sistema para garantir conformidade de acessibilidade (WCAG) no **Modo Escuro**:
+
+*   **Fórmula Aplicada em Badges e Textos:**
+    *   **Modo Claro:** Fundo `bg-red-50` / Texto `text-red-700`
+    *   **Modo Escuro:** Fundo `dark:bg-red-950/50` / Texto `dark:text-red-400` (vermelho pastel de alta luminância).
+*   **Fórmula Aplicada em Hover de Botões de Exclusão (Ícone de Lixeira):**
+    *   **Modo Claro:** `hover:bg-red-50` / `hover:text-error`
+    *   **Modo Escuro:** `dark:hover:bg-red-950/50` / `dark:hover:text-red-400`.
+*   **Escopo de Arquivos Beneficiados:**
+    *   *Dashboards:* `AdminDashboardView.tsx`, `AgentDashboard.tsx`, `QualityDashboard.tsx`, `QualityManagerDashboard.tsx` e `SupportManagerDashboard.tsx`.
+    *   *Telas Admin:* `FormsManagement.tsx`, `TeamsManagement.tsx` e `UsersManagement.tsx`.
+
+---
+
+## 10. Paleta de Alto Contraste e Espaçamento de Barras Comparativas
+
+Ajustamos o design do componente genérico de comparação de barras para fornecer clareza cromática imediata e aproximar os dados de uma mesma categoria:
+
+*   **Paleta de Alto Contraste de Cores:**
+    *   `'Meu Volume'` (Individual): Código Hex `#6366f1` (Tailwind `indigo-500`).
+    *   `'Média Equipe'` (Comparativo): Código Hex `#2dd4bf` (Tailwind `teal-400`).
+*   **Aproximação de Barras (Solução Recharts para Categorias Espaçadas):**
+    *   **O Problema:** Em gráficos com poucas categorias horizontais (como as de auditores no dashboard de Administrador), o Recharts calcula colunas gigantescas e afasta as duas barras correspondentes de um mesmo item (criando um espaçamento exagerado indicado pelo usuário).
+    *   **A Solução:** Adicionamos a propriedade **`barSize={20}`** diretamente no componente pai `<BarChart />` de `ComparativeBarChart.tsx`, fixando a largura de cada barra e removendo as travas individuais de `maxBarSize`. Definimos também **`barGap={4}`** para garantir que as barras comparativas do mesmo item fiquem perfeitamente vizinhas, resolvendo as assimetrias em todos os painéis.
+

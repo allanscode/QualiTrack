@@ -460,7 +460,7 @@ export default function AdminDashboardView({
   const excDiffSign = excellentTrendPercentage >= 0 ? '↑' : '↓';
   const excColorClass = excellentTrendPercentage >= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   const teamMonitoriaDistribution = useMemo(() => {
     if (isCustomizing) return mockTeamDistribution;
@@ -714,13 +714,13 @@ export default function AdminDashboardView({
   const diffSign = scoreDiff >= 0 ? '↑' : '↓';
   const diffColorClass = scoreDiff >= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   const revDiff = reversalRate - config.targetReversalRate;
   const revSign = revDiff <= 0 ? '↓' : '↑';
   const revColorClass = revDiff <= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   const CustomTooltipMedia = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;

@@ -276,7 +276,7 @@ export default function AgentDashboard({
   const diffSign = scoreDiff >= 0 ? '↑' : '↓';
   const diffColorClass = scoreDiff >= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   const myMonitoriasCount = useMemo(() => {
     if (isCustomizing) return 18;
@@ -287,7 +287,7 @@ export default function AgentDashboard({
   const volSign = volDiff >= 0 ? '↑' : '↓';
   const volColorClass = volDiff >= 0
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   const myContestationsCount = useMemo(() => {
     if (isCustomizing) return 4;

@@ -12,11 +12,12 @@ import { motion, AnimatePresence } from 'motion/react';
 interface ActionDeadlineWidgetProps {
   title: string;
   monitorias: Monitoria[];
-  targetStatus: string | string[];
+  targetStatus?: string | string[];
   isCustomizing?: boolean;
   profile?: string;
   activeEditingId?: string | null;
   setActiveEditingId?: (id: string | null) => void;
+  preFilteredSorted?: boolean;
 }
 
 export default function ActionDeadlineWidget({ 
@@ -26,7 +27,8 @@ export default function ActionDeadlineWidget({
   isCustomizing = false,
   profile,
   activeEditingId,
-  setActiveEditingId
+  setActiveEditingId,
+  preFilteredSorted = false
 }: ActionDeadlineWidgetProps) {
   const { config, saveConfig } = useQualityConfig();
   const [isHovered, setIsHovered] = useState(false);
@@ -93,12 +95,14 @@ export default function ActionDeadlineWidget({
     }
   };
 
-  const statuses = Array.isArray(targetStatus) ? targetStatus : [targetStatus];
+  const statuses = Array.isArray(targetStatus) ? targetStatus : (targetStatus ? [targetStatus] : []);
 
-  const pending = monitorias
-    .filter(m => statuses.includes(m.status) && !['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(m.status))
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-    .slice(0, 5);
+  const pending = preFilteredSorted
+    ? monitorias.slice(0, 5)
+    : monitorias
+        .filter(m => statuses.includes(m.status) && !['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(m.status))
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        .slice(0, 5);
 
   const getName = (m: Monitoria) => {
     if (m.status === 'pendente_revisao') return m.evaluator_name || m.evaluator_id;

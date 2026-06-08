@@ -1,4 +1,4 @@
-﻿# AGENTS.md — Guia para Agentes de IA no QualiTrack
+# AGENTS.md — Guia para Agentes de IA no QualiTrack
 
 > Leia este documento **inteiro** antes de modificar qualquer arquivo do projeto.
 
@@ -140,6 +140,12 @@ Use **sempre** os tokens semânticos definidos em `index.css`. Nunca hardcode co
 | `text-functional-success` / `bg-functional-success` | Ações positivas, aprovações |
 | `text-functional-warning` / `bg-functional-warning` | Alertas, pendências |
 | `text-functional-error` / `bg-functional-error` | Erros, rejeições, exclusões |
+
+> **Ajuste de Acessibilidade (WCAG) para Alertas/Erros (Vermelho) em Modo Escuro:**
+> - **Modo Claro:** Fundo `bg-red-50` e Texto `text-red-700` (ou `text-functional-error-dark`)
+> - **Modo Escuro:** Mude rigorosamente para Fundo `dark:bg-red-950/50` e Texto `dark:text-red-400` (ou vermelho pastel claro brilhante).
+> - **Hover em botões de exclusão (lixeira) em Modo Escuro:** Use `dark:hover:bg-red-950/50 dark:hover:text-red-400`.
+
 
 ### Cores de Nível de Qualidade (Dark-mode pastel)
 | Classe | Uso |
@@ -520,6 +526,7 @@ Antes de commitar qualquer alteração, verifique:
 - **Auto-save**: FormsManagement auto-salva drafts em `localStorage` com chave `qualitrack_form_draft`.
 - **CustomSelect**: Usa `<div>` trigger com `<input>` inline para type-ahead; `createPortal` para dropdown; filtra opções por digitação (case-insensitive).
 - **Gráficos**: Cores via `chartPalette()`/`chartColorArray()`/`chartColorMap()` de `chartColors.ts` — lê CSS vars em runtime, funciona em light e dark mode.
+- **Gráficos de Comparação (ComparativeBarChart)**: Para gráficos comparativos (como "Volumetria Diária" e "Volume de Reavaliações por Auditor"), use sempre **`barSize={20}`** no componente pai `<BarChart />` e **`barGap={4}`** para agrupar visualmente de forma compacta as barras de uma mesma categoria, eliminando lacunas de espaçamento. Para as cores das barras comparativas de auditor vs média, use os tons de alto contraste oficiais do projeto: **'Meu Volume'** com Indigo-500 (`#6366f1`) e **'Média Equipe'** com Teal-400 (`#2dd4bf`).
 - **Ícones Dashboard**: Fundos de ícone usam classes `.bg-icon-*` (ex: `bg-icon-primary`, `bg-icon-accent`, `bg-icon-highlight`) — cores claras/pastel que contrastam com `text-brand-*`. NUNCA use `bg-brand-*` para fundo de ícone, pois estas classes usam as mesmas CSS vars de `text-brand-*` (ícone ficaria invisível).
 - **Tooltips Recharts**: Usar `backgroundColor: 'var(--brand-primary)'` + `color: 'var(--brand-on-primary)'` — garante contraste em light e dark mode.
 - **Date Picker**: `input[type="date"]` NUNCA usa `style={{ colorScheme }}` inline. `color-scheme` é 100% CSS-driven via regras em `index.css`: `input[type="date"] { color-scheme: light; }`, `html.dark input[type="date"] { color-scheme: dark; }`, `html:not(.dark) input[type="date"] { color-scheme: light !important; }`. Isso elimina race condition JS no Chromium calendar popup.

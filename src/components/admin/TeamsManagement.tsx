@@ -462,7 +462,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                       <button onClick={() => setDeleteConfirmId(null)} className="px-1.5 py-1 rounded-md bg-surface-subtle text-brand-muted text-[8px] font-black uppercase cursor-pointer">Não</button>
                     </div>
                   ) : (
-                    <button onClick={() => setDeleteConfirmId(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-brand-muted hover:text-error transition-all cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setDeleteConfirmId(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-brand-muted hover:text-error dark:hover:text-red-400 transition-all cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
                   )}
                 </div>
               </div>
@@ -714,7 +714,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                               onClick={() => handleRemoveUserFromTeamLocal(u.id)}
                               disabled={operationLoading}
                               title="Remover da equipe"
-                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-error transition-all cursor-pointer opacity-0 group-hover/member:opacity-100 focus:opacity-100 disabled:opacity-50"
+                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-slate-400 hover:text-error dark:hover:text-red-400 transition-all cursor-pointer opacity-0 group-hover/member:opacity-100 focus:opacity-100 disabled:opacity-50"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
