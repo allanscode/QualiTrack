@@ -299,14 +299,14 @@ export default function QualityDashboard({
   const scoreDiff = avgScore - config.targetScore;
   const diffSign = scoreDiff >= 0 ? '↑' : '↓';
   const diffColorClass = scoreDiff >= 0
-    ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
+    ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
 
   const volDiff = myMonitoriasCount - config.targetVolume;
   const volSign = volDiff >= 0 ? '↑' : '↓';
   const volColorClass = volDiff >= 0
-    ? 'bg-green-50 text-green-700 dark:bg-green-955/30 dark:text-green-400'
-    : 'bg-red-50 text-red-700 dark:bg-red-955/30 dark:text-red-400';
+    ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
 
   const resolvedComparativeData = useMemo(() => {
     if (isCustomizing) return mockComparativeData;

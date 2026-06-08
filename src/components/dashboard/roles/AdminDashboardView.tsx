@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
@@ -8,13 +8,107 @@ import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import DistributionChart from '../widgets/DistributionChart';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity, PieChart as PieChartIcon, ClipboardCheck, Award } from 'lucide-react';
+import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity, PieChart as PieChartIcon, ClipboardCheck, Award, Clock } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
+
+const mockMonitoriasDeadlines = [
+  {
+    id: 'm1',
+    display_id: '001',
+    ticket_id: '10239',
+    status: 'pendente_revisao',
+    evaluator_name: 'Mariana Santos',
+    created_at: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
+    action_deadline_at: new Date(Date.now() + 45 * 60 * 1000).toISOString() // 45 min
+  },
+  {
+    id: 'm2',
+    display_id: '002',
+    ticket_id: '10482',
+    status: 'em_contestacao',
+    evaluated_name: 'Ana Silva',
+    created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+    action_deadline_at: new Date(Date.now() + 2 * 3600 * 1000).toISOString() // 2h
+  }
+] as any[];
+
+// Inline Countdown Row for Ações Expirando
+function SlaCountdownItem({ monitoria, users }: { monitoria: any, users: any[] }) {
+  const [secondsLeft, setSecondsLeft] = useState(() => {
+    const deadline = new Date(monitoria.action_deadline_at);
+    return getRemainingBusinessSeconds(new Date(), deadline);
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const deadline = new Date(monitoria.action_deadline_at);
+      setSecondsLeft(getRemainingBusinessSeconds(new Date(), deadline));
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [monitoria.action_deadline_at]);
+
+  const formatTimeLeft = (sec: number) => {
+    if (sec <= 0) return 'Expirado';
+    const hours = Math.floor(sec / 3600);
+    const mins = Math.floor((sec % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${mins}m rest.`;
+    }
+    return `${mins} min rest.`;
+  };
+
+  const isCritical = secondsLeft > 0 && secondsLeft < 3600; // < 1 hour
+  const isExpired = secondsLeft <= 0;
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pendente_revisao': return 'Pendente Assinatura';
+      case 'em_contestacao': return 'Em Contestação';
+      case 'aguardando_gestor_suporte': return 'Aguardando Gestor';
+      case 'aguardando_gestor_qualidade': return 'Aguardando Qualidade';
+      default: return status;
+    }
+  };
+
+  const agentName = users.find((u: any) => u.id === monitoria.evaluated_id)?.name || monitoria.evaluated_name || 'Agente';
+
+  let badgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-800/80 dark:text-slate-300';
+  if (isExpired) {
+    badgeClass = 'bg-red-500/10 text-red-500 border border-red-500/20';
+  } else if (isCritical) {
+    badgeClass = 'animate-pulse bg-red-500/10 text-red-500 border border-red-500/20 font-black';
+  }
+
+  return (
+    <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-subtle/30 border border-surface-border/30 hover:border-surface-border transition-all duration-200">
+      <div className="flex flex-col min-w-0 flex-1 mr-2">
+        <div className="flex items-center gap-1.5 mb-1 min-w-0">
+          <span className="font-mono font-black text-xs text-brand-primary flex-shrink-0">
+            #{monitoria.ticket_id}
+          </span>
+          <span className="text-[10px] text-brand-muted font-bold truncate">
+            • {agentName}
+          </span>
+        </div>
+        <span className="text-[9px] font-black uppercase tracking-widest text-brand-muted truncate">
+          Etapa: {getStatusLabel(monitoria.status)}
+        </span>
+      </div>
+      <div className="flex-shrink-0">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${badgeClass}`}>
+          {formatTimeLeft(secondsLeft)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 
 // High-fidelity mock datasets for customization mode
 const mockPrecisionData = [
@@ -540,6 +634,69 @@ export default function AdminDashboardView({
     }).sort((a, b) => (b.Aceitas + b.Recusadas) - (a.Aceitas + a.Recusadas));
   }, [isCustomizing, monitorias, users]);
 
+  // Ações Expirando list
+  const sortedDeadlines = useMemo(() => {
+    const source = isCustomizing ? mockMonitoriasDeadlines : monitorias;
+    const filtered = source.filter((m: any) =>
+      ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
+      && m.action_deadline_at
+    );
+    
+    return [...filtered].sort((a, b) => {
+      const tA = new Date(a.action_deadline_at).getTime();
+      const tB = new Date(b.action_deadline_at).getTime();
+      return tA - tB;
+    });
+  }, [isCustomizing, monitorias]);
+
+  // Dissatisfaction Data
+  const clientDissatisfactionData = useMemo(() => {
+    if (isCustomizing) {
+      return mockClientDissatisfaction;
+    }
+    if (!dissatisfactionFields || dissatisfactionFields.length === 0) {
+      return [];
+    }
+    const COLORS = chartColorArray();
+    const monWithAnswers = monitorias.filter((m: any) => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
+    const clientFields = dissatisfactionFields.filter((f: any) => f.type === 'cliente');
+
+    const freq: Record<string, number> = {};
+    monWithAnswers.forEach((m: any) => {
+      clientFields.forEach((f: any) => {
+        const answers = m.dissatisfaction_answers?.[f.id] || [];
+        answers.forEach((opt: string) => { freq[opt] = (freq[opt] || 0) + 1; });
+      });
+    });
+    return Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
+  }, [isCustomizing, monitorias, dissatisfactionFields]);
+
+  const qualityDissatisfactionData = useMemo(() => {
+    if (isCustomizing) {
+      return mockQualityDissatisfaction;
+    }
+    if (!dissatisfactionFields || dissatisfactionFields.length === 0) {
+      return [];
+    }
+    const COLORS = chartColorArray();
+    const monWithAnswers = monitorias.filter((m: any) => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
+    const qualityFields = dissatisfactionFields.filter((f: any) => f.type === 'qualidade');
+
+    const freq: Record<string, number> = {};
+    monWithAnswers.forEach((m: any) => {
+      qualityFields.forEach((f: any) => {
+        const answers = m.dissatisfaction_answers?.[f.id] || [];
+        answers.forEach((opt: string) => { freq[opt] = (freq[opt] || 0) + 1; });
+      });
+    });
+    return Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
+  }, [isCustomizing, monitorias, dissatisfactionFields]);
+
+
 
   const onlineSub = useMemo(() => (
     <div className="relative inline-flex items-center gap-1.5 select-none">
@@ -1018,7 +1175,7 @@ export default function AdminDashboardView({
                     )}
                   </AnimatePresence>
                 </div>
-                <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest truncate flex-1 min-w-0">
+                <h3 className="text-[13px] font-black text-brand-primary uppercase tracking-wider whitespace-normal flex-1 leading-snug">
                   Curva de Qualidade (Distribuição por Nível)
                 </h3>
               </div>
@@ -1083,7 +1240,64 @@ export default function AdminDashboardView({
         </div>
       </div>
 
-      {/* LINHA 5: Performance Histórica */}
+      {/* LINHA 5: Nova Linha Operacional e de Alertas (Insatisfação Cliente | Insatisfação Qualidade | Ações Expirando, lg:grid-cols-3 gap-6) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Bloco Insatisfação — Visão do Cliente */}
+        <div className="h-[380px]">
+          <DistributionChart
+            title="Insatisfação — Visão do Cliente"
+            data={clientDissatisfactionData}
+            isCustomizing={isCustomizing}
+            profile="admin"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
+
+        {/* Bloco Insatisfação — Visão da Qualidade */}
+        <div className="h-[380px]">
+          <DistributionChart
+            title="Insatisfação — Visão da Qualidade"
+            data={qualityDissatisfactionData}
+            isCustomizing={isCustomizing}
+            profile="admin"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
+
+        {/* Bloco Ações Expirando list */}
+        <div className="h-[380px]">
+          <Card padding="lg" className="h-full flex flex-col overflow-visible">
+            <div className="flex items-center gap-3 mb-4 flex-shrink-0">
+              <div className="relative w-9 h-9 rounded-xl bg-icon-highlight flex items-center justify-center flex-shrink-0 text-brand-highlight">
+                <Clock className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">
+                  Ações Expirando
+                </h3>
+              </div>
+            </div>
+            
+            {sortedDeadlines.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-60">
+                <p className="text-[10px] text-brand-muted font-black uppercase tracking-widest leading-relaxed">
+                  Nenhuma ação pendente de SLA no momento
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar min-h-0">
+                {sortedDeadlines.map((m) => (
+                  <SlaCountdownItem key={m.id} monitoria={m} users={users} />
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+
+      {/* LINHA 6: Performance Histórica */}
       <div className="h-[380px]">
         <TrendChart
           title="Performance Histórica"
@@ -1195,69 +1409,6 @@ export default function AdminDashboardView({
           setActiveEditingId={setActiveEditingId}
         />
       </div>
-
-      {/* LINHA 9: Insatisfação */}
-      {(() => {
-        let clientData: any[] = [];
-        let qualityData: any[] = [];
-        let showSection = false;
-
-        if (isCustomizing) {
-          clientData = mockClientDissatisfaction;
-          qualityData = mockQualityDissatisfaction;
-          showSection = true;
-        } else if (dissatisfactionFields && dissatisfactionFields.length > 0) {
-          const COLORS = chartColorArray();
-          const monWithAnswers = monitorias.filter((m: any) => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
-
-          const clientFields = dissatisfactionFields.filter((f: any) => f.type === 'cliente');
-          const qualityFields = dissatisfactionFields.filter((f: any) => f.type === 'qualidade');
-
-          const buildChartData = (fields: typeof dissatisfactionFields) => {
-            const freq: Record<string, number> = {};
-            monWithAnswers.forEach((m: any) => {
-              fields.forEach((f: any) => {
-                const answers = m.dissatisfaction_answers?.[f.id] || [];
-                answers.forEach((opt: string) => { freq[opt] = (freq[opt] || 0) + 1; });
-              });
-            });
-            return Object.entries(freq)
-              .sort((a, b) => b[1] - a[1])
-              .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
-          };
-
-          clientData = buildChartData(clientFields);
-          qualityData = buildChartData(qualityFields);
-          showSection = true;
-        }
-
-        if (!showSection) return null;
-
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-[360px]">
-              <DistributionChart
-                title="Insatisfação — Visão do Cliente"
-                data={clientData}
-                isCustomizing={isCustomizing}
-                profile="admin"
-                activeEditingId={activeEditingId}
-                setActiveEditingId={setActiveEditingId}
-              />
-            </div>
-            <div className="h-[360px]">
-              <DistributionChart
-                title="Insatisfação — Visão da Qualidade"
-                data={qualityData}
-                isCustomizing={isCustomizing}
-                profile="admin"
-                activeEditingId={activeEditingId}
-                setActiveEditingId={setActiveEditingId}
-              />
-            </div>
-          </div>
-        );
-      })()}
 
       {/* LINHA 10: Últimas Auditorias do Sistema */}
       <RecentAuditsTable

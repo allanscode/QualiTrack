@@ -19,6 +19,7 @@ interface StatCardProps {
   activeEditingId?: string | null;
   setActiveEditingId?: (id: string | null) => void;
   valueColorClass?: string;
+  onlineUsersOverride?: any[];
 }
 
 const BG_MAP: Record<string, string> = {
@@ -64,7 +65,8 @@ export default function StatCard({
   profile,
   activeEditingId,
   setActiveEditingId,
-  valueColorClass
+  valueColorClass,
+  onlineUsersOverride
 }: StatCardProps) {
   const { config, saveConfig } = useQualityConfig();
   
@@ -75,7 +77,7 @@ export default function StatCard({
     // Fail-safe if used outside of DashboardProvider
   }
   const user = dashboardContext?.user;
-  const onlineUsers = dashboardContext?.onlineUsers || [];
+  const onlineUsers = onlineUsersOverride || dashboardContext?.onlineUsers || [];
 
   const iconBg = getIconBg(accent);
   const [isHovered, setIsHovered] = useState(false);
@@ -247,7 +249,7 @@ export default function StatCard({
               e.stopPropagation();
               setShowOnlineModal(true);
             } : undefined}
-            className={`text-3xl font-black leading-none text-slate-900 dark:text-slate-50 ${
+            className={`text-3xl font-black leading-none ${valueColorClass || 'text-slate-900 dark:text-slate-50'} ${
               isOnlineUsersCard ? 'cursor-pointer hover:opacity-80' : ''
             }`}
           >

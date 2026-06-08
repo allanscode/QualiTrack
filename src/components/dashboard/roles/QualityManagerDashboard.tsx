@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
@@ -8,15 +8,107 @@ import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import DistributionChart from '../widgets/DistributionChart';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity, PieChart as PieChartIcon, ClipboardCheck, Award } from 'lucide-react';
+import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity, PieChart as PieChartIcon, ClipboardCheck, Award, Clock } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
 
-// High-fidelity mock datasets for customization mode
+const mockMonitoriasDeadlines = [
+  {
+    id: 'm1',
+    display_id: '001',
+    ticket_id: '10239',
+    status: 'em_contestacao',
+    evaluated_name: 'Ana Silva',
+    created_at: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
+    action_deadline_at: new Date(Date.now() + 45 * 60 * 1000).toISOString() // 45 min
+  },
+  {
+    id: 'm2',
+    display_id: '002',
+    ticket_id: '10482',
+    status: 'aguardando_gestor_qualidade',
+    evaluated_name: 'Bruno Costa',
+    created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+    action_deadline_at: new Date(Date.now() + 2 * 3600 * 1000).toISOString() // 2h
+  }
+] as any[];
+
+// Inline Countdown Row for Ações Expirando
+function SlaCountdownItem({ monitoria, users }: { monitoria: any, users: any[] }) {
+  const [secondsLeft, setSecondsLeft] = useState(() => {
+    const deadline = new Date(monitoria.action_deadline_at);
+    return getRemainingBusinessSeconds(new Date(), deadline);
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const deadline = new Date(monitoria.action_deadline_at);
+      setSecondsLeft(getRemainingBusinessSeconds(new Date(), deadline));
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [monitoria.action_deadline_at]);
+
+  const formatTimeLeft = (sec: number) => {
+    if (sec <= 0) return 'Expirado';
+    const hours = Math.floor(sec / 3600);
+    const mins = Math.floor((sec % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${mins}m rest.`;
+    }
+    return `${mins} min rest.`;
+  };
+
+  const isCritical = secondsLeft > 0 && secondsLeft < 3600; // < 1 hour
+  const isExpired = secondsLeft <= 0;
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pendente_revisao': return 'Pendente Assinatura';
+      case 'em_contestacao': return 'Em Contestação';
+      case 'aguardando_gestor_suporte': return 'Aguardando Gestor';
+      case 'aguardando_gestor_qualidade': return 'Aguardando Qualidade';
+      default: return status;
+    }
+  };
+
+  const agentName = users.find((u: any) => u.id === monitoria.evaluated_id)?.name || monitoria.evaluated_name || 'Agente';
+
+  let badgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-800/80 dark:text-slate-300';
+  if (isExpired) {
+    badgeClass = 'bg-red-500/10 text-red-500 border border-red-500/20';
+  } else if (isCritical) {
+    badgeClass = 'animate-pulse bg-red-500/10 text-red-500 border border-red-500/20 font-black';
+  }
+
+  return (
+    <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-subtle/30 border border-surface-border/30 hover:border-surface-border transition-all duration-200">
+      <div className="flex flex-col min-w-0 flex-1 mr-2">
+        <div className="flex items-center gap-1.5 mb-1 min-w-0">
+          <span className="font-mono font-black text-xs text-brand-primary flex-shrink-0">
+            #{monitoria.ticket_id}
+          </span>
+          <span className="text-[10px] text-brand-muted font-bold truncate">
+            • {agentName}
+          </span>
+        </div>
+        <span className="text-[9px] font-black uppercase tracking-widest text-brand-muted truncate">
+          Etapa: {getStatusLabel(monitoria.status)}
+        </span>
+      </div>
+      <div className="flex-shrink-0">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${badgeClass}`}>
+          {formatTimeLeft(secondsLeft)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 const mockPrecisionData = [
   { name: 'Estáveis', value: 54, color: '#10B981' },
   { name: 'Reavaliadas', value: 6, color: '#F59E0B' }
@@ -545,6 +637,54 @@ export default function QualityManagerDashboard({
     }).sort((a, b) => (b.Aceitas + b.Recusadas) - (a.Aceitas + a.Recusadas));
   }, [isCustomizing, monitorias, users]);
 
+  // Dissatisfaction Data
+  const clientDissatisfactionData = useMemo(() => {
+    if (isCustomizing) {
+      return mockClientDissatisfaction;
+    }
+    if (!dissatisfactionFields || dissatisfactionFields.length === 0) {
+      return [];
+    }
+    const COLORS = chartColorArray();
+    const monWithAnswers = monitorias.filter((m: any) => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
+    const clientFields = dissatisfactionFields.filter((f: any) => f.type === 'cliente');
+
+    const freq: Record<string, number> = {};
+    monWithAnswers.forEach((m: any) => {
+      clientFields.forEach((f: any) => {
+        const answers = m.dissatisfaction_answers?.[f.id] || [];
+        answers.forEach((opt: string) => { freq[opt] = (freq[opt] || 0) + 1; });
+      });
+    });
+    return Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
+  }, [isCustomizing, monitorias, dissatisfactionFields]);
+
+  const qualityDissatisfactionData = useMemo(() => {
+    if (isCustomizing) {
+      return mockQualityDissatisfaction;
+    }
+    if (!dissatisfactionFields || dissatisfactionFields.length === 0) {
+      return [];
+    }
+    const COLORS = chartColorArray();
+    const monWithAnswers = monitorias.filter((m: any) => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
+    const qualityFields = dissatisfactionFields.filter((f: any) => f.type === 'qualidade');
+
+    const freq: Record<string, number> = {};
+    monWithAnswers.forEach((m: any) => {
+      qualityFields.forEach((f: any) => {
+        const answers = m.dissatisfaction_answers?.[f.id] || [];
+        answers.forEach((opt: string) => { freq[opt] = (freq[opt] || 0) + 1; });
+      });
+    });
+    return Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
+  }, [isCustomizing, monitorias, dissatisfactionFields]);
+
+
 
   const onlineSub = useMemo(() => (
     <div className="relative inline-flex items-center gap-1.5 select-none">
@@ -683,69 +823,96 @@ export default function QualityManagerDashboard({
     }
   };
 
+  // Ações Expirando list
+  const sortedDeadlines = useMemo(() => {
+    const source = isCustomizing ? mockMonitoriasDeadlines : monitorias;
+    const filtered = source.filter((m: any) =>
+      ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
+      && m.action_deadline_at
+    );
+    
+    return [...filtered].sort((a, b) => {
+      const tA = new Date(a.action_deadline_at).getTime();
+      const tB = new Date(b.action_deadline_at).getTime();
+      return tA - tB;
+    });
+  }, [isCustomizing, monitorias]);
+
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-visible">
-      {/* LINHA 1 (FOCO TOTAL NO TOPO - REQUISITO CRÍTICO): Configure com lg:grid-cols-2 gap-6 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <StatCard
-          title="Média Geral"
-          value={`${avgScore.toFixed(2)}%`}
-          sub={isCustomizing ? 'Média simulada do período' : 'Média acumulada global'}
-          good={avgScore >= config.targetScore}
-          icon={<Target className="w-5 h-5" />}
-          accent="text-brand-accent"
-          badge={
-            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : diffColorClass}`}>
-              {isCustomizing ? '↑' : diffSign} {isCustomizing ? '5.42%' : Math.abs(scoreDiff).toFixed(2) + '%'}
-            </span>
-          }
-          isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
-          activeEditingId={activeEditingId}
-          setActiveEditingId={setActiveEditingId}
-        />
-        <StatCard
-          title="Índice de Excelência"
-          value={`${excellentPercent.toFixed(2)}%`}
-          sub={isCustomizing ? 'Percentual na faixa Excelente' : 'Percentual na faixa Excelente'}
-          good={excellentPercent >= 50}
-          icon={<Award className="w-5 h-5" />}
-          accent="text-brand-accent"
-          badge={
-            <div className="flex items-center gap-1.5">
-              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-md ${
-                excellentPercent >= 50
-                  ? 'bg-functional-success/10 text-functional-success border border-functional-success/20'
-                  : 'bg-functional-warning/10 text-functional-warning border border-functional-warning/20'
-              }`}>
-                {excellentPercent >= 50 ? 'Alto' : 'Médio'}
+      {/* LINHA 1 (FOCO TOTAL NO TOPO - REQUISITO CRÍTICO): Configure com lg:grid-cols-4 gap-6 */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-1">
+          <StatCard
+            title="Minhas Ações"
+            value={pendingMyActions}
+            sub={pendingMyActions === 0 ? "Fila de decisões em dia" : "Aguardando sua decisão"}
+            good={pendingMyActions === 0}
+            icon={pendingMyActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+            accent={pendingMyActions === 0 ? 'text-functional-success' : 'text-functional-error'}
+            badge={
+              pendingMyActions > 0 ? (
+                <span className="relative flex h-2 w-2 self-center">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                </span>
+              ) : undefined
+            }
+            isCustomizing={isCustomizing}
+            profile="gestor_qualidade"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
+        <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <StatCard
+            title="Média Geral"
+            value={`${avgScore.toFixed(2)}%`}
+            sub={isCustomizing ? 'Média simulada do período' : 'Média acumulada global'}
+            good={avgScore >= config.targetScore}
+            icon={<Target className="w-5 h-5" />}
+            accent="text-brand-accent"
+            badge={
+              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : diffColorClass}`}>
+                {isCustomizing ? '↑' : diffSign} {isCustomizing ? '5.42%' : Math.abs(scoreDiff).toFixed(2) + '%'}
               </span>
-              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : excColorClass}`}>
-                {isCustomizing ? '↑' : excDiffSign} {isCustomizing ? '4.81%' : Math.abs(excellentTrendPercentage).toFixed(2) + '%'}
-              </span>
-            </div>
-          }
-          isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
-          activeEditingId={activeEditingId}
-          setActiveEditingId={setActiveEditingId}
-        />
+            }
+            isCustomizing={isCustomizing}
+            profile="gestor_qualidade"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+          <StatCard
+            title="Índice de Excelência"
+            value={`${excellentPercent.toFixed(2)}%`}
+            sub={isCustomizing ? 'Percentual na faixa Excelente' : 'Percentual na faixa Excelente'}
+            good={excellentPercent >= 50}
+            icon={<Award className="w-5 h-5" />}
+            accent="text-brand-accent"
+            badge={
+              <div className="flex items-center gap-1.5">
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-md ${
+                  excellentPercent >= 50
+                    ? 'bg-functional-success/10 text-functional-success border border-functional-success/20'
+                    : 'bg-functional-warning/10 text-functional-warning border border-functional-warning/20'
+                }`}>
+                  {excellentPercent >= 50 ? 'Alto' : 'Médio'}
+                </span>
+                <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : excColorClass}`}>
+                  {isCustomizing ? '↑' : excDiffSign} {isCustomizing ? '4.81%' : Math.abs(excellentTrendPercentage).toFixed(2) + '%'}
+                </span>
+              </div>
+            }
+            isCustomizing={isCustomizing}
+            profile="gestor_qualidade"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
       </div>
 
-      {/* LINHA 2: Métricas Operacionais - Cards Menores (com Minhas Ações na 1ª posição e quebra harmônica) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-        <StatCard
-          title="Minhas Ações"
-          value={pendingMyActions}
-          sub="Aguardando sua decisão"
-          good={pendingMyActions === 0}
-          icon={pendingMyActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-          accent={pendingMyActions === 0 ? 'text-functional-success' : 'text-functional-error'}
-          isCustomizing={isCustomizing}
-          profile="gestor_qualidade"
-          activeEditingId={activeEditingId}
-          setActiveEditingId={setActiveEditingId}
-        />
+      {/* LINHA 2: Métricas Operacionais - Cards Menores (4 Blocos Simétricos) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total"
           value={totalMonitorias}
@@ -1035,8 +1202,8 @@ export default function QualityManagerDashboard({
                     )}
                   </AnimatePresence>
                 </div>
-                <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest truncate flex-1 min-w-0">
-                  Curva de Qualidade
+                <h3 className="text-[13px] font-black text-brand-primary uppercase tracking-wider whitespace-normal flex-1 leading-snug">
+                  Curva de Qualidade (Distribuição por Nível)
                 </h3>
               </div>
 
@@ -1066,7 +1233,7 @@ export default function QualityManagerDashboard({
                     {/* Compact Legend */}
                     <div className="max-h-[85px] overflow-y-auto pr-1 no-scrollbar flex flex-wrap justify-center gap-x-3 gap-y-1.5 mt-2 pt-2 border-t border-surface-border/40">
                       {gradeDistribution.map((entry: any, index: number) => {
-                        const totalVal = gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0);
+                        const totalVal = gradeDistribution.reduce((sum, entry) => sum + entry.value, 0);
                         const percent = totalVal > 0 ? ((entry.value / totalVal) * 100).toFixed(1) : '0';
                         return (
                           <div key={index} className="flex items-center gap-1.5 text-[9px] text-brand-muted font-black uppercase tracking-tight">
@@ -1100,7 +1267,64 @@ export default function QualityManagerDashboard({
         </div>
       </div>
 
-      {/* LINHA 5: Performance Histórica */}
+      {/* LINHA 5: Nova Linha Operacional e de Alertas (Insatisfação Cliente | Insatisfação Qualidade | Ações Expirando, lg:grid-cols-3 gap-6) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Bloco Insatisfação — Visão do Cliente */}
+        <div className="h-[380px]">
+          <DistributionChart
+            title="Insatisfação — Visão do Cliente"
+            data={clientDissatisfactionData}
+            isCustomizing={isCustomizing}
+            profile="gestor_qualidade"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
+
+        {/* Bloco Insatisfação — Visão da Qualidade */}
+        <div className="h-[380px]">
+          <DistributionChart
+            title="Insatisfação — Visão da Qualidade"
+            data={qualityDissatisfactionData}
+            isCustomizing={isCustomizing}
+            profile="gestor_qualidade"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
+
+        {/* Bloco Ações Expirando list */}
+        <div className="h-[380px]">
+          <Card padding="lg" className="h-full flex flex-col overflow-visible">
+            <div className="flex items-center gap-3 mb-4 flex-shrink-0">
+              <div className="relative w-9 h-9 rounded-xl bg-icon-highlight flex items-center justify-center flex-shrink-0 text-brand-highlight">
+                <Clock className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest leading-tight">
+                  Ações Expirando
+                </h3>
+              </div>
+            </div>
+            
+            {sortedDeadlines.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-60">
+                <p className="text-[10px] text-brand-muted font-black uppercase tracking-widest leading-relaxed">
+                  Nenhuma ação pendente de SLA no momento
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar min-h-0">
+                {sortedDeadlines.map((m) => (
+                  <SlaCountdownItem key={m.id} monitoria={m} users={users} />
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+
+      {/* LINHA 6: Performance Histórica */}
       <div className="h-[380px]">
         <TrendChart
           title="Performance Histórica"
@@ -1114,7 +1338,7 @@ export default function QualityManagerDashboard({
         />
       </div>
 
-      {/* LINHA 6: Volume de Reavaliações por Auditor */}
+      {/* LINHA 7: Volume de Reavaliações por Auditor */}
       <div className="h-[420px]">
         <ComparativeBarChart
           title="Volume de Reavaliações por Auditor"
@@ -1131,7 +1355,7 @@ export default function QualityManagerDashboard({
         />
       </div>
 
-      {/* LINHA 7: Rankings Compactados (Melhores Suporte | Maiores Ofensores | Volume por Auditor | Top Reav. Aceitas | Top Reav. Recusadas) */}
+      {/* LINHA 8: Rankings Compactados (Melhores Suporte | Maiores Ofensores | Volume por Auditor | Top Reav. Aceitas | Top Reav. Recusadas) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <div className="h-[420px] py-1.5">
           <RankingWidget
@@ -1199,7 +1423,7 @@ export default function QualityManagerDashboard({
         </div>
       </div>
 
-      {/* LINHA 8: Maiores Ofensores */}
+      {/* LINHA 9: Maiores Ofensores */}
       <div className="h-[420px]">
         <OfensoresChart
           title="Maiores Ofensores"
@@ -1213,70 +1437,7 @@ export default function QualityManagerDashboard({
         />
       </div>
 
-      {/* LINHA 9: Insatisfação */}
-      {(() => {
-        let clientData: any[] = [];
-        let qualityData: any[] = [];
-        let showSection = false;
-
-        if (isCustomizing) {
-          clientData = mockClientDissatisfaction;
-          qualityData = mockQualityDissatisfaction;
-          showSection = true;
-        } else if (dissatisfactionFields && dissatisfactionFields.length > 0) {
-          const COLORS = chartColorArray();
-          const monWithAnswers = monitorias.filter((m: any) => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
-
-          const clientFields = dissatisfactionFields.filter((f: any) => f.type === 'cliente');
-          const qualityFields = dissatisfactionFields.filter((f: any) => f.type === 'qualidade');
-
-          const buildChartData = (fields: typeof dissatisfactionFields) => {
-            const freq: Record<string, number> = {};
-            monWithAnswers.forEach((m: any) => {
-              fields.forEach((f: any) => {
-                const answers = m.dissatisfaction_answers?.[f.id] || [];
-                answers.forEach((opt: string) => { freq[opt] = (freq[opt] || 0) + 1; });
-              });
-            });
-            return Object.entries(freq)
-              .sort((a, b) => b[1] - a[1])
-              .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
-          };
-
-          clientData = buildChartData(clientFields);
-          qualityData = buildChartData(qualityFields);
-          showSection = true;
-        }
-
-        if (!showSection) return null;
-
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-[360px]">
-              <DistributionChart
-                title="Insatisfação — Visão do Cliente"
-                data={clientData}
-                isCustomizing={isCustomizing}
-                profile="gestor_qualidade"
-                activeEditingId={activeEditingId}
-                setActiveEditingId={setActiveEditingId}
-              />
-            </div>
-            <div className="h-[360px]">
-              <DistributionChart
-                title="Insatisfação — Visão da Qualidade"
-                data={qualityData}
-                isCustomizing={isCustomizing}
-                profile="gestor_qualidade"
-                activeEditingId={activeEditingId}
-                setActiveEditingId={setActiveEditingId}
-              />
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* LINHA 10: Últimas Auditorias do Sistema */}
+      {/* LINHA 11: Últimas Auditorias do Sistema */}
       <RecentAuditsTable
         monitorias={isCustomizing ? mockRecentMonitorias : monitorias}
         users={isCustomizing ? mockUsersList : users}
