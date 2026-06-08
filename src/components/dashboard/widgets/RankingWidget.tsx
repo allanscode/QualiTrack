@@ -125,7 +125,7 @@ export default function RankingWidget({
   };
 
   return (
-    <Card padding="lg" className="h-full flex flex-col">
+    <Card padding="md" className="h-full flex flex-col">
       {isEditing ? (
         <div className="flex flex-col gap-2 mb-5 animate-fade-in" onClick={(e) => e.stopPropagation()}>
           <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
@@ -160,21 +160,21 @@ export default function RankingWidget({
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-3 mb-5 min-w-0">
+        <div className="flex items-center gap-3 mb-3 min-w-0">
           <div 
             onClick={canEdit ? handleEditClick : undefined}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            className={`relative w-9 h-9 rounded-xl ${accent ? getIconBg(accent) : 'bg-surface-subtle'} flex items-center justify-center flex-shrink-0 ${accent || ''} ${
+            className={`relative w-8 h-8 rounded-xl ${accent ? getIconBg(accent) : 'bg-surface-subtle'} flex items-center justify-center flex-shrink-0 ${accent || ''} ${
               canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
             }`}
             title=""
           >
             {(() => {
-              const defaultIcon = icon || <Award className="w-5 h-5" />;
+              const defaultIcon = icon || <Award className="w-4 h-4" />;
               return React.isValidElement(defaultIcon)
                 ? React.cloneElement(defaultIcon as React.ReactElement<any>, {
-                    className: 'w-5 h-5 fill-current fill-opacity-15',
+                    className: 'w-4 h-4 fill-current fill-opacity-15',
                     strokeWidth: 2,
                     fill: 'currentColor',
                     fillOpacity: 0.15,
@@ -203,7 +203,7 @@ export default function RankingWidget({
         </div>
       )}
 
-      <div className="flex-1 space-y-2 overflow-y-auto pr-1 no-scrollbar">
+      <div className="flex-1 space-y-1.5 overflow-y-auto pr-1 no-scrollbar">
         {data.map((item, index) => {
           const level = item.score !== undefined ? getLevelForScore(item.score) : { color: 'text-brand-primary', label: '' };
           const isCount = type === 'count';
@@ -211,15 +211,15 @@ export default function RankingWidget({
           return (
             <div
               key={item.id}
-              className="group flex items-center gap-3 p-3 rounded-2xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle/50 transition-all duration-200"
+              className="group flex items-center gap-3 py-1.5 px-3 rounded-2xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle/50 transition-all duration-200"
             >
               {/* Rank Badge */}
               <div className="relative flex-shrink-0">
-        <div className="w-9 h-9 rounded-xl bg-brand-accent text-white flex items-center justify-center font-black text-xs shadow-premium group-hover:scale-105 transition-transform">
-            {index + 1}
-          </div>
-          {index === 0 && (
-            <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-400 rounded-full border-2 border-surface-card flex items-center justify-center">
+                <div className="w-7 h-7 rounded-xl bg-brand-accent text-white flex items-center justify-center font-black text-[10px] shadow-premium group-hover:scale-105 transition-transform">
+                  {index + 1}
+                </div>
+                {index === 0 && (
+                  <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-400 rounded-full border border-surface-card flex items-center justify-center">
                     <Award className="w-2 h-2 text-white" />
                   </div>
                 )}
