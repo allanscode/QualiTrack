@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode, useMemo } from 'react';
 import { User, Team, EvaluationForm, DissatisfactionField, UserTeam, UserPreferences } from '../types';
 import { supabase, mockDb } from './supabase';
 import { toast } from 'sonner';
@@ -152,8 +152,19 @@ export function StaticDataProvider({ children }: { children: ReactNode }) {
     setRefreshTrigger(prev => prev + 1);
   }, []);
 
+  const contextValue = useMemo(() => ({
+    users,
+    teams,
+    forms,
+    dissatisfactionFields,
+    userTeams,
+    userPreferences,
+    loading,
+    refreshAll
+  }), [users, teams, forms, dissatisfactionFields, userTeams, userPreferences, loading, refreshAll]);
+
   return (
-    <StaticDataContext.Provider value={{ users, teams, forms, dissatisfactionFields, userTeams, userPreferences, loading, refreshAll }}>
+    <StaticDataContext.Provider value={contextValue}>
       {children}
     </StaticDataContext.Provider>
   );

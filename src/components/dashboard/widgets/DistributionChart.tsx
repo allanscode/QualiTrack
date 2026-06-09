@@ -7,6 +7,18 @@ import { useDashboard } from '../DashboardContext';
 import { toast } from 'sonner';
 import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'motion/react';
 
+const CustomTooltip = ({ active, payload, total }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const percent = total > 0 ? ((d.value / total) * 100).toFixed(1) : 0;
+  return (
+    <div className="bg-slate-900 text-slate-50 dark:bg-white dark:text-slate-900 px-3 py-2 rounded-xl shadow-premium text-[10px] border border-black/5 dark:border-white/10 font-sans font-bold print:hidden">
+      <p className="mb-0.5">{d.name}</p>
+      <p className="opacity-80 font-semibold">{d.value} ocorrência{d.value !== 1 ? 's' : ''} ({percent}%)</p>
+    </div>
+  );
+};
+
 interface DistributionChartProps {
   title: string;
   data: { name: string; value: number; color: string }[];
@@ -93,17 +105,7 @@ export default function DistributionChart({
 
   const total = data.reduce((a, b) => a + b.value, 0);
 
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (!active || !payload?.length) return null;
-    const d = payload[0].payload;
-    const percent = total > 0 ? ((d.value / total) * 100).toFixed(1) : 0;
-    return (
-      <div className="bg-slate-900 text-slate-50 dark:bg-white dark:text-slate-900 px-3 py-2 rounded-xl shadow-premium text-[10px] border border-black/5 dark:border-white/10 font-sans font-bold print:hidden">
-        <p className="mb-0.5">{d.name}</p>
-        <p className="opacity-80 font-semibold">{d.value} ocorrência{d.value !== 1 ? 's' : ''} ({percent}%)</p>
-      </div>
-    );
-  };
+
 
   return (
     <LazyMotion features={domAnimation}>
@@ -178,7 +180,7 @@ export default function DistributionChart({
             <div className="flex-1 min-h-[150px] print:h-[180px]" style={{ minWidth: 0, minHeight: 150 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<CustomTooltip total={total} />} />
                   <Pie
                     data={data}
                     cx="50%"

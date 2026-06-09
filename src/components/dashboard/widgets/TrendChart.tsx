@@ -7,6 +7,24 @@ import { useDashboard } from '../DashboardContext';
 import { toast } from 'sonner';
 import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'motion/react';
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-slate-900 text-slate-50 dark:bg-white dark:text-slate-900 px-3 py-2.5 rounded-xl shadow-premium text-[10px] border border-black/5 dark:border-white/10 font-sans font-bold animate-fade-in print:hidden">
+      <p className="mb-1 leading-snug uppercase tracking-widest opacity-60 text-[8px] font-black">{label}</p>
+      <div className="space-y-1">
+        {payload.map((p: any, i: number) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.stroke || p.color }} />
+            <span className="opacity-90 font-semibold">{p.name}:</span>
+            <span className="font-extrabold">{p.value}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 interface TrendChartProps {
   title: string;
   subtitle?: string;
@@ -191,23 +209,7 @@ export default function TrendChart({
               <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} className="print:fill-slate-700" />
               <Tooltip
                 cursor={{ stroke: 'var(--brand-accent)', strokeWidth: 2, strokeDasharray: '4 4' }}
-                content={({ active, payload, label }) => {
-                  if (!active || !payload?.length) return null;
-                  return (
-                    <div className="bg-slate-900 text-slate-50 dark:bg-white dark:text-slate-900 px-3 py-2.5 rounded-xl shadow-premium text-[10px] border border-black/5 dark:border-white/10 font-sans font-bold animate-fade-in print:hidden">
-                      <p className="mb-1 leading-snug uppercase tracking-widest opacity-60 text-[8px] font-black">{label}</p>
-                      <div className="space-y-1">
-                        {payload.map((p: any, i: number) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.stroke || p.color }} />
-                            <span className="opacity-90 font-semibold">{p.name}:</span>
-                            <span className="font-extrabold">{p.value}%</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                }}
+                content={<CustomTooltip />}
               />
               {dataKeys.map(dk => (
                 <Area
