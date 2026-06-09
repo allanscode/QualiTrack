@@ -181,7 +181,7 @@ export default function RankingWidget({
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             className={`relative w-8 h-8 rounded-xl ${accent ? getIconBg(accent) : 'bg-surface-subtle'} flex items-center justify-center flex-shrink-0 ${accent || ''} ${
-              canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
+              canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : (isMelhoresSuporte ? 'cursor-pointer' : 'cursor-help')
             }`}
             title=""
           >

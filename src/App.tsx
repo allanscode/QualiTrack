@@ -1098,47 +1098,47 @@ function MainApp({
       return [
         { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
         { value: '#12130F', label: 'Obsidiana', hex: 'bg-[#12130F]' },
-        { value: '#1E1F1A', label: 'Carvão', hex: 'bg-[#1E1F1A]' },
-        { value: '#2A2C24', label: 'Grafite', hex: 'bg-[#2A2C24]' },
-        { value: '#1E293B', label: 'Slate Escuro', hex: 'bg-[#1E293B]' },
-        { value: '#0F172A', label: 'Meia-noite', hex: 'bg-[#0F172A]' },
-        { value: '#1E3A8A', label: 'Azul Escuro', hex: 'bg-[#1E3A8A]' },
-        { value: '#172554', label: 'Marinho Escuro', hex: 'bg-[#172554]' },
-        { value: '#064E3B', label: 'Esmeralda Escuro', hex: 'bg-[#064E3B]' },
-        { value: '#022C22', label: 'Floresta Profunda', hex: 'bg-[#022C22]' },
-        { value: '#115E59', label: 'Teal Muted', hex: 'bg-[#115E59]' },
-        { value: '#4C0519', label: 'Vinho Profundo', hex: 'bg-[#4C0519]' },
-        { value: '#3B0764', label: 'Beringela', hex: 'bg-[#3B0764]' },
-        { value: '#2E1065', label: 'Violeta Escuro', hex: 'bg-[#2E1065]' },
-        { value: '#3F2212', label: 'Chocolate', hex: 'bg-[#3F2212]' },
-        { value: '#451A03', label: 'Café', hex: 'bg-[#451A03]' },
-        { value: '#78350F', label: 'Bronze Escuro', hex: 'bg-[#78350F]' },
-        { value: '#3F4232', label: 'Oliva Escuro', hex: 'bg-[#3F4232]' },
-        { value: '#334155', label: 'Aço Muted', hex: 'bg-[#334155]' },
-        { value: '#0F0F10', label: 'Zinco Negro', hex: 'bg-[#0F0F10]' }
+        { value: '#2F3129', label: 'Grafite Escuro', hex: 'bg-[#2F3129]' },
+        { value: '#1E293B', label: 'Slate Azulado', hex: 'bg-[#1E293B]' },
+        { value: '#1B2A4A', label: 'Azul Marinho', hex: 'bg-[#1B2A4A]' },
+        { value: '#253366', label: 'Azul Indigo', hex: 'bg-[#253366]' },
+        { value: '#0F4C81', label: 'Azul Oceano', hex: 'bg-[#0F4C81]' },
+        { value: '#0F5132', label: 'Esmeralda Escuro', hex: 'bg-[#0F5132]' },
+        { value: '#1A3A2A', label: 'Verde Floresta', hex: 'bg-[#1A3A2A]' },
+        { value: '#3C4E2D', label: 'Verde Oliva', hex: 'bg-[#3C4E2D]' },
+        { value: '#0F6B5C', label: 'Menta Escuro', hex: 'bg-[#0F6B5C]' },
+        { value: '#7A431D', label: 'Bronze / Cobre', hex: 'bg-[#7A431D]' },
+        { value: '#422006', label: 'Café Profundo', hex: 'bg-[#422006]' },
+        { value: '#8A331E', label: 'Terracota Escuro', hex: 'bg-[#8A331E]' },
+        { value: '#5C0624', label: 'Vinho', hex: 'bg-[#5C0624]' },
+        { value: '#801438', label: 'Cereja Negra', hex: 'bg-[#801438]' },
+        { value: '#522258', label: 'Ametista', hex: 'bg-[#522258]' },
+        { value: '#3B0764', label: 'Roxo Meia-Noite', hex: 'bg-[#3B0764]' },
+        { value: '#4C1D95', label: 'Lavanda Escuro', hex: 'bg-[#4C1D95]' },
+        { value: '#475569', label: 'Aço Escuro', hex: 'bg-[#475569]' }
       ];
     } else {
       return [
         { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
-        { value: '#64748B', label: 'Slate', hex: 'bg-[#64748B]' },
-        { value: '#93C5FD', label: 'Azul Sereno', hex: 'bg-[#93C5FD]' },
-        { value: '#A7F3D0', label: 'Menta', hex: 'bg-[#A7F3D0]' },
-        { value: '#F5F5F4', label: 'Areia', hex: 'bg-[#F5F5F4]' },
-        { value: '#C2C9BA', label: 'Sálvia', hex: 'bg-[#C2C9BA]' },
-        { value: '#FDA4AF', label: 'Rosé', hex: 'bg-[#FDA4AF]' },
-        { value: '#DDD6FE', label: 'Lavanda', hex: 'bg-[#DDD6FE]' },
-        { value: '#FFEDD5', label: 'Pêssego', hex: 'bg-[#FFEDD5]' },
-        { value: '#E0F2FE', label: 'Céu Claro', hex: 'bg-[#E0F2FE]' },
-        { value: '#D9F99D', label: 'Lima Suave', hex: 'bg-[#D9F99D]' },
-        { value: '#F1F5F9', label: 'Névoa', hex: 'bg-[#F1F5F9]' },
-        { value: '#1D4ED8', label: 'Azul Real', hex: 'bg-[#1D4ED8]' },
-        { value: '#65A30D', label: 'Verde Oliva', hex: 'bg-[#65A30D]' },
-        { value: '#F97316', label: 'Laranja', hex: 'bg-[#F97316]' },
-        { value: '#7C3AED', label: 'Roxo Elegante', hex: 'bg-[#7C3AED]' },
-        { value: '#C2410C', label: 'Terracota', hex: 'bg-[#C2410C]' },
-        { value: '#D97706', label: 'Ouro', hex: 'bg-[#D97706]' },
-        { value: '#10B981', label: 'Esmeralda', hex: 'bg-[#10B981]' },
-        { value: '#E2E8F0', label: 'Platina', hex: 'bg-[#E2E8F0]' }
+        { value: '#475569', label: 'Slate Clássico', hex: 'bg-[#475569]' },
+        { value: '#3B82F6', label: 'Azul Denim', hex: 'bg-[#3B82F6]' },
+        { value: '#60A5FA', label: 'Azul Celeste', hex: 'bg-[#60A5FA]' },
+        { value: '#34D399', label: 'Verde Hortelã', hex: 'bg-[#34D399]' },
+        { value: '#10B981', label: 'Esmeralda Suave', hex: 'bg-[#10B981]' },
+        { value: '#7D9B82', label: 'Verde Sálvia', hex: 'bg-[#7D9B82]' },
+        { value: '#D97706', label: 'Amarelo Mostarda', hex: 'bg-[#D97706]' },
+        { value: '#EA580C', label: 'Laranja Cenoura', hex: 'bg-[#EA580C]' },
+        { value: '#C2410C', label: 'Terracota Suave', hex: 'bg-[#C2410C]' },
+        { value: '#DC2626', label: 'Vermelho Carmim', hex: 'bg-[#DC2626]' },
+        { value: '#F43F5E', label: 'Rosa Coral', hex: 'bg-[#F43F5E]' },
+        { value: '#A78BFA', label: 'Lilás Médio', hex: 'bg-[#A78BFA]' },
+        { value: '#7C3AED', label: 'Roxo Real', hex: 'bg-[#7C3AED]' },
+        { value: '#8B5CF6', label: 'Ameixa', hex: 'bg-[#8B5CF6]' },
+        { value: '#0D9488', label: 'Azul Turquesa', hex: 'bg-[#0D9488]' },
+        { value: '#B45309', label: 'Bronze Dourado', hex: 'bg-[#B45309]' },
+        { value: '#854D0E', label: 'Argila', hex: 'bg-[#854D0E]' },
+        { value: '#64748B', label: 'Aço Claro', hex: 'bg-[#64748B]' },
+        { value: '#84CC16', label: 'Verde Oliva Claro', hex: 'bg-[#84CC16]' }
       ];
     }
   }, [resolvedTheme]);
@@ -1599,7 +1599,7 @@ function MainApp({
                             return (
                               <button
                                 key={opt.label}
-                                onClick={() => { handleSidebarColorChange(opt.value); setSidebarAccordion(null); }}
+                                onClick={() => { handleSidebarColorChange(opt.value); }}
                                 className={`w-7 h-7 rounded-full ${opt.hex} border-2 hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer ${isActive ? 'border-brand-accent shadow-md scale-105' : 'border-surface-border'}`}
                                 title={opt.label}
                               >
@@ -1612,6 +1612,17 @@ function MainApp({
                     </motion.div>
                   )}
                 </AnimatePresence>
+              </div>
+
+              {/* ── Sair Option ── */}
+              <div className="border-t border-surface-border pt-1 mt-1">
+                <button
+                  onClick={() => { setShowTeamList(false); handleLogout(); }}
+                  className="w-full flex items-center gap-2 py-2 px-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="text-[11px] font-black uppercase tracking-wider">Sair</span>
+                </button>
               </div>
             </div>
           </motion.div>
