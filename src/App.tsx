@@ -1075,6 +1075,53 @@ function AppContent() {
   );
 }
 
+// --- Sidebar Color Mirroring Maps ---
+const darkToLightColorMap: Record<string, string> = {
+  '': '', // Padrão
+  '#12130F': '#475569', // Obsidiana -> Slate Clássico
+  '#2F3129': '#64748B', // Grafite Escuro -> Aço Claro
+  '#1E293B': '#3B82F6', // Slate Azulado -> Azul Denim
+  '#1B2A4A': '#60A5FA', // Azul Marinho -> Azul Celeste
+  '#253366': '#3B82F6', // Azul Indigo -> Azul Denim
+  '#0F4C81': '#3B82F6', // Azul Oceano -> Azul Denim
+  '#0F5132': '#10B981', // Esmeralda Escuro -> Esmeralda Suave
+  '#1A3A2A': '#7D9B82', // Verde Floresta -> Verde Sálvia
+  '#3C4E2D': '#84CC16', // Verde Oliva -> Verde Oliva Claro
+  '#0F6B5C': '#0D9488', // Menta Escuro -> Azul Turquesa
+  '#7A431D': '#B45309', // Bronze / Cobre -> Bronze Dourado
+  '#422006': '#854D0E', // Café Profundo -> Argila
+  '#8A331E': '#C2410C', // Terracota Escuro -> Terracota Suave
+  '#5C0624': '#DC2626', // Vinho -> Vermelho Carmim
+  '#801438': '#F43F5E', // Cereja Negra -> Rosa Coral
+  '#522258': '#A78BFA', // Ametista -> Lilás Médio
+  '#3B0764': '#7C3AED', // Roxo Meia-Noite -> Roxo Real
+  '#4C1D95': '#8B5CF6', // Lavanda Escuro -> Ameixa
+  '#475569': '#64748B'  // Aço Escuro -> Aço Claro
+};
+
+const lightToDarkColorMap: Record<string, string> = {
+  '': '', // Padrão
+  '#475569': '#12130F', // Slate Clássico -> Obsidiana
+  '#3B82F6': '#1E293B', // Azul Denim -> Slate Azulado
+  '#60A5FA': '#1B2A4A', // Azul Celeste -> Azul Marinho
+  '#34D399': '#0F6B5C', // Verde Hortelã -> Menta Escuro
+  '#10B981': '#0F5132', // Esmeralda Suave -> Esmeralda Escuro
+  '#7D9B82': '#1A3A2A', // Verde Sálvia -> Verde Floresta
+  '#D97706': '#7A431D', // Amarelo Mostarda -> Bronze / Cobre
+  '#EA580C': '#8A331E', // Laranja Cenoura -> Terracota Escuro
+  '#C2410C': '#8A331E', // Terracota Suave -> Terracota Escuro
+  '#DC2626': '#5C0624', // Vermelho Carmim -> Vinho
+  '#F43F5E': '#801438', // Rosa Coral -> Cereja Negra
+  '#A78BFA': '#522258', // Lilás Médio -> Ametista
+  '#7C3AED': '#3B0764', // Roxo Real -> Roxo Meia-Noite
+  '#8B5CF6': '#4C1D95', // Ameixa -> Lavanda Escuro
+  '#0D9488': '#0F6B5C', // Azul Turquesa -> Menta Escuro
+  '#B45309': '#7A431D', // Bronze Dourado -> Bronze / Cobre
+  '#854D0E': '#422006', // Argila -> Café Profundo
+  '#64748B': '#475569', // Aço Claro -> Aço Escuro
+  '#84CC16': '#3C4E2D'  // Verde Oliva Claro -> Verde Oliva
+};
+
 function MainApp({
   isSidebarOpen,
   setIsSidebarOpen,
@@ -1277,6 +1324,36 @@ function MainApp({
     if (userData?.id) {
       await upsertUserPreferences(userData.id, { sidebar_color: color });
     }
+  };
+
+  const handleThemeChange = async (newTheme: Theme) => {
+    const currentResolved = resolvedTheme; // 'light' | 'dark'
+    let targetResolved: 'light' | 'dark';
+    if (newTheme === 'system') {
+      targetResolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } else {
+      targetResolved = newTheme;
+    }
+
+    if (currentResolved !== targetResolved) {
+      let mappedColor = sidebarColor;
+      if (targetResolved === 'light') {
+        mappedColor = darkToLightColorMap[sidebarColor] !== undefined ? darkToLightColorMap[sidebarColor] : '';
+      } else {
+        mappedColor = lightToDarkColorMap[sidebarColor] !== undefined ? lightToDarkColorMap[sidebarColor] : '';
+      }
+
+      setSidebarColor(mappedColor);
+      const email = userData?.email || currentUser?.email;
+      if (email) {
+        localStorage.setItem(`qualitrack_sidebar_color_${email}`, mappedColor);
+      }
+      if (userData?.id) {
+        await upsertUserPreferences(userData.id, { sidebar_color: mappedColor });
+      }
+    }
+
+    setTheme(newTheme);
   };
 
   const userTeams = teams.filter(t => (userData?.team_ids || []).includes(t.id));
@@ -1549,7 +1626,7 @@ function MainApp({
                             return (
                               <button
                                 key={opt.value}
-                                onClick={(e) => { e.stopPropagation(); setTheme(opt.value as any); }}
+                                onClick={(e) => { e.stopPropagation(); handleThemeChange(opt.value as Theme); }}
                                 className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
                                   isActive
                                     ? 'bg-surface-card text-brand-primary shadow-sm border border-surface-border'
