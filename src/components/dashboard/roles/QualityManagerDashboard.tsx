@@ -143,10 +143,10 @@ const mockTrendData = [
 ];
 
 const mockDistributionData = [
-  { name: 'Excelente (90-100%)', value: 35, color: '#10B981' },
-  { name: 'Aceitável (75-89%)', value: 18, color: '#3B82F6' },
-  { name: 'Atenção (50-74%)', value: 5, color: '#F59E0B' },
-  { name: 'Ruim (0-49%)', value: 2, color: '#EF4444' }
+  { name: 'Excelente (91-100%)', value: 35, color: '#10B981' },
+  { name: 'Aceitável (80-90%)', value: 18, color: '#3B82F6' },
+  { name: 'Atenção (60-79%)', value: 5, color: '#F59E0B' },
+  { name: 'Ruim (0-59%)', value: 2, color: '#EF4444' }
 ];
 
 const mockTeamDistribution = [
@@ -429,7 +429,7 @@ export default function QualityManagerDashboard({
     if (isCustomizing) return 35;
     return scoredMonitorias.filter((m: any) => {
       const lvl = getLevelForScore(m.score || 0);
-      return lvl?.color === 'excelente';
+      return lvl?.color.includes('excelente');
     }).length;
   }, [isCustomizing, scoredMonitorias, getLevelForScore]);
 
@@ -450,7 +450,7 @@ export default function QualityManagerDashboard({
       if (list.length === 0) return 0;
       const exc = list.filter((m: any) => {
         const lvl = getLevelForScore(m.score || 0);
-        return lvl?.color === 'excelente';
+        return lvl?.color.includes('excelente');
       }).length;
       return (exc / list.length) * 100;
     };

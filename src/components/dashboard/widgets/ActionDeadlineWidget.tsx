@@ -105,7 +105,13 @@ export default function ActionDeadlineWidget({
         .slice(0, 5);
 
   const getName = (m: Monitoria) => {
-    if (m.status === 'pendente_revisao') return m.evaluator_name || m.evaluator_id;
+    if (m.status === 'pendente_revisao') {
+      const isProtectedRole = ['suporte', 'gestor_suporte'].includes(user?.role || '');
+      if (isProtectedRole) {
+        return 'Análise da Qualidade';
+      }
+      return m.evaluator_name || m.evaluator_id;
+    }
     return m.evaluated_name || m.evaluated_id;
   };
 

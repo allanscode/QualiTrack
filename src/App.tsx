@@ -1668,7 +1668,7 @@ function MainApp({
               <AdminPanel user={userData} />
             </div>
             <div className={activeTab === 'custom_dashboard' ? 'block animate-fade-in' : 'hidden'}>
-              <CustomDashboardManagement />
+              <CustomDashboardManagement user={userData} />
             </div>
           </>
         )}

@@ -188,6 +188,29 @@ Ajustamos o design do componente genérico de comparação de barras para fornec
     *   `'Meu Volume'` (Individual): Código Hex `#6366f1` (Tailwind `indigo-500`).
     *   `'Média Equipe'` (Comparativo): Código Hex `#2dd4bf` (Tailwind `teal-400`).
 *   **Aproximação de Barras (Solução Recharts para Categorias Espaçadas):**
-    *   **O Problema:** Em gráficos com poucas categorias horizontais (como as de auditores no dashboard de Administrador), o Recharts calcula colunas gigantescas e afasta as duas barras correspondentes de um mesmo item (criando um espaçamento exagerado indicado pelo usuário).
-    *   **A Solução:** Adicionamos a propriedade **`barSize={20}`** diretamente no componente pai `<BarChart />` de `ComparativeBarChart.tsx`, fixando a largura de cada barra e removendo as travas individuais de `maxBarSize`. Definimos também **`barGap={4}`** para garantir que as barras comparativas do mesmo item fiquem perfeitamente vizinhas, resolvendo as assimetrias em todos os painéis.
+    *   **A Proposta:** Em gráficos com poucas categorias horizontais (como as de auditores no dashboard de Administrador), o Recharts calcula colunas gigantescas e afasta as duas barras correspondentes de um mesmo item (criando um espaçamento exagerado indicado pelo usuário).
+*   **A Solução:** Adicionamos a propriedade **`barSize={20}`** diretamente no componente pai `<BarChart />` de `ComparativeBarChart.tsx`, fixando a largura de cada barra e removendo as travas individuais de `maxBarSize`. Definimos também **`barGap={4}`** para garantir que as barras comparativas do mesmo item fiquem perfeitamente vizinhas, resolvendo as assimetrias em todos os painéis.
 
+---
+
+## 11. Refatoração Visual e Otimização do Dashboard do Agente de Suporte (`AgentDashboard.tsx`)
+
+Reestruturamos o dashboard do **Agente de Atendimento/Suporte** para priorizar uma visualização focada no autodesenvolvimento, inteligência de erros/acertos e conformidade de SLAs, mantendo a simetria de layouts:
+
+### **Reorganização de Cards e Remoção de Métricas Irrelevantes**
+*   **Remoção de 'Precisão da Qualidade':** O card de precisão foi desativado e removido do fluxo do agente por não possuir correlação operacional direta com a função do atendente.
+*   **Grid de 3 Colunas Simétricas (Linha de Distribuição/Insatisfação):** Redesenhamos o grid inferior para `grid-cols-1 md:grid-cols-3 gap-6` contendo as três visões de distribuição lado a lado:
+    1.  `Minha Classificação por Faixas` (Gráfico de rosca dinâmico)
+    2.  `Insatisfação — Visão do Cliente` (Gráfico de distribuição de motivos de insatisfação)
+    3.  `Insatisfação — Visão da Qualidade` (Gráfico de distribuição de motivos de insatisfação sob a ótica dos auditores)
+*   **Layout Limpo e Responsivo:** Essa nova distribuição de 3 colunas simétricas resolve qualquer sensação de vazio visual e se adapta perfeitamente do mobile para telas UltraWide.
+
+### **Coexistência de Gráficos de Tendência Temporal**
+*   **Evolução Comparativa (Meu Score vs Média da Equipe):** Mantivemos o gráfico de linha de área original que plota o desempenho diário contra o benchmark da equipe.
+*   **Evolução Semanal (Novo):** Inserimos consecutivamente um segundo gráfico de tendência em largura cheia focado na `'Evolução Semanal'`. Ambos dividem eficientemente a mesma lógica computada de dados sem latência adicional.
+
+### **Split de Ofensores & Maiores Acertos no `OfensoresChart.tsx`**
+*   **Layout Dividido (Dual Layout):** Criamos uma lógica condicional reativa baseada no papel (`suporte`). Quando renderizado para o agente, o componente `<OfensoresChart />` divide o seu grid interno em duas colunas independentes (`grid-cols-1 md:grid-cols-2 gap-8`):
+    *   **Coluna da Esquerda — Meus Ofensores (Vermelho):** Exibe as falhas de conformidade (respostas "NÃO") aplicando um degradê dinâmico baseado na cor funcional de erro (`text-functional-error`).
+    *   **Coluna da Direita — Maiores Acertos (Verde):** Injeta uma lógica analítica em `useMemo` para computar os critérios com maior índice de acerto (respostas "SIM"), renderizando-os em um degradê fluido baseado na cor de sucesso (`text-functional-success`).
+*   **Navegação e Tooltips Personalizados:** Cada coluna possui tooltips independentes contendo a contagem exata de conformidades/falhas e legendas individuais de top performance.

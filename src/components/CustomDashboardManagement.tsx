@@ -5,8 +5,10 @@ import QualityManagerDashboard from './dashboard/roles/QualityManagerDashboard';
 import SupportManagerDashboard from './dashboard/roles/SupportManagerDashboard';
 import QualityDashboard from './dashboard/roles/QualityDashboard';
 import AgentDashboard from './dashboard/roles/AgentDashboard';
+import { DashboardProvider } from './dashboard/DashboardContext';
+import { User } from '../types';
 
-export default function CustomDashboardManagement() {
+export default function CustomDashboardManagement({ user }: { user: User | null }) {
   const [selectedProfile, setSelectedProfile] = useState<'admin' | 'gestor_qualidade' | 'gestor_suporte' | 'qualidade' | 'suporte'>('admin');
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
 
@@ -65,45 +67,47 @@ export default function CustomDashboardManagement() {
 
       {/* Dynamic Dashboard View rendering according to the selected profile */}
       <div className="space-y-6">
-        {selectedProfile === 'admin' && (
-          <AdminDashboardView 
-            isCustomizing={true}
-            activeEditingId={activeEditingId}
-            setActiveEditingId={setActiveEditingId}
-          />
-        )}
+        <DashboardProvider user={user} activeTab="custom_dashboard">
+          {selectedProfile === 'admin' && (
+            <AdminDashboardView 
+              isCustomizing={true}
+              activeEditingId={activeEditingId}
+              setActiveEditingId={setActiveEditingId}
+            />
+          )}
 
-        {selectedProfile === 'gestor_qualidade' && (
-          <QualityManagerDashboard 
-            isCustomizing={true}
-            activeEditingId={activeEditingId}
-            setActiveEditingId={setActiveEditingId}
-          />
-        )}
+          {selectedProfile === 'gestor_qualidade' && (
+            <QualityManagerDashboard 
+              isCustomizing={true}
+              activeEditingId={activeEditingId}
+              setActiveEditingId={setActiveEditingId}
+            />
+          )}
 
-        {selectedProfile === 'gestor_suporte' && (
-          <SupportManagerDashboard 
-            isCustomizing={true}
-            activeEditingId={activeEditingId}
-            setActiveEditingId={setActiveEditingId}
-          />
-        )}
+          {selectedProfile === 'gestor_suporte' && (
+            <SupportManagerDashboard 
+              isCustomizing={true}
+              activeEditingId={activeEditingId}
+              setActiveEditingId={setActiveEditingId}
+            />
+          )}
 
-        {selectedProfile === 'qualidade' && (
-          <QualityDashboard 
-            isCustomizing={true}
-            activeEditingId={activeEditingId}
-            setActiveEditingId={setActiveEditingId}
-          />
-        )}
+          {selectedProfile === 'qualidade' && (
+            <QualityDashboard 
+              isCustomizing={true}
+              activeEditingId={activeEditingId}
+              setActiveEditingId={setActiveEditingId}
+            />
+          )}
 
-        {selectedProfile === 'suporte' && (
-          <AgentDashboard 
-            isCustomizing={true}
-            activeEditingId={activeEditingId}
-            setActiveEditingId={setActiveEditingId}
-          />
-        )}
+          {selectedProfile === 'suporte' && (
+            <AgentDashboard 
+              isCustomizing={true}
+              activeEditingId={activeEditingId}
+              setActiveEditingId={setActiveEditingId}
+            />
+          )}
+        </DashboardProvider>
       </div>
     </div>
   );

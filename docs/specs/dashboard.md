@@ -147,10 +147,17 @@ Quando `resolution_type === 'automatic'`, ícone `Clock` (`w-3 h-3 opacity-70`) 
 ## Layouts por Perfil
 
 ### Agente de Atendimento (`AgentDashboard`)
-- **Performance e Benchmarks:** 3 StatCards (Minha Média, Média Equipe, Média Global) + TrendChart
-- **Volumetria:** StatCards (Monitorias, Total Pendentes, Solicitadas, Aprovadas, Recusadas, Taxa de Reversão)
-- **Evolução Comparativa:** TrendChart (score diária vs média equipe)
-- **Maiores Ofensores:** OfensoresChart (8 itens)
+- **Linha 1 (Performance e Benchmarks):** 3 StatCards (Minha Média, Média Equipe, Média Global)
+- **Linha 2 (Fila de Contestações e Sucesso):** StatCards (Total Monitorias, Em Revisão, Contestações Aprovadas, Contestações Recusadas, Taxa de Sucesso com comparação dinâmica versus meta da qualidade).
+- **Linha 3 (Evolução Comparativa):** TrendChart de linha/área (Meu Score vs Média Equipe).
+- **Linha 3B (Evolução Semanal):** TrendChart de linha/área (Evolução de tendência semanal).
+- **Linha 4 (Fila e Prazos Operacionais):** 2 ActionDeadlineWidgets lado a lado: "Contestações Ativas" e "Prazos para Contestar".
+- **Linha 5 (Meus Ofensores & Maiores Acertos):** OfensoresChart expandido com layout split de duas colunas (Ofensores em vermelho e Acertos em verde).
+- **Linha 6 (Distribuição e Insatisfações):** Grid de 3 colunas perfeitamente simétricas (`grid-cols-1 md:grid-cols-3`):
+    1. `Minha Classificação por Faixas` (Gráfico de rosca)
+    2. `Insatisfação — Visão do Cliente` (Gráfico de colunas/rosca correspondente)
+    3. `Insatisfação — Visão da Qualidade` (Gráfico de colunas/rosca correspondente)
+- **Linha 8 (Histórico Recente):** Tabela de `Minhas Auditorias Recentes` (RecentAuditsTable) com mascaramento de avaliador sob anonymização.
 
 ### Monitor de Qualidade (`QualityDashboard`)
 - **Volume e Pendências:** Volumetria Diária (2/3) + Auditorias Pendentes StatCard (1/3)
