@@ -352,7 +352,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                         type="time"
                         value={localConfig.businessHours?.start || '08:00'}
                         onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, start: e.target.value } }))}
-                        className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                        className="w-full h-10 bg-surface-card dark:bg-surface-bg border border-surface-border text-brand-primary rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                       />
                     </div>
                     <div className="w-[140px]">
@@ -363,7 +363,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                         type="time"
                         value={localConfig.businessHours?.end || '17:00'}
                         onChange={e => setLocalConfig(c => ({ ...c, businessHours: { ...c.businessHours, end: e.target.value } }))}
-                        className="w-full h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
+                        className="w-full h-10 bg-surface-card dark:bg-surface-bg border border-surface-border text-brand-primary rounded-lg px-3 text-sm font-medium focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm"
                       />
                     </div>
                   </div>
@@ -413,11 +413,11 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     <div
                       ref={triggerRef}
                       onClick={() => setCalendarOpen(prev => !prev)}
-                      className="flex items-center justify-between w-36 h-10 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-medium text-slate-900 dark:text-slate-50 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 shadow-sm select-none shrink-0"
+                      className="flex items-center justify-between w-36 h-10 bg-surface-card dark:bg-surface-bg border border-surface-border rounded-lg px-3 text-sm font-medium text-brand-primary cursor-pointer hover:bg-surface-subtle/50 transition-all duration-200 shadow-sm select-none shrink-0"
                     >
                       <div className="flex items-center gap-2 truncate">
                         <Calendar className="w-4 h-4 text-brand-muted" />
-                        <span className={holidayInput ? "text-slate-900 dark:text-slate-50 font-bold" : "text-slate-400 dark:text-zinc-500 font-bold"}>
+                        <span className={holidayInput ? "text-brand-primary font-bold" : "text-slate-400 dark:text-zinc-500 font-bold"}>
                           {holidayInput || 'DD/MM'}
                         </span>
                       </div>
@@ -428,7 +428,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                             e.stopPropagation();
                             setHolidayInput('');
                           }}
-                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-slate-300 transition-all duration-200"
+                          className="p-1 rounded hover:bg-surface-subtle text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-slate-300 transition-all duration-200"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -451,7 +451,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     localConfig.businessHours?.holidays.map(h => (
                       <div 
                         key={h} 
-                        className="group flex items-center gap-2 px-2.5 py-1 bg-slate-900/40 border border-slate-800 rounded-md text-xs font-normal text-slate-300 shadow-sm transition-all"
+                        className="group flex items-center gap-2 px-2.5 py-1 bg-surface-subtle border border-surface-border rounded-md text-xs font-semibold text-brand-primary shadow-sm transition-all"
                       >
                         <span>{h}</span>
                         <button 
