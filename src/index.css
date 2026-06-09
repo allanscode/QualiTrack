@@ -56,7 +56,7 @@ color-scheme: light;
   /* Functional color tokens (light mode) */
   --error-color: #EF4444;
   --error-bg: #FEF2F2;
-  --warning-color: #F59E0B;
+  --warning-color: #B45309;
   --warning-bg: #FFFBEB;
   --success-color: #10B981;
   --success-bg: #ECFDF5;
@@ -96,8 +96,8 @@ color-scheme: dark;
   /* Functional color tokens (dark mode — pastel/soft) */
   --error-pastel: #FCA5A5;
   --error-pastel-bg: #3B1C1C;
-  --warning-pastel: #FCD34D;
-  --warning-pastel-bg: #3B2F0A;
+  --warning-pastel: #FBBF24;
+  --warning-pastel-bg: rgba(69, 26, 3, 0.4);
   --success-pastel: #6EE7B7;
   --success-pastel-bg: #1A3A2A;
 
@@ -250,8 +250,8 @@ select {
 .dark .bg-level-aceitavel { background-color: #1A3A2A; }
 .dark .text-level-ruim { color: #FCA5A5; }
 .dark .bg-level-ruim { background-color: #3B1C1C; }
-.dark .text-level-atencao { color: #FCD34D; }
-.dark .bg-level-atencao { background-color: #3B2F0A; }
+.dark .text-level-atencao { color: #FBBF24; }
+.dark .bg-level-atencao { background-color: rgba(69, 26, 3, 0.4); }
 .dark .text-level-roxo { color: #D8B4FE; }
 .dark .bg-level-roxo { background-color: #2E1A4E; }
 .dark .text-level-azul { color: #93C5FD; }

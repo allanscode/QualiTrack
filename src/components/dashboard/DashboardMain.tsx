@@ -58,9 +58,11 @@ export default function DashboardMain({
 
   return (
     <DashboardProvider user={user} activeTab={activeTab}>
-      <div className="space-y-4">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
         <FilterBar />
-        <DashboardRouter />
+        <main className="p-6">
+          <DashboardRouter />
+        </main>
       </div>
     </DashboardProvider>
   );

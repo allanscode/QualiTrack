@@ -36,9 +36,10 @@ const DEFAULT_CONFIG: QualityConfig = {
   targetReversalRate: 15,
   targetVolume: 30,
   levels: [
-    { label: 'Excelente', minScore: 96, maxScore: 100, color: 'text-level-excelente', bgColor: 'bg-level-excelente' },
-    { label: 'Aceitável', minScore: 75, maxScore: 95, color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel' },
-    { label: 'Ruim', minScore: 0, maxScore: 74, color: 'text-level-ruim', bgColor: 'bg-level-ruim' },
+    { label: 'Excelente', minScore: 91, maxScore: 100, color: 'text-level-excelente', bgColor: 'bg-level-excelente' },
+    { label: 'Aceitável', minScore: 80, maxScore: 90, color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel' },
+    { label: 'Atenção', minScore: 60, maxScore: 79, color: 'text-level-atencao', bgColor: 'bg-level-atencao' },
+    { label: 'Ruim', minScore: 0, maxScore: 59, color: 'text-level-ruim', bgColor: 'bg-level-ruim' },
   ],
   action_deadline: {
     agent_review: 50,
@@ -107,6 +108,15 @@ function normalizeConfig(cfg: any): QualityConfig {
   }
   if (!migrated.dashboardWidgetTitles) {
     migrated.dashboardWidgetTitles = {};
+  }
+  // Programmatic migration of configurations that do not have exactly 4 levels
+  if (!migrated.levels || !Array.isArray(migrated.levels) || migrated.levels.length !== 4) {
+    migrated.levels = [
+      { label: 'Excelente', minScore: 91, maxScore: 100, color: 'text-level-excelente', bgColor: 'bg-level-excelente' },
+      { label: 'Aceitável', minScore: 80, maxScore: 90, color: 'text-level-aceitavel', bgColor: 'bg-level-aceitavel' },
+      { label: 'Atenção', minScore: 60, maxScore: 79, color: 'text-level-atencao', bgColor: 'bg-level-atencao' },
+      { label: 'Ruim', minScore: 0, maxScore: 59, color: 'text-level-ruim', bgColor: 'bg-level-ruim' }
+    ];
   }
   return migrated as QualityConfig;
 }

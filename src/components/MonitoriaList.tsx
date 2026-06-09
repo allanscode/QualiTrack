@@ -255,8 +255,9 @@ finally {
     let mounted = true;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const channelName = `monitorias-realtime-list-${Math.random().toString(36).substring(2, 11)}`;
     const channel = supabase
-      .channel('monitorias-realtime-list')
+      .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, () => {
         if (!mounted) return;
         if (debounceTimer) clearTimeout(debounceTimer);

@@ -276,8 +276,9 @@ const loadData = useCallback(async () => {
     let mounted = true;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const channelName = `monitorias-realtime-dash-${Math.random().toString(36).substring(2, 11)}`;
     const channel = supabase
-      .channel('monitorias-realtime-dash')
+      .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, () => {
         if (!mounted) return;
         if (debounceTimer) clearTimeout(debounceTimer);
@@ -355,6 +356,13 @@ const loadData = useCallback(async () => {
     updateCombinedOnlineUsers(localSessions, presenceSessions);
 
     if (supabase) {
+      const existingChannel = supabase.getChannels().find(
+        (c: any) => c.name === 'online-presence' || c.topic === 'realtime:online-presence'
+      );
+      if (existingChannel) {
+        supabase.removeChannel(existingChannel);
+      }
+
       channel = supabase.channel('online-presence', {
         config: {
           presence: {

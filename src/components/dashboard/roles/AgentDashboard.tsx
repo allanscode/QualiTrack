@@ -6,9 +6,9 @@ import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
-import { Target, ClipboardCheck, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users } from 'lucide-react';
+import { Target, ClipboardCheck, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
-import { chartPalette } from '../chartColors';
+import { chartPalette, chartColorArray } from '../chartColors';
 
 // High-fidelity mock datasets for customization mode
 const mockTrendData = [
@@ -21,17 +21,36 @@ const mockTrendData = [
 ];
 
 const mockDistributionData = [
-  { name: 'Excelente (90-100%)', value: 12, color: '#10B981' },
-  { name: 'Aceitável (75-89%)', value: 5, color: '#3B82F6' },
-  { name: 'Atenção (50-74%)', value: 1, color: '#F59E0B' },
-  { name: 'Ruim (0-49%)', value: 0, color: '#EF4444' }
+  { name: 'Excelente (91-100%)', value: 12, color: '#10B981' },
+  { name: 'Aceitável (80-90%)', value: 5, color: '#3B82F6' },
+  { name: 'Atenção (60-79%)', value: 1, color: '#F59E0B' },
+  { name: 'Ruim (0-59%)', value: 0, color: '#EF4444' }
+];
+
+const mockPrecisionData = [
+  { name: 'Estáveis', value: 15, color: '#10B981' },
+  { name: 'Reavaliadas', value: 3, color: '#F59E0B' }
+];
+
+const mockClientDissatisfaction = [
+  { name: 'Navegação confusa', value: 12, color: '#3B82F6' },
+  { name: 'Demora no retorno', value: 8, color: '#10B981' },
+  { name: 'Tom inadequado', value: 5, color: '#F59E0B' },
+  { name: 'Erro de sistema', value: 3, color: '#EF4444' }
+];
+
+const mockQualityDissatisfaction = [
+  { name: 'Script incompleto', value: 15, color: '#3B82F6' },
+  { name: 'Erro de registro', value: 10, color: '#10B981' },
+  { name: 'Postura fria', value: 6, color: '#F59E0B' },
+  { name: 'Sem FCR', value: 4, color: '#EF4444' }
 ];
 
 const mockMonitoriasOfensores = [
   { answers: { q1: 'NAO', q2: 'SIM', q3: 'SIM', q4: 'SIM', q5: 'SIM' } },
   { answers: { q1: 'NAO', q2: 'NAO', q3: 'SIM', q4: 'SIM', q5: 'SIM' } },
   { answers: { q1: 'SIM', q2: 'SIM', q3: 'NAO', q4: 'NAO', q5: 'SIM' } }
-] as any[];
+];
 
 const mockForms = [
   {
@@ -48,7 +67,7 @@ const mockForms = [
       }
     ]
   }
-] as any[];
+];
 
 const mockMonitoriasDeadlines = [
   {
@@ -56,7 +75,7 @@ const mockMonitoriasDeadlines = [
     display_id: '001',
     ticket_id: '10239',
     status: 'pendente_revisao',
-    evaluator_name: 'Mariana Santos',
+    evaluator_name: 'Análise da Qualidade',
     created_at: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
     action_deadline_at: new Date(Date.now() + 8 * 3600 * 1000).toISOString()
   },
@@ -65,11 +84,20 @@ const mockMonitoriasDeadlines = [
     display_id: '002',
     ticket_id: '10482',
     status: 'contestacao_negada',
-    evaluator_name: 'Mariana Santos',
+    evaluator_name: 'Análise da Qualidade',
     created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
     action_deadline_at: new Date(Date.now() + 14 * 3600 * 1000).toISOString()
+  },
+  {
+    id: 'm3',
+    display_id: '003',
+    ticket_id: '10512',
+    status: 'em_contestacao',
+    evaluator_name: 'Análise da Qualidade',
+    created_at: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
+    action_deadline_at: new Date(Date.now() + 20 * 3600 * 1000).toISOString()
   }
-] as any[];
+];
 
 const mockRecentMonitorias = [
   {
@@ -102,7 +130,7 @@ const mockRecentMonitorias = [
     created_at: new Date(Date.now() - 7200000).toISOString(),
     action_deadline_at: new Date(Date.now() + 36000000).toISOString()
   }
-] as any[];
+];
 
 interface AgentDashboardProps {
   isCustomizing?: boolean;
@@ -121,6 +149,7 @@ export default function AgentDashboard({
     allMonitorias: [],
     users: [],
     forms: [],
+    dissatisfactionFields: [],
     globalAvg: 0
   };
 
@@ -133,7 +162,7 @@ export default function AgentDashboard({
     // safe fallback when outside DashboardProvider (e.g. customization preview)
   }
 
-  const { user, monitorias, allMonitorias, users, forms, globalAvg } = dashboardData;
+  const { user, monitorias, allMonitorias, users, forms, dissatisfactionFields, globalAvg } = dashboardData;
   const { config, getLevelForScore, isAboveTarget } = useQualityConfig();
 
   // --- Only MY monitorias (for personal metrics) - FILTERED BY UI
@@ -147,6 +176,34 @@ export default function AgentDashboard({
     if (isCustomizing) return [];
     return allMonitorias.filter((m: any) => m.evaluated_id === user?.id);
   }, [isCustomizing, allMonitorias, user]);
+
+  // --- Anonymized and masked datasets
+  const maskedMonitorias = useMemo(() => {
+    const source = isCustomizing ? mockRecentMonitorias : myMonitorias;
+    return source.map((m: any) => ({
+      ...m,
+      evaluator_name: 'Análise da Qualidade',
+      evaluator_id: 'Análise da Qualidade',
+    }));
+  }, [isCustomizing, myMonitorias]);
+
+  const maskedAllMonitorias = useMemo(() => {
+    const source = isCustomizing ? mockMonitoriasDeadlines : myAllMonitorias;
+    return source.map((m: any) => ({
+      ...m,
+      evaluator_name: 'Análise da Qualidade',
+      evaluator_id: 'Análise da Qualidade',
+    }));
+  }, [isCustomizing, myAllMonitorias]);
+
+  const maskedUsers = useMemo(() => {
+    return users.map((u: any) => {
+      if (['admin', 'gestor_qualidade', 'qualidade'].includes(u.role)) {
+        return { ...u, name: 'Análise da Qualidade' };
+      }
+      return u;
+    });
+  }, [users]);
   
   // --- Team Data (for comparison)
   const teamMonitorias = useMemo(() => {
@@ -215,6 +272,18 @@ export default function AgentDashboard({
     ).length;
   }, [isCustomizing, myContestations]);
 
+  const reversionRate = useMemo(() => {
+    const totalContested = contestationsApproved + contestationsRejected;
+    if (totalContested === 0) return 0;
+    return (contestationsApproved / totalContested) * 100;
+  }, [contestationsApproved, contestationsRejected]);
+
+  const revDiff = reversionRate - config.targetReversalRate;
+  const revSign = revDiff >= 0 ? '↑' : '↓';
+  const revColorClass = revDiff >= 0
+    ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+    : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
+
   // --- Trend Data (Agent vs Team)
   const trendData = useMemo(() => {
     if (isCustomizing) return mockTrendData;
@@ -247,28 +316,11 @@ export default function AgentDashboard({
     });
   }, [isCustomizing, myMonitorias, teamMonitorias]);
 
-  // --- Tendência: Compara a média da 2ª metade do período vs a 1ª metade
-  const trendPercentage = useMemo(() => {
-    if (isCustomizing) return 4.2;
-    if (trendData.length < 2) return 0;
-    const mid = Math.floor(trendData.length / 2);
-    const firstHalf = trendData.slice(0, mid);
-    const secondHalf = trendData.slice(mid);
-    const avgFirst = firstHalf.reduce((a, b) => a + (b.MeuScore || 0), 0) / (firstHalf.filter(x => x.MeuScore !== undefined).length || 1);
-    const avgSecond = secondHalf.reduce((a, b) => a + (b.MeuScore || 0), 0) / (secondHalf.filter(x => x.MeuScore !== undefined).length || 1);
-    return avgFirst > 0 ? ((avgSecond / avgFirst) - 1) * 100 : 0;
-  }, [isCustomizing, trendData]);
-
   // --- Total Pendentes: Monitorias aguardando ação do agente (Ciente ou Re-contestação)
   const pendingCount = useMemo(() => {
     if (isCustomizing) return 2;
     return myAllMonitorias.filter((m: any) => ['pendente_revisao', 'contestacao_negada'].includes(m.status)).length;
   }, [isCustomizing, myAllMonitorias]);
-
-  const resolvedGlobalAvg = useMemo(() => {
-    if (isCustomizing) return 82.4;
-    return globalAvg || 0;
-  }, [isCustomizing, globalAvg]);
 
   const level = getLevelForScore(avgScore);
 
@@ -294,10 +346,147 @@ export default function AgentDashboard({
     return myContestations.length;
   }, [isCustomizing, myContestations]);
 
+  // --- Fila 1: Contestações Ativas
+  const contestacoesAtivas = useMemo(() => {
+    const filterFn = (m: any) => ['em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status);
+    return maskedAllMonitorias
+      .filter(filterFn)
+      .sort((a: any, b: any) => {
+        const timeA = a.action_deadline_at ? new Date(a.action_deadline_at).getTime() : Infinity;
+        const timeB = b.action_deadline_at ? new Date(b.action_deadline_at).getTime() : Infinity;
+        return timeA - timeB;
+      });
+  }, [maskedAllMonitorias]);
+
+  // --- Fila 2: Prazos para Contestar
+  const prazosParaContestar = useMemo(() => {
+    const filterFn = (m: any) => ['pendente_revisao', 'contestacao_negada'].includes(m.status);
+    return maskedAllMonitorias
+      .filter(filterFn)
+      .sort((a: any, b: any) => {
+        const timeA = a.action_deadline_at ? new Date(a.action_deadline_at).getTime() : Infinity;
+        const timeB = b.action_deadline_at ? new Date(b.action_deadline_at).getTime() : Infinity;
+        return timeA - timeB;
+      });
+  }, [maskedAllMonitorias]);
+
+  // --- Minha Classificação por Faixas
+  const levelsData = useMemo(() => {
+    if (isCustomizing) return mockDistributionData;
+    const colors = chartPalette();
+    return config.levels.map(l => {
+      let color = colors.indigo;
+      if (l.color.includes('excelente') || l.color.includes('indigo')) color = colors.excelente;
+      else if (l.color.includes('aceitavel') || l.color.includes('emerald') || l.color.includes('success') || l.color.includes('green')) color = colors.aceitavel;
+      else if (l.color.includes('atencao') || l.color.includes('amber') || l.color.includes('warning') || l.color.includes('yellow')) color = colors.atencao;
+      else if (l.color.includes('ruim') || l.color.includes('red') || l.color.includes('error')) color = colors.ruim;
+      return {
+        name: `${l.label} (${l.minScore}-${l.maxScore}%)`,
+        value: myMonitorias.filter(m => (m.score || 0) >= l.minScore && (m.score || 0) <= l.maxScore).length,
+        color
+      };
+    }).filter(d => d.value > 0);
+  }, [isCustomizing, myMonitorias, config.levels]);
+
+  // --- Precisão da Qualidade (Estáveis vs Reavaliadas)
+  const totalReevaluated = useMemo(() => {
+    if (isCustomizing) return 2;
+    return myMonitorias.filter((m: any) => 
+      ['contestacao_aceita', 'finalizada_alterada'].includes(m.status) ||
+      m.history?.some((h: any) => 
+        h.action.toLowerCase().includes('reavaliada') ||
+        h.action.toLowerCase().includes('procedente') ||
+        h.action.toLowerCase().includes('alterada')
+      )
+    ).length;
+  }, [isCustomizing, myMonitorias]);
+
+  const precisionData = useMemo(() => {
+    if (isCustomizing) return mockPrecisionData;
+    const totalVal = myMonitorias.length;
+    return [
+      { name: 'Estáveis', value: totalVal - totalReevaluated, color: chartPalette().excelente },
+      { name: 'Reavaliadas', value: totalReevaluated, color: chartPalette().atencao }
+    ].filter(d => d.value > 0);
+  }, [isCustomizing, myMonitorias, totalReevaluated]);
+
+  // --- Insatisfação — Visão do Cliente
+  const clientDissatisfactionData = useMemo(() => {
+    if (isCustomizing) return mockClientDissatisfaction;
+    const fields = dissatisfactionFields || [];
+    if (fields.length === 0) return [];
+    const COLORS = chartColorArray();
+    const monWithAnswers = myMonitorias.filter((m: any) => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
+    const clientFields = fields.filter((f: any) => f.type === 'cliente');
+
+    const freq: Record<string, number> = {};
+    monWithAnswers.forEach((m: any) => {
+      clientFields.forEach((f: any) => {
+        const answers = m.dissatisfaction_answers?.[f.id] || [];
+        answers.forEach((opt: string) => { freq[opt] = (freq[opt] || 0) + 1; });
+      });
+    });
+    return Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
+  }, [isCustomizing, myMonitorias, dissatisfactionFields]);
+
+  // --- Insatisfação — Visão da Qualidade
+  const qualityDissatisfactionData = useMemo(() => {
+    if (isCustomizing) return mockQualityDissatisfaction;
+    const fields = dissatisfactionFields || [];
+    if (fields.length === 0) return [];
+    const COLORS = chartColorArray();
+    const monWithAnswers = myMonitorias.filter((m: any) => m.dissatisfaction_answers && Object.keys(m.dissatisfaction_answers).length > 0);
+    const qualityFields = fields.filter((f: any) => f.type === 'qualidade');
+
+    const freq: Record<string, number> = {};
+    monWithAnswers.forEach((m: any) => {
+      qualityFields.forEach((f: any) => {
+        const answers = m.dissatisfaction_answers?.[f.id] || [];
+        answers.forEach((opt: string) => { freq[opt] = (freq[opt] || 0) + 1; });
+      });
+    });
+    return Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
+  }, [isCustomizing, myMonitorias, dissatisfactionFields]);
+
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-visible">
-      {/* Linha 1: Benchmarks de Performance */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+      {/* LINHA 1 (lg:grid-cols-4): Benchmarks de Performance */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Minhas Pendências"
+          value={pendingCount.toString()}
+          sub="Aguardando sua ação"
+          good={pendingCount === 0}
+          icon={pendingCount === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+          accent={pendingCount === 0 ? 'text-functional-success' : 'text-functional-error'}
+          valueColorClass="text-slate-900 dark:text-slate-50"
+          isCustomizing={isCustomizing}
+          profile="suporte"
+          activeEditingId={activeEditingId}
+          setActiveEditingId={setActiveEditingId}
+        />
+        <StatCard
+          title="Meu Volume"
+          value={myMonitoriasCount.toString()}
+          sub="Total no período"
+          good={volDiff >= 0}
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          accent={volDiff >= 0 ? 'text-functional-success' : 'text-functional-error'}
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${volColorClass}`}>
+              {volSign} {Math.abs(volDiff)}
+            </span>
+          }
+          valueColorClass="text-slate-900 dark:text-slate-50"
+          isCustomizing={isCustomizing}
+          profile="suporte"
+          activeEditingId={activeEditingId}
+          setActiveEditingId={setActiveEditingId}
+        />
         <StatCard
           title="Minha Média"
           value={`${avgScore.toFixed(2)}%`}
@@ -310,6 +499,7 @@ export default function AgentDashboard({
               {diffSign} {Math.abs(scoreDiff).toFixed(2)}%
             </span>
           }
+          valueColorClass="text-slate-900 dark:text-slate-50"
           isCustomizing={isCustomizing}
           profile="suporte"
           activeEditingId={activeEditingId}
@@ -322,30 +512,7 @@ export default function AgentDashboard({
           good={avgScore >= teamAvgScore}
           icon={<Users className="w-5 h-5" />}
           accent="text-slate-500"
-          isCustomizing={isCustomizing}
-          profile="suporte"
-          activeEditingId={activeEditingId}
-          setActiveEditingId={setActiveEditingId}
-        />
-        <StatCard
-          title="Média Global"
-          value={`${resolvedGlobalAvg.toFixed(2)}%`}
-          sub="Empresa"
-          good={avgScore >= resolvedGlobalAvg}
-          icon={<Users className="w-5 h-5" />}
-          accent="text-slate-500"
-          isCustomizing={isCustomizing}
-          profile="suporte"
-          activeEditingId={activeEditingId}
-          setActiveEditingId={setActiveEditingId}
-        />
-        <StatCard
-          title="Tendência"
-          value={`${trendPercentage >= 0 ? '+' : ''}${trendPercentage.toFixed(1)}%`}
-          sub="Evolução no período"
-          good={trendPercentage >= 0}
-          icon={<TrendingUp className="w-5 h-5" />}
-          accent="text-functional-success"
+          valueColorClass="text-slate-900 dark:text-slate-50"
           isCustomizing={isCustomizing}
           profile="suporte"
           activeEditingId={activeEditingId}
@@ -353,68 +520,60 @@ export default function AgentDashboard({
         />
       </div>
 
-      {/* Linha 2: Volume e Contestações */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+      {/* LINHA 2 (lg:grid-cols-4): Volume e Contestações */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Monitorias"
-          value={myMonitoriasCount.toString()}
-          sub="Total no período"
-          good={volDiff >= 0}
-          icon={<ClipboardCheck className="w-5 h-5" />}
-          accent={volDiff >= 0 ? 'text-functional-success' : 'text-functional-error'}
-          badge={
-            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${volColorClass}`}>
-              {volSign} {Math.abs(volDiff)}
-            </span>
-          }
-          isCustomizing={isCustomizing}
-          profile="suporte"
-          activeEditingId={activeEditingId}
-          setActiveEditingId={setActiveEditingId}
-        />
-        <StatCard
-          title="Total Pendentes"
-          value={pendingCount.toString()}
-          sub="Aguardando sua ação"
-          good={pendingCount === 0}
-          icon={pendingCount === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-          accent={pendingCount === 0 ? 'text-functional-success' : 'text-functional-error'}
-          isCustomizing={isCustomizing}
-          profile="suporte"
-          activeEditingId={activeEditingId}
-          setActiveEditingId={setActiveEditingId}
-        />
-        <StatCard
-          title="Solicitadas"
+          title="Contestações Solicitadas"
           value={myContestationsCount.toString()}
-          sub="Contestações abertas"
+          sub="Total de contestações"
           good={true}
-          icon={<ClipboardCheck className="w-5 h-5" />}
+          icon={<History className="w-5 h-5" />}
           accent="text-slate-500"
+          valueColorClass="text-slate-900 dark:text-slate-50"
           isCustomizing={isCustomizing}
           profile="suporte"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
         <StatCard
-          title="Aprovadas"
+          title="Contestações Aprovadas"
           value={contestationsApproved.toString()}
-          sub="Nota Alterada"
+          sub="Procedentes (Nota alterada)"
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
           accent="text-functional-success"
+          valueColorClass="text-slate-900 dark:text-slate-50"
           isCustomizing={isCustomizing}
           profile="suporte"
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
         <StatCard
-          title="Recusadas"
+          title="Contestações Recusadas"
           value={contestationsRejected.toString()}
-          sub="Nota Mantida"
-          good={false}
+          sub="Improcedentes (Nota mantida)"
+          good={true}
           icon={<XCircle className="w-5 h-5" />}
           accent="text-functional-error"
+          valueColorClass="text-slate-900 dark:text-slate-50"
+          isCustomizing={isCustomizing}
+          profile="suporte"
+          activeEditingId={activeEditingId}
+          setActiveEditingId={setActiveEditingId}
+        />
+        <StatCard
+          title="Taxa de Sucesso"
+          value={`${reversionRate.toFixed(2)}%`}
+          sub="Sucesso de contestações"
+          good={reversionRate >= config.targetReversalRate}
+          icon={<Target className="w-5 h-5" />}
+          accent={reversionRate >= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
+          badge={
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${revColorClass}`}>
+              {revSign} {Math.abs(revDiff).toFixed(2)}%
+            </span>
+          }
+          valueColorClass="text-slate-900 dark:text-slate-50"
           isCustomizing={isCustomizing}
           profile="suporte"
           activeEditingId={activeEditingId}
@@ -422,8 +581,9 @@ export default function AgentDashboard({
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[380px]">
+      {/* LINHA 3 (grid-cols-1): Gráfico de Evolução Comparativa (TrendChart) */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="h-[380px]">
           <TrendChart 
             data={trendData} 
             title="Evolução Comparativa"
@@ -438,14 +598,19 @@ export default function AgentDashboard({
             setActiveEditingId={setActiveEditingId}
           />
         </div>
-        <div className="lg:col-span-1 h-[380px]">
-          <DistributionChart 
-            title="Minha Classificação"
-            data={isCustomizing ? mockDistributionData : config.levels.map(l => ({
-              name: l.label,
-              value: myMonitorias.filter(m => (m.score || 0) >= l.minScore && (m.score || 0) <= l.maxScore).length,
-              color: l.color.includes('aceitavel') || l.color.includes('emerald') ? chartPalette().aceitavel : l.color.includes('atencao') || l.color.includes('amber') ? chartPalette().atencao : l.color.includes('ruim') || l.color.includes('red') ? chartPalette().ruim : chartPalette().excelente
-            })).filter(d => d.value > 0)}
+      </div>
+
+      {/* LINHA 3B (grid-cols-1): Gráfico de Evolução Semanal (TrendChart) */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="h-[380px]">
+          <TrendChart 
+            data={trendData} 
+            title="Evolução Semanal"
+            subtitle="Tendência de desempenho ao longo das semanas"
+            dataKeys={[
+              { key: 'MeuScore', name: 'Meu Score', color: chartPalette().excelente },
+              { key: 'MediaEquipe', name: 'Média Equipe', color: chartPalette().aceitavel }
+            ]}
             isCustomizing={isCustomizing}
             profile="suporte"
             activeEditingId={activeEditingId}
@@ -454,10 +619,37 @@ export default function AgentDashboard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[420px]">
+      {/* LINHA 4 (lg:grid-cols-2 gap-6): Filas e Prazos Operacionais - Lado a Lado */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="h-[340px]">
+          <ActionDeadlineWidget
+            title="Contestações Ativas"
+            monitorias={contestacoesAtivas}
+            preFilteredSorted={true}
+            isCustomizing={isCustomizing}
+            profile="suporte"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
+        <div className="h-[340px]">
+          <ActionDeadlineWidget
+            title="Prazos para Contestar"
+            monitorias={prazosParaContestar}
+            preFilteredSorted={true}
+            isCustomizing={isCustomizing}
+            profile="suporte"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
+      </div>
+
+      {/* LINHA 5 (grid-cols-1): Meus Ofensores */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="h-[420px]">
           <OfensoresChart 
-            monitorias={isCustomizing ? mockMonitoriasOfensores : myMonitorias}
+            monitorias={isCustomizing ? mockMonitoriasOfensores : maskedMonitorias}
             forms={isCustomizing ? mockForms : forms}
             title="Meus Ofensores"
             subtitle="Critérios onde você mais falhou"
@@ -468,11 +660,34 @@ export default function AgentDashboard({
             setActiveEditingId={setActiveEditingId}
           />
         </div>
-        <div className="lg:col-span-1 h-[420px]">
-          <ActionDeadlineWidget
-            title="Aguardando Minha Ação"
-            monitorias={isCustomizing ? mockMonitoriasDeadlines : myAllMonitorias}
-            targetStatus={['pendente_revisao', 'contestacao_negada']}
+      </div>
+
+      {/* LINHA 6 (grid-cols-1 md:grid-cols-3 gap-6): Classificação por Faixas e Visões de Insatisfação */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="h-[340px]">
+          <DistributionChart 
+            title="Minha Classificação por Faixas"
+            data={levelsData}
+            isCustomizing={isCustomizing}
+            profile="suporte"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
+        <div className="h-[340px]">
+          <DistributionChart 
+            title="Insatisfação — Visão do Cliente"
+            data={clientDissatisfactionData}
+            isCustomizing={isCustomizing}
+            profile="suporte"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
+        <div className="h-[340px]">
+          <DistributionChart 
+            title="Insatisfação — Visão da Qualidade"
+            data={qualityDissatisfactionData}
             isCustomizing={isCustomizing}
             profile="suporte"
             activeEditingId={activeEditingId}
@@ -481,10 +696,11 @@ export default function AgentDashboard({
         </div>
       </div>
 
+      {/* LINHA 8 (grid-cols-1): Histórico Recente */}
       <div className="overflow-hidden">
         <RecentAuditsTable 
-          monitorias={isCustomizing ? mockRecentMonitorias : myMonitorias} 
-          users={users} 
+          monitorias={maskedMonitorias} 
+          users={maskedUsers} 
           title="Minhas Auditorias Recentes"
           isCustomizing={isCustomizing}
         />
