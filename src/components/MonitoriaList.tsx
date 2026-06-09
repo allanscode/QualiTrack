@@ -356,7 +356,7 @@ if (user?.role === 'gestor_suporte') {
       const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
       return bTime - aTime;
     });
-  }, [monitorias, user, tab, search, statusFilter, teamFilter, auditorFilter, dateType, startDate, endDate]);
+  }, [monitorias, user, tab, search, statusFilter, teamFilter, suporteFilter, auditorFilter, dateType, startDate, endDate]);
 
   const hasActiveFilters = useMemo(() => {
     const isDefaultDate = startDate === new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0] &&

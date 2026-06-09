@@ -244,7 +244,7 @@ const loadData = useCallback(async () => {
       loadData();
     }, 300);
     return () => clearTimeout(timer);
-  }, [user, loadData]);
+  }, [user, loadData, filters]);
 
   useEffect(() => {
     if (activeTab === 'dashboard' && user) {
