@@ -1093,6 +1093,55 @@ function MainApp({
 }: any) {
   const { resolvedTheme } = useTheme();
   const { teams, userPreferences, loading: staticDataLoading } = useStaticData();
+  const sidebarColors = React.useMemo(() => {
+    if (resolvedTheme === 'dark') {
+      return [
+        { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
+        { value: '#12130F', label: 'Obsidiana', hex: 'bg-[#12130F]' },
+        { value: '#1E1F1A', label: 'Carvão', hex: 'bg-[#1E1F1A]' },
+        { value: '#2A2C24', label: 'Grafite', hex: 'bg-[#2A2C24]' },
+        { value: '#1E293B', label: 'Slate Escuro', hex: 'bg-[#1E293B]' },
+        { value: '#0F172A', label: 'Meia-noite', hex: 'bg-[#0F172A]' },
+        { value: '#1E3A8A', label: 'Azul Escuro', hex: 'bg-[#1E3A8A]' },
+        { value: '#172554', label: 'Marinho Escuro', hex: 'bg-[#172554]' },
+        { value: '#064E3B', label: 'Esmeralda Escuro', hex: 'bg-[#064E3B]' },
+        { value: '#022C22', label: 'Floresta Profunda', hex: 'bg-[#022C22]' },
+        { value: '#115E59', label: 'Teal Muted', hex: 'bg-[#115E59]' },
+        { value: '#4C0519', label: 'Vinho Profundo', hex: 'bg-[#4C0519]' },
+        { value: '#3B0764', label: 'Beringela', hex: 'bg-[#3B0764]' },
+        { value: '#2E1065', label: 'Violeta Escuro', hex: 'bg-[#2E1065]' },
+        { value: '#3F2212', label: 'Chocolate', hex: 'bg-[#3F2212]' },
+        { value: '#451A03', label: 'Café', hex: 'bg-[#451A03]' },
+        { value: '#78350F', label: 'Bronze Escuro', hex: 'bg-[#78350F]' },
+        { value: '#3F4232', label: 'Oliva Escuro', hex: 'bg-[#3F4232]' },
+        { value: '#334155', label: 'Aço Muted', hex: 'bg-[#334155]' },
+        { value: '#0F0F10', label: 'Zinco Negro', hex: 'bg-[#0F0F10]' }
+      ];
+    } else {
+      return [
+        { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
+        { value: '#64748B', label: 'Slate', hex: 'bg-[#64748B]' },
+        { value: '#93C5FD', label: 'Azul Sereno', hex: 'bg-[#93C5FD]' },
+        { value: '#A7F3D0', label: 'Menta', hex: 'bg-[#A7F3D0]' },
+        { value: '#F5F5F4', label: 'Areia', hex: 'bg-[#F5F5F4]' },
+        { value: '#C2C9BA', label: 'Sálvia', hex: 'bg-[#C2C9BA]' },
+        { value: '#FDA4AF', label: 'Rosé', hex: 'bg-[#FDA4AF]' },
+        { value: '#DDD6FE', label: 'Lavanda', hex: 'bg-[#DDD6FE]' },
+        { value: '#FFEDD5', label: 'Pêssego', hex: 'bg-[#FFEDD5]' },
+        { value: '#E0F2FE', label: 'Céu Claro', hex: 'bg-[#E0F2FE]' },
+        { value: '#D9F99D', label: 'Lima Suave', hex: 'bg-[#D9F99D]' },
+        { value: '#F1F5F9', label: 'Névoa', hex: 'bg-[#F1F5F9]' },
+        { value: '#1D4ED8', label: 'Azul Real', hex: 'bg-[#1D4ED8]' },
+        { value: '#65A30D', label: 'Verde Oliva', hex: 'bg-[#65A30D]' },
+        { value: '#F97316', label: 'Laranja', hex: 'bg-[#F97316]' },
+        { value: '#7C3AED', label: 'Roxo Elegante', hex: 'bg-[#7C3AED]' },
+        { value: '#C2410C', label: 'Terracota', hex: 'bg-[#C2410C]' },
+        { value: '#D97706', label: 'Ouro', hex: 'bg-[#D97706]' },
+        { value: '#10B981', label: 'Esmeralda', hex: 'bg-[#10B981]' },
+        { value: '#E2E8F0', label: 'Platina', hex: 'bg-[#E2E8F0]' }
+      ];
+    }
+  }, [resolvedTheme]);
   const [showTeamList, setShowTeamList] = React.useState(false);
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | 'color' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
@@ -1545,28 +1594,7 @@ function MainApp({
                     >
                       <div className="pb-2 px-2">
                         <div className="grid grid-cols-5 gap-1.5">
-                          {[
-                            { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
-                            { value: '#475569', label: 'Slate', hex: 'bg-[#475569]' },
-                            { value: '#1E293B', label: 'Escuro', hex: 'bg-[#1E293B]' },
-                            { value: '#111827', label: 'Carvão', hex: 'bg-[#111827]' },
-                            { value: '#0F172A', label: 'Meia-noite', hex: 'bg-[#0F172A]' },
-                            { value: '#047857', label: 'Esmeralda', hex: 'bg-[#047857]' },
-                            { value: '#14532D', label: 'Floresta', hex: 'bg-[#14532D]' },
-                            { value: '#0D9488', label: 'Menta', hex: 'bg-[#0D9488]' },
-                            { value: '#1E40AF', label: 'Azul', hex: 'bg-[#1E40AF]' },
-                            { value: '#0284C7', label: 'Céu', hex: 'bg-[#0284C7]' },
-                            { value: '#881337', label: 'Vinho', hex: 'bg-[#881337]' },
-                            { value: '#E11D48', label: 'Rubi', hex: 'bg-[#E11D48]' },
-                            { value: '#6D28D9', label: 'Roxo', hex: 'bg-[#6D28D9]' },
-                            { value: '#5B21B6', label: 'Lavanda', hex: 'bg-[#5B21B6]' },
-                            { value: '#86198F', label: 'Fúcsia', hex: 'bg-[#86198F]' },
-                            { value: '#B45309', label: 'Bronze', hex: 'bg-[#B45309]' },
-                            { value: '#EA580C', label: 'Pôr do Sol', hex: 'bg-[#EA580C]' },
-                            { value: '#3F6212', label: 'Oliva', hex: 'bg-[#3F6212]' },
-                            { value: '#451A03', label: 'Café', hex: 'bg-[#451A03]' },
-                            { value: '#1D4ED8', label: 'Safira', hex: 'bg-[#1D4ED8]' }
-                          ].map(opt => {
+                          {sidebarColors.map(opt => {
                             const isActive = sidebarColor === opt.value;
                             return (
                               <button
