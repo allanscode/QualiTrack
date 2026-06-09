@@ -141,16 +141,18 @@ body {
 .thin-scrollbar::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-brand-accent); }
 
-/* ── Date input Contrast Fix ── */
-input[type="date"] {
+input[type="date"],
+input[type="time"] {
   color-scheme: light;
 }
 
-html.dark input[type="date"] {
+html.dark input[type="date"],
+html.dark input[type="time"] {
   color-scheme: dark;
 }
 
-html:not(.dark) input[type="date"] {
+html:not(.dark) input[type="date"],
+html:not(.dark) input[type="time"] {
   color-scheme: light !important;
 }
 
@@ -280,6 +282,8 @@ input[type="number"],
 input[type="password"],
 input[type="email"],
 input[type="search"],
+input[type="time"],
+input[type="date"],
 textarea {
   border-radius: 0.5rem !important; /* rounded-lg */
   font-size: 0.875rem !important; /* text-sm */
@@ -293,6 +297,8 @@ input[type="number"],
 input[type="password"],
 input[type="email"],
 input[type="search"],
+input[type="time"],
+input[type="date"],
 textarea {
   background-color: #FFFFFF !important;
   border: 1px solid #E2E4D8 !important; /* border-slate-200 / surface-border */
@@ -304,6 +310,8 @@ input[type="number"]::placeholder,
 input[type="password"]::placeholder,
 input[type="email"]::placeholder,
 input[type="search"]::placeholder,
+input[type="time"]::placeholder,
+input[type="date"]::placeholder,
 textarea::placeholder {
   color: #94A3B8 !important; /* text-slate-400 */
 }
@@ -314,6 +322,8 @@ textarea::placeholder {
 .dark input[type="password"],
 .dark input[type="email"],
 .dark input[type="search"],
+.dark input[type="time"],
+.dark input[type="date"],
 .dark textarea {
   background-color: #1A1C16 !important; /* dark:bg-surface-bg */
   border: 1px solid #3D4136 !important; /* dark:border-surface-border */
@@ -325,6 +335,8 @@ textarea::placeholder {
 .dark input[type="password"]::placeholder,
 .dark input[type="email"]::placeholder,
 .dark input[type="search"]::placeholder,
+.dark input[type="time"]::placeholder,
+.dark input[type="date"]::placeholder,
 .dark textarea::placeholder {
   color: rgba(163, 166, 154, 0.5) !important; /* dark:placeholder-brand-muted/50 */
 }
@@ -335,6 +347,8 @@ input[type="number"]:focus,
 input[type="password"]:focus,
 input[type="email"]:focus,
 input[type="search"]:focus,
+input[type="time"]:focus,
+input[type="date"]:focus,
 textarea:focus {
   outline: none !important;
   border-color: #94A3B8 !important; /* border-slate-400 */
@@ -346,6 +360,8 @@ textarea:focus {
 .dark input[type="password"]:focus,
 .dark input[type="email"]:focus,
 .dark input[type="search"]:focus,
+.dark input[type="time"]:focus,
+.dark input[type="date"]:focus,
 .dark textarea:focus {
   border-color: #475569 !important; /* focus:border-slate-600 */
   box-shadow: 0 0 0 1px #475569 !important; /* focus:ring-slate-600 */
@@ -357,6 +373,8 @@ input[type="number"].bg-transparent,
 input[type="password"].bg-transparent,
 input[type="email"].bg-transparent,
 input[type="search"].bg-transparent,
+input[type="time"].bg-transparent,
+input[type="date"].bg-transparent,
 textarea.bg-transparent,
 input.bg-transparent {
   background-color: transparent !important;
@@ -368,7 +386,9 @@ input[type="text"].border-none,
 input[type="number"].border-none,
 input[type="password"].border-none,
 input[type="email"].border-none,
-input[type="search"].border-none {
+input[type="search"].border-none,
+input[type="time"].border-none,
+input[type="date"].border-none {
   border: none !important;
   box-shadow: none !important;
 }
@@ -383,11 +403,15 @@ input[type="number"].border-none:focus,
 input[type="password"].border-none:focus,
 input[type="email"].border-none:focus,
 input[type="search"].border-none:focus,
+input[type="time"].border-none:focus,
+input[type="date"].border-none:focus,
 input[type="text"].bg-transparent:focus,
 input[type="number"].bg-transparent:focus,
 input[type="password"].bg-transparent:focus,
 input[type="email"].bg-transparent:focus,
-input[type="search"].bg-transparent:focus {
+input[type="search"].bg-transparent:focus,
+input[type="time"].bg-transparent:focus,
+input[type="date"].bg-transparent:focus {
   border: none !important;
   box-shadow: none !important;
   outline: none !important;

@@ -1,11 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import { Monitoria, User, Team, EvaluationForm, DissatisfactionField } from '../../types';
 import { supabase, mockDb } from '../../lib/supabase';
 import { useStaticData } from '../../lib/StaticDataContext';
 import { toast } from 'sonner';
 import { useQualityConfig } from '../../lib/useQualityConfig';
 import { getRemainingBusinessSeconds } from '../../lib/businessHours';
-
 
 export interface DashboardFilters {
   startDate: string;
@@ -18,13 +17,12 @@ export interface DashboardFilters {
   channel: string;
 }
 
-interface DashboardContextType {
+export interface DashboardState {
   user: User | null;
   loggedInUser: User | null;
   dashboardRole: 'admin' | 'gestor_qualidade' | 'gestor_suporte' | 'qualidade' | 'suporte';
   isSimulated: boolean;
   filters: DashboardFilters;
-  setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
   monitorias: Monitoria[];
   allMonitorias: Monitoria[];
   users: User[];
@@ -32,14 +30,204 @@ interface DashboardContextType {
   forms: EvaluationForm[];
   loading: boolean;
   globalAvg: number;
-  refresh: () => void;
-  onlineUsers: User[];
   dissatisfactionFields: DissatisfactionField[];
   activeEditingId: string | null;
+}
+
+export interface DashboardDispatch {
+  setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
+  refresh: () => void;
   setActiveEditingId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
+export const DashboardStateContext = createContext<DashboardState | undefined>(undefined);
+export const DashboardDispatchContext = createContext<DashboardDispatch | undefined>(undefined);
+
+export interface PresenceContextType {
+  onlineUsers: User[];
+}
+
+export const PresenceContext = createContext<PresenceContextType | undefined>(undefined);
+
+export function PresenceProvider({ user, children }: { user: User | null; children: ReactNode }) {
+  const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    if (!user) {
+      setOnlineUsers([]);
+      return;
+    }
+
+    const HEARTBEAT_INTERVAL = 10000;
+    const SESSION_TIMEOUT = 25000;
+
+    const performLocalHeartbeat = () => {
+      try {
+        const storedStr = localStorage.getItem('qualitrack_active_sessions');
+        let sessions = storedStr ? JSON.parse(storedStr) : [];
+        if (!Array.isArray(sessions)) sessions = [];
+
+        const now = Date.now();
+        sessions = sessions.filter((s: any) =>
+          s && s.id && s.lastActive && (now - s.lastActive < SESSION_TIMEOUT) && s.id !== user.id
+        );
+
+        sessions.push({
+          id: user.id,
+          name: user.name,
+          role: user.role,
+          email: user.email,
+          active: true,
+          lastActive: now
+        });
+
+        localStorage.setItem('qualitrack_active_sessions', JSON.stringify(sessions));
+        return sessions.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          role: s.role,
+          email: s.email,
+          active: true,
+          created_at: s.created_at || new Date().toISOString()
+        })) as User[];
+      } catch (e) {
+        console.error('[Presence] Error updating local heartbeat:', e);
+        return [];
+      }
+    };
+
+    let localSessions = performLocalHeartbeat();
+    let presenceSessions: User[] = [];
+    let channel: any = null;
+
+    const updateCombinedOnlineUsers = (local: User[], remote: User[]) => {
+      const userMap = new Map<string, User>();
+      local.forEach(u => userMap.set(u.id, u));
+      remote.forEach(u => userMap.set(u.id, u));
+      const merged = Array.from(userMap.values());
+      setOnlineUsers(merged);
+    };
+
+    updateCombinedOnlineUsers(localSessions, presenceSessions);
+
+    if (supabase) {
+      const existingChannel = supabase.getChannels().find(
+        (c: any) => c.name === 'online-presence' || c.topic === 'realtime:online-presence'
+      );
+      if (existingChannel) {
+        supabase.removeChannel(existingChannel);
+      }
+
+      channel = supabase.channel('online-presence', {
+        config: {
+          presence: {
+            key: user.id,
+          },
+        },
+      });
+
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          try {
+            const presenceState = channel.presenceState();
+            const remote = Object.values(presenceState)
+              .flatMap((presences: any) => presences || [])
+              .filter((p: any) => p && p.user_id)
+              .map((p: any) => ({
+                id: p.user_id,
+                name: p.name,
+                role: p.role,
+                email: p.email,
+                active: true,
+                created_at: p.created_at || new Date().toISOString()
+              }));
+
+            presenceSessions = remote;
+            updateCombinedOnlineUsers(performLocalHeartbeat(), presenceSessions);
+          } catch (e) {
+            console.error('[Presence] Sync event error:', e);
+          }
+        })
+        .subscribe(async (status: string) => {
+          if (status === 'SUBSCRIBED') {
+            try {
+              await channel.track({
+                user_id: user.id,
+                name: user.name,
+                role: user.role,
+                email: user.email,
+                online_at: new Date().toISOString()
+              });
+            } catch (e) {
+              console.error('[Presence] Track error:', e);
+            }
+          }
+        });
+    }
+
+    const timer = setInterval(() => {
+      const activeLocal = performLocalHeartbeat();
+      updateCombinedOnlineUsers(activeLocal, presenceSessions);
+    }, HEARTBEAT_INTERVAL);
+
+    const handleUnload = () => {
+      try {
+        const storedStr = localStorage.getItem('qualitrack_active_sessions');
+        if (storedStr) {
+          let sessions = JSON.parse(storedStr);
+          if (Array.isArray(sessions)) {
+            sessions = sessions.filter((s: any) => s && s.id !== user.id);
+            localStorage.setItem('qualitrack_active_sessions', JSON.stringify(sessions));
+          }
+        }
+        if (channel) {
+          channel.unsubscribe();
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('beforeunload', handleUnload);
+      handleUnload();
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [user]);
+
+  return (
+    <PresenceContext value={{ onlineUsers }}>
+      {children}
+    </PresenceContext>
+  );
+}
+
+export function usePresence() {
+  const context = React.use(PresenceContext);
+  if (context === undefined) {
+    throw new Error('usePresence must be used within a PresenceProvider');
+  }
+  return context;
+}
+
+export function useDashboardState() {
+  const context = React.use(DashboardStateContext);
+  if (context === undefined) {
+    throw new Error('useDashboardState must be used within a DashboardStateContext Provider');
+  }
+  return context;
+}
+
+export function useDashboardDispatch() {
+  const context = React.use(DashboardDispatchContext);
+  if (context === undefined) {
+    throw new Error('useDashboardDispatch must be used within a DashboardDispatchContext Provider');
+  }
+  return context;
+}
 
 export function DashboardProvider({ 
   user: loggedInUser, 
@@ -82,17 +270,17 @@ export function DashboardProvider({
   const staticDataRef = useRef(staticData);
   staticDataRef.current = staticData;
 
-const loadData = useCallback(async () => {
-  const currentUser = userRef.current;
-  if (!currentUser) return;
-  if (fetchingRef.current) {
-    console.log('[Dashboard] Fetch já em andamento, ignorando...');
-    return;
-  }
-  fetchingRef.current = true;
-  if (!hasLoadedOnce.current) {
-    setLoading(true);
-  }
+  const loadData = useCallback(async () => {
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+    if (fetchingRef.current) {
+      console.log('[Dashboard] Fetch já em andamento, ignorando...');
+      return;
+    }
+    fetchingRef.current = true;
+    if (!hasLoadedOnce.current) {
+      setLoading(true);
+    }
     try {
       let docs: Monitoria[] = [];
       let scoreDocs: any[] = [];
@@ -231,11 +419,11 @@ const loadData = useCallback(async () => {
           toast.error('A conexão expirou. Por favor, atualize a página (F5).');
         });
       }
-} finally {
-    setLoading(false);
-    hasLoadedOnce.current = true;
-    fetchingRef.current = false;
-  }
+    } finally {
+      setLoading(false);
+      hasLoadedOnce.current = true;
+      fetchingRef.current = false;
+    }
   }, [refreshTrigger]);
 
   useEffect(() => {
@@ -292,154 +480,6 @@ const loadData = useCallback(async () => {
       mounted = false;
       if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
-    };
-  }, [user]);
-
-  const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
-
-  useEffect(() => {
-    if (!user) {
-      setOnlineUsers([]);
-      return;
-    }
-
-    const HEARTBEAT_INTERVAL = 10000;
-    const SESSION_TIMEOUT = 25000;
-
-    const performLocalHeartbeat = () => {
-      try {
-        const storedStr = localStorage.getItem('qualitrack_active_sessions');
-        let sessions = storedStr ? JSON.parse(storedStr) : [];
-        if (!Array.isArray(sessions)) sessions = [];
-
-        const now = Date.now();
-        sessions = sessions.filter((s: any) =>
-          s && s.id && s.lastActive && (now - s.lastActive < SESSION_TIMEOUT) && s.id !== user.id
-        );
-
-        sessions.push({
-          id: user.id,
-          name: user.name,
-          role: user.role,
-          email: user.email,
-          active: true,
-          lastActive: now
-        });
-
-        localStorage.setItem('qualitrack_active_sessions', JSON.stringify(sessions));
-        return sessions.map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          role: s.role,
-          email: s.email,
-          active: true,
-          created_at: s.created_at || new Date().toISOString()
-        })) as User[];
-      } catch (e) {
-        console.error('[Presence] Error updating local heartbeat:', e);
-        return [];
-      }
-    };
-
-    let localSessions = performLocalHeartbeat();
-    let presenceSessions: User[] = [];
-    let channel: any = null;
-
-    const updateCombinedOnlineUsers = (local: User[], remote: User[]) => {
-      const userMap = new Map<string, User>();
-      local.forEach(u => userMap.set(u.id, u));
-      remote.forEach(u => userMap.set(u.id, u));
-      const merged = Array.from(userMap.values());
-      setOnlineUsers(merged);
-    };
-
-    updateCombinedOnlineUsers(localSessions, presenceSessions);
-
-    if (supabase) {
-      const existingChannel = supabase.getChannels().find(
-        (c: any) => c.name === 'online-presence' || c.topic === 'realtime:online-presence'
-      );
-      if (existingChannel) {
-        supabase.removeChannel(existingChannel);
-      }
-
-      channel = supabase.channel('online-presence', {
-        config: {
-          presence: {
-            key: user.id,
-          },
-        },
-      });
-
-      channel
-        .on('presence', { event: 'sync' }, () => {
-          try {
-            const presenceState = channel.presenceState();
-            const remote = Object.values(presenceState)
-              .flatMap((presences: any) => presences || [])
-              .filter((p: any) => p && p.user_id)
-              .map((p: any) => ({
-                id: p.user_id,
-                name: p.name,
-                role: p.role,
-                email: p.email,
-                active: true,
-                created_at: p.created_at || new Date().toISOString()
-              }));
-
-            presenceSessions = remote;
-            updateCombinedOnlineUsers(performLocalHeartbeat(), presenceSessions);
-          } catch (e) {
-            console.error('[Presence] Sync event error:', e);
-          }
-        })
-        .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            try {
-              await channel.track({
-                user_id: user.id,
-                name: user.name,
-                role: user.role,
-                email: user.email,
-                online_at: new Date().toISOString()
-              });
-            } catch (e) {
-              console.error('[Presence] Track error:', e);
-            }
-          }
-        });
-    }
-
-    const timer = setInterval(() => {
-      const activeLocal = performLocalHeartbeat();
-      updateCombinedOnlineUsers(activeLocal, presenceSessions);
-    }, HEARTBEAT_INTERVAL);
-
-    const handleUnload = () => {
-      try {
-        const storedStr = localStorage.getItem('qualitrack_active_sessions');
-        if (storedStr) {
-          let sessions = JSON.parse(storedStr);
-          if (Array.isArray(sessions)) {
-            sessions = sessions.filter((s: any) => s && s.id !== user.id);
-            localStorage.setItem('qualitrack_active_sessions', JSON.stringify(sessions));
-          }
-        }
-        if (channel) {
-          channel.unsubscribe();
-        }
-      } catch (e) {}
-    };
-
-    window.addEventListener('beforeunload', handleUnload);
-
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('beforeunload', handleUnload);
-      handleUnload();
-      if (channel && supabase) {
-        supabase.removeChannel(channel);
-      }
     };
   }, [user]);
 
@@ -502,36 +542,62 @@ const loadData = useCallback(async () => {
     setRefreshTrigger(prev => prev + 1);
   }, []);
 
+  const stateValue = useMemo<DashboardState>(() => ({
+    user,
+    loggedInUser,
+    dashboardRole,
+    isSimulated,
+    filters,
+    monitorias,
+    allMonitorias,
+    users: staticData.users,
+    teams: staticData.teams,
+    forms: staticData.forms,
+    loading,
+    globalAvg,
+    dissatisfactionFields: staticData.dissatisfactionFields,
+    activeEditingId
+  }), [
+    user,
+    loggedInUser,
+    dashboardRole,
+    isSimulated,
+    filters,
+    monitorias,
+    allMonitorias,
+    staticData.users,
+    staticData.teams,
+    staticData.forms,
+    loading,
+    globalAvg,
+    staticData.dissatisfactionFields,
+    activeEditingId
+  ]);
+
+  const dispatchValue = useMemo<DashboardDispatch>(() => ({
+    setFilters,
+    refresh,
+    setActiveEditingId
+  }), [refresh]);
+
   return (
-    <DashboardContext.Provider value={{
-      user,
-      loggedInUser,
-      dashboardRole,
-      isSimulated,
-      filters,
-      setFilters,
-      monitorias,
-      allMonitorias,
-      users: staticData.users,
-      teams: staticData.teams,
-      forms: staticData.forms,
-      loading,
-      globalAvg,
-      refresh,
-      onlineUsers,
-      dissatisfactionFields: staticData.dissatisfactionFields,
-      activeEditingId,
-      setActiveEditingId
-    }}>
-      {children}
-    </DashboardContext.Provider>
+    <DashboardStateContext value={stateValue}>
+      <DashboardDispatchContext value={dispatchValue}>
+        <PresenceProvider user={user}>
+          {children}
+        </PresenceProvider>
+      </DashboardDispatchContext>
+    </DashboardStateContext>
   );
 }
 
 export function useDashboard() {
-  const context = useContext(DashboardContext);
-  if (context === undefined) {
-    throw new Error('useDashboard must be used within a DashboardProvider');
-  }
-  return context;
+  const state = useDashboardState();
+  const dispatch = useDashboardDispatch();
+  const presence = usePresence();
+  return {
+    ...state,
+    ...dispatch,
+    onlineUsers: presence.onlineUsers,
+  };
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useTransition } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus, DissatisfactionField, UserTeam } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
@@ -21,7 +21,8 @@ import {
   History,
   Target
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'motion/react';
+import { calculateQualityScore } from '../utils/qualityMath';
 import { toast } from 'sonner';
 import { addBusinessHours } from '../lib/businessHours';
 import { useQualityConfig } from '../lib/useQualityConfig';
@@ -64,7 +65,8 @@ export default function MonitoriaForm({
     }
   }, [step]);
 
-  const [saving, setSaving] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const shouldReduceMotion = useReducedMotion();
   const [dissatisfactionAnswers, setDissatisfactionAnswers] = useState<Record<string, string[]>>(initialData?.dissatisfaction_answers || {});
 
   const forms = useMemo(() =>
@@ -142,46 +144,7 @@ export default function MonitoriaForm({
     return forms.find(f => f.id === header.form_id);
   }, [initialData, forms, header.form_id]);
 
-  const calculateScore = () => {
-    // 1. Check for any failed critical questions (from the new system)
-    let anyCriticalFailed = false;
-    selectedForm?.sections?.forEach(s => {
-      s.questions.forEach(q => {
-        if (q.is_critical && scores[q.id] === 'NAO') anyCriticalFailed = true;
-      });
-    });
-    
-    // 2. Check for any checked items in the old critical errors list
-    if (Object.values(criticalErrors).some(v => v)) anyCriticalFailed = true;
-
-    if (anyCriticalFailed) return 0;
-    if (!selectedForm?.sections?.length) return 0;
-
-    let totalScore = 100;
-    
-    selectedForm.sections.forEach(s => {
-      const sectionWeight = s.weight || 0;
-      // We only consider questions that are NOT 'NA'
-      const activeQuestions = s.questions.filter(q => scores[q.id] !== 'NA');
-      
-      if (activeQuestions.length === 0) {
-        // If all questions in a section are NA, that section doesn't subtract anything from the 100.
-        // This is equivalent to redistributing the weight to the rest of the form.
-        return;
-      }
-      
-      const weightPerQuestion = sectionWeight / activeQuestions.length;
-      activeQuestions.forEach(q => {
-        if (scores[q.id] === 'NAO') {
-          totalScore -= weightPerQuestion;
-        }
-      });
-    });
-    
-    return Math.max(0, Number(totalScore.toFixed(2)));
-  };
-
-  const score = calculateScore();
+  const score = calculateQualityScore(selectedForm, scores, criticalErrors);
   const isAllAnswered = () => {
     if (!selectedForm) return false;
     return selectedForm.sections.every(s => 
@@ -230,7 +193,7 @@ export default function MonitoriaForm({
     return true;
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!user) return;
     if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
     for (const field of qualityFieldsToShow) {
@@ -245,105 +208,107 @@ export default function MonitoriaForm({
       return;
     }
     
-    setSaving(true);
-    try {
-      const nowTs = new Date().toISOString();
-      const scoreNote = isReevaluating ? `[DE ${initialData?.score}% PARA ${score}%] ` : '';
-      let historyNote = isReevaluating ? `${scoreNote}${header.reevaluation_justification}` : undefined;
-      
-      if (isAdminEdit && initialData) {
-        const changes: string[] = [];
-        if (header.ticket_id !== initialData.ticket_id) changes.push(`Ticket: ${initialData.ticket_id} → ${header.ticket_id}`);
-        if (header.ticket_date !== initialData.ticket_date) changes.push(`Data do ticket: ${initialData.ticket_date} → ${header.ticket_date}`);
-        if (score !== initialData.score) changes.push(`Score: ${initialData.score}% → ${score}%`);
-        historyNote = changes.length > 0 ? changes.join(' | ') : 'Edição administrativa';
+    startTransition(async () => {
+      try {
+        const nowTs = new Date().toISOString();
+        const scoreNote = isReevaluating ? `[DE ${initialData?.score}% PARA ${score}%] ` : '';
+        let historyNote = isReevaluating ? `${scoreNote}${header.reevaluation_justification}` : undefined;
+        
+        if (isAdminEdit && initialData) {
+          const changes: string[] = [];
+          if (header.ticket_id !== initialData.ticket_id) changes.push(`Ticket: ${initialData.ticket_id} → ${header.ticket_id}`);
+          if (header.ticket_date !== initialData.ticket_date) changes.push(`Data do ticket: ${initialData.ticket_date} → ${header.ticket_date}`);
+          if (score !== initialData.score) changes.push(`Score: ${initialData.score}% → ${score}%`);
+          historyNote = changes.length > 0 ? changes.join(' | ') : 'Edição administrativa';
+        }
+
+        const historyEntry: MonitoriaHistoryEntry = { 
+          action: isAdminEdit ? 'Edição pelo Administrador' : (isReevaluating ? 'Monitoria Reavaliada (Procedente)' : 'Monitoria Criada'), 
+          by_id: user.id, 
+          by_name: user.name, 
+          at: nowTs,
+          note: historyNote
+        };
+        
+        const getDeadline = () => {
+          const now = new Date();
+          const actionDeadline = qualityConfig.action_deadline;
+          const bh = qualityConfig.businessHours;
+          if (isReevaluating) return addBusinessHours(now, actionDeadline?.auditor_reevaluation || 25, bh).toISOString();
+          return addBusinessHours(now, actionDeadline?.agent_review || 50, bh).toISOString();
+        };
+
+        const filteredDissatisfactionAnswers = { ...dissatisfactionAnswers };
+        if (header.satisfaction_result !== 'Negativa' || !(header.satisfaction_has_record || header.client_contact_success)) {
+          dissatisfactionFields.forEach(f => {
+            if (f.type === 'cliente') {
+              delete filteredDissatisfactionAnswers[f.id];
+            }
+          });
+        }
+
+        const evaluatedUser = allUsers.find(u => u.id === header.evaluated_id);
+        const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.team_ids?.[0]));
+        const selectedFormObj = forms.find(f => f.id === header.form_id);
+
+        const payload = {
+          form_id: header.form_id,
+          evaluator_id: initialData?.evaluator_id || user.id,
+          evaluated_id: header.evaluated_id,
+          team_id: header.team_id || null,
+          ticket_id: header.ticket_id,
+          channel: header.channel,
+          ticket_date: header.ticket_date,
+          analysis_date: header.analysis_date,
+          satisfaction_result: header.satisfaction_result || null,
+          satisfaction_has_record: header.satisfaction_has_record,
+          satisfaction_record_text: header.satisfaction_record_text,
+          answers: scores,
+          question_observations: observations,
+          critical_error_observations: criticalErrorObservations,
+          selected_critical_errors: Object.keys(criticalErrors).filter(id => criticalErrors[id]),
+          score,
+          status: isAdminEdit ? (initialData?.status || 'pendente_revisao') : (isReevaluating ? 'pendente_revisao' : (initialData?.status || 'pendente_revisao')),
+          evaluator_note: header.evaluator_note,
+          client_contact_log: header.client_contact_success ? header.client_contact_log : '',
+          client_contact_success: header.client_contact_success,
+          active: true,
+          form_snapshot: selectedForm,
+          history: [...(initialData?.history || []), historyEntry],
+          action_deadline_at: (initialData?.action_deadline_at && !isReevaluating && !isAdminEdit) ? initialData.action_deadline_at : getDeadline(),
+          evaluator_name: user.name,
+          evaluated_name: evaluatedUser?.name || '',
+          form_name: selectedFormObj?.title || '',
+          team_name: selectedTeam?.name || '',
+          updated_at: nowTs,
+          dissatisfaction_answers: filteredDissatisfactionAnswers,
+          applied_config: qualityConfig as unknown as Record<string, unknown>,
+        };
+
+        if (!supabase) {
+          if (initialData?.id) await mockDb.update('monitorias', initialData.id, payload);
+          else await mockDb.insert('monitorias', payload);
+        } else {
+          if (initialData?.id) await supabase.from('monitorias').update(payload).eq('id', initialData.id);
+          else await supabase.from('monitorias').insert([payload]);
+        }
+        toast.success('Monitoria salva com sucesso!');
+        onSaved();
+      } catch (e: any) {
+        toast.error('Não foi possível salvar a monitoria. Tente novamente.');
       }
-
-      const historyEntry: MonitoriaHistoryEntry = { 
-        action: isAdminEdit ? 'Edição pelo Administrador' : (isReevaluating ? 'Monitoria Reavaliada (Procedente)' : 'Monitoria Criada'), 
-        by_id: user.id, 
-        by_name: user.name, 
-        at: nowTs,
-        note: historyNote
-      };
-      
-  const getDeadline = () => {
-    const now = new Date();
-    const actionDeadline = qualityConfig.action_deadline;
-    const bh = qualityConfig.businessHours;
-    if (isReevaluating) return addBusinessHours(now, actionDeadline?.auditor_reevaluation || 25, bh).toISOString();
-    return addBusinessHours(now, actionDeadline?.agent_review || 50, bh).toISOString();
-  };
-
-      const filteredDissatisfactionAnswers = { ...dissatisfactionAnswers };
-      if (header.satisfaction_result !== 'Negativa' || !(header.satisfaction_has_record || header.client_contact_success)) {
-        dissatisfactionFields.forEach(f => {
-          if (f.type === 'cliente') {
-            delete filteredDissatisfactionAnswers[f.id];
-          }
-        });
-      }
-
-const evaluatedUser = allUsers.find(u => u.id === header.evaluated_id);
-const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.team_ids?.[0]));
-  const selectedFormObj = forms.find(f => f.id === header.form_id);
-
-  const payload = {
-    form_id: header.form_id,
-    evaluator_id: initialData?.evaluator_id || user.id,
-    evaluated_id: header.evaluated_id,
-    team_id: header.team_id || null,
-    ticket_id: header.ticket_id,
-    channel: header.channel,
-    ticket_date: header.ticket_date,
-    analysis_date: header.analysis_date,
-    satisfaction_result: header.satisfaction_result || null,
-    satisfaction_has_record: header.satisfaction_has_record,
-    satisfaction_record_text: header.satisfaction_record_text,
-    answers: scores,
-    question_observations: observations,
-    critical_error_observations: criticalErrorObservations,
-    selected_critical_errors: Object.keys(criticalErrors).filter(id => criticalErrors[id]),
-    score,
-    status: isAdminEdit ? (initialData?.status || 'pendente_revisao') : (isReevaluating ? 'pendente_revisao' : (initialData?.status || 'pendente_revisao')),
-    evaluator_note: header.evaluator_note,
-    client_contact_log: header.client_contact_success ? header.client_contact_log : '',
-    client_contact_success: header.client_contact_success,
-    active: true,
-    form_snapshot: selectedForm,
-    history: [...(initialData?.history || []), historyEntry],
-    action_deadline_at: (initialData?.action_deadline_at && !isReevaluating && !isAdminEdit) ? initialData.action_deadline_at : getDeadline(),
-    evaluator_name: user.name,
-    evaluated_name: evaluatedUser?.name || '',
-    form_name: selectedFormObj?.title || '',
-    team_name: selectedTeam?.name || '',
-    updated_at: nowTs,
-  dissatisfaction_answers: filteredDissatisfactionAnswers,
-  applied_config: qualityConfig as unknown as Record<string, unknown>,
-};
-
-      if (!supabase) {
-        if (initialData?.id) await mockDb.update('monitorias', initialData.id, payload);
-        else await mockDb.insert('monitorias', payload);
-      } else {
-        if (initialData?.id) await supabase.from('monitorias').update(payload).eq('id', initialData.id);
-        else await supabase.from('monitorias').insert([payload]);
-      }
-      toast.success('Monitoria salva com sucesso!');
-      onSaved();
-    } catch (e: any) {
-      toast.error('Não foi possível salvar a monitoria. Tente novamente.');
-    } finally { setSaving(false); }
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 overflow-y-auto">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.98, y: 10 }} 
-        animate={{ opacity: 1, scale: 1, y: 0 }} 
-        className="bg-surface-bg rounded-2xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col overflow-hidden" 
-        style={{ height: '90vh' }}
-      >
+    <LazyMotion features={domAnimation}>
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 overflow-y-auto">
+        <m.div 
+          initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 10 }} 
+          animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }} 
+          className="bg-surface-bg rounded-2xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col overflow-hidden" 
+          style={{ height: '90vh' }}
+        >
         {/* Top Header */}
         <div className="p-6 border-b border-surface-border flex items-center justify-between bg-surface-card">
           <div className="flex items-center gap-4">
@@ -524,7 +489,7 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
               </div>
 
               {header.satisfaction_result && header.satisfaction_result !== 'Sem pesquisa' && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                <m.div initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }} className="space-y-6">
                   <Card className="bg-surface-card p-5 space-y-4 rounded-xl">
                     <div className="flex items-center justify-between gap-4">
                       <p className="text-xs font-black text-brand-primary uppercase tracking-wider">O cliente deixou algum registro (elogio/reclamação)?</p>
@@ -622,7 +587,7 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                       ))}
                     </div>
                   )}
-                </motion.div>
+                </m.div>
               )}
             </section>
           )}
@@ -878,13 +843,14 @@ const selectedTeam = teams.find(t => t.id === (header.team_id || evaluatedUser?.
                 Continuar
               </Button>
             ) : (
-              <Button onClick={handleSave} disabled={saving || isViewOnly} variant="primary" className="px-12" icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}>
-                {saving ? 'Processando...' : 'Finalizar Monitoria'}
+              <Button onClick={handleSave} disabled={isPending || isViewOnly} variant="primary" className="px-12" icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}>
+                {isPending ? 'Processando...' : 'Finalizar Monitoria'}
               </Button>
             )}
           </div>
         </div>
-      </motion.div>
+      </m.div>
     </div>
+    </LazyMotion>
   );
 }
