@@ -13,7 +13,7 @@ import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
 
@@ -1046,7 +1046,7 @@ export default function AdminDashboardView({
                   <Target className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
                   <AnimatePresence>
                     {hoverMedia && mediaExplanation && (
-                      <motion.div
+                      <m.div
                         initial={{ opacity: 0, y: -8, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -8, scale: 0.95 }}
@@ -1055,7 +1055,7 @@ export default function AdminDashboardView({
                       >
                         {mediaExplanation}{isCustomizing ? ' (Clique para editar)' : ''}
                         <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
-                      </motion.div>
+                      </m.div>
                     )}
                   </AnimatePresence>
                 </div>
@@ -1162,7 +1162,7 @@ export default function AdminDashboardView({
                   <PieChartIcon className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
                   <AnimatePresence>
                     {hoverCurva && curvaExplanation && (
-                      <motion.div
+                      <m.div
                         initial={{ opacity: 0, y: -8, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -8, scale: 0.95 }}
@@ -1171,7 +1171,7 @@ export default function AdminDashboardView({
                       >
                         {curvaExplanation}{isCustomizing ? ' (Clique para editar)' : ''}
                         <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
-                      </motion.div>
+                      </m.div>
                     )}
                   </AnimatePresence>
                 </div>

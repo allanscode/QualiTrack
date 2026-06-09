@@ -313,6 +313,40 @@ if (typeof window !== 'undefined') {
       localStorage.setItem(`${DB_PREFIX}users`, JSON.stringify(users));
     }
   });
+
+  // Timeout SLA Replication in Mock Mode
+  try {
+    const monitoriasStr = localStorage.getItem(`${DB_PREFIX}monitorias`);
+    if (monitoriasStr) {
+      let monitorias = JSON.parse(monitoriasStr) as Monitoria[];
+      let changed = false;
+      const nowStr = new Date().toISOString();
+      monitorias = monitorias.map(m => {
+        if (
+          m.active !== false && 
+          m.status !== 'concluida' && 
+          m.action_deadline_at && 
+          m.action_deadline_at < nowStr
+        ) {
+          changed = true;
+          const isQualityPending = m.status === 'aguardando_gestor_qualidade';
+          return { 
+            ...m, 
+            status: 'concluida', 
+            resolution_type: 'automatic',
+            score: isQualityPending ? 100 : m.score,
+            updated_at: nowStr
+          };
+        }
+        return m;
+      });
+      if (changed) {
+        localStorage.setItem(`${DB_PREFIX}monitorias`, JSON.stringify(monitorias));
+      }
+    }
+  } catch (e) {
+    console.error('[MockDB] SLA Timeout Replication Error:', e);
+  }
 }
 
 const getMockData = <T>(key: string): T[] => {

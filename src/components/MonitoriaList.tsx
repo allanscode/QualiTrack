@@ -29,7 +29,7 @@ import {
   X,
   History
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, m as motionComponent, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import MonitoriaForm from './MonitoriaForm';
 import { addBusinessHours } from '../lib/businessHours';
@@ -573,7 +573,7 @@ if (user?.role === 'gestor_suporte') {
             {/* Clear button — animated clean button pushed to the right */}
             <AnimatePresence>
               {hasActiveFilters && (
-                <motion.div
+                <m.div
                   initial={{ width: 0, opacity: 0 }}
                   animate={{ width: 28, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
@@ -587,7 +587,7 @@ if (user?.role === 'gestor_suporte') {
                   >
                     <X className="w-3 h-3" />
                   </button>
-                </motion.div>
+                </m.div>
               )}
             </AnimatePresence>
           </div>
@@ -705,7 +705,7 @@ if (user?.role === 'gestor_suporte') {
 
                 <AnimatePresence>
                   {isExpanded && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-t border-surface-border/50">
+                    <motionComponent.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-t border-surface-border/50">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-2">
                         {/* Coluna 1: Observações, Linha do tempo e Visualizar Avaliação */}
                         <div className="space-y-6 flex flex-col justify-between h-full">
@@ -902,7 +902,7 @@ if (user?.role === 'gestor_suporte') {
                           )}
                         </div>
                       </div>
-                    </motion.div>
+                    </motionComponent.div>
                   )}
                 </AnimatePresence>
               </div>
@@ -922,7 +922,7 @@ if (user?.role === 'gestor_suporte') {
       <AnimatePresence>
         {actionModal && (
           <div className="fixed inset-0 bg-[#2D3A3A]/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
+            <m.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
               <Card className="max-w-md w-full shadow-2xl border-none">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-12 h-12 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
@@ -993,7 +993,7 @@ if (user?.role === 'gestor_suporte') {
                   </Button>
                 </div>
               </Card>
-            </motion.div>
+            </m.div>
           </div>
         )}
       </AnimatePresence>

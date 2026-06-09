@@ -1,5 +1,6 @@
 import { SmtpClient } from "https://deno.land/x/smtp/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 // Polyfill para Deno.writeAll
 if (!(Deno as any).writeAll) {
@@ -12,9 +13,16 @@ if (!(Deno as any).writeAll) {
 }
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') || '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const EmailSchema = z.object({
+  email: z.string().email(),
+  type: z.enum(['welcome', 'reset', 'rejection']),
+  token: z.string().min(1),
+  name: z.string().min(1)
+});
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -22,7 +30,20 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { email, type, token, name } = await req.json();
+    const body = await req.json();
+    const result = EmailSchema.safeParse(body);
+    
+    if (!result.success) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid payload', details: result.error.errors }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        }
+      );
+    }
+    
+    const { email, type, token, name } = result.data;
     console.log(`[LOG] Iniciando envio de e-mail tipo: ${type} para: ${email}`);
 
     const client = new SmtpClient();
@@ -42,7 +63,8 @@ serve(async (req: Request) => {
       password: smtpPassword,
     });
 
-    const resetLink = `http://localhost:3001/setup-password?token=${token}`;
+    const frontendUrl = Deno.env.get("FRONTEND_URL") || "http://localhost:3001";
+    const resetLink = `${frontendUrl}/setup-password?token=${token}`;
 
     let subject = "";
     let htmlContent = "";
@@ -102,7 +124,7 @@ serve(async (req: Request) => {
     if (type === 'rejection') {
       plainTextContent = `Olá, ${name}!\n\nSua solicitação de acesso ao QualiTrack foi analisada.\nInfelizmente, seu acesso não foi aprovado pelo seguinte motivo:\n\n"${token}"\n\nCaso tenha dúvidas, entre em contato com o administrador.`;
     } else {
-      plainTextContent = `Olá, ${name}!\n\nSua conta no QualiTrack foi aprovada.\nPara definir sua senha, acesse o link: http://localhost:3001/setup-password?token=${token}`;
+      plainTextContent = `Olá, ${name}!\n\nSua conta no QualiTrack foi aprovada.\nPara definir sua senha, acesse o link: ${resetLink}`;
     }
 
   await client.send({

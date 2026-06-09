@@ -5,7 +5,7 @@ import { BarChart3 } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard } from '../DashboardContext';
 import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 
 interface DataKey {
   key: string;
@@ -149,7 +149,7 @@ export default function ComparativeBarChart({
               <BarChart3 className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
               <AnimatePresence>
                 {isHovered && customSub && (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0, y: -8, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -8, scale: 0.95 }}
@@ -159,7 +159,7 @@ export default function ComparativeBarChart({
                     {customSub}{canEdit ? " (Clique para editar)" : ""}
                     {/* Subtle upward pointing arrow */}
                     <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
-                  </motion.div>
+                  </m.div>
                 )}
               </AnimatePresence>
             </div>

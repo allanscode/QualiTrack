@@ -6,7 +6,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase, mockDb, upsertUserPreferences } from './lib/supabase';
 import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
@@ -41,11 +41,11 @@ const isDarkColor = (hex: string, resolvedTheme: 'light' | 'dark') => {
 // --- Fim do Sidebar Contrast Utility ---
 
 // Components
-import DashboardMain from './components/dashboard/DashboardMain';
-import MonitoriaList from './components/MonitoriaList';
-import MonitoriaForm from './components/MonitoriaForm';
-import AdminPanel from './components/AdminPanel';
-import CustomDashboardManagement from './components/CustomDashboardManagement';
+const DashboardMain = React.lazy(() => import('./components/dashboard/DashboardMain'));
+const MonitoriaList = React.lazy(() => import('./components/MonitoriaList'));
+const MonitoriaForm = React.lazy(() => import('./components/MonitoriaForm'));
+const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
+const CustomDashboardManagement = React.lazy(() => import('./components/CustomDashboardManagement'));
 
 type AuthView = 'login' | 'request-access' | 'pending' | 'change-password' | 'forgot-password' | 'setup-password';
 
@@ -867,7 +867,7 @@ function AppContent() {
     <Toaster position="top-right" richColors />
     <AnimatePresence>
       {showIdleWarning && currentUser && (
-        <motion.div
+        <m.div
           key="idle-warning"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -875,7 +875,7 @@ function AppContent() {
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
           onClick={extendSession}
         >
-          <motion.div
+          <m.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
@@ -897,13 +897,13 @@ function AppContent() {
             >
               Continuar Conectado
             </button>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
     <AnimatePresence mode="wait">
         {loading ? (
-          <motion.div
+          <m.div
             key="app-loading"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -911,14 +911,14 @@ function AppContent() {
             transition={{ duration: 0.3 }}
             className="h-screen w-screen flex items-center justify-center bg-surface-bg"
           >
-            <motion.div 
+            <m.div 
               animate={{ rotate: 360 }} 
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }} 
               className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full" 
             />
-          </motion.div>
+          </m.div>
         ) : !currentUser ? (
-          <motion.div
+          <m.div
             key="app-auth"
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
@@ -931,7 +931,7 @@ function AppContent() {
               <div className="bg-surface-card p-8 rounded-[40px] border border-surface-border shadow-premium min-h-[400px] flex flex-col justify-center">
                 <AnimatePresence mode="wait">
                   {authView === 'login' && (
-                    <motion.div key="login" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6">
+                    <m.div key="login" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6">
                       <h3 className="text-xl font-bold text-center mb-6">Acesse sua Conta</h3>
                       <form onSubmit={handleLogin} className="space-y-4 text-left">
                         <div>
@@ -950,11 +950,11 @@ function AppContent() {
                         </button>
                       </form>
                       <button onClick={() => setAuthView('request-access')} className="text-sm font-bold text-brand-accent hover:text-brand-primary transition-colors">Não tem acesso? Solicite aqui</button>
-                    </motion.div>
+                    </m.div>
                   )}
 
                   {authView === 'request-access' && (
-                    <motion.div key="request" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
+                    <m.div key="request" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
                       <h3 className="text-xl font-bold text-center mb-6 text-brand-primary">Solicitar Novo Acesso</h3>
                       <form onSubmit={handleRequestAccess} className="space-y-4">
                         <div>
@@ -970,11 +970,11 @@ function AppContent() {
                         </button>
                         <button type="button" onClick={() => setAuthView('login')} className="w-full text-sm font-bold text-brand-muted hover:text-brand-primary transition-colors mt-2 text-center">Voltar para Login</button>
                       </form>
-                    </motion.div>
+                    </m.div>
                   )}
 
                   {authView === 'pending' && (
-                    <motion.div key="pending" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 py-4 text-center">
+                    <m.div key="pending" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 py-4 text-center">
                       <div className="w-16 h-16 bg-surface-subtle rounded-full flex items-center justify-center mx-auto mb-4">
                         <Clock className="w-8 h-8 text-brand-accent" />
                       </div>
@@ -983,11 +983,11 @@ function AppContent() {
                       <button onClick={() => setAuthView('login')} className="w-full bg-brand-accent text-white py-4 rounded-lg font-bold uppercase tracking-wider shadow-lg transition-all flex items-center justify-center">
                         <span className="text-white">Voltar para o Início</span>
                       </button>
-                    </motion.div>
+                    </m.div>
                   )}
 
                   {authView === 'change-password' && (
-                    <motion.div key="change" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
+                    <m.div key="change" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
                       <h3 className="text-xl font-bold text-center mb-6 text-brand-primary">Defina sua nova senha</h3>
                       <form onSubmit={handleUpdatePassword} className="space-y-4">
                         <div>
@@ -1002,11 +1002,11 @@ function AppContent() {
                           <span className="text-white">Definir Nova Senha</span>
                         </button>
                       </form>
-                    </motion.div>
+                    </m.div>
                   )}
 
                   {authView === 'forgot-password' && (
-                    <motion.div key="forgot" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
+                    <m.div key="forgot" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
                       <h3 className="text-xl font-bold text-center mb-6 text-brand-primary">Recuperar Senha</h3>
                       <form onSubmit={handleForgotPassword} className="space-y-4">
                         <div>
@@ -1018,14 +1018,14 @@ function AppContent() {
                         </button>
                         <button type="button" onClick={() => setAuthView('login')} className="w-full py-4 text-brand-muted font-bold hover:text-brand-primary transition-colors text-center">Voltar</button>
                       </form>
-                    </motion.div>
+                    </m.div>
                   )}
                 </AnimatePresence>
               </div>
       </div>
-      </motion.div>
+      </m.div>
       ) : !appReady ? (
-        <motion.div
+        <m.div
           key="app-transition"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1033,14 +1033,14 @@ function AppContent() {
           transition={{ duration: 0.3 }}
           className="h-screen w-screen flex items-center justify-center bg-surface-bg"
         >
-          <motion.div
+          <m.div
             animate={{ rotate: 360 }}
             transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full"
           />
-        </motion.div>
+        </m.div>
       ) : (
-          <motion.div
+          <m.div
             key="app-main"
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -1068,7 +1068,7 @@ function AppContent() {
         />
         </StaticDataProvider>
       </QualityConfigProvider>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </>
@@ -1382,7 +1382,7 @@ function MainApp({
         )}
       </AnimatePresence>
 
-    <motion.aside
+    <m.aside
     initial={false}
     animate={{ width: isSidebarOpen ? 260 : 80 }}
     transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -1439,7 +1439,7 @@ function MainApp({
               `}
             >
               {(activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen && (
-                <motion.div 
+                <m.div 
                   layoutId="active-bar"
                   className={`absolute left-0 w-1 h-6 rounded-full ${sidebarIsDark ? 'bg-white' : 'bg-slate-900'}`}
                 />
@@ -1457,7 +1457,7 @@ function MainApp({
             
             <AnimatePresence initial={false}>
               {isSettingsOpen && sidebarTextVisible && (
-                <motion.div
+                <m.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
@@ -1478,7 +1478,7 @@ function MainApp({
                     isOpen={sidebarTextVisible} 
                     isDark={sidebarIsDark} 
                   />
-                </motion.div>
+                </m.div>
               )}
             </AnimatePresence>
           </div>
@@ -1521,7 +1521,7 @@ function MainApp({
 {/* Team List & Settings Popover */}
       <AnimatePresence>
         {showTeamList && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -1542,7 +1542,7 @@ function MainApp({
                 </button>
                 <AnimatePresence initial={false}>
                   {sidebarAccordion === 'teams' && (
-                    <motion.div
+                    <m.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
@@ -1556,7 +1556,7 @@ function MainApp({
                           <div className="text-[10px] text-brand-muted italic px-2 py-1">Nenhuma equipe vinculada</div>
                         )}
                       </div>
-                    </motion.div>
+                    </m.div>
                   )}
                 </AnimatePresence>
               </div>
@@ -1575,7 +1575,7 @@ function MainApp({
                 </button>
                 <AnimatePresence initial={false}>
                   {sidebarAccordion === 'avatar' && (
-                    <motion.div
+                    <m.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
@@ -1585,7 +1585,7 @@ function MainApp({
                       <div className="pb-2 px-2">
                         <div className="text-[10px] text-brand-muted italic py-1">Em breve</div>
                       </div>
-                    </motion.div>
+                    </m.div>
                   )}
                 </AnimatePresence>
               </div>
@@ -1607,7 +1607,7 @@ function MainApp({
                 </button>
                 <AnimatePresence initial={false}>
                   {sidebarAccordion === 'appearance' && (
-                    <motion.div
+                    <m.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
@@ -1640,7 +1640,7 @@ function MainApp({
                           })}
                         </div>
                       </div>
-                    </motion.div>
+                    </m.div>
                   )}
                 </AnimatePresence>
               </div>
@@ -1662,7 +1662,7 @@ function MainApp({
                 </button>
                 <AnimatePresence initial={false}>
                   {sidebarAccordion === 'color' && (
-                    <motion.div
+                    <m.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
@@ -1686,7 +1686,7 @@ function MainApp({
                           })}
                         </div>
                       </div>
-                    </motion.div>
+                    </m.div>
                   )}
                 </AnimatePresence>
               </div>
@@ -1702,12 +1702,12 @@ function MainApp({
                 </button>
               </div>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
           </div>
         </div>
-      </motion.aside>
+      </m.aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-surface-bg">
         <header className="px-8 h-20 flex items-center gap-4 border-b border-surface-border/50">
@@ -1772,22 +1772,24 @@ function MainApp({
         </header>
 
         <div className="flex-1 overflow-auto px-8 pb-8 pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
-          <div className={activeTab === 'dashboard' ? 'block animate-fade-in' : 'hidden'}>
-            <DashboardMain user={userData} activeTab={activeTab} />
-          </div>
-          <div className={activeTab === 'monitorias' ? 'block animate-fade-in' : 'hidden'}>
-            <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} activeTab={activeTab} />
-          </div>
-        {userData?.role === 'admin' && (
-          <>
-            <div className={activeTab === 'admin' ? 'block animate-fade-in' : 'hidden'}>
-              <AdminPanel user={userData} />
+          <React.Suspense fallback={<div className="flex justify-center items-center h-full"><div className="w-8 h-8 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div></div>}>
+            <div className={activeTab === 'dashboard' ? 'block animate-fade-in' : 'hidden'}>
+              <DashboardMain user={userData} activeTab={activeTab} />
             </div>
-            <div className={activeTab === 'custom_dashboard' ? 'block animate-fade-in' : 'hidden'}>
-              <CustomDashboardManagement user={userData} />
+            <div className={activeTab === 'monitorias' ? 'block animate-fade-in' : 'hidden'}>
+              <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} activeTab={activeTab} />
             </div>
-          </>
-        )}
+          {userData?.role === 'admin' && (
+            <>
+              <div className={activeTab === 'admin' ? 'block animate-fade-in' : 'hidden'}>
+                <AdminPanel user={userData} />
+              </div>
+              <div className={activeTab === 'custom_dashboard' ? 'block animate-fade-in' : 'hidden'}>
+                <CustomDashboardManagement user={userData} />
+              </div>
+            </>
+          )}
+          </React.Suspense>
         </div>
       </main>
     </div>
@@ -1806,7 +1808,7 @@ function NavItem({ icon, label, active, onClick, isOpen, isDark, badge }: any) {
       `}
     >
       {active && (
-        <motion.div 
+        <m.div 
           layoutId="active-bar"
           className={`absolute left-0 w-1 h-6 rounded-full ${isDark ? 'bg-white' : 'bg-slate-900'}`}
         />

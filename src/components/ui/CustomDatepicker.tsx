@@ -16,7 +16,7 @@ import {
   parseISO 
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 
 interface CustomDatepickerProps {
   value: string; // Formato padrão "YYYY-MM-DD"
@@ -254,7 +254,7 @@ export default function CustomDatepicker({
             className="bg-surface-card border border-surface-border rounded-lg shadow-premium-lg overflow-hidden select-none"
           >
             <AnimatePresence initial={false}>
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, scale: 0.95, y: -4 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -4 }}
@@ -325,7 +325,7 @@ export default function CustomDatepicker({
                     );
                   })}
                 </div>
-              </motion.div>
+              </m.div>
             </AnimatePresence>
           </div>,
           document.body

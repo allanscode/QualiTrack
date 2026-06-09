@@ -64,7 +64,14 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
     const performLocalHeartbeat = () => {
       try {
         const storedStr = localStorage.getItem('qualitrack_active_sessions');
-        let sessions = storedStr ? JSON.parse(storedStr) : [];
+        let sessions = [];
+        if (storedStr) {
+          try {
+            sessions = JSON.parse(decodeURIComponent(atob(storedStr)));
+          } catch {
+            sessions = JSON.parse(storedStr);
+          }
+        }
         if (!Array.isArray(sessions)) sessions = [];
 
         const now = Date.now();
@@ -81,7 +88,7 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
           lastActive: now
         });
 
-        localStorage.setItem('qualitrack_active_sessions', JSON.stringify(sessions));
+        localStorage.setItem('qualitrack_active_sessions', btoa(encodeURIComponent(JSON.stringify(sessions))));
         return sessions.map((s: any) => ({
           id: s.id,
           name: s.name,
@@ -174,10 +181,15 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
       try {
         const storedStr = localStorage.getItem('qualitrack_active_sessions');
         if (storedStr) {
-          let sessions = JSON.parse(storedStr);
+          let sessions = [];
+          try {
+            sessions = JSON.parse(decodeURIComponent(atob(storedStr)));
+          } catch {
+            sessions = JSON.parse(storedStr);
+          }
           if (Array.isArray(sessions)) {
             sessions = sessions.filter((s: any) => s && s.id !== user.id);
-            localStorage.setItem('qualitrack_active_sessions', JSON.stringify(sessions));
+            localStorage.setItem('qualitrack_active_sessions', btoa(encodeURIComponent(JSON.stringify(sessions))));
           }
         }
         if (channel) {

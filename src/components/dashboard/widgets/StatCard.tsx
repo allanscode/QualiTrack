@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Card from '../../ui/Card';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { toast } from 'sonner';
@@ -223,7 +223,7 @@ export default function StatCard({
             {clonedIcon}
             <AnimatePresence>
               {isHovered && tooltipText && (
-                <motion.div
+                <m.div
                   initial={{ opacity: 0, y: -8, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.95 }}
@@ -233,7 +233,7 @@ export default function StatCard({
                   {tooltipText}{canEdit ? " (Clique para editar)" : ""}
                   {/* Subtle upward pointing arrow */}
                   <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
-                </motion.div>
+                </m.div>
               )}
             </AnimatePresence>
           </div>
@@ -263,7 +263,7 @@ export default function StatCard({
         {showOnlineModal && (
           <div className="fixed inset-0 flex items-center justify-center z-[999]" onClick={() => setShowOnlineModal(false)}>
             {/* Backdrop */}
-            <motion.div
+            <m.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -271,7 +271,7 @@ export default function StatCard({
             />
 
             {/* Modal Box */}
-            <motion.div
+            <m.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -330,7 +330,7 @@ export default function StatCard({
                   })
                 )}
               </div>
-            </motion.div>
+            </m.div>
           </div>
         )}
       </AnimatePresence>

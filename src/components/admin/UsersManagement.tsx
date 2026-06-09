@@ -13,7 +13,7 @@ import {
   RefreshCw,
   Star
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import Card from '../ui/Card';
 import Button from '../ui/Button';

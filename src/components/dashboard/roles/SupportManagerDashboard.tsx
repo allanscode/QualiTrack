@@ -9,7 +9,7 @@ import OfensoresChart from '../widgets/OfensoresChart';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Target, Users, TrendingUp, AlertTriangle, CheckCircle2, XCircle, ClipboardCheck, Award, Clock, History, Activity } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
 import { useQualityConfig } from '../../../lib/useQualityConfig';
@@ -916,7 +916,7 @@ export default function SupportManagerDashboard({
                   <Activity className="w-4 h-4 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
                   <AnimatePresence>
                     {hoverCurva && curvaExplanation && (
-                      <motion.div
+                      <m.div
                         initial={{ opacity: 0, y: -8, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -8, scale: 0.95 }}
@@ -925,7 +925,7 @@ export default function SupportManagerDashboard({
                       >
                         {curvaExplanation}{isCustomizing ? ' (Clique para editar)' : ''}
                         <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
-                      </motion.div>
+                      </m.div>
                     )}
                   </AnimatePresence>
                 </div>

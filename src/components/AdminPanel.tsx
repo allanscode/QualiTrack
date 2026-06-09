@@ -13,7 +13,7 @@ import {
   Calendar,
   Target
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import QualityConfigManagement from './QualityConfigManagement';
 import UsersManagement from './admin/UsersManagement';
@@ -124,7 +124,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
       </div>
 
       <AnimatePresence mode="wait">
-        <motion.div
+        <m.div
           key={activeSubTab}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -138,7 +138,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           {activeSubTab === 'operacao' && <QualityConfigManagement mode="operacao" />}
           {activeSubTab === 'metas' && <QualityConfigManagement mode="metas" />}
           {activeSubTab === 'campos_extras' && <DissatisfactionFieldsManagement />}
-        </motion.div>
+        </m.div>
       </AnimatePresence>
     </div>
   );

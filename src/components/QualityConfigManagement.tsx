@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Save, Plus, Calendar, Check, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import CustomSelect from './ui/CustomSelect';
@@ -282,7 +282,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+    <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
       {mode === 'operacao' ? (
         <>
           <div>
@@ -483,7 +483,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-premium-lg overflow-hidden select-none animate-fade-in"
               >
                 <AnimatePresence initial={false}>
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0, scale: 0.95, y: -4 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: -4 }}
@@ -553,7 +553,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                         );
                       })}
                     </div>
-                  </motion.div>
+                  </m.div>
                 </AnimatePresence>
               </div>,
               document.body
@@ -828,6 +828,6 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
           {saving ? 'Salvando...' : 'Salvar Alterações'}
         </button>
       </div>
-    </motion.div>
+    </m.div>
   );
 }

@@ -18,7 +18,7 @@ import {
   ChevronRight,
   Pencil
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
@@ -315,7 +315,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-3xl w-full min-h-[600px] h-[650px] max-h-[90vh] overflow-hidden flex flex-col bg-surface-card border border-surface-border rounded-[32px] shadow-2xl">
+            <m.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-3xl w-full min-h-[600px] h-[650px] max-h-[90vh] overflow-hidden flex flex-col bg-surface-card border border-surface-border rounded-[32px] shadow-2xl">
               <header className="flex items-center justify-between p-6 border-b border-surface-border bg-surface-card sticky top-0 z-10">
                 <div className="flex items-center gap-4">
                   <div className="w-11 h-11 rounded-xl bg-surface-subtle flex items-center justify-center text-brand-primary">
@@ -354,7 +354,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
 
               <div className="flex-1 overflow-y-auto pl-6 pr-3 py-6 space-y-6 bg-surface-bg dark:bg-surface-bg thin-scrollbar">
                 {activeTab === 'geral' && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-8 py-4">
+                  <m.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-8 py-4">
                     {showDraftBanner && !draftRecoveredOrDismissed && !editingForm.id && (
                       <div className="p-4 bg-brand-subtle dark:bg-surface-subtle border border-surface-border rounded-2xl flex items-center justify-between text-xs text-brand-primary">
                         <span className="font-bold flex items-center gap-2">💡 Você possui um rascunho anterior salvo. Deseja recuperá-lo?</span>
@@ -395,11 +395,11 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                         </div>
                       </div>
                     </div>
-                  </motion.div>
+                  </m.div>
                 )}
 
                 {activeTab === 'pilares' && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                  <m.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
                     <div className="flex items-center justify-between">
                       <div>
                         <h4 className="text-sm font-black text-brand-primary uppercase tracking-widest">Definição da Estrutura</h4>
@@ -523,11 +523,11 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                         </div>
                       )}
                     </div>
-                  </motion.div>
+                  </m.div>
                 )}
 
                 {activeTab === 'criticos' && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                  <m.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
                     <div className="flex items-center justify-between">
                       <div>
                         <h4 className="text-sm font-black text-error uppercase tracking-widest flex items-center gap-2">
@@ -563,7 +563,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                         </div>
                       )}
                     </div>
-                  </motion.div>
+                  </m.div>
                 )}
               </div>
               
@@ -630,7 +630,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                   </Button>
                 </div>
               </footer>
-            </motion.div>
+            </m.div>
           </div>
         )}
       </AnimatePresence>

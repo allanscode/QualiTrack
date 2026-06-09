@@ -4,7 +4,7 @@ import { useDashboard } from './DashboardContext';
 import CustomSelect from '../ui/CustomSelect';
 import CustomDatepicker from '../ui/CustomDatepicker';
 import { useTheme } from '../../App';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 
 export default function FilterBar() {
   const { resolvedTheme } = useTheme();
@@ -155,7 +155,7 @@ export default function FilterBar() {
           {/* Action Buttons — animated clean button */}
           <AnimatePresence>
             {hasChanged && (
-              <motion.div
+              <m.div
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: 28, opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
@@ -169,7 +169,7 @@ export default function FilterBar() {
                 >
                   <X className="w-3 h-3" />
                 </button>
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
         </div>

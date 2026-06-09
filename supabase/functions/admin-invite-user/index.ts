@@ -1,10 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts"
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') || '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+const InviteSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1),
+  role: z.enum(['admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte', 'suporte']).optional(),
+  team_ids: z.array(z.string().uuid()).optional()
+})
 
 async function syncUserTeams(supabaseAdmin: any, userId: string, teamIds: string[]) {
   const { data: existing } = await supabaseAdmin
@@ -35,7 +43,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ success: false, error: 'Missing Authorization header' }), {
-        status: 200,
+        status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -50,7 +58,7 @@ serve(async (req) => {
 
     if (userError || !user) {
       return new Response(JSON.stringify({ success: false, error: 'Unauthorized', details: userError }), {
-        status: 200,
+        status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -58,19 +66,25 @@ serve(async (req) => {
     const { data: adminUser } = await supabaseClient.from('users').select('role').eq('id', user.id).single()
     if (!adminUser || !['admin', 'gestor_qualidade', 'gestor_suporte'].includes(adminUser.role)) {
       return new Response(JSON.stringify({ success: false, error: 'Forbidden: Admins only. User role is: ' + (adminUser?.role || 'none') }), {
-        status: 200,
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const { email, name, role, team_ids } = await req.json()
-
-    if (!email || !name) {
-      return new Response(JSON.stringify({ success: false, error: 'Email and Name are required' }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    const body = await req.json()
+    const result = InviteSchema.safeParse(body)
+    
+    if (!result.success) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid payload', details: result.error.errors }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        }
+      )
     }
+
+    const { email, name, role, team_ids } = result.data
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -100,14 +114,14 @@ serve(async (req) => {
       if (dbError) {
         console.error('DB Update Error for existing user:', dbError)
         return new Response(JSON.stringify({ success: false, error: 'Failed to update existing user in public users table', details: dbError }), {
-          status: 200,
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
       await syncUserTeams(supabaseAdmin, existingUser.id, team_ids || [])
 
-      const origin = req.headers.get('Origin') || 'http://localhost:3000'
+      const origin = req.headers.get('Origin') || Deno.env.get('FRONTEND_URL') || 'http://localhost:3000'
       const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email.toLowerCase(), {
         redirectTo: origin
       })
@@ -115,7 +129,7 @@ serve(async (req) => {
       if (resetError) {
         console.error('Reset Password Error:', resetError)
         return new Response(JSON.stringify({ success: false, error: 'Failed to send password reset email to existing user', details: resetError }), {
-          status: 200,
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
@@ -145,14 +159,14 @@ serve(async (req) => {
           if (dbError) {
             console.error('DB Upsert Fallback Error:', dbError)
             return new Response(JSON.stringify({ success: false, error: 'Failed to save to public users table in fallback', details: dbError }), {
-              status: 200,
+              status: 500,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             })
           }
 
           await syncUserTeams(supabaseAdmin, foundUser.id, team_ids || [])
 
-          const origin = req.headers.get('Origin') || 'http://localhost:3000'
+          const origin = req.headers.get('Origin') || Deno.env.get('FRONTEND_URL') || 'http://localhost:3000'
           const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email.toLowerCase(), {
             redirectTo: origin
           })
@@ -160,7 +174,7 @@ serve(async (req) => {
           if (resetError) {
             console.error('Reset Password Fallback Error:', resetError)
             return new Response(JSON.stringify({ success: false, error: 'Failed to send password reset email in fallback', details: resetError }), {
-              status: 200,
+              status: 500,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             })
           }
@@ -173,7 +187,7 @@ serve(async (req) => {
 
       console.error('Invite Error:', inviteError)
       return new Response(JSON.stringify({ success: false, error: 'Failed to invite user via Auth', details: inviteError }), {
-        status: 200,
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -188,7 +202,7 @@ serve(async (req) => {
     if (dbError) {
       console.error('DB Insert Error:', dbError)
       return new Response(JSON.stringify({ success: false, error: 'Failed to save to public users table', details: dbError }), {
-        status: 200,
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -202,7 +216,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Catch Error:', error)
     return new Response(JSON.stringify({ success: false, error: 'Internal Server Error', message: error.message }), {
-      status: 200,
+      status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
