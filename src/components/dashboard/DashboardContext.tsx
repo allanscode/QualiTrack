@@ -31,14 +31,19 @@ export interface DashboardState {
   loading: boolean;
   globalAvg: number;
   dissatisfactionFields: DissatisfactionField[];
-  activeEditingId: string | null;
 }
 
 export interface DashboardDispatch {
   setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
   refresh: () => void;
+}
+
+export interface EditingContextType {
+  activeEditingId: string | null;
   setActiveEditingId: React.Dispatch<React.SetStateAction<string | null>>;
 }
+
+export const EditingContext = createContext<EditingContextType | undefined>(undefined);
 
 export const DashboardStateContext = createContext<DashboardState | undefined>(undefined);
 export const DashboardDispatchContext = createContext<DashboardDispatch | undefined>(undefined);
@@ -241,6 +246,14 @@ export function useDashboardDispatch() {
   return context;
 }
 
+export function useEditing() {
+  const context = React.use(EditingContext);
+  if (context === undefined) {
+    throw new Error('useEditing must be used within an EditingContext Provider');
+  }
+  return context;
+}
+
 export function DashboardProvider({ 
   user: loggedInUser, 
   activeTab, 
@@ -309,26 +322,32 @@ export function DashboardProvider({
             console.log(`[Dashboard] Carregando monitorias (Tentativa ${retryCount + 1})...`);
             const controller = new AbortController();
 
-            let monitoriasQuery = supabase.from('monitorias').select('*').order('created_at', { ascending: false });
-            let scoresQuery = supabase.from('monitorias').select('score, created_at, status, channel, form_id, active');
+        let monitoriasQuery = supabase.from('monitorias').select('*').order('created_at', { ascending: false });
+        let scoresQuery = supabase.from('monitorias').select('score, created_at, status, channel, form_id, active, evaluated_id, evaluator_id, team_id');
 
-            const myTeamIds = currentUser.team_ids || [];
+        const myTeamIds = currentUser.team_ids || [];
 
-            if (currentUser.role === 'suporte') {
-              if (myTeamIds.length > 0) {
-                monitoriasQuery = monitoriasQuery.or(`evaluated_id.eq.${currentUser.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`);
-              } else {
-                monitoriasQuery = monitoriasQuery.eq('evaluated_id', currentUser.id);
-              }
-            } else if (currentUser.role === 'qualidade') {
-              monitoriasQuery = monitoriasQuery.eq('evaluator_id', currentUser.id);
-            } else if (currentUser.role === 'gestor_suporte') {
-              if (myTeamIds.length > 0) {
-                monitoriasQuery = monitoriasQuery.in('team_id', myTeamIds);
-              } else {
-                monitoriasQuery = monitoriasQuery.eq('team_id', '00000000-0000-0000-0000-000000000000');
-              }
-            }
+        if (currentUser.role === 'suporte') {
+          if (myTeamIds.length > 0) {
+            const rbacFilter = `evaluated_id.eq.${currentUser.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`;
+            monitoriasQuery = monitoriasQuery.or(rbacFilter);
+            scoresQuery = scoresQuery.or(rbacFilter);
+          } else {
+            monitoriasQuery = monitoriasQuery.eq('evaluated_id', currentUser.id);
+            scoresQuery = scoresQuery.eq('evaluated_id', currentUser.id);
+          }
+        } else if (currentUser.role === 'qualidade') {
+          monitoriasQuery = monitoriasQuery.eq('evaluator_id', currentUser.id);
+          scoresQuery = scoresQuery.eq('evaluator_id', currentUser.id);
+        } else if (currentUser.role === 'gestor_suporte') {
+          if (myTeamIds.length > 0) {
+            monitoriasQuery = monitoriasQuery.in('team_id', myTeamIds);
+            scoresQuery = scoresQuery.in('team_id', myTeamIds);
+          } else {
+            monitoriasQuery = monitoriasQuery.eq('team_id', '00000000-0000-0000-0000-000000000000');
+            scoresQuery = scoresQuery.eq('team_id', '00000000-0000-0000-0000-000000000000');
+          }
+        }
 
             const fetchPromise = Promise.all([
               monitoriasQuery.abortSignal(controller.signal),
@@ -370,20 +389,23 @@ export function DashboardProvider({
 
       docs = docs.filter(m => m.active !== false);
 
-      const globalFiltered = scoreDocs.filter(m => {
-        if (m.active === false) return false;
-        const targetDate = m.created_at;
-        if (!targetDate) return true;
-        const d = new Date(targetDate).getTime();
-        const startD = currentFilters.startDate ? new Date(currentFilters.startDate).getTime() : 0;
-        const endD = currentFilters.endDate ? new Date(currentFilters.endDate + 'T23:59:59').getTime() : Infinity;
+    const globalFiltered = scoreDocs.filter(m => {
+      if (m.active === false) return false;
+      const targetDate = m.created_at;
+      if (!targetDate) return true;
+      const d = new Date(targetDate).getTime();
+      const startD = currentFilters.startDate ? new Date(currentFilters.startDate).getTime() : 0;
+      const endD = currentFilters.endDate ? new Date(currentFilters.endDate + 'T23:59:59').getTime() : Infinity;
 
-        let pass = d >= startD && d <= endD;
-        if (currentFilters.status) pass = pass && m.status === currentFilters.status;
-        if (currentFilters.channel) pass = pass && m.channel === currentFilters.channel;
-        if (currentFilters.formId) pass = pass && m.form_id === currentFilters.formId;
-        return pass;
-      });
+      let pass = d >= startD && d <= endD;
+      if (currentFilters.status) pass = pass && m.status === currentFilters.status;
+      if (currentFilters.channel) pass = pass && m.channel === currentFilters.channel;
+      if (currentFilters.formId) pass = pass && m.form_id === currentFilters.formId;
+      if (currentFilters.teamId && 'team_id' in m) pass = pass && m.team_id === currentFilters.teamId;
+      if (currentFilters.agentId && currentUser.role !== 'suporte' && 'evaluated_id' in m) pass = pass && m.evaluated_id === currentFilters.agentId;
+      if (currentFilters.auditorId && 'evaluator_id' in m) pass = pass && m.evaluator_id === currentFilters.auditorId;
+      return pass;
+    });
       const gAvg = globalFiltered.length > 0 ? globalFiltered.reduce((acc, m) => acc + (m.score || 0), 0) / globalFiltered.length : 0;
 
       if (currentUser.role === 'suporte') {
@@ -568,7 +590,6 @@ export function DashboardProvider({
     loading,
     globalAvg,
     dissatisfactionFields: staticData.dissatisfactionFields,
-    activeEditingId
   }), [
     user,
     loggedInUser,
@@ -583,21 +604,26 @@ export function DashboardProvider({
     loading,
     globalAvg,
     staticData.dissatisfactionFields,
-    activeEditingId
   ]);
 
   const dispatchValue = useMemo<DashboardDispatch>(() => ({
     setFilters,
     refresh,
-    setActiveEditingId
   }), [refresh]);
+
+  const editingValue = useMemo<EditingContextType>(() => ({
+    activeEditingId,
+    setActiveEditingId,
+  }), [activeEditingId]);
 
   return (
     <DashboardStateContext value={stateValue}>
       <DashboardDispatchContext value={dispatchValue}>
-        <PresenceProvider user={user}>
-          {children}
-        </PresenceProvider>
+        <EditingContext value={editingValue}>
+          <PresenceProvider user={user}>
+            {children}
+          </PresenceProvider>
+        </EditingContext>
       </DashboardDispatchContext>
     </DashboardStateContext>
   );
@@ -606,10 +632,11 @@ export function DashboardProvider({
 export function useDashboard() {
   const state = useDashboardState();
   const dispatch = useDashboardDispatch();
-  const presence = usePresence();
+  const editing = useEditing();
   return {
     ...state,
     ...dispatch,
-    onlineUsers: presence.onlineUsers,
+    activeEditingId: editing.activeEditingId,
+    setActiveEditingId: editing.setActiveEditingId,
   };
 }

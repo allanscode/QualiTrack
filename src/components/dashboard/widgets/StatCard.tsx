@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Card from '../../ui/Card';
 import { m, AnimatePresence } from 'motion/react';
-import { useDashboard } from '../DashboardContext';
+import { useDashboard, usePresence, useEditing } from '../DashboardContext';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { toast } from 'sonner';
 
@@ -71,13 +71,17 @@ export default function StatCard({
   const { config, saveConfig } = useQualityConfig();
   
   let dashboardContext = null;
+  let presenceContext = null;
+  let editingContext = null;
   try {
     dashboardContext = useDashboard();
+    presenceContext = usePresence();
+    editingContext = useEditing();
   } catch (e) {
     // Fail-safe if used outside of DashboardProvider
   }
   const user = dashboardContext?.user;
-  const onlineUsers = onlineUsersOverride || dashboardContext?.onlineUsers || [];
+  const onlineUsers = onlineUsersOverride || presenceContext?.onlineUsers || [];
 
   const iconBg = getIconBg(accent);
   const [isHovered, setIsHovered] = useState(false);
@@ -113,7 +117,7 @@ export default function StatCard({
   const myUniqueId = `stat-card-${title}`;
   const isEditing = activeEditingId !== undefined
     ? activeEditingId === myUniqueId
-    : dashboardContext?.activeEditingId === myUniqueId;
+    : editingContext?.activeEditingId === myUniqueId;
 
   const handleEditClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -121,7 +125,7 @@ export default function StatCard({
     if (setActiveEditingId) {
       setActiveEditingId(myUniqueId);
     } else {
-      dashboardContext?.setActiveEditingId(myUniqueId);
+      editingContext?.setActiveEditingId(myUniqueId);
     }
     setIsHovered(false);
   };
@@ -141,7 +145,7 @@ export default function StatCard({
       if (setActiveEditingId) {
         setActiveEditingId(null);
       } else {
-        dashboardContext?.setActiveEditingId(null);
+        editingContext?.setActiveEditingId(null);
       }
     } catch (err) {
       toast.error('Erro ao salvar descrição.');
@@ -153,7 +157,7 @@ export default function StatCard({
     if (setActiveEditingId) {
       setActiveEditingId(null);
     } else {
-      dashboardContext?.setActiveEditingId(null);
+      editingContext?.setActiveEditingId(null);
     }
   };
 
@@ -209,36 +213,38 @@ export default function StatCard({
     <>
       <Card onClick={onClick} padding="none" className="px-5 py-4 flex flex-col justify-between min-h-[100px] relative z-10 hover:z-30 transition-all duration-200">
         <div className="flex items-center gap-3 mb-3 min-w-0">
-          <div
-            onClick={canEdit ? handleEditClick : undefined}
-            className={`relative w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 ${accent} ${
-              canEdit 
-                ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' 
-                : 'cursor-pointer'
-            }`}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            title=""
-          >
-            {clonedIcon}
-            <AnimatePresence>
-              {isHovered && tooltipText && (
-                <m.div
-                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                  transition={{ duration: 0.12, ease: 'easeOut' }}
-                  className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
-                >
-                  {tooltipText}{canEdit ? " (Clique para editar)" : ""}
-                  {/* Subtle upward pointing arrow */}
-                  <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
-                </m.div>
-              )}
-            </AnimatePresence>
+        <div
+          onClick={canEdit ? handleEditClick : undefined}
+          className={`relative w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 ${accent} ${
+            canEdit
+              ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all'
+              : 'cursor-pointer'
+          }`}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          tabIndex={0}
+          aria-describedby={isHovered && tooltipText ? `tooltip-${myUniqueId}` : undefined}
+        >
+          {clonedIcon}
+          <AnimatePresence>
+            {isHovered && tooltipText && (
+              <m.div
+                id={`tooltip-${myUniqueId}`}
+                role="tooltip"
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                transition={{ duration: 0.12, ease: 'easeOut' }}
+                className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
+              >
+                {tooltipText}{canEdit ? " (Clique para editar)" : ""}
+                <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
+              </m.div>
+            )}
+          </AnimatePresence>
           </div>
           <div className="min-w-0 flex-1">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-normal leading-snug block" title="">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-normal leading-snug block">
               {title}
             </span>
           </div>

@@ -21,7 +21,7 @@ import {
   History,
   Target
 } from 'lucide-react';
-import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'motion/react';
+import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { calculateQualityScore } from '../utils/qualityMath';
 import { toast } from 'sonner';
 import { addBusinessHours } from '../lib/businessHours';
@@ -301,8 +301,7 @@ export default function MonitoriaForm({
   };
 
   return (
-    <LazyMotion features={domAnimation}>
-      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 overflow-y-auto">
         <m.div 
           initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 10 }} 
           animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }} 
@@ -851,6 +850,5 @@ export default function MonitoriaForm({
         </div>
       </m.div>
     </div>
-    </LazyMotion>
   );
 }

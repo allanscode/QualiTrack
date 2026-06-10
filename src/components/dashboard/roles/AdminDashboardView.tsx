@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { useDashboard } from '../DashboardContext';
+import { useDashboard, usePresence } from '../DashboardContext';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import RankingWidget from '../widgets/RankingWidget';
@@ -294,20 +294,22 @@ export default function AdminDashboardView({
     users: [],
     teams: [],
     forms: [],
-    onlineUsers: [],
     dissatisfactionFields: []
   };
 
+  let onlineUsers: any[] = [];
   try {
     const context = useDashboard();
     if (context) {
       dashboardData = context;
     }
+    const presence = usePresence();
+    onlineUsers = presence.onlineUsers;
   } catch (e) {
     // safe fallback when outside DashboardProvider (e.g. customization preview)
   }
 
-  const { monitorias, users, teams, forms, onlineUsers, dissatisfactionFields } = dashboardData;
+  const { monitorias, users, teams, forms, dissatisfactionFields } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
 
   const [hoverMedia, setHoverMedia] = useState(false);
