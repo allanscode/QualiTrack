@@ -3,9 +3,9 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tool
 import Card from '../../ui/Card';
 import { TrendingUp } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
-import { useDashboard } from '../DashboardContext';
+import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
-import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'motion/react';
+import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -53,8 +53,10 @@ export default function TrendChart({
   const shouldReduceMotion = useReducedMotion();
 
   let dashboardContext = null;
+  let editingContext = null;
   try {
     dashboardContext = useDashboard();
+    editingContext = useEditing();
   } catch (e) {}
   const user = dashboardContext?.user;
   const canEdit = isCustomizing;
@@ -62,7 +64,7 @@ export default function TrendChart({
   const myUniqueId = `chart-${title}`;
   const isEditing = activeEditingId !== undefined
     ? activeEditingId === myUniqueId
-    : dashboardContext?.activeEditingId === myUniqueId;
+    : editingContext?.activeEditingId === myUniqueId;
 
   const lookupKey = profile ? `${profile}_${title}` : (user?.role ? `${user.role}_${title}` : title);
   const customSub = (config?.statCardExplanations?.[lookupKey] !== undefined && config.statCardExplanations[lookupKey] !== '')
@@ -77,7 +79,7 @@ export default function TrendChart({
     if (setActiveEditingId) {
       setActiveEditingId(myUniqueId);
     } else {
-      dashboardContext?.setActiveEditingId(myUniqueId);
+      editingContext?.setActiveEditingId(myUniqueId);
     }
     setIsHovered(false);
   };
@@ -97,7 +99,7 @@ export default function TrendChart({
       if (setActiveEditingId) {
         setActiveEditingId(null);
       } else {
-        dashboardContext?.setActiveEditingId(null);
+        editingContext?.setActiveEditingId(null);
       }
     } catch (err) {
       toast.error('Erro ao salvar descrição.');
@@ -109,13 +111,12 @@ export default function TrendChart({
     if (setActiveEditingId) {
       setActiveEditingId(null);
     } else {
-      dashboardContext?.setActiveEditingId(null);
+      editingContext?.setActiveEditingId(null);
     }
   };
 
   return (
-    <LazyMotion features={domAnimation}>
-      <Card padding="lg" className="h-full flex flex-col print:shadow-none print:border print:border-slate-300 print:bg-white print:text-black print:p-4">
+    <Card padding="lg" className="h-full flex flex-col print:shadow-none print:border print:border-slate-300 print:bg-white print:text-black print:p-4">
         {isEditing ? (
           <div className="flex flex-col gap-2 mb-6 animate-fade-in print:hidden" onClick={(e) => e.stopPropagation()}>
             <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
@@ -152,35 +153,37 @@ export default function TrendChart({
         ) : (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 print:mb-4">
             <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div 
-                onClick={canEdit ? handleEditClick : undefined}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-                className={`relative w-9 h-9 rounded-xl bg-icon-highlight flex items-center justify-center flex-shrink-0 text-brand-highlight print:bg-slate-100 print:text-slate-800 ${
-                  canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
-                }`}
-                title=""
+        <div
+          onClick={canEdit ? handleEditClick : undefined}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          className={`relative w-9 h-9 rounded-xl bg-icon-highlight flex items-center justify-center flex-shrink-0 text-brand-highlight print:bg-slate-100 print:text-slate-800 ${
+            canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
+          }`}
+          tabIndex={0}
+          aria-describedby={isHovered && customSub ? `tooltip-${myUniqueId}` : undefined}
+        >
+          <TrendingUp className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
+          <AnimatePresence>
+            {isHovered && customSub && (
+              <m.div
+                id={`tooltip-${myUniqueId}`}
+                role="tooltip"
+                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.95 }}
+                transition={{ duration: 0.12, ease: 'easeOut' }}
+                style={{ willChange: 'transform, opacity' }}
+                className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none print:hidden"
               >
-                <TrendingUp className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
-                <AnimatePresence>
-                  {isHovered && customSub && (
-                    <m.div
-                      initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.95 }}
-                      transition={{ duration: 0.12, ease: 'easeOut' }}
-                      style={{ willChange: 'transform, opacity' }}
-                      className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none print:hidden"
-                    >
-                      {customSub}{canEdit ? " (Clique para editar)" : ""}
-                      {/* Subtle upward pointing arrow */}
-                      <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
-                    </m.div>
-                  )}
-                </AnimatePresence>
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest whitespace-normal leading-snug print:text-black" title="">{title}</h3>
+                {customSub}{canEdit ? " (Clique para editar)" : ""}
+                <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
+              </m.div>
+            )}
+          </AnimatePresence>
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest whitespace-normal leading-snug print:text-black">{title}</h3>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-4 text-[10px] font-black uppercase tracking-widest text-brand-muted flex-shrink-0 print:text-slate-700">
@@ -229,6 +232,5 @@ export default function TrendChart({
           </ResponsiveContainer>
         </div>
       </Card>
-    </LazyMotion>
   );
 }

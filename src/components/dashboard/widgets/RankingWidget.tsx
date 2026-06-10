@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User, Award } from 'lucide-react';
 import Card from '../../ui/Card';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
-import { useDashboard } from '../DashboardContext';
+import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
 import { m, AnimatePresence } from 'motion/react';
 
@@ -79,8 +79,10 @@ export default function RankingWidget({
       : 'left-1/2 -translate-x-1/2';
 
   let dashboardContext = null;
+  let editingContext = null;
   try {
     dashboardContext = useDashboard();
+    editingContext = useEditing();
   } catch (e) {}
   const user = dashboardContext?.user;
   const canEdit = isCustomizing;
@@ -88,7 +90,7 @@ export default function RankingWidget({
   const myUniqueId = `chart-${title}`;
   const isEditing = activeEditingId !== undefined
     ? activeEditingId === myUniqueId
-    : dashboardContext?.activeEditingId === myUniqueId;
+    : editingContext?.activeEditingId === myUniqueId;
 
   const lookupKey = profile ? `${profile}_${title}` : (user?.role ? `${user.role}_${title}` : title);
   const customSub = (config?.statCardExplanations?.[lookupKey] !== undefined && config.statCardExplanations[lookupKey] !== '')
@@ -103,7 +105,7 @@ export default function RankingWidget({
     if (setActiveEditingId) {
       setActiveEditingId(myUniqueId);
     } else {
-      dashboardContext?.setActiveEditingId(myUniqueId);
+      editingContext?.setActiveEditingId(myUniqueId);
     }
     setIsHovered(false);
   };
@@ -123,7 +125,7 @@ export default function RankingWidget({
       if (setActiveEditingId) {
         setActiveEditingId(null);
       } else {
-        dashboardContext?.setActiveEditingId(null);
+        editingContext?.setActiveEditingId(null);
       }
     } catch (err) {
       toast.error('Erro ao salvar descrição.');
@@ -135,7 +137,7 @@ export default function RankingWidget({
     if (setActiveEditingId) {
       setActiveEditingId(null);
     } else {
-      dashboardContext?.setActiveEditingId(null);
+      editingContext?.setActiveEditingId(null);
     }
   };
 
@@ -176,44 +178,46 @@ export default function RankingWidget({
         </div>
       ) : (
         <div className="flex items-center gap-3 mb-3 min-w-0">
-          <div 
-            onClick={canEdit ? handleEditClick : undefined}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            className={`relative w-8 h-8 rounded-xl ${accent ? getIconBg(accent) : 'bg-surface-subtle'} flex items-center justify-center flex-shrink-0 ${accent || ''} ${
-              canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
-            }`}
-            title=""
-          >
-            {(() => {
-              const defaultIcon = icon || <Award className="w-4 h-4" />;
-              return React.isValidElement(defaultIcon)
-                ? React.cloneElement(defaultIcon as React.ReactElement<any>, {
-                    className: 'w-4 h-4 fill-current fill-opacity-15',
-                    strokeWidth: 2,
-                    fill: 'currentColor',
-                    fillOpacity: 0.15,
-                  })
-                : defaultIcon;
-            })()}
-            <AnimatePresence>
-              {isHovered && customSub && (
-                <m.div
-                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                  transition={{ duration: 0.12, ease: 'easeOut' }}
-                  className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
-                >
-                  {customSub}{canEdit ? " (Clique para editar)" : ""}
-                  {/* Subtle upward pointing arrow */}
-                  <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
-                </m.div>
-              )}
-            </AnimatePresence>
-          </div>
+        <div
+          onClick={canEdit ? handleEditClick : undefined}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          className={`relative w-8 h-8 rounded-xl ${accent ? getIconBg(accent) : 'bg-surface-subtle'} flex items-center justify-center flex-shrink-0 ${accent || ''} ${
+            canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
+          }`}
+          tabIndex={0}
+          aria-describedby={isHovered && customSub ? `tooltip-${myUniqueId}` : undefined}
+        >
+          {(() => {
+            const defaultIcon = icon || <Award className="w-4 h-4" />;
+            return React.isValidElement(defaultIcon)
+              ? React.cloneElement(defaultIcon as React.ReactElement<any>, {
+                  className: 'w-4 h-4 fill-current fill-opacity-15',
+                  strokeWidth: 2,
+                  fill: 'currentColor',
+                  fillOpacity: 0.15,
+                })
+              : defaultIcon;
+          })()}
+          <AnimatePresence>
+            {isHovered && customSub && (
+              <m.div
+                id={`tooltip-${myUniqueId}`}
+                role="tooltip"
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                transition={{ duration: 0.12, ease: 'easeOut' }}
+                className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
+              >
+                {customSub}{canEdit ? " (Clique para editar)" : ""}
+                <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
+              </m.div>
+            )}
+          </AnimatePresence>
+        </div>
           <div className="flex-1">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-tight whitespace-normal" title="">{title}</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-tight whitespace-normal">{title}</h3>
           </div>
         </div>
       )}
@@ -224,14 +228,17 @@ export default function RankingWidget({
           const isCount = type === 'count';
 
           return (
-            <div
-              key={item.id}
-              className="group relative flex items-center gap-2 py-1 px-2 rounded-2xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle/50 hover:z-[10000] transition-all duration-200"
-            >
-              {/* Tooltip flutuante CSS-driven premium */}
-              <div 
-                className={`absolute bottom-full ${tooltipPositionClass} mb-2.5 z-50 w-64 bg-slate-900 border border-slate-800 text-slate-100 p-2.5 rounded-lg shadow-xl pointer-events-none opacity-0 invisible scale-95 group-hover:opacity-100 group-hover:visible group-hover:scale-100 transition-all duration-150 origin-bottom dark:bg-slate-50 dark:border-slate-200 dark:text-slate-900`}
-              >
+        <div
+          key={item.id}
+          className="group relative flex items-center gap-2 py-1 px-2 rounded-2xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle/50 hover:z-[10000] transition-all duration-200"
+          tabIndex={0}
+          aria-describedby={`tooltip-${myUniqueId}-row-${index}`}
+        >
+          <div
+            id={`tooltip-${myUniqueId}-row-${index}`}
+            role="tooltip"
+            className={`absolute bottom-full ${tooltipPositionClass} mb-2.5 z-50 w-64 bg-slate-900 border border-slate-800 text-slate-100 p-2.5 rounded-lg shadow-xl pointer-events-none opacity-0 invisible scale-95 group-hover:opacity-100 group-hover:visible group-hover:scale-100 transition-all duration-150 origin-bottom dark:bg-slate-50 dark:border-slate-200 dark:text-slate-900`}
+          >
                 <p className="text-xs font-bold text-slate-200 dark:text-slate-900 leading-tight mb-1 truncate">
                   #{index + 1}º - {item.name}
                 </p>

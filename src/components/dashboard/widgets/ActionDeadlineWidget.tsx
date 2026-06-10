@@ -5,7 +5,7 @@ import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
 import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
-import { useDashboard } from '../DashboardContext';
+import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
 import { m, AnimatePresence } from 'motion/react';
 
@@ -35,8 +35,10 @@ export default function ActionDeadlineWidget({
   const [tempSub, setTempSub] = useState('');
 
   let dashboardContext = null;
+  let editingContext = null;
   try {
     dashboardContext = useDashboard();
+    editingContext = useEditing();
   } catch (e) {}
   const user = dashboardContext?.user;
   const canEdit = isCustomizing;
@@ -44,7 +46,7 @@ export default function ActionDeadlineWidget({
   const myUniqueId = `chart-${title}`;
   const isEditing = activeEditingId !== undefined
     ? activeEditingId === myUniqueId
-    : dashboardContext?.activeEditingId === myUniqueId;
+    : editingContext?.activeEditingId === myUniqueId;
 
   const lookupKey = profile ? `${profile}_${title}` : (user?.role ? `${user.role}_${title}` : title);
   const customSub = (config?.statCardExplanations?.[lookupKey] !== undefined && config.statCardExplanations[lookupKey] !== '')
@@ -59,7 +61,7 @@ export default function ActionDeadlineWidget({
     if (setActiveEditingId) {
       setActiveEditingId(myUniqueId);
     } else {
-      dashboardContext?.setActiveEditingId(myUniqueId);
+      editingContext?.setActiveEditingId(myUniqueId);
     }
     setIsHovered(false);
   };
@@ -79,7 +81,7 @@ export default function ActionDeadlineWidget({
       if (setActiveEditingId) {
         setActiveEditingId(null);
       } else {
-        dashboardContext?.setActiveEditingId(null);
+        editingContext?.setActiveEditingId(null);
       }
     } catch (err) {
       toast.error('Erro ao salvar descrição.');
@@ -91,7 +93,7 @@ export default function ActionDeadlineWidget({
     if (setActiveEditingId) {
       setActiveEditingId(null);
     } else {
-      dashboardContext?.setActiveEditingId(null);
+      editingContext?.setActiveEditingId(null);
     }
   };
 
@@ -152,37 +154,39 @@ export default function ActionDeadlineWidget({
         </div>
       ) : (
         <div className="flex items-center gap-3 mb-5 min-w-0">
-          <div 
-            onClick={canEdit ? handleEditClick : undefined}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            className={`relative w-9 h-9 rounded-xl bg-functional-warning flex items-center justify-center flex-shrink-0 text-functional-warning ${
-              canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
-            }`}
-            title=""
-          >
-            <Clock className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
-            <AnimatePresence>
-              {isHovered && customSub && (
-                <m.div
-                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                  transition={{ duration: 0.12, ease: 'easeOut' }}
-                  className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
-                >
-                  {customSub}{canEdit ? " (Clique para editar)" : ""}
-                  {/* Subtle upward pointing arrow */}
-                  <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
-                </m.div>
-              )}
-            </AnimatePresence>
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest whitespace-normal leading-snug" title="">{title}</h3>
-            <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5 whitespace-normal leading-snug" title="">
-              {pending.length} pendência{pending.length !== 1 ? 's' : ''}
-            </p>
+        <div
+          onClick={canEdit ? handleEditClick : undefined}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          className={`relative w-9 h-9 rounded-xl bg-functional-warning flex items-center justify-center flex-shrink-0 text-functional-warning ${
+            canEdit ? 'cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all' : 'cursor-help'
+          }`}
+          tabIndex={0}
+          aria-describedby={isHovered && customSub ? `tooltip-${myUniqueId}` : undefined}
+        >
+          <Clock className="w-5 h-5 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
+          <AnimatePresence>
+            {isHovered && customSub && (
+              <m.div
+                id={`tooltip-${myUniqueId}`}
+                role="tooltip"
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                transition={{ duration: 0.12, ease: 'easeOut' }}
+                className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
+              >
+                {customSub}{canEdit ? " (Clique para editar)" : ""}
+                <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
+              </m.div>
+            )}
+          </AnimatePresence>
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest whitespace-normal leading-snug">{title}</h3>
+          <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mt-0.5 whitespace-normal leading-snug">
+            {pending.length} pendência{pending.length !== 1 ? 's' : ''}
+          </p>
           </div>
         </div>
       )}

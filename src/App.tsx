@@ -4,13 +4,13 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { supabase, mockDb, upsertUserPreferences } from './lib/supabase';
+import { supabase, mockDb, upsertUserPreferences, isMockMode, assertSupabase } from './lib/supabase';
 import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
-import { User, ROLE_LABELS, UserPreferences } from './types';
+import { User, ROLE_LABELS, UserPreferences, UserRole } from './types';
 import { QualityConfigProvider } from './lib/useQualityConfig';
 import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
 
@@ -191,7 +191,6 @@ function AppContent() {
   const isPasswordRecoveryRef = React.useRef(false);
   const isCleaningSessionRef = React.useRef(false);
   const isInviteFlowRef = React.useRef(false);
-  const isMockMode = !supabase;
 
   // --- Session State ---
   const [showIdleWarning, setShowIdleWarning] = useState(false);
@@ -221,7 +220,7 @@ function AppContent() {
                 localStorage.removeItem(LAST_ACTIVITY_KEY);
               } else {
                 mockDb.get('users').then(async ({ data }) => {
-                  const dbUser = data.find((u: any) => u.id === parsed.userId && u.active);
+                  const dbUser = (data || []).find((u: any) => u.id === parsed.userId && u.active);
                   if (dbUser) {
                     const enriched = await enrichUserWithTeamIds(dbUser);
                     setCurrentUser(enriched);
@@ -276,7 +275,8 @@ function AppContent() {
       setLoading(false);
     }
 
-    const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, session) => {
+    const sb = supabase ?? assertSupabase();
+    const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         isPasswordRecoveryRef.current = true;
         setAuthView('change-password');
@@ -343,6 +343,7 @@ function AppContent() {
   // --- Session Resilience & Active Reconnection ---
   useEffect(() => {
     if (isMockMode || !supabase || !currentUser) return;
+    const sb = supabase!; // TypeScript narrowing after guard
 
     let lastFocusCheck = 0;
     let reconnectInterval: ReturnType<typeof setInterval> | null = null;
@@ -353,7 +354,7 @@ function AppContent() {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
         // Usamos um limit(1) em vez de head: true porque head tem comportamentos estranhos no Supabase JS
-        const { error } = await supabase.from('users').select('id').limit(1).abortSignal(controller.signal);
+        const { error } = await sb.from('users').select('id').limit(1).abortSignal(controller.signal);
         clearTimeout(timeout);
         
         if (error && error.message !== 'JWT expired') {
@@ -377,7 +378,7 @@ function AppContent() {
         wasOffline = false;
         setIsReconnecting(false);
         // Tenta renovar sessão após reconexão
-        try { await supabase.auth.refreshSession(); } catch {}
+        try { await sb.auth.refreshSession(); } catch {}
         // Notifica TODOS os componentes para recarregarem
         window.dispatchEvent(new CustomEvent('qualitrack:reconnected'));
         // Para o polling agressivo
@@ -416,10 +417,10 @@ function AppContent() {
     if (document.visibilityState === 'visible' && now - lastFocusCheck > 15000) {
       lastFocusCheck = now;
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await sb.auth.getSession();
         if (session) {
           const timeToExpiry = (session.expires_at || 0) - Math.floor(now / 1000);
-          if (timeToExpiry < 900) await supabase.auth.refreshSession();
+          if (timeToExpiry < 900) await sb.auth.refreshSession();
         }
       } catch {}
     }
@@ -553,12 +554,12 @@ function AppContent() {
       startIdleTimer();
     };
 
-    if (!isMockMode && supabase) {
+    if (!isMockMode) {
       refreshTimerId = setInterval(async () => {
         if (!currentUser) return;
         if (checkAbsoluteTimeout()) return;
         try {
-          await supabase.auth.refreshSession();
+          await supabase!.auth.refreshSession();
         } catch {}
       }, SESSION_REFRESH_MS);
     }
@@ -566,12 +567,12 @@ function AppContent() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && currentUser) {
         if (checkAbsoluteTimeout()) return;
-        if (!isMockMode && supabase) {
-          supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!isMockMode) {
+          supabase!.auth.getSession().then(({ data: { session } }) => {
             if (session) {
               const timeToExpiry = (session.expires_at || 0) - Math.floor(Date.now() / 1000);
               if (timeToExpiry < 900) {
-                supabase.auth.refreshSession().catch(() => {});
+                supabase!.auth.refreshSession().catch(() => {});
               }
             }
           });
@@ -604,11 +605,10 @@ function AppContent() {
         const { data: utData } = await mockDb.get('user_teams');
         const userTeamIds = (utData || []).filter((ut: any) => ut.user_id === dbUser.id).map((ut: any) => ut.team_id);
         return { ...dbUser, team_ids: userTeamIds.length > 0 ? userTeamIds : (dbUser.team_ids || []) };
-      } else if (supabase) {
-        const { data: utData } = await supabase.from('user_teams').select('team_id').eq('user_id', dbUser.id);
-        const userTeamIds = (utData || []).map((ut: any) => ut.team_id);
-        return { ...dbUser, team_ids: userTeamIds.length > 0 ? userTeamIds : (dbUser.team_ids || []) };
       }
+      const { data: utData } = await supabase!.from('user_teams').select('team_id').eq('user_id', dbUser.id);
+      const userTeamIds = (utData || []).map((ut: any) => ut.team_id);
+      return { ...dbUser, team_ids: userTeamIds.length > 0 ? userTeamIds : (dbUser.team_ids || []) };
     } catch {}
     return dbUser;
   };
@@ -623,8 +623,8 @@ function AppContent() {
         const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
         resolvedTheme = myPref?.preferences?.theme === 'dark' ? 'dark' : 'light';
         resolvedSidebarColor = myPref?.preferences?.sidebar_color || '';
-      } else if (supabase) {
-        const { data: prefData } = await supabase
+      } else {
+        const { data: prefData } = await supabase!
           .from('user_preferences')
           .select('preferences')
           .eq('user_id', user.id)
@@ -644,7 +644,7 @@ function AppContent() {
 
       if (isMockMode) {
         const { data } = await mockDb.get('users');
-        const dbUser = data.find((u: any) => u.email === user.email && u.active);
+        const dbUser = (data || []).find((u: any) => u.email === user.email && u.active);
         if (dbUser) {
           const enriched = await enrichUserWithTeamIds(dbUser);
           setUserData(enriched);
@@ -663,8 +663,8 @@ function AppContent() {
           }));
           localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
         }
-      } else if (supabase) {
-        const { data, error } = await supabase.from('users').select('*').eq('email', user.email).single();
+      } else {
+        const { data, error } = await supabase!.from('users').select('*').eq('email', user.email).single();
         if (data && data.active) {
           const enriched = await enrichUserWithTeamIds(data);
           setUserData(enriched);
@@ -679,7 +679,7 @@ function AppContent() {
           localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
         } else if (error && error.code === 'PGRST116') {
           setAppReady(false);
-          await supabase.auth.signOut();
+          await supabase!.auth.signOut();
           setAuthView('login');
         } else if (error) {
           console.error('[App] Erro crítico em handleUserSession:', error);
@@ -704,7 +704,7 @@ function AppContent() {
       const emailLower = credentials.email.toLowerCase();
       if (isMockMode) {
         const { data: users } = await mockDb.get('users');
-        const user = users.find((u: any) => 
+        const user = (users || []).find((u: any) => 
           u.email.toLowerCase() === emailLower && 
           u.password === credentials.password
         );
@@ -779,8 +779,8 @@ function AppContent() {
     setTheme('system');
     applyThemeToDOM(resolveSystemTheme());
     lastDbThemeRef.current = null;
-    if (!isMockMode && supabase) {
-      supabase.auth.signOut().catch(console.error);
+    if (!isMockMode) {
+      supabase!.auth.signOut().catch(console.error);
     }
     if (!options?.silent) {
       toast.success(options?.message || 'Você saiu do sistema com sucesso.');
@@ -849,7 +849,7 @@ function AppContent() {
         toast.success('Solicitação simulada enviada!');
         setAuthView('pending');
       } else {
-        const { error } = await supabase.from('access_requests').insert([
+        const { error } = await supabase!.from('access_requests').insert([
           { name: requestData.name, email: requestData.email.toLowerCase(), status: 'pending' }
         ]);
         if (error) throw error;
@@ -1504,7 +1504,7 @@ function MainApp({
         >
               <p className="text-xs font-bold leading-tight truncate">{userData?.name}</p>
               <p className={`text-[10px] font-medium ${sidebarContrastSubtle} uppercase tracking-wider mt-0.5 leading-tight truncate`}>
-                {userData ? ROLE_LABELS[userData.role] : ''}
+                {userData ? ROLE_LABELS[userData.role as UserRole] : ''}
               </p>
             </button>
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { useDashboard } from '../DashboardContext';
+import { useDashboard, usePresence } from '../DashboardContext';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import RankingWidget from '../widgets/RankingWidget';
@@ -232,21 +232,23 @@ export default function SupportManagerDashboard({
     users: [],
     teams: [],
     forms: [],
-    onlineUsers: [],
     dissatisfactionFields: [],
     globalAvg: 0
   };
 
+  let onlineUsers: any[] = [];
   try {
     const context = useDashboard();
     if (context) {
       dashboardData = context;
     }
+    const presence = usePresence();
+    onlineUsers = presence.onlineUsers;
   } catch (e) {
     // safe fallback
   }
 
-  const { user, monitorias, users, teams, forms, onlineUsers, dissatisfactionFields, globalAvg } = dashboardData;
+  const { user, monitorias, users, teams, forms, dissatisfactionFields, globalAvg } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
 
   // Scoped Team IDs

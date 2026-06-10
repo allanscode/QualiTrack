@@ -345,8 +345,8 @@ export default function DissatisfactionFieldsManagement() {
                 <div className="flex flex-col gap-1">
                   <label className="uppercase text-[10px] font-medium text-slate-400 dark:text-slate-500 tracking-wide mb-1.5 ml-0.5 block">Tipo / Onde Exibir</label>
                   <CustomSelect 
-                    value={editingField.type}
-                    onChange={val => setEditingField({ ...editingField, type: val as any })}
+                    value={editingField.type || 'cliente'}
+                    onChange={val => setEditingField({ ...editingField, type: val as 'cliente' | 'qualidade' })}
                     options={[
                       { value: 'cliente', label: 'Visão do Cliente' },
                       { value: 'qualidade', label: 'Visão do Monitor' }

@@ -82,7 +82,14 @@ DROP POLICY IF EXISTS "user_preferences_self" ON public.user_preferences;
 -- users
 CREATE POLICY "users_select" ON public.users
   FOR SELECT TO authenticated
-  USING (true);
+  USING (
+    id = (SELECT auth.uid())
+    OR EXISTS (
+      SELECT 1 FROM public.users
+      WHERE users.id = (SELECT auth.uid())
+        AND users.role IN ('admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte')
+    )
+  );
 
 CREATE POLICY "users_admin_write" ON public.users
   FOR ALL TO authenticated

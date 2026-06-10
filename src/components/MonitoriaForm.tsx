@@ -21,7 +21,7 @@ import {
   History,
   Target
 } from 'lucide-react';
-import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'motion/react';
+import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { calculateQualityScore } from '../utils/qualityMath';
 import { toast } from 'sonner';
 import { addBusinessHours } from '../lib/businessHours';
@@ -301,8 +301,7 @@ export default function MonitoriaForm({
   };
 
   return (
-    <LazyMotion features={domAnimation}>
-      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 overflow-y-auto">
         <m.div 
           initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 10 }} 
           animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }} 
@@ -695,11 +694,11 @@ export default function MonitoriaForm({
                 </div>
               ))}
 
-              {selectedForm.critical_errors?.length > 0 && (
+              {selectedForm.critical_errors && selectedForm.critical_errors.length > 0 && (
                 <div className="pt-10 border-t border-error/10">
                   <h3 className="text-sm font-black text-error flex items-center gap-1.5 mb-4 uppercase tracking-wider"><AlertOctagon className="w-4 h-4" /> Itens Fatais (Erros Críticos)</h3>
                   <div className="grid grid-cols-1 gap-3">
-                    {selectedForm.critical_errors.map(ce => (
+                    {(selectedForm.critical_errors || []).map(ce => (
                       <div key={ce.id} className="space-y-2">
                         <label className={`flex items-center gap-2.5 p-2.5 rounded-lg border transition-all cursor-pointer ${criticalErrors[ce.id] ? 'bg-error/5 border-error' : 'bg-surface-card border-surface-border hover:border-error/30'}`}>
                           <input type="checkbox" checked={!!criticalErrors[ce.id]} onChange={e => !isViewOnly && setCriticalErrors({...criticalErrors, [ce.id]: e.target.checked})} disabled={isViewOnly} className="w-4.5 h-4.5 rounded text-error focus:ring-error" />
@@ -851,6 +850,5 @@ export default function MonitoriaForm({
         </div>
       </m.div>
     </div>
-    </LazyMotion>
   );
 }

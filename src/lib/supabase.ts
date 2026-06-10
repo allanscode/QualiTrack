@@ -36,7 +36,7 @@ export const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey &
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
-        flowType: 'implicit',
+        flowType: 'pkce',
         storage: typeof window !== 'undefined' ? window.localStorage : undefined,
         lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => await fn(),
       },
@@ -48,6 +48,15 @@ export const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey &
       }
     })
   : null;
+
+// Helper to assert supabase is not null (use only after checking isMockMode)
+export function assertSupabase(): SupabaseClient {
+  if (!supabase) throw new Error('Supabase client not initialized. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+  return supabase;
+}
+
+// Type guard for mock mode
+export const isMockMode = !supabase;
 
 const DB_PREFIX = 'qualitrack_mock_';
 
