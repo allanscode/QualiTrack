@@ -24,11 +24,13 @@ Testar após cada alteração para evitar quebra.
 - **Teste**: Query Supabase com user comum deve retornar apenas seu próprio registro
 
 #### P0.2 [x] Implementar CSP e Headers de Segurança
-- **Arquivo**: `index.html`
+- **Arquivo**: `index.html` + `vite.config.ts`
 - **Problema**: Ausência de CSP, X-Frame-Options, X-Content-Type-Options, HSTS
-- **Critério de Aceite**: Headers presentes, dark mode script inline com nonce/hash
+- **Critério de Aceite**: Headers presentes, dark mode script inline com hash SHA-256
 - **Status**: ✅ Done
-- **Teste**: Verificar headers no DevTools > Network
+- **Teste**: Verificar headers no DevTools > Network; CSP válido no build
+- **Commit**: 493ec0d
+- **Data**: 2026-06-10
 
 #### P0.3 [ ] Habilitar `strict: true` no TypeScript
 - **Arquivo**: `tsconfig.json` + `src/**/*.ts` + `src/**/*.tsx`
