@@ -32,12 +32,14 @@ Testar após cada alteração para evitar quebra.
 - **Commit**: 493ec0d
 - **Data**: 2026-06-10
 
-#### P0.3 [ ] Habilitar `strict: true` no TypeScript
+#### P0.3 [x] Habilitar `strict: true` no TypeScript
 - **Arquivo**: `tsconfig.json` + `src/**/*.ts` + `src/**/*.tsx`
 - **Problema**: `strict: false`, `any` em estados críticos
 - **Critério de Aceite**: `tsc --noEmit` passa sem erros, `any` removido de auth/session
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
 - **Teste**: `npm run lint` (ou `npx tsc --noEmit`) passando
+- **Commit**: 902ccb9
+- **Data**: 2026-06-10
 
 #### P0.4 [ ] Refatorar Componentes Monolíticos (Parte 1: App.tsx)
 - **Arquivo**: `src/App.tsx`
