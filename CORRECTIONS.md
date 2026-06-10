@@ -43,10 +43,17 @@ Testar após cada alteração para evitar quebra.
 
 #### P0.4 [ ] Refatorar Componentes Monolíticos (Parte 1: App.tsx)
 - **Arquivo**: `src/App.tsx`
-- **Problema**: 1.100+ linhas, múltiplas responsabilidades
+- **Problema**: 1.859+ linhas, múltiplas responsabilidades
 - **Critério de Aceite**: Extrair: ThemeProvider, AuthProvider, SessionManager, IdleTimeoutManager
-- **Status**: ⬜ Pending
+- **Status**: 🔄 Em progresso
 - **Teste**: App renderiza, login/logout e idle timeout funcionam
+
+##### P0.4.1 [x] Extrair ThemeProvider
+- **Arquivo**: `src/providers/ThemeProvider.tsx` (novo)
+- **Status**: ✅ Done
+- **Commit**: 6d9d819
+- **Data**: 2026-06-10
+- **Teste**: `npm run lint` + `npm run build` passando
 
 #### P0.5 [ ] Refatorar MonitoriaList.tsx
 - **Arquivo**: `src/components/MonitoriaList.tsx`
