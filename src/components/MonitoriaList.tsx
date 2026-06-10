@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, User, Team, EvaluationForm, MonitoriaHistoryEntry } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
-import { useTheme } from '../App';
+import { useTheme } from '../providers/ThemeProvider';
 import { resolveContestationResult } from '../lib/contestation';
 import { getStatusConfig } from '../lib/statusHelper';
 import { 

@@ -13,21 +13,7 @@ import { Toaster, toast } from 'sonner';
 import { User, ROLE_LABELS, UserPreferences, UserRole } from './types';
 import { QualityConfigProvider } from './lib/useQualityConfig';
 import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
-
-// --- Theme Context ---
-type Theme = 'light' | 'dark' | 'system';
-interface ThemeContextType {
-  theme: Theme;
-  setTheme: React.Dispatch<React.SetStateAction<Theme>>;
-  resolvedTheme: 'light' | 'dark';
-}
-const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
-export const useTheme = () => {
-  const context = React.useContext(ThemeContext);
-  if (!context) throw new Error('useTheme must be used within a ThemeProvider');
-  return context;
-};
-// --- Fim do Theme Context ---
+import { ThemeProvider, useTheme, resolveSystemTheme, applyThemeToDOM, type Theme } from './providers/ThemeProvider';
 
 // --- Sidebar Contrast Utility ---
 const isDarkColor = (hex: string, resolvedTheme: 'light' | 'dark') => {
@@ -56,59 +42,6 @@ const SESSION_REFRESH_MS = 50 * 60 * 1000;
 const MOCK_SESSION_KEY = 'qualitrack_session';
 const LAST_ACTIVITY_KEY = 'qualitrack_last_activity';
 
-// Componente do Provedor de Tema
-const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('qualitrack_theme');
-    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
-    return 'system';
-  });
-
-  const resolvedTheme = React.useMemo(() => {
-    if (theme === 'system') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    return theme;
-  }, [theme]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (resolvedTheme === 'dark') {
-      root.classList.add('dark');
-      root.style.colorScheme = 'dark';
-    } else {
-      root.classList.remove('dark');
-      root.style.colorScheme = 'light';
-    }
-  }, [resolvedTheme]);
-
-  // Listener para mudança de tema do OS
-  useEffect(() => {
-    if (theme !== 'system') return;
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const listener = () => {
-      // Força um re-render para que `resolvedTheme` seja recalculado
-      setTheme('system');
-    };
-    mediaQuery.addEventListener('change', listener);
-    return () => mediaQuery.removeEventListener('change', listener);
-  }, [theme]);
-
-  // Salva no localStorage
-  useEffect(() => {
-    // Salva apenas o valor resolvido quando logado, para consistência com o script do index.html
-    // A persistência no banco é tratada separadamente no MainApp
-    if (localStorage.getItem('qualitrack_session') || localStorage.getItem('sb-amyfyngzkqqzixmreeih-auth-token')) {
-       localStorage.setItem('qualitrack_theme', resolvedTheme);
-    }
-  }, [resolvedTheme]);
-
-
-  const value = { theme, setTheme, resolvedTheme };
-
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-};
-
 const lastDbThemeRef = { current: null as ('light' | 'dark' | null) };
 
 export default function App() {
@@ -117,21 +50,6 @@ export default function App() {
       <AppContent />
     </ThemeProvider>
   );
-}
-
-function resolveSystemTheme(): 'light' | 'dark' {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-function applyThemeToDOM(resolved: 'light' | 'dark') {
-  const root = document.documentElement;
-  if (resolved === 'dark') {
-    root.classList.add('dark');
-    root.style.colorScheme = 'dark';
-  } else {
-    root.classList.remove('dark');
-    root.style.colorScheme = 'light';
-  }
 }
 
 function AppContent() {

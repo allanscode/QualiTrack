@@ -3,7 +3,7 @@ import { Calendar, X, RefreshCw } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
 import CustomSelect from '../ui/CustomSelect';
 import CustomDatepicker from '../ui/CustomDatepicker';
-import { useTheme } from '../../App';
+import { useTheme } from '../../providers/ThemeProvider';
 import { m, AnimatePresence } from 'motion/react';
 
 export default function FilterBar() {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useTransition } from 'reac
 import { supabase, mockDb } from '../lib/supabase';
 import { EvaluationForm, User, Team, MonitoriaHistoryEntry, Monitoria, MonitoriaStatus, DissatisfactionField, UserTeam } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
-import { useTheme } from '../App';
+import { useTheme } from '../providers/ThemeProvider';
 import {  
   ChevronRight, 
   ChevronLeft, 
