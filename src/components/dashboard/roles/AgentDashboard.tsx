@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useDashboard } from '../DashboardContext';
+import { Monitoria } from '../../../types';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import DistributionChart from '../widgets/DistributionChart';
@@ -382,7 +383,7 @@ export default function AgentDashboard({
       else if (l.color.includes('ruim') || l.color.includes('red') || l.color.includes('error')) color = colors.ruim;
       return {
         name: `${l.label} (${l.minScore}-${l.maxScore}%)`,
-        value: myMonitorias.filter(m => (m.score || 0) >= l.minScore && (m.score || 0) <= l.maxScore).length,
+        value: myMonitorias.filter((m: Monitoria) => (m.score || 0) >= l.minScore && (m.score || 0) <= l.maxScore).length,
         color
       };
     }).filter(d => d.value > 0);

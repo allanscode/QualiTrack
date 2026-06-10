@@ -1,6 +1,6 @@
 // QualiTrack UI Refinement Session - 2026-05-13
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { supabase, mockDb } from '../lib/supabase';
+import { supabase, mockDb, isMockMode } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, User, Team, EvaluationForm, MonitoriaHistoryEntry } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../App';
@@ -82,7 +82,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
     try {
       let fetchedMonitorias: any[] = [];
 
-      if (!supabase) {
+      if (isMockMode) {
         const { data: d } = await mockDb.get('monitorias');
         fetchedMonitorias = d || [];
       } else {
@@ -91,7 +91,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
             console.log(`[Monitorias] Buscando monitorias (Tentativa ${retryCount + 1})...`);
             const controller = new AbortController();
 
-            let monitoriasQuery = supabase.from('monitorias').select('*').order('created_at', { ascending: false });
+            let monitoriasQuery = supabase!.from('monitorias').select('*').order('created_at', { ascending: false });
 
             const myTeamIds = currentUser.team_ids || [];
 
@@ -122,12 +122,12 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
             if (errorRes) throw errorRes.error;
 
             return results;
-          } catch (err: any) {
+            } catch (err: any) {
             console.error(`[Monitorias] Erro na tentativa ${retryCount + 1}:`, err);
             if (retryCount < 4) {
               const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
               toast.loading(`Recuperando monitorias... (${retryCount + 1}/5)`, { id: 'mon-retry' });
-              await supabase.auth.getSession();
+              await supabase!.auth.getSession();
               await new Promise(res => setTimeout(res, waitTime));
               return executeWithRetry(retryCount + 1);
             }
@@ -175,10 +175,10 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
             history: [...(m.history || []), historyEntry]
           };
 
-          if (!supabase) {
+          if (isMockMode) {
             await mockDb.update('monitorias', m.id, update);
           } else {
-            await supabase.from('monitorias').update(update).eq('id', m.id);
+            await supabase!.from('monitorias').update(update).eq('id', m.id);
           }
         }
 
@@ -250,13 +250,14 @@ finally {
 
   // Realtime Supabase updates — canal conecta 1x por user, callback via ref
   useEffect(() => {
-    if (!supabase || !user) return;
+    if (isMockMode || !user) return;
+    const sb = supabase!;
 
     let mounted = true;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const channelName = `monitorias-realtime-list-${Math.random().toString(36).substring(2, 11)}`;
-    const channel = supabase
+    const channel = sb
       .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, () => {
         if (!mounted) return;
@@ -270,7 +271,7 @@ finally {
     return () => {
       mounted = false;
       if (debounceTimer) clearTimeout(debounceTimer);
-      supabase.removeChannel(channel);
+      sb.removeChannel(channel);
     };
   }, [user]);
 

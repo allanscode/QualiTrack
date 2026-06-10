@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode, useMemo } from 'react';
 import { User, Team, EvaluationForm, DissatisfactionField, UserTeam, UserPreferences } from '../types';
-import { supabase, mockDb } from './supabase';
+import { supabase, mockDb, isMockMode } from './supabase';
 import { toast } from 'sonner';
 
 interface StaticDataContextType {
@@ -50,7 +50,7 @@ export function StaticDataProvider({ children }: { children: ReactNode }) {
     fetchedRef.current = false;
     setLoading(true);
     try {
-      if (!supabase) {
+      if (isMockMode) {
         const [uRes, tRes, fRes, dfRes, utRes, upRes] = await Promise.all([
           mockDb.get('users'),
           mockDb.get('teams'),
@@ -83,12 +83,12 @@ export function StaticDataProvider({ children }: { children: ReactNode }) {
             const controller = new AbortController();
 
           const fetchPromise = Promise.all([
-            supabase.from('users').select('*').abortSignal(controller.signal),
-            supabase.from('teams').select('*').abortSignal(controller.signal),
-            supabase.from('forms').select('*').abortSignal(controller.signal),
-            supabase.from('dissatisfaction_fields').select('*').abortSignal(controller.signal),
-            supabase.from('user_teams').select('*').abortSignal(controller.signal),
-            supabase.from('user_preferences').select('*').abortSignal(controller.signal)
+            supabase!.from('users').select('*').abortSignal(controller.signal),
+            supabase!.from('teams').select('*').abortSignal(controller.signal),
+            supabase!.from('forms').select('*').abortSignal(controller.signal),
+            supabase!.from('dissatisfaction_fields').select('*').abortSignal(controller.signal),
+            supabase!.from('user_teams').select('*').abortSignal(controller.signal),
+            supabase!.from('user_preferences').select('*').abortSignal(controller.signal)
           ]);
 
           const timeoutPromise = new Promise((_, reject) => {

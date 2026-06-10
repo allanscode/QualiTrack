@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import { Monitoria, User, Team, EvaluationForm, DissatisfactionField } from '../../types';
-import { supabase, mockDb } from '../../lib/supabase';
+import { supabase, mockDb, isMockMode } from '../../lib/supabase';
 import { useStaticData } from '../../lib/StaticDataContext';
 import { toast } from 'sonner';
 import { useQualityConfig } from '../../lib/useQualityConfig';
@@ -317,13 +317,14 @@ export function DashboardProvider({
         docs = data || [];
         scoreDocs = docs;
       } else {
+        const sb = supabase!; // TypeScript narrowing after guard
         const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
           try {
             console.log(`[Dashboard] Carregando monitorias (Tentativa ${retryCount + 1})...`);
             const controller = new AbortController();
 
-        let monitoriasQuery = supabase.from('monitorias').select('*').order('created_at', { ascending: false });
-        let scoresQuery = supabase.from('monitorias').select('score, created_at, status, channel, form_id, active, evaluated_id, evaluator_id, team_id');
+        let monitoriasQuery = sb.from('monitorias').select('*').order('created_at', { ascending: false });
+        let scoresQuery = sb.from('monitorias').select('score, created_at, status, channel, form_id, active, evaluated_id, evaluator_id, team_id');
 
         const myTeamIds = currentUser.team_ids || [];
 
@@ -362,12 +363,12 @@ export function DashboardProvider({
             if (errorRes) throw errorRes.error;
 
             return results;
-          } catch (err: any) {
+            } catch (err: any) {
             console.error(`[Dashboard] Erro na tentativa ${retryCount + 1}:`, err);
             if (retryCount < 4) {
               const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
               toast.loading(`Recuperando dashboard... (${retryCount + 1}/5)`, { id: 'dash-retry' });
-              await supabase.auth.getSession();
+              await sb.auth.getSession();
               await new Promise(res => setTimeout(res, waitTime));
               return executeWithRetry(retryCount + 1);
             }
@@ -422,7 +423,7 @@ export function DashboardProvider({
         docs = docs.filter(m => m.evaluator_id === currentUser.id);
       } else if (currentUser.role === 'gestor_suporte') {
         const myTeamIds = currentUser.team_ids || [];
-        docs = docs.filter(m => myTeamIds.includes(m.team_id));
+        docs = docs.filter(m => m.team_id && myTeamIds.includes(m.team_id));
       } else if (currentUser.role === 'gestor_qualidade') {
       }
 
@@ -493,13 +494,14 @@ export function DashboardProvider({
 
   useEffect(() => {
     if (!supabase) return;
+    const sb = supabase!;
     if (!user) return;
 
     let mounted = true;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const channelName = `monitorias-realtime-dash-${Math.random().toString(36).substring(2, 11)}`;
-    const channel = supabase
+    const channel = sb
       .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, () => {
         if (!mounted) return;
@@ -513,7 +515,7 @@ export function DashboardProvider({
     return () => {
       mounted = false;
       if (debounceTimer) clearTimeout(debounceTimer);
-      supabase.removeChannel(channel);
+      sb.removeChannel(channel);
     };
   }, [user]);
 
