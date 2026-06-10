@@ -16,11 +16,11 @@ Testar após cada alteração para evitar quebra.
 
 ### **FASE P0 — BLOQUEANTES (Não entra em produção sem isso)**
 
-#### P0.1 [ ] Corrigir RLS `users_select`
+#### P0.1 [x] Corrigir RLS `users_select`
 - **Arquivo**: `supabase/migrations/20260609000001_security_audit_rls.sql`
 - **Problema**: `FOR SELECT TO authenticated USING (true)` permite ler TODOS usuários
 - **Critério de Aceite**: Users só veem próprios dados ou admin/auditor role
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
 - **Teste**: Query Supabase com user comum deve retornar apenas seu próprio registro
 
 #### P0.2 [ ] Implementar CSP e Headers de Segurança

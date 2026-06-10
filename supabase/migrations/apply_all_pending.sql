@@ -243,7 +243,14 @@ CREATE POLICY "monitorias_delete_policy" ON public.monitorias FOR DELETE TO auth
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "users_select" ON public.users;
 DROP POLICY IF EXISTS "users_admin_write" ON public.users;
-CREATE POLICY "users_select" ON public.users FOR SELECT TO authenticated USING (true);
+CREATE POLICY "users_select" ON public.users FOR SELECT TO authenticated USING (
+  id = (SELECT auth.uid())
+  OR EXISTS (
+    SELECT 1 FROM public.users
+    WHERE users.id = (SELECT auth.uid())
+      AND users.role IN ('admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte')
+  )
+);
 CREATE POLICY "users_admin_write" ON public.users FOR ALL TO authenticated USING (
   EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('admin','gestor_qualidade','gestor_suporte'))
 );
