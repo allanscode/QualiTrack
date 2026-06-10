@@ -3,14 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-hbRGy/BJ5hOC+PEoxMZqDBJ/6o3pVdZo7RmgiIK7HSA='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co ws://localhost:* ws://192.168.10.38:* http://localhost:* http://192.168.10.38:*;" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="Strict-Transport-Security" content="max-age=31536000; includeSubDomains; preload" />
     <title>QualiTrack</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <script>
-      (function(){var t=localStorage.getItem('qualitrack_theme');var d=false;
-      if(t==='dark'){d=true}else if(t==='system'||!t){d=window.matchMedia('(prefers-color-scheme:dark)').matches}
-      if(d){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}
-      else{document.documentElement.classList.remove('dark');document.documentElement.style.colorScheme='light'}})();
-    </script>
+    <script>(function(){var t=localStorage.getItem('qualitrack_theme');var d=false;if(t==='dark'){d=true}else if(t==='system'||!t){d=window.matchMedia('(prefers-color-scheme:dark)').matches}if(d){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}else{document.documentElement.classList.remove('dark');document.documentElement.style.colorScheme='light'}})();</script>
   </head>
   <body>
     <div id="root"></div>

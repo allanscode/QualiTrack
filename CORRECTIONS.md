@@ -23,11 +23,11 @@ Testar após cada alteração para evitar quebra.
 - **Status**: ✅ Done
 - **Teste**: Query Supabase com user comum deve retornar apenas seu próprio registro
 
-#### P0.2 [ ] Implementar CSP e Headers de Segurança
+#### P0.2 [x] Implementar CSP e Headers de Segurança
 - **Arquivo**: `index.html`
 - **Problema**: Ausência de CSP, X-Frame-Options, X-Content-Type-Options, HSTS
 - **Critério de Aceite**: Headers presentes, dark mode script inline com nonce/hash
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
 - **Teste**: Verificar headers no DevTools > Network
 
 #### P0.3 [ ] Habilitar `strict: true` no TypeScript
