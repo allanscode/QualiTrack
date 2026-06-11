@@ -63,6 +63,30 @@ Testar após cada alteração para evitar quebra.
 - **Migrado**: Auth lifecycle useEffect, session resilience, idle timeout + warning, proactive refresh, handleLogin, handleLogout, handleForgotPassword, handleUpdatePassword, handleRequestAccess, handleUserSession, enrichUserWithTeamIds, ref-bridge pattern, activeTab/hash sync, sidebar contrast derived values
 - **Teste**: `npm run lint` + `npm run build` passando (0 erros)
 
+##### P0.4.3 [x] Extrair useSessionManager hook
+- **Arquivo**: `src/hooks/useSessionManager.ts` (novo, ~297 linhas)
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: AuthProvider.tsx: 873→629 linhas (-28%). Lógica de sessão extraída
+- **Migrado**: Session resilience/reconnection useEffect, idle timeout + warning + absolute timeout useEffect, extendSession ref-bridge pattern, `lastDbThemeRef`, all timeout constants (`IDLE_TIMEOUT_MS`, `IDLE_WARNING_MS`, `ABSOLUTE_TIMEOUT_MS`, `SESSION_REFRESH_MS`, `MOCK_SESSION_KEY`, `LAST_ACTIVITY_KEY`)
+- **Deduplicado**: Constantes agora só em useSessionManager.ts; `lastDbThemeRef` exportado e importado por AuthProvider e App.tsx
+- **Teste**: `npm run lint` + `npm run build` passando (0 erros)
+
+##### P0.4.4 [x] Extrair useSidebarManager hook
+- **Arquivo**: `src/hooks/useSidebarManager.ts` (novo, ~264 linhas)
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: App.tsx: 1061→840 linhas (-21%). Lógica de sidebar/theme extraída
+- **Migrado**: sidebarColor state, theme sync effects (prevThemeUserIdRef, prevThemeForDbRef), sidebar color sync effect, handleSidebarColorChange, handleThemeChange, sidebarColors presets (light/dark), contrast derivation (sidebarIsDark, sidebarContrastClass, sidebarContrastSubtle, sidebarBorderClass), sidebarStyle, color mirroring maps (lightToDarkColorMap, darkToLightColorMap), `isDarkColor` utility
+- **Deduplicado**: `isDarkColor` removido de App.tsx e AuthProvider.tsx — agora única fonte em useSidebarManager.ts. Color maps removidos de App.tsx. Fixed duplicate keys em darkToLightColorMap (`#7A431D`, `#3C4E2D`)
+- **Teste**: `npm run lint` + `npm run build` passando (0 erros)
+
+#### P0.4 [x] Refatorar Componentes Monolíticos (Parte 1: App.tsx) — COMPLETO
+- **Status**: ✅ Done
+- **Resultado final**: App.tsx: 1.780→840 linhas (-53%). 4 novos arquivos criados
+- **Arquivos criados**: `ThemeProvider.tsx` (87), `AuthProvider.tsx` (629), `useSessionManager.ts` (297), `useSidebarManager.ts` (264)
+- **Teste**: `npm run lint` + `npm run build` passando
+
 #### P0.5 [ ] Refatorar MonitoriaList.tsx
 - **Arquivo**: `src/components/MonitoriaList.tsx`
 - **Problema**: 1.002 linhas, estado extenso misturado com UI

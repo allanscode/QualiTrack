@@ -3,28 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { upsertUserPreferences } from './lib/supabase';
+import React, { useEffect, useState } from 'react';
 import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
-import { User, ROLE_LABELS, UserPreferences, UserRole } from './types';
+import { User, ROLE_LABELS, UserRole } from './types';
 import { QualityConfigProvider } from './lib/useQualityConfig';
 import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
 import { ThemeProvider, useTheme, resolveSystemTheme, applyThemeToDOM, type Theme } from './providers/ThemeProvider';
 import { AuthProvider, useAuth } from './providers/AuthProvider';
-
-// --- Sidebar Contrast Utility ---
-const isDarkColor = (hex: string, resolvedTheme: 'light' | 'dark') => {
-  if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return resolvedTheme === 'dark';
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-  return yiq < 128;
-};
+import { useSidebarManager } from './hooks/useSidebarManager';
 
 // Components
 const DashboardMain = React.lazy(() => import('./components/dashboard/DashboardMain'));
@@ -32,8 +22,6 @@ const MonitoriaList = React.lazy(() => import('./components/MonitoriaList'));
 const MonitoriaForm = React.lazy(() => import('./components/MonitoriaForm'));
 const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
 const CustomDashboardManagement = React.lazy(() => import('./components/CustomDashboardManagement'));
-
-const lastDbThemeRef = { current: null as ('light' | 'dark' | null) };
 
 export default function App() {
   return (
@@ -300,53 +288,6 @@ function AppContent() {
   );
 }
 
-// --- Sidebar Color Mirroring Maps ---
-const darkToLightColorMap: Record<string, string> = {
-  '': '',
-  '#12130F': '#475569',
-  '#2F3129': '#64748B',
-  '#1E293B': '#3B82F6',
-  '#1B2A4A': '#60A5FA',
-  '#253366': '#3B82F6',
-  '#0F4C81': '#3B82F6',
-  '#0F5132': '#10B981',
-  '#1A3A2A': '#7D9B82',
-  '#3C4E2D': '#84CC16',
-  '#0F6B5C': '#0D9488',
-  '#7A431D': '#B45309',
-  '#422006': '#854D0E',
-  '#8A331E': '#C2410C',
-  '#5C0624': '#DC2626',
-  '#801438': '#F43F5E',
-  '#522258': '#A78BFA',
-  '#3B0764': '#7C3AED',
-  '#4C1D95': '#8B5CF6',
-  '#475569': '#64748B'
-};
-
-const lightToDarkColorMap: Record<string, string> = {
-  '': '',
-  '#475569': '#12130F',
-  '#3B82F6': '#1E293B',
-  '#60A5FA': '#1B2A4A',
-  '#34D399': '#0F6B5C',
-  '#10B981': '#0F5132',
-  '#7D9B82': '#1A3A2A',
-  '#D97706': '#7A431D',
-  '#EA580C': '#8A331E',
-  '#C2410C': '#8A331E',
-  '#DC2626': '#5C0624',
-  '#F43F5E': '#801438',
-  '#A78BFA': '#522258',
-  '#7C3AED': '#3B0764',
-  '#8B5CF6': '#4C1D95',
-  '#0D9488': '#0F6B5C',
-  '#B45309': '#7A431D',
-  '#854D0E': '#422006',
-  '#64748B': '#475569',
-  '#84CC16': '#3C4E2D'
-};
-
 function MainApp({
   isSidebarOpen,
   setIsSidebarOpen,
@@ -362,57 +303,21 @@ function MainApp({
   prefetchedSidebarColor
 }: any) {
   const { resolvedTheme } = useTheme();
-  const { theme, setTheme } = useAuth();
-  const { teams, userPreferences, loading: staticDataLoading } = useStaticData();
-  const sidebarColors = React.useMemo(() => {
-    if (resolvedTheme === 'dark') {
-      return [
-        { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
-        { value: '#12130F', label: 'Obsidiana', hex: 'bg-[#12130F]' },
-        { value: '#2F3129', label: 'Grafite Escuro', hex: 'bg-[#2F3129]' },
-        { value: '#1E293B', label: 'Slate Azulado', hex: 'bg-[#1E293B]' },
-        { value: '#1B2A4A', label: 'Azul Marinho', hex: 'bg-[#1B2A4A]' },
-        { value: '#253366', label: 'Azul Indigo', hex: 'bg-[#253366]' },
-        { value: '#0F4C81', label: 'Azul Oceano', hex: 'bg-[#0F4C81]' },
-        { value: '#0F5132', label: 'Esmeralda Escuro', hex: 'bg-[#0F5132]' },
-        { value: '#1A3A2A', label: 'Verde Floresta', hex: 'bg-[#1A3A2A]' },
-        { value: '#3C4E2D', label: 'Verde Oliva', hex: 'bg-[#3C4E2D]' },
-        { value: '#0F6B5C', label: 'Menta Escuro', hex: 'bg-[#0F6B5C]' },
-        { value: '#7A431D', label: 'Bronze / Cobre', hex: 'bg-[#7A431D]' },
-        { value: '#422006', label: 'Café Profundo', hex: 'bg-[#422006]' },
-        { value: '#8A331E', label: 'Terracota Escuro', hex: 'bg-[#8A331E]' },
-        { value: '#5C0624', label: 'Vinho', hex: 'bg-[#5C0624]' },
-        { value: '#801438', label: 'Cereja Negra', hex: 'bg-[#801438]' },
-        { value: '#522258', label: 'Ametista', hex: 'bg-[#522258]' },
-        { value: '#3B0764', label: 'Roxo Meia-Noite', hex: 'bg-[#3B0764]' },
-        { value: '#4C1D95', label: 'Lavanda Escuro', hex: 'bg-[#4C1D95]' },
-        { value: '#475569', label: 'Aço Escuro', hex: 'bg-[#475569]' }
-      ];
-    } else {
-      return [
-        { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
-        { value: '#475569', label: 'Slate Clássico', hex: 'bg-[#475569]' },
-        { value: '#3B82F6', label: 'Azul Denim', hex: 'bg-[#3B82F6]' },
-        { value: '#60A5FA', label: 'Azul Celeste', hex: 'bg-[#60A5FA]' },
-        { value: '#34D399', label: 'Verde Hortelã', hex: 'bg-[#34D399]' },
-        { value: '#10B981', label: 'Esmeralda Suave', hex: 'bg-[#10B981]' },
-        { value: '#7D9B82', label: 'Verde Sálvia', hex: 'bg-[#7D9B82]' },
-        { value: '#D97706', label: 'Amarelo Mostarda', hex: 'bg-[#D97706]' },
-        { value: '#EA580C', label: 'Laranja Cenoura', hex: 'bg-[#EA580C]' },
-        { value: '#C2410C', label: 'Terracota Suave', hex: 'bg-[#C2410C]' },
-        { value: '#DC2626', label: 'Vermelho Carmim', hex: 'bg-[#DC2626]' },
-        { value: '#F43F5E', label: 'Rosa Coral', hex: 'bg-[#F43F5E]' },
-        { value: '#A78BFA', label: 'Lilás Médio', hex: 'bg-[#A78BFA]' },
-        { value: '#7C3AED', label: 'Roxo Real', hex: 'bg-[#7C3AED]' },
-        { value: '#8B5CF6', label: 'Ameixa', hex: 'bg-[#8B5CF6]' },
-        { value: '#0D9488', label: 'Azul Turquesa', hex: 'bg-[#0D9488]' },
-        { value: '#B45309', label: 'Bronze Dourado', hex: 'bg-[#B45309]' },
-        { value: '#854D0E', label: 'Argila', hex: 'bg-[#854D0E]' },
-        { value: '#64748B', label: 'Aço Claro', hex: 'bg-[#64748B]' },
-        { value: '#84CC16', label: 'Verde Oliva Claro', hex: 'bg-[#84CC16]' }
-      ];
-    }
-  }, [resolvedTheme]);
+  const { theme } = useAuth();
+  const { teams } = useStaticData();
+
+  const {
+    sidebarColor,
+    sidebarColors,
+    handleSidebarColorChange,
+    handleThemeChange,
+    sidebarIsDark,
+    sidebarContrastClass,
+    sidebarContrastSubtle,
+    sidebarBorderClass,
+    sidebarStyle,
+  } = useSidebarManager({ userData, currentUser, prefetchedSidebarColor });
+
   const [showTeamList, setShowTeamList] = React.useState(false);
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | 'color' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
@@ -441,81 +346,6 @@ function MainApp({
     }
   }, [userData?.role, activeTab]);
 
-  const [sidebarColor, setSidebarColor] = useState<string>(() => {
-    if (prefetchedSidebarColor) return prefetchedSidebarColor;
-    if (typeof window !== 'undefined') {
-      const email = userData?.email || currentUser?.email || '';
-      if (email) {
-        return localStorage.getItem(`qualitrack_sidebar_color_${email}`) || '';
-      }
-    }
-    return '';
-  });
-
-  const prevThemeUserIdRef = React.useRef<string | null>(null);
-  React.useEffect(() => {
-    if (!userData?.id) return;
-    if (staticDataLoading) return;
-
-    const userId = userData.id;
-    const isLogin = prevThemeUserIdRef.current !== userId;
-    prevThemeUserIdRef.current = userId;
-
-    const myPrefs = userPreferences[userId];
-    const dbTheme = myPrefs?.theme;
-
-    if (dbTheme) {
-      lastDbThemeRef.current = dbTheme;
-      setTheme(dbTheme);
-      localStorage.setItem('qualitrack_theme', dbTheme);
-    } else if (isLogin && myPrefs !== undefined) {
-      const osDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const resolved = osDark ? 'dark' as const : 'light' as const;
-      lastDbThemeRef.current = resolved;
-      setTheme(resolved);
-      localStorage.setItem('qualitrack_theme', resolved);
-      upsertUserPreferences(userId, { theme: resolved });
-    }
-  }, [userData?.id, userPreferences, staticDataLoading]);
-
-  const prevThemeForDbRef = React.useRef<'light' | 'dark' | 'system' | null>(null);
-  React.useEffect(() => {
-    if (!userData?.id) return;
-    if (staticDataLoading) return;
-    if (theme === prevThemeForDbRef.current) return;
-    prevThemeForDbRef.current = theme;
-
-    const resolved = theme === 'system'
-      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' as const : 'light' as const)
-      : theme;
-
-    if (resolved !== lastDbThemeRef.current) {
-      lastDbThemeRef.current = resolved;
-      upsertUserPreferences(userData.id, { theme: resolved });
-    }
-  }, [theme, userData?.id, staticDataLoading]);
-
-  React.useEffect(() => {
-    if (!userData?.id) return;
-    const userId = userData.id;
-    const email = userData.email || currentUser?.email;
-
-    const myPrefs = userPreferences[userId];
-    let dbColor: string | undefined = myPrefs?.sidebar_color;
-
-    if (!dbColor) {
-      const metadataColor = currentUser?.user_metadata?.sidebar_color;
-      if (metadataColor) {
-        dbColor = metadataColor;
-        upsertUserPreferences(userId, { sidebar_color: metadataColor });
-      }
-    }
-
-    const finalColor = dbColor || '';
-    setSidebarColor(finalColor);
-    if (email) localStorage.setItem(`qualitrack_sidebar_color_${email}`, finalColor);
-  }, [userData?.id, userPreferences]);
-
   useEffect(() => {
     if (!showTeamList) {
       setSidebarAccordion(null);
@@ -535,59 +365,8 @@ function MainApp({
     setShowTeamList(false);
   }, [isSidebarOpen]);
 
-  const handleSidebarColorChange = async (color: string) => {
-    setSidebarColor(color);
-    const email = userData?.email || currentUser?.email;
-    if (email) {
-      localStorage.setItem(`qualitrack_sidebar_color_${email}`, color);
-    }
-    if (userData?.id) {
-      await upsertUserPreferences(userData.id, { sidebar_color: color });
-    }
-  };
-
-  const handleThemeChange = async (newTheme: Theme) => {
-    const currentResolved = resolvedTheme;
-    let targetResolved: 'light' | 'dark';
-    if (newTheme === 'system') {
-      targetResolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    } else {
-      targetResolved = newTheme;
-    }
-
-    if (currentResolved !== targetResolved) {
-      let mappedColor = sidebarColor;
-      if (targetResolved === 'light') {
-        mappedColor = darkToLightColorMap[sidebarColor] !== undefined ? darkToLightColorMap[sidebarColor] : '';
-      } else {
-        mappedColor = lightToDarkColorMap[sidebarColor] !== undefined ? lightToDarkColorMap[sidebarColor] : '';
-      }
-
-      setSidebarColor(mappedColor);
-      const email = userData?.email || currentUser?.email;
-      if (email) {
-        localStorage.setItem(`qualitrack_sidebar_color_${email}`, mappedColor);
-      }
-      if (userData?.id) {
-        await upsertUserPreferences(userData.id, { sidebar_color: mappedColor });
-      }
-    }
-
-    setTheme(newTheme);
-  };
-
   const userTeams = teams.filter(t => (userData?.team_ids || []).includes(t.id));
   const teamNames = userTeams.map(t => t.name).join(', ');
-
-  const isSidebarLight = !isDarkColor(sidebarColor, resolvedTheme);
-  const sidebarIsDark = !isSidebarLight;
-  const sidebarContrastClass = isSidebarLight ? 'text-slate-900' : 'text-white';
-  const sidebarContrastSubtle = isSidebarLight ? 'text-slate-700/60' : 'text-white/40';
-  const sidebarBorderClass = isSidebarLight ? 'border-black/5' : 'border-white/5';
-
-  const sidebarStyle = {
-    backgroundColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})`,
-  };
 
   return (
     <div className="h-screen w-full flex bg-surface-bg text-brand-primary font-sans overflow-hidden">
