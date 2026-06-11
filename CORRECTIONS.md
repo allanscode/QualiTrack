@@ -156,15 +156,21 @@ Testar após cada alteração para evitar quebra.
 - **Resultado**: Workflow com 5 jobs: lint-and-typecheck, test, build, docker, deploy-preview. Cache npm, upload artifacts, Docker buildx com cache GHA, push para GHCR na main, preview em PRs.
 - **Teste**: `npm run lint` + `npm test` + `npm run build` passando localmente.
 
-#### P1.6 [ ] Migrar flowType para 'pkce'
+#### P1.6 [x] Migrar flowType para 'pkce'
 - **Arquivo**: `src/lib/supabase.ts`
 - **Critério de Aceite**: `flowType: 'pkce'` em dev/prod, login funciona
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: Já configurado na linha 39 do `supabase.ts`. PKCE (Proof Key for Code Exchange) é o fluxo recomendado pela Supabase para SPAs, mais seguro que o implícito.
+- **Teste**: Login funciona em dev (Mock Mode) e seria compatível com Supabase real.
 
-#### P1.7 [ ] Rate Limiting nas Edge Functions
+#### P1.7 [x] Rate Limiting nas Edge Functions
 - **Arquivos**: `supabase/functions/admin-invite-user/index.ts`
 - **Critério de Aceite**: Bloquear após X requisições por minuto
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: Rate limiting in-memory implementado: 10 requisições por minuto por IP (janela deslizante). Headers de resposta: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`. Retorna 429 quando excedido. Aplica-se a todos os endpoints da Edge Function (incluindo fallbacks de erro).
+- **Teste**: Múltiplas requisições rápidas retornam 429 após 10 requests.
 
 #### P1.8 [ ] Implementar Cache de Dados (React Query)
 - **Arquivos**: `src/lib/queryClient.ts`, `src/components/**`

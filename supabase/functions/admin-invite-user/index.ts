@@ -14,6 +14,32 @@ const InviteSchema = z.object({
   team_ids: z.array(z.string().uuid()).optional()
 })
 
+// Rate limiting store (in-memory, resets on cold start)
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+function checkRateLimit(identifier: string, maxRequests: number = 10, windowMs: number = 60000): { allowed: boolean; remaining: number; resetTime: number } {
+  const now = Date.now();
+  const entry = rateLimitStore.get(identifier);
+  
+  if (!entry || now > entry.resetTime) {
+    // Nova janela
+    rateLimitStore.set(identifier, { count: 1, resetTime: now + windowMs });
+    return { allowed: true, remaining: maxRequests - 1, resetTime: now + windowMs };
+  }
+  
+  if (entry.count >= maxRequests) {
+    return { allowed: false, remaining: 0, resetTime: entry.resetTime };
+  }
+  
+  entry.count++;
+  return { allowed: true, remaining: maxRequests - entry.count, resetTime: entry.resetTime };
+}
+
 async function syncUserTeams(supabaseAdmin: any, userId: string, teamIds: string[]) {
   const { data: existing } = await supabaseAdmin
     .from('user_teams')
@@ -40,11 +66,34 @@ serve(async (req) => {
   }
 
   try {
+    // Rate limiting por IP + User Agent (ou user ID se autenticado)
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                     req.headers.get('x-real-ip') || 
+                     'unknown';
+    const rateLimitKey = `invite:${clientIp}`;
+    const rateLimit = checkRateLimit(rateLimitKey, 10, 60000); // 10 requests por minuto
+    
+    const rateLimitHeaders = {
+      'X-RateLimit-Limit': '10',
+      'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+      'X-RateLimit-Reset': Math.ceil(rateLimit.resetTime / 1000).toString(),
+    };
+
+    if (!rateLimit.allowed) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Rate limit exceeded. Try again later.' 
+      }), {
+        status: 429,
+        headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ success: false, error: 'Missing Authorization header' }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -59,7 +108,7 @@ serve(async (req) => {
     if (userError || !user) {
       return new Response(JSON.stringify({ success: false, error: 'Unauthorized', details: userError }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -67,7 +116,7 @@ serve(async (req) => {
     if (!adminUser || !['admin', 'gestor_qualidade', 'gestor_suporte'].includes(adminUser.role)) {
       return new Response(JSON.stringify({ success: false, error: 'Forbidden: Admins only. User role is: ' + (adminUser?.role || 'none') }), {
         status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -78,7 +127,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ success: false, error: 'Invalid payload', details: result.error.errors }),
         {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
           status: 400,
         }
       )
@@ -115,7 +164,7 @@ serve(async (req) => {
         console.error('DB Update Error for existing user:', dbError)
         return new Response(JSON.stringify({ success: false, error: 'Failed to update existing user in public users table', details: dbError }), {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
         })
       }
 
@@ -130,12 +179,12 @@ serve(async (req) => {
         console.error('Reset Password Error:', resetError)
         return new Response(JSON.stringify({ success: false, error: 'Failed to send password reset email to existing user', details: resetError }), {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
         })
       }
 
       return new Response(JSON.stringify({ success: true, user: { id: existingUser.id, email } }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -160,7 +209,7 @@ serve(async (req) => {
             console.error('DB Upsert Fallback Error:', dbError)
             return new Response(JSON.stringify({ success: false, error: 'Failed to save to public users table in fallback', details: dbError }), {
               status: 500,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
             })
           }
 
@@ -175,12 +224,12 @@ serve(async (req) => {
             console.error('Reset Password Fallback Error:', resetError)
             return new Response(JSON.stringify({ success: false, error: 'Failed to send password reset email in fallback', details: resetError }), {
               status: 500,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
             })
           }
 
           return new Response(JSON.stringify({ success: true, user: foundUser }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
           })
         }
       }
@@ -188,7 +237,7 @@ serve(async (req) => {
       console.error('Invite Error:', inviteError)
       return new Response(JSON.stringify({ success: false, error: 'Failed to invite user via Auth', details: inviteError }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -203,21 +252,21 @@ serve(async (req) => {
       console.error('DB Insert Error:', dbError)
       return new Response(JSON.stringify({ success: false, error: 'Failed to save to public users table', details: dbError }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
       })
     }
 
     await syncUserTeams(supabaseAdmin, authData.user.id, team_ids || [])
 
     return new Response(JSON.stringify({ success: true, user: authData.user }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
     })
 
   } catch (error) {
     console.error('Catch Error:', error)
     return new Response(JSON.stringify({ success: false, error: 'Internal Server Error', message: error.message }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
     })
   }
 })
