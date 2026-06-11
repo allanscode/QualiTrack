@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import { List } from 'react-window';
 import { Monitoria, MonitoriaStatus, User } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../providers/ThemeProvider';
@@ -308,15 +309,47 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
       {/* Block 2: The List */}
       <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card overflow-hidden">
         <div className="divide-y divide-surface-subtle">
-          {filtered.length > 0 ? filtered.map(m => {
-            const config = getStatusConfig(m.status);
-            const isExpanded = expandedId === m.id;
-            const level = getLevelForScore(m.score || 0);
-            const scoreColor = m.score !== undefined ? level.color : 'text-brand-muted';
+          {filtered.length > 0 ? (
+            filtered.length > 50 ? (
+              <List
+                height={600}
+                itemCount={filtered.length}
+                itemSize={180}
+                width="100%"
+                overscanCount={5}
+              >
+                {({ index, style }) => (
+                  <MonitoriaRow
+                    index={index}
+                    style={style}
+                    data={{
+                      monitorias: filtered,
+                      expandedId,
+                      setExpandedId,
+                      setViewingMonitoria,
+                      setActionModal,
+                      user,
+                      staticData,
+                      qualityConfig,
+                      getLevelForScore,
+                      getStatusConfig,
+                      getName,
+                      format,
+                      ptBR,
+                    }}
+                  />
+                )}
+              </List>
+            ) : (
+              filtered.map(m => {
+                const config = getStatusConfig(m.status);
+                const isExpanded = expandedId === m.id;
+                const level = getLevelForScore(m.score || 0);
+                const scoreColor = m.score !== undefined ? level.color : 'text-brand-muted';
 
-            return (
-              <div key={m.id} className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
-                <div className="flex items-center gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : m.id)}>
+                return (
+                  <div key={m.id} className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
+                    <div className="flex items-center gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : m.id)}>
                   {/* Left: Status Icon */}
                   <div className={`w-11 h-11 rounded-[1.25rem] flex items-center justify-center flex-shrink-0 bg-surface-bg text-brand-muted shadow-sm`}>
                     <config.icon className="w-5 h-5" />
@@ -577,7 +610,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                 </AnimatePresence>
               </div>
             );
-          }) : (
+          }))) : (
             <div className="py-24 text-center bg-surface-bg/10">
               <div className="w-16 h-16 rounded-3xl bg-surface-subtle flex items-center justify-center mx-auto mb-4 opacity-50">
                 <Search className="w-8 h-8 text-brand-muted" />

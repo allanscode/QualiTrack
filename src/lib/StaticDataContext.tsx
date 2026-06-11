@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode, useMemo } from 'react';
+import React, { createContext, useContext, useCallback, useMemo, ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { User, Team, EvaluationForm, DissatisfactionField, UserTeam, UserPreferences } from '../types';
 import { supabase, mockDb, isMockMode } from './supabase';
 import { toast } from 'sonner';
@@ -29,139 +30,116 @@ function enrichUsersWithTeams(usersList: User[], userTeamDocs: UserTeam[], prefs
   }));
 }
 
-export function StaticDataProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<User[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [forms, setForms] = useState<EvaluationForm[]>([]);
-  const [dissatisfactionFields, setDissatisfactionFields] = useState<DissatisfactionField[]>([]);
-  const [userTeams, setUserTeams] = useState<UserTeam[]>([]);
-  const [userPreferences, setUserPreferences] = useState<Record<string, UserPreferences>>({});
-  const [loading, setLoading] = useState(true);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const fetchingRef = useRef(false);
-  const fetchedRef = useRef(false);
+async function fetchAllStaticData() {
+  if (isMockMode) {
+    const [uRes, tRes, fRes, dfRes, utRes, upRes] = await Promise.all([
+      mockDb.get('users'),
+      mockDb.get('teams'),
+      mockDb.get('forms'),
+      mockDb.get('dissatisfaction_fields'),
+      mockDb.get('user_teams'),
+      mockDb.get('user_preferences')
+    ]);
+    const prefsMap: Record<string, UserPreferences> = {};
+    (upRes.data || []).forEach((row: any) => {
+      if (row.user_id && row.preferences) {
+        prefsMap[row.user_id] = row.preferences as UserPreferences;
+      }
+    });
+    const enrichedUsers = enrichUsersWithTeams(
+      (uRes.data || []) as User[],
+      (utRes.data || []) as UserTeam[],
+      prefsMap
+    );
+    return {
+      users: enrichedUsers,
+      teams: (tRes.data || []) as Team[],
+      forms: (fRes.data || []) as EvaluationForm[],
+      dissatisfactionFields: (dfRes.data || []) as DissatisfactionField[],
+      userTeams: (utRes.data || []) as UserTeam[],
+      userPreferences: prefsMap,
+    };
+  } else {
+    const sb = supabase!;
+    const executeWithRetry = async (retryCount = 0): Promise<any> => {
+      try {
+        console.log(`[StaticData] Carregando dados cadastrais (Tentativa ${retryCount + 1})...`);
+        const controller = new AbortController();
 
-  const fetchStaticData = useCallback(async () => {
-    if (fetchingRef.current) {
-      console.log('[StaticData] Fetch já em andamento, ignorando...');
-      return;
-    }
-    fetchingRef.current = true;
-    fetchedRef.current = false;
-    setLoading(true);
-    try {
-      if (isMockMode) {
-        const [uRes, tRes, fRes, dfRes, utRes, upRes] = await Promise.all([
-          mockDb.get('users'),
-          mockDb.get('teams'),
-          mockDb.get('forms'),
-          mockDb.get('dissatisfaction_fields'),
-          mockDb.get('user_teams'),
-          mockDb.get('user_preferences')
+        const fetchPromise = Promise.all([
+          sb.from('users').select('*').abortSignal(controller.signal),
+          sb.from('teams').select('*').abortSignal(controller.signal),
+          sb.from('forms').select('*').abortSignal(controller.signal),
+          sb.from('dissatisfaction_fields').select('*').abortSignal(controller.signal),
+          sb.from('user_teams').select('*').abortSignal(controller.signal),
+          sb.from('user_preferences').select('*').abortSignal(controller.signal)
         ]);
+
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000);
+        });
+
+        const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+        const [uRes, tRes, fRes, dfRes, utRes, upRes] = results;
+
         const prefsMap: Record<string, UserPreferences> = {};
         (upRes.data || []).forEach((row: any) => {
           if (row.user_id && row.preferences) {
             prefsMap[row.user_id] = row.preferences as UserPreferences;
           }
         });
-        setUserPreferences(prefsMap);
         const enrichedUsers = enrichUsersWithTeams(
           (uRes.data || []) as User[],
           (utRes.data || []) as UserTeam[],
           prefsMap
         );
-        setUsers(enrichedUsers);
-        setTeams((tRes.data || []) as Team[]);
-        setForms((fRes.data || []) as EvaluationForm[]);
-        setDissatisfactionFields((dfRes.data || []) as DissatisfactionField[]);
-        setUserTeams((utRes.data || []) as UserTeam[]);
-      } else {
-        const executeWithRetry = async (retryCount = 0): Promise<void> => {
-          try {
-            console.log(`[StaticData] Carregando dados cadastrais (Tentativa ${retryCount + 1})...`);
-            const controller = new AbortController();
-
-          const fetchPromise = Promise.all([
-            supabase!.from('users').select('*').abortSignal(controller.signal),
-            supabase!.from('teams').select('*').abortSignal(controller.signal),
-            supabase!.from('forms').select('*').abortSignal(controller.signal),
-            supabase!.from('dissatisfaction_fields').select('*').abortSignal(controller.signal),
-            supabase!.from('user_teams').select('*').abortSignal(controller.signal),
-            supabase!.from('user_preferences').select('*').abortSignal(controller.signal)
-          ]);
-
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000);
-          });
-
-          const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
-          const [uRes, tRes, fRes, dfRes, utRes, upRes] = results;
-
-          const prefsMap: Record<string, UserPreferences> = {};
-          (upRes.data || []).forEach((row: any) => {
-            if (row.user_id && row.preferences) {
-              prefsMap[row.user_id] = row.preferences as UserPreferences;
-            }
-          });
-          setUserPreferences(prefsMap);
-          const enrichedUsers = enrichUsersWithTeams(
-            (uRes.data || []) as User[],
-            (utRes.data || []) as UserTeam[],
-            prefsMap
-          );
-            setUsers(enrichedUsers);
-            setTeams((tRes.data || []) as Team[]);
-            setForms((fRes.data || []) as EvaluationForm[]);
-            setDissatisfactionFields((dfRes.data || []) as DissatisfactionField[]);
-            setUserTeams((utRes.data || []) as UserTeam[]);
-          } catch (error: any) {
-            if (error?.message === 'timeout' && retryCount < 2) {
-              console.warn(`[StaticData] Timeout. Retrying (${retryCount + 1}/2)...`);
-              await new Promise(r => setTimeout(r, 2000 * (retryCount + 1)));
-              return executeWithRetry(retryCount + 1);
-            }
-            throw error;
-          }
+        return {
+          users: enrichedUsers,
+          teams: (tRes.data || []) as Team[],
+          forms: (fRes.data || []) as EvaluationForm[],
+          dissatisfactionFields: (dfRes.data || []) as DissatisfactionField[],
+          userTeams: (utRes.data || []) as UserTeam[],
+          userPreferences: prefsMap,
         };
-        await executeWithRetry();
+      } catch (error: any) {
+        if (error?.message === 'timeout' && retryCount < 2) {
+          console.warn(`[StaticData] Timeout. Retrying (${retryCount + 1}/2)...`);
+          await new Promise(r => setTimeout(r, 2000 * (retryCount + 1)));
+          return executeWithRetry(retryCount + 1);
+        }
+        throw error;
       }
-    } catch (e) {
-      console.error('[StaticData] Erro ao carregar dados cadastrais:', e);
-      toast.error('Erro ao carregar dados cadastrais. Tente atualizar a página.');
-    } finally {
-      setLoading(false);
-      fetchedRef.current = true;
-      fetchingRef.current = false;
-    }
-  }, []);
+    };
+    return executeWithRetry();
+  }
+}
 
-  useEffect(() => {
-    if (fetchedRef.current || fetchingRef.current) return;
-    fetchStaticData();
-  }, [fetchStaticData]);
+export function StaticDataProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (refreshTrigger === 0) return;
-    fetchStaticData();
-  }, [refreshTrigger, fetchStaticData]);
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['staticData'],
+    queryFn: fetchAllStaticData,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: 2,
+    refetchOnWindowFocus: false,
+  });
 
   const refreshAll = useCallback(() => {
-    fetchingRef.current = false;
-    fetchedRef.current = false;
-    setRefreshTrigger(prev => prev + 1);
-  }, []);
+    queryClient.invalidateQueries({ queryKey: ['staticData'] });
+  }, [queryClient]);
 
   const contextValue = useMemo(() => ({
-    users,
-    teams,
-    forms,
-    dissatisfactionFields,
-    userTeams,
-    userPreferences,
-    loading,
-    refreshAll
-  }), [users, teams, forms, dissatisfactionFields, userTeams, userPreferences, loading, refreshAll]);
+    users: data?.users || [],
+    teams: data?.teams || [],
+    forms: data?.forms || [],
+    dissatisfactionFields: data?.dissatisfactionFields || [],
+    userTeams: data?.userTeams || [],
+    userPreferences: data?.userPreferences || {},
+    loading: isLoading,
+    refreshAll,
+  }), [data, isLoading, refreshAll]);
 
   return (
     <StaticDataContext.Provider value={contextValue}>

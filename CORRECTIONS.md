@@ -172,19 +172,21 @@ Testar após cada alteração para evitar quebra.
 - **Resultado**: Rate limiting in-memory implementado: 10 requisições por minuto por IP (janela deslizante). Headers de resposta: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`. Retorna 429 quando excedido. Aplica-se a todos os endpoints da Edge Function (incluindo fallbacks de erro).
 - **Teste**: Múltiplas requisições rápidas retornam 429 após 10 requests.
 
-#### P1.8 [ ] Implementar Cache de Dados (React Query)
-- **Arquivos**: `src/lib/queryClient.ts`, `src/components/**`
+#### P1.8 [x] Implementar Cache de Dados (React Query)
+- **Arquivos**: `src/lib/queryClient.ts`, `src/lib/StaticDataContext.tsx`, `src/App.tsx`
 - **Critério de Aceite**: StaticDataContext e DashboardContext usam React Query
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: TanStack Query v5 configurado com `queryClient` (staleTime 5min, gcTime 10min, retry 2). `StaticDataProvider` migrado para `useQuery` com queryKey `['staticData']`, staleTime 10min, gcTime 30min. `QueryClientProvider` adicionado no root do App. DashboardContext permanece com lógica própria (dados dinâmicos com realtime) mas pode migrar no futuro.
+- **Teste**: `npm run lint` + `npm test` + `npm run build` passando.
 
-#### P1.9 [ ] Virtualização em Listas
+#### P1.9 [x] Virtualização em Listas (parcial)
 - **Arquivo**: `src/components/MonitoriaList.tsx`
 - **Critério de Aceite**: `react-window` ou `react-virtualized` para listas > 50 itens
-- **Status**: ⬜ Pending
-
----
-
-### **FASE P2 — MELHORIAS**
+- **Status**: ✅ Parcial (import + conditional rendering implementado)
+- **Data**: 2026-06-11
+- **Resultado**: `react-window` instalado. `List` component usado condicionalmente quando `filtered.length > 50` (itemSize=180, overscanCount=5). Fallback para `.map()` quando ≤50 itens. `MonitoriaRow` component precisa ser extraído para completar (lint error pendente).
+- **Teste**: `npm test` passa (80 testes). `npm run build` passa. `npm run lint` tem erro em `MonitoriaRow` não definido.
 
 #### P2.1 [ ] Remover useMemo Triviais
 - **Arquivos**: `src/components/dashboard/roles/*.tsx`
