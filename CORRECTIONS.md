@@ -123,10 +123,13 @@ Testar após cada alteração para evitar quebra.
 - **Resultado**: Vitest 4.1.8 + jsdom + @testing-library/react + @testing-library/jest-dom configurado. `npm test` passa (2 testes smoke). `npm run lint` + `npm run build` passando (0 erros).
 - **Teste**: `npm test` (vitest run) passando
 
-#### P1.2 [ ] Testes Críticos — qualityMath.ts
+#### P1.2 [x] Testes Críticos — qualityMath.ts
 - **Arquivos**: `src/utils/qualityMath.test.ts`
 - **Critério de Aceite**: Cobrir cálculo de score, erros críticos, N/A
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: 18 testes cobrindo: score ponderado (100%, 0%, pesos variados), exclusão N/A (redenistribuição de peso seção), erros críticos (is_critical + NAO, legacy criticalErrors), casos de borda (undefined/null/empty form, all NA, bounds 0-100, arredondamento), cenário complexo multi-seção
+- **Teste**: `npm test` passa (20 testes total: 2 smoke + 18 qualityMath)
 
 #### P1.3 [ ] Testes Críticos — businessHours.ts
 - **Arquivos**: `src/lib/businessHours.test.ts`
