@@ -115,10 +115,13 @@ Testar após cada alteração para evitar quebra.
 
 ### **FASE P1 — ESSENCIAIS (Qualidade e Entrega)**
 
-#### P1.1 [ ] Setup Vitest + React Testing Library
-- **Arquivos**: `vitest.config.ts`, `src/**/*.test.ts`
+#### P1.1 [x] Setup Vitest + React Testing Library
+- **Arquivos**: `vitest.config.ts`, `src/test/setup.tsx`, `src/test/smoke.test.ts`
 - **Critério de Aceite**: `npm test` executa e passa (com testes básicos)
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: Vitest 4.1.8 + jsdom + @testing-library/react + @testing-library/jest-dom configurado. `npm test` passa (2 testes smoke). `npm run lint` + `npm run build` passando (0 erros).
+- **Teste**: `npm test` (vitest run) passando
 
 #### P1.2 [ ] Testes Críticos — qualityMath.ts
 - **Arquivos**: `src/utils/qualityMath.test.ts`
