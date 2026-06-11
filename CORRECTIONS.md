@@ -55,6 +55,14 @@ Testar após cada alteração para evitar quebra.
 - **Data**: 2026-06-10
 - **Teste**: `npm run lint` + `npm run build` passando
 
+##### P0.4.2 [x] Extrair AuthProvider
+- **Arquivo**: `src/providers/AuthProvider.tsx` (novo, 873 linhas)
+- **Status**: ✅ Done
+- **Data**: 2026-06-10
+- **Resultado**: App.tsx: 1780→1061 linhas (-40%). Toda lógica de auth, sessão, idle timeout, reconexão e handlers migrada para AuthProvider
+- **Migrado**: Auth lifecycle useEffect, session resilience, idle timeout + warning, proactive refresh, handleLogin, handleLogout, handleForgotPassword, handleUpdatePassword, handleRequestAccess, handleUserSession, enrichUserWithTeamIds, ref-bridge pattern, activeTab/hash sync, sidebar contrast derived values
+- **Teste**: `npm run lint` + `npm run build` passando (0 erros)
+
 #### P0.5 [ ] Refatorar MonitoriaList.tsx
 - **Arquivo**: `src/components/MonitoriaList.tsx`
 - **Problema**: 1.002 linhas, estado extenso misturado com UI

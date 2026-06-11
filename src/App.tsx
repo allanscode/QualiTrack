@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { supabase, mockDb, upsertUserPreferences, isMockMode, assertSupabase } from './lib/supabase';
+import { upsertUserPreferences } from './lib/supabase';
 import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
@@ -14,6 +14,7 @@ import { User, ROLE_LABELS, UserPreferences, UserRole } from './types';
 import { QualityConfigProvider } from './lib/useQualityConfig';
 import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
 import { ThemeProvider, useTheme, resolveSystemTheme, applyThemeToDOM, type Theme } from './providers/ThemeProvider';
+import { AuthProvider, useAuth } from './providers/AuthProvider';
 
 // --- Sidebar Contrast Utility ---
 const isDarkColor = (hex: string, resolvedTheme: 'light' | 'dark') => {
@@ -24,7 +25,6 @@ const isDarkColor = (hex: string, resolvedTheme: 'light' | 'dark') => {
   const yiq = (r * 299 + g * 587 + b * 114) / 1000;
   return yiq < 128;
 };
-// --- Fim do Sidebar Contrast Utility ---
 
 // Components
 const DashboardMain = React.lazy(() => import('./components/dashboard/DashboardMain'));
@@ -33,793 +33,102 @@ const MonitoriaForm = React.lazy(() => import('./components/MonitoriaForm'));
 const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
 const CustomDashboardManagement = React.lazy(() => import('./components/CustomDashboardManagement'));
 
-type AuthView = 'login' | 'request-access' | 'pending' | 'change-password' | 'forgot-password' | 'setup-password';
-
-const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
-const IDLE_WARNING_MS = 5 * 60 * 1000;
-const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
-const SESSION_REFRESH_MS = 50 * 60 * 1000;
-const MOCK_SESSION_KEY = 'qualitrack_session';
-const LAST_ACTIVITY_KEY = 'qualitrack_last_activity';
-
 const lastDbThemeRef = { current: null as ('light' | 'dark' | null) };
 
 export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </ThemeProvider>
   );
 }
 
 function AppContent() {
-  const { theme, setTheme } = useTheme();
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [userData, setUserData] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [appReady, setAppReady] = useState(() => {
-    const saved = localStorage.getItem('qualitrack_theme');
-    return !!saved && saved !== 'system';
-  });
-  const [prefetchedSidebarColor, setPrefetchedSidebarColor] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'monitorias' | 'admin' | 'custom_dashboard'>(() => {
-    const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
-    if (hash === 'dashboard' || hash === 'monitorias' || hash === 'admin' || hash === 'custom_dashboard') {
-      return hash as any;
-    }
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('qualitrack_active_tab') : null;
-    if (saved === 'dashboard' || saved === 'monitorias' || saved === 'admin' || saved === 'custom_dashboard') {
-      return saved as any;
-    }
-    return 'dashboard';
-  });
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [authView, setAuthView] = useState<AuthView>('login');
-
-  // --- Sincronização da aba ativa com localStorage e hash da URL ---
-  useEffect(() => {
-    localStorage.setItem('qualitrack_active_tab', activeTab);
-    const currentHash = window.location.hash.replace('#', '');
-    if (currentHash !== activeTab) {
-      window.location.hash = activeTab;
-    }
-  }, [activeTab]);
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '');
-      if (hash === 'dashboard' || hash === 'monitorias' || hash === 'admin' || hash === 'custom_dashboard') {
-        setActiveTab(hash as any);
-      }
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-  const prevUserIdRef = useRef<string | null>(null);
-
-  const [credentials, setCredentials] = useState({ email: '', password: '' });
-  const [requestData, setRequestData] = useState({ name: '', email: '' });
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [resetEmail, setResetEmail] = useState('');
-  const [isExistingRequest, setIsExistingRequest] = useState(false);
-
-  const isPasswordRecoveryRef = React.useRef(false);
-  const isCleaningSessionRef = React.useRef(false);
-  const isInviteFlowRef = React.useRef(false);
-
-  // --- Session State ---
-  const [showIdleWarning, setShowIdleWarning] = useState(false);
-  const [idleCountdown, setIdleCountdown] = useState(300); // 5 min em segundos
-  const sessionStartTimeRef = useRef<number | null>(null);
-
-  // --- Auth Lifecycle ---
-  useEffect(() => {
-    const initializationTimeout = setTimeout(() => {
-      setLoading(false);
-    }, 10000);
-
-    if (isMockMode) {
-      // Restaura sessão mock do localStorage
-      const stored = localStorage.getItem(MOCK_SESSION_KEY);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          const now = Date.now();
-            if (parsed.sessionExpiresAt && parsed.sessionExpiresAt > now) {
-              const lastActivityStored = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
-              if (lastActivityStored && (now - lastActivityStored) >= IDLE_TIMEOUT_MS) {
-                localStorage.removeItem(MOCK_SESSION_KEY);
-                localStorage.removeItem(LAST_ACTIVITY_KEY);
-              } else if (parsed.sessionStartedAt && (now - parsed.sessionStartedAt) >= ABSOLUTE_TIMEOUT_MS) {
-                localStorage.removeItem(MOCK_SESSION_KEY);
-                localStorage.removeItem(LAST_ACTIVITY_KEY);
-              } else {
-                mockDb.get('users').then(async ({ data }) => {
-                  const dbUser = (data || []).find((u: any) => u.id === parsed.userId && u.active);
-                  if (dbUser) {
-                    const enriched = await enrichUserWithTeamIds(dbUser);
-                    setCurrentUser(enriched);
-                    setUserData(enriched);
-                    const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
-                    if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin' || savedTab === 'custom_dashboard') {
-                      setActiveTab(savedTab as any);
-                    }
-                    sessionStartTimeRef.current = parsed.sessionStartedAt || now;
-                  } else {
-                    localStorage.removeItem(MOCK_SESSION_KEY);
-                    localStorage.removeItem(LAST_ACTIVITY_KEY);
-                  }
-                });
-              }
-      } else {
-        localStorage.removeItem(MOCK_SESSION_KEY);
-        localStorage.removeItem(LAST_ACTIVITY_KEY);
-      }
-    } catch {
-      localStorage.removeItem(MOCK_SESSION_KEY);
-      localStorage.removeItem(LAST_ACTIVITY_KEY);
-    }
-      }
-      setLoading(false);
-      clearTimeout(initializationTimeout);
-      return;
-    }
-
-    const hash = window.location.hash;
-    const search = window.location.search;
-
-    if (hash.includes('error_code=otp_expired') || search.includes('error_code=otp_expired')) {
-      toast.error('O link expirou ou já foi utilizado. Por favor, solicite um novo link de recuperação.');
-      setAuthView('forgot-password');
-      window.history.replaceState(null, '', window.location.pathname);
-      setLoading(false);
-      return;
-    }
-
-    if (hash && (hash.includes('type=recovery') || hash.includes('type=invite'))) {
-      isPasswordRecoveryRef.current = true;
-      isInviteFlowRef.current = true;
-      setAuthView('change-password');
-      setLoading(false);
-    }
-
-    if (search && (search.includes('type=invite') || search.includes('type=recovery'))) {
-      isPasswordRecoveryRef.current = true;
-      isInviteFlowRef.current = true;
-      setAuthView('change-password');
-      setLoading(false);
-    }
-
-    const sb = supabase ?? assertSupabase();
-    const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        isPasswordRecoveryRef.current = true;
-        setAuthView('change-password');
-      } else if (event === 'INITIAL_SESSION') {
-        if (isInviteFlowRef.current && session) {
-          return;
-        }
-        if (session) {
-          // Sessão persistida — restaura sem pedir login
-          // Para sessão restaurada, estimamos o início como agora menos o tempo decorrido
-          // Se não houver sessão prévia (login novo), usa Date.now()
-          if (!sessionStartTimeRef.current) {
-            sessionStartTimeRef.current = Date.now();
-          }
-          setTimeout(() => {
-            handleUserSession(session.user);
-          }, 0);
-          return;
-        }
-        // Sem sessão — mostra login
-        setCurrentUser(null);
-        setUserData(null);
-        setAuthView('login');
-      } else if (event === 'SIGNED_IN') {
-        if (!isPasswordRecoveryRef.current && session) {
-          sessionStartTimeRef.current = Date.now();
-          setTimeout(() => {
-            handleUserSession(session.user);
-          }, 0);
-          return;
-        }
-      } else if (event === 'SIGNED_OUT') {
-        if (isCleaningSessionRef.current) {
-          isCleaningSessionRef.current = false;
-          setLoading(false);
-          clearTimeout(initializationTimeout);
-          return;
-        }
-      setAppReady(false);
-      setCurrentUser(null);
-      setUserData(null);
-      setAuthView('login');
-      localStorage.setItem('qualitrack_theme', 'system');
-      setTheme('system');
-      applyThemeToDOM(resolveSystemTheme());
-      lastDbThemeRef.current = null;
-      prevUserIdRef.current = null;
-  } else if (event === 'TOKEN_REFRESHED') {
-        // Token renovado silenciosamente — sem ação necessária
-      }
-      setLoading(false);
-      clearTimeout(initializationTimeout);
-    });
-
-    return () => {
-      clearTimeout(initializationTimeout);
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const [isSystemOnline, setIsSystemOnline] = useState(true);
-  const [isReconnecting, setIsReconnecting] = useState(false);
-
-  // --- Session Resilience & Active Reconnection ---
-  useEffect(() => {
-    if (isMockMode || !supabase || !currentUser) return;
-    const sb = supabase!; // TypeScript narrowing after guard
-
-    let lastFocusCheck = 0;
-    let reconnectInterval: ReturnType<typeof setInterval> | null = null;
-    let wasOffline = false;
-
-    const pingSupabase = async (): Promise<boolean> => {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        // Usamos um limit(1) em vez de head: true porque head tem comportamentos estranhos no Supabase JS
-        const { error } = await sb.from('users').select('id').limit(1).abortSignal(controller.signal);
-        clearTimeout(timeout);
-        
-        if (error && error.message !== 'JWT expired') {
-          console.warn('[System] Ping falhou, erro retornado pelo DB:', error);
-          // Se for erro de auth, a rede pode estar OK
-          if (error.code === 'PGRST301' || error.message.includes('auth')) return true;
-          throw error;
-        }
-        return true;
-      } catch (e: any) {
-        console.error('[System] Ping catch error:', e.message || e);
-        return false;
-      }
-    };
-
-    const handleOnlineStatusChange = async (online: boolean) => {
-      setIsSystemOnline(online);
-      if (online && wasOffline) {
-        // Transição offline → online: reconectou!
-        console.log('[System] ✅ Reconexão detectada! Notificando componentes...');
-        wasOffline = false;
-        setIsReconnecting(false);
-        // Tenta renovar sessão após reconexão
-        try { await sb.auth.refreshSession(); } catch {}
-        // Notifica TODOS os componentes para recarregarem
-        window.dispatchEvent(new CustomEvent('qualitrack:reconnected'));
-        // Para o polling agressivo
-        if (reconnectInterval) {
-          clearInterval(reconnectInterval);
-          reconnectInterval = null;
-        }
-      } else if (!online && !wasOffline) {
-        // Transição online → offline
-        console.warn('[System] ⚠️ Conexão perdida. Iniciando reconexão ativa...');
-        wasOffline = true;
-        setIsReconnecting(true);
-        // Inicia polling agressivo a cada 5 segundos até reconectar
-        if (!reconnectInterval) {
-          reconnectInterval = setInterval(async () => {
-            console.log('[System] 🔄 Tentando reconectar...');
-            const ok = await pingSupabase();
-            if (ok) handleOnlineStatusChange(true);
-          }, 5000);
-        }
-      }
-    };
-
-    // Heartbeat periódico: a cada 2 minutos verifica se a conexão está viva
-    const heartbeatInterval = setInterval(async () => {
-      const ok = await pingSupabase();
-      handleOnlineStatusChange(ok);
-    }, 2 * 60 * 1000);
-
-    // Ping inicial
-    pingSupabase().then(ok => handleOnlineStatusChange(ok));
-
-  // Tab Focus Recovery: verifica sessão ao focar a aba, sem recarregar dados
-  const handleVisibilityChange = async () => {
-    const now = Date.now();
-    if (document.visibilityState === 'visible' && now - lastFocusCheck > 15000) {
-      lastFocusCheck = now;
-      try {
-        const { data: { session } } = await sb.auth.getSession();
-        if (session) {
-          const timeToExpiry = (session.expires_at || 0) - Math.floor(now / 1000);
-          if (timeToExpiry < 900) await sb.auth.refreshSession();
-        }
-      } catch {}
-    }
-  };
-
-    // Listeners nativos do navegador para online/offline
-    const handleBrowserOnline = () => {
-      console.log('[System] Navegador reportou: online');
-      pingSupabase().then(ok => handleOnlineStatusChange(ok));
-    };
-    const handleBrowserOffline = () => {
-      console.log('[System] Navegador reportou: offline');
-      handleOnlineStatusChange(false);
-    };
-
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-  window.addEventListener('online', handleBrowserOnline);
-  window.addEventListener('offline', handleBrowserOffline);
-
-  return () => {
-    clearInterval(heartbeatInterval);
-    if (reconnectInterval) clearInterval(reconnectInterval);
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-    window.removeEventListener('online', handleBrowserOnline);
-    window.removeEventListener('offline', handleBrowserOffline);
-  };
-  }, [isMockMode, currentUser]);
-
-  // --- Unified Session Management: Idle Timeout + Warning + Absolute Timeout + Proactive Refresh ---
-  const extendSessionRef = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    if (!currentUser) {
-      extendSessionRef.current = () => {};
-      return;
-    }
-
-    let idleTimerId: NodeJS.Timeout;
-    let warningIntervalId: NodeJS.Timeout;
-    let refreshTimerId: NodeJS.Timeout;
-    let lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_KEY)) || Date.now();
-
-  const forceLogout = async (reason: string) => {
-    setShowIdleWarning(false);
-    setAppReady(false);
-    localStorage.removeItem(MOCK_SESSION_KEY);
-    localStorage.removeItem(LAST_ACTIVITY_KEY);
-    localStorage.setItem('qualitrack_theme', 'system');
-    setTheme('system');
-    applyThemeToDOM(resolveSystemTheme());
-    lastDbThemeRef.current = null;
-    prevUserIdRef.current = null;
-    if (!isMockMode && supabase) {
-      isCleaningSessionRef.current = true;
-      await supabase.auth.signOut();
-    }
-    setCurrentUser(null);
-    setUserData(null);
-    setAuthView('login');
-    sessionStartTimeRef.current = null;
-    toast.error(reason);
-  };
-
-    // Verifica se a sessão já expirou por inatividade ou tempo absoluto
-    const idleElapsed = Date.now() - lastActivity;
-    if (idleElapsed >= IDLE_TIMEOUT_MS) {
-      forceLogout('Sessão encerrada por inatividade (60 minutos). Faça login novamente.');
-      return;
-    }
-    if (sessionStartTimeRef.current && (Date.now() - sessionStartTimeRef.current) >= ABSOLUTE_TIMEOUT_MS) {
-      forceLogout('Sessão encerrada após 8 horas contínuas. Faça login novamente.');
-      return;
-    }
-
-    const checkAbsoluteTimeout = () => {
-      if (!sessionStartTimeRef.current) return false;
-      const elapsed = Date.now() - sessionStartTimeRef.current;
-      if (elapsed >= ABSOLUTE_TIMEOUT_MS) {
-        forceLogout('Sessão encerrada após 8 horas contínuas. Faça login novamente.');
-        return true;
-      }
-      return false;
-    };
-
-    const doExtendSession = () => {
-      setShowIdleWarning(false);
-      clearInterval(warningIntervalId);
-      startIdleTimer();
-      if (!isMockMode && supabase) {
-        supabase.auth.refreshSession().catch(() => {});
-      }
-    };
-
-    extendSessionRef.current = doExtendSession;
-
-    const startIdleTimer = () => {
-      clearTimeout(idleTimerId);
-      clearInterval(warningIntervalId);
-      setShowIdleWarning(false);
-
-      idleTimerId = setTimeout(() => {
-        if (checkAbsoluteTimeout()) return;
-
-        setShowIdleWarning(true);
-        setIdleCountdown(Math.ceil(IDLE_WARNING_MS / 1000));
-
-        warningIntervalId = setInterval(() => {
-          setIdleCountdown(prev => {
-            if (prev <= 1) {
-              clearInterval(warningIntervalId);
-              if (checkAbsoluteTimeout()) return 0;
-              forceLogout('Sessão encerrada por inatividade (60 minutos). Faça login novamente.');
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      }, IDLE_TIMEOUT_MS - IDLE_WARNING_MS);
-    };
-
-    const handleUserActivity = () => {
-      const now = Date.now();
-      if (now - lastActivity < 1000) return;
-      lastActivity = now;
-      localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
-
-      if (showIdleWarning) {
-        setShowIdleWarning(false);
-        clearInterval(warningIntervalId);
-      }
-      startIdleTimer();
-    };
-
-    if (!isMockMode) {
-      refreshTimerId = setInterval(async () => {
-        if (!currentUser) return;
-        if (checkAbsoluteTimeout()) return;
-        try {
-          await supabase!.auth.refreshSession();
-        } catch {}
-      }, SESSION_REFRESH_MS);
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && currentUser) {
-        if (checkAbsoluteTimeout()) return;
-        if (!isMockMode) {
-          supabase!.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-              const timeToExpiry = (session.expires_at || 0) - Math.floor(Date.now() / 1000);
-              if (timeToExpiry < 900) {
-                supabase!.auth.refreshSession().catch(() => {});
-              }
-            }
-          });
-        }
-      }
-    };
-
-    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
-    events.forEach(event => document.addEventListener(event, handleUserActivity, { passive: true }));
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    startIdleTimer();
-
-    return () => {
-      clearTimeout(idleTimerId);
-      clearInterval(warningIntervalId);
-      clearInterval(refreshTimerId);
-      events.forEach(event => document.removeEventListener(event, handleUserActivity));
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [currentUser, isMockMode]);
-
-  const extendSession = useCallback(() => {
-    extendSessionRef.current();
-  }, []);
-
-  const enrichUserWithTeamIds = async (dbUser: any): Promise<any> => {
-    try {
-      if (isMockMode) {
-        const { data: utData } = await mockDb.get('user_teams');
-        const userTeamIds = (utData || []).filter((ut: any) => ut.user_id === dbUser.id).map((ut: any) => ut.team_id);
-        return { ...dbUser, team_ids: userTeamIds.length > 0 ? userTeamIds : (dbUser.team_ids || []) };
-      }
-      const { data: utData } = await supabase!.from('user_teams').select('team_id').eq('user_id', dbUser.id);
-      const userTeamIds = (utData || []).map((ut: any) => ut.team_id);
-      return { ...dbUser, team_ids: userTeamIds.length > 0 ? userTeamIds : (dbUser.team_ids || []) };
-    } catch {}
-    return dbUser;
-  };
-
-  const handleUserSession = async (user: any) => {
-    try {
-      let resolvedTheme: 'light' | 'dark' = 'light';
-      let resolvedSidebarColor = '';
-
-      if (isMockMode) {
-        const { data: prefRows } = await mockDb.get('user_preferences');
-        const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
-        resolvedTheme = myPref?.preferences?.theme === 'dark' ? 'dark' : 'light';
-        resolvedSidebarColor = myPref?.preferences?.sidebar_color || '';
-      } else {
-        const { data: prefData } = await supabase!
-          .from('user_preferences')
-          .select('preferences')
-          .eq('user_id', user.id)
-          .single();
-        resolvedTheme = prefData?.preferences?.theme === 'dark' ? 'dark' : 'light';
-        resolvedSidebarColor = prefData?.preferences?.sidebar_color || '';
-      }
-
-      localStorage.setItem('qualitrack_theme', resolvedTheme);
-      setTheme(resolvedTheme);
-      applyThemeToDOM(resolvedTheme);
-      setPrefetchedSidebarColor(resolvedSidebarColor);
-      if (user.email) {
-        localStorage.setItem(`qualitrack_sidebar_color_${user.email}`, resolvedSidebarColor);
-      }
-      setAppReady(true);
-
-      if (isMockMode) {
-        const { data } = await mockDb.get('users');
-        const dbUser = (data || []).find((u: any) => u.email === user.email && u.active);
-        if (dbUser) {
-          const enriched = await enrichUserWithTeamIds(dbUser);
-          setUserData(enriched);
-          setCurrentUser(user);
-          const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
-          if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin' || savedTab === 'custom_dashboard') {
-            setActiveTab(savedTab as any);
-          } else {
-            setActiveTab('dashboard');
-          }
-          if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now();
-          localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({
-            userId: dbUser.id,
-            sessionStartedAt: sessionStartTimeRef.current,
-            sessionExpiresAt: sessionStartTimeRef.current + ABSOLUTE_TIMEOUT_MS,
-          }));
-          localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
-        }
-      } else {
-        const { data, error } = await supabase!.from('users').select('*').eq('email', user.email).single();
-        if (data && data.active) {
-          const enriched = await enrichUserWithTeamIds(data);
-          setUserData(enriched);
-          setCurrentUser(user);
-          const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
-          if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin' || savedTab === 'custom_dashboard') {
-            setActiveTab(savedTab as any);
-          } else {
-            setActiveTab('dashboard');
-          }
-          if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now();
-          localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
-        } else if (error && error.code === 'PGRST116') {
-          setAppReady(false);
-          await supabase!.auth.signOut();
-          setAuthView('login');
-        } else if (error) {
-          console.error('[App] Erro crítico em handleUserSession:', error);
-          toast.error('Erro de conexão ao carregar seu perfil. O sistema está tentando reconectar.');
-        } else {
-          setAppReady(false);
-          setAuthView('request-access');
-          setRequestData({ name: user.name || '', email: user.email });
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const emailLower = credentials.email.toLowerCase();
-      if (isMockMode) {
-        const { data: users } = await mockDb.get('users');
-        const user = (users || []).find((u: any) => 
-          u.email.toLowerCase() === emailLower && 
-          u.password === credentials.password
-        );
-
-        if (user) {
-          if (!user.active) {
-            setLoading(false);
-            return toast.error('Esta conta está desativada.');
-          }
-
-        const { data: prefRows } = await mockDb.get('user_preferences');
-        const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
-        const resolvedTheme: 'light' | 'dark' = myPref?.preferences?.theme === 'dark' ? 'dark' : 'light';
-        const resolvedSidebarColor: string = myPref?.preferences?.sidebar_color || '';
-        localStorage.setItem('qualitrack_theme', resolvedTheme);
-        setTheme(resolvedTheme);
-        applyThemeToDOM(resolvedTheme);
-        setPrefetchedSidebarColor(resolvedSidebarColor);
-        localStorage.setItem(`qualitrack_sidebar_color_${user.email}`, resolvedSidebarColor);
-        setAppReady(true);
-
-          const enriched = await enrichUserWithTeamIds(user);
-          setCurrentUser(enriched);
-          setUserData(enriched);
-          setActiveTab('dashboard');
-          localStorage.setItem('qualitrack_active_tab', 'dashboard');
-          window.location.hash = 'dashboard';
-          setCredentials({ email: '', password: '' });
-          sessionStartTimeRef.current = Date.now();
-          localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({
-            userId: user.id,
-            sessionStartedAt: sessionStartTimeRef.current,
-            sessionExpiresAt: sessionStartTimeRef.current + ABSOLUTE_TIMEOUT_MS,
-          }));
-          localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
-          toast.success(`Bem-vindo, ${user.name}!`);
-        } else {
-          toast.error('E-mail ou senha incorretos. Tente novamente.');
-        }
-        setLoading(false);
-      } else {
-        const { error } = await supabase!.auth.signInWithPassword({
-          email: emailLower,
-          password: credentials.password
-        });
-        if (error) throw error;
-        toast.success('Login realizado com sucesso!');
-        // Não definimos loading como false aqui; o handleUserSession fará isso
-        // após carregar com sucesso o perfil do usuário do banco de dados.
-      }
-    } catch (e: any) {
-      toast.error('As credenciais informadas estão incorretas ou são inválidas.');
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = async (options?: { silent?: boolean; message?: string }) => {
-    setAppReady(false);
-    setCurrentUser(null);
-    setUserData(null);
-    setActiveTab('dashboard');
-    localStorage.removeItem('qualitrack_active_tab');
-    window.location.hash = 'dashboard';
-    setAuthView('login');
-    setPrefetchedSidebarColor('');
-    setCredentials({ email: '', password: '' });
-    setShowIdleWarning(false);
-    sessionStartTimeRef.current = null;
-    prevUserIdRef.current = null;
-    localStorage.removeItem(MOCK_SESSION_KEY);
-    localStorage.setItem('qualitrack_theme', 'system');
-    setTheme('system');
-    applyThemeToDOM(resolveSystemTheme());
-    lastDbThemeRef.current = null;
-    if (!isMockMode) {
-      supabase!.auth.signOut().catch(console.error);
-    }
-    if (!options?.silent) {
-      toast.success(options?.message || 'Você saiu do sistema com sucesso.');
-    }
-  };
-
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      if (isMockMode) {
-        toast.success('Funcionalidade simulada no modo Mock.');
-      } else {
-        const { error } = await supabase!.auth.resetPasswordForEmail(resetEmail.toLowerCase(), {
-          redirectTo: window.location.origin,
-        });
-        if (error) throw error;
-        toast.success('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
-        setAuthView('login');
-      }
-    } catch (e: any) {
-      toast.error('Não foi possível enviar o e-mail de recuperação. Verifique o e-mail digitado.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdatePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword.length < 6) return toast.error('A senha deve ter pelo menos 6 caracteres.');
-    if (newPassword !== confirmPassword) return toast.error('As senhas não coincidem.');
-    setLoading(true);
-    try {
-      if (isMockMode) {
-        if (!userData?.id) throw new Error('Sessão expirada.');
-        await mockDb.update('users', userData.id, { password: newPassword, must_change_password: false });
-        handleLogout({ silent: true });
-        toast.success('Sua senha foi atualizada com sucesso!');
-      } else {
-        const { data: { user }, error: userError } = await supabase!.auth.getUser();
-        if (userError || !user) throw userError || new Error('Usuário não autenticado.');
-
-        const { error } = await supabase!.auth.updateUser({ password: newPassword });
-        if (error) throw error;
-        await supabase!.from('users').update({ must_change_password: false }).eq('email', user.email);
-        window.history.replaceState({}, document.title, window.location.pathname);
-        isPasswordRecoveryRef.current = false;
-        isInviteFlowRef.current = false;
-        handleLogout({ silent: true });
-        toast.success('Sua nova senha foi definida com sucesso! Faça login com suas novas credenciais.');
-      }
-    } catch (e: any) {
-      console.error('[handleUpdatePassword] Erro ao atualizar senha:', e);
-      toast.error(`Não foi possível atualizar sua senha: ${e.message || e}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRequestAccess = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      if (isMockMode) {
-        await mockDb.insert('access_requests', { name: requestData.name, email: requestData.email.toLowerCase(), status: 'pending' });
-        toast.success('Solicitação simulada enviada!');
-        setAuthView('pending');
-      } else {
-        const { error } = await supabase!.from('access_requests').insert([
-          { name: requestData.name, email: requestData.email.toLowerCase(), status: 'pending' }
-        ]);
-        if (error) throw error;
-        setAuthView('pending');
-      }
-    } catch (e: any) {
-      toast.error('Não foi possível enviar sua solicitação. Tente novamente mais tarde.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    currentUser,
+    userData,
+    loading,
+    appReady,
+    authView,
+    setAuthView,
+    credentials,
+    setCredentials,
+    requestData,
+    setRequestData,
+    newPassword,
+    setNewPassword,
+    confirmPassword,
+    setConfirmPassword,
+    resetEmail,
+    setResetEmail,
+    isExistingRequest,
+    setIsExistingRequest,
+    prefetchedSidebarColor,
+    activeTab,
+    setActiveTab,
+    handleLogin,
+    handleLogout,
+    handleForgotPassword,
+    handleUpdatePassword,
+    handleRequestAccess,
+    extendSession,
+    showIdleWarning,
+    idleCountdown,
+    isSystemOnline,
+    isReconnecting,
+    isFormOpen,
+    setIsFormOpen,
+    isSidebarOpen,
+    setIsSidebarOpen,
+    sidebarColor,
+    setSidebarColor,
+    sidebarContrastClass,
+    sidebarContrastSubtle,
+    sidebarIsDark,
+  } = useAuth();
 
   return (
     <>
-    <Toaster position="top-right" richColors />
-    <AnimatePresence>
-      {showIdleWarning && currentUser && (
-        <m.div
-          key="idle-warning"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={extendSession}
-        >
+      <Toaster position="top-right" richColors />
+      <AnimatePresence>
+        {showIdleWarning && currentUser && (
           <m.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="bg-surface-card border border-surface-border rounded-3xl p-8 max-w-md w-full mx-4 shadow-premium text-center"
-            onClick={e => e.stopPropagation()}
+            key="idle-warning"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={extendSession}
           >
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-              <AlertTriangle className="w-8 h-8 text-amber-500" />
-            </div>
-            <h3 className="text-xl font-black text-brand-primary mb-2">Sessão expirando</h3>
-            <p className="text-sm text-brand-muted mb-1">
-              Sua sessão expirará em <span className="font-black text-amber-500 text-lg">{Math.floor(idleCountdown / 60)}:{String(idleCountdown % 60).padStart(2, '0')}</span> devido à inatividade.
-            </p>
-            <p className="text-xs text-brand-muted mb-6">Clique no botão abaixo para continuar conectado.</p>
-            <button
-              onClick={extendSession}
-              className="w-full bg-brand-accent text-white py-3.5 rounded-lg font-bold uppercase tracking-wider shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all"
+            <m.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="bg-surface-card border border-surface-border rounded-3xl p-8 max-w-md w-full mx-4 shadow-premium text-center"
+              onClick={e => e.stopPropagation()}
             >
-              Continuar Conectado
-            </button>
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8 text-amber-500" />
+              </div>
+              <h3 className="text-xl font-black text-brand-primary mb-2">Sessão expirando</h3>
+              <p className="text-sm text-brand-muted mb-1">
+                Sua sessão expirará em <span className="font-black text-amber-500 text-lg">{Math.floor(idleCountdown / 60)}:{String(idleCountdown % 60).padStart(2, '0')}</span> devido à inatividade.
+              </p>
+              <p className="text-xs text-brand-muted mb-6">Clique no botão abaixo para continuar conectado.</p>
+              <button
+                onClick={extendSession}
+                className="w-full bg-brand-accent text-white py-3.5 rounded-lg font-bold uppercase tracking-wider shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all"
+              >
+                Continuar Conectado
+              </button>
+            </m.div>
           </m.div>
-        </m.div>
-      )}
-    </AnimatePresence>
-    <AnimatePresence mode="wait">
+        )}
+      </AnimatePresence>
+      <AnimatePresence mode="wait">
         {loading ? (
           <m.div
             key="app-loading"
@@ -829,10 +138,10 @@ function AppContent() {
             transition={{ duration: 0.3 }}
             className="h-screen w-screen flex items-center justify-center bg-surface-bg"
           >
-            <m.div 
-              animate={{ rotate: 360 }} 
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }} 
-              className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full" 
+            <m.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full"
             />
           </m.div>
         ) : !currentUser ? (
@@ -940,24 +249,24 @@ function AppContent() {
                   )}
                 </AnimatePresence>
               </div>
-      </div>
-      </m.div>
-      ) : !appReady ? (
-        <m.div
-          key="app-transition"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="h-screen w-screen flex items-center justify-center bg-surface-bg"
-        >
+            </div>
+          </m.div>
+        ) : !appReady ? (
           <m.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full"
-          />
-        </m.div>
-      ) : (
+            key="app-transition"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="h-screen w-screen flex items-center justify-center bg-surface-bg"
+          >
+            <m.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full"
+            />
+          </m.div>
+        ) : (
           <m.div
             key="app-main"
             initial={{ opacity: 0, scale: 0.98 }}
@@ -966,26 +275,24 @@ function AppContent() {
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="h-screen w-full"
           >
-        <QualityConfigProvider>
-        <StaticDataProvider>
-        <MainApp
-          isSidebarOpen={isSidebarOpen}
-          setIsSidebarOpen={setIsSidebarOpen}
-          currentUser={currentUser}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          userData={userData}
-          handleLogout={handleLogout}
-          isFormOpen={isFormOpen}
-          setIsFormOpen={setIsFormOpen}
-          theme={theme}
-          setTheme={setTheme}
-          isSystemOnline={isSystemOnline}
-          isReconnecting={isReconnecting}
-          prefetchedSidebarColor={prefetchedSidebarColor}
-        />
-        </StaticDataProvider>
-      </QualityConfigProvider>
+            <QualityConfigProvider>
+              <StaticDataProvider>
+                <MainApp
+                  isSidebarOpen={isSidebarOpen}
+                  setIsSidebarOpen={setIsSidebarOpen}
+                  currentUser={currentUser}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  userData={userData}
+                  handleLogout={handleLogout}
+                  isFormOpen={isFormOpen}
+                  setIsFormOpen={setIsFormOpen}
+                  isSystemOnline={isSystemOnline}
+                  isReconnecting={isReconnecting}
+                  prefetchedSidebarColor={prefetchedSidebarColor}
+                />
+              </StaticDataProvider>
+            </QualityConfigProvider>
           </m.div>
         )}
       </AnimatePresence>
@@ -995,49 +302,49 @@ function AppContent() {
 
 // --- Sidebar Color Mirroring Maps ---
 const darkToLightColorMap: Record<string, string> = {
-  '': '', // Padrão
-  '#12130F': '#475569', // Obsidiana -> Slate Clássico
-  '#2F3129': '#64748B', // Grafite Escuro -> Aço Claro
-  '#1E293B': '#3B82F6', // Slate Azulado -> Azul Denim
-  '#1B2A4A': '#60A5FA', // Azul Marinho -> Azul Celeste
-  '#253366': '#3B82F6', // Azul Indigo -> Azul Denim
-  '#0F4C81': '#3B82F6', // Azul Oceano -> Azul Denim
-  '#0F5132': '#10B981', // Esmeralda Escuro -> Esmeralda Suave
-  '#1A3A2A': '#7D9B82', // Verde Floresta -> Verde Sálvia
-  '#3C4E2D': '#84CC16', // Verde Oliva -> Verde Oliva Claro
-  '#0F6B5C': '#0D9488', // Menta Escuro -> Azul Turquesa
-  '#7A431D': '#B45309', // Bronze / Cobre -> Bronze Dourado
-  '#422006': '#854D0E', // Café Profundo -> Argila
-  '#8A331E': '#C2410C', // Terracota Escuro -> Terracota Suave
-  '#5C0624': '#DC2626', // Vinho -> Vermelho Carmim
-  '#801438': '#F43F5E', // Cereja Negra -> Rosa Coral
-  '#522258': '#A78BFA', // Ametista -> Lilás Médio
-  '#3B0764': '#7C3AED', // Roxo Meia-Noite -> Roxo Real
-  '#4C1D95': '#8B5CF6', // Lavanda Escuro -> Ameixa
-  '#475569': '#64748B'  // Aço Escuro -> Aço Claro
+  '': '',
+  '#12130F': '#475569',
+  '#2F3129': '#64748B',
+  '#1E293B': '#3B82F6',
+  '#1B2A4A': '#60A5FA',
+  '#253366': '#3B82F6',
+  '#0F4C81': '#3B82F6',
+  '#0F5132': '#10B981',
+  '#1A3A2A': '#7D9B82',
+  '#3C4E2D': '#84CC16',
+  '#0F6B5C': '#0D9488',
+  '#7A431D': '#B45309',
+  '#422006': '#854D0E',
+  '#8A331E': '#C2410C',
+  '#5C0624': '#DC2626',
+  '#801438': '#F43F5E',
+  '#522258': '#A78BFA',
+  '#3B0764': '#7C3AED',
+  '#4C1D95': '#8B5CF6',
+  '#475569': '#64748B'
 };
 
 const lightToDarkColorMap: Record<string, string> = {
-  '': '', // Padrão
-  '#475569': '#12130F', // Slate Clássico -> Obsidiana
-  '#3B82F6': '#1E293B', // Azul Denim -> Slate Azulado
-  '#60A5FA': '#1B2A4A', // Azul Celeste -> Azul Marinho
-  '#34D399': '#0F6B5C', // Verde Hortelã -> Menta Escuro
-  '#10B981': '#0F5132', // Esmeralda Suave -> Esmeralda Escuro
-  '#7D9B82': '#1A3A2A', // Verde Sálvia -> Verde Floresta
-  '#D97706': '#7A431D', // Amarelo Mostarda -> Bronze / Cobre
-  '#EA580C': '#8A331E', // Laranja Cenoura -> Terracota Escuro
-  '#C2410C': '#8A331E', // Terracota Suave -> Terracota Escuro
-  '#DC2626': '#5C0624', // Vermelho Carmim -> Vinho
-  '#F43F5E': '#801438', // Rosa Coral -> Cereja Negra
-  '#A78BFA': '#522258', // Lilás Médio -> Ametista
-  '#7C3AED': '#3B0764', // Roxo Real -> Roxo Meia-Noite
-  '#8B5CF6': '#4C1D95', // Ameixa -> Lavanda Escuro
-  '#0D9488': '#0F6B5C', // Azul Turquesa -> Menta Escuro
-  '#B45309': '#7A431D', // Bronze Dourado -> Bronze / Cobre
-  '#854D0E': '#422006', // Argila -> Café Profundo
-  '#64748B': '#475569', // Aço Claro -> Aço Escuro
-  '#84CC16': '#3C4E2D'  // Verde Oliva Claro -> Verde Oliva
+  '': '',
+  '#475569': '#12130F',
+  '#3B82F6': '#1E293B',
+  '#60A5FA': '#1B2A4A',
+  '#34D399': '#0F6B5C',
+  '#10B981': '#0F5132',
+  '#7D9B82': '#1A3A2A',
+  '#D97706': '#7A431D',
+  '#EA580C': '#8A331E',
+  '#C2410C': '#8A331E',
+  '#DC2626': '#5C0624',
+  '#F43F5E': '#801438',
+  '#A78BFA': '#522258',
+  '#7C3AED': '#3B0764',
+  '#8B5CF6': '#4C1D95',
+  '#0D9488': '#0F6B5C',
+  '#B45309': '#7A431D',
+  '#854D0E': '#422006',
+  '#64748B': '#475569',
+  '#84CC16': '#3C4E2D'
 };
 
 function MainApp({
@@ -1050,13 +357,12 @@ function MainApp({
   handleLogout,
   isFormOpen,
   setIsFormOpen,
-  theme,
-  setTheme,
   isSystemOnline,
   isReconnecting,
   prefetchedSidebarColor
 }: any) {
   const { resolvedTheme } = useTheme();
+  const { theme, setTheme } = useAuth();
   const { teams, userPreferences, loading: staticDataLoading } = useStaticData();
   const sidebarColors = React.useMemo(() => {
     if (resolvedTheme === 'dark') {
@@ -1129,12 +435,12 @@ function MainApp({
     }
   };
 
-  // Reset activeTab to dashboard if user doesn't have admin role
   React.useEffect(() => {
     if (userData && userData.role !== 'admin' && (activeTab === 'admin' || activeTab === 'custom_dashboard')) {
       setActiveTab('dashboard');
     }
   }, [userData?.role, activeTab]);
+
   const [sidebarColor, setSidebarColor] = useState<string>(() => {
     if (prefetchedSidebarColor) return prefetchedSidebarColor;
     if (typeof window !== 'undefined') {
@@ -1172,7 +478,6 @@ function MainApp({
     }
   }, [userData?.id, userPreferences, staticDataLoading]);
 
-  // Persiste tema no DB quando usuário muda manualmente (após sync inicial)
   const prevThemeForDbRef = React.useRef<'light' | 'dark' | 'system' | null>(null);
   React.useEffect(() => {
     if (!userData?.id) return;
@@ -1190,7 +495,6 @@ function MainApp({
     }
   }, [theme, userData?.id, staticDataLoading]);
 
-  // Sincroniza sidebar_color do banco (com fallback user_metadata) ao logar / F5
   React.useEffect(() => {
     if (!userData?.id) return;
     const userId = userData.id;
@@ -1212,7 +516,6 @@ function MainApp({
     if (email) localStorage.setItem(`qualitrack_sidebar_color_${email}`, finalColor);
   }, [userData?.id, userPreferences]);
 
-  // Fechar o menu de equipes/configurações ao clicar fora
   useEffect(() => {
     if (!showTeamList) {
       setSidebarAccordion(null);
@@ -1228,7 +531,6 @@ function MainApp({
     return () => document.removeEventListener('click', handleOutsideClick, true);
   }, [showTeamList]);
 
-  // Fechar o menu ao abrir ou recolher o sidebar para evitar que fique flutuando desalinhado
   useEffect(() => {
     setShowTeamList(false);
   }, [isSidebarOpen]);
@@ -1245,7 +547,7 @@ function MainApp({
   };
 
   const handleThemeChange = async (newTheme: Theme) => {
-    const currentResolved = resolvedTheme; // 'light' | 'dark'
+    const currentResolved = resolvedTheme;
     let targetResolved: 'light' | 'dark';
     if (newTheme === 'system') {
       targetResolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -1277,7 +579,6 @@ function MainApp({
   const userTeams = teams.filter(t => (userData?.team_ids || []).includes(t.id));
   const teamNames = userTeams.map(t => t.name).join(', ');
 
-  // Contrast logic
   const isSidebarLight = !isDarkColor(sidebarColor, resolvedTheme);
   const sidebarIsDark = !isSidebarLight;
   const sidebarContrastClass = isSidebarLight ? 'text-slate-900' : 'text-white';
@@ -1300,336 +601,319 @@ function MainApp({
         )}
       </AnimatePresence>
 
-    <m.aside
-    initial={false}
-    animate={{ width: isSidebarOpen ? 260 : 80 }}
-    transition={{ duration: 0.3, ease: "easeInOut" }}
-    onAnimationComplete={() => setSidebarTextVisible(isSidebarOpen)}
-    style={sidebarStyle}
-    onClick={(e) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('select') || target.closest('.interactive-sidebar-item')) {
-        return;
-      }
-      toggleSidebar();
-    }}
+      <m.aside
+        initial={false}
+        animate={{ width: isSidebarOpen ? 260 : 80 }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
+        onAnimationComplete={() => setSidebarTextVisible(isSidebarOpen)}
+        style={sidebarStyle}
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('select') || target.closest('.interactive-sidebar-item')) {
+            return;
+          }
+          toggleSidebar();
+        }}
         className={`${sidebarContrastClass} flex flex-col relative z-20 transition-all transition-colors duration-300 border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
       >
-        {/* Floating toggle button on hover */}
-        <div 
-      onClick={(e) => {
-        e.stopPropagation();
-        toggleSidebar();
-      }}
+        <div
+          onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
           className="absolute -right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-surface-card border border-surface-border text-brand-primary flex items-center justify-center shadow-premium hover:scale-110 active:scale-95 transition-all opacity-0 group-hover/sidebar:opacity-100 z-30 cursor-pointer"
         >
-          {isSidebarOpen ? (
-            <ChevronLeft className="w-4 h-4" />
-          ) : (
-            <ChevronRight className="w-4 h-4" />
-          )}
+          {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </div>
-        {/* Header / Logo */}
         <div className="h-20 flex items-center px-6 overflow-hidden">
           <div className="flex items-center gap-3 whitespace-nowrap">
             <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
               <div className="w-4 h-4 border-2 border-white rounded-[2px]" />
             </div>
-        {sidebarTextVisible && (
-          <h2 className="font-bold text-lg tracking-tight">QualiTrack</h2>
-        )}
+            {sidebarTextVisible && (
+              <h2 className="font-bold text-lg tracking-tight">QualiTrack</h2>
+            )}
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 px-3 space-y-1 py-4">
-        <NavItem isDark={sidebarIsDark} icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
-        <NavItem isDark={sidebarIsDark} icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
-        {userData?.role === 'admin' && (
-          <div className="space-y-1">
-            <button 
-              onClick={handleSettingsClick}
-              className={`
-                w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
-                ${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen)
-                  ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-slate-900') 
-                  : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
-              `}
-            >
-              {(activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen && (
-                <m.div 
-                  layoutId="active-bar"
-                  className={`absolute left-0 w-1 h-6 rounded-full ${sidebarIsDark ? 'bg-white' : 'bg-slate-900'}`}
-                />
-              )}
-              <div className={`${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen) ? 'text-current' : (sidebarIsDark ? 'text-white/30 group-hover:text-white' : 'text-slate-900/30 group-hover:text-slate-900')}`}>
-                <Settings className="w-5 h-5" />
-              </div>
-              <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${sidebarTextVisible ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
-                <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
-                  Configurações
-                </span>
-                <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isSettingsOpen ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
-            
-            <AnimatePresence initial={false}>
-              {isSettingsOpen && sidebarTextVisible && (
-                <m.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
-                  className="overflow-hidden pl-1 space-y-1"
-                >
-                  <SubNavItem 
-                    label="Geral" 
-                    active={activeTab === 'admin'} 
-                    onClick={() => setActiveTab('admin')} 
-                    isOpen={sidebarTextVisible} 
-                    isDark={sidebarIsDark} 
+          <NavItem isDark={sidebarIsDark} icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
+          <NavItem isDark={sidebarIsDark} icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
+          {userData?.role === 'admin' && (
+            <div className="space-y-1">
+              <button
+                onClick={handleSettingsClick}
+                className={`
+                  w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
+                  ${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen)
+                    ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-slate-900')
+                    : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
+                `}
+              >
+                {(activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen && (
+                  <m.div
+                    layoutId="active-bar"
+                    className={`absolute left-0 w-1 h-6 rounded-full ${sidebarIsDark ? 'bg-white' : 'bg-slate-900'}`}
                   />
-                  <SubNavItem 
-                    label="Customizar Dashboards" 
-                    active={activeTab === 'custom_dashboard'} 
-                    onClick={() => setActiveTab('custom_dashboard')} 
-                    isOpen={sidebarTextVisible} 
-                    isDark={sidebarIsDark} 
-                  />
-                </m.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
+                )}
+                <div className={`${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen) ? 'text-current' : (sidebarIsDark ? 'text-white/30 group-hover:text-white' : 'text-slate-900/30 group-hover:text-slate-900')}`}>
+                  <Settings className="w-5 h-5" />
+                </div>
+                <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${sidebarTextVisible ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
+                  <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
+                    Configurações
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isSettingsOpen ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
+
+              <AnimatePresence initial={false}>
+                {isSettingsOpen && sidebarTextVisible && (
+                  <m.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                    className="overflow-hidden pl-1 space-y-1"
+                  >
+                    <SubNavItem
+                      label="Geral"
+                      active={activeTab === 'admin'}
+                      onClick={() => setActiveTab('admin')}
+                      isOpen={sidebarTextVisible}
+                      isDark={sidebarIsDark}
+                    />
+                    <SubNavItem
+                      label="Customizar Dashboards"
+                      active={activeTab === 'custom_dashboard'}
+                      onClick={() => setActiveTab('custom_dashboard')}
+                      isOpen={sidebarTextVisible}
+                      isDark={sidebarIsDark}
+                    />
+                  </m.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </nav>
 
-    {/* Footer Area - User Profile */}
-    <div className="p-3 border-t border-white/5 interactive-sidebar-item">
-      <div className="relative interactive-sidebar-item">
-        <div className="flex items-center gap-3 p-2 rounded-xl bg-black/10 overflow-hidden">
-        <button
-          onClick={() => setShowTeamList(!showTeamList)}
-          className="profile-toggle-btn w-9 h-9 rounded-lg bg-black/10 flex items-center justify-center flex-shrink-0 hover:bg-black/20 transition-all relative cursor-pointer"
-        >
-            <UserIcon className="w-5 h-5" />
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full transition-colors duration-300" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
-          </button>
+        <div className="p-3 border-t border-white/5 interactive-sidebar-item">
+          <div className="relative interactive-sidebar-item">
+            <div className="flex items-center gap-3 p-2 rounded-xl bg-black/10 overflow-hidden">
+              <button
+                onClick={() => setShowTeamList(!showTeamList)}
+                className="profile-toggle-btn w-9 h-9 rounded-lg bg-black/10 flex items-center justify-center flex-shrink-0 hover:bg-black/20 transition-all relative cursor-pointer"
+              >
+                <UserIcon className="w-5 h-5" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full transition-colors duration-300" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
+              </button>
 
-          <div className="flex-1 flex items-center gap-2 min-w-0 overflow-hidden" style={{ opacity: sidebarTextVisible ? 1 : 0, maxWidth: sidebarTextVisible ? undefined : 0, transition: 'opacity 0.15s ease' }}>
-        <button
-          onClick={() => setShowTeamList(!showTeamList)}
-          className="profile-toggle-btn min-w-0 flex-1 py-1 text-left cursor-pointer hover:opacity-80 transition-opacity"
-        >
-              <p className="text-xs font-bold leading-tight truncate">{userData?.name}</p>
-              <p className={`text-[10px] font-medium ${sidebarContrastSubtle} uppercase tracking-wider mt-0.5 leading-tight truncate`}>
-                {userData ? ROLE_LABELS[userData.role as UserRole] : ''}
-              </p>
-            </button>
-
-            <button
-              onClick={handleLogout}
-              className={`p-1.5 ${sidebarIsDark ? 'hover:bg-white/10 text-white/40 hover:text-white' : 'hover:bg-black/10 text-slate-900/40 hover:text-slate-900'} rounded-lg transition-colors cursor-pointer flex-shrink-0`}
-              title="Sair"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-{/* Team List & Settings Popover */}
-      <AnimatePresence>
-        {showTeamList && (
-          <m.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className={`absolute w-56 bg-surface-card border border-surface-border rounded-2xl shadow-premium z-50 text-brand-primary interactive-sidebar-popover overflow-hidden ${isSidebarOpen ? 'bottom-full left-0 mb-2' : 'bottom-0 left-full ml-2' }`}
-          >
-            <div className="p-3 space-y-0.5">
-              {/* ── Teams Accordion ── */}
-              <div>
+              <div className="flex-1 flex items-center gap-2 min-w-0 overflow-hidden" style={{ opacity: sidebarTextVisible ? 1 : 0, maxWidth: sidebarTextVisible ? undefined : 0, transition: 'opacity 0.15s ease' }}>
                 <button
-                  onClick={() => setSidebarAccordion(sidebarAccordion === 'teams' ? null : 'teams')}
-                  className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
+                  onClick={() => setShowTeamList(!showTeamList)}
+                  className="profile-toggle-btn min-w-0 flex-1 py-1 text-left cursor-pointer hover:opacity-80 transition-opacity"
                 >
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-brand-accent" />
-                    <span className="text-[11px] font-black uppercase tracking-wider">Equipes</span>
-                  </div>
-                  <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'teams' ? 'rotate-180' : ''}`} />
+                  <p className="text-xs font-bold leading-tight truncate">{userData?.name}</p>
+                  <p className={`text-[10px] font-medium ${sidebarContrastSubtle} uppercase tracking-wider mt-0.5 leading-tight truncate`}>
+                    {userData ? ROLE_LABELS[userData.role as UserRole] : ''}
+                  </p>
                 </button>
-                <AnimatePresence initial={false}>
-                  {sidebarAccordion === 'teams' && (
-                    <m.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2, ease: 'easeInOut' }}
-                      className="overflow-hidden"
-                    >
-                      <div className="pb-2 px-2 space-y-0.5">
-                        {userTeams.length > 0 ? userTeams.map(t => (
-                          <div key={t.id} className="text-[11px] py-1 px-2 rounded-lg font-semibold text-brand-muted">{t.name}</div>
-                        )) : (
-                          <div className="text-[10px] text-brand-muted italic px-2 py-1">Nenhuma equipe vinculada</div>
-                        )}
-                      </div>
-                    </m.div>
-                  )}
-                </AnimatePresence>
-              </div>
 
-              {/* ── Avatar Accordion ── */}
-              <div className="border-t border-surface-border">
                 <button
-                  onClick={() => setSidebarAccordion(sidebarAccordion === 'avatar' ? null : 'avatar')}
-                  className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-2">
-                    <UserIcon className="w-4 h-4 text-brand-accent" />
-                    <span className="text-[11px] font-black uppercase tracking-wider">Avatar</span>
-                  </div>
-                  <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'avatar' ? 'rotate-180' : ''}`} />
-                </button>
-                <AnimatePresence initial={false}>
-                  {sidebarAccordion === 'avatar' && (
-                    <m.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2, ease: 'easeInOut' }}
-                      className="overflow-hidden"
-                    >
-                      <div className="pb-2 px-2">
-                        <div className="text-[10px] text-brand-muted italic py-1">Em breve</div>
-                      </div>
-                    </m.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* ── Appearance Accordion ── */}
-              <div className="border-t border-surface-border">
-                <button
-                  onClick={() => setSidebarAccordion(sidebarAccordion === 'appearance' ? null : 'appearance')}
-                  className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-2">
-                    {theme === 'dark' ? <Moon className="w-4 h-4 text-brand-accent" /> : theme === 'light' ? <Sun className="w-4 h-4 text-brand-accent" /> : <Monitor className="w-4 h-4 text-brand-accent" />}
-                    <span className="text-[11px] font-black uppercase tracking-wider">Aparência</span>
-                    <span className="text-[10px] font-semibold text-brand-muted normal-case tracking-normal">
-                      {theme === 'light' ? 'Claro' : theme === 'dark' ? 'Escuro' : 'Sistema'}
-                    </span>
-                  </div>
-                  <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'appearance' ? 'rotate-180' : ''}`} />
-                </button>
-                <AnimatePresence initial={false}>
-                  {sidebarAccordion === 'appearance' && (
-                    <m.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2, ease: 'easeInOut' }}
-                      className="overflow-hidden"
-                    >
-                      <div className="pb-2 px-2">
-                        <div className="grid grid-cols-3 gap-1 bg-surface-subtle p-1 rounded-xl border border-surface-border">
-                          {[
-                            { value: 'light', label: 'Claro', icon: Sun },
-                            { value: 'dark', label: 'Escuro', icon: Moon },
-                            { value: 'system', label: 'Sistema', icon: Monitor }
-                          ].map(opt => {
-                            const Icon = opt.icon;
-                            const isActive = theme === opt.value;
-                            return (
-                              <button
-                                key={opt.value}
-                                onClick={(e) => { e.stopPropagation(); handleThemeChange(opt.value as Theme); }}
-                                className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                                  isActive
-                                    ? 'bg-surface-card text-brand-primary shadow-sm border border-surface-border'
-                                    : 'text-brand-muted hover:text-brand-primary hover:bg-surface-card/30 border border-transparent'
-                                }`}
-                              >
-                                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-brand-accent' : 'text-brand-muted'}`} />
-                                <span>{opt.label}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </m.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* ── Color Accordion ── */}
-              <div className="border-t border-surface-border">
-                <button
-                  onClick={() => setSidebarAccordion(sidebarAccordion === 'color' ? null : 'color')}
-                  className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-2">
-                    <Palette className="w-4 h-4 text-brand-accent" />
-                    <span className="text-[11px] font-black uppercase tracking-wider">Cor do Menu</span>
-                    {sidebarColor && (
-                      <span className="w-3.5 h-3.5 rounded-full flex-shrink-0 border border-surface-border" style={{ backgroundColor: sidebarColor }} />
-                    )}
-                  </div>
-                  <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'color' ? 'rotate-180' : ''}`} />
-                </button>
-                <AnimatePresence initial={false}>
-                  {sidebarAccordion === 'color' && (
-                    <m.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2, ease: 'easeInOut' }}
-                      className="overflow-hidden"
-                    >
-                      <div className="pb-2 px-2">
-                        <div className="grid grid-cols-5 gap-1.5">
-                          {sidebarColors.map(opt => {
-                            const isActive = sidebarColor === opt.value;
-                            return (
-                              <button
-                                key={opt.label}
-                                onClick={() => { handleSidebarColorChange(opt.value); }}
-                                className={`w-7 h-7 rounded-full ${opt.hex} border-2 hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer ${isActive ? 'border-brand-accent shadow-md scale-105' : 'border-surface-border'}`}
-                                title={opt.label}
-                              >
-                                {isActive && <Check className="w-3.5 h-3.5 text-white drop-shadow" />}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </m.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* ── Sair Option ── */}
-              <div className="border-t border-surface-border pt-1 mt-1">
-                <button
-                  onClick={() => { setShowTeamList(false); handleLogout(); }}
-                  className="w-full flex items-center gap-2 py-2 px-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
+                  onClick={handleLogout}
+                  className={`p-1.5 ${sidebarIsDark ? 'hover:bg-white/10 text-white/40 hover:text-white' : 'hover:bg-black/10 text-slate-900/40 hover:text-slate-900'} rounded-lg transition-colors cursor-pointer flex-shrink-0`}
+                  title="Sair"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span className="text-[11px] font-black uppercase tracking-wider">Sair</span>
                 </button>
               </div>
             </div>
-          </m.div>
-        )}
-      </AnimatePresence>
+
+            <AnimatePresence>
+              {showTeamList && (
+                <m.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className={`absolute w-56 bg-surface-card border border-surface-border rounded-2xl shadow-premium z-50 text-brand-primary interactive-sidebar-popover overflow-hidden ${isSidebarOpen ? 'bottom-full left-0 mb-2' : 'bottom-0 left-full ml-2' }`}
+                >
+                  <div className="p-3 space-y-0.5">
+                    <div>
+                      <button
+                        onClick={() => setSidebarAccordion(sidebarAccordion === 'teams' ? null : 'teams')}
+                        className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-brand-accent" />
+                          <span className="text-[11px] font-black uppercase tracking-wider">Equipes</span>
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'teams' ? 'rotate-180' : ''}`} />
+                      </button>
+                      <AnimatePresence initial={false}>
+                        {sidebarAccordion === 'teams' && (
+                          <m.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="pb-2 px-2 space-y-0.5">
+                              {userTeams.length > 0 ? userTeams.map(t => (
+                                <div key={t.id} className="text-[11px] py-1 px-2 rounded-lg font-semibold text-brand-muted">{t.name}</div>
+                              )) : (
+                                <div className="text-[10px] text-brand-muted italic px-2 py-1">Nenhuma equipe vinculada</div>
+                              )}
+                            </div>
+                          </m.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="border-t border-surface-border">
+                      <button
+                        onClick={() => setSidebarAccordion(sidebarAccordion === 'avatar' ? null : 'avatar')}
+                        className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <UserIcon className="w-4 h-4 text-brand-accent" />
+                          <span className="text-[11px] font-black uppercase tracking-wider">Avatar</span>
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'avatar' ? 'rotate-180' : ''}`} />
+                      </button>
+                      <AnimatePresence initial={false}>
+                        {sidebarAccordion === 'avatar' && (
+                          <m.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="pb-2 px-2">
+                              <div className="text-[10px] text-brand-muted italic py-1">Em breve</div>
+                            </div>
+                          </m.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="border-t border-surface-border">
+                      <button
+                        onClick={() => setSidebarAccordion(sidebarAccordion === 'appearance' ? null : 'appearance')}
+                        className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          {theme === 'dark' ? <Moon className="w-4 h-4 text-brand-accent" /> : theme === 'light' ? <Sun className="w-4 h-4 text-brand-accent" /> : <Monitor className="w-4 h-4 text-brand-accent" />}
+                          <span className="text-[11px] font-black uppercase tracking-wider">Aparência</span>
+                          <span className="text-[10px] font-semibold text-brand-muted normal-case tracking-normal">
+                            {theme === 'light' ? 'Claro' : theme === 'dark' ? 'Escuro' : 'Sistema'}
+                          </span>
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'appearance' ? 'rotate-180' : ''}`} />
+                      </button>
+                      <AnimatePresence initial={false}>
+                        {sidebarAccordion === 'appearance' && (
+                          <m.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="pb-2 px-2">
+                              <div className="grid grid-cols-3 gap-1 bg-surface-subtle p-1 rounded-xl border border-surface-border">
+                                {[
+                                  { value: 'light', label: 'Claro', icon: Sun },
+                                  { value: 'dark', label: 'Escuro', icon: Moon },
+                                  { value: 'system', label: 'Sistema', icon: Monitor }
+                                ].map(opt => {
+                                  const Icon = opt.icon;
+                                  const isActive = theme === opt.value;
+                                  return (
+                                    <button
+                                      key={opt.value}
+                                      onClick={(e) => { e.stopPropagation(); handleThemeChange(opt.value as Theme); }}
+                                      className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                        isActive
+                                          ? 'bg-surface-card text-brand-primary shadow-sm border border-surface-border'
+                                          : 'text-brand-muted hover:text-brand-primary hover:bg-surface-card/30 border border-transparent'
+                                      }`}
+                                    >
+                                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-brand-accent' : 'text-brand-muted'}`} />
+                                      <span>{opt.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </m.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="border-t border-surface-border">
+                      <button
+                        onClick={() => setSidebarAccordion(sidebarAccordion === 'color' ? null : 'color')}
+                        className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Palette className="w-4 h-4 text-brand-accent" />
+                          <span className="text-[11px] font-black uppercase tracking-wider">Cor do Menu</span>
+                          {sidebarColor && (
+                            <span className="w-3.5 h-3.5 rounded-full flex-shrink-0 border border-surface-border" style={{ backgroundColor: sidebarColor }} />
+                          )}
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'color' ? 'rotate-180' : ''}`} />
+                      </button>
+                      <AnimatePresence initial={false}>
+                        {sidebarAccordion === 'color' && (
+                          <m.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="pb-2 px-2">
+                              <div className="grid grid-cols-5 gap-1.5">
+                                {sidebarColors.map(opt => {
+                                  const isActive = sidebarColor === opt.value;
+                                  return (
+                                    <button
+                                      key={opt.label}
+                                      onClick={() => { handleSidebarColorChange(opt.value); }}
+                                      className={`w-7 h-7 rounded-full ${opt.hex} border-2 hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer ${isActive ? 'border-brand-accent shadow-md scale-105' : 'border-surface-border'}`}
+                                      title={opt.label}
+                                    >
+                                      {isActive && <Check className="w-3.5 h-3.5 text-white drop-shadow" />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </m.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="border-t border-surface-border pt-1 mt-1">
+                      <button
+                        onClick={() => { setShowTeamList(false); handleLogout(); }}
+                        className="w-full flex items-center gap-2 py-2 px-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span className="text-[11px] font-black uppercase tracking-wider">Sair</span>
+                      </button>
+                    </div>
+                  </div>
+                </m.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </m.aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-surface-bg">
         <header className="px-8 h-20 flex items-center gap-4 border-b border-surface-border/50">
-          <button 
+          <button
             onClick={() => toggleSidebar()}
             className="sidebar-toggle-btn p-2 hover:bg-surface-subtle border border-surface-border/40 rounded-xl transition-all text-brand-muted hover:text-brand-primary shadow-sm flex-shrink-0 flex items-center justify-center w-10 h-10 cursor-pointer"
             title={isSidebarOpen ? "Recolher Menu" : "Expandir Menu"}
@@ -1645,26 +929,26 @@ function MainApp({
           <div className="min-w-0 flex-1">
             <div className="flex flex-col">
               <h2 className="text-xl font-black text-brand-primary tracking-tight">
-                {activeTab === 'dashboard' 
-                  ? `Olá, ${userData?.name.split(' ')[0]}! 👋` 
-                  : activeTab === 'monitorias' 
-                    ? 'Gestão de Monitorias' 
-                    : 'Configurações do Sistema'}
+                {activeTab === 'dashboard'
+                  ? `Olá, ${userData?.name.split(' ')[0]}! 👋`
+                  : activeTab === 'monitorias'
+                  ? 'Gestão de Monitorias'
+                  : 'Configurações do Sistema'}
               </h2>
               <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest mt-0.5">
-                {activeTab === 'dashboard' 
-                  ? (userData?.role === 'suporte' 
-                      ? 'Acompanhe seu desempenho e evolução individual' 
-                      : userData?.role === 'qualidade' 
-                        ? 'Gestão de produtividade e análise de qualidade'
-                        : 'Visão executiva da performance e KPIs globais')
-                  : activeTab === 'monitorias' 
-                    ? 'Fluxo de auditoria, contestações e reavaliações' 
-                    : 'Parâmetros de qualidade, prazos de ação e horários comerciais'}
+                {activeTab === 'dashboard'
+                  ? (userData?.role === 'suporte'
+                    ? 'Acompanhe seu desempenho e evolução individual'
+                    : userData?.role === 'qualidade'
+                    ? 'Gestão de produtividade e análise de qualidade'
+                    : 'Visão executiva da performance e KPIs globais')
+                  : activeTab === 'monitorias'
+                  ? 'Fluxo de auditoria, contestações e reavaliações'
+                  : 'Parâmetros de qualidade, prazos de ação e horários comerciais'}
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-6">
             <div className="hidden xl:flex flex-col items-end">
               <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">{formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
@@ -1678,8 +962,8 @@ function MainApp({
 
             <div className="flex items-center gap-4">
               {userData?.role === 'qualidade' && (
-                <button 
-                  onClick={() => setIsFormOpen(true)} 
+                <button
+                  onClick={() => setIsFormOpen(true)}
                   className="bg-brand-primary text-brand-on-primary h-10 px-5 rounded-xl text-xs font-black shadow-premium hover:opacity-90 transition-all flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" /> Nova Monitoria
@@ -1697,16 +981,16 @@ function MainApp({
             <div className={activeTab === 'monitorias' ? 'block animate-fade-in' : 'hidden'}>
               <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} activeTab={activeTab} />
             </div>
-          {userData?.role === 'admin' && (
-            <>
-              <div className={activeTab === 'admin' ? 'block animate-fade-in' : 'hidden'}>
-                <AdminPanel user={userData} />
-              </div>
-              <div className={activeTab === 'custom_dashboard' ? 'block animate-fade-in' : 'hidden'}>
-                <CustomDashboardManagement user={userData} />
-              </div>
-            </>
-          )}
+            {userData?.role === 'admin' && (
+              <>
+                <div className={activeTab === 'admin' ? 'block animate-fade-in' : 'hidden'}>
+                  <AdminPanel user={userData} />
+                </div>
+                <div className={activeTab === 'custom_dashboard' ? 'block animate-fade-in' : 'hidden'}>
+                  <CustomDashboardManagement user={userData} />
+                </div>
+              </>
+            )}
           </React.Suspense>
         </div>
       </main>
@@ -1716,17 +1000,17 @@ function MainApp({
 
 function NavItem({ icon, label, active, onClick, isOpen, isDark, badge }: any) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={`
         w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative
-        ${active 
-          ? (isDark ? 'bg-white/10 text-white' : 'bg-black/10 text-slate-900') 
+        ${active
+          ? (isDark ? 'bg-white/10 text-white' : 'bg-black/10 text-slate-900')
           : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
       `}
     >
       {active && (
-        <m.div 
+        <m.div
           layoutId="active-bar"
           className={`absolute left-0 w-1 h-6 rounded-full ${isDark ? 'bg-white' : 'bg-slate-900'}`}
         />
@@ -1750,17 +1034,17 @@ function NavItem({ icon, label, active, onClick, isOpen, isDark, badge }: any) {
 
 function SubNavItem({ label, active, onClick, isOpen, isDark, badge }: any) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={`
         w-full flex items-center justify-between pl-11 pr-4 h-9 rounded-xl transition-all font-medium text-xs group relative
-        ${active 
-          ? (isDark ? 'bg-white/5 text-white font-bold' : 'bg-black/5 text-slate-900 font-bold') 
+        ${active
+          ? (isDark ? 'bg-white/5 text-white font-bold' : 'bg-black/5 text-slate-900 font-bold')
           : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
       `}
     >
       {active && (
-        <div 
+        <div
           className={`absolute left-5 w-1 h-4 rounded-full ${isDark ? 'bg-white' : 'bg-slate-900'}`}
         />
       )}
