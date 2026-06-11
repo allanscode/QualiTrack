@@ -131,10 +131,13 @@ Testar após cada alteração para evitar quebra.
 - **Resultado**: 18 testes cobrindo: score ponderado (100%, 0%, pesos variados), exclusão N/A (redenistribuição de peso seção), erros críticos (is_critical + NAO, legacy criticalErrors), casos de borda (undefined/null/empty form, all NA, bounds 0-100, arredondamento), cenário complexo multi-seção
 - **Teste**: `npm test` passa (20 testes total: 2 smoke + 18 qualityMath)
 
-#### P1.3 [ ] Testes Críticos — businessHours.ts
+#### P1.3 [x] Testes Críticos — businessHours.ts
 - **Arquivos**: `src/lib/businessHours.test.ts`
 - **Critério de Aceite**: Cobrir addBusinessHours, getRemainingBusinessSeconds, feriados
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: 25 testes cobrindo: addBusinessHours (mesmo dia, próximo dia, fim de semana, feriados, config customizada, snap antes/depois do expediente, horas grandes), getRemainingBusinessSeconds (mesmo dia, múltiplos dias, fim de semana, feriado, deadline passado, config customizada), edge cases (virada de ano, ano bissexto, milliseconds). 45 testes totais passando.
+- **Teste**: `npm test` passa (45 testes total: 2 smoke + 18 qualityMath + 25 businessHours)
 
 #### P1.4 [ ] Testes Críticos — contestation.ts
 - **Arquivos**: `src/lib/contestation.test.ts`
