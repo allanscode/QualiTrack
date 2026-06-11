@@ -190,20 +190,26 @@ export default function QualityDashboard({
     // safe fallback when outside DashboardProvider (e.g. customization preview)
   }
 
-  const { user, monitorias, users, teams, forms, dissatisfactionFields, globalAvg } = dashboardData;
+  const { user, monitorias, allMonitorias, users, teams, forms, dissatisfactionFields, globalAvg } = dashboardData;
   const { config, getLevelForScore, isAboveTarget } = useQualityConfig();
   const [comparativeData, setComparativeData] = useState<any[]>([]);
 
-  // Strict RBAC scope filter: evaluator_id === user.id
+  // Dados do RBAC para ESTE perfil (sem filtros de UI) — usado para fallback e contadores globais
+  const myAllMonitorias = useMemo(() => {
+    if (isCustomizing) return [];
+    return allMonitorias.filter((m: any) => m.evaluator_id === user?.id);
+  }, [isCustomizing, allMonitorias, user]);
+
+  // Dados para exibição (COM filtros de UI aplicados)
   const myMonitorias = useMemo(() => {
     if (isCustomizing) return [];
     return monitorias.filter((m: any) => m.evaluator_id === user?.id);
   }, [isCustomizing, monitorias, user]);
 
-  // Fallback mode trigger: if monitorias is empty, inject high-fidelity mock data
+  // Fallback só quando NÃO HÁ DADOS NO SISTEMA para este perfil (sem filtros de UI)
   const useFallback = useMemo(() => {
-    return isCustomizing || myMonitorias.length === 0;
-  }, [isCustomizing, myMonitorias]);
+    return isCustomizing || myAllMonitorias.length === 0;
+  }, [isCustomizing, myAllMonitorias]);
 
   const scoredMonitorias = useMemo(() => {
     if (useFallback) return [];
