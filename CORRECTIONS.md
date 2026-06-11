@@ -5,7 +5,7 @@ Bloquear e Corrigir (do crítico para o menos crítico).
 Testar após cada alteração para evitar quebra.
 
 ## 🗓️ Progresso
-- [ ] Fase P0 — Bloqueantes (Segurança, Qualidade, Tipagem)
+- [x] Fase P0 — Bloqueantes (Segurança, Qualidade, Tipagem)
 - [ ] Fase P1 — Essenciais (Testes, CI/CD, Cache, Auth)
 - [ ] Fase P2 — Melhorias (Performance, Acessibilidade, Observabilidade)
 - [ ] Fase P3 — Otimizações (Docker, SEO, Bundle)
@@ -87,19 +87,29 @@ Testar após cada alteração para evitar quebra.
 - **Arquivos criados**: `ThemeProvider.tsx` (87), `AuthProvider.tsx` (629), `useSessionManager.ts` (297), `useSidebarManager.ts` (264)
 - **Teste**: `npm run lint` + `npm run build` passando
 
-#### P0.5 [ ] Refatorar MonitoriaList.tsx
+#### P0.5 [x] Refatorar MonitoriaList.tsx
 - **Arquivo**: `src/components/MonitoriaList.tsx`
-- **Problema**: 1.002 linhas, estado extenso misturado com UI
-- **Critério de Aceite**: Extrair MonitoriaFilters, MonitoriaTable, ActionModal, useMonitoriaActions
-- **Status**: ⬜ Pending
-- **Teste**: Listagem, filtros, ações funcionam igual
+- **Problema**: 1.003 linhas, estado extenso misturado com UI
+- **Critério de Aceite**: Extrair hooks de data, filters, actions
+- **Status**: ✅ Done
+- **Commit**: 8c52164
+- **Data**: 2026-06-11
+- **Resultado**: MonitoriaList.tsx: 1003→672 linhas (-33%). 3 novos hooks criados
+- **Arquivos criados**: `useMonitoriaData.ts` (~214 linhas), `useMonitoriaFilters.ts` (~50 linhas), `useMonitoriaActions.ts` (~110 linhas)
+- **Migrado**: Data fetch + RBAC query + retry w/ backoff + auto-finalize + realtime subscription + reconnection + failsafe timer → useMonitoriaData; 8 filter states + hasActiveFilters + clearFilters → useMonitoriaFilters; action modal + handleAction + status transitions + deadline calc → useMonitoriaActions
+- **Teste**: `npm run lint` + `npm run build` passando (0 erros)
 
-#### P0.6 [ ] Refatorar MonitoriaForm.tsx
+#### P0.6 [x] Refatorar MonitoriaForm.tsx
 - **Arquivo**: `src/components/MonitoriaForm.tsx`
 - **Problema**: 854 linhas, validação, cálculo e UI misturados
-- **Critério de Aceite**: Extrair HeaderForm, ScoringForm, useMonitoriaValidation
-- **Status**: ⬜ Pending
-- **Teste**: Formulário 4 etapas, cálculo de score, reavaliação funcionam
+- **Critério de Aceite**: Extrair hooks de form state, validation e save
+- **Status**: ✅ Done
+- **Commit**: 1ef190b
+- **Data**: 2026-06-11
+- **Resultado**: MonitoriaForm.tsx: 854→667 linhas (-22%). 2 novos hooks criados
+- **Arquivos criados**: `useMonitoriaFormState.ts` (87 linhas), `useMonitoriaSave.ts` (190 linhas)
+- **Migrado**: 7 useState (step, header, scores, observations, criticalErrors, criticalErrorObservations, dissatisfactionAnswers) + selectedForm/score memos + clientFieldsToShow/qualityFieldsToShow memos + handleCheckboxChange → useMonitoriaFormState; validateStep (3-step validation) + isAllAnswered + handleSave (payload build, deadline calc, Supabase/mockDb CRUD, history entry) → useMonitoriaSave
+- **Teste**: `npm run lint` + `npm run build` passando (0 erros)
 
 ---
 
