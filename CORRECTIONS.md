@@ -148,10 +148,13 @@ Testar após cada alteração para evitar quebra.
 - **Bug fix**: `resolveContestationResult` agora verifica rejeição ANTES de aprovação; `isApprovalAction` exclui "impropedente"; `isResolutionAction` ignora "Monitoria Reavaliada"
 - **Teste**: `npm test` passa (80 testes total: 2 smoke + 18 qualityMath + 25 businessHours + 35 contestation)
 
-#### P1.5 [ ] Implementar CI/CD (GitHub Actions)
-- **Arquivos**: `.github/workflows/qualitrack.yml`
+#### P1.5 [x] Implementar CI/CD (GitHub Actions)
+- **Arquivos**: `.github/workflows/qualitrack.yml`, `Dockerfile`, `nginx.conf`
 - **Critério de Aceite**: Pipeline de lint → typecheck → test → build → deploy
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: Workflow com 5 jobs: lint-and-typecheck, test, build, docker, deploy-preview. Cache npm, upload artifacts, Docker buildx com cache GHA, push para GHCR na main, preview em PRs.
+- **Teste**: `npm run lint` + `npm test` + `npm run build` passando localmente.
 
 #### P1.6 [ ] Migrar flowType para 'pkce'
 - **Arquivo**: `src/lib/supabase.ts`
