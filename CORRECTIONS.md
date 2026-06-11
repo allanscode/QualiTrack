@@ -139,10 +139,14 @@ Testar após cada alteração para evitar quebra.
 - **Resultado**: 25 testes cobrindo: addBusinessHours (mesmo dia, próximo dia, fim de semana, feriados, config customizada, snap antes/depois do expediente, horas grandes), getRemainingBusinessSeconds (mesmo dia, múltiplos dias, fim de semana, feriado, deadline passado, config customizada), edge cases (virada de ano, ano bissexto, milliseconds). 45 testes totais passando.
 - **Teste**: `npm test` passa (45 testes total: 2 smoke + 18 qualityMath + 25 businessHours)
 
-#### P1.4 [ ] Testes Críticos — contestation.ts
-- **Arquivos**: `src/lib/contestation.test.ts`
-- **Critério de Aceite**: Cobrir isApprovalAction, isRejectionAction, countContestationOutcomes
-- **Status**: ⬜ Pending
+#### P1.4 [x] Testes Críticos — contestation.ts
+- **Arquivos**: `src/lib/contestation.test.ts`, `src/lib/contestation.ts` (bug fix)
+- **Critério de Aceite**: Cobrir isApprovalAction, isRejectionAction, isContestationAction, isResolutionAction, resolveContestationResult, getContestedMonitorias, getLastResolution, countContestationOutcomes
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: 35 testes cobrindo: approval keywords (procedente, aceita, reavaliada, alterada/alterado), rejection keywords (improcedente, mantida, negada, recusada - com fix para false positive "improcedente" contendo "procedente"), contestação keywords, resolution detection, getLastResolution (último desfecho, ignorar notas de reavaliação), countContestationOutcomes (prioriza contestation_result, usa último desfecho do history, evita dupla contagem, ignora sem contestação)
+- **Bug fix**: `resolveContestationResult` agora verifica rejeição ANTES de aprovação; `isApprovalAction` exclui "impropedente"; `isResolutionAction` ignora "Monitoria Reavaliada"
+- **Teste**: `npm test` passa (80 testes total: 2 smoke + 18 qualityMath + 25 businessHours + 35 contestation)
 
 #### P1.5 [ ] Implementar CI/CD (GitHub Actions)
 - **Arquivos**: `.github/workflows/qualitrack.yml`
