@@ -3,8 +3,17 @@ import type { Monitoria } from '@/src/types';
 const APPROVAL_KEYWORDS = ['procedente', 'aceita', 'reavaliada', 'alterada', 'alterado'];
 const REJECTION_KEYWORDS = ['improcedente', 'mantida', 'negada', 'recusada'];
 
+// Palavras que contêm keywords de aprovação mas são na verdade rejeição
+const FALSE_POSITIVE_APPROVAL = ['improcedente'];
+
+function isFalsePositiveApproval(action: string): boolean {
+  const lower = action.toLowerCase();
+  return FALSE_POSITIVE_APPROVAL.some(kw => lower.includes(kw));
+}
+
 export function isApprovalAction(action: string): boolean {
   const lower = action.toLowerCase();
+  if (isFalsePositiveApproval(action)) return false;
   return APPROVAL_KEYWORDS.some(kw => lower.includes(kw));
 }
 
@@ -20,12 +29,15 @@ export function isContestationAction(action: string): boolean {
 }
 
 export function isResolutionAction(action: string): boolean {
+  // Excluir notas de reavaliação que contêm keywords mas não são resoluções formais
+  if (action.startsWith('Monitoria Reavaliada') || action.startsWith('Reavaliação:')) return false;
   return isApprovalAction(action) || isRejectionAction(action);
 }
 
 export function resolveContestationResult(action: string): 'approved' | 'rejected' | null {
-  if (isApprovalAction(action)) return 'approved';
+  // Verificar rejeição primeiro para casos de false positive (ex: "Improcedente" contém "procedente")
   if (isRejectionAction(action)) return 'rejected';
+  if (isApprovalAction(action)) return 'approved';
   return null;
 }
 
