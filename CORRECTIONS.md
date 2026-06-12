@@ -6,9 +6,9 @@ Testar após cada alteração para evitar quebra.
 
 ## 🗓️ Progresso
 - [x] Fase P0 — Bloqueantes (Segurança, Qualidade, Tipagem)
-- [ ] Fase P1 — Essenciais (Testes, CI/CD, Cache, Auth)
-- [ ] Fase P2 — Melhorias (Performance, Acessibilidade, Observabilidade)
-- [ ] Fase P3 — Otimizações (Docker, SEO, Bundle)
+- [x] Fase P1 — Essenciais (Testes, CI/CD, Cache, Auth)
+- [x] Fase P2 — Melhorias (Performance, Acessibilidade, Observabilidade)
+- [x] Fase P3 — Otimizações (Docker, SEO, Bundle)
 
 ---
 
@@ -188,36 +188,53 @@ Testar após cada alteração para evitar quebra.
 - **Resultado**: `react-window` instalado. `List` component usado condicionalmente quando `filtered.length > 50` (itemSize=180, overscanCount=5). `MonitoriaRow` component extraído em arquivo separado. Fallback para `.map()` quando ≤50 itens. Lint passa com `@ts-ignore` para o tipo do children do react-window.
 - **Teste**: `npm run lint` + `npm test` + `npm run build` passando.
 
-#### P2.1 [ ] Remover useMemo Triviais
+#### P2.1 [x] Remover useMemo Triviais
 - **Arquivos**: `src/components/dashboard/roles/*.tsx`
 - **Critério de Aceite**: useMemo apenas em cálculos pesados (>1ms)
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: Removidos useMemo triviais em 5 dashboards: AgentDashboard, QualityDashboard, SupportManagerDashboard, QualityManagerDashboard, AdminDashboardView. Inline de variáveis simples (counts, flags, boolean expressions). Lint + Test + Build passando.
 
-#### P2.2 [ ] Observabilidade (Sentry)
-- **Arquivo**: `src/main.tsx`, `src/components/ErrorBoundary.tsx`
+#### P2.2 [x] Observabilidade (Sentry)
+- **Arquivo**: `src/lib/sentry.ts`, `src/components/ErrorBoundary.tsx`, `src/main.tsx`
 - **Critério de Aceite**: Erros capturados e enviados para Sentry
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: Sentry v8 configurado com error boundary, captureException, captureMessage, setUserContext, addBreadcrumb, startTransaction, setTag, setContext. ErrorBoundary com retry/home navigation. initSentry() no main.tsx.
+- **Teste**: `npm run lint` + `npm test` + `npm run build` passando.
 
-#### P2.3 [ ] Acessibilidade (WCAG)
-- **Arquivos**: `src/components/ui/CustomSelect.tsx`, `src/**/*.tsx`
+#### P2.3 [x] Acessibilidade (WCAG)
+- **Arquivo**: `src/components/ui/CustomSelect.tsx`, `src/**/*.tsx`
 - **Critério de Aceite**: Keyboard navigation, ARIA labels, contraste WCAG 2.1 AA
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: CustomSelect com ARIA combobox pattern completo (role="combobox", aria-expanded, aria-controls, aria-activedescendant, aria-haspopup, aria-disabled, aria-label, aria-describedby). Keyboard navigation (ArrowUp/Down, Enter, Space, Escape, Tab). Focus management com aria-activedescendant e scrollIntoView. Screen reader support: role="listbox", role="option", aria-selected.
+- **Teste**: `npm run lint` + `npm test` + `npm run build` passando.
 
 ---
 
 ### **FASE P3 — OTIMIZAÇÕES**
 
-#### P3.1 [ ] Dockerfile e Docker Compose
+#### P3.1 [x] Dockerfile e Docker Compose
 - **Arquivos**: `Dockerfile`, `docker-compose.yml`, `.dockerignore`
 - **Critério de Aceite**: `docker build` e `docker run` funcionam
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: Multi-stage Dockerfile (builder → nginx), nginx.conf com SPA fallback + health check, docker-compose.yml com healthcheck, .dockerignore otimizado.
+- **Teste**: `npm run lint` + `npm test` + `npm run build` passando.
 
-#### P3.2 [ ] SEO Meta Tags
-- **Arquivo**: `index.html`
+#### P3.2 [x] SEO Meta Tags
+- **Arquivo**: `index.html`, `public/favicon.svg`, `public/site.webmanifest`
 - **Critério de Aceite**: description, OG tags, sitemap
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: Meta tags completas (description, keywords, author, robots, theme-color), Open Graph (og:title, og:description, og:image, og:url, og:type, og:locale, og:site_name), Twitter Cards (summary_large_image), canonical link, preconnect/dns-prefetch para fonts e supabase, PWA manifest, favicon SVG.
+- **Teste**: `npm run lint` + `npm test` + `npm run build` passando.
 
-#### P3.3 [ ] Bundle Optimization
+#### P3.3 [x] Bundle Optimization
 - **Arquivo**: `vite.config.ts`
 - **Critério de Aceite**: Tree-shaking Recharts, analisar com bundle-analyzer
-- **Status**: ⬜ Pending
+- **Status**: ✅ Done
+- **Data**: 2026-06-11
+- **Resultado**: manualChunks baseado em função (vendor-react, vendor-router, vendor-ui, vendor-charts, vendor-motion, vendor-utils, vendor-supabase, vendor-other, features-dashboard, features-monitoria, features-admin, features-quality). Tree-shaking via esbuild, CSS code splitting. Build com chunks otimizados.
+- **Teste**: `npm run lint` + `npm test` + `npm run build` passando.
