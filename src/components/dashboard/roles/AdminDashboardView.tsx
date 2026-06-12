@@ -337,10 +337,7 @@ export default function AdminDashboardView({
     ).length;
   }, [isCustomizing, monitorias]);
 
-  const totalMonitorias = useMemo(() => {
-    if (isCustomizing) return 85;
-    return monitorias.length;
-  }, [isCustomizing, monitorias]);
+  const totalMonitorias = isCustomizing ? 85 : monitorias.length;
 
   // Monitorias que tiveram pelo menos uma contestação
   const contestedMonitorias = useMemo(() => {
@@ -350,10 +347,7 @@ export default function AdminDashboardView({
     );
   }, [isCustomizing, monitorias]);
 
-  const totalContestations = useMemo(() => {
-    if (isCustomizing) return 12;
-    return contestedMonitorias.length;
-  }, [isCustomizing, contestedMonitorias]);
+  const totalContestations = isCustomizing ? 12 : contestedMonitorias.length;
 
   // Conta apenas pelo ÚLTIMO desfecho — evita dupla contagem em múltiplas rodadas
   const reavAccepted = useMemo(() => {
