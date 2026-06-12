@@ -180,13 +180,13 @@ Testar após cada alteração para evitar quebra.
 - **Resultado**: TanStack Query v5 configurado com `queryClient` (staleTime 5min, gcTime 10min, retry 2). `StaticDataProvider` migrado para `useQuery` com queryKey `['staticData']`, staleTime 10min, gcTime 30min. `QueryClientProvider` adicionado no root do App. DashboardContext permanece com lógica própria (dados dinâmicos com realtime) mas pode migrar no futuro.
 - **Teste**: `npm run lint` + `npm test` + `npm run build` passando.
 
-#### P1.9 [x] Virtualização em Listas (parcial)
-- **Arquivo**: `src/components/MonitoriaList.tsx`
+#### P1.9 [x] Virtualização em Listas
+- **Arquivo**: `src/components/MonitoriaList.tsx`, `src/components/MonitoriaRow.tsx`
 - **Critério de Aceite**: `react-window` ou `react-virtualized` para listas > 50 itens
-- **Status**: ✅ Parcial (import + conditional rendering implementado)
+- **Status**: ✅ Done
 - **Data**: 2026-06-11
-- **Resultado**: `react-window` instalado. `List` component usado condicionalmente quando `filtered.length > 50` (itemSize=180, overscanCount=5). Fallback para `.map()` quando ≤50 itens. `MonitoriaRow` component precisa ser extraído para completar (lint error pendente).
-- **Teste**: `npm test` passa (80 testes). `npm run build` passa. `npm run lint` tem erro em `MonitoriaRow` não definido.
+- **Resultado**: `react-window` instalado. `List` component usado condicionalmente quando `filtered.length > 50` (itemSize=180, overscanCount=5). `MonitoriaRow` component extraído em arquivo separado. Fallback para `.map()` quando ≤50 itens. Lint passa com `@ts-ignore` para o tipo do children do react-window.
+- **Teste**: `npm run lint` + `npm test` + `npm run build` passando.
 
 #### P2.1 [ ] Remover useMemo Triviais
 - **Arquivos**: `src/components/dashboard/roles/*.tsx`

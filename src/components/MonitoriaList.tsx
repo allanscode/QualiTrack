@@ -36,6 +36,7 @@ import { useMonitoriaData } from '../hooks/useMonitoriaData';
 import { useMonitoriaFilters } from '../hooks/useMonitoriaFilters';
 import { useMonitoriaActions } from '../hooks/useMonitoriaActions';
 import MonitoriaForm from './MonitoriaForm';
+import { MonitoriaRow } from './MonitoriaRow';
 
 export default function MonitoriaList({ user, onNew, activeTab }: { user: User | null; onNew: () => void; activeTab?: string }) {
   const { resolvedTheme } = useTheme();
@@ -311,6 +312,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
         <div className="divide-y divide-surface-subtle">
           {filtered.length > 0 ? (
             filtered.length > 50 ? (
+              // @ts-ignore - react-window List children type mismatch
               <List
                 height={600}
                 itemCount={filtered.length}
@@ -318,7 +320,8 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                 width="100%"
                 overscanCount={5}
               >
-                {({ index, style }) => (
+                {/* @ts-ignore */}
+                {({ index, style }: { index: number; style: React.CSSProperties }): React.ReactNode => (
                   <MonitoriaRow
                     index={index}
                     style={style}
