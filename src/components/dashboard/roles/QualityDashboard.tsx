@@ -207,9 +207,7 @@ export default function QualityDashboard({
   }, [isCustomizing, monitorias, user]);
 
   // Fallback só quando NÃO HÁ DADOS NO SISTEMA para este perfil (sem filtros de UI)
-  const useFallback = useMemo(() => {
-    return isCustomizing || myAllMonitorias.length === 0;
-  }, [isCustomizing, myAllMonitorias]);
+  const useFallback = isCustomizing || myAllMonitorias.length === 0;
 
   const scoredMonitorias = useMemo(() => {
     if (useFallback) return [];
@@ -225,10 +223,7 @@ export default function QualityDashboard({
   }, [useFallback, scoredMonitorias]);
 
   // Nota Média Geral (puxada do globalAvg no DashboardContext)
-  const globalAvgScore = useMemo(() => {
-    if (useFallback) return 82.4;
-    return typeof globalAvg === 'number' ? globalAvg : 82.4;
-  }, [useFallback, globalAvg]);
+  const globalAvgScore = useFallback ? 82.4 : (typeof globalAvg === 'number' ? globalAvg : 82.4);
 
   // Monitorias que sofreram contestação do time
   const contestedMyMonitorias = useMemo(() => {
@@ -263,11 +258,7 @@ export default function QualityDashboard({
   }, [useFallback, contestedMyMonitorias]);
 
   // Taxa de Reversão Individual
-  const reversionRate = useMemo(() => {
-    const totalContested = reavAccepted + reavRejected;
-    if (totalContested === 0) return 0;
-    return (reavAccepted / totalContested) * 100;
-  }, [reavAccepted, reavRejected]);
+  const reversionRate = (reavAccepted + reavRejected) === 0 ? 0 : (reavAccepted / (reavAccepted + reavRejected)) * 100;
 
   // Volumetria Diária calculation
   useEffect(() => {
@@ -309,10 +300,7 @@ export default function QualityDashboard({
     calculateComparativeData();
   }, [useFallback, monitorias, user]);
 
-  const resolvedComparativeData = useMemo(() => {
-    if (useFallback) return mockComparativeData;
-    return comparativeData;
-  }, [useFallback, comparativeData]);
+  const resolvedComparativeData = useFallback ? mockComparativeData : comparativeData;
 
   // Distribuição por Equipes (INJETAR: Gráfico de rosca exibindo proporcionalidade de monitorias realizadas por ele)
   const teamsDistribution = useMemo(() => {
