@@ -1,59 +1,94 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Sentry } from '../lib/sentry';
+import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import Button from './ui/Button';
+import Card from './ui/Card';
 
 interface Props {
-  children?: ReactNode;
+  children: ReactNode;
   fallback?: ReactNode;
 }
 
 interface State {
   hasError: boolean;
-  error?: Error;
+  error: Error | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false
-  };
+  public state: State = { hasError: false, error: null };
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    console.error('[ErrorBoundary] Caught error:', error, errorInfo);
+    
+    // Send to Sentry
+    if (typeof window !== 'undefined') {
+      import('../lib/sentry').then(({ captureException }) => {
+        captureException(error, { componentStack: errorInfo.componentStack });
+      });
+    }
   }
 
-  public render() {
+  private handleRetry = (): void => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  private handleGoHome = (): void => {
+    window.location.href = '/';
+  };
+
+  public render(): ReactNode {
     if (this.state.hasError) {
       if (this.props.fallback) {
         return this.props.fallback;
       }
+
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-surface-bg text-brand-primary p-6">
-          <div className="bg-surface-card p-8 rounded-2xl shadow-premium max-w-md w-full text-center border border-functional-error/20">
-            <div className="w-16 h-16 bg-functional-error/10 text-functional-error rounded-full flex items-center justify-center mx-auto mb-6">
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold mb-4">Ops! Algo deu errado.</h2>
-            <p className="text-brand-muted mb-6">
-              Desculpe, ocorreu um erro inesperado. Nossa equipe técnica já foi notificada (no console).
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full bg-brand-accent hover:bg-brand-accent/90 text-white font-medium py-3 px-4 rounded-xl transition-colors"
-            >
-              Recarregar página
-            </button>
-            {this.state.error && (
-              <div className="mt-6 p-4 bg-black/5 dark:bg-white/5 rounded-xl text-left overflow-auto max-h-32 text-xs font-mono text-brand-muted">
-                {this.state.error.toString()}
+        <div className="min-h-screen flex items-center justify-center bg-surface-bg p-4">
+          <Card className="max-w-md w-full shadow-2xl border border-surface-border">
+            <div className="p-8 text-center space-y-6">
+              <div className="w-16 h-16 rounded-2xl bg-error/10 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-8 h-8 text-error" />
               </div>
-            )}
-          </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-black text-brand-primary uppercase tracking-tight">
+                  Ops! Algo deu errado
+                </h2>
+                <p className="text-brand-muted text-sm">
+                  Ocorreu um erro inesperado. Nossa equipe foi notificada automaticamente.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                <Button
+                  onClick={this.handleRetry}
+                  className="flex-1"
+                  icon={<RefreshCw className="w-4 h-4" />}
+                >
+                  Tentar Novamente
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={this.handleGoHome}
+                  className="flex-1"
+                  icon={<Home className="w-4 h-4" />}
+                >
+                  Ir para Início
+                </Button>
+              </div>
+              <details className="text-left mt-4">
+                <summary className="text-xs text-brand-muted/60 cursor-pointer">
+                  Detalhes técnicos (para suporte)
+                </summary>
+                <pre className="mt-2 p-3 bg-surface-bg border border-surface-border rounded-lg text-[10px] overflow-auto max-h-40 text-error">
+                  {this.state.error?.message}
+                  {this.state.error?.stack && `\n\n${this.state.error.stack}`}
+                </pre>
+              </details>
+            </div>
+          </Card>
         </div>
       );
     }
@@ -61,3 +96,5 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+
+export default ErrorBoundary;
