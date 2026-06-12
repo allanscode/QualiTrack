@@ -252,7 +252,7 @@ export default function SupportManagerDashboard({
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
 
   // Scoped Team IDs
-  const myTeamIds = useMemo(() => user?.team_ids || [], [user]);
+  const myTeamIds = user?.team_ids || [];
 
   // Restrict everything to this manager's teams
   const myMonitorias = useMemo(() => {
@@ -323,24 +323,15 @@ export default function SupportManagerDashboard({
     : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   // Total volume
-  const totalMonitorias = useMemo(() => {
-    if (isCustomizing) return 15;
-    return myMonitorias.length;
-  }, [isCustomizing, myMonitorias]);
+  const totalMonitorias = isCustomizing ? 15 : myMonitorias.length;
 
   // Total Pendentes (Unified agent acknowledgements + disputes + support manager actions)
-  const pendingTotal = useMemo(() => {
-    if (isCustomizing) return 3;
-    return myMonitorias.filter((m: any) =>
-      ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte'].includes(m.status)
-    ).length;
-  }, [isCustomizing, myMonitorias]);
+  const pendingTotal = isCustomizing ? 3 : myMonitorias.filter((m: any) =>
+    ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte'].includes(m.status)
+  ).length;
 
   // Minhas Ações (Awaiting gestor_suporte decision)
-  const pendingManager = useMemo(() => {
-    if (isCustomizing) return 1;
-    return myMonitorias.filter((m: any) => m.status === 'aguardando_gestor_suporte').length;
-  }, [isCustomizing, myMonitorias]);
+  const pendingManager = isCustomizing ? 1 : myMonitorias.filter((m: any) => m.status === 'aguardando_gestor_suporte').length;
 
   // Online users scoped to manager's teams
   const teamOnlineUsers = useMemo(() => {
@@ -372,10 +363,7 @@ export default function SupportManagerDashboard({
     );
   }, [isCustomizing, myMonitorias]);
 
-  const totalContestations = useMemo(() => {
-    if (isCustomizing) return 8;
-    return contestedMonitorias.length;
-  }, [isCustomizing, contestedMonitorias]);
+  const totalContestations = isCustomizing ? 8 : contestedMonitorias.length;
 
   const reavAccepted = useMemo(() => {
     if (isCustomizing) return 1;
