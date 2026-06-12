@@ -179,32 +179,32 @@ export default function AgentDashboard({
   }, [isCustomizing, allMonitorias, user]);
 
   // --- Anonymized and masked datasets
-  const maskedMonitorias = useMemo(() => {
-    const source = isCustomizing ? mockRecentMonitorias : myMonitorias;
-    return source.map((m: any) => ({
-      ...m,
-      evaluator_name: 'Análise da Qualidade',
-      evaluator_id: 'Análise da Qualidade',
-    }));
-  }, [isCustomizing, myMonitorias]);
+  const maskedMonitorias = isCustomizing ? mockRecentMonitorias.map((m: any) => ({
+    ...m,
+    evaluator_name: 'Análise da Qualidade',
+    evaluator_id: 'Análise da Qualidade',
+  })) : myMonitorias.map((m: any) => ({
+    ...m,
+    evaluator_name: 'Análise da Qualidade',
+    evaluator_id: 'Análise da Qualidade',
+  }));
 
-  const maskedAllMonitorias = useMemo(() => {
-    const source = isCustomizing ? mockMonitoriasDeadlines : myAllMonitorias;
-    return source.map((m: any) => ({
-      ...m,
-      evaluator_name: 'Análise da Qualidade',
-      evaluator_id: 'Análise da Qualidade',
-    }));
-  }, [isCustomizing, myAllMonitorias]);
+  const maskedAllMonitorias = isCustomizing ? mockMonitoriasDeadlines.map((m: any) => ({
+    ...m,
+    evaluator_name: 'Análise da Qualidade',
+    evaluator_id: 'Análise da Qualidade',
+  })) : myAllMonitorias.map((m: any) => ({
+    ...m,
+    evaluator_name: 'Análise da Qualidade',
+    evaluator_id: 'Análise da Qualidade',
+  }));
 
-  const maskedUsers = useMemo(() => {
-    return users.map((u: any) => {
-      if (['admin', 'gestor_qualidade', 'qualidade'].includes(u.role)) {
-        return { ...u, name: 'Análise da Qualidade' };
-      }
-      return u;
-    });
-  }, [users]);
+  const maskedUsers = users.map((u: any) => {
+    if (['admin', 'gestor_qualidade', 'qualidade'].includes(u.role)) {
+      return { ...u, name: 'Análise da Qualidade' };
+    }
+    return u;
+  });
   
   // --- Team Data (for comparison)
   const teamMonitorias = useMemo(() => {
@@ -318,10 +318,7 @@ export default function AgentDashboard({
   }, [isCustomizing, myMonitorias, teamMonitorias]);
 
   // --- Total Pendentes: Monitorias aguardando ação do agente (Ciente ou Re-contestação)
-  const pendingCount = useMemo(() => {
-    if (isCustomizing) return 2;
-    return myAllMonitorias.filter((m: any) => ['pendente_revisao', 'contestacao_negada'].includes(m.status)).length;
-  }, [isCustomizing, myAllMonitorias]);
+  const pendingCount = isCustomizing ? 2 : myAllMonitorias.filter((m: any) => ['pendente_revisao', 'contestacao_negada'].includes(m.status)).length;
 
   const level = getLevelForScore(avgScore);
 
@@ -331,10 +328,7 @@ export default function AgentDashboard({
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
     : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
-  const myMonitoriasCount = useMemo(() => {
-    if (isCustomizing) return 18;
-    return myMonitorias.length;
-  }, [isCustomizing, myMonitorias]);
+  const myMonitoriasCount = isCustomizing ? 18 : myMonitorias.length;
 
   const volDiff = myMonitoriasCount - config.targetVolume;
   const volSign = volDiff >= 0 ? '↑' : '↓';
@@ -342,10 +336,7 @@ export default function AgentDashboard({
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
     : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
-  const myContestationsCount = useMemo(() => {
-    if (isCustomizing) return 4;
-    return myContestations.length;
-  }, [isCustomizing, myContestations]);
+  const myContestationsCount = isCustomizing ? 4 : myContestations.length;
 
   // --- Fila 1: Contestações Ativas
   const contestacoesAtivas = useMemo(() => {
