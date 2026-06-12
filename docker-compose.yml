@@ -11,6 +11,7 @@ services:
       - "8080:8080"
     environment:
       - NODE_ENV=production
+      - PORT=8080
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -20,29 +21,49 @@ services:
       start_period: 20s
     networks:
       - qualitrack-network
+    volumes:
+      - qualitrack-logs:/var/log/nginx
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=qualitrack-network"
+      - "traefik.http.routers.qualitrack.rule=Host(`qualitrack.localhost`)"
+      - "traefik.http.routers.qualitrack.entrypoints=web"
+      - "traefik.http.services.qualitrack.loadbalancer.server.port=8080"
+      - "traefik.http.routers.qualitrack.middlewares=qualitrack-headers"
+      - "traefik.http.middlewares.qualitrack-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+
+  # Optional: Traefik reverse proxy for local development
+  traefik:
+    image: traefik:v3.0
+    container_name: qualitrack-traefik
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=admin@qualitrack.local"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8081:8080"  # Traefik dashboard
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik-letsencrypt:/letsencrypt"
+    networks:
+      - qualitrack-network
+    labels:
+      - "traefik.enable=true"
+    restart: unless-stopped
 
 networks:
   qualitrack-network:
     driver: bridge
 
-# Optional: for local development with hot reload
-# services:
-#   app-dev:
-#     build:
-#       context: .
-#       dockerfile: Dockerfile
-#       target: builder
-#     container_name: qualitrack-dev
-#     ports:
-#       - "3000:3000"
-#       - "24678:24678"  # Vite HMR port
-#     volumes:
-#       - .:/app
-#       - /app/node_modules
-#     environment:
-#       - NODE_ENV=development
-#       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-#       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
-#     command: npm run dev -- --host 0.0.0.0 --port 3000
-#     networks:
-#       - qualitrack-network
+volumes:
+  qualitrack-network:
+  qualitrack-logs:
+  traefik-letsencrypt:
