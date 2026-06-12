@@ -20,6 +20,35 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      // Enable tree-shaking
+      minify: 'esbuild',
+      cssCodeSplit: true,
+      sourcemap: false,
+      // Manual chunks for better caching
+      rollupOptions: {
+        output: {
+          manualChunks: (id) => {
+            // Vendor chunks
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('react-dom')) return 'vendor-react';
+              if (id.includes('react-router-dom')) return 'vendor-router';
+              if (id.includes('lucide-react') || id.includes('clsx') || id.includes('tailwind-merge') || id.includes('sonner')) return 'vendor-ui';
+              if (id.includes('recharts')) return 'vendor-charts';
+              if (id.includes('motion')) return 'vendor-motion';
+              if (id.includes('date-fns')) return 'vendor-utils';
+              if (id.includes('@supabase/supabase-js')) return 'vendor-supabase';
+              return 'vendor-other';
+            }
+            // Feature chunks
+            if (id.includes('/src/components/dashboard/')) return 'features-dashboard';
+            if (id.includes('/src/components/MonitoriaList.tsx') || id.includes('/src/components/MonitoriaForm.tsx')) return 'features-monitoria';
+            if (id.includes('/src/components/AdminPanel.tsx') || id.includes('/src/components/AdminDashboardView.tsx')) return 'features-admin';
+            if (id.includes('/src/components/QualityConfigManagement.tsx')) return 'features-quality';
+          },
+        },
+      },
+    },
     server: {
       host: '0.0.0.0',
       port: 3001,
