@@ -1,0 +1,22 @@
+{
+  "name": "QualiTrack - Gestão de Qualidade",
+  "short_name": "QualiTrack",
+  "description": "Sistema de gestão de qualidade para operações de suporte ao cliente",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e40af",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "screenshots": [],
+  "prefer_related_applications": false
+}
