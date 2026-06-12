@@ -328,22 +328,13 @@ export default function QualityManagerDashboard({
       : 0;
   }, [isCustomizing, scoredMonitorias]);
 
-  const pendingActions = useMemo(() => {
-    if (isCustomizing) return 4;
-    return monitorias.filter((m: any) =>
-      ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
-    ).length;
-  }, [isCustomizing, monitorias]);
+  const pendingActions = isCustomizing ? 4 : monitorias.filter((m: any) =>
+    ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
+  ).length;
 
-  const pendingMyActions = useMemo(() => {
-    if (isCustomizing) return 1;
-    return monitorias.filter((m: any) => m.status === 'aguardando_gestor_qualidade').length;
-  }, [isCustomizing, monitorias]);
+  const pendingMyActions = isCustomizing ? 1 : monitorias.filter((m: any) => m.status === 'aguardando_gestor_qualidade').length;
 
-  const totalMonitorias = useMemo(() => {
-    if (isCustomizing) return 85;
-    return monitorias.length;
-  }, [isCustomizing, monitorias]);
+  const totalMonitorias = isCustomizing ? 85 : monitorias.length;
 
   // Monitorias que tiveram pelo menos uma contestação
   const contestedMonitorias = useMemo(() => {
@@ -353,10 +344,7 @@ export default function QualityManagerDashboard({
     );
   }, [isCustomizing, monitorias]);
 
-  const totalContestations = useMemo(() => {
-    if (isCustomizing) return 12;
-    return contestedMonitorias.length;
-  }, [isCustomizing, contestedMonitorias]);
+  const totalContestations = isCustomizing ? 12 : contestedMonitorias.length;
 
   // Conta apenas pelo ÚLTIMO desfecho — evita dupla contagem em múltiplas rodadas
   const reavAccepted = useMemo(() => {
