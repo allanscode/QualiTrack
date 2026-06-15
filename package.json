@@ -15,6 +15,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@sentry/react": "^10.57.0",
+    "@sentry/tracing": "^7.120.4",
     "@supabase/supabase-js": "^2.105.3",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.101.0",

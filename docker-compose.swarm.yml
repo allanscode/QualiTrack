@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   app:
-    image: qualitrack-app:latest
+    image: ghcr.io/marcospaulofreitas/qualitrack:latest
     deploy:
       replicas: 3
       update_config:

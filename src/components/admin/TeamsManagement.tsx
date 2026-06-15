@@ -75,6 +75,7 @@ import {
 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { matchesSearch } from '../../utils/search';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -180,7 +181,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
   const filteredTeams = useMemo(() => {
     return teams
       .filter(t => statusFilter === 'active' ? t.active !== false : t.active === false)
-      .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      .filter(t => matchesSearch(t.name, searchTerm))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [teams, statusFilter, searchTerm]);
 

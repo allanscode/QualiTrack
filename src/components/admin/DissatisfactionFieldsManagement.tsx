@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, mockDb } from '../../lib/supabase';
-import { DissatisfactionField } from '../../types';
+import { DissatisfactionField, EvaluationForm } from '../../types';
 import { 
   Search, 
   Plus, 
@@ -19,13 +19,18 @@ import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import CustomSelect from '../ui/CustomSelect';
 
-export default function DissatisfactionFieldsManagement() {
+interface DissatisfactionFieldsManagementProps {
+  forms: EvaluationForm[];
+}
+
+export default function DissatisfactionFieldsManagement({ forms }: DissatisfactionFieldsManagementProps) {
   const [fields, setFields] = useState<DissatisfactionField[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [formFilter, setFormFilter] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -34,7 +39,8 @@ export default function DissatisfactionFieldsManagement() {
     title: '',
     type: 'cliente',
     options: [],
-    active: true
+    active: true,
+    form_id: ''
   });
   const [newOption, setNewOption] = useState('');
 
@@ -69,8 +75,9 @@ export default function DissatisfactionFieldsManagement() {
     return fields
       .filter(f => statusFilter === 'active' ? f.active !== false : f.active === false)
       .filter(f => typeFilter === '' ? true : f.type === typeFilter)
+      .filter(f => formFilter === '' ? true : f.form_id === formFilter)
       .filter(f => f.title.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [fields, statusFilter, typeFilter, searchTerm]);
+  }, [fields, statusFilter, typeFilter, formFilter, searchTerm]);
 
   const handleAddOption = () => {
     const trimmed = newOption.trim();
@@ -106,7 +113,8 @@ export default function DissatisfactionFieldsManagement() {
         title: editingField.title.trim(),
         type: editingField.type || 'cliente',
         options: editingField.options,
-        active: editingField.active !== false
+        active: editingField.active !== false,
+        form_id: editingField.form_id || null
       };
 
       if (!supabase) {
@@ -166,7 +174,8 @@ export default function DissatisfactionFieldsManagement() {
       title: '',
       type: 'cliente',
       options: [],
-      active: true
+      active: true,
+      form_id: ''
     });
     setNewOption('');
     setIsModalOpen(true);
@@ -216,6 +225,15 @@ export default function DissatisfactionFieldsManagement() {
                 { value: 'qualidade', label: 'Visão do Monitor' }
               ]}
               className="w-56"
+            />
+            <CustomSelect 
+              value={formFilter}
+              onChange={val => setFormFilter(val as string)}
+              options={[
+                { value: '', label: 'Todos os Formulários' },
+                ...forms.filter(f => f.active !== false).map(f => ({ value: f.id, label: f.title }))
+              ]}
+              className="w-64"
             />
           </div>
         </div>
@@ -350,6 +368,19 @@ export default function DissatisfactionFieldsManagement() {
                     options={[
                       { value: 'cliente', label: 'Visão do Cliente' },
                       { value: 'qualidade', label: 'Visão do Monitor' }
+                    ]}
+                    className="[&>div>div]:!rounded-lg [&_span]:!text-sm [&_span]:!font-normal [&_input]:!text-sm [&_input]:!font-normal [&>div>div]:h-10 [&_svg]:w-4 [&_svg]:h-4"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="uppercase text-[10px] font-medium text-slate-400 dark:text-slate-500 tracking-wide mb-1.5 ml-0.5 block">Formulário (opcional)</label>
+                  <CustomSelect 
+                    value={editingField.form_id || ''}
+                    onChange={val => setEditingField({ ...editingField, form_id: val || '' })}
+                    options={[
+                      { value: '', label: 'Todos os Formulários (Global)' },
+                      ...forms.filter(f => f.active !== false).map(f => ({ value: f.id, label: f.title }))
                     ]}
                     className="[&>div>div]:!rounded-lg [&_span]:!text-sm [&_span]:!font-normal [&_input]:!text-sm [&_input]:!font-normal [&>div>div]:h-10 [&_svg]:w-4 [&_svg]:h-4"
                   />

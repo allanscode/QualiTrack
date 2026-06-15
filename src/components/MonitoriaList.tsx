@@ -25,6 +25,7 @@ import {
 import { m, m as motionComponent, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { matchesSearch, matchesAnySearch } from '../utils/search';
 import Card from './ui/Card';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
@@ -95,10 +96,18 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
       if (filters.auditorFilter && m.evaluator_id !== filters.auditorFilter) return false;
 
       if (filters.search) {
-        const s = filters.search.toLowerCase();
-        const ticketId = m.ticket_id.toLowerCase();
-        const displayId = (m.display_id || '').toString();
-        if (!ticketId.includes(s) && !displayId.includes(s)) return false;
+        const teamName = m.team_name || staticData.teams.find(t => t.id === m.team_id)?.name || '';
+        const evaluatedName = getName(m.evaluated_id, false, m.evaluated_name);
+        const evaluatorName = getName(m.evaluator_id, true, m.evaluator_name);
+        const searchable: string[] = [
+          m.ticket_id,
+          String(m.display_id || ''),
+          teamName,
+          evaluatedName,
+          evaluatorName,
+          m.evaluator_note || '',
+        ];
+        if (!matchesAnySearch(searchable, filters.search)) return false;
       }
 
       const targetDate = filters.dateType === 'analysis' ? (m.analysis_date || m.created_at) : m.ticket_date;

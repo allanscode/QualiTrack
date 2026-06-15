@@ -137,7 +137,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           {activeSubTab === 'requests' && <RequestsManagement requests={requests} users={staticData.users} teams={staticData.teams} loadData={loadAllData} />}
           {activeSubTab === 'operacao' && <QualityConfigManagement mode="operacao" />}
           {activeSubTab === 'metas' && <QualityConfigManagement mode="metas" />}
-          {activeSubTab === 'campos_extras' && <DissatisfactionFieldsManagement />}
+          {activeSubTab === 'campos_extras' && <DissatisfactionFieldsManagement forms={staticData.forms} />}
         </m.div>
       </AnimatePresence>
     </div>

@@ -46,15 +46,19 @@ export function useMonitoriaFormState(
 
   const clientFieldsToShow = useMemo(() => {
     return dissatisfactionFields.filter(f =>
-      f.type === 'cliente' && (f.active || (dissatisfactionAnswers[f.id] && dissatisfactionAnswers[f.id].length > 0))
+      f.type === 'cliente' &&
+      (f.active || (dissatisfactionAnswers[f.id] && dissatisfactionAnswers[f.id].length > 0)) &&
+      (!f.form_id || f.form_id === selectedForm?.id)
     );
-  }, [dissatisfactionFields, dissatisfactionAnswers]);
+  }, [dissatisfactionFields, dissatisfactionAnswers, selectedForm]);
 
   const qualityFieldsToShow = useMemo(() => {
     return dissatisfactionFields.filter(f =>
-      f.type === 'qualidade' && (f.active || (dissatisfactionAnswers[f.id] && dissatisfactionAnswers[f.id].length > 0))
+      f.type === 'qualidade' &&
+      (f.active || (dissatisfactionAnswers[f.id] && dissatisfactionAnswers[f.id].length > 0)) &&
+      (!f.form_id || f.form_id === selectedForm?.id)
     );
-  }, [dissatisfactionFields, dissatisfactionAnswers]);
+  }, [dissatisfactionFields, dissatisfactionAnswers, selectedForm]);
 
   const handleCheckboxChange = (fieldId: string, option: string, checked: boolean, isViewOnly: boolean) => {
     if (isViewOnly) return;

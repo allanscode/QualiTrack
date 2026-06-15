@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { matchesSearch } from '../../utils/search';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -50,8 +51,8 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
       .filter(u => roleFilter === '' ? true : u.role === roleFilter)
       .filter(u => teamFilter === '' ? true : (u.team_ids || []).includes(teamFilter))
       .filter(u =>
-        u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchTerm.toLowerCase())
+        matchesSearch(u.name, searchTerm) ||
+        matchesSearch(u.email, searchTerm)
       )
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [users, statusFilter, searchTerm, roleFilter, teamFilter]);
@@ -236,7 +237,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
           </div>
         </div>
         <Button 
-          onClick={() => { setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], primary_team_id: '', password: '' }); setIsModalOpen(true); }} 
+          onClick={() => { setEditingUser({ name: '', email: '', role: 'suporte', team_ids: [], primary_team_id: '', password: '' }); setTeamSearch(''); setIsModalOpen(true); }} 
           icon={<UserPlus className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
           className="group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200"
         >
@@ -347,6 +348,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                             const activeTeamIds = u.team_ids?.filter(id => teams.find(t => t.id === id)?.active !== false) || [];
                             const primaryTeamId = u.primary_team_id || activeTeamIds[0] || '';
                             setEditingUser({...u, team_ids: activeTeamIds, primary_team_id: primaryTeamId}); 
+                            setTeamSearch(''); 
                             setIsModalOpen(true); 
                           }} 
                           className="group p-2.5 rounded-lg hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all duration-200 cursor-pointer"
@@ -430,10 +432,10 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                     )}
                   </div>
                   <div className="grid grid-cols-1 gap-y-2 p-4 bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-lg max-h-40 overflow-y-auto scrollbar-thin">
-                    {teams.filter(t => t.active !== false)
-                      .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map(t => {
+                     {teams.filter(t => t.active !== false)
+                       .filter(t => matchesSearch(t.name, teamSearch))
+                       .sort((a, b) => a.name.localeCompare(b.name))
+                       .map(t => {
                         const isChecked = editingUser.team_ids?.includes(t.id) || false;
                         const isPrimary = editingUser.primary_team_id === t.id;
 
@@ -481,7 +483,7 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                     {teams.filter(t => t.active !== false).length === 0 && (
                       <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 col-span-2 text-center">Nenhuma equipe ativa cadastrada.</p>
                     )}
-                    {teams.filter(t => t.active !== false).length > 0 && teams.filter(t => t.active !== false).filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
+                    {teams.filter(t => t.active !== false).length > 0 && teams.filter(t => t.active !== false).filter(t => matchesSearch(t.name, teamSearch)).length === 0 && (
                       <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 col-span-2 text-center">Nenhuma equipe encontrada.</p>
                     )}
                   </div>

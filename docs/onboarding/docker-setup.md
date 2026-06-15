@@ -110,7 +110,7 @@ docker stack ps qualitrack
 docker service logs -f qualitrack_app
 
 # Atualizar serviço (após novo build/push da imagem)
-docker service update --image qualitrack-app:v2.0.1 qualitrack_app
+docker service update --image ghcr.io/marcospaulofreitas/qualitrack:v2.0.1 qualitrack_app
 ```
 
 ### 3. Remover Stack
@@ -249,7 +249,7 @@ docker compose exec app sh
 
 ```bash
 # Atualizar imagem
-docker service update --image qualitrack-app:v2.1.0 qualitrack_app
+docker service update --image ghcr.io/marcospaulofreitas/qualitrack:v2.1.0 qualitrack_app
 
 # Rollback
 docker service rollback qualitrack_app
