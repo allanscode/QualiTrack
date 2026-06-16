@@ -1,8 +1,9 @@
-version: '3.8'
-
 services:
   app:
     image: ghcr.io/marcospaulofreitas/qualitrack:latest
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
     deploy:
       replicas: 3
       update_config:
@@ -32,34 +33,31 @@ services:
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=qualitrack-network"
-        - "traefik.http.routers.qualitrack.rule=Host(`qualitrack.localhost`)"
-        - "traefik.http.routers.qualitrack.entrypoints=web"
+        - "traefik.http.routers.qualitrack.rule=Host(`qualitrack.seudominio.com`)"
+        - "traefik.http.routers.qualitrack.entrypoints=websecure"
+        - "traefik.http.routers.qualitrack.tls.certresolver=myresolver"
         - "traefik.http.services.qualitrack.loadbalancer.server.port=8080"
         - "traefik.http.routers.qualitrack.middlewares=qualitrack-headers"
         - "traefik.http.middlewares.qualitrack-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
-        - "traefik.docker.network=qualitrack-network"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   traefik:
     image: traefik:v3.0
-    deploy:
-      placement:
-        constraints:
-          - node.role == manager
-      labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
-        - "traefik.http.routers.traefik-dashboard.service=api@internal"
-        - "traefik.http.routers.traefik-dashboard.entrypoints=web"
     command:
       - "--api.dashboard=true"
-      - "--api.insecure=true"
+      - "--api.insecure=false"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.swarmMode=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
-      - "--certificatesresolvers.myresolver.acme.email=admin@qualitrack.local"
+      - "--certificatesresolvers.myresolver.acme.email=admin@qualitrack.seudominio.com"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
     ports:
       - target: 80
@@ -68,10 +66,6 @@ services:
         mode: host
       - target: 443
         published: 443
-        protocol: tcp
-        mode: host
-      - target: 8080
-        published: 8080
         protocol: tcp
         mode: host
     volumes:
