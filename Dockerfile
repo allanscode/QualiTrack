@@ -3,14 +3,19 @@
 # ===========================================
 FROM node:20-alpine AS builder
 
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+
 WORKDIR /app
 
 # Install dependencies first (cache layer)
 COPY package*.json ./
 RUN npm ci
 
-# Copy source code
+# Copy source code and env file (if provided via build args)
 COPY . .
+RUN test -n "$VITE_SUPABASE_URL" && echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL" > .env || true; \
+    test -n "$VITE_SUPABASE_ANON_KEY" && echo "VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY" >> .env || true
 
 # Build application
 RUN npm run build

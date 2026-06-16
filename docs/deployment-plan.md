@@ -101,7 +101,7 @@ cd /opt/qualitrack
 git clone <seu-repo> .
 # ou copiar manualmente: Dockerfile, docker-compose.yml, nginx.conf, .env
 
-# Criar .env com variáveis de produção
+# Criar .env com variáveis de produção (Docker Compose lê automaticamente)
 cat > .env << 'EOF'
 VITE_SUPABASE_URL=https://amyfyngzkqqzixmreeih.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...

@@ -69,6 +69,14 @@ docker compose down
 
 > ⚠️ **Nota sobre `envsubst` no Dockerfile**: O comando `envsubst` no entrypoint usa `'${PORT}'` (aspas simples) para evitar que o shell interprete `$PORT` antes do `envsubst`. Não altere para `"$PORT"` ou `$PORT`.
 
+> ⚠️ **Build args obrigatórios**: O Docker build precisa de `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` para compilar a app com o Supabase real. O `docker-compose.yml` já lê esses valores do seu `.env` automaticamente (via `build.args`). Se não estiverem presentes, a app será construída em **Mock Mode**. Para builds manuais com `docker build`:
+> ```bash
+> docker build \
+>   --build-arg VITE_SUPABASE_URL=https://seu-projeto.supabase.co \
+>   --build-arg VITE_SUPABASE_ANON_KEY=sua-chave \
+>   -t qualitrack .
+> ```
+
 ### 5. Health Check
 
 O container do Nginx expõe `/health` retornando 200. O `docker-compose.yml` inclui healthcheck com intervalo de 30s, timeout 10s, 3 retentativas e período inicial de 20s.

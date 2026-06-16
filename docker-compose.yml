@@ -6,6 +6,9 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runner
+      args:
+        - VITE_SUPABASE_URL
+        - VITE_SUPABASE_ANON_KEY
     container_name: qualitrack-app
     ports:
       - "8080:8080"
