@@ -7,7 +7,8 @@
 DROP VIEW IF EXISTS public.vw_monitorias_suporte;
 
 -- Create view with evaluator fields as NULL (anonymized)
-CREATE OR REPLACE VIEW public.vw_monitorias_suporte AS
+CREATE OR REPLACE VIEW public.vw_monitorias_suporte
+  WITH (security_invoker = on) AS
 SELECT
   id, form_id, evaluated_id, evaluated_name, team_id, team_name, form_name,
   ticket_id, channel, ticket_date, analysis_date,
