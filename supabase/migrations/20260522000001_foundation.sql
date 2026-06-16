@@ -84,7 +84,9 @@ ALTER TABLE public.monitorias
 -- P13: Trigger updated_at
 -- -----------------------------------------------------------------
 CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = 'public'
+AS $$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;

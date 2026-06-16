@@ -134,11 +134,17 @@ CREATE POLICY "forms_admin_write" ON public.forms
 -- access_requests
 CREATE POLICY "access_requests_insert" ON public.access_requests
   FOR INSERT TO anon
-  WITH CHECK (true);
+  WITH CHECK (
+    name IS NOT NULL AND name <> '' AND
+    email IS NOT NULL AND email <> ''
+  );
 
 CREATE POLICY "access_requests_authenticated_insert" ON public.access_requests
   FOR INSERT TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (
+    name IS NOT NULL AND name <> '' AND
+    email IS NOT NULL AND email <> ''
+  );
 
 CREATE POLICY "access_requests_admin_read" ON public.access_requests
   FOR SELECT TO authenticated
@@ -357,9 +363,29 @@ CREATE POLICY "monitorias_delete_policy" ON public.monitorias
 -- ---------------------------------------------------------------------
 -- Set explicit search_path on any potential SECURITY DEFINER function to
 -- prevent path hijacking via search_path manipulations.
--- Note: update_updated_at and other triggers are currently security invoker
--- but it is best practice to secure all triggers or custom triggers.
--- We declare security path empty for custom admin functions if any.
+
+-- Define is_admin_user() if not yet created (needed by security_audit_rls policies)
+CREATE OR REPLACE FUNCTION public.is_admin_user()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = 'public'
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.users
+    WHERE id = auth.uid()
+    AND role IN ('admin', 'gestor_qualidade')
+  );
+$$;
+
+ALTER FUNCTION public.update_updated_at() SET search_path TO 'public';
+ALTER FUNCTION public.update_user_preferences_updated_at() SET search_path TO 'public';
+ALTER FUNCTION public.is_admin_user() SET search_path TO 'public';
+ALTER FUNCTION public.process_action_deadline_timeouts() SET search_path TO 'public';
+ALTER FUNCTION public.calculate_action_deadline(timestamp with time zone, numeric) SET search_path TO 'public';
+
+REVOKE EXECUTE ON FUNCTION public.is_admin_user() FROM anon;
+GRANT EXECUTE ON FUNCTION public.is_admin_user() TO authenticated;
 
 
 -- ---------------------------------------------------------------------

@@ -22,7 +22,9 @@ CREATE INDEX IF NOT EXISTS idx_user_preferences_gin ON public.user_preferences U
 
 -- Trigger: auto-update updated_at
 CREATE OR REPLACE FUNCTION public.update_user_preferences_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = 'public'
+AS $$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
