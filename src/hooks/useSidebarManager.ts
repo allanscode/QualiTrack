@@ -63,11 +63,11 @@ export function isDarkColor(hex: string, resolvedTheme: 'light' | 'dark'): boole
 }
 
 const DEFAULT_SIDEBAR_COLORS: Record<string, { light: string; dark: string }> = {
-  admin: { light: '#475569', dark: '#1E293B' },
-  gestor_qualidade: { light: '#3B82F6', dark: '#1B2A4A' },
-  qualidade: { light: '#10B981', dark: '#0F5132' },
-  gestor_suporte: { light: '#D97706', dark: '#7A431D' },
-  suporte: { light: '#60A5FA', dark: '#253366' },
+  admin:            { light: '#475569', dark: '#1E293B' },
+  gestor_qualidade: { light: '#475569', dark: '#1E293B' },
+  qualidade:        { light: '#475569', dark: '#1E293B' },
+  gestor_suporte:   { light: '#475569', dark: '#1E293B' },
+  suporte:          { light: '#475569', dark: '#1E293B' },
 };
 
 function getDefaultSidebarColor(role: string, resolvedTheme: 'light' | 'dark'): string {

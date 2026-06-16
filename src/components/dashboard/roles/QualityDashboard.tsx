@@ -206,8 +206,8 @@ export default function QualityDashboard({
     return monitorias.filter((m: any) => m.evaluator_id === user?.id);
   }, [isCustomizing, monitorias, user]);
 
-  // Fallback só quando NÃO HÁ DADOS NO SISTEMA para este perfil (sem filtros de UI)
-  const useFallback = isCustomizing || myAllMonitorias.length === 0;
+  // Fallback apenas no modo de customização (admin configurando textos/layout)
+  const useFallback = isCustomizing;
 
   const scoredMonitorias = useMemo(() => {
     if (useFallback) return [];
