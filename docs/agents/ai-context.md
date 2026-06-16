@@ -89,6 +89,9 @@ Se você for debugar algo, verifique estes pontos conhecidos primeiro:
 25. **Mock Mode Production Guard**: `main.tsx` emite `console.error` se `isMockMode && import.meta.env.PROD`. Isso alerta sobre configuração incorreta em produção.
 26. **envsubst $PORT**: No `Dockerfile`, use `envsubst '${PORT}'` (com aspas simples) para evitar que o shell interprete `$PORT` como variável antes do `envsubst`.
 27. **maybeSingle vs single**: Use `.maybeSingle()` em vez de `.single()` para queries que podem retornar zero linhas. `.single()` retorna erro 406 quando não encontra registros. Aplicado em `useQualityConfig.tsx`.
+28. **Auth flowType: 'implicit' obrigatório**: O Supabase client em `supabase.ts` deve usar `flowType: 'implicit'` (não `'pkce'`). Os emails de invite/recovery do Supabase sempre redirecionam com `#access_token=xxx&type=invite` (implicit grant). Com `flowType: 'pkce'`, `_handleAuthRedirect()` ignora `access_token` e a sessão nunca é criada. Se `'pkce'` for usado, o timer de 20s em `AuthProvider.tsx` estoura e exibe erro "expirou ou é inválido".
+29. **Auth hash não pode ser sobrescrito durante redirect**: O efeito de sync do `activeTab` em `AuthProvider.tsx` verifica se o hash contém `access_token=`, `type=` ou `code=` antes de sobrescrever `window.location.hash`. Sem esse guard, o hash de autenticação é perdido e o Supabase não consegue processar o redirect.
+30. **Timer PKCE limpo no INITIAL_SESSION**: `SIGNED_IN`/`PASSWORD_RECOVERY` podem disparar durante a inicialização do Supabase (antes do React montar). O timer de 20s do PKCE também é limpo no handler de `INITIAL_SESSION` (quando `isInviteFlowRef.current && session`), não apenas nos handlers de `SIGNED_IN`/`PASSWORD_RECOVERY`.
 
 ---
 

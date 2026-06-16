@@ -40,7 +40,7 @@ export const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey &
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
-        flowType: 'pkce',
+        flowType: 'implicit',
         storage: typeof window !== 'undefined' ? window.localStorage : undefined,
         lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => await fn(),
       },

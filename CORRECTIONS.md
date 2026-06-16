@@ -156,13 +156,13 @@ Testar após cada alteração para evitar quebra.
 - **Resultado**: Workflow com 5 jobs: lint-and-typecheck, test, build, docker, deploy-preview. Cache npm, upload artifacts, Docker buildx com cache GHA, push para GHCR na main, preview em PRs.
 - **Teste**: `npm run lint` + `npm test` + `npm run build` passando localmente.
 
-#### P1.6 [x] Migrar flowType para 'pkce'
+#### P1.6 [x] flowType: 'implicit' (revertido de 'pkce')
 - **Arquivo**: `src/lib/supabase.ts`
-- **Critério de Aceite**: `flowType: 'pkce'` em dev/prod, login funciona
-- **Status**: ✅ Done
-- **Data**: 2026-06-11
-- **Resultado**: Já configurado na linha 39 do `supabase.ts`. PKCE (Proof Key for Code Exchange) é o fluxo recomendado pela Supabase para SPAs, mais seguro que o implícito.
-- **Teste**: Login funciona em dev (Mock Mode) e seria compatível com Supabase real.
+- **Critério de Aceite**: fluxo de invite/recovery por email funciona corretamente
+- **Status**: ✅ Done (revertido)
+- **Data**: 2026-06-16
+- **Resultado**: `flowType` alterado de `'pkce'` para `'implicit'`. Os emails de invite/recovery do Supabase sempre redirecionam com `#access_token=xxx&type=invite` (implicit grant). Com `flowType: 'pkce'`, o `_handleAuthRedirect()` do Supabase ignora `access_token` e a sessão nunca é criada, resultando em timeout de 20s e erro "expirou ou é inválido". O app não usa OAuth, então não há perda de segurança.
+- **Teste**: Admin logado clica em link de invite → URL não é sobrescrita → Supabase processa access_token → PASSWORD_RECOVERY é disparado → tela change-password → senha do convidado alterada corretamente (não a do admin).
 
 #### P1.7 [x] Rate Limiting nas Edge Functions
 - **Arquivos**: `supabase/functions/admin-invite-user/index.ts`

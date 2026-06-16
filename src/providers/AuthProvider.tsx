@@ -126,6 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isPasswordRecoveryRef = useRef(false);
   const isCleaningSessionRef = useRef(false);
   const isInviteFlowRef = useRef(false);
+  const pkceFlowRef = useRef(false);
+  const pkceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [showIdleWarning, setShowIdleWarning] = useState(false);
   const [idleCountdown, setIdleCountdown] = useState(300);
@@ -152,7 +154,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem('qualitrack_active_tab', activeTab);
     const currentHash = window.location.hash.replace('#', '');
-    if (currentHash !== activeTab) {
+    // Don't override hash if it contains auth params (access_token, code, type) needed by Supabase
+    const hasAuthParams = currentHash.includes('access_token=') || currentHash.includes('type=') || currentHash.includes('code=');
+    if (currentHash !== activeTab && !hasAuthParams) {
       window.location.hash = activeTab;
     }
   }, [activeTab]);
@@ -353,13 +357,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
 
+    // Detect auth redirect flow (PKCE code exchange or access_token from invite/recovery)
+    const isAuthRedirect = (initialUrlSearch && (initialUrlSearch.includes('code=') || initialUrlSearch.includes('access_token='))) ||
+      (initialUrlHash && (initialUrlHash.includes('code=') || initialUrlHash.includes('access_token=')));
+    if (isAuthRedirect) {
+      pkceFlowRef.current = true;
+      pkceTimerRef.current = setTimeout(() => {
+        if (pkceFlowRef.current) {
+          toast.error('A autenticação via link expirou ou é inválida. Por favor, faça login novamente.');
+          setAuthView('login');
+          setLoading(false);
+          pkceFlowRef.current = false;
+        }
+      }, 20000);
+    }
+
     const sb = supabase ?? assertSupabase();
     const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        if (pkceFlowRef.current && pkceTimerRef.current) {
+          clearTimeout(pkceTimerRef.current);
+          pkceTimerRef.current = null;
+          pkceFlowRef.current = false;
+        }
         isPasswordRecoveryRef.current = true;
         setAuthView('change-password');
       } else if (event === 'INITIAL_SESSION') {
         if (isInviteFlowRef.current && session) {
+          // Clear PKCE timer — SIGNED_IN/PASSWORD_RECOVERY may have fired before our subscription
+          if (pkceFlowRef.current && pkceTimerRef.current) {
+            clearTimeout(pkceTimerRef.current);
+            pkceTimerRef.current = null;
+            pkceFlowRef.current = false;
+          }
           return;
         }
         // Guard: if user is already loaded and app is ready, skip re-loading
@@ -382,6 +412,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuthView('login');
         }
       } else if (event === 'SIGNED_IN') {
+        if (pkceFlowRef.current && pkceTimerRef.current) {
+          clearTimeout(pkceTimerRef.current);
+          pkceTimerRef.current = null;
+          pkceFlowRef.current = false;
+        }
         if (!isPasswordRecoveryRef.current && session) {
           // Guard: if user is already loaded and app is ready, skip re-loading
           if (currentUserRef.current?.id === session.user.id && appReadyRef.current) {
@@ -418,6 +453,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       clearTimeout(initializationTimeout);
+      if (pkceTimerRef.current) {
+        clearTimeout(pkceTimerRef.current);
+        pkceTimerRef.current = null;
+      }
       subscription.unsubscribe();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
