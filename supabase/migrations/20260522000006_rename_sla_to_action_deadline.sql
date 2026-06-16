@@ -14,7 +14,9 @@ CREATE INDEX idx_monitorias_action_deadline ON public.monitorias(action_deadline
 DROP FUNCTION IF EXISTS process_sla_timeouts();
 
 CREATE OR REPLACE FUNCTION process_action_deadline_timeouts()
-RETURNS void AS $$
+RETURNS void
+SET search_path = 'public'
+AS $$
 DECLARE
   v_monitoria RECORD;
   v_new_score numeric;
@@ -71,7 +73,9 @@ DROP FUNCTION IF EXISTS calculate_sla_deadline(timestamptz, numeric);
 CREATE OR REPLACE FUNCTION calculate_action_deadline(
   p_start_time timestamp with time zone,
   p_action_hours numeric
-) RETURNS timestamp with time zone AS $$
+) RETURNS timestamp with time zone
+SET search_path = 'public'
+AS $$
 DECLARE
   v_deadline timestamp with time zone;
   v_remaining_hours numeric := p_action_hours;
