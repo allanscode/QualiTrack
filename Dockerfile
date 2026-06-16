@@ -46,7 +46,7 @@ set -e\n\
 \n# Default PORT to 8080 if not set\n\
 export PORT=${PORT:-8080}\n\
 \n# Substitute $PORT in nginx config template using envsubst\n\
-envsubst \"$PORT\" < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf\n\
+envsubst '${PORT}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf\n\
 \n# Execute the command\n\
 exec "$@"\n\
 ' > /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh

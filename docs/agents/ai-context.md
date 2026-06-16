@@ -79,6 +79,16 @@ Se você for debugar algo, verifique estes pontos conhecidos primeiro:
 15. **Sidebar Accordion**: Popover de perfil usa `sidebarAccordion` state (single-open). Se adicionar novas seções, siga o padrão `AnimatePresence initial={false}` + `ChevronDown` rotation. Seleção de cor auto-fecha o accordion.
 16. **Profile Toggle**: Botões de toggle do sidebar (avatar + nome) usam classe `profile-toggle-btn` para exclusão do click-outside handler. Sem isso, o click-outside fecha o popover antes do toggle.
 17. **Scrollbar Gutter**: O container de scroll principal usa `scrollbar-gutter: stable` (inline style) para evitar layout shift quando scrollbar aparece/desaparece.
+18. **Auth Hash Race**: `initialUrlHash` e `initialUrlSearch` são capturados no escopo do módulo em `supabase.ts` (antes de `createClient`). `AuthProvider.tsx` usa `isPasswordRecoveryRef.current` como guarda para evitar que `INITIAL_SESSION` sobrescreva a view `change-password`. Nunca remova esse guard.
+19. **Anonimato do Auditor**: Agentes (`suporte`) consultam `vw_monitorias_suporte` (view que retorna `NULL` para `evaluator_name` e `evaluator_id`). Implementado em `useMonitoriaData.ts` e `DashboardContext.tsx`. Se adicionar novas queries de monitorias, verifique se a role `suporte` precisa usar a view.
+20. **SLA Auto-Finalize Removido do Frontend**: A lógica de auto-finalização de monitorias por SLA foi removida de `useMonitoriaData.ts`. Agora é responsabilidade exclusiva do `pg_cron` server-side (`process_action_deadline_timeouts()`). Não recrie essa lógica no frontend.
+21. **Dashboard Query Storm (P4)**: `filters` foi removido das dependências do `useEffect` de `loadData` em `DashboardContext.tsx`. Mudanças de filtro disparam recarga apenas via `debouncedRefresh`. Não adicione `filters` de volta às dependências.
+22. **useQualityConfig N+1 (P15)**: O loop sequencial de atualização de monitorias foi convertido para `Promise.all`. Ao adicionar operações batch, sempre use `Promise.all`.
+23. **duplicate heartbeat removido (P14)**: `resilienceHeartbeatInterval2` foi removido de `useSessionManager.ts`. Existe apenas um heartbeat interval (`resilienceHeartbeatInterval`).
+24. **OfensoresChart sem mock (P9)**: Blocos de dados mockados (`if (isMockMode)`) foram removidos de `OfensoresChart.tsx`. Sempre busque dados reais do contexto.
+25. **Mock Mode Production Guard**: `main.tsx` emite `console.error` se `isMockMode && import.meta.env.PROD`. Isso alerta sobre configuração incorreta em produção.
+26. **envsubst $PORT**: No `Dockerfile`, use `envsubst '${PORT}'` (com aspas simples) para evitar que o shell interprete `$PORT` como variável antes do `envsubst`.
+27. **maybeSingle vs single**: Use `.maybeSingle()` em vez de `.single()` para queries que podem retornar zero linhas. `.single()` retorna erro 406 quando não encontra registros. Aplicado em `useQualityConfig.tsx`.
 
 ---
 

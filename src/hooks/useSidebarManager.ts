@@ -62,6 +62,18 @@ export function isDarkColor(hex: string, resolvedTheme: 'light' | 'dark'): boole
   return luma < 128;
 }
 
+const DEFAULT_SIDEBAR_COLORS: Record<string, { light: string; dark: string }> = {
+  admin: { light: '#475569', dark: '#1E293B' },
+  gestor_qualidade: { light: '#3B82F6', dark: '#1B2A4A' },
+  qualidade: { light: '#10B981', dark: '#0F5132' },
+  gestor_suporte: { light: '#D97706', dark: '#7A431D' },
+  suporte: { light: '#60A5FA', dark: '#253366' },
+};
+
+function getDefaultSidebarColor(role: string, resolvedTheme: 'light' | 'dark'): string {
+  return DEFAULT_SIDEBAR_COLORS[role]?.[resolvedTheme] ?? DEFAULT_SIDEBAR_COLORS.admin[resolvedTheme];
+}
+
 interface SidebarManagerOptions {
   userData: User | null;
   currentUser: any;
@@ -82,7 +94,8 @@ export function useSidebarManager(opts: SidebarManagerOptions) {
         return localStorage.getItem(`qualitrack_sidebar_color_${email}`) || '';
       }
     }
-    return '';
+    const role = userData?.role || 'admin';
+    return getDefaultSidebarColor(role, resolvedTheme);
   });
 
   const sidebarColors = useMemo(() => {
@@ -135,31 +148,8 @@ export function useSidebarManager(opts: SidebarManagerOptions) {
     }
   }, [resolvedTheme]);
 
-  const prevThemeUserIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!userData?.id) return;
-    if (staticDataLoading) return;
-
-    const userId = userData.id;
-    const isLogin = prevThemeUserIdRef.current !== userId;
-    prevThemeUserIdRef.current = userId;
-
-    const myPrefs = userPreferences[userId];
-    const dbTheme = myPrefs?.theme;
-
-    if (dbTheme) {
-      lastDbThemeRef.current = dbTheme;
-      setTheme(dbTheme);
-      localStorage.setItem('qualitrack_theme', dbTheme);
-    } else if (isLogin && myPrefs !== undefined) {
-      const osDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const resolved = osDark ? 'dark' as const : 'light' as const;
-      lastDbThemeRef.current = resolved;
-      setTheme(resolved);
-      localStorage.setItem('qualitrack_theme', resolved);
-      upsertUserPreferences(userId, { theme: resolved });
-    }
-  }, [userData?.id, userPreferences, staticDataLoading]);
+  // Theme sync on login is handled ONLY by handleUserSession in AuthProvider
+  // This hook only manages sidebar_color persistence and theme changes from UI
 
   const prevThemeForDbRef = useRef<'light' | 'dark' | 'system' | null>(null);
   useEffect(() => {
@@ -168,36 +158,13 @@ export function useSidebarManager(opts: SidebarManagerOptions) {
     if (theme === prevThemeForDbRef.current) return;
     prevThemeForDbRef.current = theme;
 
-    const resolved = theme === 'system'
-      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' as const : 'light' as const)
-      : theme;
-
-    if (resolved !== lastDbThemeRef.current) {
-      lastDbThemeRef.current = resolved;
-      upsertUserPreferences(userData.id, { theme: resolved });
+    // Save the literal theme (including 'system') to DB
+    // Resolution to 'light'/'dark' is only for DOM application, not persistence
+    if (theme !== lastDbThemeRef.current) {
+      lastDbThemeRef.current = theme;
+      upsertUserPreferences(userData.id, { theme });
     }
   }, [theme, userData?.id, staticDataLoading]);
-
-  useEffect(() => {
-    if (!userData?.id) return;
-    const userId = userData.id;
-    const email = userData.email || currentUser?.email;
-
-    const myPrefs = userPreferences[userId];
-    let dbColor: string | undefined = myPrefs?.sidebar_color;
-
-    if (!dbColor) {
-      const metadataColor = currentUser?.user_metadata?.sidebar_color;
-      if (metadataColor) {
-        dbColor = metadataColor;
-        upsertUserPreferences(userId, { sidebar_color: metadataColor });
-      }
-    }
-
-    const finalColor = dbColor || '';
-    setSidebarColor(finalColor);
-    if (email) localStorage.setItem(`qualitrack_sidebar_color_${email}`, finalColor);
-  }, [userData?.id, userPreferences]);
 
   const handleSidebarColorChange = async (color: string) => {
     setSidebarColor(color);

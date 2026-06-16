@@ -77,9 +77,10 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   // Salva no localStorage (apenas quando logado)
   useEffect(() => {
     if (localStorage.getItem('qualitrack_session') || localStorage.getItem('sb-amyfyngzkqqzixmreeih-auth-token')) {
-      localStorage.setItem('qualitrack_theme', resolvedTheme);
+      // Save the literal theme (including 'system'), not resolvedTheme
+      localStorage.setItem('qualitrack_theme', theme);
     }
-  }, [resolvedTheme]);
+  }, [theme]);
 
   const value = { theme, setTheme, resolvedTheme };
 

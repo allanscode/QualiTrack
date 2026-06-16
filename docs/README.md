@@ -51,7 +51,7 @@
 - [SPEC: Quality Config](./specs/quality-config.md) — faixas, meta, prazos, Context Provider
 
 ### Banco de Dados
-- [Schema e Entidades](./database/schema.md) — 10 tabelas, ER diagram, RLS matrix
+- [Schema e Entidades](./database/schema.md) — 11 tabelas, ER diagram, RLS matrix
 
 ### API
 - [Endpoints e Contratos](./api/endpoints.md) — Supabase queries, Edge Functions, auth, utilities

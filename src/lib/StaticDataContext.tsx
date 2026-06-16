@@ -124,6 +124,7 @@ export function StaticDataProvider({ children }: { children: ReactNode }) {
     gcTime: 30 * 60 * 1000, // 30 minutes
     retry: 2,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false, // CORRECTION 5: custom qualitrack:reconnected event handles this
   });
 
   const refreshAll = useCallback(() => {

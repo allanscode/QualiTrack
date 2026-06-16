@@ -6,11 +6,11 @@ import { toast } from 'sonner';
 export const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
 const IDLE_WARNING_MS = 5 * 60 * 1000;
 export const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
-const SESSION_REFRESH_MS = 50 * 60 * 1000;
+// REMOVED: SESSION_REFRESH_MS - autoRefreshToken handles token refresh
 export const MOCK_SESSION_KEY = 'qualitrack_session';
 export const LAST_ACTIVITY_KEY = 'qualitrack_last_activity';
 
-export const lastDbThemeRef = { current: null as ('light' | 'dark' | null) };
+export const lastDbThemeRef = { current: null as ('light' | 'dark' | 'system' | null) };
 
 interface SessionManagerOptions {
   currentUser: any;
@@ -47,12 +47,23 @@ export function useSessionManager(opts: SessionManagerOptions) {
     setTheme,
   } = opts;
 
-  // --- Session Resilience & Active Reconnection ---
+  // Shared checkAbsoluteTimeout function accessible to both useEffects
+  const checkAbsoluteTimeout = useCallback(() => {
+    if (!sessionStartTimeRef.current) return false;
+    const elapsed = Date.now() - sessionStartTimeRef.current;
+    if (elapsed >= ABSOLUTE_TIMEOUT_MS) {
+      return true;
+    }
+    return false;
+  }, []);
+
+  // Ref for lastFocusCheck to persist across effect re-runs (persists throttle state)
+  const lastFocusCheckRef = useRef(0);
+
+  // --- Session Resilience, Active Reconnection & Visibility Change (Consolidated) ---
   useEffect(() => {
     if (isMockMode || !supabase || !currentUser) return;
     const sb = supabase!;
-
-    let lastFocusCheck = 0;
     let reconnectInterval: ReturnType<typeof setInterval> | null = null;
     let wasOffline = false;
 
@@ -79,9 +90,8 @@ export function useSessionManager(opts: SessionManagerOptions) {
       setIsSystemOnline(online);
       if (online && wasOffline) {
         console.log('[System] Reconexão detectada! Notificando componentes...');
-        wasOffline = false;
         setIsReconnecting(false);
-        try { await sb.auth.refreshSession(); } catch {}
+        // REMOVED: manual refreshSession() - autoRefreshToken handles this
         window.dispatchEvent(new CustomEvent('qualitrack:reconnected'));
         if (reconnectInterval) {
           clearInterval(reconnectInterval);
@@ -101,24 +111,37 @@ export function useSessionManager(opts: SessionManagerOptions) {
       }
     };
 
-    const heartbeatInterval = setInterval(async () => {
+    // Heartbeat ping every 2 minutes (renamed to avoid conflict with idle effect)
+    const resilienceHeartbeatInterval = setInterval(async () => {
       const ok = await pingSupabase();
       handleOnlineStatusChange(ok);
     }, 2 * 60 * 1000);
 
-    pingSupabase().then(ok => handleOnlineStatusChange(ok));
-
+    // CONSOLIDATED: Single visibilitychange handler with 15s throttle
+    // Checks absolute timeout, validates session, only refreshes if <15min to expiry (fallback only)
     const handleVisibilityChange = async () => {
       const now = Date.now();
-      if (document.visibilityState === 'visible' && now - lastFocusCheck > 15000) {
-        lastFocusCheck = now;
+      if (document.visibilityState !== 'visible') return;
+      if (now - lastFocusCheckRef.current <= 15000) return; // 15s throttle
+
+      if (checkAbsoluteTimeout()) return; // Check absolute timeout first
+
+      lastFocusCheckRef.current = now;
+
+      if (!isMockMode) {
         try {
           const { data: { session } } = await sb.auth.getSession();
           if (session) {
             const timeToExpiry = (session.expires_at || 0) - Math.floor(now / 1000);
-            if (timeToExpiry < 900) await sb.auth.refreshSession();
+            // Only refresh if session expires in <15min (fallback - autoRefreshToken should handle this)
+            if (timeToExpiry < 900) {
+              console.log('[System] Session expiring soon, triggering refresh as fallback');
+              await sb.auth.refreshSession();
+            }
           }
-        } catch {}
+        } catch (e) {
+          console.warn('[System] visibilitychange: getSession/refresh failed:', e);
+        }
       }
     };
 
@@ -135,16 +158,19 @@ export function useSessionManager(opts: SessionManagerOptions) {
     window.addEventListener('online', handleBrowserOnline);
     window.addEventListener('offline', handleBrowserOffline);
 
+    // Initial ping
+    pingSupabase().then(ok => handleOnlineStatusChange(ok));
+
     return () => {
-      clearInterval(heartbeatInterval);
+      clearInterval(resilienceHeartbeatInterval);
       if (reconnectInterval) clearInterval(reconnectInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('online', handleBrowserOnline);
       window.removeEventListener('offline', handleBrowserOffline);
     };
-  }, [isMockMode, currentUser]);
+  }, [isMockMode, currentUser, checkAbsoluteTimeout]);
 
-  // --- Idle Timeout + Warning + Absolute Timeout + Proactive Refresh ---
+  // --- Idle Timeout + Warning + Absolute Timeout (NO proactive refresh) ---
   const extendSessionRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -155,7 +181,6 @@ export function useSessionManager(opts: SessionManagerOptions) {
 
     let idleTimerId: NodeJS.Timeout;
     let warningIntervalId: NodeJS.Timeout;
-    let refreshTimerId: NodeJS.Timeout;
     let lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_KEY)) || Date.now();
 
     const forceLogout = async (reason: string) => {
@@ -163,9 +188,7 @@ export function useSessionManager(opts: SessionManagerOptions) {
       setAppReady(false);
       localStorage.removeItem(MOCK_SESSION_KEY);
       localStorage.removeItem(LAST_ACTIVITY_KEY);
-      localStorage.setItem('qualitrack_theme', 'system');
-      setTheme('system');
-      applyThemeToDOM(resolveSystemTheme());
+      // Don't reset theme/sidebar_color preferences on force logout
       lastDbThemeRef.current = null;
       prevUserIdRef.current = null;
       if (!isMockMode && supabase) {
@@ -189,23 +212,11 @@ export function useSessionManager(opts: SessionManagerOptions) {
       return;
     }
 
-    const checkAbsoluteTimeout = () => {
-      if (!sessionStartTimeRef.current) return false;
-      const elapsed = Date.now() - sessionStartTimeRef.current;
-      if (elapsed >= ABSOLUTE_TIMEOUT_MS) {
-        forceLogout('Sessão encerrada após 8 horas contínuas. Faça login novamente.');
-        return true;
-      }
-      return false;
-    };
-
     const doExtendSession = () => {
       setShowIdleWarning(false);
       clearInterval(warningIntervalId);
       startIdleTimer();
-      if (!isMockMode && supabase) {
-        supabase.auth.refreshSession().catch(() => {});
-      }
+      // REMOVED: proactive refreshSession() - autoRefreshToken handles this
     };
 
     extendSessionRef.current = doExtendSession;
@@ -248,46 +259,20 @@ export function useSessionManager(opts: SessionManagerOptions) {
       startIdleTimer();
     };
 
-    if (!isMockMode) {
-      refreshTimerId = setInterval(async () => {
-        if (!currentUser) return;
-        if (checkAbsoluteTimeout()) return;
-        try {
-          await supabase!.auth.refreshSession();
-        } catch {}
-      }, SESSION_REFRESH_MS);
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && currentUser) {
-        if (checkAbsoluteTimeout()) return;
-        if (!isMockMode) {
-          supabase!.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-              const timeToExpiry = (session.expires_at || 0) - Math.floor(Date.now() / 1000);
-              if (timeToExpiry < 900) {
-                supabase!.auth.refreshSession().catch(() => {});
-              }
-            }
-          });
-        }
-      }
-    };
+    // REMOVED: proactive refreshTimerId (SESSION_REFRESH_MS) - autoRefreshToken handles this
 
     const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
     events.forEach(event => document.addEventListener(event, handleUserActivity, { passive: true }));
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    // Note: visibilitychange is handled in the first useEffect (consolidated)
 
     startIdleTimer();
 
     return () => {
       clearTimeout(idleTimerId);
       clearInterval(warningIntervalId);
-      clearInterval(refreshTimerId);
       events.forEach(event => document.removeEventListener(event, handleUserActivity));
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentUser, isMockMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUser, isMockMode, showIdleWarning, checkAbsoluteTimeout]);
 
   const extendSession = useCallback(() => {
     extendSessionRef.current();

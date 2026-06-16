@@ -102,8 +102,39 @@ Retorna boolean se o usuário autenticado é admin. Necessária para evitar recu
 ### `process_action_deadline_timeouts()`
 Busca monitorias com `action_deadline_at < now()` e status ativo, aplica regras de auto-finalização por posse.
 
+## View Anônima: `vw_monitorias_suporte`
+
+Criada na migration `20260617000001_anonymized_monitoria_view.sql`:
+
+```sql
+CREATE VIEW vw_monitorias_suporte AS
+SELECT
+  id, ticket_id, evaluated_id, evaluated_name, team_id,
+  form_id, form_name, channel, score, answers, critical_errors,
+  feedback, status, history, action_deadline_at, resolution_type,
+  contestation_result, form_snapshot, applied_config,
+  selected_critical_errors, dissatisfaction_answers, active,
+  created_at, updated_at,
+  NULL::text AS evaluator_name,
+  NULL::uuid AS evaluator_id
+FROM monitorias;
+```
+
+**Propósito**: Agentes (`suporte`) consultam esta view em vez da tabela `monitorias` diretamente, garantindo que `evaluator_name` e `evaluator_id` nunca vazem para o agente avaliado.
+
+**Uso no frontend**:
+- `useMonitoriaData.ts` — quando `role === 'suporte'`, faz query em `vw_monitorias_suporte`
+- `DashboardContext.tsx` — mesma lógica
+
+## Migrations
+
+| Migration | Descrição |
+|---|---|
+| `20260520000000_initial_schema.sql` | Schema inicial: 11 tabelas base + seeds (business_hours, holidays 2026) |
+| `20260616000001_realtime_publication.sql` | Publicação realtime para tabelas monitoradas (idempotente via `DO $$`) |
+| `20260617000001_anonymized_monitoria_view.sql` | View `vw_monitorias_suporte` para auditoria anônima |
+
 ## Alertas
 
 - [ ] `admin-create-user` não implementada (retorna 501)
-- [ ] Sem rate limiting, logging estruturado ou observabilidade
 - [ ] Cron de prazo de ação não usa mesma lógica de horário comercial do frontend — compara `action_deadline_at < now()` diretamente

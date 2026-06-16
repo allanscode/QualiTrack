@@ -13,6 +13,10 @@ import {
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Capture initial URL parameters before Supabase client processes them (PKCE flow)
+export const initialUrlHash = typeof window !== 'undefined' ? window.location.hash : '';
+export const initialUrlSearch = typeof window !== 'undefined' ? window.location.search : '';
+
 const customFetch = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
   const requestId = Math.random().toString(36).substring(7);
   const startTime = Date.now();

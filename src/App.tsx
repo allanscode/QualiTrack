@@ -79,6 +79,7 @@ function AppContent() {
     sidebarContrastClass,
     sidebarContrastSubtle,
     sidebarIsDark,
+    loadingPreferences,
   } = useAuth();
 
   return (
@@ -243,20 +244,26 @@ function AppContent() {
               </div>
             </div>
           </m.div>
-        ) : !appReady ? (
+        ) : loadingPreferences || !appReady ? (
           <m.div
             key="app-transition"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="h-screen w-screen flex items-center justify-center bg-surface-bg"
+            className="h-screen w-screen flex flex-col items-center justify-center bg-surface-bg gap-4"
           >
             <m.div
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
               className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full"
             />
+            {loadingPreferences && (
+              <div className="text-center text-brand-primary space-y-2">
+                <p className="text-sm font-bold uppercase tracking-wider">Carregando suas preferências...</p>
+                <p className="text-xs text-brand-muted">Aplicando tema e configurações do menu</p>
+              </div>
+            )}
           </m.div>
         ) : (
           <m.div
@@ -758,20 +765,28 @@ function MainApp({
 
         <div className="flex-1 overflow-auto px-8 pb-8 pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
           <React.Suspense fallback={<div className="flex justify-center items-center h-full"><div className="w-8 h-8 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div></div>}>
-            <div className={activeTab === 'dashboard' ? 'block animate-fade-in' : 'hidden'}>
-              <DashboardMain user={userData} activeTab={activeTab} />
-            </div>
-            <div className={activeTab === 'monitorias' ? 'block animate-fade-in' : 'hidden'}>
-              <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} activeTab={activeTab} />
-            </div>
+            {activeTab === 'dashboard' && (
+              <div className="animate-fade-in">
+                <DashboardMain user={userData} activeTab={activeTab} />
+              </div>
+            )}
+            {activeTab === 'monitorias' && (
+              <div className="animate-fade-in">
+                <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} activeTab={activeTab} />
+              </div>
+            )}
             {userData?.role === 'admin' && (
               <>
-                <div className={activeTab === 'admin' ? 'block animate-fade-in' : 'hidden'}>
-                  <AdminPanel user={userData} />
-                </div>
-                <div className={activeTab === 'custom_dashboard' ? 'block animate-fade-in' : 'hidden'}>
-                  <CustomDashboardManagement user={userData} />
-                </div>
+                {activeTab === 'admin' && (
+                  <div className="animate-fade-in">
+                    <AdminPanel user={userData} />
+                  </div>
+                )}
+                {activeTab === 'custom_dashboard' && (
+                  <div className="animate-fade-in">
+                    <CustomDashboardManagement user={userData} />
+                  </div>
+                )}
               </>
             )}
           </React.Suspense>

@@ -20,7 +20,7 @@ npm install
 npm run dev
 ```
 
-O app estará disponível em `http://localhost:3000`.
+O app estará disponível em `http://localhost:3001`.
 
 ## Variáveis de Ambiente
 
@@ -50,9 +50,10 @@ Se as variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` não estiverem c
 
 | Comando | Descrição |
 |---|---|
-| `npm run dev` | Dev server com HMR (Vite) em localhost:3000 |
+| `npm run dev` | Dev server com HMR (Vite) em localhost:3001 |
 | `npm run build` | Build de produção |
 | `npm run lint` | Type checking (`tsc --noEmit`) — **execute sempre após editar código** |
+| `npm run test` | Executa testes (vitest run) |
 | `npm run preview` | Preview do build de produção |
 | `npm run clean` | Limpa pasta dist/ |
 

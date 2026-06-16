@@ -263,6 +263,28 @@ As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) 
 
 > Isso evita JOINs nas queries de listagem do dashboard.
 
+## View Anônima: `vw_monitorias_suporte`
+
+Criada na migration `20260617000001_anonymized_monitoria_view.sql`:
+
+```sql
+CREATE VIEW vw_monitorias_suporte AS
+SELECT
+  id, ticket_id, evaluated_id, evaluated_name, team_id,
+  form_id, form_name, channel, score, answers, critical_errors,
+  feedback, status, history, action_deadline_at, resolution_type,
+  contestation_result, form_snapshot, applied_config,
+  selected_critical_errors, dissatisfaction_answers, active,
+  created_at, updated_at,
+  NULL::text AS evaluator_name,
+  NULL::uuid AS evaluator_id
+FROM monitorias;
+```
+
+**Propósito**: Agentes (`suporte`) consultam esta view em vez de `monitorias` diretamente, escondendo `evaluator_name` e `evaluator_id` para garantir anonimato do auditor.
+
+**Uso no frontend**: `useMonitoriaData.ts` e `DashboardContext.tsx` fazem query em `vw_monitorias_suporte` quando `role === 'suporte'`.
+
 ## SQL Files no Repositório
 
 | Arquivo | Propósito |
@@ -270,7 +292,9 @@ As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) 
 | `auth_migration.sql` | Cria admin padrão no Auth + public.users |
 | `create_quality_configs.sql` | Cria tabela quality_configs + RLS |
 | `rls_monitorias.sql` | RLS policies para a tabela monitorias |
-| `supabase/migrations/` | Migrations SQL versionadas (timestamp) — inclui `user_teams`, `dissatisfaction_fields`, `business_hours`, `holidays`, `user_preferences`, RLS policies, `is_admin_user()` SECURITY DEFINER |
+| `supabase/migrations/20260520000000_initial_schema.sql` | Schema inicial: 11 tabelas + seeds |
+| `supabase/migrations/20260616000001_realtime_publication.sql` | Realtime publication (idempotente) |
+| `supabase/migrations/20260617000001_anonymized_monitoria_view.sql` | View `vw_monitorias_suporte` |
 
 ## RLS por Tabela
 

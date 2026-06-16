@@ -154,7 +154,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
 
     const fetchConfig = async () => {
       if (supabase) {
-        const { data } = await supabase.from('quality_configs').select('*').single();
+        const { data } = await supabase.from('quality_configs').select('*').maybeSingle();
         if (data) {
           const cfg = normalizeConfig(data.config);
           setConfig(cfg);
@@ -179,7 +179,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
 
     if (supabase) {
-      const { data: existing } = await supabase.from('quality_configs').select('id').single();
+      const { data: existing } = await supabase.from('quality_configs').select('id').maybeSingle();
       if (existing) {
         await supabase.from('quality_configs').update({ config: newConfig }).eq('id', existing.id);
       } else {
@@ -244,13 +244,17 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
       }).filter(Boolean);
 
       if (supabase) {
-        for (const update of updates) {
-          if(update) await supabase.from('monitorias').update({ action_deadline_at: update.action_deadline_at }).eq('id', update.id);
+        const validUpdates = updates.filter(Boolean) as { id: string; action_deadline_at: string }[];
+        if (validUpdates.length > 0) {
+          await Promise.all(validUpdates.map(update =>
+            supabase!.from('monitorias').update({ action_deadline_at: update.action_deadline_at }).eq('id', update.id)
+          ));
         }
       } else {
-        for (const update of updates) {
-          if(update) await mockDb.update('monitorias', update.id, { action_deadline_at: update.action_deadline_at });
-        }
+        const validUpdates = updates.filter(Boolean) as { id: string; action_deadline_at: string }[];
+        await Promise.all(validUpdates.map(update =>
+          mockDb.update('monitorias', update.id, { action_deadline_at: update.action_deadline_at })
+        ));
       }
     } catch (e) {
       console.error('Failed to recalculate action deadlines', e);

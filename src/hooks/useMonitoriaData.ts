@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
-import { Monitoria, MonitoriaHistoryEntry, User } from '../types';
+import { Monitoria, User } from '../types';
 import { toast } from 'sonner';
 
 export function useMonitoriaData(user: User | null, activeTab?: string) {
@@ -33,7 +33,9 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
             console.log(`[Monitorias] Buscando monitorias (Tentativa ${retryCount + 1})...`);
             const controller = new AbortController();
 
-            let monitoriasQuery = supabase!.from('monitorias').select('*').order('created_at', { ascending: false });
+            const isSuporte = currentUser.role === 'suporte';
+            const source = isSuporte ? 'vw_monitorias_suporte' : 'monitorias';
+            let monitoriasQuery = supabase!.from(source).select('*').order('created_at', { ascending: false });
 
             const myTeamIds = currentUser.team_ids || [];
 
@@ -81,50 +83,6 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
 
         const [mRes] = await executeWithRetry();
         fetchedMonitorias = mRes.data || [];
-      }
-
-      const expired = fetchedMonitorias.filter((m: any) =>
-        m.active !== false &&
-        !['concluida', 'finalizada_alterada'].includes(m.status) &&
-        m.action_deadline_at &&
-        new Date(m.action_deadline_at) < new Date()
-      );
-
-      if (expired.length > 0) {
-        console.log(`[Prazo] Encontradas ${expired.length} monitorias expiradas. Finalizando...`);
-        const nowStr = new Date().toISOString();
-        for (const m of expired) {
-          const isQualityTurn = ['em_contestacao', 'aguardando_gestor_qualidade', 'reavaliacao_solicitada'].includes(m.status);
-          const newScore = isQualityTurn ? 100 : m.score;
-          const note = isQualityTurn
-            ? 'Monitoria aprovada automaticamente (nota 100%) por perda de prazo da Equipe de Qualidade.'
-            : 'Monitoria aprovada automaticamente por perda de prazo da Equipe de Suporte.';
-
-          const historyEntry: MonitoriaHistoryEntry = {
-            action: 'Finalização Automática (Prazo)',
-            by_id: 'system',
-            by_name: 'Sistema Automático',
-            at: nowStr,
-            note
-          };
-
-          const update = {
-            status: 'concluida' as const,
-            score: newScore,
-            resolution_type: 'automatic' as const,
-            updated_at: nowStr,
-            history: [...(m.history || []), historyEntry]
-          };
-
-          if (isMockMode) {
-            await mockDb.update('monitorias', m.id, update);
-          } else {
-            await supabase!.from('monitorias').update(update).eq('id', m.id);
-          }
-        }
-
-        setTimeout(() => { loadRef.current(true); }, 50);
-        return;
       }
 
       setMonitorias(fetchedMonitorias.map((r: any) => ({ ...r, history: r.history || [], answers: r.answers || {} })));
@@ -201,7 +159,17 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
           loadRef.current(true);
         }, 300);
       })
-      .subscribe();
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Realtime] Inscrição ativa na tabela monitorias');
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[Realtime] Timeout - verificar config de Realtime no Supabase');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[Realtime] Erro no canal - Realtime pode não estar configurado');
+        } else if (status === 'CLOSED') {
+          console.log('[Realtime] Canal fechado');
+        }
+      });
 
     return () => {
       mounted = false;

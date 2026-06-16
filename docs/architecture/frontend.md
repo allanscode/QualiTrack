@@ -20,10 +20,16 @@
 ```
 src/
 ├── App.tsx # Entry point: Auth + Layout + Tab Navigation + Session + Sidebar Accordion + isDarkColor (module scope)
-├── main.tsx                         # React DOM render
+├── main.tsx                         # React DOM render + mock mode production guard (console.error se PROD && isMockMode)
 ├── index.css # Design tokens + CSS global (Tailwind v4 @theme) + date picker color-scheme
 ├── types.ts                         # Tipos TypeScript globais (User, Monitoria, Team, etc.)
-├── lib/ 27: │   ├── supabase.ts # Cliente Supabase + MockDB (localStorage) + upsertUserPreferences() 28: │   ├── useQualityConfig.tsx # Context Provider singleton + hook de config de qualidade 29: │   ├── businessHours.ts # Utilitários de horário comercial/prazo de ação 30: │   ├── contestation.ts # Funções unificadas de contestação (isApprovalAction/isRejectionAction) 31: │   ├── chartColors.ts # Utilitário de cores de gráfico (lê CSS vars, theme-aware) 32: │   └── StaticDataContext.tsx # Context Provider — cadastro (6 tabelas) + userPreferences
+├── lib/
+│   ├── supabase.ts # Cliente Supabase + MockDB + upsertUserPreferences() + initialUrlHash/initialUrlSearch (escopo módulo)
+│   ├── useQualityConfig.tsx # Context Provider singleton + hook de config de qualidade
+│   ├── businessHours.ts # Utilitários de horário comercial/prazo de ação
+│   ├── contestation.ts # Funções unificadas de contestação (isApprovalAction/isRejectionAction)
+│   ├── chartColors.ts # Utilitário de cores de gráfico (lê CSS vars, theme-aware)
+│   └── StaticDataContext.tsx # Context Provider — cadastro (6 tabelas) + userPreferences
 ├── utils/                           # (Vazio — não utilizado atualmente)
 └── components/
     ├── AdminPanel.tsx               # Painel administrativo (222 linhas, 6 sub-tabs)
@@ -113,11 +119,13 @@ Context Provider que centraliza:
 - `dissatisfactionFields` — Definições de campos de insatisfação
 - Realtime subscription no canal `monitorias-realtime-dash` (300ms debounce)
 - Reload triggers: `activeTab` change, `qualitrack:reconnected`
+- **Role `suporte`**: Consulta `vw_monitorias_suporte` (view anônima) em vez de `monitorias` diretamente — esconde `evaluator_name` e `evaluator_id` para garantir anonimato do auditor
 
 **Travas contra fetch storms:**
 - `fetchingRef` — impede fetch paralelo de monitorias (re-entrant guard)
 - `hasLoadedOnce` — distingue primeira carga de reloads silenciosos
-- `userRef`, `filtersRef`, `staticDataRef` — estabilizam callback `loadData`, evitam cascade re-renders
+- `userRef`, `staticDataRef` — estabilizam callback `loadData`, evitam cascade re-renders
+- **`filters` removido das dependências do `loadData` useEffect** (P4 fix) — previne tempestade de queries quando qualquer filtro muda
 - Realtime `deps=[user]` — canal reconecta apenas quando usuário muda, callback via `loadDataRef`
 
 ### 4. Configuração de Qualidade (`QualityConfigProvider` — `useQualityConfig.tsx`)

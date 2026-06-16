@@ -9,7 +9,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export interface UserPreferences {
-  theme?: 'light' | 'dark';
+  theme?: 'light' | 'dark' | 'system';
   sidebar_color?: string;
   avatar_url?: string;
 }

@@ -31,6 +31,9 @@ export interface DashboardState {
   loading: boolean;
   globalAvg: number;
   dissatisfactionFields: DissatisfactionField[];
+  // CORRECTION 8: Cooldown for manual refresh button
+  refreshCooldownEnd: number | null;
+  refreshCooldownRemaining: string;
 }
 
 export interface DashboardDispatch {
@@ -286,6 +289,9 @@ export function DashboardProvider({
   const [globalAvg, setGlobalAvg] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
+  // CORRECTION 8: Cooldown for manual refresh button
+  const [refreshCooldownEnd, setRefreshCooldownEnd] = useState<number | null>(null);
+  const [refreshCooldownRemaining, setRefreshCooldownRemaining] = useState<string>('');
   const hasLoadedOnce = useRef(false);
   const fetchingRef = useRef(false);
   const filtersRef = useRef(filters);
@@ -323,36 +329,33 @@ export function DashboardProvider({
             console.log(`[Dashboard] Carregando monitorias (Tentativa ${retryCount + 1})...`);
             const controller = new AbortController();
 
-        let monitoriasQuery = sb.from('monitorias').select('*').order('created_at', { ascending: false });
-        let scoresQuery = sb.from('monitorias').select('score, created_at, status, channel, form_id, active, evaluated_id, evaluator_id, team_id');
+            // CORRECTION 4: Single query - select('*') contains all needed fields
+            // Use anonymized view for suporte to hide evaluator identity
+            const isSuporte = currentUser.role === 'suporte';
+            const source = isSuporte ? 'vw_monitorias_suporte' : 'monitorias';
+            let monitoriasQuery = sb.from(source).select('*').order('created_at', { ascending: false });
 
-        const myTeamIds = currentUser.team_ids || [];
+            const myTeamIds = currentUser.team_ids || [];
 
-        if (currentUser.role === 'suporte') {
-          if (myTeamIds.length > 0) {
-            const rbacFilter = `evaluated_id.eq.${currentUser.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`;
-            monitoriasQuery = monitoriasQuery.or(rbacFilter);
-            scoresQuery = scoresQuery.or(rbacFilter);
-          } else {
-            monitoriasQuery = monitoriasQuery.eq('evaluated_id', currentUser.id);
-            scoresQuery = scoresQuery.eq('evaluated_id', currentUser.id);
-          }
-        } else if (currentUser.role === 'qualidade') {
-          monitoriasQuery = monitoriasQuery.eq('evaluator_id', currentUser.id);
-          scoresQuery = scoresQuery.eq('evaluator_id', currentUser.id);
-        } else if (currentUser.role === 'gestor_suporte') {
-          if (myTeamIds.length > 0) {
-            monitoriasQuery = monitoriasQuery.in('team_id', myTeamIds);
-            scoresQuery = scoresQuery.in('team_id', myTeamIds);
-          } else {
-            monitoriasQuery = monitoriasQuery.eq('team_id', '00000000-0000-0000-0000-000000000000');
-            scoresQuery = scoresQuery.eq('team_id', '00000000-0000-0000-0000-000000000000');
-          }
-        }
+            if (currentUser.role === 'suporte') {
+              if (myTeamIds.length > 0) {
+                const rbacFilter = `evaluated_id.eq.${currentUser.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`;
+                monitoriasQuery = monitoriasQuery.or(rbacFilter);
+              } else {
+                monitoriasQuery = monitoriasQuery.eq('evaluated_id', currentUser.id);
+              }
+            } else if (currentUser.role === 'qualidade') {
+              monitoriasQuery = monitoriasQuery.eq('evaluator_id', currentUser.id);
+            } else if (currentUser.role === 'gestor_suporte') {
+              if (myTeamIds.length > 0) {
+                monitoriasQuery = monitoriasQuery.in('team_id', myTeamIds);
+              } else {
+                monitoriasQuery = monitoriasQuery.eq('team_id', '00000000-0000-0000-0000-000000000000');
+              }
+            }
 
             const fetchPromise = Promise.all([
               monitoriasQuery.abortSignal(controller.signal),
-              scoresQuery.abortSignal(controller.signal),
             ]);
 
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000));
@@ -363,30 +366,32 @@ export function DashboardProvider({
             if (errorRes) throw errorRes.error;
 
             return results;
-            } catch (err: any) {
-            console.error(`[Dashboard] Erro na tentativa ${retryCount + 1}:`, err);
-            if (retryCount < 4) {
-              const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
-              toast.loading(`Recuperando dashboard... (${retryCount + 1}/5)`, { id: 'dash-retry' });
-              await sb.auth.getSession();
-              await new Promise(res => setTimeout(res, waitTime));
-              return executeWithRetry(retryCount + 1);
-            }
-            toast.dismiss('dash-retry');
-            toast.error('Não foi possível conectar ao servidor. Verifique sua internet.');
-            throw err;
+          } catch (err: any) {
+          console.error(`[Dashboard] Erro na tentativa ${retryCount + 1}:`, err);
+          if (retryCount < 4) {
+            const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
+            toast.loading(`Recuperando dashboard... (${retryCount + 1}/5)`, { id: 'dash-retry' });
+            await sb.auth.getSession();
+            await new Promise(res => setTimeout(res, waitTime));
+            return executeWithRetry(retryCount + 1);
           }
-        };
+          toast.dismiss('dash-retry');
+          toast.error('Não foi possível conectar ao servidor. Verifique sua internet.');
+          throw err;
+        }
+      };
 
-        const [mRes, sRes] = await executeWithRetry();
+        const [mRes] = await executeWithRetry();
 
-        if (mRes.data) docs = mRes.data as Monitoria[];
-        if (sRes.data) scoreDocs = sRes.data;
-      }
+        if (mRes.data) {
+          docs = mRes.data as Monitoria[];
+          // CORRECTION 4: Derive scoreDocs from the full query result (same data, just filtered)
+          scoreDocs = mRes.data as any[];
+        }
+
+      } // Close try block for loadData
 
       const userDocs = currentStaticData.users;
-      const teamDocs = currentStaticData.teams;
-      const formDocs = currentStaticData.forms;
 
       docs = docs.filter(m => m.active !== false);
 
@@ -467,7 +472,7 @@ export function DashboardProvider({
       loadData();
     }, 300);
     return () => clearTimeout(timer);
-  }, [user, loadData, filters]);
+  }, [user, loadData]);
 
   useEffect(() => {
     if (activeTab === 'dashboard' && user) {
@@ -492,6 +497,20 @@ export function DashboardProvider({
     };
   }, []);
 
+  // CORRECTION 7: Throttle reloads after realtime reconnection
+  const lastTabVisibleRef = useRef(0);
+
+  // Track tab visibility for realtime throttle
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        lastTabVisibleRef.current = Date.now();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   useEffect(() => {
     if (!supabase) return;
     const sb = supabase!;
@@ -505,12 +524,27 @@ export function DashboardProvider({
       .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, () => {
         if (!mounted) return;
+        // CORRECTION 7: Ignore reloads in first 2s after tab becomes visible (reconnection sync)
+        if (Date.now() - lastTabVisibleRef.current < 2000) {
+          console.log('[Realtime] Ignorando reload - aba recém-ativa (sync de reconexão)');
+          return;
+        }
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           loadDataRef.current();
         }, 300);
       })
-      .subscribe();
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Realtime] Inscrição ativa na tabela monitorias');
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[Realtime] Timeout - verificar config de Realtime no Supabase');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[Realtime] Erro no canal - Realtime pode não estar configurado');
+        } else if (status === 'CLOSED') {
+          console.log('[Realtime] Canal fechado');
+        }
+      });
 
     return () => {
       mounted = false;
@@ -573,10 +607,30 @@ export function DashboardProvider({
     sessionStorage.setItem(notifiedKey, 'true');
   }, [loading, user, allMonitorias, qualityConfig]);
 
+  // CORRECTION 8: Cooldown timer for manual refresh button
+  useEffect(() => {
+    if (!refreshCooldownEnd) return;
+    const interval = setInterval(() => {
+      const remaining = refreshCooldownEnd - Date.now();
+      if (remaining <= 0) {
+        setRefreshCooldownEnd(null);
+        setRefreshCooldownRemaining('');
+        clearInterval(interval);
+        return;
+      }
+      const mins = Math.floor(remaining / 60000);
+      const secs = Math.floor((remaining % 60000) / 1000);
+      setRefreshCooldownRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [refreshCooldownEnd]);
+
   const refresh = useCallback(() => {
+    if (refreshCooldownEnd && Date.now() < refreshCooldownEnd) return; // block during cooldown
+    setRefreshCooldownEnd(Date.now() + 5 * 60 * 1000); // 5 minute cooldown
     hasLoadedOnce.current = false;
     setRefreshTrigger(prev => prev + 1);
-  }, []);
+  }, [refreshCooldownEnd]);
 
   const stateValue = useMemo<DashboardState>(() => ({
     user,
@@ -592,6 +646,8 @@ export function DashboardProvider({
     loading,
     globalAvg,
     dissatisfactionFields: staticData.dissatisfactionFields,
+    refreshCooldownEnd,
+    refreshCooldownRemaining,
   }), [
     user,
     loggedInUser,
@@ -606,6 +662,8 @@ export function DashboardProvider({
     loading,
     globalAvg,
     staticData.dissatisfactionFields,
+    refreshCooldownEnd,
+    refreshCooldownRemaining,
   ]);
 
   const dispatchValue = useMemo<DashboardDispatch>(() => ({

@@ -11,7 +11,7 @@
 ```mermaid
 sequenceDiagram
     participant U as Usuário
-    participant App as App.tsx
+    participant App as AuthProvider.tsx
     participant SB as Supabase Auth
     participant DB as Supabase DB
 
@@ -32,9 +32,31 @@ sequenceDiagram
 2. App chama `auth.resetPasswordForEmail(email, { redirectTo })`
 3. Supabase envia email com link de recuperação
 4. Link contém hash `#type=recovery&access_token=...`
-5. App detecta hash via `isPasswordRecoveryRef` no `useEffect` e mostra formulário de nova senha
-6. Usuário define nova senha via `auth.updateUser({ password })`
-7. App chama `handleLogout({ silent: true })` + toast contextual
+5. **Antes do Supabase processar o hash**, o módulo `supabase.ts` captura `window.location.hash` em `initialUrlHash` e `window.location.search` em `initialUrlSearch` no nível do módulo (executado na importação, antes de qualquer React lifecycle)
+6. `AuthProvider.tsx` lê `initialUrlHash` e `initialUrlSearch` para detectar recovery/invite **antes** que o `INITIAL_SESSION` event do Supabase possa sobrescrever o `authView`
+7. App detecta hash via `isPasswordRecoveryRef` e mostra formulário de nova senha
+8. Usuário define nova senha via `auth.updateUser({ password })`
+9. App chama `handleLogout({ silent: true })` + toast contextual
+
+### Fix: Race Condition INITIAL_SESSION vs Recovery Hash
+
+**Problema original**: O evento `INITIAL_SESSION` do Supabase era processado antes do React detectar o hash de recovery, fazendo `setAuthView('login')` sobrescrever o estado `change-password`.
+
+**Solução**:
+1. `src/lib/supabase.ts` exporta `initialUrlHash` e `initialUrlSearch` — capturados no escopo do módulo (executado na importação do arquivo, antes de `createClient`)
+2. `AuthProvider.tsx` usa `isPasswordRecoveryRef.current` como guarda: `if (!isPasswordRecoveryRef.current) setAuthView('login')`
+3. Isso previne que `INITIAL_SESSION` resete a view de change-password
+
+```typescript
+// src/lib/supabase.ts
+export const initialUrlHash = typeof window !== 'undefined' ? window.location.hash : '';
+export const initialUrlSearch = typeof window !== 'undefined' ? window.location.search : '';
+
+// src/providers/AuthProvider.tsx
+if (session && !isPasswordRecoveryRef.current) {
+  setAuthView('login');
+}
+```
 
 ## Fluxo de Convite (Admin)
 
@@ -46,8 +68,9 @@ sequenceDiagram
    - Sincroniza `user_teams` com os `team_ids` recebidos
 4. Supabase envia email de convite com link
 5. Link contém hash `#type=invite`
-6. App detecta via `isInviteFlowRef` e mostra formulário de definição de senha
-7. Após definir senha, `handleLogout({ silent: true })` + toast
+6. `initialUrlHash` captura o hash antes do Supabase processar
+7. App detecta via `isInviteFlowRef` e mostra formulário de definição de senha
+8. Após definir senha, `handleLogout({ silent: true })` + toast
 
 ## Fluxo de Solicitação de Acesso
 
@@ -82,7 +105,7 @@ flowchart TD
 - **Last Activity**: `localStorage` chave `qualitrack_last_activity` — verifica expiração ao restaurar
 
 ### Resiliência
-- Heartbeat ping ao Supabase a cada 2 min
+- Heartbeat ping ao Supabase a cada 2 min (único timer — heartbeat duplicado foi removido)
 - Reconexão agressiva (5s polling) quando offline
 - `visibilitychange`: verifica expiração ao focar aba
 - Event listeners `online`/`offline`
@@ -98,12 +121,17 @@ Quando Supabase não está configurado:
 - Usuário padrão: `qualidade@webposto.com.br` / `123456` (admin)
 - Sessão persistida em `localStorage` (sobrevive a F5 e fechamento de aba)
 - Outros perfis são usuários reais ou temporários e serão removidos na publicação
+- **Produção**: `main.tsx` emite `console.error` se mock mode for detectado em produção
 
-## Detecção de Hash (Recovery/Invite)
+## Detecção de Hash (Recovery/Invite) — Atual
 
 ```typescript
-// Em App.tsx useEffect
-const hash = window.location.hash;
+// Em src/lib/supabase.ts (escopo do módulo, antes do createClient)
+export const initialUrlHash = typeof window !== 'undefined' ? window.location.hash : '';
+export const initialUrlSearch = typeof window !== 'undefined' ? window.location.search : '';
+
+// Em AuthProvider.tsx useEffect
+const hash = initialUrlHash || window.location.hash;
 if (hash.includes('type=recovery')) {
   isPasswordRecoveryRef.current = true;
 }

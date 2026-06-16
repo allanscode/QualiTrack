@@ -398,6 +398,10 @@ export default function SupportManagerDashboard({
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
     : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
+  // Data availability checks for variation badges
+  const hasScoreData = scoredMonitorias.length > 0;
+  const hasReversalData = totalContestations > 0;
+
   // Performance Histórica (Trend chart)
   const trendData = useMemo(() => {
     if (isCustomizing) return mockTrendData;
@@ -673,9 +677,15 @@ export default function SupportManagerDashboard({
             icon={<Target className="w-5 h-5" />}
             accent="text-brand-accent"
             badge={
-              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : diffColorClass}`}>
-                {isCustomizing ? '↑' : diffSign} {isCustomizing ? '4.20%' : Math.abs(scoreDiff).toFixed(2) + '%'}
-              </span>
+              isCustomizing ? (
+                <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : diffColorClass}`}>
+                  {isCustomizing ? '↑' : diffSign} {isCustomizing ? '4.20%' : Math.abs(scoreDiff).toFixed(2) + '%'}
+                </span>
+              ) : hasScoreData ? (
+                <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${diffColorClass}`}>
+                  {diffSign} {Math.abs(scoreDiff).toFixed(2) + '%'}
+                </span>
+              ) : undefined
             }
             isCustomizing={isCustomizing}
             profile="gestor_suporte"
@@ -737,23 +747,29 @@ export default function SupportManagerDashboard({
           activeEditingId={activeEditingId}
           setActiveEditingId={setActiveEditingId}
         />
-        <StatCard
-          title="Taxa de Reversão"
-          value={`${reversalRate.toFixed(2)}%`}
-          sub="Eficácia das contestações do time"
-          good={reversalRate <= config.targetReversalRate}
-          icon={<Target className="w-5 h-5" />}
-          accent={reversalRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
-          badge={
-            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : revColorClass}`}>
-              {isCustomizing ? '↓' : revSign} {isCustomizing ? '1.67%' : Math.abs(revDiff).toFixed(2) + '%'}
-            </span>
-          }
-          isCustomizing={isCustomizing}
-          profile="gestor_suporte"
-          activeEditingId={activeEditingId}
-          setActiveEditingId={setActiveEditingId}
-        />
+          <StatCard
+            title="Taxa de Reversão"
+            value={`${reversalRate.toFixed(2)}%`}
+            sub="Eficácia das contestações do time"
+            good={reversalRate <= config.targetReversalRate}
+            icon={<Target className="w-5 h-5" />}
+            accent={reversalRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
+            badge={
+              isCustomizing ? (
+                <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : revColorClass}`}>
+                  {isCustomizing ? '↓' : revSign} {isCustomizing ? '1.67%' : Math.abs(revDiff).toFixed(2) + '%'}
+                </span>
+              ) : hasReversalData ? (
+                <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${revColorClass}`}>
+                  {revSign} {Math.abs(revDiff).toFixed(2) + '%'}
+                </span>
+              ) : undefined
+            }
+            isCustomizing={isCustomizing}
+            profile="gestor_suporte"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
         <StatCard
           title="Usuários Online"
           value={isCustomizing ? 8 : teamOnlineUsers.length}

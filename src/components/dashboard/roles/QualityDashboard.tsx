@@ -463,6 +463,10 @@ export default function QualityDashboard({
     ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
     : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
+  // Data availability checks for variation badges
+  const hasScoreData = scoredMonitorias.length > 0;
+  const hasReversalData = (reavAccepted + reavRejected) > 0;
+
   return (
     <div className="space-y-6 animate-fade-in min-w-0 overflow-visible">
 
@@ -505,9 +509,15 @@ export default function QualityDashboard({
           icon={<Target className="w-5 h-5" />}
           accent="text-slate-500"
           badge={
-            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${diffColorClass}`}>
-              {diffSign} {Math.abs(scoreDiff).toFixed(2)}%
-            </span>
+            isCustomizing ? (
+              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : diffColorClass}`}>
+                {isCustomizing ? '↑' : diffSign} {isCustomizing ? '5.42%' : Math.abs(scoreDiff).toFixed(2)}%
+              </span>
+            ) : hasScoreData ? (
+              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${diffColorClass}`}>
+                {diffSign} {Math.abs(scoreDiff).toFixed(2)}%
+              </span>
+            ) : undefined
           }
           isCustomizing={isCustomizing}
           profile="qualidade"
@@ -579,9 +589,15 @@ export default function QualityDashboard({
           icon={<Target className="w-5 h-5" />}
           accent={reversionRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
           badge={
-            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${revColorClass}`}>
-              {revSign} {Math.abs(revDiff).toFixed(2)}%
-            </span>
+            isCustomizing ? (
+              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : revColorClass}`}>
+                {isCustomizing ? '↓' : revSign} {isCustomizing ? '1.67%' : Math.abs(revDiff).toFixed(2)}%
+              </span>
+            ) : hasReversalData ? (
+              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${revColorClass}`}>
+                {revSign} {Math.abs(revDiff).toFixed(2)}%
+              </span>
+            ) : undefined
           }
           isCustomizing={isCustomizing}
           profile="qualidade"

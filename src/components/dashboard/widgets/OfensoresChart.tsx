@@ -133,38 +133,7 @@ export default function OfensoresChart({
       }));
 
     if (result.length === 0) {
-      return [
-        {
-          text: 'Conhecimento Técnico e Permissionamento de Sistemas',
-          fullText: 'Conhecimento Técnico e Permissionamento de Sistemas',
-          naoCount: 12,
-          taxaFalha: 15.4
-        },
-        {
-          text: 'Postura, Empatia e Cordialidade no Atendimento',
-          fullText: 'Postura, Empatia e Cordialidade no Atendimento',
-          naoCount: 8,
-          taxaFalha: 10.2
-        },
-        {
-          text: 'Resolução no Primeiro Contato (FCR)',
-          fullText: 'Resolução no Primeiro Contato (FCR)',
-          naoCount: 5,
-          taxaFalha: 6.4
-        },
-        {
-          text: 'Confirmação de Dados Cadastrais do Cliente',
-          fullText: 'Confirmação de Dados Cadastrais do Cliente',
-          naoCount: 3,
-          taxaFalha: 3.8
-        },
-        {
-          text: 'Segurança da Informação e Confidencialidade',
-          fullText: 'Segurança da Informação e Confidencialidade',
-          naoCount: 1,
-          taxaFalha: 1.2
-        }
-      ].slice(0, limit);
+      return [];
     }
 
     return result;
@@ -202,38 +171,7 @@ export default function OfensoresChart({
       }));
 
     if (result.length === 0) {
-      return [
-        {
-          text: 'Segurança da Informação e Confidencialidade',
-          fullText: 'Segurança da Informação e Confidencialidade',
-          simCount: 15,
-          taxaAcerto: 98.5
-        },
-        {
-          text: 'Confirmação de Dados Cadastrais do Cliente',
-          fullText: 'Confirmação de Dados Cadastrais do Cliente',
-          simCount: 12,
-          taxaAcerto: 92.0
-        },
-        {
-          text: 'Resolução no Primeiro Contato (FCR)',
-          fullText: 'Resolução no Primeiro Contato (FCR)',
-          simCount: 9,
-          taxaAcerto: 85.5
-        },
-        {
-          text: 'Postura, Empatia e Cordialidade no Atendimento',
-          fullText: 'Postura, Empatia e Cordialidade no Atendimento',
-          simCount: 7,
-          taxaAcerto: 80.0
-        },
-        {
-          text: 'Conhecimento Técnico e Permissionamento de Sistemas',
-          fullText: 'Conhecimento Técnico e Permissionamento de Sistemas',
-          simCount: 4,
-          taxaAcerto: 75.0
-        }
-      ].slice(0, limit);
+      return [];
     }
 
     return result;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { supabase, mockDb, upsertUserPreferences, isMockMode, assertSupabase } from '../lib/supabase';
+import { supabase, mockDb, upsertUserPreferences, isMockMode, assertSupabase, initialUrlHash, initialUrlSearch } from '../lib/supabase';
 import { User, UserRole, ROLE_LABELS, UserPreferences } from '../types';
 import { useTheme, resolveSystemTheme, applyThemeToDOM } from './ThemeProvider';
 import { useSessionManager, lastDbThemeRef, ABSOLUTE_TIMEOUT_MS, IDLE_TIMEOUT_MS, MOCK_SESSION_KEY, LAST_ACTIVITY_KEY } from '../hooks/useSessionManager';
@@ -54,6 +54,7 @@ interface AuthContextType {
   sidebarIsDark: boolean;
   theme: ReturnType<typeof useTheme>['theme'];
   setTheme: ReturnType<typeof useTheme>['setTheme'];
+  loadingPreferences: boolean;
 }
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
@@ -88,7 +89,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const saved = localStorage.getItem('qualitrack_theme');
     return !!saved && saved !== 'system';
   });
+  // Refs to track current state without triggering re-renders/subscriptions
+  const currentUserRef = useRef<any>(null);
+  const appReadyRef = useRef(false);
+  
   const [prefetchedSidebarColor, setPrefetchedSidebarColor] = useState('');
+
+  // Keep refs in sync with state for use in callbacks without re-subscriptions
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+  useEffect(() => { appReadyRef.current = appReady; }, [appReady]);
+
   const [activeTab, setActiveTab] = useState<'dashboard' | 'monitorias' | 'admin' | 'custom_dashboard'>(() => {
     const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
     if (hash === 'dashboard' || hash === 'monitorias' || hash === 'admin' || hash === 'custom_dashboard') {
@@ -128,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [sidebarContrastClass, setSidebarContrastClass] = useState('');
   const [sidebarContrastSubtle, setSidebarContrastSubtle] = useState('');
   const [sidebarIsDark, setSidebarIsDark] = useState(false);
+  const [loadingPreferences, setLoadingPreferences] = useState(false);
 
   // --- Update sidebar contrast derived values when color or theme changes ---
   useEffect(() => {
@@ -161,14 +172,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleUserSessionRef = useRef<((user: any) => Promise<void>) | null>(null);
 
   const handleUserSession = useCallback(async (user: any) => {
+    // Guard: if app is already ready and user matches, skip re-loading preferences
+    if (appReadyRef.current && currentUserRef.current?.id === user.id) {
+      console.log('[Auth] handleUserSession: User already loaded, skipping');
+      return;
+    }
+    setLoadingPreferences(true);
     try {
-      let resolvedThemeValue: 'light' | 'dark' = 'light';
+      let themeValue: 'light' | 'dark' | 'system' = 'system';
       let resolvedSidebarColor = '';
 
       if (isMockMode) {
         const { data: prefRows } = await mockDb.get('user_preferences');
         const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
-        resolvedThemeValue = myPref?.preferences?.theme === 'dark' ? 'dark' : 'light';
+        themeValue = (myPref?.preferences?.theme as 'light' | 'dark' | 'system') || 'system';
         resolvedSidebarColor = myPref?.preferences?.sidebar_color || '';
       } else {
         const sb = supabase ?? assertSupabase();
@@ -177,18 +194,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .select('preferences')
           .eq('user_id', user.id)
           .single();
-        resolvedThemeValue = prefData?.preferences?.theme === 'dark' ? 'dark' : 'light';
+        themeValue = (prefData?.preferences?.theme as 'light' | 'dark' | 'system') || 'system';
         resolvedSidebarColor = prefData?.preferences?.sidebar_color || '';
       }
 
-      localStorage.setItem('qualitrack_theme', resolvedThemeValue);
-      setTheme(resolvedThemeValue);
-      applyThemeToDOM(resolvedThemeValue);
+      // Save literal theme (including 'system') to localStorage
+      localStorage.setItem('qualitrack_theme', themeValue);
+      // Pass the literal theme to setTheme - ThemeProvider will resolve 'system' for DOM
+      setTheme(themeValue);
+      // Apply resolved theme to DOM immediately
+      const resolved = themeValue === 'system' ? resolveSystemTheme() : themeValue;
+      applyThemeToDOM(resolved);
       setPrefetchedSidebarColor(resolvedSidebarColor);
       if (user.email) {
         localStorage.setItem(`qualitrack_sidebar_color_${user.email}`, resolvedSidebarColor);
       }
       setAppReady(true);
+
+      // Minimum loading time to avoid flash (500ms)
+      await new Promise(r => setTimeout(r, 500));
 
       if (isMockMode) {
         const { data } = await mockDb.get('users');
@@ -243,6 +267,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error(e);
     } finally {
       setLoading(false);
+      // Small additional delay so loading screen is visible
+      await new Promise(r => setTimeout(r, 100));
+      setLoadingPreferences(false);
     }
   }, [setTheme]);
 
@@ -303,10 +330,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const hash = window.location.hash;
-    const search = window.location.search;
-
-    if (hash.includes('error_code=otp_expired') || search.includes('error_code=otp_expired')) {
+    // Use pre-captured URL params saved before Supabase client processed them
+    if (initialUrlHash.includes('error_code=otp_expired') || initialUrlSearch.includes('error_code=otp_expired')) {
       toast.error('O link expirou ou já foi utilizado. Por favor, solicite um novo link de recuperação.');
       setAuthView('forgot-password');
       window.history.replaceState(null, '', window.location.pathname);
@@ -314,14 +339,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (hash && (hash.includes('type=recovery') || hash.includes('type=invite'))) {
+    if (initialUrlHash && (initialUrlHash.includes('type=recovery') || initialUrlHash.includes('type=invite'))) {
       isPasswordRecoveryRef.current = true;
       isInviteFlowRef.current = true;
       setAuthView('change-password');
       setLoading(false);
     }
 
-    if (search && (search.includes('type=invite') || search.includes('type=recovery'))) {
+    if (initialUrlSearch && (initialUrlSearch.includes('type=invite') || initialUrlSearch.includes('type=recovery'))) {
       isPasswordRecoveryRef.current = true;
       isInviteFlowRef.current = true;
       setAuthView('change-password');
@@ -337,6 +362,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isInviteFlowRef.current && session) {
           return;
         }
+        // Guard: if user is already loaded and app is ready, skip re-loading
+        if (session && currentUserRef.current?.id === session.user.id && appReadyRef.current) {
+          console.log('[Auth] INITIAL_SESSION: User already loaded, skipping handleUserSession');
+          return;
+        }
         if (session) {
           if (!sessionStartTimeRef.current) {
             sessionStartTimeRef.current = Date.now();
@@ -346,11 +376,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }, 0);
           return;
         }
-        setCurrentUser(null);
-        setUserData(null);
-        setAuthView('login');
+        if (!isPasswordRecoveryRef.current) {
+          setCurrentUser(null);
+          setUserData(null);
+          setAuthView('login');
+        }
       } else if (event === 'SIGNED_IN') {
         if (!isPasswordRecoveryRef.current && session) {
+          // Guard: if user is already loaded and app is ready, skip re-loading
+          if (currentUserRef.current?.id === session.user.id && appReadyRef.current) {
+            console.log('[Auth] SIGNED_IN: User already loaded, skipping handleUserSession');
+            return;
+          }
           sessionStartTimeRef.current = Date.now();
           setTimeout(() => {
             handleUserSessionRef.current?.(session.user);
@@ -364,13 +401,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           clearTimeout(initializationTimeout);
           return;
         }
+        // Don't reset theme/sidebar_color preferences on logout
+        // They are per-user preferences and should persist across sessions
         setAppReady(false);
         setCurrentUser(null);
         setUserData(null);
         setAuthView('login');
-        localStorage.setItem('qualitrack_theme', 'system');
-        setTheme('system');
-        applyThemeToDOM(resolveSystemTheme());
         lastDbThemeRef.current = null;
         prevUserIdRef.current = null;
       } else if (event === 'TOKEN_REFRESHED') {
@@ -424,11 +460,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           const { data: prefRows } = await mockDb.get('user_preferences');
           const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
-          const resolvedThemeValue: 'light' | 'dark' = myPref?.preferences?.theme === 'dark' ? 'dark' : 'light';
+          const themeValue: 'light' | 'dark' | 'system' = (myPref?.preferences?.theme as 'light' | 'dark' | 'system') || 'system';
           const resolvedSidebarColor: string = myPref?.preferences?.sidebar_color || '';
-          localStorage.setItem('qualitrack_theme', resolvedThemeValue);
-          setTheme(resolvedThemeValue);
-          applyThemeToDOM(resolvedThemeValue);
+          localStorage.setItem('qualitrack_theme', themeValue);
+          setTheme(themeValue);
+          const resolved = themeValue === 'system' ? resolveSystemTheme() : themeValue;
+          applyThemeToDOM(resolved);
           setPrefetchedSidebarColor(resolvedSidebarColor);
           localStorage.setItem(`qualitrack_sidebar_color_${user.email}`, resolvedSidebarColor);
           setAppReady(true);
@@ -469,6 +506,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // --- handleLogout ---
   const handleLogout = useCallback(async (options?: { silent?: boolean; message?: string }) => {
+    // Don't reset theme/sidebar_color preferences on logout
+    // They are per-user preferences and should persist across sessions
+    // Only save current preferences to DB before logout if needed
+    if (userData?.id) {
+      // Preferences are already saved immediately on change via useSidebarManager
+      // No need to save again here
+    }
+    
     setAppReady(false);
     setCurrentUser(null);
     setUserData(null);
@@ -482,9 +527,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionStartTimeRef.current = null;
     prevUserIdRef.current = null;
     localStorage.removeItem(MOCK_SESSION_KEY);
-    localStorage.setItem('qualitrack_theme', 'system');
-    setTheme('system');
-    applyThemeToDOM(resolveSystemTheme());
+    // Don't reset qualitrack_theme - keep user's preference
     lastDbThemeRef.current = null;
     if (!isMockMode) {
       (supabase ?? assertSupabase()).auth.signOut().catch(console.error);
@@ -492,7 +535,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!options?.silent) {
       toast.success(options?.message || 'Você saiu do sistema com sucesso.');
     }
-  }, [setTheme]);
+  }, [userData?.id]);
 
   // --- handleForgotPassword ---
   const handleForgotPassword = useCallback(async (e: React.FormEvent) => {
@@ -622,6 +665,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sidebarIsDark,
       theme,
       setTheme,
+      loadingPreferences,
     }}>
       {children}
     </AuthContext.Provider>

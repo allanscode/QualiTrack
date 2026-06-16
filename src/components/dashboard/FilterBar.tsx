@@ -8,7 +8,7 @@ import { m, AnimatePresence } from 'motion/react';
 
 export default function FilterBar() {
   const { resolvedTheme } = useTheme();
-  const { filters, setFilters, users, teams, loading, refresh, user, allMonitorias, dashboardRole } = useDashboard();
+  const { filters, setFilters, users, teams, loading, refresh, user, allMonitorias, dashboardRole, refreshCooldownEnd, refreshCooldownRemaining } = useDashboard();
 
   const defaults = useMemo(() => ({
     startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0],
@@ -76,11 +76,11 @@ export default function FilterBar() {
       <div className="flex justify-end">
         <button
           onClick={refresh}
-          disabled={loading}
-          className="flex items-center gap-2 px-3 py-1.5 text-brand-muted hover:text-brand-primary transition-colors text-[10px] font-black uppercase tracking-widest"
+          disabled={loading || !!refreshCooldownRemaining}
+          className="flex items-center gap-2 px-3 py-1.5 text-brand-muted hover:text-brand-primary transition-colors text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Atualizando...' : 'Atualizar Dados'}
+          {loading ? 'Atualizando...' : refreshCooldownRemaining ? `Atualizar (${refreshCooldownRemaining})` : 'Atualizar Dados'}
         </button>
       </div>
 
