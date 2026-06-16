@@ -50,11 +50,11 @@ color-scheme: light;
   --surface-subtle: #F0F1E8;
 
   /* Role Sidebar Colors (Light Mode — neutral gray) */
-  --sidebar-bg-admin: #4B5563;
-  --sidebar-bg-qualidade: #4B5563;
-  --sidebar-bg-gestor-qualidade: #4B5563;
-  --sidebar-bg-gestor-suporte: #4B5563;
-  --sidebar-bg-suporte: #4B5563;
+  --sidebar-bg-admin: #F9F9F6;
+  --sidebar-bg-qualidade: #F9F9F6;
+  --sidebar-bg-gestor-qualidade: #F9F9F6;
+  --sidebar-bg-gestor-suporte: #F9F9F6;
+  --sidebar-bg-suporte: #F9F9F6;
   --surface-border: #E2E4D8;
   
   --shadow-premium: 0 10px 40px -10px rgba(45, 58, 58, 0.1);

@@ -9,6 +9,7 @@ import type { User } from '../types';
 
 export const lightToDarkColorMap: Record<string, string> = {
   '#475569': '#1E293B',
+  '#F9F9F6': '#1F2937',
   '#3B82F6': '#1B2A4A',
   '#60A5FA': '#253366',
   '#34D399': '#0F5132',
@@ -31,6 +32,7 @@ export const lightToDarkColorMap: Record<string, string> = {
 
 export const darkToLightColorMap: Record<string, string> = {
   '#1E293B': '#475569',
+  '#1F2937': '#F9F9F6',
   '#1B2A4A': '#3B82F6',
   '#253366': '#60A5FA',
   '#0F5132': '#34D399',
@@ -63,11 +65,11 @@ export function isDarkColor(hex: string, resolvedTheme: 'light' | 'dark'): boole
 }
 
 const DEFAULT_SIDEBAR_COLORS: Record<string, { light: string; dark: string }> = {
-  admin:            { light: '#4B5563', dark: '#1F2937' },
-  gestor_qualidade: { light: '#4B5563', dark: '#1F2937' },
-  qualidade:        { light: '#4B5563', dark: '#1F2937' },
-  gestor_suporte:   { light: '#4B5563', dark: '#1F2937' },
-  suporte:          { light: '#4B5563', dark: '#1F2937' },
+  admin:            { light: '#F9F9F6', dark: '#1F2937' },
+  gestor_qualidade: { light: '#F9F9F6', dark: '#1F2937' },
+  qualidade:        { light: '#F9F9F6', dark: '#1F2937' },
+  gestor_suporte:   { light: '#F9F9F6', dark: '#1F2937' },
+  suporte:          { light: '#F9F9F6', dark: '#1F2937' },
 };
 
 function getDefaultSidebarColor(role: string, resolvedTheme: 'light' | 'dark'): string {
@@ -101,7 +103,7 @@ export function useSidebarManager(opts: SidebarManagerOptions) {
   const sidebarColors = useMemo(() => {
     if (resolvedTheme === 'dark') {
       return [
-        { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
+        { value: '', label: 'Padrão', hex: 'bg-[#1F2937]' },
         { value: '#12130F', label: 'Obsidiana', hex: 'bg-[#12130F]' },
         { value: '#2F3129', label: 'Grafite Escuro', hex: 'bg-[#2F3129]' },
         { value: '#1E293B', label: 'Slate Azulado', hex: 'bg-[#1E293B]' },
@@ -124,7 +126,7 @@ export function useSidebarManager(opts: SidebarManagerOptions) {
       ];
     } else {
       return [
-        { value: '', label: 'Padrão', hex: 'bg-gradient-to-br from-brand-muted/20 to-brand-primary/20' },
+        { value: '', label: 'Padrão', hex: 'bg-[#F9F9F6]' },
         { value: '#475569', label: 'Slate Clássico', hex: 'bg-[#475569]' },
         { value: '#3B82F6', label: 'Azul Denim', hex: 'bg-[#3B82F6]' },
         { value: '#60A5FA', label: 'Azul Celeste', hex: 'bg-[#60A5FA]' },

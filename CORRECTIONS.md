@@ -164,7 +164,15 @@ Testar após cada alteração para evitar quebra.
 - **Resultado**: `flowType` alterado de `'pkce'` para `'implicit'`. Os emails de invite/recovery do Supabase sempre redirecionam com `#access_token=xxx&type=invite` (implicit grant). Com `flowType: 'pkce'`, o `_handleAuthRedirect()` do Supabase ignora `access_token` e a sessão nunca é criada, resultando em timeout de 20s e erro "expirou ou é inválido". O app não usa OAuth, então não há perda de segurança.
 - **Teste**: Admin logado clica em link de invite → URL não é sobrescrita → Supabase processa access_token → PASSWORD_RECOVERY é disparado → tela change-password → senha do convidado alterada corretamente (não a do admin).
 
-#### P1.7 [x] Rate Limiting nas Edge Functions
+#### P1.7 [x] Sidebar Padrão neutro unificado + círculo "Padrão" fiel à cor real
+- **Arquivos**: `src/hooks/useSidebarManager.ts`, `src/index.css`, `docs/agents/ai-context.md`
+- **Critério de Aceite**: Preview do círculo "Padrão" corresponde exatamente à cor aplicada no sidebar
+- **Status**: ✅ Done
+- **Data**: 2026-06-16
+- **Resultado**: Círculo "Padrão" no seletor de cores do menu: dark mode `bg-[#1F2937]` / light mode `bg-[#F9F9F6]` (antes era gradiente `from-brand-muted/20 to-brand-primary/20` que aparecia visualmente como `#474942`, divergindo da cor real `#1F2937`). Light mode corrigido de `#4B5563` para `#F9F9F6` para combinar com o fundo da janela e evitar contraste ruim com fonte escura. Mapas de espelhamento `lightToDarkColorMap`/`darkToLightColorMap` atualizados. `DEFAULT_SIDEBAR_COLORS` e `--sidebar-bg-*` CSS vars atualizados.
+- **Teste**: Visual: círculo "Padrão" → sidebar aplica mesma cor; light mode sidebar = `#F9F9F6` com contraste adequado para fonte escura.
+
+#### P1.8 [x] Rate Limiting nas Edge Functions
 - **Arquivos**: `supabase/functions/admin-invite-user/index.ts`
 - **Critério de Aceite**: Bloquear após X requisições por minuto
 - **Status**: ✅ Done
