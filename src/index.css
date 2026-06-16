@@ -48,6 +48,13 @@ color-scheme: light;
   --surface-bg: #F9F9F6;
   --surface-card: #FFFFFF;
   --surface-subtle: #F0F1E8;
+
+  /* Role Sidebar Colors (Light Mode — neutral gray) */
+  --sidebar-bg-admin: #4B5563;
+  --sidebar-bg-qualidade: #4B5563;
+  --sidebar-bg-gestor-qualidade: #4B5563;
+  --sidebar-bg-gestor-suporte: #4B5563;
+  --sidebar-bg-suporte: #4B5563;
   --surface-border: #E2E4D8;
   
   --shadow-premium: 0 10px 40px -10px rgba(45, 58, 58, 0.1);
@@ -86,12 +93,12 @@ color-scheme: dark;
   --shadow-premium: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
   --shadow-premium-sm: 0 4px 20px -5px rgba(0, 0, 0, 0.3);
 
-  /* Role Sidebar Colors (Dark Mode — all default to gray/slate) */
-  --sidebar-bg-admin: #1A1C16;
-  --sidebar-bg-qualidade: #1E293B;
-  --sidebar-bg-gestor-qualidade: #1E293B;
-  --sidebar-bg-gestor-suporte: #1E293B;
-  --sidebar-bg-suporte: #1E293B;
+  /* Role Sidebar Colors (Dark Mode — neutral gray) */
+  --sidebar-bg-admin: #1F2937;
+  --sidebar-bg-qualidade: #1F2937;
+  --sidebar-bg-gestor-qualidade: #1F2937;
+  --sidebar-bg-gestor-suporte: #1F2937;
+  --sidebar-bg-suporte: #1F2937;
 
   /* Functional color tokens (dark mode — pastel/soft) */
   --error-pastel: #FCA5A5;

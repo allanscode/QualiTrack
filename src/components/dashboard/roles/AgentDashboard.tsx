@@ -473,9 +473,15 @@ export default function AgentDashboard({
           icon={<ClipboardCheck className="w-5 h-5" />}
           accent={volDiff >= 0 ? 'text-functional-success' : 'text-functional-error'}
           badge={
-            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${volColorClass}`}>
-              {volSign} {Math.abs(volDiff)}
-            </span>
+            myMonitorias.length > 0 ? (
+              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${volColorClass}`}>
+                {volSign} {Math.abs(volDiff)}
+              </span>
+            ) : isCustomizing ? (
+              <span className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                ↑ 5.42%
+              </span>
+            ) : undefined
           }
           valueColorClass="text-slate-900 dark:text-slate-50"
           isCustomizing={isCustomizing}

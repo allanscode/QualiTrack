@@ -492,9 +492,15 @@ export default function QualityDashboard({
           icon={<ClipboardCheck className="w-5 h-5" />}
           accent={volDiff >= 0 ? 'text-functional-success' : 'text-functional-error'}
           badge={
-            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${volColorClass}`}>
-              {volSign} {Math.abs(volDiff)}
-            </span>
+            myMonitoriasCount > 0 ? (
+              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${volColorClass}`}>
+                {volSign} {Math.abs(volDiff)}
+              </span>
+            ) : isCustomizing ? (
+              <span className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                ↑ 5.42%
+              </span>
+            ) : undefined
           }
           isCustomizing={isCustomizing}
           profile="qualidade"
@@ -532,9 +538,15 @@ export default function QualityDashboard({
           icon={<Award className="w-5 h-5" />}
           accent="text-slate-500"
           badge={
-            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${globalDiffColorClass}`}>
-              {globalDiffSign} {Math.abs(globalDiff).toFixed(2)}%
-            </span>
+            isCustomizing ? (
+              <span className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                ↑ 5.42%
+              </span>
+            ) : hasScoreData ? (
+              <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${globalDiffColorClass}`}>
+                {globalDiffSign} {Math.abs(globalDiff).toFixed(2)}%
+              </span>
+            ) : undefined
           }
           isCustomizing={isCustomizing}
           profile="qualidade"
