@@ -81,8 +81,9 @@ DROP POLICY IF EXISTS "user_preferences_self" ON public.user_preferences;
 
 -- users
 -- Note: users_select and users_admin_write are defined in
--- 20260617000005_fix_users_rls_recursion.sql using _private.is_admin_user()
--- (SECURITY DEFINER) to prevent infinite recursion (42P17).
+-- 20260617000005_fix_users_rls_recursion.sql using _private.* helper functions
+-- with SECURITY DEFINER to prevent infinite recursion (42P17).
+-- NEVER use inline subqueries against public.users inside policies on users.
 
 -- teams
 CREATE POLICY "teams_select" ON public.teams
