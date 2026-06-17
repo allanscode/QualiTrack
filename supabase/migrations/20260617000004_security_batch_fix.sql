@@ -1,7 +1,7 @@
 -- =================================================================
 -- Batch fix: security warnings from Supabase Security Advisor
 -- 1. Mutable search_path on trigger functions
--- 2. Mutable search_path + anon EXECUTE on is_admin_user()
+-- 2. Drop is_admin_user() — unused by any RLS policy
 -- 3. access_requests INSERT with WITH CHECK (true)
 -- 4. Enable HaveIBeenPwned (done via Supabase dashboard)
 -- =================================================================
@@ -16,18 +16,9 @@ ALTER FUNCTION public.update_user_preferences_updated_at()
   SET search_path TO 'public';
 
 -- -----------------------------------------------------------------
--- 2. Fix is_admin_user(): set search_path + revoke anon EXECUTE
+-- 2. Drop is_admin_user() — unused, all policies use inline EXISTS
 -- -----------------------------------------------------------------
--- is_admin_user() must remain SECURITY DEFINER (avoids infinite
--- recursion in users RLS), but anon should not be able to call it.
-ALTER FUNCTION public.is_admin_user()
-  SET search_path TO 'public';
-
-REVOKE EXECUTE ON FUNCTION public.is_admin_user() FROM anon;
-
--- authenticated still needs EXECUTE (used by RLS policies)
--- This is already granted by default, but we ensure it explicitly:
-GRANT EXECUTE ON FUNCTION public.is_admin_user() TO authenticated;
+DROP FUNCTION IF EXISTS public.is_admin_user();
 
 -- -----------------------------------------------------------------
 -- 3. Fix access_requests INSERT RLS policies

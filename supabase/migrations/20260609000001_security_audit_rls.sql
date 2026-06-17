@@ -364,28 +364,10 @@ CREATE POLICY "monitorias_delete_policy" ON public.monitorias
 -- Set explicit search_path on any potential SECURITY DEFINER function to
 -- prevent path hijacking via search_path manipulations.
 
--- Define is_admin_user() if not yet created (needed by security_audit_rls policies)
-CREATE OR REPLACE FUNCTION public.is_admin_user()
-RETURNS boolean
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = 'public'
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.users
-    WHERE id = auth.uid()
-    AND role IN ('admin', 'gestor_qualidade')
-  );
-$$;
-
 ALTER FUNCTION public.update_updated_at() SET search_path TO 'public';
 ALTER FUNCTION public.update_user_preferences_updated_at() SET search_path TO 'public';
-ALTER FUNCTION public.is_admin_user() SET search_path TO 'public';
 ALTER FUNCTION public.process_action_deadline_timeouts() SET search_path TO 'public';
 ALTER FUNCTION public.calculate_action_deadline(timestamp with time zone, numeric) SET search_path TO 'public';
-
-REVOKE EXECUTE ON FUNCTION public.is_admin_user() FROM anon;
-GRANT EXECUTE ON FUNCTION public.is_admin_user() TO authenticated;
 
 
 -- ---------------------------------------------------------------------
