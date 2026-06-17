@@ -25,6 +25,13 @@
 - [x] Migration `20260520000000_initial_schema.sql` aplicada
 - [x] Migration `20260616000001_realtime_publication.sql` aplicada
 - [x] Migration `20260617000001_anonymized_monitoria_view.sql` aplicada
+- [x] Migration `20260617000002_fix_view_security_invoker.sql` aplicada
+- [x] Migration `20260617000003_fix_function_search_path.sql` aplicada
+- [x] Migration `20260617000004_security_batch_fix.sql` aplicada
+- [x] Migration `20260617000005_fix_users_rls_recursion.sql` aplicada
+- [x] Migration `20260617000006_cleanup_users_table.sql` aplicada
+- [x] Migration `20260617000007_cleanup_orphan_tables_columns.sql` aplicada
+- [x] Migration `20260617000008_drop_monitorias_satisfaction.sql` aplicada
 
 ### Documentação
 - [x] `docs/` atualizada (auth flow, frontend, backend, schema, agents context)
