@@ -150,6 +150,7 @@ export interface AccessRequest {
   email: string;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
+  rejection_reason?: string;
 }
 
 export interface DissatisfactionField {

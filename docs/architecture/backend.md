@@ -96,15 +96,21 @@ SELECT cron.schedule(
 
 ## Funções SQL
 
-### `is_admin_user()` — SECURITY DEFINER
-Retorna boolean se o usuário autenticado é admin. Necessária para evitar recursão infinita nas policies RLS de `users`. Não modifique sem entender o padrão 42P17.
+### `_private.is_admin_user()` — SECURITY DEFINER (schema `_private`)
+Retorna boolean se o usuário autenticado é admin ou gestor_qualidade. Movida do schema `public` para `_private` (migration `20260617000005_fix_users_rls_recursion.sql`) para não ser exposta via `/rest/v1/rpc/`. Necessária para evitar recursão infinita (42P17) nas policies RLS de `users`. Não modifique sem entender o padrão 42P17.
+
+### `_private.is_quality_or_support_user()` — SECURITY DEFINER
+Retorna boolean se o usuário é `qualidade` ou `gestor_suporte`. Usada na policy `users_select`.
+
+### `_private.is_support_manager()` — SECURITY DEFINER
+Retorna boolean se o usuário é `gestor_suporte`. Usada na policy `users_admin_write`.
 
 ### `process_action_deadline_timeouts()`
 Busca monitorias com `action_deadline_at < now()` e status ativo, aplica regras de auto-finalização por posse.
 
 ## View Anônima: `vw_monitorias_suporte`
 
-Criada na migration `20260617000001_anonymized_monitoria_view.sql`:
+Criada na migration `20260617000001_anonymized_monitoria_view.sql`. Foi alterada para `SECURITY INVOKER` na migration `20260617000002_fix_view_security_invoker.sql` para que as RLS policies da tabela base `monitorias` sejam aplicadas nas consultas feitas por usuários `suporte`:
 
 ```sql
 CREATE VIEW vw_monitorias_suporte AS
@@ -133,6 +139,10 @@ FROM monitorias;
 | `20260520000000_initial_schema.sql` | Schema inicial: 11 tabelas base + seeds (business_hours, holidays 2026) |
 | `20260616000001_realtime_publication.sql` | Publicação realtime para tabelas monitoradas (idempotente via `DO $$`) |
 | `20260617000001_anonymized_monitoria_view.sql` | View `vw_monitorias_suporte` para auditoria anônima |
+| `20260617000002_fix_view_security_invoker.sql` | `ALTER VIEW ... SET (security_invoker = on)` |
+| `20260617000003_fix_function_search_path.sql` | `SET search_path TO 'public'` em `process_action_deadline_timeouts()` e `calculate_action_deadline()` |
+| `20260617000004_security_batch_fix.sql` | `SET search_path` em triggers `update_updated_at` e `update_user_preferences_updated_at`; `access_requests` RLS INSERT com field validation |
+| `20260617000005_fix_users_rls_recursion.sql` | Schema `_private` com helpers `SECURITY DEFINER`; policies `users_select` e `users_admin_write` sem inline subqueries |
 
 ## Alertas
 

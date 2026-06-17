@@ -214,7 +214,7 @@ graph LR
 | Edge Functions (Deno) | Operações admin que requerem service role key | Dependência de Deno runtime no Supabase |
 | RBAC no client | Controle fino de visibilidade de dados | Segurança depende de RLS no banco para ser efetiva |
 | `user_teams` N:N | Relacionamento multi-equipe por usuário | Exige `enrichUserWithTeamIds()` em toda carga de dados |
-| `SECURITY DEFINER` para RLS | Evitar recursão infinita (42P17) na policy de `users` | Função `is_admin_user()` bypassa RLS intencionalmente |
+| `SECURITY DEFINER` no schema `_private` para RLS | Evitar recursão infinita (42P17) na policy de `users` | Funções `_private.is_admin_user()`, `_private.is_quality_or_support_user()`, `_private.is_support_manager()` bypassam RLS intencionalmente; schema `_private` evita exposição via `/rest/v1/rpc/` |
 
 ## Fluxo de Dados Principal
 

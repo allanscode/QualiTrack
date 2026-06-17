@@ -136,6 +136,10 @@ erDiagram
 | `created_at` | TIMESTAMPTZ | `now()` | Data de criação |
 
 > **Nota**: A coluna `team_ids` foi removida (migration M5). O relacionamento N:N entre usuários e equipes é feito via tabela `user_teams`. O frontend enriquece o objeto `User` com `team_ids: string[]` via `enrichUserWithTeamIds()`, mas **nunca** envia `team_ids` em payloads Supabase da tabela `users`. Use `syncUserTeams()` para sincronizar.
+>
+> **Cleanup (migration `20260617000006`)**: Colunas legadas `password`, `reset_token` e `team_id` (FK → teams) foram removidas por não serem usadas pelo app. A constraint `role` agora possui CHECK com os 5 roles válidos.
+>
+> **RLS**: Policies na tabela `users` usam helpers `SECURITY DEFINER` no schema `_private` (`_private.is_admin_user()`, `_private.is_quality_or_support_user()`, `_private.is_support_manager()`) para evitar recursão infinita (42P17) causada por inline subqueries contra `public.users`.
 
 ### `public.user_teams`
 | Coluna | Tipo | Default | Descrição |
@@ -265,7 +269,7 @@ As seguintes colunas são **denormalizadas** (duplicam dados de outras tabelas) 
 
 ## View Anônima: `vw_monitorias_suporte`
 
-Criada na migration `20260617000001_anonymized_monitoria_view.sql`:
+Criada na migration `20260617000001_anonymized_monitoria_view.sql`. Posteriormente alterada para `SECURITY INVOKER` em `20260617000002_fix_view_security_invoker.sql` para garantir que as RLS policies da tabela base `monitorias` sejam aplicadas (em vez de rodar com permissões do criador):
 
 ```sql
 CREATE VIEW vw_monitorias_suporte AS
@@ -294,7 +298,14 @@ FROM monitorias;
 | `rls_monitorias.sql` | RLS policies para a tabela monitorias |
 | `supabase/migrations/20260520000000_initial_schema.sql` | Schema inicial: 11 tabelas + seeds |
 | `supabase/migrations/20260616000001_realtime_publication.sql` | Realtime publication (idempotente) |
-| `supabase/migrations/20260617000001_anonymized_monitoria_view.sql` | View `vw_monitorias_suporte` |
+| `supabase/migrations/20260617000001_anonymized_monitoria_view.sql` | View `vw_monitorias_suporte` (SECURITY DEFINER default) |
+| `supabase/migrations/20260617000002_fix_view_security_invoker.sql` | `ALTER VIEW vw_monitorias_suporte SET (security_invoker = on)` |
+| `supabase/migrations/20260617000003_fix_function_search_path.sql` | `SET search_path TO 'public'` em `process_action_deadline_timeouts()` e `calculate_action_deadline()` |
+| `supabase/migrations/20260617000004_security_batch_fix.sql` | `SET search_path` em triggers, `access_requests` RLS com field validation |
+| `supabase/migrations/20260617000005_fix_users_rls_recursion.sql` | `_private` schema com `is_admin_user()`, `is_quality_or_support_user()`, `is_support_manager()`; policies `users_select` e `users_admin_write` sem inline subqueries |
+| `supabase/migrations/20260617000006_cleanup_users_table.sql` | Remove colunas legadas `password`, `reset_token`, `team_id` de `public.users`; adiciona CHECK constraint em `role` |
+| `supabase/migrations/20260617000007_cleanup_orphan_tables_columns.sql` | Remove tabela órfã `critical_criteria` (nunca usada pelo app) |
+| `supabase/migrations/20260617000008_drop_monitorias_satisfaction.sql` | Remove coluna `satisfaction` (solta) de `monitorias` — app usa `satisfaction_result`, `satisfaction_has_record`, `satisfaction_record_text` |
 
 ## RLS por Tabela
 
@@ -306,6 +317,6 @@ FROM monitorias;
 | `forms` | Todos autenticados | Admin, qualidade | Admin | Admin |
 | `monitorias` | RBAC por role | Admin, gestor_qualidade, qualidade | RBAC por role | Admin |
 | `quality_configs` | Todos autenticados | Admin, gestor_qualidade | Admin, gestor_qualidade | Admin, gestor_qualidade |
-| `access_requests` | Admin, gestores | Anônimo | Admin, gestores | Admin |
+| `access_requests` | Admin, gestores | Anônimo (com field validation: name/email NOT NULL) | Admin, gestores | Admin |
 | `dissatisfaction_fields` | Todos autenticados | Admin, gestor_qualidade | Admin, gestor_qualidade | Admin, gestor_qualidade |
 | `user_preferences` | Próprio usuário (`user_id = auth.uid()`) | Próprio usuário | Próprio usuário | Próprio usuário |

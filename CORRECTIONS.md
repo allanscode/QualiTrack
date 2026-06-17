@@ -16,6 +16,18 @@ Testar após cada alteração para evitar quebra.
 
 ### **FASE P0 — BLOQUEANTES (Não entra em produção sem isso)**
 
+#### P0.0 [x] Security Batch Fix — RLS, Search Path, View Invoker
+- **Arquivos**: `supabase/migrations/2026061700000{2,3,4,5}_*.sql`
+- **Problema**: `vw_monitorias_suporte` com `SECURITY DEFINER` (default) bypassa RLS; funções SQL sem `search_path` expostas a injection; `access_requests` INSERT sem field validation; `users` RLS com inline subqueries causa 42P17
+- **Correções**:
+  1. `20260617000002`: View alterada para `SECURITY INVOKER` — consultas de `suporte` agora respeitam RLS da tabela base
+  2. `20260617000003`: `SET search_path TO 'public'` em `process_action_deadline_timeouts()` e `calculate_action_deadline()`
+  3. `20260617000004`: `SET search_path` em triggers `update_updated_at` e `update_user_preferences_updated_at`; `access_requests` INSERT policies trocadas de `WITH CHECK (true)` para field validation (`name IS NOT NULL AND name <> '' AND email IS NOT NULL AND email <> ''`)
+  4. `20260617000005`: Schema `_private` criado; `is_admin_user()` movida de `public` para `_private` (SECURITY DEFINER, SET search_path); novas helpers `_private.is_quality_or_support_user()` e `_private.is_support_manager()`; policies `users_select` e `users_admin_write` reescritas sem inline subqueries contra `public.users` (elimina 42P17)
+- **Status**: ✅ Done
+- **Data**: 2026-06-17
+- **Teste**: Queries Supabase com role `suporte` consultam `vw_monitorias_suporte` sem vazar evaluator dados; RLS em `users` não causa erro 42P17; funções SQL seguras contra search_path injection; `access_requests` INSERT rejeita name/email vazios
+
 #### P0.1 [x] Corrigir RLS `users_select`
 - **Arquivo**: `supabase/migrations/20260609000001_security_audit_rls.sql`
 - **Problema**: `FOR SELECT TO authenticated USING (true)` permite ler TODOS usuários
