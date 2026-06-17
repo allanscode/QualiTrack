@@ -80,26 +80,9 @@ DROP POLICY IF EXISTS "user_preferences_self" ON public.user_preferences;
 -- ---------------------------------------------------------------------
 
 -- users
-CREATE POLICY "users_select" ON public.users
-  FOR SELECT TO authenticated
-  USING (
-    id = (SELECT auth.uid())
-    OR EXISTS (
-      SELECT 1 FROM public.users
-      WHERE users.id = (SELECT auth.uid())
-        AND users.role IN ('admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte')
-    )
-  );
-
-CREATE POLICY "users_admin_write" ON public.users
-  FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.users
-      WHERE users.id = (SELECT auth.uid())
-        AND users.role IN ('admin','gestor_qualidade','gestor_suporte')
-    )
-  );
+-- Note: users_select and users_admin_write are defined in
+-- 20260617000005_fix_users_rls_recursion.sql using _private.is_admin_user()
+-- (SECURITY DEFINER) to prevent infinite recursion (42P17).
 
 -- teams
 CREATE POLICY "teams_select" ON public.teams
