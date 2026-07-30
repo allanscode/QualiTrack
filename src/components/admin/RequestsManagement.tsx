@@ -66,12 +66,21 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
         const userPayload = { name: approveData.name, email: approveData.email.toLowerCase(), role: approveData.role, active: true };
 
         const operation = (async () => {
-          const { error: reqError } = await supabase.from('access_requests').update({ status: 'approved' }).eq('id', approvingReq.id);
-          if (reqError) throw reqError;
-
+          // Ordem importa: cria o usuário ANTES de marcar a solicitação como
+          // aprovada. Na ordem inversa, uma falha no convite deixava a
+          // solicitação como 'approved' sem usuário nenhum criado — ela sumia
+          // da fila de pendentes e a pessoa nunca conseguia entrar, sem sinal
+          // visível para o admin. Falhando agora, a solicitação permanece
+          // pendente e a aprovação pode ser repetida.
+          // A autorização continua sendo feita pela própria Edge Function
+          // (401 sem sessão, 403 se o papel não for admin/gestor), então esta
+          // reordenação não afeta segurança — só consistência.
           const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', { body: { ...userPayload, team_ids: approveData.team_ids || [] } });
           if (funcError) throw funcError;
           if (data?.success === false) throw new Error(data.details?.message || 'Erro ao convidar usuário');
+
+          const { error: reqError } = await supabase.from('access_requests').update({ status: 'approved' }).eq('id', approvingReq.id);
+          if (reqError) throw reqError;
         })();
 
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
