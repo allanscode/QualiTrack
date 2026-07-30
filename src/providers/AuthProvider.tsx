@@ -593,7 +593,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthView('login');
       }
     } catch (e: any) {
-      toast.error('Não foi possível enviar o e-mail de recuperação. Verifique o e-mail digitado.');
+      // A mensagem anterior culpava sempre o e-mail digitado, mesmo quando a
+      // causa era outra. O caso mais comum e o limite de envio do Supabase
+      // Auth (429 over_email_send_rate_limit): no SMTP compartilhado do plano
+      // free sao poucos e-mails por hora, somando convites e recuperacoes.
+      // Mandar o usuario "conferir o e-mail" nesse cenario leva a tentativas
+      // repetidas, que so consomem mais cota.
+      const code = e?.code || e?.error_code;
+      const status = e?.status;
+      if (code === 'over_email_send_rate_limit' || status === 429) {
+        toast.error('Limite de envio de e-mails atingido. Aguarde alguns minutos e tente de novo.');
+      } else {
+        toast.error(e?.message
+          ? `Não foi possível enviar o e-mail de recuperação: ${e.message}`
+          : 'Não foi possível enviar o e-mail de recuperação. Verifique o e-mail digitado.');
+      }
+      console.error('[Auth] Falha ao enviar recuperação de senha:', e);
     } finally {
       setLoading(false);
     }
