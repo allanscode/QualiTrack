@@ -469,14 +469,26 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                                   {!['concluida', 'finalizada_alterada'].includes(m.status) && (() => {
                                     const cfg = getStatusConfig(m.status);
                                     const StepIcon = cfg.icon;
+                                    // Cor vem do variant do STATUS_CONFIGS, o mesmo que
+                                    // pinta os badges da listagem. Aplicada no wrapper e
+                                    // herdada pelo marcador via border-current, para não
+                                    // duplicar o mapa de cores.
+                                    const variantColor: Record<string, string> = {
+                                      warning: 'text-warning',
+                                      error: 'text-error',
+                                      info: 'text-info',
+                                      success: 'text-success',
+                                      neutral: 'text-brand-muted',
+                                    };
+                                    const colorClass = variantColor[cfg.variant] || 'text-brand-muted';
                                     return (
-                                      <div className="relative">
-                                        <div className="absolute -left-[32px] top-1 w-3 h-3 rounded-full bg-surface-bg border-2 border-dashed border-brand-muted/60" />
+                                      <div className={`relative ${colorClass}`}>
+                                        <div className="absolute -left-[32px] top-1 w-3 h-3 rounded-full bg-surface-bg border-2 border-current animate-pulse" />
                                         <div className="flex flex-col">
-                                          <span className="text-[11px] font-bold text-brand-muted leading-none flex items-center gap-1.5">
+                                          <span className="text-[11px] font-black leading-none flex items-center gap-1.5">
                                             <StepIcon className="w-3 h-3" /> {cfg.label}
                                           </span>
-                                          <span className="text-[9px] font-bold text-brand-muted/70 uppercase tracking-widest mt-1">
+                                          <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1">
                                             Etapa atual
                                           </span>
                                         </div>
