@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, mockDb } from '../../lib/supabase';
+import { supabase, mockDb, requireAccessToken } from '../../lib/supabase';
 import { User, Team, AccessRequest } from '../../types';
 import { 
   RefreshCw, 
@@ -62,7 +62,8 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
           return;
         }
 
-        await supabase.auth.getSession();
+        // Falha cedo e com mensagem util se a sessao tiver expirado.
+        const accessToken = await requireAccessToken();
         const userPayload = { name: approveData.name, email: approveData.email.toLowerCase(), role: approveData.role, active: true };
 
         const operation = (async () => {
@@ -75,7 +76,10 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
           // A autorização continua sendo feita pela própria Edge Function
           // (401 sem sessão, 403 se o papel não for admin/gestor), então esta
           // reordenação não afeta segurança — só consistência.
-          const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', { body: { ...userPayload, team_ids: approveData.team_ids || [] } });
+          const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: { ...userPayload, team_ids: approveData.team_ids || [] }
+          });
           if (funcError) throw funcError;
           if (data?.success === false) throw new Error(data.details?.message || 'Erro ao convidar usuário');
 

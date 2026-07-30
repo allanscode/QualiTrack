@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase, mockDb } from '../../lib/supabase';
+import { supabase, mockDb, requireAccessToken } from '../../lib/supabase';
 import { User, Team, ROLE_LABELS } from '../../types';
 import { 
   Search, 
@@ -108,7 +108,8 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
           return;
         }
 
-        await supabase.auth.getSession();
+        // Falha cedo e com mensagem util se a sessao tiver expirado.
+        const accessToken = await requireAccessToken();
 
         const userPayload = {
           name: editingUser.name,
@@ -125,7 +126,10 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
             if (error) throw error;
             await syncUserTeams(editingUser.id, teamIds);
           } else {
-            const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', { body: { ...userPayload, team_ids: teamIds } });
+            const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              body: { ...userPayload, team_ids: teamIds }
+            });
             if (funcError) throw funcError;
             if (data?.success === false) throw new Error(data.details?.message || 'Erro ao convidar usuário');
             userId = data?.user?.id || null;

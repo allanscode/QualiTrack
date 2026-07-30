@@ -59,6 +59,29 @@ export function assertSupabase(): SupabaseClient {
   return supabase;
 }
 
+/**
+ * Devolve o access_token da sessão atual, ou falha com mensagem clara.
+ *
+ * Sem sessão ativa, supabase-js monta o cabeçalho das Edge Functions como
+ *   Authorization: `Bearer ${session?.access_token ?? supabaseKey}`
+ * e acaba enviando a chave publicável no lugar do token do usuário. A função
+ * recebe um Authorization aparentemente válido, mas getUser() falha com
+ * "AuthSessionMissingError: Auth session missing!" e responde 401 — que o
+ * supabase-js reporta como o genérico "Edge Function returned a non-2xx
+ * status code", sem indicar que o problema era a sessão.
+ *
+ * Falhar aqui torna o diagnóstico imediato e evita mandar a chave publicável
+ * como se fosse credencial de usuário.
+ */
+export async function requireAccessToken(): Promise<string> {
+  const sb = assertSupabase();
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Sua sessão expirou. Saia e entre novamente para continuar.');
+  }
+  return session.access_token;
+}
+
 // Type guard for mock mode
 export const isMockMode = !supabase;
 
