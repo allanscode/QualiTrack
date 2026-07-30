@@ -79,6 +79,39 @@ export const STATUS_CONFIGS: Record<MonitoriaStatus | 'expiradas_prazo', StatusC
   }
 };
 
+/**
+ * Cor e ícone de cada evento da linha do tempo.
+ *
+ * O texto do evento vem de actionDescriptions (useMonitoriaActions) e de
+ * useMonitoriaSave, além de registros antigos com outras redações. Casar
+ * por string exata quebraria a cada texto novo, então classificamos por
+ * palavra-chave — a ordem importa: "Contestação Aceita" contém tanto
+ * "contesta" quanto "aceita", e deve sair como aceite.
+ */
+export function getHistoryEventConfig(action: string): { variant: StatusConfig['variant']; icon: LucideIcon } {
+  const a = (action || '').toLowerCase();
+
+  if (/negad|removid|recusad|improcedente/.test(a)) {
+    return { variant: 'error', icon: XCircle };
+  }
+  if (/aceit|aprovad|procedente|conclu/.test(a)) {
+    return { variant: 'success', icon: CheckCircle2 };
+  }
+  if (/contesta|escalad|devolvid|solicitad|mantid|reabert|reavalia/.test(a)) {
+    return { variant: 'warning', icon: AlertTriangle };
+  }
+  return { variant: 'info', icon: Clock };
+}
+
+/** Classe de cor de texto por variant. Centralizado para a linha do tempo. */
+export const VARIANT_TEXT_CLASS: Record<StatusConfig['variant'], string> = {
+  warning: 'text-warning',
+  error: 'text-error',
+  info: 'text-info',
+  success: 'text-success',
+  neutral: 'text-brand-muted'
+};
+
 export function getStatusConfig(status: MonitoriaStatus | 'expiradas_prazo' | string): StatusConfig {
   const config = STATUS_CONFIGS[status as MonitoriaStatus | 'expiradas_prazo'];
   if (config) return config;

@@ -3,7 +3,7 @@ import { List } from 'react-window';
 import { Monitoria, MonitoriaStatus, User } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../providers/ThemeProvider';
-import { getStatusConfig } from '../lib/statusHelper';
+import { getStatusConfig, getHistoryEventConfig, VARIANT_TEXT_CLASS } from '../lib/statusHelper';
 import {
   Search,
   Eye,
@@ -438,11 +438,17 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                                   <History className="w-3 h-3" /> Linha do Tempo
                                 </p>
                                 <div className="space-y-4 ml-2 border-l-2 border-surface-border/60 pl-6 py-1">
-                                  {m.history.map((h, i) => (
+                                  {m.history.map((h, i) => {
+                                    const ev = getHistoryEventConfig(h.action);
+                                    const EvIcon = ev.icon;
+                                    const evColor = VARIANT_TEXT_CLASS[ev.variant];
+                                    return (
                                     <div key={i} className="relative">
-                                      <div className="absolute -left-[31px] top-1.5 w-2 h-2 rounded-full bg-brand-accent border-2 border-surface-bg shadow-sm" />
+                                      <div className={`absolute -left-[32px] top-1 w-3 h-3 rounded-full bg-current border-2 border-surface-bg shadow-sm ${evColor}`} />
                                       <div className="flex flex-col">
-                                        <span className="text-[11px] font-bold text-brand-primary leading-none">{h.action}</span>
+                                        <span className="text-[11px] font-bold text-brand-primary leading-none flex items-center gap-1.5">
+                                          <EvIcon className={`w-3 h-3 shrink-0 ${evColor}`} /> {h.action}
+                                        </span>
                                         <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70">
                                           {(() => {
                                             const actor = staticData.users.find(u => u.id === h.by_id);
@@ -458,7 +464,8 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                                         )}
                                       </div>
                                     </div>
-                                  ))}
+                                    );
+                                  })}
 
                                   {/* Etapa atual: fecha a linha do tempo mostrando
                                       de quem a monitoria está esperando. Rótulo vem
@@ -473,14 +480,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                                     // pinta os badges da listagem. Aplicada no wrapper e
                                     // herdada pelo marcador via border-current, para não
                                     // duplicar o mapa de cores.
-                                    const variantColor: Record<string, string> = {
-                                      warning: 'text-warning',
-                                      error: 'text-error',
-                                      info: 'text-info',
-                                      success: 'text-success',
-                                      neutral: 'text-brand-muted',
-                                    };
-                                    const colorClass = variantColor[cfg.variant] || 'text-brand-muted';
+                                    const colorClass = VARIANT_TEXT_CLASS[cfg.variant];
                                     return (
                                       <div className={`relative ${colorClass}`}>
                                         <div className="absolute -left-[32px] top-1 w-3 h-3 rounded-full bg-surface-bg border-2 border-current animate-pulse" />

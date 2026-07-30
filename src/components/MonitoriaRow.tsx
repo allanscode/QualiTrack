@@ -1,7 +1,8 @@
 import React from 'react';
 import { Monitoria, User, Team } from '../types';
 import { ActionType } from '../hooks/useMonitoriaActions';
-import { getStatusConfig } from '../lib/statusHelper';
+// getStatusConfig chega por prop (data), não importado — evita sombra.
+import { getHistoryEventConfig, VARIANT_TEXT_CLASS, type StatusConfig } from '../lib/statusHelper';
 import {
   CheckCircle2,
   XCircle,
@@ -42,7 +43,7 @@ interface MonitoriaRowProps {
     staticData: any;
     qualityConfig: any;
     getLevelForScore: (score: number) => any;
-    getStatusConfig: (status: string) => any;
+    getStatusConfig: (status: string) => StatusConfig;
     getName: (id: string, isEvaluator?: boolean, snapshotName?: string) => string;
     format: any;
     ptBR: any;
@@ -143,11 +144,17 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
                           <History className="w-3 h-3" /> Linha do Tempo
                         </p>
                         <div className="space-y-4 ml-2 border-l-2 border-surface-border/60 pl-6 py-1">
-                          {m.history.map((h, i) => (
+                          {m.history.map((h, i) => {
+                            const ev = getHistoryEventConfig(h.action);
+                            const EvIcon = ev.icon;
+                            const evColor = VARIANT_TEXT_CLASS[ev.variant];
+                            return (
                             <div key={i} className="relative">
-                              <div className="absolute -left-[31px] top-1.5 w-2 h-2 rounded-full bg-brand-accent border-2 border-surface-bg shadow-sm" />
+                              <div className={`absolute -left-[32px] top-1 w-3 h-3 rounded-full bg-current border-2 border-surface-bg shadow-sm ${evColor}`} />
                               <div className="flex flex-col">
-                                <span className="text-[11px] font-bold text-brand-primary leading-none">{h.action}</span>
+                                <span className="text-[11px] font-bold text-brand-primary leading-none flex items-center gap-1.5">
+                                  <EvIcon className={`w-3 h-3 shrink-0 ${evColor}`} /> {h.action}
+                                </span>
                                 <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70">
                                   {(() => {
                                     const actor = staticData.users.find((u: User) => u.id === h.by_id);
@@ -163,7 +170,28 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
                                 )}
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
+
+                          {/* Etapa atual — mesma regra do MonitoriaList */}
+                          {!['concluida', 'finalizada_alterada'].includes(m.status) && (() => {
+                            const cfg = getStatusConfig(m.status);
+                            const StepIcon = cfg.icon;
+                            const colorClass = VARIANT_TEXT_CLASS[cfg.variant];
+                            return (
+                              <div className={`relative ${colorClass}`}>
+                                <div className="absolute -left-[32px] top-1 w-3 h-3 rounded-full bg-surface-bg border-2 border-current animate-pulse" />
+                                <div className="flex flex-col">
+                                  <span className="text-[11px] font-black leading-none flex items-center gap-1.5">
+                                    <StepIcon className="w-3 h-3 shrink-0" /> {cfg.label}
+                                  </span>
+                                  <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1">
+                                    Etapa atual
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     )}
