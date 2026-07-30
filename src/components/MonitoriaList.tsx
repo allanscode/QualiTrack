@@ -459,6 +459,30 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                                       </div>
                                     </div>
                                   ))}
+
+                                  {/* Etapa atual: fecha a linha do tempo mostrando
+                                      de quem a monitoria está esperando. Rótulo vem
+                                      do STATUS_CONFIGS, o mesmo usado nos badges e
+                                      filtros — muda num lugar só. Marcador vazado e
+                                      tracejado distingue "pendente" de "concluído"
+                                      sem depender de cor. */}
+                                  {!['concluida', 'finalizada_alterada'].includes(m.status) && (() => {
+                                    const cfg = getStatusConfig(m.status);
+                                    const StepIcon = cfg.icon;
+                                    return (
+                                      <div className="relative">
+                                        <div className="absolute -left-[32px] top-1 w-3 h-3 rounded-full bg-surface-bg border-2 border-dashed border-brand-muted/60" />
+                                        <div className="flex flex-col">
+                                          <span className="text-[11px] font-bold text-brand-muted leading-none flex items-center gap-1.5">
+                                            <StepIcon className="w-3 h-3" /> {cfg.label}
+                                          </span>
+                                          <span className="text-[9px] font-bold text-brand-muted/70 uppercase tracking-widest mt-1">
+                                            Etapa atual
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             )}

@@ -18,7 +18,8 @@ import {
   Calendar,
   AlertTriangle,
   History,
-  Target
+  Target,
+  Lock
 } from 'lucide-react';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
@@ -130,9 +131,21 @@ export default function MonitoriaForm({
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-brand-primary tracking-tight uppercase">
-                {isViewOnly ? 'Visualizar' : isAdminEdit ? 'Editar (Admin)' : isReevaluating ? 'Reavaliar' : 'Nova'} Monitoria
-              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-black text-brand-primary tracking-tight uppercase">
+                  {isViewOnly ? 'Visualizar' : isAdminEdit ? 'Editar (Admin)' : isReevaluating ? 'Reavaliar' : 'Nova'} Monitoria
+                </h2>
+                {isViewOnly && (
+                  <Badge variant="warning" className="flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> Somente leitura
+                  </Badge>
+                )}
+              </div>
+              {isViewOnly && (
+                <p className="text-[11px] text-brand-muted mt-1.5 max-w-md leading-relaxed">
+                  Monitorias salvas não podem ser editadas. Para alterar, use <span className="text-brand-primary font-bold">Reavaliar</span> — disponível quando o suporte contesta.
+                </p>
+              )}
               {initialData?.display_id && <Badge variant="info" className="mt-1">Mon: {initialData.display_id}</Badge>}
             </div>
           </div>
@@ -372,7 +385,7 @@ export default function MonitoriaForm({
                       <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1 text-center">Campos Extras do Cliente</p>
                       {clientFieldsToShow.map(field => (
                         <Card key={field.id} className="bg-surface-card p-5 border border-surface-border space-y-4 shadow-premium-sm rounded-xl">
-                          <p className="text-xs font-black text-brand-primary uppercase tracking-wider">{field.title} *</p>
+                          <p className="text-xs font-black text-brand-primary uppercase tracking-wider">{field.title}{!isViewOnly && ' *'}</p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             {field.options.map(opt => {
                               const isChecked = (dissatisfactionAnswers[field.id] || []).includes(opt);
@@ -536,7 +549,7 @@ export default function MonitoriaForm({
                   <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1">Campos Extras da Qualidade</p>
                   {qualityFieldsToShow.map(field => (
                     <Card key={field.id} className="bg-surface-card p-5 border border-surface-border space-y-4 shadow-premium-sm rounded-xl">
-                      <p className="text-xs font-black text-brand-primary uppercase tracking-wider">{field.title} *</p>
+                      <p className="text-xs font-black text-brand-primary uppercase tracking-wider">{field.title}{!isViewOnly && ' *'}</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {field.options.map(opt => {
                           const isChecked = (dissatisfactionAnswers[field.id] || []).includes(opt);
@@ -646,13 +659,22 @@ export default function MonitoriaForm({
         {/* Footer Actions */}
         <div className="p-8 bg-surface-card border-t border-surface-border flex items-center justify-between">
           <Button variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5" />}>
-            Voltar
+            {isViewOnly ? 'Anterior' : 'Voltar'}
           </Button>
 
           <div className="flex gap-4">
             {step < 4 ? (
-              <Button onClick={() => { if (validateStep(step)) setStep(s => Math.min(4, s + 1)); }} icon={<ChevronRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />}>
-                Continuar
+              <Button
+                onClick={() => {
+                  // Em modo leitura os campos estão desabilitados, então validar
+                  // aqui prenderia o usuário: ele não tem como corrigir o que a
+                  // validação exige. Registros antigos, ou anteriores à criação
+                  // de um novo campo obrigatório, ficavam impossíveis de navegar.
+                  if (isViewOnly || validateStep(step)) setStep(s => Math.min(4, s + 1));
+                }}
+                icon={<ChevronRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />}
+              >
+                {isViewOnly ? 'Próximo' : 'Continuar'}
               </Button>
             ) : (
               <Button onClick={handleSave} disabled={isPending || isViewOnly} variant="primary" className="px-12" icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}>
