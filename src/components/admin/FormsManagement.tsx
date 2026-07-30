@@ -121,14 +121,22 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
     const executeWithRetry = async (retryCount = 0): Promise<void> => {
       try {
         if (!supabase) {
-          const payload = { ...editingForm, active: true, created_by: currentUser?.email };
+          // forms.created_by e UUID REFERENCES users(id) — gravar o e-mail aqui
+        // fazia o Postgres recusar com
+        //   invalid input syntax for type uuid: "fulano@empresa.com.br"
+        // impedindo salvar qualquer formulario.
+        const payload = { ...editingForm, active: true, created_by: currentUser?.id };
           if (editingForm.id) await mockDb.update('forms', editingForm.id, payload);
           else await mockDb.insert('forms', payload);
           return;
         }
 
         await supabase.auth.getSession();
-        const payload = { ...editingForm, active: true, created_by: currentUser?.email };
+        // forms.created_by e UUID REFERENCES users(id) — gravar o e-mail aqui
+        // fazia o Postgres recusar com
+        //   invalid input syntax for type uuid: "fulano@empresa.com.br"
+        // impedindo salvar qualquer formulario.
+        const payload = { ...editingForm, active: true, created_by: currentUser?.id };
 
         const operation = (async () => {
           const { error } = await supabase.from('forms').upsert([{ ...(editingForm.id ? { id: editingForm.id } : {}), ...payload }]);
