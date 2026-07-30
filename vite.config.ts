@@ -31,13 +31,22 @@ export default defineConfig(() => {
           manualChunks: (id) => {
             // Vendor chunks
             if (id.includes('node_modules')) {
-              if (id.includes('react') || id.includes('react-dom')) return 'vendor-react';
-              if (id.includes('react-router-dom')) return 'vendor-router';
-              if (id.includes('lucide-react') || id.includes('clsx') || id.includes('tailwind-merge') || id.includes('sonner')) return 'vendor-ui';
-              if (id.includes('recharts')) return 'vendor-charts';
-              if (id.includes('motion')) return 'vendor-motion';
-              if (id.includes('date-fns')) return 'vendor-utils';
-              if (id.includes('@supabase/supabase-js')) return 'vendor-supabase';
+              // Casar pelo nome exato do pacote. O `id.includes('react')`
+              // anterior capturava lucide-react, @tanstack/react-query,
+              // react-window etc. junto do React core, produzindo
+              // "Circular chunk: vendor-other -> vendor-react -> vendor-other"
+              // e quebrando o bundle em runtime com
+              // "Cannot set properties of undefined (setting 'Activity')".
+              // vendor-react agora contém só react/react-dom/scheduler, que
+              // não dependem de outros chunks — eliminando o ciclo.
+              const p = id.replace(/\\/g, '/');
+              if (/node_modules\/(react|react-dom|scheduler)\//.test(p)) return 'vendor-react';
+              if (/node_modules\/react-router-dom\//.test(p)) return 'vendor-router';
+              if (/node_modules\/(lucide-react|clsx|tailwind-merge|sonner)\//.test(p)) return 'vendor-ui';
+              if (/node_modules\/recharts\//.test(p)) return 'vendor-charts';
+              if (/node_modules\/(motion|framer-motion)\//.test(p)) return 'vendor-motion';
+              if (/node_modules\/date-fns\//.test(p)) return 'vendor-utils';
+              if (/node_modules\/@supabase\//.test(p)) return 'vendor-supabase';
               return 'vendor-other';
             }
             // Feature chunks
