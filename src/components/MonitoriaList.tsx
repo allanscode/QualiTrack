@@ -517,28 +517,12 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                         <div className="flex flex-col justify-between h-full min-h-[220px] items-end space-y-6">
                           <div className="flex flex-wrap gap-3 justify-end items-start w-full">
                             {/* Suporte Actions */}
-                            {user?.role === 'suporte' && (m.status === 'pendente_revisao' || m.status === 'contestacao_negada') && (
+                            {/* Aprovar/Contestar a tratativa passou a ser exclusivo
+                                do gestor_suporte — ver bloco "Gestor Suporte Actions"
+                                logo abaixo. O agente individual mantém apenas Apelar
+                                após negativa da Qualidade. */}
+                            {user?.role === 'suporte' && m.status === 'contestacao_negada' && (
                               <div className="flex gap-3 items-center flex-wrap justify-end">
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => setActionModal({ id: m.id, type: 'aceitar' })}
-                                  icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                                  className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
-                                >
-                                  Aprovar
-                                </Button>
-                                {m.status === 'pendente_revisao' && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
-                                    icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                                    className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
-                                  >
-                                    Contestar
-                                  </Button>
-                                )}
                                 {m.status === 'contestacao_negada' && (
                                   <Button
                                     variant="outline"
@@ -554,6 +538,29 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                             )}
 
                             {/* Gestor Suporte Actions */}
+                            {user?.role === 'gestor_suporte' && m.status === 'pendente_revisao' && (
+                              <div className="flex gap-3 items-center flex-wrap justify-end">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => setActionModal({ id: m.id, type: 'aceitar' })}
+                                  icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                                  className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
+                                >
+                                  Aprovar
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
+                                  icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                                  className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                                >
+                                  Contestar
+                                </Button>
+                              </div>
+                            )}
+
                             {user?.role === 'gestor_suporte' && m.status === 'aguardando_gestor_suporte' && (
                               <div className="flex gap-3 items-center flex-wrap justify-end">
                                 <Button

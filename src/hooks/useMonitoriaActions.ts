@@ -8,8 +8,13 @@ import { toast } from 'sonner';
 export type ActionType = 'aceitar' | 'contestar' | 'manter' | 'aprovar' | 'escalar' | 'excluir' | 'reavaliar' | 'devolver' | 'editAdmin' | 'solicitar_reavaliacao' | 'recusar_agente' | 'reabrir';
 
 const actionDescriptions: Record<string, string> = {
-  'aceitar': 'Monitoria aceita pelo suporte',
-  'contestar': 'Contestação realizada pelo suporte',
+  // "pelo suporte" foi removido: aceitar/contestar passaram a ser exclusivos
+  // do gestor_suporte, e o texto fixo ficaria incorreto. O nome de quem agiu
+  // já aparece via by_name na linha do tempo — não se perde informação.
+  // Mantidas as palavras-chave "aceita" e "Contestação": contestation.ts as
+  // usa (isApprovalAction/isContestationAction) para derivar contestation_result.
+  'aceitar': 'Monitoria aceita',
+  'contestar': 'Contestação realizada',
   'manter': 'Contestação negada pela Qualidade',
   'aprovar': 'Monitoria aprovada pelo Gestor',
   'escalar': 'Escalado para decisão da Qualidade',
