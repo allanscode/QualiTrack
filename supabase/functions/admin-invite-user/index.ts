@@ -188,8 +188,17 @@ serve(async (req) => {
       })
     }
 
+    // redirectTo é obrigatório aqui: sem ele o Supabase usa o Site URL do
+    // projeto, que vem como http://localhost:3000 por padrão — o convidado
+    // recebia um link para localhost e não conseguia criar a senha. O caminho
+    // de usuário já existente (resetPasswordForEmail acima) já fazia isso.
+    // Observação: o Supabase valida este valor contra a lista de Redirect URLs
+    // do projeto; se a URL não estiver liberada lá, ele cai no Site URL de
+    // qualquer forma. Configurar ambos no painel continua sendo necessário.
+    const inviteOrigin = req.headers.get('Origin') || Deno.env.get('FRONTEND_URL') || 'http://localhost:3000'
     const { data: authData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      data: { name }
+      data: { name },
+      redirectTo: inviteOrigin
     })
 
     if (inviteError) {
