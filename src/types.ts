@@ -65,7 +65,10 @@ export interface EvaluationForm {
   id: string;
   title: string;
   description: string;
+  /** @deprecated Mantido por compatibilidade; use team_ids (vínculo N:N via form_teams). */
   team_id: string;
+  /** IDs das equipes vinculadas. Vazio/ausente = formulário geral (todas as equipes). */
+  team_ids?: string[];
   sections: FormSection[];
   critical_errors?: Question[];
   active: boolean;

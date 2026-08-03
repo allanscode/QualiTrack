@@ -34,7 +34,7 @@ interface FormsManagementProps {
 export default function FormsManagement({ currentUser, teams, loadData }: FormsManagementProps) {
   const [forms, setForms] = useState<EvaluationForm[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingForm, setEditingForm] = useState<Partial<EvaluationForm>>({ title: '', description: '', team_id: '', sections: [], critical_errors: [] });
+  const [editingForm, setEditingForm] = useState<Partial<EvaluationForm>>({ title: '', description: '', team_id: '', team_ids: [], sections: [], critical_errors: [] });
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [searchTerm, setSearchTerm] = useState('');
@@ -98,7 +98,40 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
 
   const loadForms = async () => {
     const res = supabase ? await supabase.from('forms').select('*') : await mockDb.get('forms');
-    setForms(res.data || []);
+    const list: EvaluationForm[] = res.data || [];
+
+    if (supabase && list.length > 0) {
+      const { data: links } = await supabase
+        .from('form_teams')
+        .select('form_id, team_id')
+        .in('form_id', list.map(f => f.id));
+      const byForm = new Map<string, string[]>();
+      (links || []).forEach((l: any) => {
+        byForm.set(l.form_id, [...(byForm.get(l.form_id) || []), l.team_id]);
+      });
+      setForms(list.map(f => ({ ...f, team_ids: byForm.get(f.id) || [] })));
+    } else {
+      // Mock mode não tem form_teams; cai no legado de uma equipe só.
+      setForms(list.map(f => ({ ...f, team_ids: f.team_id ? [f.team_id] : [] })));
+    }
+  };
+
+  // Espelha syncUserTeams (UsersManagement.tsx): calcula o diff entre o
+  // vínculo atual em form_teams e o selecionado na tela, e aplica só a
+  // diferença — evita apagar e recriar tudo a cada salvamento.
+  const syncFormTeams = async (formId: string, teamIds: string[]) => {
+    if (!supabase) return; // mock mode: sem tabela form_teams, nada a sincronizar
+    const { data: existing } = await supabase.from('form_teams').select('id, team_id').eq('form_id', formId);
+    const existingTeamIds = (existing || []).map((ft: any) => ft.team_id);
+    const toAdd = teamIds.filter(id => !existingTeamIds.includes(id));
+    const toRemove = (existing || []).filter((ft: any) => !teamIds.includes(ft.team_id));
+
+    if (toRemove.length > 0) {
+      await supabase.from('form_teams').delete().in('id', toRemove.map((ft: any) => ft.id));
+    }
+    if (toAdd.length > 0) {
+      await supabase.from('form_teams').insert(toAdd.map(team_id => ({ form_id: formId, team_id })));
+    }
   };
 
   useEffect(() => {
@@ -118,33 +151,41 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
   const handleSaveForm = async () => {
     if (!editingForm.title || !editingForm.sections?.length) return toast.error('Por favor, preencha o título e as seções do formulário.');
     setSaving(true);
-    const executeWithRetry = async (retryCount = 0): Promise<void> => {
+    const teamIds = editingForm.team_ids || [];
+    // forms.team_id (coluna legada, uma equipe só) é mantida em sincronia com
+    // a primeira equipe selecionada — nenhum código lê team_id além deste
+    // componente hoje, mas evita deixar a coluna obsoleta com lixo antigo.
+    const legacyTeamId = teamIds[0] || null;
+
+    const executeWithRetry = async (retryCount = 0): Promise<string | undefined> => {
       try {
-        if (!supabase) {
-          // forms.created_by e UUID REFERENCES users(id) — gravar o e-mail aqui
+        // forms.created_by é UUID REFERENCES users(id) — gravar o e-mail aqui
         // fazia o Postgres recusar com
         //   invalid input syntax for type uuid: "fulano@empresa.com.br"
-        // impedindo salvar qualquer formulario.
-        const payload = { ...editingForm, active: true, created_by: currentUser?.id };
-          if (editingForm.id) await mockDb.update('forms', editingForm.id, payload);
-          else await mockDb.insert('forms', payload);
-          return;
+        // impedindo salvar qualquer formulário.
+        const { team_ids: _omit, ...rest } = editingForm;
+        const payload = { ...rest, active: true, created_by: currentUser?.id, team_id: legacyTeamId };
+
+        if (!supabase) {
+          if (editingForm.id) { await mockDb.update('forms', editingForm.id, payload); return editingForm.id; }
+          const { data } = await mockDb.insert('forms', payload);
+          return data?.id;
         }
 
         await supabase.auth.getSession();
-        // forms.created_by e UUID REFERENCES users(id) — gravar o e-mail aqui
-        // fazia o Postgres recusar com
-        //   invalid input syntax for type uuid: "fulano@empresa.com.br"
-        // impedindo salvar qualquer formulario.
-        const payload = { ...editingForm, active: true, created_by: currentUser?.id };
 
-        const operation = (async () => {
-          const { error } = await supabase.from('forms').upsert([{ ...(editingForm.id ? { id: editingForm.id } : {}), ...payload }]);
+        const operation = (async (): Promise<string | undefined> => {
+          const { data, error } = await supabase
+            .from('forms')
+            .upsert([{ ...(editingForm.id ? { id: editingForm.id } : {}), ...payload }])
+            .select('id')
+            .single();
           if (error) throw error;
+          return data?.id;
         })();
 
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
-        await Promise.race([operation, timeoutPromise]);
+        const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        return await Promise.race([operation, timeoutPromise]);
       } catch (err: any) {
         if (err.message === 'timeout' && retryCount < 2) {
           await new Promise(res => setTimeout(res, 1000 * (retryCount + 1)));
@@ -155,17 +196,18 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
     };
 
     try {
-      await executeWithRetry();
+      const formId = await executeWithRetry();
+      if (formId) await syncFormTeams(formId, teamIds);
       toast.success('Formulário salvo com sucesso!');
       clearDraft();
       setIsModalOpen(false);
       loadForms();
       loadData();
-    } catch (e: any) { 
+    } catch (e: any) {
       console.error('Erro definitivo ao salvar formulário:', e);
       toast.error(e.message === 'timeout' ? 'O servidor não respondeu. Seu rascunho continua salvo localmente.' : (e.message || 'Não foi possível salvar o formulário.'));
-    } finally { 
-      setSaving(false); 
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -265,7 +307,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
         <div className="flex gap-2">
         <Button 
           onClick={() => { 
-            setEditingForm({ title: '', description: '', team_id: '', sections: [], critical_errors: [] }); 
+            setEditingForm({ title: '', description: '', team_id: '', team_ids: [], sections: [], critical_errors: [] }); 
             setDraftRecoveredOrDismissed(false);
             setShowDraftBanner(!!localStorage.getItem('qualitrack_form_draft')); 
             setIsModalOpen(true); 
@@ -288,7 +330,13 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                 </div>
                 <div onClick={() => { setEditingForm(f); setIsModalOpen(true); }} className="cursor-pointer">
                   <h4 className="font-black text-brand-primary uppercase tracking-tight">{f.title}</h4>
-                  <Badge variant="neutral">{f.team_id ? teams.find(t => t.id === f.team_id)?.name : 'Geral'}</Badge>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(f.team_ids && f.team_ids.length > 0)
+                      ? f.team_ids.map(tid => (
+                          <Badge key={tid} variant="neutral">{teams.find(t => t.id === tid)?.name || '—'}</Badge>
+                        ))
+                      : <Badge variant="neutral">Geral</Badge>}
+                  </div>
                 </div>
               </div>
               <div className="flex gap-1">
@@ -385,12 +433,39 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                           />
                         </div>
                         <div className="flex flex-col">
-                          <label className="uppercase tracking-widest text-[10px] font-black text-brand-muted opacity-80 dark:opacity-70 mb-1.5 ml-0.5 block">Equipe Vinculada</label>
-                          <CustomSelect 
-                            value={editingForm.team_id || ''} 
-                            onChange={val => setEditingForm({...editingForm, team_id: val})} 
-                            options={[{ value: '', label: 'Geral (Todas as Equipes)' }, ...teams.map(t => ({ value: t.id, label: t.name }))]} 
-                          />
+                          <label className="uppercase tracking-widest text-[10px] font-black text-brand-muted opacity-80 dark:opacity-70 mb-1.5 ml-0.5 block">
+                            Equipes Vinculadas
+                          </label>
+                          <p className="text-[10px] text-brand-muted mb-2 ml-0.5 leading-relaxed">
+                            Marque uma ou mais. Nenhuma marcada = formulário geral, disponível para todas as equipes.
+                          </p>
+                          <div className="flex flex-col gap-1 px-4 pb-4 pt-3 bg-white dark:bg-surface-bg border border-surface-border rounded-lg max-h-40 overflow-y-auto scrollbar-thin">
+                            {teams.map(t => {
+                              const checked = (editingForm.team_ids || []).includes(t.id);
+                              return (
+                                <label key={t.id} className="flex items-center gap-3 py-2.5 px-1 cursor-pointer group">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 rounded border-surface-border text-brand-primary focus:ring-brand-accent/20 focus:ring-offset-0 accent-brand-primary transition-all cursor-pointer"
+                                    checked={checked}
+                                    onChange={e => {
+                                      const current = editingForm.team_ids || [];
+                                      const next = e.target.checked
+                                        ? [...current, t.id]
+                                        : current.filter(id => id !== t.id);
+                                      setEditingForm({ ...editingForm, team_ids: next });
+                                    }}
+                                  />
+                                  <span className="text-[11px] font-bold text-brand-primary uppercase tracking-wide group-hover:opacity-80 transition-opacity">
+                                    {t.name}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                            {teams.length === 0 && (
+                              <p className="text-[10px] font-bold text-brand-muted uppercase italic p-2 text-center">Nenhuma equipe cadastrada.</p>
+                            )}
+                          </div>
                         </div>
                         <div className="flex flex-col">
                           <label className="uppercase tracking-widest text-[10px] font-black text-brand-muted opacity-80 dark:opacity-70 mb-1.5 ml-0.5 block">Descrição do Propósito</label>
