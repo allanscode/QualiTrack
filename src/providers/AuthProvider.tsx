@@ -482,9 +482,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // --- handleLogin ---
   const handleLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const emailLower = credentials.email.toLowerCase();
+
+    // ATENCAO — esta trava e uma barreira de USABILIDADE, nao um controle de
+    // seguranca. Ela roda no navegador, entao um atacante que chame
+    // /auth/v1/token diretamente (curl, script) a ignora por completo.
+    // A protecao real contra forca bruta e server-side e precisa ser
+    // configurada no painel do Supabase:
+    //   Authentication > Rate Limits  (limite de tentativas de sign in)
+    //   Authentication > Attack Protection > CAPTCHA (hCaptcha/Turnstile)
+    // Verificado neste projeto: 10 tentativas seguidas com senha errada via
+    // API retornaram 400, sem nenhum 429 — sem essa configuracao, nao ha
+    // limite efetivo.
+    const lockKey = `qualitrack_login_attempts_${emailLower}`;
+    const MAX_TENTATIVAS = 5;
+    const BLOQUEIO_MS = 5 * 60 * 1000;
+    let tentativas = 0;
+    try {
+      const raw = localStorage.getItem(lockKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { count: number; until?: number };
+        if (parsed.until && Date.now() < parsed.until) {
+          const restam = Math.ceil((parsed.until - Date.now()) / 60000);
+          toast.error(`Muitas tentativas. Tente novamente em ${restam} min ou use "Esqueci a senha".`);
+          return;
+        }
+        tentativas = parsed.until && Date.now() >= parsed.until ? 0 : (parsed.count || 0);
+      }
+    } catch { /* localStorage indisponivel: segue sem a trava */ }
+
     setLoading(true);
     try {
-      const emailLower = credentials.email.toLowerCase();
       if (isMockMode) {
         const { data: users } = await mockDb.get('users');
         const user = (users || []).find((u: any) =>
@@ -523,9 +552,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             sessionExpiresAt: sessionStartTimeRef.current + ABSOLUTE_TIMEOUT_MS,
           }));
           localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
+          try { localStorage.removeItem(lockKey); } catch { /* ignora */ }
           toast.success(`Bem-vindo, ${user.name}!`);
         } else {
-          toast.error('E-mail ou senha incorretos. Tente novamente.');
+          // Mesma contagem do fluxo Supabase, para o comportamento nao divergir
+          // entre os modos.
+          const n = tentativas + 1;
+          try {
+            localStorage.setItem(lockKey, n >= MAX_TENTATIVAS
+              ? JSON.stringify({ count: 0, until: Date.now() + BLOQUEIO_MS })
+              : JSON.stringify({ count: n }));
+          } catch { /* ignora */ }
+          toast.error(n >= MAX_TENTATIVAS
+            ? 'Muitas tentativas. Aguarde 5 minutos ou use "Esqueci a senha".'
+            : 'E-mail ou senha incorretos. Tente novamente.');
         }
         setLoading(false);
       } else {
@@ -535,10 +575,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           password: credentials.password
         });
         if (error) throw error;
+        try { localStorage.removeItem(lockKey); } catch { /* ignora */ }
         toast.success('Login realizado com sucesso!');
       }
     } catch (e: any) {
-      toast.error('As credenciais informadas estão incorretas ou são inválidas.');
+      const novasTentativas = tentativas + 1;
+      try {
+        if (novasTentativas >= MAX_TENTATIVAS) {
+          localStorage.setItem(lockKey, JSON.stringify({ count: 0, until: Date.now() + BLOQUEIO_MS }));
+        } else {
+          localStorage.setItem(lockKey, JSON.stringify({ count: novasTentativas }));
+        }
+      } catch { /* ignora */ }
+
+      const restantes = MAX_TENTATIVAS - novasTentativas;
+      if (novasTentativas >= MAX_TENTATIVAS) {
+        toast.error('Muitas tentativas. Aguarde 5 minutos ou use "Esqueci a senha".');
+      } else {
+        toast.error(
+          restantes <= 2
+            ? `Credenciais incorretas. ${restantes} tentativa(s) antes do bloqueio temporário.`
+            : 'As credenciais informadas estão incorretas ou são inválidas.'
+        );
+      }
       setLoading(false);
     }
   }, [credentials, setTheme]);

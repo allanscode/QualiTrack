@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3 } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -81,6 +81,13 @@ function AppContent() {
     sidebarIsDark,
     loadingPreferences,
   } = useAuth();
+
+  // Alternar visibilidade da senha. Cada campo tem seu proprio estado para
+  // que revelar um nao exponha os demais (ex.: na tela de nova senha, ver a
+  // senha digitada sem revelar a confirmacao).
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   return (
     <>
@@ -163,7 +170,25 @@ function AppContent() {
                             <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Senha</label>
                             <button type="button" onClick={() => setAuthView('forgot-password')} className="text-[10px] font-bold text-brand-accent hover:text-brand-primary transition-colors">Esqueci a senha</button>
                           </div>
-                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={credentials.password} onChange={e => setCredentials({...credentials, password: e.target.value})} />
+                          <div className="relative">
+                            <input
+                              type={showLoginPassword ? 'text' : 'password'}
+                              required
+                              className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 pl-4 pr-12 text-sm focus:border-brand-accent focus:outline-none text-brand-primary"
+                              value={credentials.password}
+                              onChange={e => setCredentials({...credentials, password: e.target.value})}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowLoginPassword(v => !v)}
+                              aria-label={showLoginPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                              aria-pressed={showLoginPassword}
+                              title={showLoginPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-brand-muted hover:text-brand-primary transition-colors"
+                            >
+                              {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
                         </div>
                         <button className="w-full bg-brand-accent text-white py-4 rounded-lg font-bold uppercase tracking-wider shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
                           <span className="text-white">Entrar</span>
@@ -212,11 +237,48 @@ function AppContent() {
                       <form onSubmit={handleUpdatePassword} className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Nova senha</label>
-                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+                          <div className="relative">
+                            <input
+                              type={showNewPassword ? 'text' : 'password'}
+                              required
+                              className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 pl-4 pr-12 text-sm focus:border-brand-accent focus:outline-none text-brand-primary"
+                              value={newPassword}
+                              onChange={e => setNewPassword(e.target.value)}
+                              placeholder="Mínimo 6 caracteres"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowNewPassword(v => !v)}
+                              aria-label={showNewPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                              aria-pressed={showNewPassword}
+                              title={showNewPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-brand-muted hover:text-brand-primary transition-colors"
+                            >
+                              {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Confirmar nova senha</label>
-                          <input type="password" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                          <div className="relative">
+                            <input
+                              type={showConfirmPassword ? 'text' : 'password'}
+                              required
+                              className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 pl-4 pr-12 text-sm focus:border-brand-accent focus:outline-none text-brand-primary"
+                              value={confirmPassword}
+                              onChange={e => setConfirmPassword(e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowConfirmPassword(v => !v)}
+                              aria-label={showConfirmPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                              aria-pressed={showConfirmPassword}
+                              title={showConfirmPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-brand-muted hover:text-brand-primary transition-colors"
+                            >
+                              {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
                         </div>
                         <button className="w-full bg-brand-accent text-white py-4 rounded-lg font-bold uppercase tracking-wider shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
                           <span className="text-white">Definir Nova Senha</span>
