@@ -98,6 +98,13 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
 
   const loadForms = async () => {
     const res = supabase ? await supabase.from('forms').select('*') : await mockDb.get('forms');
+    // Sem isto, uma falha de leitura virava "nenhum formulário cadastrado" —
+    // indistinguível de uma base realmente vazia.
+    if (res.error) {
+      console.error('[Forms] Falha ao carregar:', res.error);
+      toast.error('Não foi possível carregar os formulários: ' + res.error.message);
+      return;
+    }
     const list: EvaluationForm[] = res.data || [];
 
     if (supabase && list.length > 0) {
@@ -126,11 +133,15 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
     const toAdd = teamIds.filter(id => !existingTeamIds.includes(id));
     const toRemove = (existing || []).filter((ft: any) => !teamIds.includes(ft.team_id));
 
+    // supabase-js devolve { error } em vez de lançar: sem checar, o vínculo
+    // de equipes falharia em silêncio e o formulário salvaria "sem equipe".
     if (toRemove.length > 0) {
-      await supabase.from('form_teams').delete().in('id', toRemove.map((ft: any) => ft.id));
+      const { error } = await supabase.from('form_teams').delete().in('id', toRemove.map((ft: any) => ft.id));
+      if (error) throw error;
     }
     if (toAdd.length > 0) {
-      await supabase.from('form_teams').insert(toAdd.map(team_id => ({ form_id: formId, team_id })));
+      const { error } = await supabase.from('form_teams').insert(toAdd.map(team_id => ({ form_id: formId, team_id })));
+      if (error) throw error;
     }
   };
 
@@ -141,7 +152,10 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
   const handleToggleStatus = async (id: string, active: boolean) => {
     try {
       if (!supabase) await mockDb.update('forms', id, { active });
-      else await supabase.from('forms').update({ active }).eq('id', id);
+      else {
+        const { error } = await supabase.from('forms').update({ active }).eq('id', id);
+        if (error) throw error;
+      }
       toast.success(active ? 'Formulário ativado!' : 'Formulário desativado!');
       setDeleteConfirmId(null);
       loadForms();

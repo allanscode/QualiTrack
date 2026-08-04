@@ -272,7 +272,10 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
 
     try {
       if (!supabase) await mockDb.update('teams', id, { active });
-      else await supabase.from('teams').update({ active }).eq('id', id);
+      else {
+        const { error } = await supabase.from('teams').update({ active }).eq('id', id);
+        if (error) throw error;
+      }
       toast.success(active ? 'Equipe ativada!' : 'Equipe desativada!');
       setDeleteConfirmId(null);
       loadData();

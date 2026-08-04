@@ -175,13 +175,22 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           if (deps.initialData?.id) await mockDb.update('monitorias', deps.initialData.id, payload);
           else await mockDb.insert('monitorias', payload);
         } else {
-          if (deps.initialData?.id) await supabase.from('monitorias').update(payload).eq('id', deps.initialData.id);
-          else await supabase.from('monitorias').insert([payload]);
+          // O erro precisa ser verificado: supabase-js NAO lanca excecao em
+          // falha de query, devolve { error }. Sem checar, uma falha passava
+          // direto para o toast de sucesso e a monitoria simplesmente nunca
+          // existia — foi assim que 9 colunas ausentes ficaram invisiveis.
+          const { error } = deps.initialData?.id
+            ? await supabase.from('monitorias').update(payload).eq('id', deps.initialData.id)
+            : await supabase.from('monitorias').insert([payload]);
+          if (error) throw error;
         }
         toast.success('Monitoria salva com sucesso!');
         deps.onSaved();
       } catch (e: any) {
-        toast.error('Não foi possível salvar a monitoria. Tente novamente.');
+        console.error('[Monitoria] Falha ao salvar:', e);
+        toast.error(e?.message
+          ? `Não foi possível salvar a monitoria: ${e.message}`
+          : 'Não foi possível salvar a monitoria. Tente novamente.');
       }
     });
   };

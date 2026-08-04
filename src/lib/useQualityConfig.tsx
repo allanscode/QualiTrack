@@ -179,12 +179,16 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
 
     if (supabase) {
-      const { data: existing } = await supabase.from('quality_configs').select('id').maybeSingle();
-      if (existing) {
-        await supabase.from('quality_configs').update({ config: newConfig }).eq('id', existing.id);
-      } else {
-        await supabase.from('quality_configs').insert({ config: newConfig });
-      }
+      // supabase-js devolve { error } em vez de lançar. Sem checar, uma falha
+      // aqui passava despercebida: a config seguia salva no localStorage e a
+      // tela parecia correta, mas nada era gravado no banco — e a próxima
+      // máquina (ou aba limpa) voltaria à configuração antiga.
+      const { data: existing, error: selError } = await supabase.from('quality_configs').select('id').maybeSingle();
+      if (selError) throw selError;
+      const { error } = existing
+        ? await supabase.from('quality_configs').update({ config: newConfig }).eq('id', existing.id)
+        : await supabase.from('quality_configs').insert({ config: newConfig });
+      if (error) throw error;
     } else {
       const { data: existing } = await mockDb.get('quality_configs');
       if (existing && existing.length > 0) {

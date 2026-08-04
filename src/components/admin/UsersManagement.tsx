@@ -70,10 +70,14 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
     const toAdd = teamIds.filter(id => !existingTeamIds.includes(id));
     const toRemove = existing.filter((ut: any) => !teamIds.includes(ut.team_id));
 
+    // supabase-js devolve { error } em vez de lançar: sem checar, o vínculo
+    // de equipes falharia em silêncio e o usuário ficaria sem equipe alguma,
+    // sem nenhum aviso na tela.
     if (toRemove.length > 0) {
       const removeIds = toRemove.map((ut: any) => ut.id);
       if (supabase) {
-        await supabase.from('user_teams').delete().in('id', removeIds);
+        const { error } = await supabase.from('user_teams').delete().in('id', removeIds);
+        if (error) throw error;
       } else {
         for (const rid of removeIds) await mockDb.delete('user_teams', rid);
       }
@@ -81,7 +85,8 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
     if (toAdd.length > 0) {
       const inserts = toAdd.map(team_id => ({ user_id: userId, team_id }));
       if (supabase) {
-        await supabase.from('user_teams').insert(inserts);
+        const { error } = await supabase.from('user_teams').insert(inserts);
+        if (error) throw error;
       } else {
         for (const ins of inserts) await mockDb.insert('user_teams', ins);
       }
@@ -186,7 +191,10 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
   const handleToggleStatus = async (id: string, active: boolean) => {
     try {
       if (!supabase) await mockDb.update('users', id, { active });
-      else await supabase.from('users').update({ active }).eq('id', id);
+      else {
+        const { error } = await supabase.from('users').update({ active }).eq('id', id);
+        if (error) throw error;
+      }
       toast.success(active ? 'Usuário reativado!' : 'Usuário desativado!');
       setDeleteConfirmId(null);
       loadData();
