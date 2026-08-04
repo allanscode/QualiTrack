@@ -112,8 +112,12 @@ serve(async (req) => {
       })
     }
 
-    const { data: adminUser } = await supabaseClient.from('users').select('role').eq('id', user.id).single()
-    if (!adminUser || !['admin', 'gestor_qualidade', 'gestor_suporte'].includes(adminUser.role)) {
+    // gestor_suporte foi removido da lista: a interface restringe o painel
+    // administrativo a role === 'admin' (App.tsx), entao ele nunca convida
+    // usuarios pela tela — mas podia chamar esta funcao direto e criar uma
+    // conta com role 'admin', escalando privilegio.
+    const { data: adminUser } = await supabaseClient.from('users').select('role, active').eq('id', user.id).single()
+    if (!adminUser || !adminUser.active || !['admin', 'gestor_qualidade'].includes(adminUser.role)) {
       return new Response(JSON.stringify({ success: false, error: 'Forbidden: Admins only. User role is: ' + (adminUser?.role || 'none') }), {
         status: 403,
         headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
@@ -134,6 +138,16 @@ serve(async (req) => {
     }
 
     const { email, name, role, team_ids } = result.data
+
+    // Defesa em profundidade: o papel vem do cliente e o InviteSchema aceita
+    // 'admin'. Sem esta checagem, um gestor_qualidade poderia criar uma conta
+    // administrativa. Conceder 'admin' fica restrito a quem ja e admin.
+    if (role === 'admin' && adminUser.role !== 'admin') {
+      return new Response(JSON.stringify({ success: false, error: 'Forbidden: apenas administradores podem conceder o papel admin' }), {
+        status: 403,
+        headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
