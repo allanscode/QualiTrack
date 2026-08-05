@@ -223,6 +223,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const dbUser = (data || []).find((u: any) => u.email === user.email && u.active);
         if (dbUser) {
           const enriched = await enrichUserWithTeamIds(dbUser);
+
+          // must_change_password: manda para a tela ja existente de definir
+          // nova senha, SEM liberar o dashboard. setCurrentUser fica de fora
+          // de proposito — App.tsx usa !currentUser para decidir entre telas
+          // de auth e o dashboard, entao ficar sem ele mantem a pessoa presa
+          // na troca de senha mesmo com sessao valida.
+          if (enriched.must_change_password) {
+            // setLoading/setLoadingPreferences ficam a cargo do finally desta
+            // função — ele roda mesmo após este return.
+            setUserData(enriched);
+            setAuthView('change-password');
+            toast.info('Defina uma nova senha para continuar.');
+            return;
+          }
+
           setUserData(enriched);
           setCurrentUser(user);
           const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
@@ -244,6 +259,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data, error } = await sb.from('users').select('*').eq('email', user.email).single();
         if (data && data.active) {
           const enriched = await enrichUserWithTeamIds(data);
+
+          // must_change_password: mesma logica do branch mock acima. A
+          // sessao do Supabase permanece ativa (nao chamamos signOut aqui) —
+          // handleUpdatePassword usa sb.auth.updateUser(), que exige sessao
+          // valida. Sem setCurrentUser, App.tsx mantem a pessoa nas telas de
+          // auth em vez do dashboard, mesmo autenticada no Supabase.
+          if (enriched.must_change_password) {
+            // setLoading/setLoadingPreferences ficam a cargo do finally desta
+            // função — ele roda mesmo após este return.
+            setUserData(enriched);
+            setAuthView('change-password');
+            toast.info('Defina uma nova senha para continuar.');
+            return;
+          }
+
           setUserData(enriched);
           setCurrentUser(user);
           const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
