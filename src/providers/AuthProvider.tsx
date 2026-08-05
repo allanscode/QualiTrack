@@ -722,7 +722,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const { error } = await sb.auth.updateUser({ password: newPassword });
         if (error) throw error;
-        await sb.from('users').update({ must_change_password: false }).eq('email', user.email);
+
+        // Escrita direta em users.must_change_password sempre falhou aqui:
+        // users_admin_write nunca autorizou usuário comum a mexer na própria
+        // linha, e o erro (0 linhas afetadas por RLS) era descartado — a
+        // senha do Auth mudava, mas a flag continuava true, prendendo a
+        // pessoa num loop de "trocar senha" a cada login. A função
+        // clear_own_must_change_password (SECURITY DEFINER) zera só essa
+        // flag, só na própria linha, sem alargar a policy de escrita da
+        // tabela — o que reabriria o auto-escalonamento de role que foi
+        // fechado antes.
+        const { error: clearError } = await sb.rpc('clear_own_must_change_password');
+        if (clearError) throw clearError;
+
         window.history.replaceState({}, document.title, window.location.pathname);
         isPasswordRecoveryRef.current = false;
         isInviteFlowRef.current = false;
