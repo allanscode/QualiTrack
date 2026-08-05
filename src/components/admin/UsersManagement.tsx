@@ -104,8 +104,11 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
         if (!supabase) {
           const payload = { ...editingUser, email: emailLower, active: true, team_ids: teamIds };
           if (editingUser.id) {
-            await mockDb.update('users', editingUser.id, payload);
+            // Mesma ordem do branch Supabase, por consistência (mock não tem
+            // RLS, então aqui não há o mesmo risco, mas o comportamento fica
+            // previsível entre os dois modos).
             await syncUserTeams(editingUser.id, teamIds);
+            await mockDb.update('users', editingUser.id, payload);
           } else {
             const newUser = await mockDb.insert('users', { ...payload, id: emailLower });
             await syncUserTeams(newUser.data.id, teamIds);
@@ -127,9 +130,18 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
         const operation = (async () => {
           let userId = editingUser.id;
           if (editingUser.id) {
+            // Ordem importa: user_teams_insert/update/delete autorizam por
+            // role de QUEM CHAMA no momento da chamada (admin/gestor_*), não
+            // por quem era antes. Se alguém se auto-editar rebaixando o
+            // próprio papel (ex.: admin -> qualidade) e a atualização de role
+            // for commitada primeiro, o sync de equipes que vem depois já
+            // roda como o papel novo — e falha com RLS se o papel novo não
+            // tiver permissão de escrita em user_teams. Sincronizar equipes
+            // ANTES da troca de role evita essa auto-exclusão a meio da
+            // própria operação.
+            await syncUserTeams(editingUser.id, teamIds);
             const { error } = await supabase.from('users').update(userPayload).eq('id', editingUser.id);
             if (error) throw error;
-            await syncUserTeams(editingUser.id, teamIds);
           } else {
             const { data, error: funcError } = await supabase.functions.invoke('admin-invite-user', {
               headers: { Authorization: `Bearer ${accessToken}` },
