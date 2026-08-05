@@ -239,7 +239,12 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                 />
               )}
 
-              {user?.role === 'admin' && (
+              {/* Acompanha quem ganhou o poder de excluir logo abaixo: sem
+                  isto, gestor_qualidade removeria uma monitoria e nunca mais
+                  conseguiria vê-la na lista para conferir. Não existe ação de
+                  RESTAURAR um registro removido — nem para admin — isso é uma
+                  lacuna anterior a esta mudança, fora do escopo pedido aqui. */}
+              {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && (
                 <CustomSelect
                   value={filters.statusFilter}
                   onChange={val => filters.setStatusFilter(val as any)}
@@ -636,7 +641,10 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                           </div>
 
                           {/* Admin Final / Excluir Registro no final da coluna 2 */}
-                          {(user?.role === 'admin') && m.active !== false && (
+                          {/* Excluir é soft-delete (active=false via UPDATE, não
+                              DELETE real) — governado por monitorias_update_policy,
+                              que já autoriza admin e gestor_qualidade. */}
+                          {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
                             <div className="w-full mt-auto flex justify-end gap-3 flex-wrap">
                               <Button
                                 variant="outline"

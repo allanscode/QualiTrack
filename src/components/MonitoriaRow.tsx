@@ -326,7 +326,11 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
                       </div>
                     )}
 
-                    {(user?.role === 'admin') && m.active !== false && (
+                    {/* Excluir é soft-delete (active=false via UPDATE, não DELETE
+                        real) — governado por monitorias_update_policy, que já
+                        autoriza admin e gestor_qualidade. Alinhando a UI ao que
+                        o banco já permitia. */}
+                    {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
                       <div className="w-full mt-auto flex justify-end gap-3 flex-wrap">
                         <Button
                           variant="outline"
