@@ -21,6 +21,24 @@ export function resolveSystemTheme(): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+// Detecta uma sessão real do Supabase no localStorage sem depender do ref do
+// projeto. A versão anterior checava a chave literal
+// 'sb-amyfyngzkqqzixmreeih-auth-token' — o ref de um projeto Supabase de
+// terceiro (script de dev esquecido no repo original, nada a ver com este
+// projeto). O supabase-js nomeia a chave como 'sb-<ref>-auth-token', então
+// aquela checagem nunca batia com a sessão real deste app (ref
+// vpytvgpsqdapgouyjowc) — o tema de usuário logado nunca era persistido em
+// modo Supabase (só em Mock Mode, via 'qualitrack_session'). Escanear pelo
+// padrão em vez do ref fixo corrige isso e sobrevive a uma eventual troca de
+// projeto no futuro.
+function hasSupabaseAuthToken(): boolean {
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) return true;
+  }
+  return false;
+}
+
 // Função para aplicar tema ao DOM imediatamente (sem esperar React)
 export function applyThemeToDOM(resolved: 'light' | 'dark') {
   const root = document.documentElement;
@@ -76,7 +94,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   // Salva no localStorage (apenas quando logado)
   useEffect(() => {
-    if (localStorage.getItem('qualitrack_session') || localStorage.getItem('sb-amyfyngzkqqzixmreeih-auth-token')) {
+    if (localStorage.getItem('qualitrack_session') || hasSupabaseAuthToken()) {
       // Save the literal theme (including 'system'), not resolvedTheme
       localStorage.setItem('qualitrack_theme', theme);
     }

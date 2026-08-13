@@ -79,7 +79,7 @@
 npx supabase login
 
 # Link ao projeto
-npx supabase link --project-ref amyfyngzkqqzixmreeih
+npx supabase link --project-ref <seu-project-ref>
 
 # Configurar secrets
 npx supabase secrets set FRONTEND_URL=https://qualitrack.seudominio.com
@@ -110,8 +110,8 @@ git clone <seu-repo> .
 
 # Criar .env com variáveis de produção (Docker Compose lê automaticamente)
 cat > .env << 'EOF'
-VITE_SUPABASE_URL=https://amyfyngzkqqzixmreeih.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+VITE_SUPABASE_URL=https://<seu-project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<sua-chave-anon>
 PORT=8080
 EOF
 

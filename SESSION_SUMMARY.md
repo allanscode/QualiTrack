@@ -51,7 +51,7 @@ Atualizar toda a documentação do QualiTrack para refletir o estado atual compl
 
 ## Contexto Crítico para Próxima Sessão
 - **gh CLI**: caminho completo `C:\Program Files\GitHub CLI\gh.exe` (não está no PATH do PowerShell por padrão)
-- **Supabase project ref**: `amyfyngzkqqzixmreeih`
+- **Supabase project ref**: configurado via `VITE_SUPABASE_URL` no `.env` (não versionar o ref real aqui — nota antiga citava o projeto de dev de outra pessoa)
 - **Mock credentials**: `qualidade@webposto.com.br` / `123456` (admin)
 - **10 tabelas DB**: `users`, `user_teams`, `teams`, `forms`, `monitorias`, `quality_configs`, `access_requests`, `dissatisfaction_fields`, `business_hours`, `holidays`
 - **NUNCA enviar `team_ids` em payload da tabela `users`** — usar `syncUserTeams()`
