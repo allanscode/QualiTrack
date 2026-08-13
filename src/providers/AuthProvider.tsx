@@ -723,6 +723,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { error } = await sb.auth.updateUser({ password: newPassword });
         if (error) throw error;
 
+        // A partir daqui a senha JÁ mudou no Auth — sucesso ou falha do que
+        // vem a seguir não desfaz isso. Limpeza da URL (token de
+        // recovery/invite) e dos refs de fluxo não dependem da RPC abaixo,
+        // então rodam incondicionalmente, evitando deixar token na barra de
+        // endereço mesmo se a RPC falhar.
+        window.history.replaceState({}, document.title, window.location.pathname);
+        isPasswordRecoveryRef.current = false;
+        isInviteFlowRef.current = false;
+
         // Escrita direta em users.must_change_password sempre falhou aqui:
         // users_admin_write nunca autorizou usuário comum a mexer na própria
         // linha, e o erro (0 linhas afetadas por RLS) era descartado — a
@@ -732,12 +741,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // flag, só na própria linha, sem alargar a policy de escrita da
         // tabela — o que reabriria o auto-escalonamento de role que foi
         // fechado antes.
+        //
+        // Erro tratado aqui dentro, SEM `throw`: se a RPC falhar depois que
+        // updateUser já teve sucesso, o catch genérico do fim da função
+        // mostraria "Não foi possível atualizar sua senha" — mascarando que
+        // a senha JÁ mudou. A pessoa tentaria de novo com a senha antiga,
+        // levaria "credenciais inválidas", e se descobrisse a senha nova
+        // cairia de novo no loop de troca obrigatória (flag nunca foi
+        // zerada). Mensagem específica evita isso.
         const { error: clearError } = await sb.rpc('clear_own_must_change_password');
-        if (clearError) throw clearError;
+        if (clearError) {
+          console.error('[handleUpdatePassword] Senha trocada no Auth, mas clear_own_must_change_password falhou:', clearError);
+          handleLogout({ silent: true });
+          toast.error('Sua senha foi alterada com sucesso, mas não foi possível concluir a liberação do acesso. Entre em contato com o suporte antes de tentar entrar novamente — use a senha nova que você acabou de definir.');
+          return;
+        }
 
-        window.history.replaceState({}, document.title, window.location.pathname);
-        isPasswordRecoveryRef.current = false;
-        isInviteFlowRef.current = false;
         handleLogout({ silent: true });
         toast.success('Sua nova senha foi definida com sucesso! Faça login com suas novas credenciais.');
       }
