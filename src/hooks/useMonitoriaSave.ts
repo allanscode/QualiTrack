@@ -82,11 +82,21 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
     if (!deps.user) return;
     const currentUser = deps.user;
     if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
-    for (const field of deps.qualityFieldsToShow) {
-      const answers = deps.dissatisfactionAnswers[field.id] || [];
-      if (answers.length === 0) {
-        toast.error(`Por favor, preencha o campo extra obrigatório: "${field.title}".`);
-        return;
+    // Campos de qualidade (ex.: "Desvio de Qualidade Identificado") só são
+    // obrigatórios quando houve, de fato, um desvio na avaliação — alguma
+    // resposta "Não" ou algum erro crítico marcado. Numa monitoria positiva
+    // (tudo SIM/NA, sem erro crítico) não há desvio a registrar, então não
+    // faz sentido exigir o preenchimento. Antes eram exigidos sempre.
+    const houveDesvio =
+      Object.values(deps.scores).some(v => v === 'NAO') ||
+      Object.values(deps.criticalErrors).some(Boolean);
+    if (houveDesvio) {
+      for (const field of deps.qualityFieldsToShow) {
+        const answers = deps.dissatisfactionAnswers[field.id] || [];
+        if (answers.length === 0) {
+          toast.error(`Por favor, preencha o campo extra obrigatório: "${field.title}".`);
+          return;
+        }
       }
     }
     if (deps.isReevaluating && !deps.header.reevaluation_justification.trim()) {

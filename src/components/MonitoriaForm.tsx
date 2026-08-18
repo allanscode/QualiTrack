@@ -502,7 +502,12 @@ export default function MonitoriaForm({
                 const [bgClass, textClass] = subtleClass.split(' ');
 
                 return (
-                  <div className="p-6 rounded-2xl border border-surface-border flex flex-col sm:flex-row items-center justify-between bg-surface-card shadow-premium-sm gap-4">
+                  // sticky top-0: mantém o score fixo no topo da área de
+                  // rolagem enquanto o avaliador desce respondendo as
+                  // perguntas, acompanhando a nota subir/descer em tempo real.
+                  // z-30 fica acima dos cards de pergunta; bg sólido + shadow
+                  // impedem o conteúdo de aparecer atrás ao rolar.
+                  <div className="sticky top-0 z-30 p-6 rounded-2xl border border-surface-border flex flex-col sm:flex-row items-center justify-between bg-surface-card shadow-premium gap-4">
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bgClass}`}>
                         <Target className={`w-6 h-6 ${textClass}`} />
