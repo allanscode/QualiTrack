@@ -24,6 +24,7 @@ import {
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import { toast } from 'sonner';
+import { supabase, mockDb, isMockMode } from '../lib/supabase';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import Card from './ui/Card';
@@ -92,6 +93,69 @@ export default function MonitoriaForm({
       contentRef.current.scrollTop = 0;
     }
   }, [step]);
+
+  // Aviso (não bloqueio) de ticket já avaliado. Não há UNIQUE em
+  // monitorias.ticket_id nem checagem alguma hoje — confirmado no banco:
+  // já existem 2 monitorias reais com o mesmo ticket_id avaliando pessoas
+  // diferentes. A decisão de negócio foi permitir isso (pode ser
+  // reavaliação legítima), só sinalizando quando acontecer.
+  //
+  // Limitação conhecida: a policy de SELECT em monitorias restringe o
+  // papel 'qualidade' a ver apenas as PRÓPRIAS avaliações (evaluator_id =
+  // auth.uid()). Então esta checagem, para esse papel, só enxerga
+  // duplicidade criada pelo mesmo auditor — não pega o caso de dois
+  // auditores diferentes avaliarem o mesmo ticket. Para admin e
+  // gestor_qualidade, que veem tudo, a checagem é completa. Resolver o
+  // caso geral exigiria uma função SECURITY DEFINER dedicada; não fizemos
+  // isso aqui para manter a mudança pequena e sem tocar em RLS.
+  const lastWarnedTicketRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isViewOnly) return;
+    const ticketId = header.ticket_id?.trim();
+    if (!ticketId) { lastWarnedTicketRef.current = null; return; }
+    if (lastWarnedTicketRef.current === ticketId) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        let existentes: { evaluated_name?: string; score?: number; status?: string }[] = [];
+        if (isMockMode) {
+          const { data } = await mockDb.get('monitorias');
+          existentes = (data || []).filter((m: any) =>
+            m.ticket_id === ticketId && m.active !== false && m.id !== initialData?.id
+          );
+        } else if (supabase) {
+          let query = supabase
+            .from('monitorias')
+            .select('evaluated_name, score, status')
+            .eq('ticket_id', ticketId)
+            .eq('active', true);
+          if (initialData?.id) query = query.neq('id', initialData.id);
+          const { data, error } = await query;
+          if (error) throw error;
+          existentes = data || [];
+        }
+
+        if (existentes.length > 0) {
+          lastWarnedTicketRef.current = ticketId;
+          const resumo = existentes
+            .slice(0, 3)
+            .map(m => `${m.evaluated_name || '—'} (${m.score ?? '—'}%)`)
+            .join(', ');
+          const resto = existentes.length > 3 ? ` e mais ${existentes.length - 3}` : '';
+          toast.warning(
+            `Este ticket já possui ${existentes.length === 1 ? 'uma monitoria avaliada' : `${existentes.length} monitorias avaliadas`}: ${resumo}${resto}. Você pode continuar mesmo assim.`,
+            { duration: 8000 }
+          );
+        }
+      } catch (e) {
+        // Falha na checagem não deve bloquear o preenchimento — é só um
+        // aviso a mais, não uma validação obrigatória.
+        console.error('[MonitoriaForm] Falha ao checar monitorias existentes para o ticket:', e);
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [header.ticket_id, isViewOnly, initialData?.id]);
 
   const { isPending, validateStep, handleSave } = useMonitoriaSave({
     user,
