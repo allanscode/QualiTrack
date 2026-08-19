@@ -628,41 +628,6 @@ export default function MonitoriaForm({
 
           {step === 4 && (
             <section className="space-y-10 animate-fade-in max-w-4xl mx-auto w-full">
-              {qualityFieldsToShow.length > 0 && (
-                <div className="space-y-6 animate-fade-in">
-                  <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1">Campos Extras da Qualidade</p>
-                  {qualityFieldsToShow.map(field => (
-                    <Card key={field.id} className="bg-surface-card p-5 border border-surface-border space-y-4 shadow-premium-sm rounded-xl">
-                      <p className="text-xs font-black text-brand-primary uppercase tracking-wider">{field.title}{!isViewOnly && ' *'}</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {field.options.map(opt => {
-                          const isChecked = (dissatisfactionAnswers[field.id] || []).includes(opt);
-                          return (
-                            <label
-                              key={opt}
-                              className={`flex items-center gap-2.5 py-2.5 px-3.5 rounded-lg border transition-all cursor-pointer ${
-                                isChecked
-                                  ? 'bg-surface-subtle border-brand-primary/40 text-brand-primary'
-                                  : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent hover:text-brand-primary'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={e => handleCheckboxChange(field.id, opt, e.target.checked, isViewOnly)}
-                                disabled={isViewOnly}
-                                className="w-4.5 h-4.5 rounded text-brand-primary border-surface-border focus:ring-brand-primary"
-                              />
-                              <span className="text-[11px] font-black uppercase tracking-wider">{opt}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
               <div className="space-y-4">
                 <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Registro do Auditor</p>
                 <textarea
