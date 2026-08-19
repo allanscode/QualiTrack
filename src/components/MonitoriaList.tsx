@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { List } from 'react-window';
 import { Monitoria, MonitoriaStatus, User } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../providers/ThemeProvider';
+import { useAuth } from '../providers/AuthProvider';
 import { getStatusConfig, getHistoryEventConfig, VARIANT_TEXT_CLASS } from '../lib/statusHelper';
 import {
   Search,
@@ -56,6 +57,21 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [viewingMonitoria, setViewingMonitoria] = useState<Monitoria | null>(null);
+
+  // Encolhe a barra lateral ao abrir uma monitoria, para dar mais espaço ao
+  // formulário, e restaura o estado anterior ao fechar — sem sobrescrever a
+  // preferência do usuário se ele já tivesse recolhido manualmente.
+  const { isSidebarOpen, setIsSidebarOpen } = useAuth();
+  const sidebarWasOpenRef = useRef(isSidebarOpen);
+  useEffect(() => {
+    if (viewingMonitoria) {
+      sidebarWasOpenRef.current = isSidebarOpen;
+      setIsSidebarOpen(false);
+    } else {
+      setIsSidebarOpen(sidebarWasOpenRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingMonitoria]);
 
   const getName = (id: string, isEvaluator?: boolean, snapshotName?: string) => {
     if (isEvaluator && (user?.role === 'suporte' || user?.role === 'gestor_suporte')) {

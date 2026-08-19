@@ -396,6 +396,20 @@ function MainApp({
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(activeTab === 'admin' || activeTab === 'custom_dashboard');
 
+  // Mesmo comportamento de MonitoriaList.tsx: encolhe a barra lateral ao
+  // abrir "Nova Monitoria", dando mais espaço ao formulário, e restaura o
+  // estado anterior ao fechar.
+  const sidebarWasOpenRef = React.useRef(isSidebarOpen);
+  React.useEffect(() => {
+    if (isFormOpen) {
+      sidebarWasOpenRef.current = isSidebarOpen;
+      setIsSidebarOpen(false);
+    } else {
+      setIsSidebarOpen(sidebarWasOpenRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFormOpen]);
+
   const toggleSidebar = () => {
     const willBeOpen = !isSidebarOpen;
     if (!willBeOpen) {
