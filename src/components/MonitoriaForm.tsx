@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { User, Monitoria } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../providers/ThemeProvider';
@@ -57,6 +57,17 @@ export default function MonitoriaForm({
 
   const shouldReduceMotion = useReducedMotion();
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Card do score encolhe ao rolar para baixo na etapa de avaliação, para
+  // ocupar menos espaço e não poluir a tela enquanto se responde as perguntas.
+  const [scoreCompact, setScoreCompact] = useState(false);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const onScroll = () => setScoreCompact(el.scrollTop > 40);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   const forms = useMemo(() =>
     staticData.forms.filter(f => f.active !== false).sort((a, b) => a.title.localeCompare(b.title)),
@@ -507,15 +518,17 @@ export default function MonitoriaForm({
                   // perguntas, acompanhando a nota subir/descer em tempo real.
                   // z-30 fica acima dos cards de pergunta; bg sólido + shadow
                   // impedem o conteúdo de aparecer atrás ao rolar.
-                  <div className="sticky top-0 z-30 p-6 rounded-2xl border border-surface-border flex flex-col sm:flex-row items-center justify-between bg-surface-card shadow-premium gap-4">
+                  <div className={`sticky top-0 z-30 rounded-2xl border border-surface-border flex items-center justify-between bg-surface-card shadow-premium gap-4 transition-all duration-300 ${scoreCompact ? 'flex-row p-3' : 'flex-col sm:flex-row p-6'}`}>
                     <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bgClass}`}>
-                        <Target className={`w-6 h-6 ${textClass}`} />
+                      <div className={`rounded-xl flex items-center justify-center transition-all duration-300 ${bgClass} ${scoreCompact ? 'w-9 h-9' : 'w-12 h-12'}`}>
+                        <Target className={`transition-all duration-300 ${textClass} ${scoreCompact ? 'w-4 h-4' : 'w-6 h-6'}`} />
                       </div>
                       <div>
-                        <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em]">Score de Avaliação</p>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <span className={`text-3xl font-black tabular-nums ${textClass}`}>
+                        {!scoreCompact && (
+                          <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em]">Score de Avaliação</p>
+                        )}
+                        <div className={`flex items-baseline gap-2 ${scoreCompact ? '' : 'mt-1'}`}>
+                          <span className={`font-black tabular-nums transition-all duration-300 ${textClass} ${scoreCompact ? 'text-xl' : 'text-3xl'}`}>
                             {score.toFixed(2)}%
                           </span>
                           <span className="text-[10px] font-black text-brand-muted uppercase tracking-wider">
@@ -525,10 +538,12 @@ export default function MonitoriaForm({
                       </div>
                     </div>
                     <div className="text-center sm:text-right">
-                      <Badge variant={isTarget ? 'success' : 'error'} className="px-3.5 py-1 text-[10px] font-black uppercase tracking-wider">
+                      <Badge variant={isTarget ? 'success' : 'error'} className={`font-black uppercase tracking-wider ${scoreCompact ? 'px-2.5 py-0.5 text-[9px]' : 'px-3.5 py-1 text-[10px]'}`}>
                         {isTarget ? 'Meta Atingida' : 'Abaixo da Meta'}
                       </Badge>
-                      <p className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1.5">Calculado em tempo real</p>
+                      {!scoreCompact && (
+                        <p className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1.5">Calculado em tempo real</p>
+                      )}
                     </div>
                   </div>
                 );
