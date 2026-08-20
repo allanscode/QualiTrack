@@ -16,6 +16,7 @@ import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
 import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
+import NegativeCallsTrainingAlert from '../widgets/NegativeCallsTrainingAlert';
 
 // High-fidelity mock datasets for customization mode
 const mockTrendData = [
@@ -229,6 +230,7 @@ export default function SupportManagerDashboard({
   let dashboardData: any = {
     user: null,
     monitorias: [],
+    allMonitorias: [],
     users: [],
     teams: [],
     forms: [],
@@ -248,7 +250,7 @@ export default function SupportManagerDashboard({
     // safe fallback
   }
 
-  const { user, monitorias, users, teams, forms, dissatisfactionFields, globalAvg } = dashboardData;
+  const { user, monitorias, allMonitorias, users, teams, forms, dissatisfactionFields, globalAvg } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
 
   // Scoped Team IDs
@@ -784,6 +786,13 @@ export default function SupportManagerDashboard({
           setActiveEditingId={setActiveEditingId}
         />
       </div>
+
+      <NegativeCallsTrainingAlert
+        monitorias={isCustomizing ? [] : allMonitorias}
+        users={users}
+        teamIds={myTeamIds}
+        isCustomizing={isCustomizing}
+      />
 
       {/* LINHA 3 (Métricas de Reavaliação - lg:grid-cols-4 gap-6) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
