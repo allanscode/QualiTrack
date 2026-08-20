@@ -38,16 +38,17 @@
 :root {
 color-scheme: light;
 /* Light Theme (Default) */
-  --brand-primary: #2D3A3A;
-  --brand-highlight: #A7C0A5;
-  --brand-accent: #8E9B7B;
-  --brand-muted: #7A7D71;
-  --brand-subtle: #F0F1E8;
+  /* WebPosto brand palette (values from logo artwork; verify against official brandbook when available). */
+  --brand-primary: #0A1F44;
+  --brand-highlight: #D31E1E;
+  --brand-accent: #D31E1E;
+  --brand-muted: #52617A;
+  --brand-subtle: #E8ECF3;
   --brand-on-primary: #FFFFFF; /* White text on dark primary (Light Mode) */
 
   --surface-bg: #F9F9F6;
   --surface-card: #FFFFFF;
-  --surface-subtle: #F0F1E8;
+  --surface-subtle: #F4F6FA;
 
   /* Role Sidebar Colors (Light Mode — neutral gray) */
   --sidebar-bg-admin: #F9F9F6;
@@ -55,9 +56,9 @@ color-scheme: light;
   --sidebar-bg-gestor-qualidade: #F9F9F6;
   --sidebar-bg-gestor-suporte: #F9F9F6;
   --sidebar-bg-suporte: #F9F9F6;
-  --surface-border: #E2E4D8;
+  --surface-border: #D8DFEB;
   
-  --shadow-premium: 0 10px 40px -10px rgba(45, 58, 58, 0.1);
+  --shadow-premium: 0 10px 40px -10px rgba(10, 31, 68, 0.1);
   --shadow-premium-sm: 0 4px 20px -5px rgba(45, 58, 58, 0.05);
 
   /* Functional color tokens (light mode) */
@@ -78,17 +79,18 @@ color-scheme: light;
 .dark {
 color-scheme: dark;
 /* Dark Theme Overrides */
-  --brand-primary: #F9F9F6;
-  --brand-highlight: #A7C0A5;
-  --brand-accent: #8E9B7B;
-  --brand-muted: #A3A69A;
-  --brand-subtle: #3D4035;
-  --brand-on-primary: #1A1C16; /* Dark text on light primary (Dark Mode) */
+  /* Keep text tokens readable on dark surfaces; red is softened for text contrast. */
+  --brand-primary: #FFFFFF;
+  --brand-highlight: #F87171;
+  --brand-accent: #F87171;
+  --brand-muted: #B2BDCE;
+  --brand-subtle: #202D45;
+  --brand-on-primary: #0A1F44; /* Dark text on light primary (Dark Mode) */
 
-  --surface-bg: #1A1C16;
-  --surface-card: #252820;
-  --surface-subtle: #31352A;
-  --surface-border: #3D4136;
+  --surface-bg: #081631;
+  --surface-card: #102143;
+  --surface-subtle: #182A4D;
+  --surface-border: #2A3D63;
 
   --shadow-premium: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
   --shadow-premium-sm: 0 4px 20px -5px rgba(0, 0, 0, 0.3);
@@ -182,7 +184,7 @@ input[type="date"]::-webkit-datetime-edit {
 /* ── Focus ring standardization ── */
 .focus-ring:focus {
   outline: none;
-  box-shadow: 0 0 0 2px #A7C0A5;
+  box-shadow: 0 0 0 2px var(--brand-highlight);
 }
 
 /* ── Animations ── */
@@ -275,13 +277,13 @@ select {
 .bg-functional-success { background-color: var(--success-bg); }
 
 /* ── Icon background tokens (theme-aware, light bg for dark text) ── */
-.bg-icon-highlight { background-color: #E8F0E7; }
-.bg-icon-accent { background-color: #E8EBE3; }
-.bg-icon-primary { background-color: #E2E4D8; }
+.bg-icon-highlight { background-color: #FBE4E4; }
+.bg-icon-accent { background-color: #FBE4E4; }
+.bg-icon-primary { background-color: #E8ECF3; }
 
-.dark .bg-icon-highlight { background-color: #2A3529; }
-.dark .bg-icon-accent { background-color: #2A2D24; }
-.dark .bg-icon-primary { background-color: #3D4136; }
+.dark .bg-icon-highlight { background-color: #4A2028; }
+.dark .bg-icon-accent { background-color: #4A2028; }
+.dark .bg-icon-primary { background-color: #203252; }
 
 /* ── Universal SaaS Input & Textarea Standards (Light & Dark Mode) ── */
 input[type="text"],
@@ -308,7 +310,7 @@ input[type="time"],
 input[type="date"],
 textarea {
   background-color: #FFFFFF !important;
-  border: 1px solid #E2E4D8 !important; /* border-slate-200 / surface-border */
+  border: 1px solid var(--surface-border) !important;
   color: #0F172A !important; /* text-slate-900 */
 }
 

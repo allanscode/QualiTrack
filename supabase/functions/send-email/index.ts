@@ -72,14 +72,14 @@ serve(async (req: Request) => {
     if (type === 'welcome') {
       subject = "Bem-vindo ao QualiTrack - Defina sua senha";
       htmlContent = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #2D3A3A; padding: 20px; border: 1px solid #E2E4D8; border-radius: 12px;">
-          <h2 style="color: #2D3A3A;">Olá, ${name}!</h2>
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #0A1F44; padding: 20px; border: 1px solid #D8DFEB; border-radius: 12px;">
+          <h2 style="color: #0A1F44;">Olá, ${name}!</h2>
           <p>Sua conta no QualiTrack foi aprovada com sucesso.</p>
           <p>Para definir sua senha e começar a usar o sistema, clique no botão abaixo:</p>
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetLink}" style="background-color: #2D3A3A; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Definir Minha Senha</a>
+            <a href="${resetLink}" style="background-color: #0A1F44; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Definir Minha Senha</a>
           </div>
-          <p style="font-size: 12px; color: #7A7D71; border-top: 1px solid #E2E4D8; pt-20px; margin-top: 20px;">
+          <p style="font-size: 12px; color: #52617A; border-top: 1px solid #D8DFEB; pt-20px; margin-top: 20px;">
             Se o botão acima não funcionar, copie e cole este link no seu navegador:<br>
             ${resetLink}
           </p>
@@ -88,14 +88,14 @@ serve(async (req: Request) => {
     } else if (type === 'reset') {
       subject = "QualiTrack - Recuperação de Senha";
       htmlContent = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #2D3A3A; padding: 20px; border: 1px solid #E2E4D8; border-radius: 12px;">
-          <h2 style="color: #2D3A3A;">Olá, ${name || 'Usuário'}!</h2>
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #0A1F44; padding: 20px; border: 1px solid #D8DFEB; border-radius: 12px;">
+          <h2 style="color: #0A1F44;">Olá, ${name || 'Usuário'}!</h2>
           <p>Recebemos uma solicitação de recuperação de senha para sua conta.</p>
           <p>Para definir uma nova senha, clique no botão abaixo:</p>
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetLink}" style="background-color: #A7C0A5; color: #2D3A3A; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Redefinir Minha Senha</a>
+            <a href="${resetLink}" style="background-color: #D31E1E; color: #FFFFFF; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Redefinir Minha Senha</a>
           </div>
-          <p style="font-size: 12px; color: #7A7D71; border-top: 1px solid #E2E4D8; pt-20px; margin-top: 20px;">
+          <p style="font-size: 12px; color: #52617A; border-top: 1px solid #D8DFEB; pt-20px; margin-top: 20px;">
             Se o botão acima não funcionar, copie e cole este link no seu navegador:<br>
             ${resetLink}
           </p>
@@ -105,11 +105,11 @@ serve(async (req: Request) => {
       const reason = token; // Reuse the token field for the rejection reason text
       subject = "QualiTrack - Solicitação de Acesso";
       htmlContent = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #2D3A3A; padding: 20px; border: 1px solid #E2E4D8; border-radius: 12px;">
-          <h2 style="color: #2D3A3A;">Olá, ${name}!</h2>
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #0A1F44; padding: 20px; border: 1px solid #D8DFEB; border-radius: 12px;">
+          <h2 style="color: #0A1F44;">Olá, ${name}!</h2>
           <p>Sua solicitação de acesso ao sistema QualiTrack foi analisada.</p>
           <p>Infelizmente, não foi possível aprovar seu acesso neste momento pelo seguinte motivo:</p>
-          <div style="background-color: #F9F9F6; border: 1px solid #E2E4D8; padding: 15px; border-radius: 8px; font-style: italic; margin: 20px 0;">
+          <div style="background-color: #FFFFFF; border: 1px solid #D8DFEB; padding: 15px; border-radius: 8px; font-style: italic; margin: 20px 0;">
             "${reason || 'Não informado.'}"
           </div>
           <p>Caso tenha dúvidas, entre em contato com o administrador do sistema.</p>
