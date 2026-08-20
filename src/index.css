@@ -40,8 +40,13 @@ color-scheme: light;
 /* Light Theme (Default) */
   /* WebPosto brand palette (values from logo artwork; verify against official brandbook when available). */
   --brand-primary: #0A1F44;
-  --brand-highlight: #D31E1E;
-  --brand-accent: #D31E1E;
+  --brand-highlight: #B3141B;
+  --brand-accent: #B3141B;
+  /* Acao primaria (botoes de destaque): NAO inverte entre os temas. O rubro
+     clareado do tema escuro nao sustenta texto branco (3.49:1), entao a cor
+     de marca fica fixa aqui -- branco sobre #B3141B da 6.92:1. */
+  --action-primary-bg: #B3141B;
+  --action-primary-fg: #FFFFFF;
   --brand-muted: #52617A;
   --brand-subtle: #E8ECF3;
   --brand-on-primary: #FFFFFF; /* White text on dark primary (Light Mode) */
@@ -73,7 +78,7 @@ color-scheme: light;
   --chart-excelente: #818CF8;
   --chart-aceitavel: #34D399;
   --chart-atencao: #FBBF24;
-  --chart-ruim: #F87171;
+  --chart-ruim: #B3141B;
 }
 
 .dark {
@@ -81,8 +86,8 @@ color-scheme: dark;
 /* Dark Theme Overrides */
   /* Keep text tokens readable on dark surfaces; red is softened for text contrast. */
   --brand-primary: #FFFFFF;
-  --brand-highlight: #F87171;
-  --brand-accent: #F87171;
+  --brand-highlight: #EF5350;
+  --brand-accent: #EF5350;
   --brand-muted: #B2BDCE;
   --brand-subtle: #202D45;
   --brand-on-primary: #0A1F44; /* Dark text on light primary (Dark Mode) */
@@ -121,7 +126,7 @@ color-scheme: dark;
   --chart-excelente: #818CF8;
   --chart-aceitavel: #34D399;
   --chart-atencao: #FBBF24;
-  --chart-ruim: #F87171;
+  --chart-ruim: #EF5350;
 }
 
 
@@ -277,12 +282,16 @@ select {
 .bg-functional-success { background-color: var(--success-bg); }
 
 /* ── Icon background tokens (theme-aware, light bg for dark text) ── */
+/* Acao primaria de marca (ver tokens em :root) */
+.action-primary { background-color: var(--action-primary-bg); color: var(--action-primary-fg); }
+.action-primary:hover:not(:disabled) { opacity: 0.9; }
+
 .bg-icon-highlight { background-color: #FBE4E4; }
 .bg-icon-accent { background-color: #FBE4E4; }
 .bg-icon-primary { background-color: #E8ECF3; }
 
-.dark .bg-icon-highlight { background-color: #4A2028; }
-.dark .bg-icon-accent { background-color: #4A2028; }
+.dark .bg-icon-highlight { background-color: #35161A; }
+.dark .bg-icon-accent { background-color: #35161A; }
 .dark .bg-icon-primary { background-color: #203252; }
 
 /* ── Universal SaaS Input & Textarea Standards (Light & Dark Mode) ── */
