@@ -154,7 +154,7 @@ function AppContent() {
             className="h-screen w-screen flex flex-col items-center justify-center bg-surface-bg p-6 text-brand-primary"
           >
             <div className="max-w-md w-full text-center space-y-8">
-              <h1 className="inline-flex items-center gap-1 bg-brand-primary px-3 py-1.5 rounded-xl text-5xl font-bold tracking-tight">
+              <h1 className="inline-flex items-center gap-1 bg-[#0A1F44] px-3 py-1.5 rounded-xl text-5xl font-bold tracking-tight">
                 <span className="text-white">Qualidade</span>
                 <span className="inline-flex items-center bg-white px-1.5 py-0.5 rounded-md leading-none">
                   <span className="text-[#D31E1E]">W</span><span className="text-[#0A1F44]">P</span>
@@ -499,7 +499,7 @@ function MainApp({
               <div className="w-4 h-4 border-2 border-white rounded-[2px]" />
             </div>
             {sidebarTextVisible && (
-              <h2 className="inline-flex items-center gap-0.5 bg-brand-primary px-2 py-1 rounded-lg font-bold text-lg tracking-tight">
+              <h2 className="inline-flex items-center gap-0.5 bg-[#0A1F44] px-2 py-1 rounded-lg font-bold text-lg tracking-tight">
                 <span className="text-white">Qualidade</span>
                 <span className="inline-flex items-center bg-white px-1 py-px rounded leading-none">
                   <span className="text-[#D31E1E]">W</span><span className="text-[#0A1F44]">P</span>
