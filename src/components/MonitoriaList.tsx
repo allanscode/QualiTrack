@@ -703,7 +703,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
 
       <AnimatePresence>
         {actionModal && (
-          <div className="fixed inset-0 bg-[#2D3A3A]/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-brand-primary/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
             <m.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
               <Card className="max-w-md w-full shadow-2xl border-none">
                 <div className="flex items-center gap-4 mb-6">
