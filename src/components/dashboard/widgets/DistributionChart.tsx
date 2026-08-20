@@ -1,5 +1,18 @@
 import React, { useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import Card from '../../ui/Card';
 import { PieChart as PieChartIcon } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
@@ -28,6 +41,10 @@ interface DistributionChartProps {
   setActiveEditingId?: (id: string | null) => void;
 }
 
+type DistributionView = 'pie' | 'bar' | 'line';
+
+const QUALITY_DISTRIBUTION_TITLE = 'Insatisfação — Visão da Qualidade';
+
 export default function DistributionChart({ 
   title, 
   data,
@@ -39,6 +56,7 @@ export default function DistributionChart({
   const { config, saveConfig } = useQualityConfig();
   const [isHovered, setIsHovered] = useState(false);
   const [tempSub, setTempSub] = useState('');
+  const [view, setView] = useState<DistributionView>('pie');
 
   const shouldReduceMotion = useReducedMotion();
 
@@ -106,7 +124,55 @@ export default function DistributionChart({
   };
 
   const total = data.reduce((a, b) => a + b.value, 0);
+  const isQualityDistribution = title === QUALITY_DISTRIBUTION_TITLE;
 
+  const renderChart = () => {
+    if (view === 'bar') {
+      return (
+        <BarChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />
+          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} dy={8} />
+          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} allowDecimals={false} />
+          <Tooltip content={<CustomTooltip total={total} />} cursor={{ fill: 'var(--surface-subtle)' }} />
+          <Bar dataKey="value" name="Ocorrências" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+            {data.map((entry, index) => <Cell key={`bar-cell-${index}`} fill={entry.color} />)}
+          </Bar>
+        </BarChart>
+      );
+    }
+
+    if (view === 'line') {
+      return (
+        <LineChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />
+          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} dy={8} />
+          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} allowDecimals={false} />
+          <Tooltip content={<CustomTooltip total={total} />} cursor={{ stroke: 'var(--brand-accent)', strokeWidth: 2, strokeDasharray: '4 4' }} />
+          <Line type="monotone" dataKey="value" name="Ocorrências" stroke="var(--brand-accent)" strokeWidth={2.5} dot={{ r: 4, strokeWidth: 0 }} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
+        </LineChart>
+      );
+    }
+
+    return (
+      <PieChart>
+        <Tooltip content={<CustomTooltip total={total} />} />
+        <Pie
+          data={data}
+          cx="50%"
+          cy="50%"
+          innerRadius={55}
+          outerRadius={75}
+          paddingAngle={4}
+          dataKey="value"
+          isAnimationActive={false} // Optimized to save CPU cycles
+        >
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={entry.color} />
+          ))}
+        </Pie>
+      </PieChart>
+    );
+  };
 
 
   return (
@@ -176,29 +242,28 @@ export default function DistributionChart({
           </AnimatePresence>
         </div>
         <h3 className="text-[13px] font-black text-brand-primary uppercase tracking-wider whitespace-normal flex-1 leading-snug print:text-black">{title}</h3>
+        {isQualityDistribution && (
+          <label className="flex items-center gap-1.5 flex-shrink-0 print:hidden">
+            <span className="sr-only">Tipo de gráfico</span>
+            <select
+              aria-label="Tipo de gráfico"
+              value={view}
+              onChange={(e) => setView(e.target.value as DistributionView)}
+              className="text-[10px] font-black uppercase tracking-wider text-brand-muted bg-surface-bg border border-surface-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-accent cursor-pointer"
+            >
+              <option value="pie">Pizza</option>
+              <option value="bar">Coluna</option>
+              <option value="line">Linha</option>
+            </select>
+          </label>
+        )}
           </div>
         )}
         {data.length > 0 ? (
           <div className="flex-1 flex flex-col">
             <div className="flex-1 min-h-[150px] print:h-[180px]" style={{ minWidth: 0, minHeight: 150 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Tooltip content={<CustomTooltip total={total} />} />
-                  <Pie
-                    data={data}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={75}
-                    paddingAngle={4}
-                    dataKey="value"
-                    isAnimationActive={false} // Optimized to save CPU cycles
-                  >
-                    {data.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
+                {renderChart()}
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-3 pt-3 border-t border-surface-border/40 print:border-slate-300 print:mt-1 print:pt-1">
