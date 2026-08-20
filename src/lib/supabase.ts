@@ -124,7 +124,7 @@ const INITIAL_DATA: {
   users: [
     {
       id: ADMIN_ID,
-      name: 'Administrador QualiTrack',
+      name: 'Administrador QualidadeWP',
       email: 'qualidade@webposto.com.br',
       role: 'admin',
       team_ids: [],
