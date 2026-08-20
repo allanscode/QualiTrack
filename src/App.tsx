@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Check, Palette, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -57,7 +57,6 @@ function AppContent() {
     setResetEmail,
     isExistingRequest,
     setIsExistingRequest,
-    prefetchedSidebarColor,
     activeTab,
     setActiveTab,
     handleLogin,
@@ -74,8 +73,6 @@ function AppContent() {
     setIsFormOpen,
     isSidebarOpen,
     setIsSidebarOpen,
-    sidebarColor,
-    setSidebarColor,
     sidebarContrastClass,
     sidebarContrastSubtle,
     sidebarIsDark,
@@ -355,7 +352,6 @@ function AppContent() {
                   setIsFormOpen={setIsFormOpen}
                   isSystemOnline={isSystemOnline}
                   isReconnecting={isReconnecting}
-                  prefetchedSidebarColor={prefetchedSidebarColor}
                 />
               </StaticDataProvider>
             </QualityConfigProvider>
@@ -378,26 +374,22 @@ function MainApp({
   setIsFormOpen,
   isSystemOnline,
   isReconnecting,
-  prefetchedSidebarColor
 }: any) {
-  const { resolvedTheme } = useTheme();
   const { theme } = useAuth();
   const { teams } = useStaticData();
 
   const {
     sidebarColor,
-    sidebarColors,
-    handleSidebarColorChange,
     handleThemeChange,
     sidebarIsDark,
     sidebarContrastClass,
     sidebarContrastSubtle,
     sidebarBorderClass,
     sidebarStyle,
-  } = useSidebarManager({ userData, currentUser, prefetchedSidebarColor });
+  } = useSidebarManager({ userData });
 
   const [showTeamList, setShowTeamList] = React.useState(false);
-  const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | 'color' | null>(null);
+  const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(activeTab === 'admin' || activeTab === 'custom_dashboard');
 
@@ -715,51 +707,6 @@ function MainApp({
                                     >
                                       <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-brand-accent' : 'text-brand-muted'}`} />
                                       <span>{opt.label}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </m.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    <div className="border-t border-surface-border">
-                      <button
-                        onClick={() => setSidebarAccordion(sidebarAccordion === 'color' ? null : 'color')}
-                        className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Palette className="w-4 h-4 text-brand-accent" />
-                          <span className="text-[11px] font-black uppercase tracking-wider">Cor do Menu</span>
-                          {sidebarColor && (
-                            <span className="w-3.5 h-3.5 rounded-full flex-shrink-0 border border-surface-border" style={{ backgroundColor: sidebarColor }} />
-                          )}
-                        </div>
-                        <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'color' ? 'rotate-180' : ''}`} />
-                      </button>
-                      <AnimatePresence initial={false}>
-                        {sidebarAccordion === 'color' && (
-                          <m.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            className="overflow-hidden"
-                          >
-                            <div className="pb-2 px-2">
-                              <div className="grid grid-cols-5 gap-1.5">
-                                {sidebarColors.map(opt => {
-                                  const isActive = sidebarColor === opt.value;
-                                  return (
-                                    <button
-                                      key={opt.label}
-                                      onClick={() => { handleSidebarColorChange(opt.value); }}
-                                      className={`w-7 h-7 rounded-full ${opt.hex} border-2 hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer ${isActive ? 'border-brand-accent shadow-md scale-105' : 'border-surface-border'}`}
-                                      title={opt.label}
-                                    >
-                                      {isActive && <Check className="w-3.5 h-3.5 text-white drop-shadow" />}
                                     </button>
                                   );
                                 })}

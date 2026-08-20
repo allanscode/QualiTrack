@@ -3,7 +3,6 @@ import { supabase, mockDb, upsertUserPreferences, isMockMode, assertSupabase, in
 import { User, UserRole, ROLE_LABELS, UserPreferences } from '../types';
 import { useTheme, resolveSystemTheme, applyThemeToDOM } from './ThemeProvider';
 import { useSessionManager, lastDbThemeRef, ABSOLUTE_TIMEOUT_MS, IDLE_TIMEOUT_MS, MOCK_SESSION_KEY, LAST_ACTIVITY_KEY } from '../hooks/useSessionManager';
-import { isDarkColor } from '../hooks/useSidebarManager';
 import { toast } from 'sonner';
 
 export type AuthView = 'login' | 'request-access' | 'pending' | 'change-password' | 'forgot-password' | 'setup-password';
@@ -27,8 +26,6 @@ interface AuthContextType {
   setResetEmail: React.Dispatch<React.SetStateAction<string>>;
   isExistingRequest: boolean;
   setIsExistingRequest: React.Dispatch<React.SetStateAction<boolean>>;
-  prefetchedSidebarColor: string;
-  setPrefetchedSidebarColor: React.Dispatch<React.SetStateAction<string>>;
   activeTab: 'dashboard' | 'monitorias' | 'admin' | 'custom_dashboard';
   setActiveTab: React.Dispatch<React.SetStateAction<'dashboard' | 'monitorias' | 'admin' | 'custom_dashboard'>>;
   handleLogin: (e: React.FormEvent) => Promise<void>;
@@ -47,11 +44,6 @@ interface AuthContextType {
   setIsFormOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isSidebarOpen: boolean;
   setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  sidebarColor: string;
-  setSidebarColor: React.Dispatch<React.SetStateAction<string>>;
-  sidebarContrastClass: string;
-  sidebarContrastSubtle: string;
-  sidebarIsDark: boolean;
   theme: ReturnType<typeof useTheme>['theme'];
   setTheme: ReturnType<typeof useTheme>['setTheme'];
   loadingPreferences: boolean;
@@ -81,7 +73,7 @@ const enrichUserWithTeamIds = async (dbUser: any): Promise<any> => {
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userData, setUserData] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +85,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const currentUserRef = useRef<any>(null);
   const appReadyRef = useRef(false);
   
-  const [prefetchedSidebarColor, setPrefetchedSidebarColor] = useState('');
 
   // Keep refs in sync with state for use in callbacks without re-subscriptions
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
@@ -136,19 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isSystemOnline, setIsSystemOnline] = useState(true);
   const [isReconnecting, setIsReconnecting] = useState(false);
 
-  const [sidebarColor, setSidebarColor] = useState('');
-  const [sidebarContrastClass, setSidebarContrastClass] = useState('');
-  const [sidebarContrastSubtle, setSidebarContrastSubtle] = useState('');
-  const [sidebarIsDark, setSidebarIsDark] = useState(false);
   const [loadingPreferences, setLoadingPreferences] = useState(false);
-
-  // --- Update sidebar contrast derived values when color or theme changes ---
-  useEffect(() => {
-    const isDark = isDarkColor(sidebarColor, resolvedTheme);
-    setSidebarIsDark(isDark);
-    setSidebarContrastClass(isDark ? 'text-white' : 'text-slate-900');
-    setSidebarContrastSubtle(isDark ? 'text-white/40' : 'text-slate-700/60');
-  }, [sidebarColor, resolvedTheme]);
 
   // --- Sync activeTab with localStorage and URL hash ---
   useEffect(() => {
@@ -184,13 +163,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoadingPreferences(true);
     try {
       let themeValue: 'light' | 'dark' | 'system' = 'system';
-      let resolvedSidebarColor = '';
-
       if (isMockMode) {
         const { data: prefRows } = await mockDb.get('user_preferences');
         const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
         themeValue = (myPref?.preferences?.theme as 'light' | 'dark' | 'system') || 'system';
-        resolvedSidebarColor = myPref?.preferences?.sidebar_color || '';
       } else {
         const sb = supabase ?? assertSupabase();
         const { data: prefData } = await sb
@@ -199,7 +175,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq('user_id', user.id)
           .single();
         themeValue = (prefData?.preferences?.theme as 'light' | 'dark' | 'system') || 'system';
-        resolvedSidebarColor = prefData?.preferences?.sidebar_color || '';
       }
 
       // Save literal theme (including 'system') to localStorage
@@ -209,10 +184,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Apply resolved theme to DOM immediately
       const resolved = themeValue === 'system' ? resolveSystemTheme() : themeValue;
       applyThemeToDOM(resolved);
-      setPrefetchedSidebarColor(resolvedSidebarColor);
-      if (user.email) {
-        localStorage.setItem(`qualitrack_sidebar_color_${user.email}`, resolvedSidebarColor);
-      }
       setAppReady(true);
 
       // Minimum loading time to avoid flash (500ms)
@@ -466,7 +437,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           clearTimeout(initializationTimeout);
           return;
         }
-        // Don't reset theme/sidebar_color preferences on logout
+        // Theme preference remains stored per user.
         // They are per-user preferences and should persist across sessions
         setAppReady(false);
         setCurrentUser(null);
@@ -559,13 +530,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const { data: prefRows } = await mockDb.get('user_preferences');
           const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
           const themeValue: 'light' | 'dark' | 'system' = (myPref?.preferences?.theme as 'light' | 'dark' | 'system') || 'system';
-          const resolvedSidebarColor: string = myPref?.preferences?.sidebar_color || '';
           localStorage.setItem('qualitrack_theme', themeValue);
           setTheme(themeValue);
           const resolved = themeValue === 'system' ? resolveSystemTheme() : themeValue;
           applyThemeToDOM(resolved);
-          setPrefetchedSidebarColor(resolvedSidebarColor);
-          localStorage.setItem(`qualitrack_sidebar_color_${user.email}`, resolvedSidebarColor);
           setAppReady(true);
 
           const enriched = await enrichUserWithTeamIds(user);
@@ -634,14 +602,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // --- handleLogout ---
   const handleLogout = useCallback(async (options?: { silent?: boolean; message?: string }) => {
-    // Don't reset theme/sidebar_color preferences on logout
-    // They are per-user preferences and should persist across sessions
-    // Only save current preferences to DB before logout if needed
-    if (userData?.id) {
-      // Preferences are already saved immediately on change via useSidebarManager
-      // No need to save again here
-    }
-    
     setAppReady(false);
     setCurrentUser(null);
     setUserData(null);
@@ -649,7 +609,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('qualitrack_active_tab');
     window.location.hash = 'dashboard';
     setAuthView('login');
-    setPrefetchedSidebarColor('');
     setCredentials({ email: '', password: '' });
     setShowIdleWarning(false);
     sessionStartTimeRef.current = null;
@@ -812,8 +771,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setResetEmail,
       isExistingRequest,
       setIsExistingRequest,
-      prefetchedSidebarColor,
-      setPrefetchedSidebarColor,
       activeTab,
       setActiveTab,
       handleLogin,
@@ -832,11 +789,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsFormOpen,
       isSidebarOpen,
       setIsSidebarOpen,
-      sidebarColor,
-      setSidebarColor,
-      sidebarContrastClass,
-      sidebarContrastSubtle,
-      sidebarIsDark,
       theme,
       setTheme,
       loadingPreferences,
