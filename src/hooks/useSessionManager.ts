@@ -188,7 +188,7 @@ export function useSessionManager(opts: SessionManagerOptions) {
       setAppReady(false);
       localStorage.removeItem(MOCK_SESSION_KEY);
       localStorage.removeItem(LAST_ACTIVITY_KEY);
-      // Don't reset theme/sidebar_color preferences on force logout
+      // Theme preference remains stored per user.
       lastDbThemeRef.current = null;
       prevUserIdRef.current = null;
       if (!isMockMode && supabase) {
