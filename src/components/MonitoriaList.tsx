@@ -756,7 +756,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                   </div>
                 )}
 
-                {(actionModal.type === 'aprovar' || actionModal.type === 'reabrir' || actionModal.type === 'contestar' || actionModal.type === 'escalar' || actionModal.type === 'excluir' || actionModal.type === 'solicitar_reavaliacao' || actionModal.type === 'manter' || actionModal.type === 'recusar_agente') && (
+                {(actionModal.type === 'aprovar' || actionModal.type === 'aceitar' || actionModal.type === 'reabrir' || actionModal.type === 'contestar' || actionModal.type === 'escalar' || actionModal.type === 'excluir' || actionModal.type === 'solicitar_reavaliacao' || actionModal.type === 'manter' || actionModal.type === 'recusar_agente') && (
                   <div className="mb-6">
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 block">Justificativa / Motivo</label>
                     <textarea
