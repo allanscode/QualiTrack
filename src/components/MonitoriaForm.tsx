@@ -333,21 +333,39 @@ export default function MonitoriaForm({
                   <CustomSelect
                     value={header.evaluated_id}
                     onChange={val => {
-                      if (header.team_id && val && val !== header.evaluated_id) {
-                        const newAgent = agents.find(a => a.id === val);
-                        if (newAgent && !newAgent.team_ids?.includes(header.team_id)) {
-                          toast.info('Remova a equipe antes de trocar o agente.');
-                          return;
+                      if (!val) {
+                        setHeader(prev => ({...prev, evaluated_id: '', team_id: ''}));
+                        return;
+                      }
+                      const selectedAgent = agents.find(a => a.id === val);
+                      let autoTeamId = header.team_id;
+                      if (selectedAgent) {
+                        const agentTeams = selectedAgent.team_ids?.length
+                          ? selectedAgent.team_ids
+                          : (selectedAgent.primary_team_id ? [selectedAgent.primary_team_id] : []);
+
+                        if (agentTeams.length === 1) {
+                          autoTeamId = agentTeams[0];
+                        } else if (selectedAgent.primary_team_id && agentTeams.includes(selectedAgent.primary_team_id)) {
+                          autoTeamId = selectedAgent.primary_team_id;
+                        } else if (!header.team_id && agentTeams.length > 0) {
+                          autoTeamId = agentTeams[0];
+                        } else if (header.team_id && agentTeams.length > 0 && !agentTeams.includes(header.team_id)) {
+                          autoTeamId = agentTeams[0];
                         }
                       }
-                      setHeader(prev => ({...prev, evaluated_id: val, ...(val === '' ? { team_id: '' } : {})}));
+                      setHeader(prev => ({...prev, evaluated_id: val, team_id: autoTeamId}));
                     }}
                     options={[
                       { value: '', label: 'Selecione o agente...' },
                       ...agents
                         .filter(a => {
                           if (!header.team_id) return true;
-                          return a.team_ids && a.team_ids.includes(header.team_id);
+                          const agentTeams = a.team_ids?.length
+                            ? a.team_ids
+                            : (a.primary_team_id ? [a.primary_team_id] : []);
+                          if (!agentTeams || agentTeams.length === 0) return true;
+                          return agentTeams.includes(header.team_id);
                         })
                         .map(a => ({ value: a.id, label: a.name }))
                     ]}
@@ -361,14 +379,21 @@ export default function MonitoriaForm({
                   <CustomSelect
                     value={header.team_id}
                     onChange={val => {
-                      if (header.evaluated_id && val && val !== header.team_id) {
+                      if (!val) {
+                        setHeader(prev => ({...prev, team_id: ''}));
+                        return;
+                      }
+                      if (header.evaluated_id) {
                         const currentAgent = agents.find(a => a.id === header.evaluated_id);
-                        if (currentAgent && !currentAgent.team_ids?.includes(val)) {
-                          toast.info('Remova o agente antes de trocar a equipe.');
+                        const agentTeams = currentAgent?.team_ids?.length
+                          ? currentAgent.team_ids
+                          : (currentAgent?.primary_team_id ? [currentAgent.primary_team_id] : []);
+                        if (agentTeams.length > 0 && !agentTeams.includes(val)) {
+                          toast.info('Remova o agente antes de trocar para uma equipe diferente.');
                           return;
                         }
                       }
-                      setHeader(prev => ({...prev, team_id: val, ...(val === '' ? { evaluated_id: '' } : {})}));
+                      setHeader(prev => ({...prev, team_id: val}));
                     }}
                     options={[
                       { value: '', label: 'Selecione a equipe...' },
@@ -376,7 +401,12 @@ export default function MonitoriaForm({
                         .filter(t => {
                           if (!header.evaluated_id) return true;
                           const agent = agents.find(a => a.id === header.evaluated_id);
-                          return agent?.team_ids?.includes(t.id);
+                          const agentTeams = agent?.team_ids?.length
+                            ? agent.team_ids
+                            : (agent?.primary_team_id ? [agent.primary_team_id] : []);
+                          // Se o agente ainda não tiver equipes vinculadas no cadastro, exibe todas as equipes disponíveis
+                          if (!agentTeams || agentTeams.length === 0) return true;
+                          return agentTeams.includes(t.id);
                         })
                         .map(t => ({ value: t.id, label: t.name }))
                     ]}
