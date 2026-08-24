@@ -197,3 +197,59 @@ export interface HelpdeskSubmission {
   created_by?: string;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------
+// Filas de Triagem e Auditoria Inteligente (CSAT Negativas, Proativas e Positivas)
+// ---------------------------------------------------------------------
+
+export type AuditingQueueType = 'negativas' | 'proativas' | 'positivas';
+
+export interface AuditingQueueTicket {
+  ticket_id: string;
+  subject: string;
+  requester_name?: string;
+  agent_name?: string;
+  agent_email?: string;
+  agent_id?: string;
+  team_id?: string;
+  csat_status: 'bad' | 'good' | 'unrated' | 'offered';
+  csat_comment?: string;
+  channel?: string;
+  ticket_date: string;
+  status: string;
+  url?: string;
+  already_audited?: boolean;
+}
+
+export interface AgentQueueSummary {
+  agent_id: string;
+  agent_name: string;
+  agent_email: string;
+  team_name?: string;
+  team_id?: string;
+  total_audits_month: number;
+  ai_audits_month: number;
+  last_audited_at?: string;
+  days_since_last_audit: number;
+  priority_score: number;
+}
+
+export interface TicketCommentMessage {
+  id: number;
+  author_name: string;
+  author_role: 'agent' | 'end_user' | 'system';
+  created_at: string;
+  body: string;
+  is_public: boolean;
+}
+
+export interface AIEvaluationResult {
+  score: number;
+  summary: string;
+  strengths: string[];
+  improvements: string[];
+  suggested_answers: Record<string, 'SIM' | 'NAO' | 'NA'>;
+  suggested_observations: Record<string, string>;
+  suggested_critical_errors: Record<string, boolean>;
+}
+

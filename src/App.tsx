@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -17,6 +17,7 @@ import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
 import { ThemeProvider, useTheme, resolveSystemTheme, applyThemeToDOM, type Theme } from './providers/ThemeProvider';
 import { AuthProvider, useAuth } from './providers/AuthProvider';
 import { useSidebarManager } from './hooks/useSidebarManager';
+import { useMonitoriaData } from './hooks/useMonitoriaData';
 
 // Components
 const DashboardMain = React.lazy(() => import('./components/dashboard/DashboardMain'));
@@ -24,6 +25,7 @@ const MonitoriaList = React.lazy(() => import('./components/MonitoriaList'));
 const MonitoriaForm = React.lazy(() => import('./components/MonitoriaForm'));
 const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
 const CustomDashboardManagement = React.lazy(() => import('./components/CustomDashboardManagement'));
+const AuditingQueueView = React.lazy(() => import('./components/AuditingQueueView'));
 
 export default function App() {
   return (
@@ -373,7 +375,26 @@ function MainApp({
   isReconnecting,
 }: any) {
   const { theme } = useAuth();
-  const { teams } = useStaticData();
+  const { users, teams, forms } = useStaticData();
+  const { monitorias } = useMonitoriaData(userData, activeTab);
+  const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
+
+  const handleStartAuditFromQueue = (prefill: any) => {
+    setFormPrefillData({
+      ticket_id: prefill.ticket_id,
+      evaluated_id: prefill.evaluated_id,
+      team_id: prefill.team_id,
+      channel: prefill.channel,
+      satisfaction_result: prefill.satisfaction_result,
+      ...(prefill.aiEvaluation ? {
+        answers: prefill.aiEvaluation.suggested_answers,
+        question_observations: prefill.aiEvaluation.suggested_observations,
+        selected_critical_errors: Object.keys(prefill.aiEvaluation.suggested_critical_errors).filter(k => prefill.aiEvaluation.suggested_critical_errors[k]),
+        evaluator_note: prefill.aiEvaluation.summary
+      } : {})
+    });
+    setIsFormOpen(true);
+  };
 
   const {
     sidebarColor,
@@ -455,9 +476,10 @@ function MainApp({
         {isFormOpen && (
           <MonitoriaForm
             user={userData}
-            onCancel={() => setIsFormOpen(false)}
+            initialData={formPrefillData}
+            onCancel={() => { setIsFormOpen(false); setFormPrefillData(undefined); }}
             // O id da monitoria salva não é usado aqui; a lista recarrega ao trocar de aba.
-            onSaved={() => { setIsFormOpen(false); setActiveTab('monitorias'); }}
+            onSaved={() => { setIsFormOpen(false); setFormPrefillData(undefined); setActiveTab('monitorias'); }}
           />
         )}
       </AnimatePresence>
@@ -502,6 +524,9 @@ function MainApp({
         <nav className="flex-1 px-3 space-y-1 py-4">
           <NavItem isDark={sidebarIsDark} icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
           <NavItem isDark={sidebarIsDark} icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
+          {userData?.role !== 'suporte' && (
+            <NavItem isDark={sidebarIsDark} icon={<Layers className="w-5 h-5" />} label="Filas de Triagem" active={activeTab === 'filas'} onClick={() => setActiveTab('filas')} isOpen={sidebarTextVisible} />
+          )}
           {userData?.role === 'admin' && (
             <div className="space-y-1">
               <button
@@ -804,6 +829,17 @@ function MainApp({
             {activeTab === 'monitorias' && (
               <div className="animate-fade-in">
                 <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} activeTab={activeTab} />
+              </div>
+            )}
+            {activeTab === 'filas' && (
+              <div className="animate-fade-in">
+                <AuditingQueueView
+                  agents={users.filter(u => u.role === 'suporte' && u.active !== false)}
+                  teams={teams}
+                  forms={forms}
+                  monitorias={monitorias}
+                  onStartAudit={handleStartAuditFromQueue}
+                />
               </div>
             )}
             {userData?.role === 'admin' && (
