@@ -26,12 +26,24 @@ function isHoliday(date: Date, config: BusinessHoursConfig): boolean {
   return config.holidays.includes(`${day}/${month}`);
 }
 
-function isBusinessDay(date: Date, config: BusinessHoursConfig): boolean {
+export function isBusinessDay(date: Date, config: BusinessHoursConfig): boolean {
   if (!config) return date.getDay() >= 1 && date.getDay() <= 5;
   const dow = date.getDay();
   const days = config.days || [1, 2, 3, 4, 5];
   if (days.length === 0) return dow >= 1 && dow <= 5 && !isHoliday(date, config);
   return days.includes(dow) && !isHoliday(date, config);
+}
+
+export function isWithinBusinessHours(date: Date, config: BusinessHoursConfig = DEFAULT_CONFIG): boolean {
+  if (!isBusinessDay(date, config)) return false;
+  const { h: startH, m: startM } = parseTime(config?.start || '08:00');
+  const { h: endH, m: endM } = parseTime(config?.end || '17:00');
+
+  const currentMin = date.getHours() * 60 + date.getMinutes();
+  const startMin = startH * 60 + startM;
+  const endMin = endH * 60 + endM;
+
+  return currentMin >= startMin && currentMin < endMin;
 }
 
 function snapToBusinessHours(date: Date, config: BusinessHoursConfig = DEFAULT_CONFIG): Date {
