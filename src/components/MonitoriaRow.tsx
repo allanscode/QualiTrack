@@ -19,7 +19,8 @@ import {
   History,
   ChevronUp,
   ChevronDown,
-  Search
+  Search,
+  ExternalLink
 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { motion } from 'motion/react';
@@ -86,7 +87,21 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
               <div className="flex items-center gap-2 mb-0.5">
                 <span className="text-[10px] font-black text-brand-muted/70 uppercase tracking-widest">#{m.display_id || m.id.slice(0,4)}</span>
                 <span className="text-brand-muted/30">•</span>
-                <span className="font-mono text-xs font-black text-brand-primary tracking-tight">{m.ticket_id}</span>
+                {m.ticket_id ? (
+                  <a
+                    href={`https://webposto.zendesk.com/agent/tickets/${m.ticket_id.trim()}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 font-mono text-xs font-black text-brand-primary hover:text-brand-highlight hover:underline tracking-tight transition-colors group/ticket"
+                    title={`Abrir ticket #${m.ticket_id} no Zendesk`}
+                  >
+                    <span>{m.ticket_id}</span>
+                    <ExternalLink className="w-2.5 h-2.5 opacity-40 group-hover/ticket:opacity-100 transition-opacity" />
+                  </a>
+                ) : (
+                  <span className="font-mono text-xs font-black text-brand-muted/50 tracking-tight">S/N</span>
+                )}
               </div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-brand-muted uppercase tracking-tight flex-wrap">
                 <span className="flex items-center gap-1"><UserIcon className="w-3 h-3 text-brand-highlight" />{getName(m.evaluated_id, false, m.evaluated_name)}</span>

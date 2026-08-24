@@ -20,7 +20,8 @@ import {
   History,
   Target,
   Lock,
-  Send
+  Send,
+  ExternalLink
 } from 'lucide-react';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
@@ -416,7 +417,21 @@ export default function MonitoriaForm({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Número do Ticket *</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Número do Ticket *</label>
+                    {header.ticket_id?.trim() && (
+                      <a
+                        href={`https://webposto.zendesk.com/agent/tickets/${header.ticket_id.trim()}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] font-black text-brand-highlight hover:underline uppercase tracking-wider"
+                        title={`Abrir ticket #${header.ticket_id} no Zendesk`}
+                      >
+                        <span>Abrir no Zendesk</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
                   <div className="relative">
                     <Hash className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted/50" />
                     <input
