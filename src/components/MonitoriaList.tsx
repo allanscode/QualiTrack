@@ -185,6 +185,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
         user={user}
         initialData={viewingMonitoria}
         onCancel={() => setViewingMonitoria(null)}
+        // O id da monitoria salva não é usado aqui; a lista é recarregada do zero.
         onSaved={() => { setViewingMonitoria(null); load(); }}
       />
     );

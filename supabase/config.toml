@@ -1,4 +1,13 @@
 
+# verify_jwt declarado explicitamente: esta função publica comentários em
+# tickets reais assinados pelo perfil da Qualidade. Ela também confere o papel
+# do chamador internamente (ver index.ts), mas exigir o JWT na borda impede que
+# qualquer requisição anônima sequer alcance esse código.
+[functions.helpdesk-publish-evaluation]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/helpdesk-publish-evaluation/index.ts"
+
 [functions.admin-create-user]
 enabled = true
 verify_jwt = true

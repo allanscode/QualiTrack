@@ -24,7 +24,10 @@ interface SaveHookDeps {
   dissatisfactionFields: DissatisfactionField[];
   clientFieldsToShow: DissatisfactionField[];
   qualityFieldsToShow: DissatisfactionField[];
-  onSaved: () => void;
+  // Recebe o id da monitoria salva (criada ou atualizada), para que quem
+  // chamou possa, por exemplo, abrir o preview de envio ao Zendesk sem
+  // precisar buscar o registro de novo.
+  onSaved: (monitoriaId: string) => void;
 }
 
 export function useMonitoriaSave(deps: SaveHookDeps) {
@@ -167,21 +170,36 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           applied_config: deps.qualityConfig as unknown as Record<string, unknown>,
         };
 
+        let savedId: string;
         if (!supabase) {
-          if (deps.initialData?.id) await mockDb.update('monitorias', deps.initialData.id, payload);
-          else await mockDb.insert('monitorias', payload);
+          if (deps.initialData?.id) {
+            await mockDb.update('monitorias', deps.initialData.id, payload);
+            savedId = deps.initialData.id;
+          } else {
+            const { data, error } = await mockDb.insert('monitorias', payload);
+            if (error) throw error;
+            savedId = data.id;
+          }
         } else {
           // O erro precisa ser verificado: supabase-js NAO lanca excecao em
           // falha de query, devolve { error }. Sem checar, uma falha passava
           // direto para o toast de sucesso e a monitoria simplesmente nunca
           // existia — foi assim que 9 colunas ausentes ficaram invisiveis.
-          const { error } = deps.initialData?.id
-            ? await supabase.from('monitorias').update(payload).eq('id', deps.initialData.id)
-            : await supabase.from('monitorias').insert([payload]);
-          if (error) throw error;
+          if (deps.initialData?.id) {
+            const { error } = await supabase.from('monitorias').update(payload).eq('id', deps.initialData.id);
+            if (error) throw error;
+            savedId = deps.initialData.id;
+          } else {
+            // O insert precisa devolver o id da linha criada: quem chamou
+            // (MonitoriaForm) usa esse id para abrir o preview de envio ao
+            // Zendesk logo em seguida, e a Edge Function lê os dados pelo id.
+            const { data, error } = await supabase.from('monitorias').insert([payload]).select('id').single();
+            if (error) throw error;
+            savedId = data.id;
+          }
         }
         toast.success('Monitoria salva com sucesso!');
-        deps.onSaved();
+        deps.onSaved(savedId);
       } catch (e: any) {
         console.error('[Monitoria] Falha ao salvar:', e);
         toast.error(e?.message

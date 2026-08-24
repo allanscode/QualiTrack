@@ -165,3 +165,35 @@ export interface DissatisfactionField {
   created_at: string;
   form_id?: string;
 }
+
+// ---------------------------------------------------------------------
+// Integração com helpdesk (Fase 1: Zendesk, mas os tipos aqui são
+// deliberadamente neutros — nenhum provider específico deve vazar para a
+// UI. Ver SPEC-integracao-helpdesk.md: "Tipos de domínio neutros, nunca
+// tipos da API do provider vazando para a UI".
+// ---------------------------------------------------------------------
+
+/** Provider de helpdesk configurado no backend. Hoje só 'zendesk' existe. */
+export type HelpdeskProvider = string;
+
+/** Resultado da avaliação, no vocabulário neutro usado pela Edge Function. */
+export type EvaluationOutcome = 'positiva' | 'negativa';
+
+/** Retorno da Edge Function `helpdesk-publish-evaluation`, em dry_run ou não. */
+export type PublishResult =
+  | { success: true; preview_html: string; ticket_id: string; external_comment_id?: string }
+  | { success: false; error: string; stage: 'auth' | 'not_found' | 'provider' | 'validation' };
+
+/** Linha da tabela `helpdesk_submissions` — histórico de tentativas de envio. */
+export interface HelpdeskSubmission {
+  id: string;
+  monitoria_id: string;
+  provider: HelpdeskProvider;
+  external_ticket_id: string;
+  outcome: EvaluationOutcome;
+  status: 'sent' | 'failed';
+  external_comment_id?: string;
+  error_message?: string;
+  created_by?: string;
+  created_at: string;
+}

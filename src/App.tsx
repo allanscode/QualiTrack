@@ -456,6 +456,7 @@ function MainApp({
           <MonitoriaForm
             user={userData}
             onCancel={() => setIsFormOpen(false)}
+            // O id da monitoria salva não é usado aqui; a lista recarrega ao trocar de aba.
             onSaved={() => { setIsFormOpen(false); setActiveTab('monitorias'); }}
           />
         )}

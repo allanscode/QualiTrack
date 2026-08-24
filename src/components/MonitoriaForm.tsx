@@ -19,7 +19,8 @@ import {
   AlertTriangle,
   History,
   Target,
-  Lock
+  Lock,
+  Send
 } from 'lucide-react';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
@@ -33,8 +34,22 @@ import Badge from './ui/Badge';
 import Select from './ui/Select';
 import CustomSelect from './ui/CustomSelect';
 import CustomDatepicker from './ui/CustomDatepicker';
+import HelpdeskSendModal from './HelpdeskSendModal';
+import { EvaluationOutcome, MonitoriaStatus } from '../types';
 
 const CHANNELS = ['Chat', 'Email', 'Telefone', 'WhatsApp'] as const;
+
+// Estados considerados "concluídos" para fins de envio ao helpdesk — a
+// monitoria já tem um veredito final, mesmo que tenha passado por
+// contestação. Estados intermediários (pendente_revisao, em_contestacao,
+// aguardando_gestor_*, reavaliacao_solicitada) ainda podem mudar de
+// resultado, então não fazem sentido enviar ainda.
+const HELPDESK_ELIGIBLE_STATUSES: MonitoriaStatus[] = [
+  'concluida',
+  'contestacao_aceita',
+  'contestacao_negada',
+  'finalizada_alterada',
+];
 
 export default function MonitoriaForm({
   user,
@@ -44,7 +59,7 @@ export default function MonitoriaForm({
 }: {
   user: User | null;
   onCancel: () => void;
-  onSaved: () => void;
+  onSaved: (monitoriaId: string) => void;
   initialData?: Monitoria;
 }) {
   const { resolvedTheme } = useTheme();
@@ -168,6 +183,38 @@ export default function MonitoriaForm({
     return () => clearTimeout(timer);
   }, [header.ticket_id, isViewOnly, initialData?.id]);
 
+  // Envio ao Zendesk: só faz sentido para monitorias com veredito final e
+  // com ticket_id preenchido (a Edge Function exige um ticket numérico).
+  //
+  // O modal pode abrir de duas formas: manualmente (botão "Enviar ao
+  // Zendesk" na visualização de uma monitoria já concluída) ou
+  // automaticamente logo após "Finalizar Monitoria". `fromConclusion`
+  // distingue as duas para o HelpdeskSendModal ajustar os textos, e também
+  // decide o que fazer quando o modal fecha: no fluxo manual só fecha o
+  // modal; no fluxo de conclusão, fechar o modal precisa também avisar o
+  // componente pai (via onSaved) para fechar o formulário — é por isso que
+  // o modal é mantido montado dentro do MonitoriaForm até esse momento, em
+  // vez de o form fechar (e desmontar o modal) assim que o save termina.
+  const [helpdeskModal, setHelpdeskModal] = useState<{ monitoriaId: string; fromConclusion: boolean } | null>(null);
+  const canSendToHelpdesk = isViewOnly
+    && !!initialData?.status
+    && HELPDESK_ELIGIBLE_STATUSES.includes(initialData.status)
+    && !!header.ticket_id?.trim();
+  // Sugestão inicial do preview: Invalidado quando há erro crítico marcado,
+  // Válido caso contrário. O auditor pode trocar livremente no modal.
+  const suggestedOutcome: EvaluationOutcome =
+    (initialData?.selected_critical_errors?.length ?? 0) > 0 ? 'negativa' : 'positiva';
+
+  const handleHelpdeskModalClose = () => {
+    const wasFromConclusion = helpdeskModal?.fromConclusion;
+    const savedMonitoriaId = helpdeskModal?.monitoriaId;
+    setHelpdeskModal(null);
+    // Só agora — com o modal já fechado — o formulário é liberado para
+    // fechar. Se chamássemos onSaved antes, o componente pai desmontaria o
+    // MonitoriaForm (e o modal, seu filho) antes do auditor ver o preview.
+    if (wasFromConclusion && savedMonitoriaId) onSaved(savedMonitoriaId);
+  };
+
   const { isPending, validateStep, handleSave } = useMonitoriaSave({
     user,
     initialData,
@@ -188,7 +235,23 @@ export default function MonitoriaForm({
     dissatisfactionFields,
     clientFieldsToShow,
     qualityFieldsToShow,
-    onSaved,
+    onSaved: (savedMonitoriaId: string) => {
+      // Envio automático só faz sentido para a conclusão de uma avaliação
+      // pelo auditor: em edição administrativa ou reavaliação, o comentário
+      // já foi publicado antes e reenviar duplicaria o comentário no ticket
+      // real do cliente — esses fluxos continuam só com o botão manual.
+      const ticketIdTrimmed = header.ticket_id?.trim() || '';
+      const shouldAutoSend = !isMockMode
+        && /^\d+$/.test(ticketIdTrimmed)
+        && !isAdminEdit
+        && !isReevaluating;
+
+      if (shouldAutoSend) {
+        setHelpdeskModal({ monitoriaId: savedMonitoriaId, fromConclusion: true });
+      } else {
+        onSaved(savedMonitoriaId);
+      }
+    },
   });
 
   return (
@@ -725,14 +788,35 @@ export default function MonitoriaForm({
               >
                 {isViewOnly ? 'Próximo' : 'Continuar'}
               </Button>
+            ) : isViewOnly ? (
+              canSendToHelpdesk && (
+                <button
+                  type="button"
+                  onClick={() => initialData && setHelpdeskModal({ monitoriaId: initialData.id, fromConclusion: false })}
+                  className="action-primary group inline-flex items-center justify-center gap-2 px-8 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 active:scale-[0.98]"
+                >
+                  <Send className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
+                  Enviar ao Zendesk
+                </button>
+              )
             ) : (
-              <Button onClick={handleSave} disabled={isPending || isViewOnly} variant="primary" className="px-12" icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}>
+              <Button onClick={handleSave} disabled={isPending} variant="primary" className="px-12" icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}>
                 {isPending ? 'Processando...' : 'Finalizar Monitoria'}
               </Button>
             )}
           </div>
         </div>
       </m.div>
+
+      {helpdeskModal && (
+        <HelpdeskSendModal
+          monitoriaId={helpdeskModal.monitoriaId}
+          ticketId={header.ticket_id}
+          suggestedOutcome={suggestedOutcome}
+          fromConclusion={helpdeskModal.fromConclusion}
+          onClose={handleHelpdeskModalClose}
+        />
+      )}
     </div>
   );
 }
