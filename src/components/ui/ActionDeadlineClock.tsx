@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getRemainingBusinessSeconds } from '../../lib/businessHours';
-import { Clock } from 'lucide-react';
+import { getRemainingBusinessSeconds, isWithinBusinessHours } from '../../lib/businessHours';
+import { Clock, PauseCircle } from 'lucide-react';
 import { useQualityConfig } from '../../lib/useQualityConfig';
 
 interface ActionDeadlineClockProps {
@@ -13,6 +13,7 @@ export default function ActionDeadlineClock({ actionDeadlineAt, status }: Action
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isLate, setIsLate] = useState(false);
   const [isWarning, setIsWarning] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
   const isFinalStatus = [
     'concluida',
@@ -32,9 +33,13 @@ export default function ActionDeadlineClock({ actionDeadlineAt, status }: Action
         if (diffMs <= 0) {
           setIsLate(true);
           setIsWarning(true);
+          setIsPaused(false);
           setTimeLeft('00:00:00');
         } else {
           setIsLate(false);
+          const inBusinessHours = isWithinBusinessHours(now, qualityConfig.businessHours);
+          setIsPaused(!inBusinessHours);
+
           const businessSeconds = getRemainingBusinessSeconds(now, deadline, qualityConfig.businessHours);
           setIsWarning(businessSeconds < 24 * 3600);
 
@@ -56,9 +61,13 @@ export default function ActionDeadlineClock({ actionDeadlineAt, status }: Action
 
   if (isFinalStatus || !actionDeadlineAt) return null;
 
+  const tooltipText = actionDeadlineAt
+    ? `Prazo Limite: ${new Date(actionDeadlineAt).toLocaleString('pt-BR')}${isPaused ? ` (Pausado fora do expediente: ${qualityConfig.businessHours?.start || '08:00'} às ${qualityConfig.businessHours?.end || '17:00'})` : ''}`
+    : undefined;
+
   return (
     <div
-      title={actionDeadlineAt ? `Prazo Limite: ${new Date(actionDeadlineAt).toLocaleString('pt-BR')}` : undefined}
+      title={tooltipText}
       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 font-mono text-[10px] font-black tabular-nums transition-all shadow-sm ${
       isLate
         ? 'bg-functional-error/10 border-functional-error/20 text-functional-error animate-pulse'
@@ -71,10 +80,13 @@ export default function ActionDeadlineClock({ actionDeadlineAt, status }: Action
         ? 'bg-functional-error animate-ping'
         : isWarning
         ? 'bg-functional-warning'
+        : isPaused
+        ? 'bg-brand-muted opacity-60'
         : 'bg-functional-success'
       }`} />
-      <Clock className="w-3.5 h-3.5 opacity-70" />
-      <span>Prazo: {timeLeft || '--:--:--'}</span>
+      {isPaused ? <PauseCircle className="w-3.5 h-3.5 opacity-80 text-brand-muted" /> : <Clock className="w-3.5 h-3.5 opacity-70" />}
+      <span>Prazo: {timeLeft || '--:--:--'}{isPaused ? ' (Pausado)' : ''}</span>
     </div>
   );
 }
+
