@@ -141,6 +141,19 @@ body {
   color: var(--color-brand-primary);
 }
 
+/* A aplicação é um app shell: a raiz ocupa exatamente a altura da janela
+   (h-screen + overflow-hidden em App.tsx) e todo o scroll acontece DENTRO
+   do painel de conteúdo. Sem fixar html/body/#root aqui, qualquer coisa
+   que ultrapasse 100vh — uma barra de rolagem horizontal, um portal de
+   toast, um elemento posicionado — dá ao body um scroll próprio, e o
+   usuário rola para além do painel encontrando só o fundo da página. */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* ── Scrollbar ── */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -293,6 +306,16 @@ select {
 .dark .bg-icon-highlight { background-color: #35161A; }
 .dark .bg-icon-accent { background-color: #35161A; }
 .dark .bg-icon-primary { background-color: #203252; }
+
+/* O Edge injeta um botão próprio de revelar senha (e um "x" de limpar)
+   dentro de todo input[type="password"]. Como a aplicação já tem o seu
+   próprio botão de olho (Eye/EyeOff em App.tsx), o nativo aparecia como um
+   segundo ícone duplicado. Só afeta Edge/IE — nos demais navegadores estes
+   pseudo-elementos não existem e a regra é inerte. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
 
 /* ── Universal SaaS Input & Textarea Standards (Light & Dark Mode) ── */
 input[type="text"],
