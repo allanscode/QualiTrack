@@ -108,8 +108,23 @@ const QUALITY_MANAGER_ID = 'user-quality-manager-id';
 
 const FORM_ID = 'form-suporte-geral';
 
+// Senha única dos usuários de demonstração do Mock Mode.
+//
+// O Mock Mode só existe quando VITE_SUPABASE_URL está ausente: não há banco,
+// não há dado real e tudo vive no localStorage do próprio navegador. Sem esta
+// senha o login era impossível — o AuthProvider compara
+// `u.password === credentials.password` e nenhum usuário do seed tinha o campo,
+// então a comparação era sempre `undefined === '...'`.
+//
+// `MockSeedUser` mantém `password` fora do tipo `User` de propósito: senha não
+// pertence ao domínio da aplicação e nunca deve trafegar no objeto do usuário
+// autenticado fora daqui.
+const MOCK_PASSWORD = 'demo1234';
+
+type MockSeedUser = User & { password: string };
+
 const INITIAL_DATA: {
-  users: User[];
+  users: MockSeedUser[];
   user_teams: UserTeam[];
   forms: EvaluationForm[];
   teams: Team[];
@@ -126,6 +141,7 @@ const INITIAL_DATA: {
       id: ADMIN_ID,
       name: 'Administrador QualidadeWP',
       email: 'qualidade@webposto.com.br',
+      password: MOCK_PASSWORD,
       role: 'admin',
       team_ids: [],
       active: true,
@@ -135,6 +151,7 @@ const INITIAL_DATA: {
       id: AGENT_ID,
       name: 'João Suporte (Auditado)',
       email: 'suporte@teste.com',
+      password: MOCK_PASSWORD,
       role: 'suporte',
       team_ids: ['team-alpha'],
       primary_team_id: 'team-alpha',
@@ -145,6 +162,7 @@ const INITIAL_DATA: {
       id: EVALUATOR_ID,
       name: 'Maria Auditora',
       email: 'auditor@teste.com',
+      password: MOCK_PASSWORD,
       role: 'qualidade',
       team_ids: [],
       active: true,
@@ -154,6 +172,7 @@ const INITIAL_DATA: {
       id: SUPPORT_MANAGER_ID,
       name: 'Carlos Gestor Suporte',
       email: 'gestor.suporte@teste.com',
+      password: MOCK_PASSWORD,
       role: 'gestor_suporte',
       team_ids: ['team-alpha'],
       primary_team_id: 'team-alpha',
@@ -164,6 +183,7 @@ const INITIAL_DATA: {
       id: QUALITY_MANAGER_ID,
       name: 'Ana Gestora Qualidade',
       email: 'gestor.qualidade@teste.com',
+      password: MOCK_PASSWORD,
       role: 'gestor_qualidade',
       team_ids: [],
       active: true,
@@ -339,11 +359,17 @@ if (typeof window !== 'undefined') {
     if (!existing) {
       localStorage.setItem(`${DB_PREFIX}${key}`, JSON.stringify(INITIAL_DATA[key]));
     } else if (key === 'users') {
-      const users = JSON.parse(existing) as User[];
+      const users = JSON.parse(existing) as MockSeedUser[];
       INITIAL_DATA.users.forEach((defaultUser) => {
-        const exists = users.some((u) => u.email === defaultUser.email);
-        if (!exists) {
+        const existente = users.find((u) => u.email === defaultUser.email);
+        if (!existente) {
           users.push(defaultUser);
+        } else if (!existente.password) {
+          // Repara seeds gravados antes de os usuários de demonstração
+          // terem senha. Sem isto, quem já abriu o Mock Mode alguma vez
+          // ficaria permanentemente sem conseguir entrar: o seed só era
+          // aplicado a usuários inexistentes, nunca aos já salvos.
+          existente.password = defaultUser.password;
         }
       });
       localStorage.setItem(`${DB_PREFIX}users`, JSON.stringify(users));
