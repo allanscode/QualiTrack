@@ -21,12 +21,14 @@ import {
   Target,
   Lock,
   Send,
-  ExternalLink
+  ExternalLink,
+  UserPlus
 } from 'lucide-react';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import { toast } from 'sonner';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
+import { resolveManualAgent, lookupTicketAgent, TicketAgentLookup } from '../lib/helpdeskQueue';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import Card from './ui/Card';
@@ -76,6 +78,16 @@ export default function MonitoriaForm({
 
   const shouldReduceMotion = useReducedMotion();
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Popup de cadastro rápido de agente do helpdesk ainda não formalizado
+  // no QualiTrack (conta provisória por e-mail — ver lib/helpdeskQueue).
+  const [newAgentModalOpen, setNewAgentModalOpen] = useState(false);
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentEmail, setNewAgentEmail] = useState('');
+  const [creatingAgent, setCreatingAgent] = useState(false);
+  // Preview do agente encontrado no Zendesk pelo número do ticket, quando
+  // ele ainda não tem conta no QualiTrack (ver efeito de lookup abaixo).
+  const [unregisteredAgentPreview, setUnregisteredAgentPreview] = useState<TicketAgentLookup | null>(null);
 
   // Card do score encolhe ao rolar para baixo na etapa de avaliação, para
   // ocupar menos espaço e não poluir a tela enquanto se responde as perguntas.
@@ -187,6 +199,45 @@ export default function MonitoriaForm({
     return () => clearTimeout(timer);
   }, [header.ticket_id, isViewOnly, initialData?.id]);
 
+  // Ao digitar o número do ticket manualmente (fora da Central de Filas),
+  // busca no Zendesk quem é o atendente responsável e já preenche o campo
+  // de Agente — mesmo que ele ainda não tenha conta no QualiTrack, caso em
+  // que mostramos um aviso com asterisco em vez do id (que não existe).
+  const lastLookedUpTicketRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isViewOnly || isReevaluating) return;
+    const ticketId = header.ticket_id?.trim();
+    if (!ticketId || !/^\d+$/.test(ticketId)) {
+      lastLookedUpTicketRef.current = null;
+      setUnregisteredAgentPreview(null);
+      return;
+    }
+    if (lastLookedUpTicketRef.current === ticketId) return;
+    // Já tem um agente selecionado manualmente — não sobrescreve.
+    if (header.evaluated_id) return;
+
+    const timer = setTimeout(async () => {
+      lastLookedUpTicketRef.current = ticketId;
+      const found = await lookupTicketAgent(ticketId);
+      if (!found || header.evaluated_id) return;
+
+      if (found.existing_id) {
+        // Agente já cadastrado — preenche a ficha automaticamente, igual já
+        // acontece vindo da Central de Filas.
+        setHeader(prev => prev.evaluated_id ? prev : ({
+          ...prev,
+          evaluated_id: found.existing_id!,
+          team_id: prev.team_id || found.existing_team_id || prev.team_id,
+        }));
+        setUnregisteredAgentPreview(null);
+      } else {
+        setUnregisteredAgentPreview(found);
+      }
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [header.ticket_id, header.evaluated_id, isViewOnly, isReevaluating]);
+
   // Envio ao Zendesk: só faz sentido para monitorias com veredito final e
   // com ticket_id preenchido (a Edge Function exige um ticket numérico).
   //
@@ -257,6 +308,35 @@ export default function MonitoriaForm({
       }
     },
   });
+
+  // Cadastro rápido de agente do helpdesk que ainda não tem conta no
+  // QualiTrack — cria uma conta provisória por e-mail (mesmo mecanismo da
+  // triagem automática) e já seleciona o agente recém-criado na ficha.
+  const handleCreateAgent = async () => {
+    if (!newAgentName.trim() || !newAgentEmail.trim()) {
+      toast.error('Preencha nome e e-mail do agente.');
+      return;
+    }
+    setCreatingAgent(true);
+    try {
+      const agent = await resolveManualAgent(newAgentEmail.trim(), newAgentName.trim(), header.team_id || undefined);
+      toast.success(`Agente "${newAgentName.trim()}" cadastrado — já pode ser selecionado.`);
+      setHeader(prev => ({
+        ...prev,
+        evaluated_id: agent.id,
+        team_id: agent.team_id || prev.team_id,
+      }));
+      setNewAgentModalOpen(false);
+      setNewAgentName('');
+      setNewAgentEmail('');
+      staticData.refreshAll();
+    } catch (e: any) {
+      console.error('Erro ao cadastrar agente:', e);
+      toast.error(e?.message || 'Falha ao cadastrar o agente.');
+    } finally {
+      setCreatingAgent(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 overflow-y-auto">
@@ -333,7 +413,25 @@ export default function MonitoriaForm({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Agente de Atendimento *</label>
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Agente de Atendimento *</label>
+                    {!isViewOnly && !isReevaluating && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (unregisteredAgentPreview) {
+                            setNewAgentName(unregisteredAgentPreview.name || '');
+                            setNewAgentEmail(unregisteredAgentPreview.email || '');
+                          }
+                          setNewAgentModalOpen(true);
+                        }}
+                        className="flex items-center gap-1 text-[10px] font-black text-brand-highlight hover:underline"
+                      >
+                        <UserPlus className="w-3 h-3" />
+                        <span>Agente não cadastrado?</span>
+                      </button>
+                    )}
+                  </div>
                   <CustomSelect
                     value={header.evaluated_id}
                     onChange={val => {
@@ -376,6 +474,13 @@ export default function MonitoriaForm({
                     className="w-full"
                     disabled={isViewOnly || isReevaluating}
                   />
+                  {unregisteredAgentPreview && !header.evaluated_id && (
+                    <p className="text-[10px] font-bold text-functional-warning ml-1">
+                      * {unregisteredAgentPreview.name} ({unregisteredAgentPreview.email}) — atendente do
+                      Zendesk deste ticket, ainda não cadastrado no QualiTrack. Clique em
+                      "Agente não cadastrado?" acima para cadastrar.
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -864,6 +969,60 @@ export default function MonitoriaForm({
           fromConclusion={helpdeskModal.fromConclusion}
           onClose={handleHelpdeskModalClose}
         />
+      )}
+
+      {newAgentModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => !creatingAgent && setNewAgentModalOpen(false)}
+        >
+          <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-md">
+            <Card className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-brand-primary">Cadastrar Agente do Helpdesk</h3>
+                <Button variant="ghost" size="sm" onClick={() => setNewAgentModalOpen(false)} disabled={creatingAgent}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-[11px] font-semibold text-brand-muted">
+                Para um atendente do Zendesk que ainda não tem conta formal no QualiTrack. Cria um registro
+                provisório vinculado ao e-mail — quando ele fizer o onboarding com o mesmo e-mail, o histórico
+                é herdado automaticamente pela conta definitiva.
+              </p>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome *</label>
+                <input
+                  type="text"
+                  value={newAgentName}
+                  onChange={e => setNewAgentName(e.target.value)}
+                  placeholder="Nome completo do agente"
+                  disabled={creatingAgent}
+                  className="w-full px-3 py-2 rounded-xl border border-surface-border bg-surface-subtle text-sm font-semibold"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">E-mail *</label>
+                <input
+                  type="email"
+                  value={newAgentEmail}
+                  onChange={e => setNewAgentEmail(e.target.value)}
+                  placeholder="agente@empresa.com.br"
+                  disabled={creatingAgent}
+                  className="w-full px-3 py-2 rounded-xl border border-surface-border bg-surface-subtle text-sm font-semibold"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button variant="ghost" size="sm" onClick={() => setNewAgentModalOpen(false)} disabled={creatingAgent}>
+                  Cancelar
+                </Button>
+                <Button variant="primary" size="sm" onClick={handleCreateAgent} disabled={creatingAgent} className="flex items-center gap-1.5">
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>{creatingAgent ? 'Cadastrando...' : 'Cadastrar e Selecionar'}</span>
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
       )}
     </div>
   );
