@@ -23,7 +23,7 @@ const NEGATIVE_VIEW_ID = Deno.env.get('HELPDESK_NEGATIVE_VIEW_ID') || '';
 const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '';
 
 const RequestSchema = z.object({
-  action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai']),
+  action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai', 'resolve_agent']),
   queue_type: z.enum(['negativas', 'proativas', 'positivas']).optional(),
   ticket_id: z.string().optional(),
   form_criteria: z.any().optional(),
@@ -38,6 +38,11 @@ const RequestSchema = z.object({
   // da IA). undefined = comportamento antigo (usa todos os ativos, para não
   // quebrar chamadas antigas); [] = avaliar sem nenhum manual.
   guideline_ids: z.array(z.string()).optional(),
+  // action: 'resolve_agent' — cadastro manual de um agente do helpdesk que
+  // ainda não tem conta no QualiTrack, direto na ficha de monitoria.
+  agent_email: z.string().email().optional(),
+  agent_name: z.string().optional(),
+  team_id: z.string().optional(),
 });
 
 function jsonResponse(body: any, status: number): Response {
@@ -62,7 +67,10 @@ async function resolveOrCreateAgent(
   name: string | undefined,
   externalId: string | number | undefined,
   sourceSystem: string,
-  teamName: string | undefined
+  teamName: string | undefined,
+  // Quando o chamador já sabe o team_id exato (ex.: monitor selecionou a
+  // equipe na própria ficha), pula o match por nome e usa direto.
+  explicitTeamId?: string
 ): Promise<{ id?: string; team_id?: string } | null> {
   if (!email) return null;
   const normalizedEmail = email.trim().toLowerCase();
@@ -80,9 +88,10 @@ async function resolveOrCreateAgent(
     return { id: existing.id as string, team_id: existing.primary_team_id as string | undefined };
   }
 
-  // Tenta casar a equipe pelo nome do grupo/time do helpdesk (best-effort).
-  let teamId: string | undefined;
-  if (teamName) {
+  // Tenta casar a equipe pelo nome do grupo/time do helpdesk (best-effort),
+  // a menos que o chamador já tenha passado o team_id explicitamente.
+  let teamId: string | undefined = explicitTeamId;
+  if (!teamId && teamName) {
     const { data: team } = await supabase
       .from('teams')
       .select('id')
@@ -162,6 +171,12 @@ serve(async (req) => {
       return await handleEvaluateAI(parseResult.data, supabase);
     }
 
+    // 4. Cadastro manual de agente ainda não existente no QualiTrack, feito
+    // direto na ficha de monitoria (não depende do Zendesk).
+    if (action === 'resolve_agent') {
+      return await handleResolveAgent(parseResult.data, supabase, user.id);
+    }
+
     const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
     const email = Deno.env.get('ZENDESK_EMAIL');
     const apiToken = Deno.env.get('ZENDESK_API_TOKEN');
@@ -193,18 +208,37 @@ serve(async (req) => {
         : '';
 
       if (viewId) {
-        const viewUrl = `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups`;
-        const response = await fetch(viewUrl, { headers: zendeskHeaders });
+        // A view pode ter mais tickets do que cabem numa única página (o
+        // padrão do Zendesk é 100 por página) — segue a paginação por cursor
+        // (meta.has_more / links.next) até esgotar, senão a fila mostra só
+        // uma fração dos tickets reais da view.
+        results = [];
+        const allUsers: any[] = [];
+        const allGroups: any[] = [];
+        let nextUrl: string | null =
+          `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups&page[size]=100`;
+        let pageCount = 0;
+        const MAX_PAGES = 50; // trava de segurança (até 5.000 tickets)
 
-        if (!response.ok) {
-          const errText = await response.text().catch(() => '');
-          throw new Error(`Zendesk Views API falhou (${response.status}): ${errText}`);
+        while (nextUrl && pageCount < MAX_PAGES) {
+          const response = await fetch(nextUrl, { headers: zendeskHeaders });
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            throw new Error(`Zendesk Views API falhou (${response.status}): ${errText}`);
+          }
+
+          const viewData = await response.json();
+          results.push(...(viewData.tickets || []));
+          allUsers.push(...(viewData.users || []));
+          allGroups.push(...(viewData.groups || []));
+
+          nextUrl = viewData.meta?.has_more ? (viewData.links?.next || null) : null;
+          pageCount++;
         }
 
-        const viewData = await response.json();
-        results = viewData.tickets || [];
-        sideloadedUsers = new Map<number, any>((viewData.users || []).map((u: any) => [u.id, u]));
-        sideloadedGroups = new Map<number, any>((viewData.groups || []).map((g: any) => [g.id, g]));
+        sideloadedUsers = new Map<number, any>(allUsers.map((u: any) => [u.id, u]));
+        sideloadedGroups = new Map<number, any>(allGroups.map((g: any) => [g.id, g]));
       } else {
         let searchQuery = 'type:ticket';
 
@@ -320,6 +354,45 @@ serve(async (req) => {
  * response_format: json_schema para forçar retorno em JSON estrito,
  * alinhado aos critérios da ficha de monitoria enviada pelo front-end.
  */
+/**
+ * Cadastro manual de um agente do helpdesk que ainda não tem conta no
+ * QualiTrack, disparado direto da ficha de monitoria (não só da triagem
+ * automática). Mesma lógica de conta provisória por e-mail — restrito a
+ * quem já pode criar monitoria (senão qualquer usuário autenticado poderia
+ * criar linhas em public.users através dessa função, já que ela roda com
+ * service role e ignora RLS).
+ */
+async function handleResolveAgent(
+  payload: z.infer<typeof RequestSchema>,
+  supabase: ReturnType<typeof createClient>,
+  callerId: string
+): Promise<Response> {
+  const { agent_email, agent_name, team_id } = payload;
+
+  if (!agent_email) {
+    return jsonResponse({ error: 'agent_email é obrigatório' }, 400);
+  }
+
+  const { data: caller } = await supabase
+    .from('users')
+    .select('role, active')
+    .eq('id', callerId)
+    .maybeSingle();
+
+  const allowedRoles = ['admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte'];
+  if (!caller?.active || !allowedRoles.includes(caller.role as string)) {
+    return jsonResponse({ error: 'Sem permissão para cadastrar agentes.' }, 403);
+  }
+
+  const agent = await resolveOrCreateAgent(supabase, agent_email, agent_name, undefined, 'manual', undefined, team_id);
+
+  if (!agent?.id) {
+    return jsonResponse({ error: 'Falha ao cadastrar o agente.' }, 500);
+  }
+
+  return jsonResponse({ success: true, agent }, 200);
+}
+
 async function handleEvaluateAI(
   payload: z.infer<typeof RequestSchema>,
   supabase: ReturnType<typeof createClient>

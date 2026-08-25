@@ -507,25 +507,17 @@ export default function AuditingQueueView({
       {/* Conteúdo da Fila: POSITIVAS (+ IA Copilot) */}
       {activeQueue === 'positivas' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-functional-success/10 border border-functional-success/25 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-functional-success text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-wider text-functional-success">
-                  Fila de Elogios e Avaliação com IA
-                </h3>
-                <p className="text-[11px] font-semibold text-brand-primary/80">
-                  Chamados com CSAT Positivo no Zendesk. A IA lê o diálogo, avalia os critérios operacionais e pré-preenche a monitoria com sugestão de elogios.
-                </p>
-              </div>
+          <div className="p-4 rounded-2xl bg-functional-success/10 border border-functional-success/25 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-functional-success text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Sparkles className="w-5 h-5" />
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Badge variant="success" size="sm" className="font-mono font-black flex items-center gap-1">
-                <Bot className="w-3 h-3" />
-                <span>Máximo de 2 por agente</span>
-              </Badge>
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-wider text-functional-success">
+                Fila de Elogios e Avaliação com IA
+              </h3>
+              <p className="text-[11px] font-semibold text-brand-primary/80">
+                Chamados com CSAT Positivo no Zendesk. A IA lê o diálogo, avalia os critérios operacionais e pré-preenche a monitoria com sugestão de elogios.
+              </p>
             </div>
           </div>
 

@@ -403,3 +403,30 @@ function getMockQueueTickets(type: AuditingQueueType, auditedIds: Set<string>): 
     }
   ];
 }
+
+/**
+ * Cadastra (ou encontra, se o e-mail já existir) um agente do helpdesk
+ * ainda não formalizado no QualiTrack, direto da ficha de monitoria — sem
+ * precisar passar pela triagem automática. Cria uma conta provisória
+ * (papel Atendente de Suporte) que é herdada automaticamente quando o
+ * atendente completar o onboarding formal com o mesmo e-mail.
+ */
+export async function resolveManualAgent(
+  email: string,
+  name: string | undefined,
+  teamId: string | undefined
+): Promise<{ id: string; team_id?: string }> {
+  if (isMockMode || !supabase) {
+    throw new Error('Não é possível cadastrar agentes em modo mock/offline.');
+  }
+
+  const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+    body: { action: 'resolve_agent', agent_email: email, agent_name: name, team_id: teamId }
+  });
+
+  if (error || !data?.agent?.id) {
+    throw new Error(data?.error || error?.message || 'Falha ao cadastrar o agente.');
+  }
+
+  return data.agent as { id: string; team_id?: string };
+}

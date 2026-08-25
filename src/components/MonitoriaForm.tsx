@@ -21,12 +21,14 @@ import {
   Target,
   Lock,
   Send,
-  ExternalLink
+  ExternalLink,
+  UserPlus
 } from 'lucide-react';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import { toast } from 'sonner';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
+import { resolveManualAgent } from '../lib/helpdeskQueue';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import Card from './ui/Card';
@@ -76,6 +78,13 @@ export default function MonitoriaForm({
 
   const shouldReduceMotion = useReducedMotion();
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Popup de cadastro rápido de agente do helpdesk ainda não formalizado
+  // no QualiTrack (conta provisória por e-mail — ver lib/helpdeskQueue).
+  const [newAgentModalOpen, setNewAgentModalOpen] = useState(false);
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentEmail, setNewAgentEmail] = useState('');
+  const [creatingAgent, setCreatingAgent] = useState(false);
 
   // Card do score encolhe ao rolar para baixo na etapa de avaliação, para
   // ocupar menos espaço e não poluir a tela enquanto se responde as perguntas.
@@ -258,6 +267,35 @@ export default function MonitoriaForm({
     },
   });
 
+  // Cadastro rápido de agente do helpdesk que ainda não tem conta no
+  // QualiTrack — cria uma conta provisória por e-mail (mesmo mecanismo da
+  // triagem automática) e já seleciona o agente recém-criado na ficha.
+  const handleCreateAgent = async () => {
+    if (!newAgentName.trim() || !newAgentEmail.trim()) {
+      toast.error('Preencha nome e e-mail do agente.');
+      return;
+    }
+    setCreatingAgent(true);
+    try {
+      const agent = await resolveManualAgent(newAgentEmail.trim(), newAgentName.trim(), header.team_id || undefined);
+      toast.success(`Agente "${newAgentName.trim()}" cadastrado — já pode ser selecionado.`);
+      setHeader(prev => ({
+        ...prev,
+        evaluated_id: agent.id,
+        team_id: agent.team_id || prev.team_id,
+      }));
+      setNewAgentModalOpen(false);
+      setNewAgentName('');
+      setNewAgentEmail('');
+      staticData.refreshAll();
+    } catch (e: any) {
+      console.error('Erro ao cadastrar agente:', e);
+      toast.error(e?.message || 'Falha ao cadastrar o agente.');
+    } finally {
+      setCreatingAgent(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 overflow-y-auto">
       <m.div
@@ -333,7 +371,19 @@ export default function MonitoriaForm({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Agente de Atendimento *</label>
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Agente de Atendimento *</label>
+                    {!isViewOnly && !isReevaluating && (
+                      <button
+                        type="button"
+                        onClick={() => setNewAgentModalOpen(true)}
+                        className="flex items-center gap-1 text-[10px] font-black text-brand-highlight hover:underline"
+                      >
+                        <UserPlus className="w-3 h-3" />
+                        <span>Agente não cadastrado?</span>
+                      </button>
+                    )}
+                  </div>
                   <CustomSelect
                     value={header.evaluated_id}
                     onChange={val => {
@@ -864,6 +914,60 @@ export default function MonitoriaForm({
           fromConclusion={helpdeskModal.fromConclusion}
           onClose={handleHelpdeskModalClose}
         />
+      )}
+
+      {newAgentModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => !creatingAgent && setNewAgentModalOpen(false)}
+        >
+          <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-md">
+            <Card className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-brand-primary">Cadastrar Agente do Helpdesk</h3>
+                <Button variant="ghost" size="sm" onClick={() => setNewAgentModalOpen(false)} disabled={creatingAgent}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-[11px] font-semibold text-brand-muted">
+                Para um atendente do Zendesk que ainda não tem conta formal no QualiTrack. Cria um registro
+                provisório vinculado ao e-mail — quando ele fizer o onboarding com o mesmo e-mail, o histórico
+                é herdado automaticamente pela conta definitiva.
+              </p>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Nome *</label>
+                <input
+                  type="text"
+                  value={newAgentName}
+                  onChange={e => setNewAgentName(e.target.value)}
+                  placeholder="Nome completo do agente"
+                  disabled={creatingAgent}
+                  className="w-full px-3 py-2 rounded-xl border border-surface-border bg-surface-subtle text-sm font-semibold"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">E-mail *</label>
+                <input
+                  type="email"
+                  value={newAgentEmail}
+                  onChange={e => setNewAgentEmail(e.target.value)}
+                  placeholder="agente@empresa.com.br"
+                  disabled={creatingAgent}
+                  className="w-full px-3 py-2 rounded-xl border border-surface-border bg-surface-subtle text-sm font-semibold"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button variant="ghost" size="sm" onClick={() => setNewAgentModalOpen(false)} disabled={creatingAgent}>
+                  Cancelar
+                </Button>
+                <Button variant="primary" size="sm" onClick={handleCreateAgent} disabled={creatingAgent} className="flex items-center gap-1.5">
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>{creatingAgent ? 'Cadastrando...' : 'Cadastrar e Selecionar'}</span>
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
       )}
     </div>
   );
