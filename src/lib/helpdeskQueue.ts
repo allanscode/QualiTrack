@@ -84,28 +84,83 @@ export async function fetchQueueTickets(
     existingMonitorias.map(m => m.ticket_id?.trim()).filter(Boolean)
   );
 
+  let tickets: AuditingQueueTicket[];
+
   if (isMockMode || !supabase) {
-    return getMockQueueTickets(type, auditedTicketIds);
-  }
+    tickets = getMockQueueTickets(type, auditedTicketIds);
+  } else {
+    try {
+      const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+        body: { action: 'fetch_queue', queue_type: type }
+      });
 
-  try {
-    const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
-      body: { action: 'fetch_queue', queue_type: type }
-    });
-
-    if (error || !data?.tickets) {
-      console.warn(`[HelpdeskQueue] Falha ao consultar Edge Function helpdesk-queue (${error?.message}). Usando fallback.`);
-      return getMockQueueTickets(type, auditedTicketIds);
+      if (error || !data?.tickets) {
+        console.warn(`[HelpdeskQueue] Falha ao consultar Edge Function helpdesk-queue (${error?.message}). Usando fallback.`);
+        tickets = getMockQueueTickets(type, auditedTicketIds);
+      } else {
+        tickets = (data.tickets as AuditingQueueTicket[]).map(t => ({
+          ...t,
+          already_audited: auditedTicketIds.has(t.ticket_id.trim())
+        }));
+      }
+    } catch (err) {
+      console.error('[HelpdeskQueue] Erro na requisição:', err);
+      tickets = getMockQueueTickets(type, auditedTicketIds);
     }
-
-    return (data.tickets as AuditingQueueTicket[]).map(t => ({
-      ...t,
-      already_audited: auditedTicketIds.has(t.ticket_id.trim())
-    }));
-  } catch (err) {
-    console.error('[HelpdeskQueue] Erro na requisição:', err);
-    return getMockQueueTickets(type, auditedTicketIds);
   }
+
+  // Fila de Negativas: chamados já validados (macro/tag aplicada no Zendesk,
+  // filtrada na Edge Function) ou que já possuem monitoria registrada no
+  // QualiTrack não devem mais aparecer — a apuração já foi concluída.
+  if (type === 'negativas') {
+    tickets = tickets.filter(t => !t.already_audited);
+  }
+
+  // Fila de Positivas: trava de no máximo 2 avaliações por atendente no mês,
+  // usando o e-mail como chave de identificação agnóstica de plataforma.
+  if (type === 'positivas') {
+    const counts = countPositiveEvaluationsThisMonthByEmail(existingMonitorias, tickets);
+    tickets = tickets.map(t => {
+      const email = t.agent_email?.trim().toLowerCase();
+      const count = email ? (counts[email] || 0) : 0;
+      return { ...t, positive_cap_reached: count >= 2 } as AuditingQueueTicket;
+    });
+  }
+
+  return tickets;
+}
+
+/**
+ * Conta, por e-mail do atendente, quantas monitorias com resultado "Positiva"
+ * já existem no mês corrente. O vínculo é feito por e-mail (não por id
+ * interno), pois o mesmo atendente pode ainda não ter conta formal no
+ * QualiTrack quando a fila é consultada.
+ */
+function countPositiveEvaluationsThisMonthByEmail(
+  monitorias: Monitoria[],
+  tickets: AuditingQueueTicket[]
+): Record<string, number> {
+  const emailByAgentId: Record<string, string> = {};
+  tickets.forEach(t => {
+    if (t.agent_id && t.agent_email) {
+      emailByAgentId[t.agent_id] = t.agent_email.trim().toLowerCase();
+    }
+  });
+
+  const now = new Date();
+  const counts: Record<string, number> = {};
+
+  monitorias.forEach(m => {
+    if (m.satisfaction_result !== 'Positiva' || m.active === false) return;
+    const d = new Date(m.created_at || m.updated_at);
+    if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return;
+
+    const email = emailByAgentId[m.evaluated_id];
+    if (!email) return;
+    counts[email] = (counts[email] || 0) + 1;
+  });
+
+  return counts;
 }
 
 /**
@@ -158,13 +213,50 @@ export async function fetchTicketDialogue(ticketId: string): Promise<TicketComme
 }
 
 /**
- * Avalia o atendimento usando IA (LLM) baseado na ficha de critérios.
+ * Avalia o atendimento usando IA (Google Gemini 2.5 Flash) baseado na ficha
+ * de critérios, transcrição completa do ticket e dados do atendente/canal.
+ * Em modo mock (offline) ou em caso de falha na API, cai no fallback local
+ * para não travar o fluxo de triagem.
  */
 export async function evaluateTicketWithAI(
   ticketId: string,
   form: EvaluationForm,
-  _dialogue?: TicketCommentMessage[]
+  dialogue?: TicketCommentMessage[],
+  agentInfo?: { name?: string; email?: string; team_name?: string; channel?: string }
 ): Promise<AIEvaluationResult> {
+  if (isMockMode || !supabase) {
+    return getFallbackAIEvaluation(ticketId, form);
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+      body: {
+        action: 'evaluate_ai',
+        ticket_id: ticketId,
+        form_criteria: { sections: form.sections },
+        dialogue: dialogue || [],
+        agent_info: agentInfo,
+      }
+    });
+
+    if (error || !data?.result) {
+      console.warn(`[HelpdeskQueue] Falha ao avaliar com Gemini (${error?.message}). Usando fallback local.`);
+      return getFallbackAIEvaluation(ticketId, form);
+    }
+
+    return data.result as AIEvaluationResult;
+  } catch (err) {
+    console.error('[HelpdeskQueue] Erro ao chamar avaliação com IA:', err);
+    return getFallbackAIEvaluation(ticketId, form);
+  }
+}
+
+/**
+ * Fallback local (sem chamada externa) usado em modo mock ou quando a
+ * integração com o Gemini falha/está indisponível — nunca bloqueia a
+ * triagem, mas deixa claro que não é uma avaliação real da IA.
+ */
+function getFallbackAIEvaluation(ticketId: string, form: EvaluationForm): AIEvaluationResult {
   const suggestedAnswers: Record<string, 'SIM' | 'NAO' | 'NA'> = {};
   const suggestedObs: Record<string, string> = {};
   const suggestedCritErrors: Record<string, boolean> = {};
@@ -172,7 +264,7 @@ export async function evaluateTicketWithAI(
   form.sections.forEach(section => {
     section.questions.forEach(q => {
       suggestedAnswers[q.id] = 'SIM';
-      suggestedObs[q.id] = 'Atendimento executado conforme os padrões operacionais.';
+      suggestedObs[q.id] = 'Sugestão automática indisponível (IA offline) — revisar manualmente antes de concluir.';
       if (q.is_critical) {
         suggestedCritErrors[q.id] = false;
       }
@@ -180,14 +272,10 @@ export async function evaluateTicketWithAI(
   });
 
   return {
-    score: 100,
-    summary: `Avaliação automática via IA para o ticket #${ticketId}: O atendente foi cortês, compreendeu o problema com agilidade e forneceu a solução definitiva no primeiro contato.`,
-    strengths: [
-      'Cordialidade e empatia na saudação inicial.',
-      'Diagnóstico correto e assertivo do problema reportado.',
-      'Encerramento positivo confirmando o sucesso da operação com o cliente.'
-    ],
-    improvements: [],
+    score: 0,
+    summary: `Não foi possível obter a avaliação da IA para o ticket #${ticketId} (Gemini indisponível ou em modo offline). Preencha manualmente.`,
+    strengths: [],
+    improvements: ['Avaliação com IA indisponível no momento — revisar o atendimento manualmente.'],
     suggested_answers: suggestedAnswers,
     suggested_observations: suggestedObs,
     suggested_critical_errors: suggestedCritErrors
