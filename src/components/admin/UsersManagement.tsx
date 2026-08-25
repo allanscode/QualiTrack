@@ -130,6 +130,21 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
         const operation = (async () => {
           let userId = editingUser.id;
           if (editingUser.id) {
+            // E-mail muda o login de verdade (auth.users), não só o cadastro
+            // (public.users) — precisa passar pela Edge Function com service
+            // role. Feito ANTES do resto: se falhar (ex.: e-mail já em uso
+            // por outra conta), a operação para aqui sem deixar nome/papel/
+            // equipe já parcialmente salvos com o e-mail errado ainda exibido.
+            const originalEmail = users.find(u => u.id === editingUser.id)?.email?.toLowerCase();
+            if (originalEmail && originalEmail !== emailLower) {
+              const { data: emailData, error: emailFuncError } = await supabase.functions.invoke('admin-update-user-email', {
+                headers: { Authorization: `Bearer ${accessToken}` },
+                body: { id: editingUser.id, email: emailLower }
+              });
+              if (emailFuncError) throw emailFuncError;
+              if (emailData?.success === false) throw new Error(emailData.error || 'Falha ao atualizar e-mail');
+            }
+
             // Ordem importa: user_teams_insert/update/delete autorizam por
             // role de QUEM CHAMA no momento da chamada (admin/gestor_*), não
             // por quem era antes. Se alguém se auto-editar rebaixando o
@@ -425,7 +440,12 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Email</label>
-                  <input type="email" disabled={!!editingUser.id} className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm disabled:opacity-50" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
+                  <input type="email" className="w-full bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-lg py-2 px-3 text-sm font-medium text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600 focus:outline-none focus:ring-0 transition-all shadow-sm" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value.toLowerCase() })} />
+                  {editingUser.id && (
+                    <p className="text-[10px] font-semibold text-brand-muted mt-1">
+                      Alterar o e-mail troca o login da pessoa imediatamente (não precisa de confirmação por e-mail).
+                    </p>
+                  )}
                 </div>
                 <CustomSelect 
                   label="Perfil"

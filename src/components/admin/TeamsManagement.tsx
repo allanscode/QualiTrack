@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { supabase, mockDb } from '../../lib/supabase';
+import { supabase, mockDb, requireAccessToken } from '../../lib/supabase';
 import { User, Team } from '../../types';
 import { 
   Shield, 
@@ -48,6 +48,8 @@ import {
   Hammer,
   HelpCircle,
   Home,
+  RefreshCw,
+  Download,
   Image,
   Inbox,
   Info,
@@ -106,6 +108,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
   const [selectedDrawerTeam, setSelectedDrawerTeam] = useState<Team | null>(null);
   const [selectedUserToAdd, setSelectedUserToAdd] = useState<string>('');
   const [operationLoading, setOperationLoading] = useState(false);
+  const [syncingZendesk, setSyncingZendesk] = useState(false);
   const [isIconDropdownOpen, setIsIconDropdownOpen] = useState(false);
 
   const TEAM_ICONS_LIST = [
@@ -262,6 +265,39 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
     }
   };
 
+  // Importa os grupos do Zendesk como equipes — só cria os que ainda não
+  // existem no QualiTrack (casados por nome), nunca duplica nem sobrescreve
+  // uma equipe já cadastrada.
+  const handleSyncZendeskGroups = async () => {
+    if (!supabase) {
+      toast.error('Sincronização com Zendesk indisponível em modo mock/offline.');
+      return;
+    }
+    setSyncingZendesk(true);
+    try {
+      const accessToken = await requireAccessToken();
+      const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: { action: 'sync_zendesk_groups' }
+      });
+      if (error || data?.success === false) {
+        throw new Error(data?.error || error?.message || 'Falha ao sincronizar grupos do Zendesk');
+      }
+      const created: string[] = data?.created || [];
+      if (created.length === 0) {
+        toast.info('Nenhuma equipe nova — todos os grupos do Zendesk já estão cadastrados.');
+      } else {
+        toast.success(`${created.length} equipe${created.length > 1 ? 's' : ''} criada${created.length > 1 ? 's' : ''} a partir do Zendesk: ${created.join(', ')}`);
+      }
+      loadData();
+    } catch (e: any) {
+      console.error('Erro ao sincronizar grupos do Zendesk:', e);
+      toast.error(e?.message || 'Não foi possível sincronizar os grupos do Zendesk.');
+    } finally {
+      setSyncingZendesk(false);
+    }
+  };
+
   const handleToggleStatus = async (id: string, active: boolean) => {
     if (!active) {
       const linkedUsers = users.filter(u => u.active !== false && u.team_ids?.includes(id));
@@ -366,12 +402,21 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
             />
           </div>
         </div>
-        <Button 
-          onClick={() => { 
-            setEditingTeam({ name: '', sigla: '', description: '', icon: '' }); 
+        <Button
+          variant="ghost"
+          onClick={handleSyncZendeskGroups}
+          disabled={syncingZendesk}
+          icon={syncingZendesk ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          title="Cria uma equipe para cada grupo do Zendesk que ainda não existe no QualiTrack"
+        >
+          {syncingZendesk ? 'SINCRONIZANDO...' : 'IMPORTAR DO ZENDESK'}
+        </Button>
+        <Button
+          onClick={() => {
+            setEditingTeam({ name: '', sigla: '', description: '', icon: '' });
             setIsIconDropdownOpen(false);
-            setIsModalOpen(true); 
-          }} 
+            setIsModalOpen(true);
+          }}
           icon={<Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90" />}
           className="group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200"
         >
