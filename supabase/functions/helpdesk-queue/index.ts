@@ -23,7 +23,7 @@ const NEGATIVE_VIEW_ID = Deno.env.get('HELPDESK_NEGATIVE_VIEW_ID') || '';
 const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '';
 
 const RequestSchema = z.object({
-  action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai', 'resolve_agent', 'lookup_ticket_agent']),
+  action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai', 'resolve_agent', 'lookup_ticket_agent', 'sync_zendesk_groups']),
   queue_type: z.enum(['negativas', 'proativas', 'positivas']).optional(),
   ticket_id: z.string().optional(),
   form_criteria: z.any().optional(),
@@ -230,6 +230,49 @@ serve(async (req) => {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     };
+
+    // 6. Importa os grupos (equipes) do Zendesk como Teams do QualiTrack —
+    // cria só os que ainda não existem (casados por nome, sem duplicar).
+    // Restrito a admin: criar Team usa a mesma regra de RLS de
+    // TeamsManagement (só admin escreve em public.teams), e aqui a Edge
+    // Function usa service role (ignora RLS), então a checagem é manual.
+    if (action === 'sync_zendesk_groups') {
+      if (caller.role !== 'admin') {
+        return jsonResponse({ error: 'Apenas administradores podem sincronizar equipes do Zendesk.' }, 403);
+      }
+
+      const groupsResp = await fetch(`https://${subdomain}.zendesk.com/api/v2/groups.json`, { headers: zendeskHeaders });
+      if (!groupsResp.ok) {
+        const errText = await groupsResp.text().catch(() => '');
+        throw new Error(`Zendesk Groups API falhou (${groupsResp.status}): ${errText}`);
+      }
+      const groupsData = await groupsResp.json();
+      const zendeskGroups: { id: number; name: string }[] = groupsData.groups || [];
+
+      const { data: existingTeams } = await supabase.from('teams').select('name');
+      const existingNames = new Set((existingTeams || []).map((t: any) => (t.name as string).trim().toLowerCase()));
+
+      const created: string[] = [];
+      const skipped: string[] = [];
+
+      for (const g of zendeskGroups) {
+        const name = (g.name || '').trim();
+        if (!name) continue;
+        if (existingNames.has(name.toLowerCase())) {
+          skipped.push(name);
+          continue;
+        }
+        const { error: insertError } = await supabase.from('teams').insert({ name, active: true });
+        if (insertError) {
+          console.error(`[helpdesk-queue] Falha ao criar equipe "${name}":`, insertError.message);
+          continue;
+        }
+        existingNames.add(name.toLowerCase());
+        created.push(name);
+      }
+
+      return jsonResponse({ success: true, created, skipped }, 200);
+    }
 
     // 1. Busca de Fila de Chamados
     if (action === 'fetch_queue') {
