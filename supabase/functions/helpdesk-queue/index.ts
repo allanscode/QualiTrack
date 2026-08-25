@@ -7,11 +7,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Tag aplicada (via macro do Zendesk) quando um chamado negativo já foi
+// apurado/validado pela qualidade. Chamados com essa tag saem da fila.
+// Sem a secret configurada, NÃO filtramos por tag nenhuma — um nome de tag
+// chutado poderia deixar passar negativas que na verdade não foram validadas.
+const VALIDATED_TAG = Deno.env.get('HELPDESK_VALIDATED_TAG') || '';
+
+// ID da view "CSAT Positivas" do Zendesk (Admin Center > Views > abrir a
+// view > o número no final da URL). Quando configurada, a fila de Positivas
+// busca exatamente os tickets dessa view salva, em vez de reconstruir o
+// filtro via Search API — garante paridade 1:1 com o que a equipe já vê
+// dentro do Zendesk.
+const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '';
+
 const RequestSchema = z.object({
   action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai']),
   queue_type: z.enum(['negativas', 'proativas', 'positivas']).optional(),
   ticket_id: z.string().optional(),
   form_criteria: z.any().optional(),
+  dialogue: z.array(z.any()).optional(),
+  agent_info: z.object({
+    name: z.string().optional(),
+    email: z.string().optional(),
+    team_name: z.string().optional(),
+    channel: z.string().optional(),
+  }).optional(),
 });
 
 function jsonResponse(body: any, status: number): Response {
@@ -19,6 +39,72 @@ function jsonResponse(body: any, status: number): Response {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+/**
+ * Garante que exista um usuário QualiTrack correspondente ao e-mail do
+ * atendente vindo do helpdesk. Nunca depende de listas locais fixas: usa
+ * o e-mail como chave universal de correlação e `external_id`/`source_system`
+ * como metadados agnósticos de provider (ver SPEC de mapeamento de agentes).
+ * Se o atendente ainda não existe no QualiTrack, cria uma conta provisória
+ * (sem senha, sem convite) que é herdada automaticamente quando ele concluir
+ * o onboarding formal com o mesmo e-mail (trigger `handle_new_user`).
+ */
+async function resolveOrCreateAgent(
+  supabase: ReturnType<typeof createClient>,
+  email: string | undefined,
+  name: string | undefined,
+  externalId: string | number | undefined,
+  sourceSystem: string,
+  teamName: string | undefined
+): Promise<{ id?: string; team_id?: string } | null> {
+  if (!email) return null;
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const { data: existing } = await supabase
+    .from('users')
+    .select('id, primary_team_id, team_ids')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (existing) {
+    return { id: existing.id as string, team_id: (existing.primary_team_id as string) || (existing.team_ids as string[] | null)?.[0] };
+  }
+
+  // Tenta casar a equipe pelo nome do grupo/time do helpdesk (best-effort).
+  let teamId: string | undefined;
+  if (teamName) {
+    const { data: team } = await supabase
+      .from('teams')
+      .select('id')
+      .ilike('name', teamName)
+      .maybeSingle();
+    teamId = team?.id as string | undefined;
+  }
+
+  const { data: created, error: createError } = await supabase
+    .from('users')
+    .insert({
+      email: normalizedEmail,
+      name: name || normalizedEmail.split('@')[0],
+      role: 'suporte',
+      active: true,
+      must_change_password: false,
+      external_id: externalId != null ? String(externalId) : null,
+      source_system: sourceSystem,
+      is_provisional: true,
+      primary_team_id: teamId || null,
+      team_ids: teamId ? [teamId] : [],
+    })
+    .select('id')
+    .single();
+
+  if (createError) {
+    console.error('[helpdesk-queue] Falha ao criar agente provisório:', createError.message);
+    return teamId ? { team_id: teamId } : null;
+  }
+
+  return { id: created.id as string, team_id: teamId };
 }
 
 serve(async (req) => {
@@ -53,6 +139,11 @@ serve(async (req) => {
 
     const { action, queue_type, ticket_id } = parseResult.data;
 
+    // 3. Avaliação com IA (Google Gemini) — não depende do Zendesk
+    if (action === 'evaluate_ai') {
+      return await handleEvaluateAI(parseResult.data);
+    }
+
     const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
     const email = Deno.env.get('ZENDESK_EMAIL');
     const apiToken = Deno.env.get('ZENDESK_API_TOKEN');
@@ -72,36 +163,80 @@ serve(async (req) => {
 
     // 1. Busca de Fila de Chamados
     if (action === 'fetch_queue') {
-      let searchQuery = 'type:ticket';
+      let results: any[];
+      let sideloadedUsers: Map<number, any>;
+      let sideloadedGroups: Map<number, any>;
 
-      if (queue_type === 'negativas') {
-        searchQuery += ' satisfaction_score:bad satisfaction_score:bad_with_comment';
-      } else if (queue_type === 'positivas') {
-        searchQuery += ' satisfaction_score:good satisfaction_score:good_with_comment';
+      // Positivas: quando a view real do Zendesk está configurada, busca
+      // exatamente os tickets dela (mesma contagem que a equipe vê lá
+      // dentro), em vez de reconstruir o filtro via Search API.
+      if (queue_type === 'positivas' && POSITIVE_VIEW_ID) {
+        const viewUrl = `https://${subdomain}.zendesk.com/api/v2/views/${POSITIVE_VIEW_ID}/tickets.json?include=users,groups`;
+        const response = await fetch(viewUrl, { headers: zendeskHeaders });
+
+        if (!response.ok) {
+          const errText = await response.text().catch(() => '');
+          throw new Error(`Zendesk Views API falhou (${response.status}): ${errText}`);
+        }
+
+        const viewData = await response.json();
+        results = viewData.tickets || [];
+        sideloadedUsers = new Map<number, any>((viewData.users || []).map((u: any) => [u.id, u]));
+        sideloadedGroups = new Map<number, any>((viewData.groups || []).map((g: any) => [g.id, g]));
       } else {
-        // Proativas: tickets resolvidos sem pesquisa ou com pesquisa pendente
-        searchQuery += ' status:solved status:closed';
+        let searchQuery = 'type:ticket';
+
+        if (queue_type === 'negativas') {
+          searchQuery += ' satisfaction_score:bad satisfaction_score:bad_with_comment';
+          // Chamados já apurados/validados pela qualidade (tag aplicada via
+          // macro) saem da fila — só filtra se a tag real estiver configurada.
+          if (VALIDATED_TAG) {
+            searchQuery += ` -tags:${VALIDATED_TAG}`;
+          }
+        } else if (queue_type === 'positivas') {
+          searchQuery += ' satisfaction_score:good satisfaction_score:good_with_comment';
+        } else {
+          // Proativas: tickets resolvidos sem pesquisa ou com pesquisa pendente
+          searchQuery += ' status:solved status:closed';
+        }
+
+        // Sideload de usuários e grupos para resolver o atendente (nome/e-mail)
+        // e a equipe de origem de cada chamado, sem depender de lista local.
+        const searchUrl = `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups`;
+        const response = await fetch(searchUrl, { headers: zendeskHeaders });
+
+        if (!response.ok) {
+          const errText = await response.text().catch(() => '');
+          throw new Error(`Zendesk Search API falhou (${response.status}): ${errText}`);
+        }
+
+        const searchData = await response.json();
+        results = searchData.results || [];
+        sideloadedUsers = new Map<number, any>((searchData.users || []).map((u: any) => [u.id, u]));
+        sideloadedGroups = new Map<number, any>((searchData.groups || []).map((g: any) => [g.id, g]));
       }
 
-      const searchUrl = `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc`;
-      const response = await fetch(searchUrl, { headers: zendeskHeaders });
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        throw new Error(`Zendesk Search API falhou (${response.status}): ${errText}`);
-      }
-
-      const searchData = await response.json();
-      const results = searchData.results || [];
-
-      // Mapeia os tickets para o formato neutro do QualiTrack
-      const mappedTickets = results.map((t: any) => {
+      // Resolve/garante o vínculo do agente no QualiTrack pelo e-mail (chave
+      // universal), criando conta provisória quando necessário.
+      const mappedTickets = await Promise.all(results.map(async (t: any) => {
         let csatStatus: 'bad' | 'good' | 'unrated' = 'unrated';
         if (t.satisfaction_rating?.score === 'bad' || t.satisfaction_rating?.score === 'bad_with_comment') {
           csatStatus = 'bad';
         } else if (t.satisfaction_rating?.score === 'good' || t.satisfaction_rating?.score === 'good_with_comment') {
           csatStatus = 'good';
         }
+
+        const assignee = t.assignee_id ? sideloadedUsers.get(t.assignee_id) : undefined;
+        const group = t.group_id ? sideloadedGroups.get(t.group_id) : undefined;
+
+        const agentLink = await resolveOrCreateAgent(
+          supabase,
+          assignee?.email,
+          assignee?.name,
+          assignee?.id,
+          'zendesk',
+          group?.name
+        );
 
         return {
           ticket_id: String(t.id),
@@ -112,8 +247,12 @@ serve(async (req) => {
           ticket_date: t.created_at || new Date().toISOString(),
           status: t.status || 'solved',
           url: `https://${subdomain}.zendesk.com/agent/tickets/${t.id}`,
+          agent_name: assignee?.name,
+          agent_email: assignee?.email,
+          agent_id: agentLink?.id,
+          team_id: agentLink?.team_id,
         };
-      });
+      }));
 
       return jsonResponse({ success: true, tickets: mappedTickets }, 200);
     }
@@ -152,3 +291,141 @@ serve(async (req) => {
     return jsonResponse({ error: error.message || 'Erro interno do servidor' }, 500);
   }
 });
+
+/**
+ * Avalia um atendimento com o Google Gemini (gemini-2.5-flash, gratuito)
+ * usando responseSchema para forçar retorno em JSON estrito, alinhado aos
+ * critérios da ficha de monitoria enviada pelo front-end.
+ */
+async function handleEvaluateAI(payload: z.infer<typeof RequestSchema>): Promise<Response> {
+  const { ticket_id, form_criteria, dialogue, agent_info } = payload;
+
+  if (!ticket_id || !form_criteria?.sections) {
+    return jsonResponse({ error: 'ticket_id e form_criteria são obrigatórios para evaluate_ai' }, 400);
+  }
+
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
+
+  if (!geminiApiKey) {
+    return jsonResponse({ error: 'GEMINI_API_KEY não configurada no Supabase Secrets' }, 500);
+  }
+
+  // Monta o responseSchema dinamicamente a partir das perguntas da ficha,
+  // garantindo que a IA responda nota/justificativa para cada critério.
+  const questionProperties: Record<string, any> = {};
+  const questionRequired: string[] = [];
+
+  for (const section of form_criteria.sections) {
+    for (const q of section.questions || []) {
+      const props: Record<string, any> = {
+        answer: { type: 'STRING', enum: ['SIM', 'NAO', 'NA'] },
+        justification: { type: 'STRING', description: 'Justificativa citando trecho literal do diálogo.' },
+      };
+      const required = ['answer', 'justification'];
+      if (q.is_critical) {
+        props.critical_error = { type: 'BOOLEAN', description: 'true se o erro crítico ocorreu.' };
+        required.push('critical_error');
+      }
+      questionProperties[q.id] = { type: 'OBJECT', properties: props, required };
+      questionRequired.push(q.id);
+    }
+  }
+
+  const responseSchema = {
+    type: 'OBJECT',
+    properties: {
+      score: { type: 'NUMBER', description: 'Nota geral do atendimento de 0 a 100.' },
+      summary: { type: 'STRING', description: 'Resumo executivo do atendimento.' },
+      strengths: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Pontos fortes observados.' },
+      improvements: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Oportunidades de melhoria.' },
+      answers: { type: 'OBJECT', properties: questionProperties, required: questionRequired },
+    },
+    required: ['score', 'summary', 'strengths', 'improvements', 'answers'],
+  };
+
+  const dialogueText = (dialogue || [])
+    .map((m: any) => `[${m.author_role === 'agent' ? 'ATENDENTE' : m.author_role === 'end_user' ? 'CLIENTE' : 'SISTEMA'}] ${m.author_name || ''}: ${m.body}`)
+    .join('\n');
+
+  const criteriaText = form_criteria.sections
+    .map((s: any) => `Seção "${s.title}":\n${(s.questions || []).map((q: any) => `- [${q.id}] ${q.text}${q.is_critical ? ' (ERRO CRÍTICO)' : ''}`).join('\n')}`)
+    .join('\n\n');
+
+  const prompt = `Você é um analista sênior de qualidade de atendimento ao cliente da WebPosto.
+Avalie o atendimento abaixo com base estritamente na ficha de critérios fornecida.
+
+DADOS DO ATENDIMENTO:
+- Atendente: ${agent_info?.name || 'não informado'}
+- E-mail: ${agent_info?.email || 'não informado'}
+- Equipe: ${agent_info?.team_name || 'não informada'}
+- Canal: ${agent_info?.channel || 'não informado'}
+- Ticket: #${ticket_id}
+
+CRITÉRIOS DA FICHA DE MONITORIA:
+${criteriaText}
+
+TRANSCRIÇÃO COMPLETA DO ATENDIMENTO:
+${dialogueText || '(sem mensagens registradas)'}
+
+Para cada critério, responda SIM, NAO ou NA e justifique citando um trecho literal do diálogo sempre que possível.
+Calcule a nota geral (score de 0 a 100) com base nas respostas. Produza um resumo executivo objetivo, com pontos
+fortes e oportunidades de melhoria concretas, baseadas apenas no que está na transcrição.`;
+
+  try {
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
+    const response = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema,
+          temperature: 0.2,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`Gemini API falhou (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error('Resposta vazia da IA (possível bloqueio de safety filter)');
+    }
+
+    const parsed = JSON.parse(text);
+
+    const suggested_answers: Record<string, string> = {};
+    const suggested_observations: Record<string, string> = {};
+    const suggested_critical_errors: Record<string, boolean> = {};
+
+    for (const [qId, value] of Object.entries<any>(parsed.answers || {})) {
+      suggested_answers[qId] = value.answer;
+      suggested_observations[qId] = value.justification;
+      if (value.critical_error !== undefined) {
+        suggested_critical_errors[qId] = value.critical_error;
+      }
+    }
+
+    return jsonResponse({
+      success: true,
+      result: {
+        score: parsed.score,
+        summary: parsed.summary,
+        strengths: parsed.strengths || [],
+        improvements: parsed.improvements || [],
+        suggested_answers,
+        suggested_observations,
+        suggested_critical_errors,
+      },
+    }, 200);
+  } catch (error: any) {
+    console.error('[helpdesk-queue] Erro na avaliação com Gemini:', error);
+    return jsonResponse({ error: error.message || 'Falha ao avaliar com IA' }, 502);
+  }
+}

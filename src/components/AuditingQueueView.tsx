@@ -121,25 +121,36 @@ export default function AuditingQueueView({
 
   // Ação de avaliar com IA
   const handleEvaluateWithAI = async (ticket: AuditingQueueTicket) => {
+    if (ticket.positive_cap_reached) {
+      toast.warning('Este atendente já atingiu o máximo de 2 avaliações positivas no mês.');
+      return;
+    }
+
     const defaultForm = forms.find(f => f.active !== false) || forms[0];
     if (!defaultForm) {
       toast.error('Nenhum formulário ativo encontrado para avaliação.');
       return;
     }
 
+    // Encontra o agente correspondente pelo e-mail (chave universal) ou nome
+    const matchedAgent = agents.find(a =>
+      (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
+      (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
+    );
+
     setEvaluatingTicketId(ticket.ticket_id);
     try {
       toast.info(`Buscando diálogo e analisando ticket #${ticket.ticket_id} com IA...`);
       const dialogue = await fetchTicketDialogue(ticket.ticket_id);
-      const aiResult = await evaluateTicketWithAI(ticket.ticket_id, defaultForm, dialogue);
+      const teamId = matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0] || ticket.team_id;
+      const aiResult = await evaluateTicketWithAI(ticket.ticket_id, defaultForm, dialogue, {
+        name: matchedAgent?.name || ticket.agent_name,
+        email: matchedAgent?.email || ticket.agent_email,
+        team_name: teamId ? teamsMap[teamId] : undefined,
+        channel: ticket.channel,
+      });
 
       toast.success(`Avaliação da IA gerada com sucesso para o ticket #${ticket.ticket_id}!`);
-
-      // Encontra o agente correspondente pelo nome ou email
-      const matchedAgent = agents.find(a =>
-        (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
-        (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
-      );
 
       onStartAudit({
         ticket_id: ticket.ticket_id,
@@ -468,7 +479,7 @@ export default function AuditingQueueView({
             <div className="flex items-center gap-2 flex-shrink-0">
               <Badge variant="success" size="sm" className="font-mono font-black flex items-center gap-1">
                 <Bot className="w-3 h-3" />
-                <span>Rate Limit: Max 2/agente</span>
+                <span>Máximo de 2 por agente</span>
               </Badge>
             </div>
           </div>
@@ -527,16 +538,24 @@ export default function AuditingQueueView({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      disabled={evaluatingTicketId === ticket.ticket_id}
-                      onClick={() => handleEvaluateWithAI(ticket)}
-                      className="flex items-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold"
-                    >
-                      <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
-                      <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
-                    </Button>
+                    {ticket.positive_cap_reached ? (
+                      <span title="Este atendente já atingiu o máximo de 2 avaliações positivas no mês.">
+                        <Badge variant="warning" size="xs" className="font-bold text-[9px]">
+                          Máximo de 2 por agente atingido
+                        </Badge>
+                      </span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={evaluatingTicketId === ticket.ticket_id}
+                        onClick={() => handleEvaluateWithAI(ticket)}
+                        className="flex items-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold"
+                      >
+                        <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+                        <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>

@@ -24,6 +24,12 @@ export interface User {
   active: boolean;
   must_change_password?: boolean;
   preferences?: UserPreferences;
+  /** Identificador do atendente na plataforma de origem (ex.: id do agente no Zendesk). Agnóstico de provider. */
+  external_id?: string;
+  /** Sistema de origem do vínculo (ex.: "zendesk"). Ausente = conta criada nativamente no QualiTrack. */
+  source_system?: string;
+  /** true = conta criada automaticamente pela triagem a partir do e-mail do atendente, sem onboarding formal. */
+  is_provisional?: boolean;
   created_at: string;
 }
 
@@ -219,6 +225,8 @@ export interface AuditingQueueTicket {
   status: string;
   url?: string;
   already_audited?: boolean;
+  /** true = atendente já atingiu o máximo de 2 avaliações positivas no mês. */
+  positive_cap_reached?: boolean;
 }
 
 export interface AgentQueueSummary {
