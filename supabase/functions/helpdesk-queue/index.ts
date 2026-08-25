@@ -619,16 +619,18 @@ async function handleEvaluateAI(
   }
 
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  // Testado manualmente com o schema real: minimax-m3/m2.7 e dots-studio
-  // simplesmente IGNORAM o json_schema e devolvem 200 OK com campos
-  // inventados (às vezes nem JSON) — mais perigoso que lento, porque
-  // corrompe a ficha em silêncio se não fosse pela validação abaixo.
-  // nemotron-3-super é o único confirmado respeitando o schema à risca
-  // (via grammar constraint nativo da Nvidia) — vai primeiro, mesmo sendo
-  // mais lento (modelo "de raciocínio"). gemma entra como 2ª opção quando
-  // não estiver rate-limited no pool compartilhado; os demais só como
-  // último recurso, protegidos pela validação de formato após o parse.
-  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free,minimax/minimax-m3:free')
+  // Testado manualmente com o schema real (16 critérios): DeepSeek e Gemini
+  // não têm nenhum modelo :free no OpenRouter atualmente — só modelos que
+  // seguem essa cadeia foram confirmados respeitando o json_schema à risca
+  // (via grammar constraint nativo do provedor). minimax-m3/m2.7 e
+  // dots-studio IGNORAM o schema e devolvem 200 OK com campos inventados —
+  // mais perigoso que lento, corrompe a ficha em silêncio se não fosse a
+  // validação após o parse. nemotron-3-ultra (550B) vai primeiro: mesma
+  // confiabilidade do -super, mas ~10x menos tokens de raciocínio pra
+  // chegar na resposta — só é mais sujeito a "sobrecarregado" no pool
+  // compartilhado (modelo grande), por isso o -super continua logo atrás
+  // como fallback comprovado. gemma/minimax só como último recurso.
+  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free,minimax/minimax-m3:free')
     .split(',')
     .map(m => m.trim())
     .filter(Boolean);
