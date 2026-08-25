@@ -10,8 +10,12 @@ export const AI_GUIDELINES_BUCKET = 'ai-guidelines';
  */
 export async function extractPdfText(file: File): Promise<string> {
   const pdfjs = await import('pdfjs-dist');
-  // Worker via CDN oficial do pdfjs, compatível com a versão instalada.
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+  // Worker empacotado localmente pelo Vite (?url vira um asset same-origin)
+  // — o CSP do site restringe worker-src a 'self' e blob:, então um worker
+  // carregado de CDN externo (cdnjs etc.) é bloqueado silenciosamente pelo
+  // navegador, e getDocument() falha com "Falha ao ler o arquivo".
+  const { default: workerUrl } = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
   const buffer = await file.arrayBuffer();
   const doc = await pdfjs.getDocument({ data: buffer }).promise;
