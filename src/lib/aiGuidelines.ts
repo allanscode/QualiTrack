@@ -105,6 +105,22 @@ export async function saveAIGuideline(params: {
   return data as AIEvaluationGuideline;
 }
 
+/**
+ * Edita título e/ou conteúdo de um manual já cadastrado — útil pra ajustar
+ * ou complementar o texto de contexto sem precisar recriar o registro (e
+ * sem precisar reenviar o PDF, que fica como está).
+ */
+export async function updateAIGuideline(id: string, params: { title: string; content: string }): Promise<void> {
+  if (isMockMode || !supabase) {
+    throw new Error('Não é possível editar manuais em modo mock/offline.');
+  }
+  const { error } = await supabase
+    .from('ai_evaluation_guidelines')
+    .update({ title: params.title, content: params.content })
+    .eq('id', id);
+  if (error) throw new Error(`Falha ao editar o manual: ${error.message}`);
+}
+
 export async function toggleAIGuidelineActive(id: string, active: boolean): Promise<void> {
   if (isMockMode || !supabase) return;
   const { error } = await supabase.from('ai_evaluation_guidelines').update({ active }).eq('id', id);

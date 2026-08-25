@@ -43,6 +43,9 @@ const RequestSchema = z.object({
   agent_email: z.string().email().optional(),
   agent_name: z.string().optional(),
   team_id: z.string().optional(),
+  // Campos de classificação do próprio ticket no Zendesk (categoria, motivo
+  // do contato etc.), usados como contexto extra na avaliação com IA.
+  ticket_fields: z.array(z.object({ title: z.string(), value: z.string() })).optional(),
 });
 
 function jsonResponse(body: any, status: number): Response {
@@ -343,7 +346,43 @@ serve(async (req) => {
         is_public: c.public !== false,
       }));
 
-      return jsonResponse({ success: true, comments: mappedComments }, 200);
+      // Campos de classificação preenchidos pelo atendente no próprio
+      // ticket (categoria, motivo do contato, tipificação etc.) — servem
+      // de contexto extra pra IA avaliar, sem preencher nada sozinhos na
+      // ficha. custom_fields do ticket só traz {id, value}; ticket_fields.json
+      // traz o título legível e, pra campos de seleção, o rótulo de cada
+      // opção (o value bruto do ticket é só a "tag" interna, não o texto
+      // que o atendente via na tela).
+      let ticket_fields: { title: string; value: string }[] = [];
+      try {
+        const [ticketResp, fieldsResp] = await Promise.all([
+          fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json`, { headers: zendeskHeaders }),
+          fetch(`https://${subdomain}.zendesk.com/api/v2/ticket_fields.json`, { headers: zendeskHeaders }),
+        ]);
+
+        if (ticketResp.ok && fieldsResp.ok) {
+          const ticketJson = await ticketResp.json();
+          const fieldsJson = await fieldsResp.json();
+          const customFields: { id: number; value: any }[] = ticketJson.ticket?.custom_fields || [];
+          const fieldDefs = new Map<number, any>((fieldsJson.ticket_fields || []).map((f: any) => [f.id, f]));
+
+          ticket_fields = customFields
+            .filter(cf => cf.value !== null && cf.value !== undefined && cf.value !== '')
+            .map(cf => {
+              const def = fieldDefs.get(cf.id);
+              const title = def?.title_in_portal || def?.title || `Campo ${cf.id}`;
+              const option = def?.custom_field_options?.find((o: any) => o.value === cf.value);
+              const value = option?.name || (Array.isArray(cf.value) ? cf.value.join(', ') : String(cf.value));
+              return { title, value };
+            });
+        }
+      } catch (e) {
+        // Campos de classificação são só um bônus de contexto — falha aqui
+        // não deve impedir a avaliação de seguir com a transcrição normal.
+        console.warn('[helpdesk-queue] Falha ao buscar campos de classificação do ticket:', e);
+      }
+
+      return jsonResponse({ success: true, comments: mappedComments, ticket_fields }, 200);
     }
 
     // 5. Busca só o atendente responsável por um ticket digitado manualmente
@@ -450,7 +489,7 @@ async function handleEvaluateAI(
   payload: z.infer<typeof RequestSchema>,
   supabase: ReturnType<typeof createClient>
 ): Promise<Response> {
-  const { ticket_id, form_criteria, dialogue, agent_info, guideline_ids } = payload;
+  const { ticket_id, form_criteria, dialogue, agent_info, guideline_ids, ticket_fields } = payload;
 
   if (!ticket_id || !form_criteria?.sections) {
     return jsonResponse({ error: 'ticket_id e form_criteria são obrigatórios para evaluate_ai' }, 400);
@@ -552,6 +591,10 @@ async function handleEvaluateAI(
   }
   }
 
+  const ticketFieldsText = (ticket_fields || [])
+    .map(f => `- ${f.title}: ${f.value}`)
+    .join('\n');
+
   const prompt = `Você é um analista sênior de qualidade de atendimento ao cliente da WebPosto.
 Avalie o atendimento abaixo com base na ficha de critérios fornecida${guidelinesText ? ' e no manual de padrões de atendimento abaixo' : ''}.
 ${guidelinesText ? `\nMANUAL DE PADRÕES DE ATENDIMENTO (referência normativa da empresa):\n${guidelinesText}\n` : ''}
@@ -561,7 +604,8 @@ DADOS DO ATENDIMENTO:
 - Equipe: ${agent_info?.team_name || 'não informada'}
 - Canal: ${agent_info?.channel || 'não informado'}
 - Ticket: #${ticket_id}
-
+${ticketFieldsText ? `\nCAMPOS DE CLASSIFICAÇÃO PREENCHIDOS PELO ATENDENTE NO TICKET (contexto adicional, use para
+entender categoria/motivo do contato, mas não invente critério novo com base neles):\n${ticketFieldsText}\n` : ''}
 CRITÉRIOS DA FICHA DE MONITORIA:
 ${criteriaText}
 
@@ -569,10 +613,10 @@ TRANSCRIÇÃO COMPLETA DO ATENDIMENTO:
 ${dialogueText || '(sem mensagens registradas)'}
 
 Para cada critério, responda SIM, NAO ou NA e justifique citando um trecho literal do diálogo sempre que possível.
-Use o manual de padrões (quando fornecido) como referência do que é esperado, mas responda SEMPRE aos critérios
-exatos da ficha — nunca invente critérios que não estão nela. Calcule a nota geral (score de 0 a 100) com base nas
-respostas. Produza um resumo executivo objetivo, com pontos fortes e oportunidades de melhoria concretas, baseadas
-apenas no que está na transcrição.`;
+Use o manual de padrões (quando fornecido) e os campos de classificação do ticket (quando fornecidos) como contexto,
+mas responda SEMPRE aos critérios exatos da ficha — nunca invente critérios que não estão nela. Calcule a nota geral
+(score de 0 a 100) com base nas respostas. Produza um resumo executivo objetivo, com pontos fortes e oportunidades
+de melhoria concretas, baseadas apenas no que está na transcrição.`;
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
