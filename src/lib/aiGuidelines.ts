@@ -27,6 +27,20 @@ export async function extractPdfText(file: File): Promise<string> {
   return pages.join('\n\n').trim();
 }
 
+/** Extensões de arquivo de texto puro aceitas além do PDF (lidas via File.text()). */
+export const PLAIN_TEXT_EXTENSIONS = ['.txt', '.md', '.markdown', '.csv'];
+
+export function isPlainTextFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return PLAIN_TEXT_EXTENSIONS.some(ext => name.endsWith(ext))
+    || file.type.startsWith('text/');
+}
+
+/** Lê um arquivo de texto puro (.txt, .md, .csv etc.) diretamente como string. */
+export async function extractPlainText(file: File): Promise<string> {
+  return (await file.text()).trim();
+}
+
 export async function fetchAIGuidelines(): Promise<AIEvaluationGuideline[]> {
   if (isMockMode || !supabase) return [];
 
@@ -61,7 +75,7 @@ export async function saveAIGuideline(params: {
     const path = `${crypto.randomUUID()}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from(AI_GUIDELINES_BUCKET)
-      .upload(path, params.file, { contentType: params.file.type || 'application/pdf' });
+      .upload(path, params.file, { contentType: params.file.type || 'text/plain' });
 
     if (uploadError) {
       throw new Error(`Falha ao enviar o PDF: ${uploadError.message}`);

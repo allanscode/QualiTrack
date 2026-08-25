@@ -34,6 +34,10 @@ const RequestSchema = z.object({
     team_name: z.string().optional(),
     channel: z.string().optional(),
   }).optional(),
+  // Manuais escolhidos pelo monitor para essa avaliação (ver Admin > Manual
+  // da IA). undefined = comportamento antigo (usa todos os ativos, para não
+  // quebrar chamadas antigas); [] = avaliar sem nenhum manual.
+  guideline_ids: z.array(z.string()).optional(),
 });
 
 function jsonResponse(body: any, status: number): Response {
@@ -320,7 +324,7 @@ async function handleEvaluateAI(
   payload: z.infer<typeof RequestSchema>,
   supabase: ReturnType<typeof createClient>
 ): Promise<Response> {
-  const { ticket_id, form_criteria, dialogue, agent_info } = payload;
+  const { ticket_id, form_criteria, dialogue, agent_info, guideline_ids } = payload;
 
   if (!ticket_id || !form_criteria?.sections) {
     return jsonResponse({ error: 'ticket_id e form_criteria são obrigatórios para evaluate_ai' }, 400);
@@ -380,12 +384,22 @@ async function handleEvaluateAI(
   // Limitado em tamanho para não estourar o contexto do modelo gratuito.
   const MAX_GUIDELINES_CHARS = 6000;
   let guidelinesText = '';
+  // guideline_ids: undefined = comportamento antigo (todos os ativos, para
+  // não quebrar chamadas de código anterior); [] = o monitor escolheu
+  // avaliar sem nenhum manual — economiza tokens não buscando nada.
+  if (guideline_ids === undefined || guideline_ids.length > 0) {
   try {
-    const { data: guidelines } = await supabase
+    let query = supabase
       .from('ai_evaluation_guidelines')
       .select('title, content')
       .eq('active', true)
       .order('created_at', { ascending: false });
+
+    if (guideline_ids !== undefined) {
+      query = query.in('id', guideline_ids);
+    }
+
+    const { data: guidelines } = await query;
 
     if (guidelines?.length) {
       const combined = guidelines
@@ -397,6 +411,7 @@ async function handleEvaluateAI(
     }
   } catch (e) {
     console.warn('[helpdesk-queue] Falha ao carregar manuais de avaliação (seguindo sem eles):', e);
+  }
   }
 
   const prompt = `Você é um analista sênior de qualidade de atendimento ao cliente da WebPosto.
