@@ -270,6 +270,25 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
                       </div>
                     )}
 
+                    {/* Aprovação direta pelo Gestor de Qualidade, mesmo sem contestação —
+                        antes só o Gestor de Atendimento podia aprovar uma monitoria "limpa"
+                        em pendente_revisao; a Qualidade só entrava depois de uma contestação
+                        ou escalonamento. Isso deixava o Gestor de Qualidade sem como agilizar
+                        a conclusão quando quisesse, mesmo tendo visibilidade completa. */}
+                    {user?.role === 'gestor_qualidade' && m.status === 'pendente_revisao' && (
+                      <div className="flex gap-3 items-center flex-wrap justify-end">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
+                          icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                          className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                        >
+                          Aprovar
+                        </Button>
+                      </div>
+                    )}
+
                     {user?.role === 'gestor_suporte' && m.status === 'aguardando_gestor_suporte' && (
                       <div className="flex gap-3 items-center flex-wrap justify-end">
                         <Button

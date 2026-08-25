@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useTransition } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   AuditingQueueType,
   AuditingQueueTicket,
@@ -71,7 +71,6 @@ export default function AuditingQueueView({
   const [tickets, setTickets] = useState<AuditingQueueTicket[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgentFilter, setSelectedAgentFilter] = useState('');
-  const [, startTransition] = useTransition();
 
   // Estado para modal/visualização rápida de IA
   const [evaluatingTicketId, setEvaluatingTicketId] = useState<string | null>(null);
@@ -268,7 +267,7 @@ export default function AuditingQueueView({
       {/* Tabs de Navegação das Filas */}
       <div className="flex items-center gap-2 p-1 bg-surface-subtle/60 rounded-2xl border border-surface-border w-fit max-w-full overflow-x-auto">
         <button
-          onClick={() => startTransition(() => setActiveQueue('negativas'))}
+          onClick={() => setActiveQueue('negativas')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
             activeQueue === 'negativas'
               ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
@@ -285,7 +284,7 @@ export default function AuditingQueueView({
         </button>
 
         <button
-          onClick={() => startTransition(() => setActiveQueue('proativas'))}
+          onClick={() => setActiveQueue('proativas')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
             activeQueue === 'proativas'
               ? 'bg-brand-highlight/15 text-brand-highlight border border-brand-highlight/30 shadow-sm'
@@ -297,7 +296,7 @@ export default function AuditingQueueView({
         </button>
 
         <button
-          onClick={() => startTransition(() => setActiveQueue('positivas'))}
+          onClick={() => setActiveQueue('positivas')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
             activeQueue === 'positivas'
               ? 'bg-functional-success/15 text-functional-success border border-functional-success/30 shadow-sm'
