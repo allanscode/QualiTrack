@@ -457,14 +457,16 @@ async function handleEvaluateAI(
   }
 
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  // Modelos gratuitos do pool compartilhado do OpenRouter ficam
-  // temporariamente rate-limited com frequência (ex.: gemma-4-31b-it:free
-  // retornando 429). Em vez de depender de um único modelo — o que gerava o
-  // fallback local "IA indisponível" com bastante frequência — usamos o
-  // roteamento automático do OpenRouter: `models` (lista, não `model`)
-  // tenta o primeiro e cai pro próximo sozinho se o de cima estiver
-  // indisponível, sem round-trip extra do nosso lado.
-  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'minimax/minimax-m3:free,google/gemma-4-31b-it:free,nvidia/nemotron-3-super-120b-a12b:free')
+  // Testado manualmente com o schema real: minimax-m3/m2.7 e dots-studio
+  // simplesmente IGNORAM o json_schema e devolvem 200 OK com campos
+  // inventados (às vezes nem JSON) — mais perigoso que lento, porque
+  // corrompe a ficha em silêncio se não fosse pela validação abaixo.
+  // nemotron-3-super é o único confirmado respeitando o schema à risca
+  // (via grammar constraint nativo da Nvidia) — vai primeiro, mesmo sendo
+  // mais lento (modelo "de raciocínio"). gemma entra como 2ª opção quando
+  // não estiver rate-limited no pool compartilhado; os demais só como
+  // último recurso, protegidos pela validação de formato após o parse.
+  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free,minimax/minimax-m3:free')
     .split(',')
     .map(m => m.trim())
     .filter(Boolean);
@@ -610,6 +612,16 @@ apenas no que está na transcrição.`;
     text = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
 
     const parsed = JSON.parse(text);
+
+    // Nem todo modelo gratuito do pool compartilhado respeita de fato o
+    // json_schema (alguns simplesmente ignoram e inventam campos próprios,
+    // mesmo retornando 200 OK) — sem essa checagem, uma resposta fora do
+    // formato passaria batido e corromperia a ficha silenciosamente com
+    // campos vazios/undefined em vez de cair no fallback local.
+    const hasAllQuestions = questionRequired.every(qId => parsed.answers?.[qId]?.answer);
+    if (typeof parsed.score !== 'number' || typeof parsed.summary !== 'string' || !hasAllQuestions) {
+      throw new Error('Resposta da IA fora do formato esperado (modelo não seguiu o schema).');
+    }
 
     const suggested_answers: Record<string, string> = {};
     const suggested_observations: Record<string, string> = {};
