@@ -23,7 +23,7 @@ const NEGATIVE_VIEW_ID = Deno.env.get('HELPDESK_NEGATIVE_VIEW_ID') || '';
 const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '';
 
 const RequestSchema = z.object({
-  action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai', 'resolve_agent']),
+  action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai', 'resolve_agent', 'lookup_ticket_agent']),
   queue_type: z.enum(['negativas', 'proativas', 'positivas']).optional(),
   ticket_id: z.string().optional(),
   form_criteria: z.any().optional(),
@@ -339,6 +339,54 @@ serve(async (req) => {
       }));
 
       return jsonResponse({ success: true, comments: mappedComments }, 200);
+    }
+
+    // 5. Busca só o atendente responsável por um ticket digitado manualmente
+    // na ficha (sem passar pela Central de Filas) — não cria nada no banco,
+    // é só consulta. O front decide se já existe conta ou se mostra o aviso
+    // de "agente não cadastrado".
+    if (action === 'lookup_ticket_agent') {
+      if (!ticket_id || !/^\d+$/.test(ticket_id)) {
+        return jsonResponse({ error: 'ticket_id numérico é obrigatório para lookup_ticket_agent' }, 400);
+      }
+
+      const ticketUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json?include=users,groups`;
+      const response = await fetch(ticketUrl, { headers: zendeskHeaders });
+
+      if (response.status === 404) {
+        return jsonResponse({ success: true, agent: null }, 200);
+      }
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        throw new Error(`Zendesk Ticket API falhou (${response.status}): ${errText}`);
+      }
+
+      const ticketData = await response.json();
+      const t = ticketData.ticket;
+      const assignee = (ticketData.users || []).find((u: any) => u.id === t?.assignee_id);
+      const group = (ticketData.groups || []).find((g: any) => g.id === t?.group_id);
+
+      if (!assignee?.email) {
+        return jsonResponse({ success: true, agent: null }, 200);
+      }
+
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id, name, primary_team_id')
+        .eq('email', assignee.email.trim().toLowerCase())
+        .maybeSingle();
+
+      return jsonResponse({
+        success: true,
+        agent: {
+          name: assignee.name,
+          email: assignee.email,
+          team_name: group?.name,
+          channel: t?.via?.channel,
+          existing_id: existing?.id || null,
+          existing_team_id: existing?.primary_team_id || null,
+        },
+      }, 200);
     }
 
     return jsonResponse({ error: 'Ação não suportada' }, 400);

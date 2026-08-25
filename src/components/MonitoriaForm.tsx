@@ -28,7 +28,7 @@ import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import { toast } from 'sonner';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
-import { resolveManualAgent } from '../lib/helpdeskQueue';
+import { resolveManualAgent, lookupTicketAgent, TicketAgentLookup } from '../lib/helpdeskQueue';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import Card from './ui/Card';
@@ -85,6 +85,9 @@ export default function MonitoriaForm({
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentEmail, setNewAgentEmail] = useState('');
   const [creatingAgent, setCreatingAgent] = useState(false);
+  // Preview do agente encontrado no Zendesk pelo número do ticket, quando
+  // ele ainda não tem conta no QualiTrack (ver efeito de lookup abaixo).
+  const [unregisteredAgentPreview, setUnregisteredAgentPreview] = useState<TicketAgentLookup | null>(null);
 
   // Card do score encolhe ao rolar para baixo na etapa de avaliação, para
   // ocupar menos espaço e não poluir a tela enquanto se responde as perguntas.
@@ -195,6 +198,45 @@ export default function MonitoriaForm({
 
     return () => clearTimeout(timer);
   }, [header.ticket_id, isViewOnly, initialData?.id]);
+
+  // Ao digitar o número do ticket manualmente (fora da Central de Filas),
+  // busca no Zendesk quem é o atendente responsável e já preenche o campo
+  // de Agente — mesmo que ele ainda não tenha conta no QualiTrack, caso em
+  // que mostramos um aviso com asterisco em vez do id (que não existe).
+  const lastLookedUpTicketRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isViewOnly || isReevaluating) return;
+    const ticketId = header.ticket_id?.trim();
+    if (!ticketId || !/^\d+$/.test(ticketId)) {
+      lastLookedUpTicketRef.current = null;
+      setUnregisteredAgentPreview(null);
+      return;
+    }
+    if (lastLookedUpTicketRef.current === ticketId) return;
+    // Já tem um agente selecionado manualmente — não sobrescreve.
+    if (header.evaluated_id) return;
+
+    const timer = setTimeout(async () => {
+      lastLookedUpTicketRef.current = ticketId;
+      const found = await lookupTicketAgent(ticketId);
+      if (!found || header.evaluated_id) return;
+
+      if (found.existing_id) {
+        // Agente já cadastrado — preenche a ficha automaticamente, igual já
+        // acontece vindo da Central de Filas.
+        setHeader(prev => prev.evaluated_id ? prev : ({
+          ...prev,
+          evaluated_id: found.existing_id!,
+          team_id: prev.team_id || found.existing_team_id || prev.team_id,
+        }));
+        setUnregisteredAgentPreview(null);
+      } else {
+        setUnregisteredAgentPreview(found);
+      }
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [header.ticket_id, header.evaluated_id, isViewOnly, isReevaluating]);
 
   // Envio ao Zendesk: só faz sentido para monitorias com veredito final e
   // com ticket_id preenchido (a Edge Function exige um ticket numérico).
@@ -376,7 +418,13 @@ export default function MonitoriaForm({
                     {!isViewOnly && !isReevaluating && (
                       <button
                         type="button"
-                        onClick={() => setNewAgentModalOpen(true)}
+                        onClick={() => {
+                          if (unregisteredAgentPreview) {
+                            setNewAgentName(unregisteredAgentPreview.name || '');
+                            setNewAgentEmail(unregisteredAgentPreview.email || '');
+                          }
+                          setNewAgentModalOpen(true);
+                        }}
                         className="flex items-center gap-1 text-[10px] font-black text-brand-highlight hover:underline"
                       >
                         <UserPlus className="w-3 h-3" />
@@ -426,6 +474,13 @@ export default function MonitoriaForm({
                     className="w-full"
                     disabled={isViewOnly || isReevaluating}
                   />
+                  {unregisteredAgentPreview && !header.evaluated_id && (
+                    <p className="text-[10px] font-bold text-functional-warning ml-1">
+                      * {unregisteredAgentPreview.name} ({unregisteredAgentPreview.email}) — atendente do
+                      Zendesk deste ticket, ainda não cadastrado no QualiTrack. Clique em
+                      "Agente não cadastrado?" acima para cadastrar.
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">

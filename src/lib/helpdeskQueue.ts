@@ -430,3 +430,37 @@ export async function resolveManualAgent(
 
   return data.agent as { id: string; team_id?: string };
 }
+
+export interface TicketAgentLookup {
+  name: string;
+  email: string;
+  team_name?: string;
+  channel?: string;
+  /** Se já existir uma conta com esse e-mail no QualiTrack, o id dela. */
+  existing_id?: string | null;
+  existing_team_id?: string | null;
+}
+
+/**
+ * Busca no Zendesk quem é o atendente responsável por um ticket digitado
+ * manualmente na ficha (fora do fluxo da Central de Filas) — não cria nada
+ * no banco, é só consulta, para poder sugerir o nome/e-mail mesmo que o
+ * atendente ainda não tenha conta formal no QualiTrack.
+ */
+export async function lookupTicketAgent(ticketId: string): Promise<TicketAgentLookup | null> {
+  if (isMockMode || !supabase || !/^\d+$/.test(ticketId.trim())) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+      body: { action: 'lookup_ticket_agent', ticket_id: ticketId.trim() }
+    });
+
+    if (error || !data?.success) return null;
+    return (data.agent as TicketAgentLookup) || null;
+  } catch (err) {
+    console.warn('[HelpdeskQueue] Falha ao buscar agente do ticket:', err);
+    return null;
+  }
+}
