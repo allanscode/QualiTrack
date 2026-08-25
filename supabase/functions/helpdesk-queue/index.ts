@@ -45,11 +45,25 @@ const VALIDATED_TAG = Deno.env.get('HELPDESK_VALIDATED_TAG') || '';
 // real que a equipe vê no Zendesk.
 const NEGATIVE_VIEW_ID = Deno.env.get('HELPDESK_NEGATIVE_VIEW_ID') || '';
 const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '';
+// Proativas: view real do Zendesk com os tickets de CSAT vazio/não avaliado
+// (ex.: 808 pesquisas vazias na view configurada) — antes essa fila não
+// buscava ticket nenhum do Zendesk, só sorteava um número de ticket
+// FICTÍCIO pra abrir a ficha. Agora usa tickets reais, igual as outras duas.
+const PROACTIVE_VIEW_ID = Deno.env.get('HELPDESK_PROACTIVE_VIEW_ID') || '';
+
+// Página pequena (25) em vez de buscar tudo de uma vez — views com centenas
+// de tickets (ex.: 808 em Proativas) estourariam o rate limit do Zendesk
+// numa carga só. O front pede próxima página sob demanda (botão), passando
+// o `cursor` devolvido na resposta anterior.
+const PAGE_SIZE = 25;
 
 const RequestSchema = z.object({
   action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai', 'resolve_agent', 'lookup_ticket_agent', 'sync_zendesk_groups']),
   queue_type: z.enum(['negativas', 'proativas', 'positivas']).optional(),
   ticket_id: z.string().optional(),
+  // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
+  // de fetch_queue. Ausente/null = primeira página.
+  cursor: z.string().nullable().optional(),
   form_criteria: z.any().optional(),
   dialogue: z.array(z.any()).optional(),
   agent_info: z.object({
@@ -315,51 +329,41 @@ serve(async (req) => {
       return jsonResponse({ success: true, created, skipped }, 200);
     }
 
-    // 1. Busca de Fila de Chamados
+    // 1. Busca de Fila de Chamados — sempre UMA página por chamada (25
+    // tickets). Views grandes (Proativas tinha 808 pesquisas vazias) não
+    // cabem numa carga só sem estourar o rate limit do Zendesk; o front pede
+    // a próxima página sob demanda, passando o `cursor` da resposta anterior.
     if (action === 'fetch_queue') {
       let results: any[];
       let sideloadedUsers: Map<number, any>;
       let sideloadedGroups: Map<number, any>;
+      let nextCursor: string | null = null;
+      let hasMore = false;
 
-      // Negativas/Positivas: quando a view real do Zendesk está configurada,
-      // busca exatamente os tickets dela (mesma contagem que a equipe vê lá
-      // dentro), em vez de reconstruir o filtro via Search API.
+      // Quando a view real do Zendesk está configurada, busca exatamente os
+      // tickets dela (mesma contagem que a equipe vê lá dentro), em vez de
+      // reconstruir o filtro via Search API.
       const viewId = queue_type === 'negativas' ? NEGATIVE_VIEW_ID
         : queue_type === 'positivas' ? POSITIVE_VIEW_ID
+        : queue_type === 'proativas' ? PROACTIVE_VIEW_ID
         : '';
 
       if (viewId) {
-        // A view pode ter mais tickets do que cabem numa única página (o
-        // padrão do Zendesk é 100 por página) — segue a paginação por cursor
-        // (meta.has_more / links.next) até esgotar, senão a fila mostra só
-        // uma fração dos tickets reais da view.
-        results = [];
-        const allUsers: any[] = [];
-        const allGroups: any[] = [];
-        let nextUrl: string | null =
-          `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups&page[size]=100`;
-        let pageCount = 0;
-        const MAX_PAGES = 50; // trava de segurança (até 5.000 tickets)
+        const url = parseResult.data.cursor
+          || `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups&page[size]=${PAGE_SIZE}`;
 
-        while (nextUrl && pageCount < MAX_PAGES) {
-          const response = await fetch(nextUrl, { headers: zendeskHeaders });
-
-          if (!response.ok) {
-            const errText = await response.text().catch(() => '');
-            throw new Error(`Zendesk Views API falhou (${response.status}): ${errText}`);
-          }
-
-          const viewData = await response.json();
-          results.push(...(viewData.tickets || []));
-          allUsers.push(...(viewData.users || []));
-          allGroups.push(...(viewData.groups || []));
-
-          nextUrl = viewData.meta?.has_more ? (viewData.links?.next || null) : null;
-          pageCount++;
+        const response = await fetch(url, { headers: zendeskHeaders });
+        if (!response.ok) {
+          const errText = await response.text().catch(() => '');
+          throw new Error(`Zendesk Views API falhou (${response.status}): ${errText}`);
         }
 
-        sideloadedUsers = new Map<number, any>(allUsers.map((u: any) => [u.id, u]));
-        sideloadedGroups = new Map<number, any>(allGroups.map((g: any) => [g.id, g]));
+        const viewData = await response.json();
+        results = viewData.tickets || [];
+        sideloadedUsers = new Map<number, any>((viewData.users || []).map((u: any) => [u.id, u]));
+        sideloadedGroups = new Map<number, any>((viewData.groups || []).map((g: any) => [g.id, g]));
+        hasMore = !!viewData.meta?.has_more;
+        nextCursor = hasMore ? (viewData.links?.next || null) : null;
       } else {
         let searchQuery = 'type:ticket';
 
@@ -373,14 +377,17 @@ serve(async (req) => {
         } else if (queue_type === 'positivas') {
           searchQuery += ' satisfaction_score:good satisfaction_score:good_with_comment';
         } else {
-          // Proativas: tickets resolvidos sem pesquisa ou com pesquisa pendente
-          searchQuery += ' status:solved status:closed';
+          // Proativas: CSAT nunca respondido pelo cliente (não é "sem
+          // filtro nenhum" como antes — isso trazia qualquer ticket
+          // solved/closed, sem relação com equidade de monitoria).
+          searchQuery += ' satisfaction_score:unoffered';
         }
 
         // Sideload de usuários e grupos para resolver o atendente (nome/e-mail)
         // e a equipe de origem de cada chamado, sem depender de lista local.
-        const searchUrl = `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups`;
-        const response = await fetch(searchUrl, { headers: zendeskHeaders });
+        const url = parseResult.data.cursor
+          || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups&page[size]=${PAGE_SIZE}`;
+        const response = await fetch(url, { headers: zendeskHeaders });
 
         if (!response.ok) {
           const errText = await response.text().catch(() => '');
@@ -391,10 +398,13 @@ serve(async (req) => {
         results = searchData.results || [];
         sideloadedUsers = new Map<number, any>((searchData.users || []).map((u: any) => [u.id, u]));
         sideloadedGroups = new Map<number, any>((searchData.groups || []).map((g: any) => [g.id, g]));
+        hasMore = !!searchData.meta?.has_more;
+        nextCursor = hasMore ? (searchData.links?.next || null) : null;
       }
 
       // Resolve/garante o vínculo do agente no QualiTrack pelo e-mail (chave
-      // universal), criando conta provisória quando necessário.
+      // universal), criando conta provisória quando necessário. Só roda
+      // pros ~25 tickets desta página, não pra view inteira.
       const mappedTickets = await Promise.all(results.map(async (t: any) => {
         let csatStatus: 'bad' | 'good' | 'unrated' = 'unrated';
         if (t.satisfaction_rating?.score === 'bad' || t.satisfaction_rating?.score === 'bad_with_comment') {
@@ -431,7 +441,7 @@ serve(async (req) => {
         };
       }));
 
-      return jsonResponse({ success: true, tickets: mappedTickets }, 200);
+      return jsonResponse({ success: true, tickets: mappedTickets, next_cursor: nextCursor, has_more: hasMore }, 200);
     }
 
     // 2. Busca de Histórico / Diálogo do Chamado
