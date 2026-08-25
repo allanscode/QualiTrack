@@ -197,36 +197,50 @@ function countPositiveEvaluationsThisMonthByEmail(
 }
 
 /**
- * Busca o histórico de mensagens/diálogo de um ticket do Zendesk.
+ * Busca o histórico de mensagens/diálogo de um ticket do Zendesk, junto com
+ * os campos de classificação preenchidos pelo atendente no próprio ticket
+ * (categoria, motivo do contato etc.) — usados como contexto extra na
+ * avaliação com IA, sem preencher nada sozinhos na ficha.
  */
-export async function fetchTicketDialogue(ticketId: string): Promise<TicketCommentMessage[]> {
+export interface TicketDialogueResult {
+  comments: TicketCommentMessage[];
+  ticketFields: { title: string; value: string }[];
+}
+
+export async function fetchTicketDialogue(ticketId: string): Promise<TicketDialogueResult> {
   if (isMockMode || !supabase) {
-    return [
-      {
-        id: 1,
-        author_name: 'Cliente (Posto Exemplo)',
-        author_role: 'end_user',
-        created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-        body: 'Boa tarde, estou com dificuldades para fechar o turno no PDV. Aparece erro 403 ao sincronizar vendas.',
-        is_public: true
-      },
-      {
-        id: 2,
-        author_name: 'Suporte WebPosto',
-        author_role: 'agent',
-        created_at: new Date(Date.now() - 3600000 * 1.5).toISOString(),
-        body: 'Olá! Boa tarde. Verifiquei aqui no servidor e liberei a permissão do seu usuário. Poderia tentar sincronizar novamente?',
-        is_public: true
-      },
-      {
-        id: 3,
-        author_name: 'Cliente (Posto Exemplo)',
-        author_role: 'end_user',
-        created_at: new Date(Date.now() - 3600000 * 1).toISOString(),
-        body: 'Deu certo agora! Muito obrigado pelo atendimento ágil!',
-        is_public: true
-      }
-    ];
+    return {
+      comments: [
+        {
+          id: 1,
+          author_name: 'Cliente (Posto Exemplo)',
+          author_role: 'end_user',
+          created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+          body: 'Boa tarde, estou com dificuldades para fechar o turno no PDV. Aparece erro 403 ao sincronizar vendas.',
+          is_public: true
+        },
+        {
+          id: 2,
+          author_name: 'Suporte WebPosto',
+          author_role: 'agent',
+          created_at: new Date(Date.now() - 3600000 * 1.5).toISOString(),
+          body: 'Olá! Boa tarde. Verifiquei aqui no servidor e liberei a permissão do seu usuário. Poderia tentar sincronizar novamente?',
+          is_public: true
+        },
+        {
+          id: 3,
+          author_name: 'Cliente (Posto Exemplo)',
+          author_role: 'end_user',
+          created_at: new Date(Date.now() - 3600000 * 1).toISOString(),
+          body: 'Deu certo agora! Muito obrigado pelo atendimento ágil!',
+          is_public: true
+        }
+      ],
+      ticketFields: [
+        { title: 'Categoria', value: 'Suporte Técnico' },
+        { title: 'Motivo do Contato', value: 'Erro de sincronização' }
+      ]
+    };
   }
 
   try {
@@ -238,7 +252,10 @@ export async function fetchTicketDialogue(ticketId: string): Promise<TicketComme
       throw new Error(error?.message || 'Falha ao obter diálogo do ticket');
     }
 
-    return data.comments as TicketCommentMessage[];
+    return {
+      comments: data.comments as TicketCommentMessage[],
+      ticketFields: (data.ticket_fields || []) as { title: string; value: string }[],
+    };
   } catch (err: any) {
     console.error('[HelpdeskQueue] Erro ao carregar diálogo:', err);
     throw err;
@@ -259,7 +276,10 @@ export async function evaluateTicketWithAI(
   // Manuais escolhidos pelo monitor para essa avaliação específica — evita
   // enviar todo o conteúdo de todos os manuais ativos a cada chamada e
   // economiza tokens. [] = avaliar só com os critérios da ficha, sem manual.
-  guidelineIds?: string[]
+  guidelineIds?: string[],
+  // Campos de classificação do próprio ticket (categoria, motivo do
+  // contato etc.) — contexto extra pra IA, não altera o schema de resposta.
+  ticketFields?: { title: string; value: string }[]
 ): Promise<AIEvaluationResult> {
   if (isMockMode || !supabase) {
     return getFallbackAIEvaluation(ticketId, form);
@@ -274,6 +294,7 @@ export async function evaluateTicketWithAI(
         dialogue: dialogue || [],
         agent_info: agentInfo,
         guideline_ids: guidelineIds,
+        ticket_fields: ticketFields,
       }
     });
 

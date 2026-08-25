@@ -194,14 +194,14 @@ export default function AuditingQueueView({
     setEvaluatingTicketId(ticket.ticket_id);
     try {
       toast.info(`Buscando diálogo e analisando ticket #${ticket.ticket_id} com IA...`);
-      const dialogue = await fetchTicketDialogue(ticket.ticket_id);
+      const { comments: dialogue, ticketFields } = await fetchTicketDialogue(ticket.ticket_id);
       const teamId = matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0] || ticket.team_id;
       const aiResult = await evaluateTicketWithAI(ticket.ticket_id, defaultForm, dialogue, {
         name: matchedAgent?.name || ticket.agent_name,
         email: matchedAgent?.email || ticket.agent_email,
         team_name: teamId ? teamsMap[teamId] : undefined,
         channel: ticket.channel,
-      }, guidelineIds);
+      }, guidelineIds, ticketFields);
 
       toast.success(`Avaliação da IA gerada com sucesso para o ticket #${ticket.ticket_id}!`);
 

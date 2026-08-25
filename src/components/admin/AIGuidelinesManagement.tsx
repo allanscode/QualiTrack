@@ -3,6 +3,7 @@ import { AIEvaluationGuideline, User } from '../../types';
 import {
   fetchAIGuidelines,
   saveAIGuideline,
+  updateAIGuideline,
   toggleAIGuidelineActive,
   deleteAIGuideline,
   downloadAIGuidelineFile,
@@ -10,7 +11,7 @@ import {
   extractPlainText,
   isPlainTextFile
 } from '../../lib/aiGuidelines';
-import { Brain, Plus, Trash2, X, Save, RefreshCw, Upload, FileText, Download, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Brain, Plus, Trash2, X, Save, RefreshCw, Upload, FileText, Download, ToggleLeft, ToggleRight, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
@@ -27,6 +28,9 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  // Quando preenchido, o modal abre em modo edição (título/conteúdo de um
+  // manual já existente) em vez de criar um novo.
+  const [editingGuideline, setEditingGuideline] = useState<AIEvaluationGuideline | null>(null);
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -50,6 +54,15 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
     setTitle('');
     setContent('');
     setFile(null);
+    setEditingGuideline(null);
+  };
+
+  const openEditModal = (g: AIEvaluationGuideline) => {
+    setEditingGuideline(g);
+    setTitle(g.title);
+    setContent(g.content);
+    setFile(null);
+    setIsModalOpen(true);
   };
 
   const handleFileChange = async (selected: File | null) => {
@@ -88,8 +101,13 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
     }
     setSaving(true);
     try {
-      await saveAIGuideline({ title: title.trim(), content: content.trim(), file: file || undefined, createdBy: currentUser?.id });
-      toast.success('Manual salvo — a IA passa a usá-lo já na próxima avaliação.');
+      if (editingGuideline) {
+        await updateAIGuideline(editingGuideline.id, { title: title.trim(), content: content.trim() });
+        toast.success('Manual atualizado — a IA passa a usar o novo texto já na próxima avaliação.');
+      } else {
+        await saveAIGuideline({ title: title.trim(), content: content.trim(), file: file || undefined, createdBy: currentUser?.id });
+        toast.success('Manual salvo — a IA passa a usá-lo já na próxima avaliação.');
+      }
       setIsModalOpen(false);
       resetForm();
       load();
@@ -149,7 +167,7 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
           <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button variant="primary" size="sm" onClick={() => setIsModalOpen(true)} className="flex items-center gap-1.5">
+          <Button variant="primary" size="sm" onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-1.5">
             <Plus className="w-3.5 h-3.5" />
             <span>Novo Manual</span>
           </Button>
@@ -181,6 +199,9 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
                     <Download className="w-3.5 h-3.5" />
                   </Button>
                 )}
+                <Button variant="ghost" size="sm" onClick={() => openEditModal(g)} title="Editar título/conteúdo">
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => handleToggle(g)} title={g.active ? 'Desativar' : 'Ativar'}>
                   {g.active ? <ToggleRight className="w-4 h-4 text-functional-success" /> : <ToggleLeft className="w-4 h-4 text-brand-muted" />}
                 </Button>
@@ -207,12 +228,14 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setIsModalOpen(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setIsModalOpen(false); resetForm(); }}>
           <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-2xl">
           <Card className="p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-brand-primary">Novo Manual de Padrões</h3>
-              <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(false)}><X className="w-4 h-4" /></Button>
+              <h3 className="text-sm font-black text-brand-primary">
+                {editingGuideline ? 'Editar Manual de Padrões' : 'Novo Manual de Padrões'}
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => { setIsModalOpen(false); resetForm(); }}><X className="w-4 h-4" /></Button>
             </div>
 
             <div className="space-y-1">
@@ -226,22 +249,24 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-black uppercase tracking-wider text-brand-muted">
-                Anexar arquivo (opcional — extrai o texto automaticamente: PDF, .txt, .md, .csv)
-              </label>
-              <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-surface-border bg-surface-subtle text-xs font-bold text-brand-muted cursor-pointer hover:border-brand-highlight/50">
-                <Upload className="w-3.5 h-3.5" />
-                <span>{extracting ? 'Extraindo texto do arquivo...' : (file?.name || 'Selecionar arquivo (PDF, .txt, .md, .csv)')}</span>
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf,text/plain,.txt,.md,.markdown,text/markdown,.csv,text/csv"
-                  className="hidden"
-                  disabled={extracting}
-                  onChange={e => handleFileChange(e.target.files?.[0] || null)}
-                />
-              </label>
-            </div>
+            {!editingGuideline && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-black uppercase tracking-wider text-brand-muted">
+                  Anexar arquivo (opcional — extrai o texto automaticamente: PDF, .txt, .md, .csv)
+                </label>
+                <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-surface-border bg-surface-subtle text-xs font-bold text-brand-muted cursor-pointer hover:border-brand-highlight/50">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{extracting ? 'Extraindo texto do arquivo...' : (file?.name || 'Selecionar arquivo (PDF, .txt, .md, .csv)')}</span>
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf,text/plain,.txt,.md,.markdown,text/markdown,.csv,text/csv"
+                    className="hidden"
+                    disabled={extracting}
+                    onChange={e => handleFileChange(e.target.files?.[0] || null)}
+                  />
+                </label>
+              </div>
+            )}
 
             <div className="space-y-1">
               <label className="text-[11px] font-black uppercase tracking-wider text-brand-muted">
@@ -254,13 +279,19 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
                 placeholder="Cole aqui o texto do manual, ou anexe um PDF acima para extrair automaticamente."
                 className="w-full px-3 py-2 rounded-xl border border-surface-border bg-surface-subtle text-xs font-medium resize-y"
               />
+              {editingGuideline && (
+                <p className="text-[10px] font-semibold text-brand-muted">
+                  Edite livremente pra adicionar mais contexto — o PDF original (se houver) continua disponível
+                  pra download, só o texto usado pela IA muda aqui.
+                </p>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
-              <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+              <Button variant="ghost" size="sm" onClick={() => { setIsModalOpen(false); resetForm(); }}>Cancelar</Button>
               <Button variant="primary" size="sm" disabled={saving || extracting} onClick={handleSave} className="flex items-center gap-1.5">
                 <Save className="w-3.5 h-3.5" />
-                <span>{saving ? 'Salvando...' : 'Salvar Manual'}</span>
+                <span>{saving ? 'Salvando...' : editingGuideline ? 'Salvar Alterações' : 'Salvar Manual'}</span>
               </Button>
             </div>
           </Card>
