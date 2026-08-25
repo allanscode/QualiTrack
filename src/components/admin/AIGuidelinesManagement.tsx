@@ -6,7 +6,9 @@ import {
   toggleAIGuidelineActive,
   deleteAIGuideline,
   downloadAIGuidelineFile,
-  extractPdfText
+  extractPdfText,
+  extractPlainText,
+  isPlainTextFile
 } from '../../lib/aiGuidelines';
 import { Brain, Plus, Trash2, X, Save, RefreshCw, Upload, FileText, Download, ToggleLeft, ToggleRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -53,22 +55,27 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
   const handleFileChange = async (selected: File | null) => {
     setFile(selected);
     if (!selected) return;
-    if (selected.type !== 'application/pdf') {
-      toast.error('Só PDF é aceito para extração automática de texto.');
+
+    const isPdf = selected.type === 'application/pdf' || selected.name.toLowerCase().endsWith('.pdf');
+    const isText = isPlainTextFile(selected);
+
+    if (!isPdf && !isText) {
+      toast.error('Formato não suportado. Use PDF, .txt, .md ou .csv — ou cole o texto manualmente.');
       return;
     }
+
     setExtracting(true);
     try {
-      const text = await extractPdfText(selected);
+      const text = isPdf ? await extractPdfText(selected) : await extractPlainText(selected);
       if (!text) {
-        toast.warning('Não foi possível extrair texto do PDF (pode ser um PDF escaneado/imagem). Cole o texto manualmente.');
+        toast.warning('Não foi possível extrair texto do arquivo (PDF pode ser escaneado/imagem). Cole o texto manualmente.');
       } else {
         setContent(prev => prev ? `${prev}\n\n${text}` : text);
-        toast.success('Texto extraído do PDF e adicionado ao manual.');
+        toast.success('Texto extraído do arquivo e adicionado ao manual.');
       }
     } catch (e: any) {
-      console.error('Erro ao extrair PDF:', e);
-      toast.error('Falha ao ler o PDF. Cole o texto manualmente ou tente outro arquivo.');
+      console.error('Erro ao extrair texto do arquivo:', e);
+      toast.error('Falha ao ler o arquivo. Cole o texto manualmente ou tente outro arquivo.');
     } finally {
       setExtracting(false);
     }
@@ -221,14 +228,14 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
 
             <div className="space-y-1">
               <label className="text-[11px] font-black uppercase tracking-wider text-brand-muted">
-                Anexar PDF (opcional — extrai o texto automaticamente)
+                Anexar arquivo (opcional — extrai o texto automaticamente: PDF, .txt, .md, .csv)
               </label>
               <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-surface-border bg-surface-subtle text-xs font-bold text-brand-muted cursor-pointer hover:border-brand-highlight/50">
                 <Upload className="w-3.5 h-3.5" />
-                <span>{extracting ? 'Extraindo texto do PDF...' : (file?.name || 'Selecionar arquivo PDF')}</span>
+                <span>{extracting ? 'Extraindo texto do arquivo...' : (file?.name || 'Selecionar arquivo (PDF, .txt, .md, .csv)')}</span>
                 <input
                   type="file"
-                  accept="application/pdf"
+                  accept="application/pdf,.pdf,text/plain,.txt,.md,.markdown,text/markdown,.csv,text/csv"
                   className="hidden"
                   disabled={extracting}
                   onChange={e => handleFileChange(e.target.files?.[0] || null)}

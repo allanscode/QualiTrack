@@ -236,7 +236,11 @@ export async function evaluateTicketWithAI(
   ticketId: string,
   form: EvaluationForm,
   dialogue?: TicketCommentMessage[],
-  agentInfo?: { name?: string; email?: string; team_name?: string; channel?: string }
+  agentInfo?: { name?: string; email?: string; team_name?: string; channel?: string },
+  // Manuais escolhidos pelo monitor para essa avaliação específica — evita
+  // enviar todo o conteúdo de todos os manuais ativos a cada chamada e
+  // economiza tokens. [] = avaliar só com os critérios da ficha, sem manual.
+  guidelineIds?: string[]
 ): Promise<AIEvaluationResult> {
   if (isMockMode || !supabase) {
     return getFallbackAIEvaluation(ticketId, form);
@@ -250,6 +254,7 @@ export async function evaluateTicketWithAI(
         form_criteria: { sections: form.sections },
         dialogue: dialogue || [],
         agent_info: agentInfo,
+        guideline_ids: guidelineIds,
       }
     });
 

@@ -7,7 +7,8 @@ import {
   Monitoria,
   EvaluationForm,
   Team,
-  AIEvaluationResult
+  AIEvaluationResult,
+  AIEvaluationGuideline
 } from '../types';
 import {
   fetchQueueTickets,
@@ -16,6 +17,7 @@ import {
   fetchTicketDialogue,
   normalizeChannel
 } from '../lib/helpdeskQueue';
+import { fetchAIGuidelines } from '../lib/aiGuidelines';
 import {
   AlertTriangle,
   Sparkles,
@@ -30,7 +32,9 @@ import {
   Zap,
   ArrowRight,
   ShieldCheck,
-  Check
+  Check,
+  X,
+  BookOpen
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -71,6 +75,14 @@ export default function AuditingQueueView({
 
   // Estado para modal/visualização rápida de IA
   const [evaluatingTicketId, setEvaluatingTicketId] = useState<string | null>(null);
+
+  // Popup de seleção do manual antes de avaliar com IA: deixa o monitor
+  // escolher qual(is) manual(is) a IA deve ler para aquele ticket em vez de
+  // sempre mandar todos os ativos — economiza tokens por chamada.
+  const [guidelineOptions, setGuidelineOptions] = useState<AIEvaluationGuideline[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [guidelinePickerTicket, setGuidelinePickerTicket] = useState<AuditingQueueTicket | null>(null);
+  const [selectedGuidelineIds, setSelectedGuidelineIds] = useState<Set<string>>(new Set());
 
   const teamsMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -123,13 +135,30 @@ export default function AuditingQueueView({
     });
   }, [tickets, searchTerm, selectedAgentFilter]);
 
-  // Ação de avaliar com IA
-  const handleEvaluateWithAI = async (ticket: AuditingQueueTicket) => {
+  // Abre o popup de seleção de manual antes de avaliar com IA — o monitor
+  // escolhe qual(is) manual(is) essa avaliação deve usar como referência.
+  const openGuidelinePicker = async (ticket: AuditingQueueTicket) => {
     if (ticket.positive_cap_reached) {
       toast.warning('Este atendente já atingiu o máximo de 2 avaliações positivas no mês.');
       return;
     }
+    setGuidelinePickerTicket(ticket);
+    setSelectedGuidelineIds(new Set());
+    setLoadingGuidelines(true);
+    try {
+      const all = await fetchAIGuidelines();
+      setGuidelineOptions(all.filter(g => g.active));
+    } catch (e) {
+      console.error('Erro ao carregar manuais:', e);
+      setGuidelineOptions([]);
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
 
+  // Ação de avaliar com IA — chamada depois que o monitor confirma (ou pula)
+  // a seleção de manual no popup.
+  const handleEvaluateWithAI = async (ticket: AuditingQueueTicket, guidelineIds: string[]) => {
     const defaultForm = forms.find(f => f.active !== false) || forms[0];
     if (!defaultForm) {
       toast.error('Nenhum formulário ativo encontrado para avaliação.');
@@ -152,7 +181,7 @@ export default function AuditingQueueView({
         email: matchedAgent?.email || ticket.agent_email,
         team_name: teamId ? teamsMap[teamId] : undefined,
         channel: ticket.channel,
-      });
+      }, guidelineIds);
 
       toast.success(`Avaliação da IA gerada com sucesso para o ticket #${ticket.ticket_id}!`);
 
@@ -565,7 +594,7 @@ export default function AuditingQueueView({
                         size="sm"
                         variant="primary"
                         disabled={evaluatingTicketId === ticket.ticket_id}
-                        onClick={() => handleEvaluateWithAI(ticket)}
+                        onClick={() => openGuidelinePicker(ticket)}
                         className="flex items-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold"
                       >
                         <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
@@ -576,6 +605,104 @@ export default function AuditingQueueView({
                 </div>
               </Card>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Popup: escolha do manual antes de avaliar com IA */}
+      {guidelinePickerTicket && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setGuidelinePickerTicket(null)}
+        >
+          <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-lg">
+            <Card className="p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-brand-highlight" />
+                  <h3 className="text-sm font-black text-brand-primary">
+                    Qual manual a IA deve usar?
+                  </h3>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setGuidelinePickerTicket(null)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-[11px] font-semibold text-brand-muted">
+                Ticket #{guidelinePickerTicket.ticket_id} — escolha só os manuais relevantes para esse
+                atendimento. Menos manuais = resposta mais rápida e mais barata (menos tokens enviados à IA).
+              </p>
+
+              {loadingGuidelines ? (
+                <div className="flex items-center justify-center py-6">
+                  <RefreshCw className="w-5 h-5 animate-spin text-brand-muted" />
+                </div>
+              ) : guidelineOptions.length === 0 ? (
+                <div className="p-4 rounded-xl bg-surface-subtle text-xs font-semibold text-brand-muted text-center">
+                  Nenhum manual cadastrado ainda (Admin &gt; Manual da IA). A IA vai avaliar só com os
+                  critérios da própria ficha.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {guidelineOptions.map(g => {
+                    const checked = selectedGuidelineIds.has(g.id);
+                    return (
+                      <label
+                        key={g.id}
+                        className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                          checked ? 'border-brand-highlight bg-brand-highlight/5' : 'border-surface-border hover:bg-surface-subtle'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setSelectedGuidelineIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(g.id)) next.delete(g.id); else next.add(g.id);
+                              return next;
+                            });
+                          }}
+                          className="mt-0.5 w-4 h-4 rounded text-brand-highlight focus:ring-brand-highlight"
+                        />
+                        <div className="min-w-0">
+                          <div className="text-xs font-black text-brand-primary">{g.title}</div>
+                          <div className="text-[10px] font-medium text-brand-muted line-clamp-2">{g.content}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-border">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const ticket = guidelinePickerTicket;
+                    setGuidelinePickerTicket(null);
+                    if (ticket) handleEvaluateWithAI(ticket, []);
+                  }}
+                >
+                  Avaliar sem manual
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="flex items-center gap-1.5"
+                  onClick={() => {
+                    const ticket = guidelinePickerTicket;
+                    const ids = Array.from(selectedGuidelineIds);
+                    setGuidelinePickerTicket(null);
+                    if (ticket) handleEvaluateWithAI(ticket, ids);
+                  }}
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>Avaliar com IA{selectedGuidelineIds.size > 0 ? ` (${selectedGuidelineIds.size} manual${selectedGuidelineIds.size > 1 ? 'is' : ''})` : ''}</span>
+                </Button>
+              </div>
+            </Card>
           </div>
         </div>
       )}
