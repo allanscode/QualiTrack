@@ -299,9 +299,10 @@ serve(async (req) => {
 });
 
 /**
- * Avalia um atendimento com o Google Gemini (gemini-3.6-flash, gratuito)
- * usando responseSchema para forçar retorno em JSON estrito, alinhado aos
- * critérios da ficha de monitoria enviada pelo front-end.
+ * Avalia um atendimento com um modelo gratuito via OpenRouter (API
+ * compatível com o formato OpenAI Chat Completions), usando
+ * response_format: json_schema para forçar retorno em JSON estrito,
+ * alinhado aos critérios da ficha de monitoria enviada pelo front-end.
  */
 async function handleEvaluateAI(payload: z.infer<typeof RequestSchema>): Promise<Response> {
   const { ticket_id, form_criteria, dialogue, agent_info } = payload;
@@ -310,14 +311,14 @@ async function handleEvaluateAI(payload: z.infer<typeof RequestSchema>): Promise
     return jsonResponse({ error: 'ticket_id e form_criteria são obrigatórios para evaluate_ai' }, 400);
   }
 
-  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
+  const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
+  const openRouterModel = Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-super-120b-a12b:free';
 
-  if (!geminiApiKey) {
-    return jsonResponse({ error: 'GEMINI_API_KEY não configurada no Supabase Secrets' }, 500);
+  if (!openRouterApiKey) {
+    return jsonResponse({ error: 'OPENROUTER_API_KEY não configurada no Supabase Secrets' }, 500);
   }
 
-  // Monta o responseSchema dinamicamente a partir das perguntas da ficha,
+  // Monta o JSON Schema dinamicamente a partir das perguntas da ficha,
   // garantindo que a IA responda nota/justificativa para cada critério.
   const questionProperties: Record<string, any> = {};
   const questionRequired: string[] = [];
@@ -325,29 +326,30 @@ async function handleEvaluateAI(payload: z.infer<typeof RequestSchema>): Promise
   for (const section of form_criteria.sections) {
     for (const q of section.questions || []) {
       const props: Record<string, any> = {
-        answer: { type: 'STRING', enum: ['SIM', 'NAO', 'NA'] },
-        justification: { type: 'STRING', description: 'Justificativa citando trecho literal do diálogo.' },
+        answer: { type: 'string', enum: ['SIM', 'NAO', 'NA'] },
+        justification: { type: 'string', description: 'Justificativa citando trecho literal do diálogo.' },
       };
       const required = ['answer', 'justification'];
       if (q.is_critical) {
-        props.critical_error = { type: 'BOOLEAN', description: 'true se o erro crítico ocorreu.' };
+        props.critical_error = { type: 'boolean', description: 'true se o erro crítico ocorreu.' };
         required.push('critical_error');
       }
-      questionProperties[q.id] = { type: 'OBJECT', properties: props, required };
+      questionProperties[q.id] = { type: 'object', properties: props, required, additionalProperties: false };
       questionRequired.push(q.id);
     }
   }
 
   const responseSchema = {
-    type: 'OBJECT',
+    type: 'object',
     properties: {
-      score: { type: 'NUMBER', description: 'Nota geral do atendimento de 0 a 100.' },
-      summary: { type: 'STRING', description: 'Resumo executivo do atendimento.' },
-      strengths: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Pontos fortes observados.' },
-      improvements: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Oportunidades de melhoria.' },
-      answers: { type: 'OBJECT', properties: questionProperties, required: questionRequired },
+      score: { type: 'number', description: 'Nota geral do atendimento de 0 a 100.' },
+      summary: { type: 'string', description: 'Resumo executivo do atendimento.' },
+      strengths: { type: 'array', items: { type: 'string' }, description: 'Pontos fortes observados.' },
+      improvements: { type: 'array', items: { type: 'string' }, description: 'Oportunidades de melhoria.' },
+      answers: { type: 'object', properties: questionProperties, required: questionRequired, additionalProperties: false },
     },
     required: ['score', 'summary', 'strengths', 'improvements', 'answers'],
+    additionalProperties: false,
   };
 
   const dialogueText = (dialogue || [])
@@ -379,30 +381,41 @@ Calcule a nota geral (score de 0 a 100) com base nas respostas. Produza um resum
 fortes e oportunidades de melhoria concretas, baseadas apenas no que está na transcrição.`;
 
   try {
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
-    const response = await fetch(geminiUrl, {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${openRouterApiKey}`,
+        // Cabeçalhos recomendados pelo OpenRouter para identificar a app
+        // (não obrigatórios, mas ajudam a evitar throttling nos modelos :free).
+        'HTTP-Referer': Deno.env.get('FRONTEND_URL') || 'https://qualitrack.app',
+        'X-Title': 'QualiTrack',
+      },
       body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema,
-          temperature: 0.2,
+        model: openRouterModel,
+        temperature: 0.2,
+        messages: [{ role: 'user', content: prompt }],
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'avaliacao_atendimento', strict: true, schema: responseSchema },
         },
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
-      throw new Error(`Gemini API falhou (${response.status}): ${errText}`);
+      throw new Error(`OpenRouter API falhou (${response.status}): ${errText}`);
     }
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    let text: string | undefined = data.choices?.[0]?.message?.content;
     if (!text) {
-      throw new Error('Resposta vazia da IA (possível bloqueio de safety filter)');
+      throw new Error('Resposta vazia da IA (modelo pode ter recusado ou atingido limite gratuito)');
     }
+
+    // Alguns modelos gratuitos ignoram o strict mode e envolvem o JSON em
+    // um bloco markdown (```json ... ```) — remove antes de fazer o parse.
+    text = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
 
     const parsed = JSON.parse(text);
 
@@ -431,7 +444,7 @@ fortes e oportunidades de melhoria concretas, baseadas apenas no que está na tr
       },
     }, 200);
   } catch (error: any) {
-    console.error('[helpdesk-queue] Erro na avaliação com Gemini:', error);
+    console.error('[helpdesk-queue] Erro na avaliação com IA (OpenRouter):', error);
     return jsonResponse({ error: error.message || 'Falha ao avaliar com IA' }, 502);
   }
 }
