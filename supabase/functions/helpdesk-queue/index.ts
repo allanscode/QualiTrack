@@ -7,6 +7,30 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Rate limiting em memória (reseta a cada cold start) — mesmo padrão já usado
+// em admin-invite-user. Por usuário autenticado (não por IP: esta função
+// sempre exige um JWT válido, então o id do usuário é uma chave melhor).
+// Dois níveis: um geral (evita loop/script acidental esgotando qualquer
+// action) e um mais apertado só pra evaluate_ai, que custa de verdade
+// (chamada à IA) e consome a cota diária do token do Zendesk indiretamente.
+interface RateLimitEntry { count: number; resetTime: number; }
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+function checkRateLimit(identifier: string, maxRequests: number, windowMs: number): { allowed: boolean; resetTime: number } {
+  const now = Date.now();
+  const entry = rateLimitStore.get(identifier);
+
+  if (!entry || now > entry.resetTime) {
+    rateLimitStore.set(identifier, { count: 1, resetTime: now + windowMs });
+    return { allowed: true, resetTime: now + windowMs };
+  }
+  if (entry.count >= maxRequests) {
+    return { allowed: false, resetTime: entry.resetTime };
+  }
+  entry.count++;
+  return { allowed: true, resetTime: entry.resetTime };
+}
+
 // Tag aplicada (via macro do Zendesk) quando um chamado negativo já foi
 // apurado/validado pela qualidade. Chamados com essa tag saem da fila.
 // Sem a secret configurada, NÃO filtramos por tag nenhuma — um nome de tag
@@ -192,6 +216,23 @@ serve(async (req) => {
     }
 
     const { action, queue_type, ticket_id } = parseResult.data;
+
+    // Rate limit geral: 60 requisições/minuto por usuário, cobre toda action.
+    const general = checkRateLimit(`general:${user.id}`, 60, 60_000);
+    if (!general.allowed) {
+      return jsonResponse({ error: 'Muitas requisições em pouco tempo. Aguarde um momento e tente de novo.' }, 429);
+    }
+
+    // Rate limit apertado só para evaluate_ai: chama a IA (custo real) e
+    // indiretamente consome a cota diária do token do Zendesk (via
+    // fetch_dialogue, chamado antes pelo frontend). 10 avaliações a cada 5
+    // minutos é folgado para revisão manual normal, mas barra um loop/script.
+    if (action === 'evaluate_ai') {
+      const ai = checkRateLimit(`evaluate_ai:${user.id}`, 10, 5 * 60_000);
+      if (!ai.allowed) {
+        return jsonResponse({ error: 'Limite de avaliações com IA atingido (10 a cada 5 min). Aguarde um pouco antes de avaliar mais tickets.' }, 429);
+      }
+    }
 
     // ticket_id sempre precisa ser o id numérico do ticket no Zendesk — ele
     // é interpolado cru em URLs da API do Zendesk (fetch_dialogue,
