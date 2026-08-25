@@ -100,9 +100,14 @@ async function resolveOrCreateAgent(
     teamId = team?.id as string | undefined;
   }
 
+  // public.users.id não tem DEFAULT (normalmente é preenchido com o id do
+  // auth.users pelo trigger handle_new_user) — para conta provisória, sem
+  // conta de auth ainda, precisamos gerar o UUID explicitamente aqui, senão
+  // o insert falha com "null value in column id violates not-null constraint".
   const { data: created, error: createError } = await supabase
     .from('users')
     .insert({
+      id: crypto.randomUUID(),
       email: normalizedEmail,
       name: name || normalizedEmail.split('@')[0],
       role: 'suporte',
@@ -452,7 +457,17 @@ async function handleEvaluateAI(
   }
 
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  const openRouterModel = Deno.env.get('OPENROUTER_MODEL') || 'google/gemma-4-31b-it:free';
+  // Modelos gratuitos do pool compartilhado do OpenRouter ficam
+  // temporariamente rate-limited com frequência (ex.: gemma-4-31b-it:free
+  // retornando 429). Em vez de depender de um único modelo — o que gerava o
+  // fallback local "IA indisponível" com bastante frequência — usamos o
+  // roteamento automático do OpenRouter: `models` (lista, não `model`)
+  // tenta o primeiro e cai pro próximo sozinho se o de cima estiver
+  // indisponível, sem round-trip extra do nosso lado.
+  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'minimax/minimax-m3:free,google/gemma-4-31b-it:free,nvidia/nemotron-3-super-120b-a12b:free')
+    .split(',')
+    .map(m => m.trim())
+    .filter(Boolean);
 
   if (!openRouterApiKey) {
     return jsonResponse({ error: 'OPENROUTER_API_KEY não configurada no Supabase Secrets' }, 500);
@@ -569,7 +584,7 @@ apenas no que está na transcrição.`;
         'X-Title': 'QualiTrack',
       },
       body: JSON.stringify({
-        model: openRouterModel,
+        models: openRouterModels,
         temperature: 0.2,
         messages: [{ role: 'user', content: prompt }],
         response_format: {

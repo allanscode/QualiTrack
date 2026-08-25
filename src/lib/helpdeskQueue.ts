@@ -311,7 +311,7 @@ function getFallbackAIEvaluation(ticketId: string, form: EvaluationForm): AIEval
 
   return {
     score: 0,
-    summary: `Não foi possível obter a avaliação da IA para o ticket #${ticketId} (Gemini indisponível ou em modo offline). Preencha manualmente.`,
+    summary: `Não foi possível obter a avaliação da IA para o ticket #${ticketId} (serviço de IA indisponível ou em modo offline). Preencha manualmente.`,
     strengths: [],
     improvements: ['Avaliação com IA indisponível no momento — revisar o atendimento manualmente.'],
     suggested_answers: suggestedAnswers,
