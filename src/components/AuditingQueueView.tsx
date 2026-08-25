@@ -102,27 +102,40 @@ export default function AuditingQueueView({
     return computeAgentQueuePriorities(agents, monitorias, teamsMap);
   }, [agents, monitorias, teamsMap]);
 
+  // Sequência das chamadas a loadQueueData — se o auditor troca de fila
+  // antes de uma busca anterior (mais lenta, ex.: Negativas com várias
+  // páginas do Zendesk) terminar, essa resposta atrasada não pode
+  // sobrescrever os tickets da fila mais nova já carregada na tela.
+  const loadSeqRef = useRef(0);
+
   const loadQueueData = async () => {
+    const seq = ++loadSeqRef.current;
+    const queueAtCallTime = activeQueue;
+
     // A aba Proativas não usa `tickets` — ela mostra agentQueue, calculada
     // localmente a partir de agents/monitorias. Buscar tickets do Zendesk
     // aqui não servia pra nada na tela e, pior, disparava a criação de
     // conta provisória para QUALQUER agente responsável por um ticket
     // solved/closed (query sem filtro nenhum) — cadastros indesejados só
     // por abrir essa aba. Simplesmente não busca mais.
-    if (activeQueue === 'proativas') {
+    if (queueAtCallTime === 'proativas') {
       setTickets([]);
       return;
     }
 
     setLoading(true);
     try {
-      const data = await fetchQueueTickets(activeQueue, monitorias);
+      const data = await fetchQueueTickets(queueAtCallTime, monitorias);
+      // Descarta a resposta se já não for mais a busca mais recente — uma
+      // troca de fila nesse meio tempo já disparou outra chamada, com seq
+      // maior.
+      if (seq !== loadSeqRef.current) return;
       setTickets(data);
     } catch (err) {
       console.error('Erro ao carregar fila:', err);
       toast.error('Não foi possível carregar a fila de chamados.');
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   };
 

@@ -165,6 +165,25 @@ serve(async (req) => {
       return jsonResponse({ error: 'Sessão inválida ou expirada' }, 401);
     }
 
+    // Autorização por papel: esta função inteira é a Central de Filas, uma
+    // tela que o próprio frontend já esconde do papel 'suporte' (ver
+    // App.tsx — ele é quem está sendo auditado, não quem audita). Sem essa
+    // checagem aqui, qualquer usuário autenticado — inclusive um atendente
+    // comum com token JWT válido — podia chamar a Edge Function direto e
+    // ler CSAT/transcrições de qualquer ticket da empresa, ou disparar
+    // avaliações de IA arbitrárias consumindo a cota da API. `resolve_agent`
+    // já tinha essa checagem; faltava nas demais ações.
+    const { data: caller, error: callerError } = await supabase
+      .from('users')
+      .select('role, active')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const allowedRoles = ['admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte'];
+    if (callerError || !caller?.active || !allowedRoles.includes(caller.role as string)) {
+      return jsonResponse({ error: 'Sem permissão para acessar a Central de Filas.' }, 403);
+    }
+
     const body = await req.json().catch(() => ({}));
     const parseResult = RequestSchema.safeParse(body);
 
@@ -173,6 +192,16 @@ serve(async (req) => {
     }
 
     const { action, queue_type, ticket_id } = parseResult.data;
+
+    // ticket_id sempre precisa ser o id numérico do ticket no Zendesk — ele
+    // é interpolado cru em URLs da API do Zendesk (fetch_dialogue,
+    // lookup_ticket_agent). Sem essa validação, um valor como
+    // "1/../../users.json#" faz a URL resultante apontar para outro
+    // endpoint qualquer do Zendesk (path traversal), usando as credenciais
+    // privilegiadas do ZENDESK_API_TOKEN.
+    if (ticket_id !== undefined && !/^\d+$/.test(ticket_id)) {
+      return jsonResponse({ error: 'ticket_id deve ser numérico.' }, 400);
+    }
 
     // 3. Avaliação com IA (OpenRouter) — não depende do Zendesk
     if (action === 'evaluate_ai') {
