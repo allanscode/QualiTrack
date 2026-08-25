@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useTransition } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useTransition } from 'react';
 import {
   AuditingQueueType,
   AuditingQueueTicket,
@@ -108,7 +108,17 @@ export default function AuditingQueueView({
     }
   };
 
+  // Ao trocar de fila (Negativas/Proativas/Positivas), limpa a lista antes
+  // de buscar a nova — senão os tickets da fila anterior ficam visíveis por
+  // alguns segundos enquanto a nova fila carrega, parecendo que são da fila
+  // que acabou de ser selecionada. Não limpa em refresh automático (mudança
+  // só em monitorias.length), pra não piscar a tela à toa.
+  const prevQueueRef = useRef(activeQueue);
   useEffect(() => {
+    if (prevQueueRef.current !== activeQueue) {
+      setTickets([]);
+      prevQueueRef.current = activeQueue;
+    }
     loadQueueData();
   }, [activeQueue, monitorias.length]);
 
