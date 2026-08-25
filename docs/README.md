@@ -61,6 +61,7 @@
 - [Monitoria](./flows/monitoria.md) — criação, contestação, reavaliação, auto-finalização
 - [Prazo de Ação](./flows/action-deadline.md) — cálculo, cron, recálculo, ActionDeadlineClock
 - [Onboarding](./flows/onboarding.md) — convite, solicitação, setup inicial
+- [Central de Filas & Avaliação por IA](./flows/central-de-filas.md) — triagem Zendesk, IA (OpenRouter), identidade universal de agentes, segurança
 
 ### Decisões Arquiteturais
 - [ADR-001: Firebase → Supabase](./decisions/adr-001.md)
