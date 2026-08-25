@@ -849,6 +849,7 @@ function MainApp({
                   teams={teams}
                   forms={forms}
                   monitorias={monitorias}
+                  currentUserId={userData?.id}
                   onStartAudit={handleStartAuditFromQueue}
                 />
               </div>

@@ -18,6 +18,7 @@ import {
   normalizeChannel
 } from '../lib/helpdeskQueue';
 import { fetchAIGuidelines } from '../lib/aiGuidelines';
+import { fetchAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import {
   AlertTriangle,
   Sparkles,
@@ -34,7 +35,8 @@ import {
   ShieldCheck,
   Check,
   X,
-  BookOpen
+  BookOpen,
+  Rocket
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -46,6 +48,7 @@ interface AuditingQueueViewProps {
   teams: Team[];
   forms: EvaluationForm[];
   monitorias: Monitoria[];
+  currentUserId?: string;
   onStartAudit: (prefill: {
     ticket_id: string;
     form_id?: string;
@@ -64,6 +67,7 @@ export default function AuditingQueueView({
   teams,
   forms,
   monitorias,
+  currentUserId,
   onStartAudit,
 }: AuditingQueueViewProps) {
   const [activeQueue, setActiveQueue] = useState<AuditingQueueType>('negativas');
@@ -82,6 +86,10 @@ export default function AuditingQueueView({
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [guidelinePickerTicket, setGuidelinePickerTicket] = useState<AuditingQueueTicket | null>(null);
   const [selectedGuidelineIds, setSelectedGuidelineIds] = useState<Set<string>>(new Set());
+
+  // Rascunhos de avaliação da IA já prontos (persistidos), por ticket_id —
+  // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
+  const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>({});
 
   const teamsMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -132,6 +140,31 @@ export default function AuditingQueueView({
     loadQueueData();
   }, [activeQueue, monitorias.length]);
 
+  // Carrega os rascunhos de IA já prontos para os tickets da fila atual —
+  // só relevante na fila de Positivas, onde a avaliação com IA acontece.
+  useEffect(() => {
+    if (activeQueue !== 'positivas' || tickets.length === 0) {
+      setDrafts({});
+      return;
+    }
+    fetchAIDrafts(tickets.map(t => t.ticket_id)).then(loaded => {
+      const stillPending: Record<string, AIEvaluationDraft> = {};
+      tickets.forEach(t => {
+        const draft = loaded[t.ticket_id];
+        if (!draft) return;
+        if (t.already_audited) {
+          // Ticket já virou monitoria de verdade — o rascunho não serve
+          // mais pra nada, limpa pra não acumular lixo na tabela nem
+          // mostrar "Lançar Monitoria" de novo num ticket já concluído.
+          deleteAIDraft(t.ticket_id);
+        } else {
+          stillPending[t.ticket_id] = draft;
+        }
+      });
+      setDrafts(stillPending);
+    });
+  }, [activeQueue, tickets]);
+
   // Contagem de negativas não auditadas
   const pendingNegativesCount = useMemo(() => {
     if (activeQueue === 'negativas') {
@@ -177,7 +210,11 @@ export default function AuditingQueueView({
   };
 
   // Ação de avaliar com IA — chamada depois que o monitor confirma (ou pula)
-  // a seleção de manual no popup.
+  // a seleção de manual no popup. Só roda a IA e SALVA o resultado como
+  // rascunho; não abre a ficha sozinha — isso fica pro botão "Lançar
+  // Monitoria" (handleLaunchMonitoria), pra não obrigar o monitor a decidir
+  // na hora e pra não precisar rodar a IA de novo se ele só quiser revisar
+  // depois.
   const handleEvaluateWithAI = async (ticket: AuditingQueueTicket, guidelineIds: string[]) => {
     const defaultForm = forms.find(f => f.active !== false) || forms[0];
     if (!defaultForm) {
@@ -190,12 +227,13 @@ export default function AuditingQueueView({
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
       (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
     );
+    const teamId = matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0] || ticket.team_id;
+    const agentId = ticket.agent_id || matchedAgent?.id;
 
     setEvaluatingTicketId(ticket.ticket_id);
     try {
       toast.info(`Buscando diálogo e analisando ticket #${ticket.ticket_id} com IA...`);
       const { comments: dialogue, ticketFields } = await fetchTicketDialogue(ticket.ticket_id);
-      const teamId = matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0] || ticket.team_id;
       const aiResult = await evaluateTicketWithAI(ticket.ticket_id, defaultForm, dialogue, {
         name: matchedAgent?.name || ticket.agent_name,
         email: matchedAgent?.email || ticket.agent_email,
@@ -203,30 +241,65 @@ export default function AuditingQueueView({
         channel: ticket.channel,
       }, guidelineIds, ticketFields);
 
-      toast.success(`Avaliação da IA gerada com sucesso para o ticket #${ticket.ticket_id}!`);
-
-      // ticket.agent_id vem resolvido pela Edge Function (garante o vínculo/
-      // conta provisória pelo e-mail) — usado como fonte primária do agente,
-      // com o match local como reforço apenas para nome/equipe de exibição.
-      onStartAudit({
-        ticket_id: ticket.ticket_id,
-        form_id: defaultForm.id,
-        evaluated_id: ticket.agent_id || matchedAgent?.id,
-        team_id: teamId,
-        channel: normalizeChannel(ticket.channel),
-        satisfaction_result: 'Positiva',
-        // Elogio do cliente no CSAT já vem preenchido na Etapa 2 (Pesquisa),
-        // marcado como "possui registro" automaticamente.
-        satisfaction_has_record: !!ticket.csat_comment,
-        satisfaction_record_text: ticket.csat_comment,
-        aiEvaluation: aiResult
+      await saveAIDraft({
+        ticketId: ticket.ticket_id,
+        formId: defaultForm.id,
+        agentName: matchedAgent?.name || ticket.agent_name,
+        agentEmail: matchedAgent?.email || ticket.agent_email,
+        agentId,
+        teamId,
+        channel: ticket.channel,
+        satisfactionComment: ticket.csat_comment,
+        result: aiResult,
+        guidelineIds,
+        createdBy: currentUserId,
       });
+
+      setDrafts(prev => ({
+        ...prev,
+        [ticket.ticket_id]: {
+          id: prev[ticket.ticket_id]?.id || ticket.ticket_id,
+          ticket_id: ticket.ticket_id,
+          form_id: defaultForm.id,
+          agent_name: matchedAgent?.name || ticket.agent_name,
+          agent_email: matchedAgent?.email || ticket.agent_email,
+          agent_id: agentId,
+          team_id: teamId,
+          channel: ticket.channel,
+          satisfaction_comment: ticket.csat_comment,
+          result: aiResult,
+          guideline_ids: guidelineIds,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      }));
+
+      toast.success(`Avaliação pronta para o ticket #${ticket.ticket_id} — confira e clique em "Lançar Monitoria".`);
     } catch (err: any) {
       console.error('Erro na avaliação com IA:', err);
       toast.error(err?.message || 'Falha ao processar avaliação com IA');
     } finally {
       setEvaluatingTicketId(null);
     }
+  };
+
+  // Abre a ficha de monitoria com o rascunho da IA já salvo pra esse
+  // ticket — sem rodar a IA de novo.
+  const handleLaunchMonitoria = (ticket: AuditingQueueTicket) => {
+    const draft = drafts[ticket.ticket_id];
+    if (!draft) return;
+
+    onStartAudit({
+      ticket_id: ticket.ticket_id,
+      form_id: draft.form_id,
+      evaluated_id: draft.agent_id,
+      team_id: draft.team_id,
+      channel: normalizeChannel(draft.channel),
+      satisfaction_result: 'Positiva',
+      satisfaction_has_record: !!draft.satisfaction_comment,
+      satisfaction_record_text: draft.satisfaction_comment,
+      aiEvaluation: draft.result
+    });
   };
 
   // Sorteio proativo para o agente prioritário
@@ -595,24 +668,70 @@ export default function AuditingQueueView({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {ticket.positive_cap_reached ? (
-                      <span title="Este atendente já atingiu o máximo de 2 avaliações positivas no mês.">
-                        <Badge variant="warning" size="xs" className="font-bold text-[9px]">
-                          Máximo de 2 por agente atingido
-                        </Badge>
-                      </span>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        disabled={evaluatingTicketId === ticket.ticket_id}
-                        onClick={() => openGuidelinePicker(ticket)}
-                        className="flex items-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold"
-                      >
-                        <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
-                        <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
-                      </Button>
-                    )}
+                    {(() => {
+                      const draft = drafts[ticket.ticket_id];
+
+                      if (draft) {
+                        // Rascunho já pronto (salvo) — mostra a nota sugerida
+                        // e libera "Lançar Monitoria" sem precisar rodar a IA
+                        // de novo. "Reavaliar" continua disponível pra
+                        // sobrescrever, mas respeita o limite de 2/agente.
+                        return (
+                          <>
+                            <span title="Nota sugerida pela IA">
+                              <Badge variant="success" size="xs" className="font-mono font-black">
+                                {Math.round(draft.result.score)}%
+                              </Badge>
+                            </span>
+                            {!ticket.positive_cap_reached && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={evaluatingTicketId === ticket.ticket_id}
+                                onClick={() => openGuidelinePicker(ticket)}
+                                className="flex items-center gap-1 text-[10px]"
+                                title="Roda a IA de novo e sobrescreve este rascunho"
+                              >
+                                <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+                                <span>Reavaliar</span>
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => handleLaunchMonitoria(ticket)}
+                              className="flex items-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold"
+                            >
+                              <Rocket className="w-3 h-3" />
+                              <span>Lançar Monitoria</span>
+                            </Button>
+                          </>
+                        );
+                      }
+
+                      if (ticket.positive_cap_reached) {
+                        return (
+                          <span title="Este atendente já atingiu o máximo de 2 avaliações positivas no mês.">
+                            <Badge variant="warning" size="xs" className="font-bold text-[9px]">
+                              Máximo de 2 por agente atingido
+                            </Badge>
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          disabled={evaluatingTicketId === ticket.ticket_id}
+                          onClick={() => openGuidelinePicker(ticket)}
+                          className="flex items-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold"
+                        >
+                          <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+                          <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
+                        </Button>
+                      );
+                    })()}
                   </div>
                 </div>
               </Card>
