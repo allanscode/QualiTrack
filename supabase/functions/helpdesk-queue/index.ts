@@ -63,14 +63,17 @@ async function resolveOrCreateAgent(
   if (!email) return null;
   const normalizedEmail = email.trim().toLowerCase();
 
+  // team_ids não existe mais em public.users (migração 20260522000005) —
+  // multi-equipe é via public.user_teams; primary_team_id continua sendo
+  // a equipe principal de exibição.
   const { data: existing } = await supabase
     .from('users')
-    .select('id, primary_team_id, team_ids')
+    .select('id, primary_team_id')
     .eq('email', normalizedEmail)
     .maybeSingle();
 
   if (existing) {
-    return { id: existing.id as string, team_id: (existing.primary_team_id as string) || (existing.team_ids as string[] | null)?.[0] };
+    return { id: existing.id as string, team_id: existing.primary_team_id as string | undefined };
   }
 
   // Tenta casar a equipe pelo nome do grupo/time do helpdesk (best-effort).
@@ -96,7 +99,6 @@ async function resolveOrCreateAgent(
       source_system: sourceSystem,
       is_provisional: true,
       primary_team_id: teamId || null,
-      team_ids: teamId ? [teamId] : [],
     })
     .select('id')
     .single();
@@ -104,6 +106,16 @@ async function resolveOrCreateAgent(
   if (createError) {
     console.error('[helpdesk-queue] Falha ao criar agente provisório:', createError.message);
     return teamId ? { team_id: teamId } : null;
+  }
+
+  // Espelha o vínculo em user_teams (fonte de verdade para multi-equipe).
+  if (teamId) {
+    const { error: userTeamError } = await supabase
+      .from('user_teams')
+      .insert({ user_id: created.id, team_id: teamId });
+    if (userTeamError) {
+      console.error('[helpdesk-queue] Falha ao vincular agente provisório à equipe:', userTeamError.message);
+    }
   }
 
   return { id: created.id as string, team_id: teamId };
