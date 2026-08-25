@@ -257,11 +257,21 @@ export default function MonitoriaForm({
         setUnregisteredAgentPreview(null);
       } else {
         setUnregisteredAgentPreview(found);
+        // Atendente ainda não cadastrado, mas o grupo dele no Zendesk (ex.:
+        // "Suporte Interno") já existe como Equipe no QualiTrack (importado
+        // via Admin > Equipes > Importar do Zendesk) — casa por nome e
+        // pré-seleciona, pra não depender do monitor escolher certo na mão.
+        if (found.team_name && !header.team_id) {
+          const matchedTeam = teams.find(t => t.name.trim().toLowerCase() === found.team_name!.trim().toLowerCase());
+          if (matchedTeam) {
+            setHeader(prev => (prev.team_id || prev.ticket_id?.trim() !== ticketId) ? prev : ({ ...prev, team_id: matchedTeam.id }));
+          }
+        }
       }
     }, 700);
 
     return () => clearTimeout(timer);
-  }, [header.ticket_id, header.evaluated_id, isViewOnly, isReevaluating]);
+  }, [header.ticket_id, header.evaluated_id, header.team_id, isViewOnly, isReevaluating, teams]);
 
   // Envio ao Zendesk: só faz sentido para monitorias com veredito final e
   // com ticket_id preenchido (a Edge Function exige um ticket numérico).
