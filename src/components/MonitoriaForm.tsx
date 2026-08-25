@@ -204,6 +204,28 @@ export default function MonitoriaForm({
   // de Agente — mesmo que ele ainda não tenha conta no QualiTrack, caso em
   // que mostramos um aviso com asterisco em vez do id (que não existe).
   const lastLookedUpTicketRef = useRef<string | null>(null);
+  // Sempre reflete o ticket_id do render mais recente — usado para
+  // descartar uma resposta de busca que chegou tarde, depois que o auditor
+  // já trocou o número do ticket (senão o agente de um ticket antigo podia
+  // ser aplicado por cima do ticket novo, avaliando a pessoa errada).
+  const latestTicketIdRef = useRef<string | undefined>(header.ticket_id);
+  latestTicketIdRef.current = header.ticket_id;
+
+  // Nome/e-mail de um lookup anterior não podem sobreviver à troca do
+  // ticket — senão o popup "Agente não cadastrado?" reabre pré-cheio com os
+  // dados de outro ticket (mesmo que o ticket novo já tenha agente
+  // cadastrado) e o auditor pode associar a pessoa errada sem perceber.
+  // Efeito separado, disparado só por ticket_id em si — não pelo resto do
+  // header — pra não limpar o que o auditor está digitando à toa.
+  const agentModalTicketRef = useRef(header.ticket_id);
+  useEffect(() => {
+    if (agentModalTicketRef.current !== header.ticket_id) {
+      agentModalTicketRef.current = header.ticket_id;
+      setNewAgentName('');
+      setNewAgentEmail('');
+    }
+  }, [header.ticket_id]);
+
   useEffect(() => {
     if (isViewOnly || isReevaluating) return;
     const ticketId = header.ticket_id?.trim();
@@ -219,12 +241,15 @@ export default function MonitoriaForm({
     const timer = setTimeout(async () => {
       lastLookedUpTicketRef.current = ticketId;
       const found = await lookupTicketAgent(ticketId);
+      // O ticket_id pode ter mudado enquanto a busca estava em voo — se
+      // mudou, essa resposta já não corresponde ao que está na tela.
+      if (ticketId !== latestTicketIdRef.current?.trim()) return;
       if (!found || header.evaluated_id) return;
 
       if (found.existing_id) {
         // Agente já cadastrado — preenche a ficha automaticamente, igual já
         // acontece vindo da Central de Filas.
-        setHeader(prev => prev.evaluated_id ? prev : ({
+        setHeader(prev => (prev.evaluated_id || prev.ticket_id?.trim() !== ticketId) ? prev : ({
           ...prev,
           evaluated_id: found.existing_id!,
           team_id: prev.team_id || found.existing_team_id || prev.team_id,
