@@ -143,7 +143,7 @@ serve(async (req) => {
 
     // 3. Avaliação com IA (OpenRouter) — não depende do Zendesk
     if (action === 'evaluate_ai') {
-      return await handleEvaluateAI(parseResult.data);
+      return await handleEvaluateAI(parseResult.data, supabase);
     }
 
     const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
@@ -304,7 +304,10 @@ serve(async (req) => {
  * response_format: json_schema para forçar retorno em JSON estrito,
  * alinhado aos critérios da ficha de monitoria enviada pelo front-end.
  */
-async function handleEvaluateAI(payload: z.infer<typeof RequestSchema>): Promise<Response> {
+async function handleEvaluateAI(
+  payload: z.infer<typeof RequestSchema>,
+  supabase: ReturnType<typeof createClient>
+): Promise<Response> {
   const { ticket_id, form_criteria, dialogue, agent_info } = payload;
 
   if (!ticket_id || !form_criteria?.sections) {
@@ -360,9 +363,33 @@ async function handleEvaluateAI(payload: z.infer<typeof RequestSchema>): Promise
     .map((s: any) => `Seção "${s.title}":\n${(s.questions || []).map((q: any) => `- [${q.id}] ${q.text}${q.is_critical ? ' (ERRO CRÍTICO)' : ''}`).join('\n')}`)
     .join('\n\n');
 
-  const prompt = `Você é um analista sênior de qualidade de atendimento ao cliente da WebPosto.
-Avalie o atendimento abaixo com base estritamente na ficha de critérios fornecida.
+  // Manual de padrões de atendimento (cadastrado em Admin > Manual da IA):
+  // contexto normativo adicional além dos critérios da própria ficha.
+  // Limitado em tamanho para não estourar o contexto do modelo gratuito.
+  const MAX_GUIDELINES_CHARS = 6000;
+  let guidelinesText = '';
+  try {
+    const { data: guidelines } = await supabase
+      .from('ai_evaluation_guidelines')
+      .select('title, content')
+      .eq('active', true)
+      .order('created_at', { ascending: false });
 
+    if (guidelines?.length) {
+      const combined = guidelines
+        .map((g: any) => `### ${g.title}\n${g.content}`)
+        .join('\n\n');
+      guidelinesText = combined.length > MAX_GUIDELINES_CHARS
+        ? combined.slice(0, MAX_GUIDELINES_CHARS) + '\n[...conteúdo truncado...]'
+        : combined;
+    }
+  } catch (e) {
+    console.warn('[helpdesk-queue] Falha ao carregar manuais de avaliação (seguindo sem eles):', e);
+  }
+
+  const prompt = `Você é um analista sênior de qualidade de atendimento ao cliente da WebPosto.
+Avalie o atendimento abaixo com base na ficha de critérios fornecida${guidelinesText ? ' e no manual de padrões de atendimento abaixo' : ''}.
+${guidelinesText ? `\nMANUAL DE PADRÕES DE ATENDIMENTO (referência normativa da empresa):\n${guidelinesText}\n` : ''}
 DADOS DO ATENDIMENTO:
 - Atendente: ${agent_info?.name || 'não informado'}
 - E-mail: ${agent_info?.email || 'não informado'}
@@ -377,8 +404,10 @@ TRANSCRIÇÃO COMPLETA DO ATENDIMENTO:
 ${dialogueText || '(sem mensagens registradas)'}
 
 Para cada critério, responda SIM, NAO ou NA e justifique citando um trecho literal do diálogo sempre que possível.
-Calcule a nota geral (score de 0 a 100) com base nas respostas. Produza um resumo executivo objetivo, com pontos
-fortes e oportunidades de melhoria concretas, baseadas apenas no que está na transcrição.`;
+Use o manual de padrões (quando fornecido) como referência do que é esperado, mas responda SEMPRE aos critérios
+exatos da ficha — nunca invente critérios que não estão nela. Calcule a nota geral (score de 0 a 100) com base nas
+respostas. Produza um resumo executivo objetivo, com pontos fortes e oportunidades de melhoria concretas, baseadas
+apenas no que está na transcrição.`;
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {

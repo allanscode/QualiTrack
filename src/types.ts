@@ -251,6 +251,19 @@ export interface TicketCommentMessage {
   is_public: boolean;
 }
 
+/** Manual de padrões de atendimento usado como contexto extra pela IA. */
+export interface AIEvaluationGuideline {
+  id: string;
+  title: string;
+  content: string;
+  file_name?: string;
+  file_path?: string;
+  active: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AIEvaluationResult {
   score: number;
   summary: string;
