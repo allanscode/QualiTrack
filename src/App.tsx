@@ -390,10 +390,13 @@ function MainApp({
 
     setFormPrefillData({
       ticket_id: prefill.ticket_id,
+      form_id: prefill.form_id,
       evaluated_id: prefill.evaluated_id,
       team_id: prefill.team_id,
       channel: prefill.channel,
       satisfaction_result: prefill.satisfaction_result,
+      satisfaction_has_record: prefill.satisfaction_has_record,
+      satisfaction_record_text: prefill.satisfaction_record_text,
       ...(prefill.aiEvaluation ? {
         answers: prefill.aiEvaluation.suggested_answers,
         question_observations: prefill.aiEvaluation.suggested_observations,

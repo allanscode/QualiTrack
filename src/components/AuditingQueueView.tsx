@@ -13,7 +13,8 @@ import {
   fetchQueueTickets,
   computeAgentQueuePriorities,
   evaluateTicketWithAI,
-  fetchTicketDialogue
+  fetchTicketDialogue,
+  normalizeChannel
 } from '../lib/helpdeskQueue';
 import {
   AlertTriangle,
@@ -43,10 +44,13 @@ interface AuditingQueueViewProps {
   monitorias: Monitoria[];
   onStartAudit: (prefill: {
     ticket_id: string;
+    form_id?: string;
     evaluated_id?: string;
     team_id?: string;
     channel?: string;
     satisfaction_result?: string;
+    satisfaction_has_record?: boolean;
+    satisfaction_record_text?: string;
     aiEvaluation?: AIEvaluationResult;
   }) => void;
 }
@@ -157,10 +161,15 @@ export default function AuditingQueueView({
       // com o match local como reforço apenas para nome/equipe de exibição.
       onStartAudit({
         ticket_id: ticket.ticket_id,
+        form_id: defaultForm.id,
         evaluated_id: ticket.agent_id || matchedAgent?.id,
         team_id: teamId,
-        channel: ticket.channel || 'Chat',
+        channel: normalizeChannel(ticket.channel),
         satisfaction_result: 'Positiva',
+        // Elogio do cliente no CSAT já vem preenchido na Etapa 2 (Pesquisa),
+        // marcado como "possui registro" automaticamente.
+        satisfaction_has_record: !!ticket.csat_comment,
+        satisfaction_record_text: ticket.csat_comment,
         aiEvaluation: aiResult
       });
     } catch (err: any) {
@@ -353,7 +362,7 @@ export default function AuditingQueueView({
                         ticket_id: ticket.ticket_id,
                         evaluated_id: ticket.agent_id || matchedAgent?.id,
                         team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
-                        channel: ticket.channel || 'Chat',
+                        channel: normalizeChannel(ticket.channel),
                         satisfaction_result: 'Negativa'
                       });
                     }}

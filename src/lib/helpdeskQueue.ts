@@ -11,6 +11,20 @@ import {
 } from '../types';
 
 /**
+ * Normaliza o canal vindo do helpdesk (ex.: "chat", "voice", "native_messaging")
+ * para um dos valores fixos aceitos pela ficha de monitoria. Sem isso, o
+ * seletor de canal do formulário abre em branco mesmo com o valor prefilled,
+ * porque o texto do Zendesk não bate com nenhuma das opções.
+ */
+export function normalizeChannel(raw?: string): 'Chat' | 'Email' | 'Telefone' | 'WhatsApp' {
+  const c = (raw || '').toLowerCase();
+  if (c.includes('whatsapp')) return 'WhatsApp';
+  if (c.includes('mail')) return 'Email';
+  if (c.includes('voice') || c.includes('phone') || c.includes('telefone') || c.includes('call')) return 'Telefone';
+  return 'Chat';
+}
+
+/**
  * Calcula a fila balanceada de agentes para monitorias proativas (sorteio justo).
  * Ordena os agentes pelo tempo decorrido desde a última monitoria.
  */
