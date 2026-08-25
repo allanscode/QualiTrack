@@ -67,7 +67,10 @@ export default function MonitoriaForm({
   const { config: qualityConfig, getLevelForScore, isAboveTarget } = useQualityConfig();
   const staticData = useStaticData();
   const isAdmin = user?.role === 'admin';
-  const isViewOnly = !!initialData && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit;
+  // Só é "somente leitura" quando initialData é uma monitoria JÁ SALVA (tem
+  // id) — dados de pré-preenchimento vindos da Central de Filas (ticket_id,
+  // sugestões da IA etc.) não têm id ainda e precisam continuar editáveis.
+  const isViewOnly = !!(initialData as any)?.id && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit;
   const isReevaluating = !!(initialData as any)?._reevaluate;
   const isAdminEdit = !!(initialData as any)?._adminEdit;
 
