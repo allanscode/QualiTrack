@@ -44,6 +44,17 @@ export function normalizeChannel(raw?: string): 'Chat' | 'Email' | 'Telefone' | 
 }
 
 /**
+ * Converte o CSAT do ticket (Zendesk) no resultado de pesquisa da ficha de
+ * monitoria — usado pra não fixar 'Positiva' em avaliações com IA que agora
+ * também rodam em Negativas/Proativas, onde o resultado real é diferente.
+ */
+export function csatStatusToSatisfactionResult(status?: string): 'Positiva' | 'Negativa' | 'Sem pesquisa' {
+  if (status === 'good') return 'Positiva';
+  if (status === 'bad') return 'Negativa';
+  return 'Sem pesquisa';
+}
+
+/**
  * Calcula a fila balanceada de agentes para monitorias proativas (sorteio justo).
  * Ordena os agentes pelo tempo decorrido desde a última monitoria.
  */
@@ -106,25 +117,37 @@ export function computeAgentQueuePriorities(
     .sort((a, b) => b.priority_score - a.priority_score);
 }
 
+export interface QueueTicketsPage {
+  tickets: AuditingQueueTicket[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 /**
- * Busca tickets das filas do Zendesk (Negativas, Proativas ou Positivas).
+ * Busca UMA página de tickets das filas do Zendesk (Negativas, Proativas ou
+ * Positivas) — 25 por vez. Views grandes (Proativas: centenas de tickets de
+ * CSAT vazio) não cabem numa carga só sem arriscar o rate limit do Zendesk;
+ * passe `cursor` (vindo do `nextCursor` da página anterior) pra continuar.
  */
 export async function fetchQueueTickets(
   type: AuditingQueueType,
-  existingMonitorias: Monitoria[] = []
-): Promise<AuditingQueueTicket[]> {
+  existingMonitorias: Monitoria[] = [],
+  cursor: string | null = null
+): Promise<QueueTicketsPage> {
   const auditedTicketIds = new Set(
     existingMonitorias.map(m => m.ticket_id?.trim()).filter(Boolean)
   );
 
   let tickets: AuditingQueueTicket[];
+  let nextCursor: string | null = null;
+  let hasMore = false;
 
   if (isMockMode || !supabase) {
     tickets = getMockQueueTickets(type, auditedTicketIds);
   } else {
     try {
       const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
-        body: { action: 'fetch_queue', queue_type: type }
+        body: { action: 'fetch_queue', queue_type: type, cursor }
       });
 
       if (error || !data?.tickets) {
@@ -135,6 +158,8 @@ export async function fetchQueueTickets(
           ...t,
           already_audited: auditedTicketIds.has(t.ticket_id.trim())
         }));
+        nextCursor = data.next_cursor || null;
+        hasMore = !!data.has_more;
       }
     } catch (err) {
       console.error('[HelpdeskQueue] Erro na requisição:', err);
@@ -160,7 +185,7 @@ export async function fetchQueueTickets(
     });
   }
 
-  return tickets;
+  return { tickets, nextCursor, hasMore };
 }
 
 /**

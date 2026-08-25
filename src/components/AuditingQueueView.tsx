@@ -15,7 +15,8 @@ import {
   computeAgentQueuePriorities,
   evaluateTicketWithAI,
   fetchTicketDialogue,
-  normalizeChannel
+  normalizeChannel,
+  csatStatusToSatisfactionResult
 } from '../lib/helpdeskQueue';
 import { fetchAIGuidelines } from '../lib/aiGuidelines';
 import { fetchAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
@@ -36,7 +37,9 @@ import {
   Check,
   X,
   BookOpen,
-  Rocket
+  Rocket,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -91,6 +94,15 @@ export default function AuditingQueueView({
   // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
   const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>({});
 
+  // Paginação: 25 tickets por página (definido no backend). Views grandes
+  // (Proativas chega a ter centenas de CSAT vazio) não cabem numa carga só
+  // sem arriscar o rate limit do Zendesk. `prevCursors` guarda o histórico
+  // pra "Página Anterior" voltar sem precisar re-buscar do zero.
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [prevCursors, setPrevCursors] = useState<(string | null)[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [pageNumber, setPageNumber] = useState(1);
+
   const teamsMap = useMemo(() => {
     const map: Record<string, string> = {};
     teams.forEach(t => { map[t.id] = t.name; });
@@ -108,29 +120,23 @@ export default function AuditingQueueView({
   // sobrescrever os tickets da fila mais nova já carregada na tela.
   const loadSeqRef = useRef(0);
 
-  const loadQueueData = async () => {
+  // targetCursor: null = primeira página. Passar explicitamente (mesmo
+  // sendo null) evita reusar por engano o cursor de uma página anterior ao
+  // trocar de fila ou dar refresh.
+  const loadQueueData = async (targetCursor: string | null = null) => {
     const seq = ++loadSeqRef.current;
     const queueAtCallTime = activeQueue;
 
-    // A aba Proativas não usa `tickets` — ela mostra agentQueue, calculada
-    // localmente a partir de agents/monitorias. Buscar tickets do Zendesk
-    // aqui não servia pra nada na tela e, pior, disparava a criação de
-    // conta provisória para QUALQUER agente responsável por um ticket
-    // solved/closed (query sem filtro nenhum) — cadastros indesejados só
-    // por abrir essa aba. Simplesmente não busca mais.
-    if (queueAtCallTime === 'proativas') {
-      setTickets([]);
-      return;
-    }
-
     setLoading(true);
     try {
-      const data = await fetchQueueTickets(queueAtCallTime, monitorias);
+      const { tickets: data, nextCursor, hasMore: more } = await fetchQueueTickets(queueAtCallTime, monitorias, targetCursor);
       // Descarta a resposta se já não for mais a busca mais recente — uma
       // troca de fila nesse meio tempo já disparou outra chamada, com seq
       // maior.
       if (seq !== loadSeqRef.current) return;
       setTickets(data);
+      setCursor(nextCursor);
+      setHasMore(more);
     } catch (err) {
       console.error('Erro ao carregar fila:', err);
       toast.error('Não foi possível carregar a fila de chamados.');
@@ -139,24 +145,49 @@ export default function AuditingQueueView({
     }
   };
 
-  // Ao trocar de fila (Negativas/Proativas/Positivas), limpa a lista antes
-  // de buscar a nova — senão os tickets da fila anterior ficam visíveis por
-  // alguns segundos enquanto a nova fila carrega, parecendo que são da fila
-  // que acabou de ser selecionada. Não limpa em refresh automático (mudança
-  // só em monitorias.length), pra não piscar a tela à toa.
+  const goToNextPage = () => {
+    if (!hasMore || !cursor) return;
+    setPrevCursors(prev => [...prev, cursor]);
+    setPageNumber(p => p + 1);
+    loadQueueData(cursor);
+  };
+
+  const goToPrevPage = () => {
+    if (prevCursors.length === 0) return;
+    const stack = [...prevCursors];
+    stack.pop(); // remove o cursor da página atual
+    const target = stack.length > 0 ? stack[stack.length - 1] : null;
+    setPrevCursors(stack);
+    setPageNumber(p => Math.max(1, p - 1));
+    loadQueueData(target);
+  };
+
+  // Ao trocar de fila (Negativas/Proativas/Positivas), limpa a lista e
+  // reseta a paginação antes de buscar a nova — senão os tickets da fila
+  // anterior ficam visíveis por alguns segundos enquanto a nova fila
+  // carrega, parecendo que são da fila que acabou de ser selecionada. Não
+  // limpa em refresh automático (mudança só em monitorias.length), pra não
+  // piscar a tela à toa.
   const prevQueueRef = useRef(activeQueue);
   useEffect(() => {
     if (prevQueueRef.current !== activeQueue) {
       setTickets([]);
+      setCursor(null);
+      setPrevCursors([]);
+      setHasMore(false);
+      setPageNumber(1);
       prevQueueRef.current = activeQueue;
+      loadQueueData(null);
+    } else {
+      loadQueueData(null);
     }
-    loadQueueData();
   }, [activeQueue, monitorias.length]);
 
-  // Carrega os rascunhos de IA já prontos para os tickets da fila atual —
-  // só relevante na fila de Positivas, onde a avaliação com IA acontece.
+  // Carrega os rascunhos de IA já prontos para os tickets da página atual —
+  // relevante nas filas de Positivas e Proativas, onde a avaliação com IA
+  // acontece (Negativas ainda não tem IA).
   useEffect(() => {
-    if (activeQueue !== 'positivas' || tickets.length === 0) {
+    if ((activeQueue !== 'positivas' && activeQueue !== 'proativas') || tickets.length === 0) {
       setDrafts({});
       return;
     }
@@ -308,26 +339,117 @@ export default function AuditingQueueView({
       evaluated_id: draft.agent_id,
       team_id: draft.team_id,
       channel: normalizeChannel(draft.channel),
-      satisfaction_result: 'Positiva',
+      // A IA agora avalia Positivas e Proativas — o resultado da pesquisa
+      // precisa refletir o CSAT real do ticket, não ficar fixo em
+      // 'Positiva' (Proativas normalmente é 'Sem pesquisa').
+      satisfaction_result: csatStatusToSatisfactionResult(ticket.csat_status),
       satisfaction_has_record: !!draft.satisfaction_comment,
       satisfaction_record_text: draft.satisfaction_comment,
       aiEvaluation: draft.result
     });
   };
 
-  // Sorteio proativo para o agente prioritário
-  const handleProactiveDraw = (agent: AgentQueueSummary) => {
-    const sampleTicketId = `154${Math.floor(100 + Math.random() * 899)}`;
-    toast.success(`Chamado #${sampleTicketId} selecionado para ${agent.agent_name}!`);
+  // E-mails dos 5 agentes mais prioritários (mais tempo sem monitoria) —
+  // usado só pra destacar visualmente esses tickets na fila Proativa, sem
+  // depender de "sortear" um ticket específico (a fila agora é paginada;
+  // um agente prioritário pode estar em qualquer página).
+  const topPriorityEmails = useMemo(() => {
+    return new Set(agentQueue.slice(0, 5).map(a => a.agent_email?.toLowerCase()).filter(Boolean));
+  }, [agentQueue]);
 
-    onStartAudit({
-      ticket_id: sampleTicketId,
-      evaluated_id: agent.agent_id,
-      team_id: agent.team_id,
-      channel: 'Chat',
-      satisfaction_result: 'Sem pesquisa'
-    });
+  // Bloco de ações de IA (nota sugerida / Avaliar com IA / Reavaliar /
+  // Lançar Monitoria) — igual pra Positivas e Proativas, só muda a cor de
+  // destaque. Extraído pra não duplicar a mesma lógica duas vezes.
+  const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
+    const draft = drafts[ticket.ticket_id];
+
+    if (draft) {
+      return (
+        <>
+          <span title="Nota sugerida pela IA">
+            <Badge variant="success" size="xs" className="font-mono font-black">
+              {Math.round(draft.result.score)}%
+            </Badge>
+          </span>
+          {!ticket.positive_cap_reached && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={evaluatingTicketId === ticket.ticket_id}
+              onClick={() => openGuidelinePicker(ticket)}
+              className="flex items-center gap-1 text-[10px]"
+              title="Roda a IA de novo e sobrescreve este rascunho"
+            >
+              <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+              <span>Reavaliar</span>
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => handleLaunchMonitoria(ticket)}
+            className={`flex items-center gap-1 ${accentClass} text-white font-bold`}
+          >
+            <Rocket className="w-3 h-3" />
+            <span>Lançar Monitoria</span>
+          </Button>
+        </>
+      );
+    }
+
+    if (ticket.positive_cap_reached) {
+      return (
+        <span title="Este atendente já atingiu o máximo de 2 avaliações positivas no mês.">
+          <Badge variant="warning" size="xs" className="font-bold text-[9px]">
+            Máximo de 2 por agente atingido
+          </Badge>
+        </span>
+      );
+    }
+
+    return (
+      <Button
+        size="sm"
+        variant="primary"
+        disabled={evaluatingTicketId === ticket.ticket_id}
+        onClick={() => openGuidelinePicker(ticket)}
+        className={`flex items-center gap-1 ${accentClass} text-white font-bold`}
+      >
+        <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+        <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
+      </Button>
+    );
   };
+
+  // Controles de paginação (25 tickets por página) — reaproveitados em
+  // Negativas, Proativas e Positivas.
+  const renderPagination = () => (
+    <div className="flex items-center justify-between pt-2">
+      <span className="text-[10px] font-bold text-brand-muted">Página {pageNumber}</span>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={prevCursors.length === 0 || loading}
+          onClick={goToPrevPage}
+          className="flex items-center gap-1 text-[10px]"
+        >
+          <ChevronLeft className="w-3 h-3" />
+          <span>Anterior</span>
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!hasMore || loading}
+          onClick={goToNextPage}
+          className="flex items-center gap-1 text-[10px]"
+        >
+          <span>Próxima</span>
+          <ChevronRight className="w-3 h-3" />
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -351,7 +473,11 @@ export default function AuditingQueueView({
           <Button
             variant="ghost"
             size="sm"
-            onClick={loadQueueData}
+            onClick={() => {
+              setPrevCursors([]);
+              setPageNumber(1);
+              loadQueueData(null);
+            }}
             disabled={loading}
             className="flex items-center gap-1.5"
           >
@@ -510,103 +636,110 @@ export default function AuditingQueueView({
               </Card>
             ))}
           </div>
+          {renderPagination()}
         </div>
       )}
 
       {/* Conteúdo da Fila: PROATIVAS (Amostragem Justa) */}
       {activeQueue === 'proativas' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-brand-highlight/10 border border-brand-highlight/25 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-brand-highlight text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                <Zap className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-wider text-brand-highlight">
-                  Fila de Equidade Proativa
-                </h3>
-                <p className="text-[11px] font-semibold text-brand-primary/80">
-                  Substitui a planilha antiga: ordena automaticamente todos os atendentes por tempo sem monitoria, garantindo 100% de cobertura da equipe.
-                </p>
-              </div>
+          <div className="p-4 rounded-2xl bg-brand-highlight/10 border border-brand-highlight/25 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-brand-highlight text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Zap className="w-5 h-5" />
             </div>
-            {agentQueue.length > 0 && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => handleProactiveDraw(agentQueue[0])}
-                className="flex items-center gap-1.5 font-bold flex-shrink-0"
-              >
-                <Zap className="w-3.5 h-3.5" />
-                <span>Sortear Top 1 da Fila</span>
-              </Button>
-            )}
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-wider text-brand-highlight">
+                Fila de Equidade Proativa
+              </h3>
+              <p className="text-[11px] font-semibold text-brand-primary/80">
+                Chamados com CSAT vazio/não avaliado no Zendesk — a mesma IA da fila de Positivas avalia e
+                sugere a monitoria, que você revisa antes de lançar. Cards de agentes com <Badge variant="warning" size="xs" className="text-[9px] align-middle">prioritário</Badge> pertencem a quem está há mais tempo sem monitoria.
+              </p>
+            </div>
           </div>
 
-          {/* Grid de Atendentes Ordenados por Prioridade */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {agentQueue.map((agent, index) => {
-              const isUrgent = agent.days_since_last_audit > 14 || agent.total_audits_month === 0;
-
-              return (
-                <Card
+          {/* Ranking de prioridade — só informativo, ajuda a escolher qual
+              ticket revisar primeiro entre os desta página. */}
+          {agentQueue.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {agentQueue.slice(0, 5).map((agent, index) => (
+                <div
                   key={agent.agent_id}
-                  className={`p-3.5 space-y-2.5 transition-all ${
-                    index === 0
-                      ? 'border-brand-highlight ring-1 ring-brand-highlight/30 bg-surface-subtle/30'
-                      : 'hover:border-surface-border'
-                  }`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-surface-border bg-surface-subtle/40 flex-shrink-0"
+                  title={`${agent.days_since_last_audit >= 999 ? 'Nunca auditado' : `${agent.days_since_last_audit}d sem monitoria`}`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                        index === 0
-                          ? 'bg-brand-highlight text-white'
-                          : 'bg-surface-subtle text-brand-muted'
-                      }`}>
-                        {index + 1}
-                      </span>
-                      <div>
-                        <h4 className="text-xs font-black text-brand-primary line-clamp-1">
-                          {agent.agent_name}
-                        </h4>
-                        <span className="text-[10px] font-bold text-brand-muted flex items-center gap-1">
-                          <Tag className="w-2.5 h-2.5 opacity-60" />
-                          {agent.team_name}
-                        </span>
-                      </div>
-                    </div>
+                  <span className="w-4 h-4 rounded-full bg-brand-highlight text-white flex items-center justify-center text-[9px] font-black flex-shrink-0">
+                    {index + 1}
+                  </span>
+                  <span className="text-[10px] font-bold text-brand-primary whitespace-nowrap">{agent.agent_name}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
-                    <Badge
-                      variant={isUrgent ? 'warning' : 'neutral'}
-                      size="xs"
-                      className="font-bold text-[9px] flex-shrink-0"
-                    >
-                      {agent.days_since_last_audit >= 999
-                        ? 'Nunca auditado'
-                        : `${agent.days_since_last_audit}d sem monitoria`}
+          {/* Lista de Chamados com CSAT Vazio */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredTickets.map(ticket => {
+              const isPriority = ticket.agent_email && topPriorityEmails.has(ticket.agent_email.toLowerCase());
+              return (
+                <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-brand-highlight/40 transition-all">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-black text-brand-primary">
+                          #{ticket.ticket_id}
+                        </span>
+                        <a
+                          href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
+                          title="Abrir no Zendesk"
+                        >
+                          <ExternalLink className="w-2.5 h-2.5" />
+                          <span>Zendesk</span>
+                        </a>
+                        {ticket.already_audited && (
+                          <Badge variant="success" size="xs" className="text-[9px]">
+                            Auditado
+                          </Badge>
+                        )}
+                        {isPriority && (
+                          <Badge variant="warning" size="xs" className="text-[9px]">
+                            Prioritário
+                          </Badge>
+                        )}
+                      </div>
+                      <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                        {ticket.subject}
+                      </h4>
+                    </div>
+                    <Badge variant="neutral" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
+                      CSAT Vazio
                     </Badge>
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2 border-t border-surface-border">
-                    <span>
-                      {agent.total_audits_month} {agent.total_audits_month === 1 ? 'monitoria' : 'monitorias'} no mês
-                    </span>
+                  <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-1 border-t border-surface-border">
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1">
+                        <UserIcon className="w-3 h-3 text-brand-highlight" />
+                        {ticket.agent_name || 'Agente'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 opacity-60" />
+                        {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleProactiveDraw(agent)}
-                      className="flex items-center gap-1 text-[10px]"
-                    >
-                      <span>Auditar Agente</span>
-                      <ArrowRight className="w-2.5 h-2.5" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {renderAiActions(ticket, 'bg-gradient-to-r from-brand-highlight to-brand-highlight/80')}
+                    </div>
                   </div>
                 </Card>
               );
             })}
           </div>
+          {renderPagination()}
         </div>
       )}
 
@@ -681,75 +814,13 @@ export default function AuditingQueueView({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {(() => {
-                      const draft = drafts[ticket.ticket_id];
-
-                      if (draft) {
-                        // Rascunho já pronto (salvo) — mostra a nota sugerida
-                        // e libera "Lançar Monitoria" sem precisar rodar a IA
-                        // de novo. "Reavaliar" continua disponível pra
-                        // sobrescrever, mas respeita o limite de 2/agente.
-                        return (
-                          <>
-                            <span title="Nota sugerida pela IA">
-                              <Badge variant="success" size="xs" className="font-mono font-black">
-                                {Math.round(draft.result.score)}%
-                              </Badge>
-                            </span>
-                            {!ticket.positive_cap_reached && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={evaluatingTicketId === ticket.ticket_id}
-                                onClick={() => openGuidelinePicker(ticket)}
-                                className="flex items-center gap-1 text-[10px]"
-                                title="Roda a IA de novo e sobrescreve este rascunho"
-                              >
-                                <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
-                                <span>Reavaliar</span>
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="primary"
-                              onClick={() => handleLaunchMonitoria(ticket)}
-                              className="flex items-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold"
-                            >
-                              <Rocket className="w-3 h-3" />
-                              <span>Lançar Monitoria</span>
-                            </Button>
-                          </>
-                        );
-                      }
-
-                      if (ticket.positive_cap_reached) {
-                        return (
-                          <span title="Este atendente já atingiu o máximo de 2 avaliações positivas no mês.">
-                            <Badge variant="warning" size="xs" className="font-bold text-[9px]">
-                              Máximo de 2 por agente atingido
-                            </Badge>
-                          </span>
-                        );
-                      }
-
-                      return (
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          disabled={evaluatingTicketId === ticket.ticket_id}
-                          onClick={() => openGuidelinePicker(ticket)}
-                          className="flex items-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold"
-                        >
-                          <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
-                          <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
-                        </Button>
-                      );
-                    })()}
+                    {renderAiActions(ticket, 'bg-gradient-to-r from-emerald-600 to-teal-600')}
                   </div>
                 </div>
               </Card>
             ))}
           </div>
+          {renderPagination()}
         </div>
       )}
 
