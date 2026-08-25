@@ -95,6 +95,17 @@ export default function AuditingQueueView({
   }, [agents, monitorias, teamsMap]);
 
   const loadQueueData = async () => {
+    // A aba Proativas não usa `tickets` — ela mostra agentQueue, calculada
+    // localmente a partir de agents/monitorias. Buscar tickets do Zendesk
+    // aqui não servia pra nada na tela e, pior, disparava a criação de
+    // conta provisória para QUALQUER agente responsável por um ticket
+    // solved/closed (query sem filtro nenhum) — cadastros indesejados só
+    // por abrir essa aba. Simplesmente não busca mais.
+    if (activeQueue === 'proativas') {
+      setTickets([]);
+      return;
+    }
+
     setLoading(true);
     try {
       const data = await fetchQueueTickets(activeQueue, monitorias);
