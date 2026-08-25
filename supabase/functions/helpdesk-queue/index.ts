@@ -141,7 +141,7 @@ serve(async (req) => {
 
     const { action, queue_type, ticket_id } = parseResult.data;
 
-    // 3. Avaliação com IA (Google Gemini) — não depende do Zendesk
+    // 3. Avaliação com IA (OpenRouter) — não depende do Zendesk
     if (action === 'evaluate_ai') {
       return await handleEvaluateAI(parseResult.data);
     }
@@ -312,7 +312,7 @@ async function handleEvaluateAI(payload: z.infer<typeof RequestSchema>): Promise
   }
 
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  const openRouterModel = Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-super-120b-a12b:free';
+  const openRouterModel = Deno.env.get('OPENROUTER_MODEL') || 'google/gemma-4-31b-it:free';
 
   if (!openRouterApiKey) {
     return jsonResponse({ error: 'OPENROUTER_API_KEY não configurada no Supabase Secrets' }, 500);
