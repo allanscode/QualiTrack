@@ -375,11 +375,19 @@ function MainApp({
   isReconnecting,
 }: any) {
   const { theme } = useAuth();
-  const { users, teams, forms } = useStaticData();
+  const { users, teams, forms, refreshAll } = useStaticData();
   const { monitorias } = useMonitoriaData(userData, activeTab);
   const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
 
   const handleStartAuditFromQueue = (prefill: any) => {
+    // O agente pode ter sido criado agora mesmo (conta provisória) pela
+    // Edge Function de triagem — se ainda não está no cache local de
+    // usuários, atualiza para que o formulário já abra com o nome
+    // preenchido no lugar de um seletor vazio.
+    if (prefill.evaluated_id && !users.some((u: User) => u.id === prefill.evaluated_id)) {
+      refreshAll();
+    }
+
     setFormPrefillData({
       ticket_id: prefill.ticket_id,
       evaluated_id: prefill.evaluated_id,

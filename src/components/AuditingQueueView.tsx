@@ -152,10 +152,13 @@ export default function AuditingQueueView({
 
       toast.success(`Avaliação da IA gerada com sucesso para o ticket #${ticket.ticket_id}!`);
 
+      // ticket.agent_id vem resolvido pela Edge Function (garante o vínculo/
+      // conta provisória pelo e-mail) — usado como fonte primária do agente,
+      // com o match local como reforço apenas para nome/equipe de exibição.
       onStartAudit({
         ticket_id: ticket.ticket_id,
-        evaluated_id: matchedAgent?.id,
-        team_id: matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
+        evaluated_id: ticket.agent_id || matchedAgent?.id,
+        team_id: teamId,
         channel: ticket.channel || 'Chat',
         satisfaction_result: 'Positiva',
         aiEvaluation: aiResult
@@ -342,10 +345,14 @@ export default function AuditingQueueView({
                         (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
                         (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
                       );
+                      // ticket.agent_id vem resolvido pela Edge Function (que já
+                      // garante o vínculo/conta provisória pelo e-mail) — mais
+                      // confiável que o match local, que depende do cache de
+                      // agentes estar atualizado.
                       onStartAudit({
                         ticket_id: ticket.ticket_id,
-                        evaluated_id: matchedAgent?.id,
-                        team_id: matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
+                        evaluated_id: ticket.agent_id || matchedAgent?.id,
+                        team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
                         channel: ticket.channel || 'Chat',
                         satisfaction_result: 'Negativa'
                       });
