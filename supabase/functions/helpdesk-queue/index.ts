@@ -535,16 +535,24 @@ async function handleEvaluateAI(
     }
   }
 
+  // A ORDEM das propriedades importa de verdade: no modo de geração
+  // estruturada, o modelo preenche os campos na ordem em que aparecem no
+  // schema. Com score/summary vindo ANTES de answers, testes reais mostraram
+  // o modelo "reservando" score:0 e summary:"" antes de ter avaliado
+  // qualquer critério — respostas técnicamente válidas (passavam no
+  // typeof), mas semanticamente vazias. `answers` vem primeiro agora, e o
+  // agregado (score/summary/pontos fortes/melhorias) só depois, obrigando o
+  // raciocínio a acontecer antes do resumo.
   const responseSchema = {
     type: 'object',
     properties: {
-      score: { type: 'number', description: 'Nota geral do atendimento de 0 a 100.' },
-      summary: { type: 'string', description: 'Resumo executivo do atendimento.' },
-      strengths: { type: 'array', items: { type: 'string' }, description: 'Pontos fortes observados.' },
-      improvements: { type: 'array', items: { type: 'string' }, description: 'Oportunidades de melhoria.' },
       answers: { type: 'object', properties: questionProperties, required: questionRequired, additionalProperties: false },
+      strengths: { type: 'array', items: { type: 'string' }, description: 'Pontos fortes observados, com base nas respostas acima.' },
+      improvements: { type: 'array', items: { type: 'string' }, description: 'Oportunidades de melhoria, com base nas respostas acima.' },
+      summary: { type: 'string', description: 'Resumo executivo do atendimento, escrito por último, com base em tudo já respondido.' },
+      score: { type: 'number', description: 'Nota geral de 0 a 100, calculada por último a partir das respostas de "answers".' },
     },
-    required: ['score', 'summary', 'strengths', 'improvements', 'answers'],
+    required: ['answers', 'strengths', 'improvements', 'summary', 'score'],
     additionalProperties: false,
   };
 
@@ -612,11 +620,16 @@ ${criteriaText}
 TRANSCRIÇÃO COMPLETA DO ATENDIMENTO:
 ${dialogueText || '(sem mensagens registradas)'}
 
-Para cada critério, responda SIM, NAO ou NA e justifique citando um trecho literal do diálogo sempre que possível.
-Use o manual de padrões (quando fornecido) e os campos de classificação do ticket (quando fornecidos) como contexto,
-mas responda SEMPRE aos critérios exatos da ficha — nunca invente critérios que não estão nela. Calcule a nota geral
-(score de 0 a 100) com base nas respostas. Produza um resumo executivo objetivo, com pontos fortes e oportunidades
-de melhoria concretas, baseadas apenas no que está na transcrição.`;
+Siga esta ORDEM de raciocínio, sem pular etapas:
+1. Para cada critério da ficha, responda SIM, NAO ou NA e justifique citando um trecho literal do diálogo
+   sempre que possível. Use o manual de padrões e os campos de classificação do ticket (quando fornecidos)
+   como contexto, mas responda SEMPRE aos critérios exatos da ficha — nunca invente critérios que não estão nela.
+2. SÓ DEPOIS de responder todos os critérios, liste pontos fortes e oportunidades de melhoria concretas,
+   baseadas apenas no que está na transcrição.
+3. Por último, calcule a nota geral (score de 0 a 100, nunca 0 a menos que o atendimento tenha sido
+   genuinamente péssimo em todos os critérios) e escreva o resumo executivo — ambos com base no que você
+   já respondeu nos passos 1 e 2. NUNCA deixe "score" ou "summary" vazios/zerados: eles resumem o que você
+   acabou de avaliar.`;
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -662,8 +675,14 @@ de melhoria concretas, baseadas apenas no que está na transcrição.`;
     // mesmo retornando 200 OK) — sem essa checagem, uma resposta fora do
     // formato passaria batido e corromperia a ficha silenciosamente com
     // campos vazios/undefined em vez de cair no fallback local.
+    // "score"/"summary" com typeof correto mas VAZIOS (0 / "") já aconteceu
+    // na prática — o modelo respondeu certinho os critérios mas "reservou"
+    // o agregado sem preencher de verdade. Rejeita isso também, não só o
+    // typeof errado, senão a ficha é salva com nota 0 e resumo em branco.
     const hasAllQuestions = questionRequired.every(qId => parsed.answers?.[qId]?.answer);
-    if (typeof parsed.score !== 'number' || typeof parsed.summary !== 'string' || !hasAllQuestions) {
+    const hasRealScore = typeof parsed.score === 'number' && parsed.score > 0;
+    const hasRealSummary = typeof parsed.summary === 'string' && parsed.summary.trim().length > 0;
+    if (!hasRealScore || !hasRealSummary || !hasAllQuestions) {
       throw new Error('Resposta da IA fora do formato esperado (modelo não seguiu o schema).');
     }
 
