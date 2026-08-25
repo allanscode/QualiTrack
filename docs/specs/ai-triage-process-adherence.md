@@ -1,6 +1,9 @@
 # SPEC: Triagem de tickets e aderência a processo via IA
 
-> Status: **rascunho para discussão**. Nada implementado.
+> Status: **Épico 1 parcialmente implementado** (25/08) por um caminho diferente do
+> proposto abaixo — ver [`docs/flows/central-de-filas.md`](../flows/central-de-filas.md#divergência-do-plano-original)
+> para a implementação real e onde ela divergiu deste plano (sem Épico 0/tabela `tickets`
+> local; consulta o Zendesk ao vivo). Épico 2 (Confluence/RAG) segue não iniciado.
 > Ver resumo executivo em `docs/ROADMAP.md`.
 
 ## Resumo
