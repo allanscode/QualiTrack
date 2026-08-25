@@ -13,11 +13,13 @@ const corsHeaders = {
 // chutado poderia deixar passar negativas que na verdade não foram validadas.
 const VALIDATED_TAG = Deno.env.get('HELPDESK_VALIDATED_TAG') || '';
 
-// ID da view "CSAT Positivas" do Zendesk (Admin Center > Views > abrir a
-// view > o número no final da URL). Quando configurada, a fila de Positivas
-// busca exatamente os tickets dessa view salva, em vez de reconstruir o
-// filtro via Search API — garante paridade 1:1 com o que a equipe já vê
-// dentro do Zendesk.
+// IDs das views salvas do Zendesk (Admin Center > Views > abrir a view >
+// número no final da URL). Quando configuradas, cada fila busca exatamente
+// os tickets da view correspondente — já filtrados pela lógica que a
+// qualidade mantém lá dentro (ex.: negativas ainda não validadas) — em vez
+// de reconstruir o filtro via Search API e arriscar divergir da contagem
+// real que a equipe vê no Zendesk.
+const NEGATIVE_VIEW_ID = Deno.env.get('HELPDESK_NEGATIVE_VIEW_ID') || '';
 const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '';
 
 const RequestSchema = z.object({
@@ -167,11 +169,15 @@ serve(async (req) => {
       let sideloadedUsers: Map<number, any>;
       let sideloadedGroups: Map<number, any>;
 
-      // Positivas: quando a view real do Zendesk está configurada, busca
-      // exatamente os tickets dela (mesma contagem que a equipe vê lá
+      // Negativas/Positivas: quando a view real do Zendesk está configurada,
+      // busca exatamente os tickets dela (mesma contagem que a equipe vê lá
       // dentro), em vez de reconstruir o filtro via Search API.
-      if (queue_type === 'positivas' && POSITIVE_VIEW_ID) {
-        const viewUrl = `https://${subdomain}.zendesk.com/api/v2/views/${POSITIVE_VIEW_ID}/tickets.json?include=users,groups`;
+      const viewId = queue_type === 'negativas' ? NEGATIVE_VIEW_ID
+        : queue_type === 'positivas' ? POSITIVE_VIEW_ID
+        : '';
+
+      if (viewId) {
+        const viewUrl = `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups`;
         const response = await fetch(viewUrl, { headers: zendeskHeaders });
 
         if (!response.ok) {
@@ -293,7 +299,7 @@ serve(async (req) => {
 });
 
 /**
- * Avalia um atendimento com o Google Gemini (gemini-2.5-flash, gratuito)
+ * Avalia um atendimento com o Google Gemini (gemini-3.6-flash, gratuito)
  * usando responseSchema para forçar retorno em JSON estrito, alinhado aos
  * critérios da ficha de monitoria enviada pelo front-end.
  */
@@ -305,7 +311,7 @@ async function handleEvaluateAI(payload: z.infer<typeof RequestSchema>): Promise
   }
 
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
+  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
 
   if (!geminiApiKey) {
     return jsonResponse({ error: 'GEMINI_API_KEY não configurada no Supabase Secrets' }, 500);
