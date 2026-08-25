@@ -11,6 +11,25 @@ import {
 } from '../types';
 
 /**
+ * Extrai a mensagem de erro real devolvida pela Edge Function. Em status
+ * não-2xx, `supabase.functions.invoke` deixa `data` como null e só expõe um
+ * erro genérico ("Edge Function returned a non-2xx status code") em
+ * `error.message` — o corpo JSON de verdade (com o motivo específico) fica
+ * escondido em `error.context`, uma Response que precisa ser lida à parte.
+ */
+export async function extractFunctionErrorMessage(error: any, fallback: string): Promise<string> {
+  try {
+    if (error?.context?.json) {
+      const body = await error.context.json();
+      if (body?.error) return body.error as string;
+    }
+  } catch {
+    // corpo não era JSON ou já foi consumido — segue para o fallback
+  }
+  return error?.message || fallback;
+}
+
+/**
  * Normaliza o canal vindo do helpdesk (ex.: "chat", "voice", "native_messaging")
  * para um dos valores fixos aceitos pela ficha de monitoria. Sem isso, o
  * seletor de canal do formulário abre em branco mesmo com o valor prefilled,
@@ -425,7 +444,7 @@ export async function resolveManualAgent(
   });
 
   if (error || !data?.agent?.id) {
-    throw new Error(data?.error || error?.message || 'Falha ao cadastrar o agente.');
+    throw new Error(data?.error || await extractFunctionErrorMessage(error, 'Falha ao cadastrar o agente.'));
   }
 
   return data.agent as { id: string; team_id?: string };
