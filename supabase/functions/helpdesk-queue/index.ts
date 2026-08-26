@@ -58,7 +58,7 @@ const PROACTIVE_VIEW_ID = Deno.env.get('HELPDESK_PROACTIVE_VIEW_ID') || '';
 const PAGE_SIZE = 25;
 
 const RequestSchema = z.object({
-  action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai', 'resolve_agent', 'lookup_ticket_agent', 'sync_zendesk_groups']),
+  action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai', 'resolve_agent', 'lookup_ticket_agent', 'sync_zendesk_groups', 'backfill_agent_team']),
   queue_type: z.enum(['negativas', 'proativas', 'positivas']).optional(),
   ticket_id: z.string().optional(),
   // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
@@ -81,6 +81,10 @@ const RequestSchema = z.object({
   agent_email: z.string().email().optional(),
   agent_name: z.string().optional(),
   team_id: z.string().optional(),
+  // action: 'backfill_agent_team' — id do agente (já existente no
+  // QualiTrack) cuja equipe deve ser completada, disparado logo após salvar
+  // uma monitoria.
+  evaluated_id: z.string().uuid().optional(),
   // Campos de classificação do próprio ticket no Zendesk (categoria, motivo
   // do contato etc.), usados como contexto extra na avaliação com IA.
   ticket_fields: z.array(z.object({ title: z.string(), value: z.string() })).optional(),
@@ -91,6 +95,43 @@ function jsonResponse(body: any, status: number): Response {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+/**
+ * Completa o vínculo de equipe de um agente que já existe no QualiTrack mas
+ * está sem `primary_team_id` — comum em contas criadas antes do "Importar
+ * do Zendesk" preencher `public.teams`, ou cadastradas manualmente sem
+ * selecionar equipe. Nunca sobrescreve uma equipe já definida, só preenche
+ * o que estava vazio. Usada tanto dentro de `resolveOrCreateAgent` (fluxo
+ * automático via ticket) quanto na ação `backfill_agent_team` (disparada
+ * pelo front-end logo após salvar uma monitoria "normal", fora da Central
+ * de Filas, onde esse agente pode ter sido selecionado direto no dropdown).
+ */
+async function backfillAgentTeamIfMissing(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  currentTeamId: string | null | undefined,
+  teamId: string | undefined
+): Promise<string | undefined> {
+  if (currentTeamId || !teamId) return currentTeamId || undefined;
+
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({ primary_team_id: teamId })
+    .eq('id', userId);
+  if (updateError) {
+    console.error('[helpdesk-queue] Falha ao completar equipe do agente existente:', updateError.message);
+    return currentTeamId || undefined;
+  }
+
+  const { error: userTeamError } = await supabase
+    .from('user_teams')
+    .upsert({ user_id: userId, team_id: teamId }, { onConflict: 'user_id,team_id', ignoreDuplicates: true });
+  if (userTeamError) {
+    console.error('[helpdesk-queue] Falha ao vincular agente existente à equipe:', userTeamError.message);
+  }
+
+  return teamId;
 }
 
 /**
@@ -125,12 +166,10 @@ async function resolveOrCreateAgent(
     .eq('email', normalizedEmail)
     .maybeSingle();
 
-  if (existing) {
-    return { id: existing.id as string, team_id: existing.primary_team_id as string | undefined };
-  }
-
   // Tenta casar a equipe pelo nome do grupo/time do helpdesk (best-effort),
-  // a menos que o chamador já tenha passado o team_id explicitamente.
+  // a menos que o chamador já tenha passado o team_id explicitamente. Feito
+  // ANTES do "if (existing)" abaixo porque agora serve tanto pra criar um
+  // agente novo quanto pra completar o vínculo de um que já existe.
   let teamId: string | undefined = explicitTeamId;
   if (!teamId && teamName) {
     const { data: team } = await supabase
@@ -139,6 +178,16 @@ async function resolveOrCreateAgent(
       .ilike('name', teamName)
       .maybeSingle();
     teamId = team?.id as string | undefined;
+  }
+
+  if (existing) {
+    const resolvedTeamId = await backfillAgentTeamIfMissing(
+      supabase,
+      existing.id as string,
+      existing.primary_team_id as string | null | undefined,
+      teamId
+    );
+    return { id: existing.id as string, team_id: resolvedTeamId };
   }
 
   // public.users.id não tem DEFAULT (normalmente é preenchido com o id do
@@ -267,6 +316,34 @@ serve(async (req) => {
     // direto na ficha de monitoria (não depende do Zendesk).
     if (action === 'resolve_agent') {
       return await handleResolveAgent(parseResult.data, supabase, user.id);
+    }
+
+    // 4b. Completa a equipe de um agente já cadastrado, mas sem
+    // `primary_team_id`, logo após salvar uma monitoria "normal" — fora da
+    // Central de Filas, onde o agente foi selecionado direto no dropdown
+    // (não passa por resolveOrCreateAgent, que só roda pra tickets do
+    // helpdesk). Não depende do Zendesk; nunca sobrescreve equipe já
+    // definida, só preenche o que estava vazio.
+    if (action === 'backfill_agent_team') {
+      const { evaluated_id, team_id: backfillTeamId } = parseResult.data;
+      if (!evaluated_id || !backfillTeamId) {
+        return jsonResponse({ error: 'evaluated_id e team_id são obrigatórios para backfill_agent_team' }, 400);
+      }
+      const { data: agent, error: agentError } = await supabase
+        .from('users')
+        .select('id, primary_team_id')
+        .eq('id', evaluated_id)
+        .maybeSingle();
+      if (agentError || !agent) {
+        return jsonResponse({ error: 'Agente não encontrado' }, 404);
+      }
+      const resolvedTeamId = await backfillAgentTeamIfMissing(
+        supabase,
+        agent.id as string,
+        agent.primary_team_id as string | null | undefined,
+        backfillTeamId
+      );
+      return jsonResponse({ success: true, team_id: resolvedTeamId }, 200);
     }
 
     const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');

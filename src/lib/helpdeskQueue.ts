@@ -498,6 +498,30 @@ export async function resolveManualAgent(
   return data.agent as { id: string; team_id?: string };
 }
 
+/**
+ * Completa a equipe de um agente já cadastrado, mas sem `primary_team_id`
+ * — disparado logo após salvar QUALQUER monitoria (não só as vindas da
+ * Central de Filas), pra pegar também agentes selecionados direto no
+ * dropdown "Avaliado", que nunca passam pelo fluxo automático de resolução
+ * por ticket. Best-effort: nunca sobrescreve equipe já definida, e uma
+ * falha aqui não deve travar o fluxo de salvar a monitoria (por isso não
+ * lança erro, só loga).
+ */
+export async function backfillAgentTeam(evaluatedId: string, teamId: string): Promise<void> {
+  if (isMockMode || !supabase || !evaluatedId || !teamId) return;
+
+  try {
+    const { error } = await supabase.functions.invoke('helpdesk-queue', {
+      body: { action: 'backfill_agent_team', evaluated_id: evaluatedId, team_id: teamId }
+    });
+    if (error) {
+      console.warn('[HelpdeskQueue] Falha ao completar equipe do agente:', error.message);
+    }
+  } catch (err) {
+    console.warn('[HelpdeskQueue] Erro ao completar equipe do agente:', err);
+  }
+}
+
 export interface TicketAgentLookup {
   name: string;
   email: string;
