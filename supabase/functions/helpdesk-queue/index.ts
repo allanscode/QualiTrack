@@ -608,6 +608,28 @@ async function handleResolveAgent(
   return jsonResponse({ success: true, agent }, 200);
 }
 
+/**
+ * O responseSchema do Gemini aceita só um subconjunto do OpenAPI 3.0 Schema
+ * (type, properties, required, items, enum, description, etc.) — não aceita
+ * "additionalProperties", que o schema usado no OpenRouter tem em todo
+ * objeto (pra reforçar o strict mode lá). Remove recursivamente antes de
+ * mandar pro Gemini; o schema original (com additionalProperties) continua
+ * sendo usado pra validar a resposta depois do parse, então a garantia de
+ * formato não é perdida, só não é reforçada do lado do provedor.
+ */
+function stripAdditionalProperties(schema: any): any {
+  if (Array.isArray(schema)) return schema.map(stripAdditionalProperties);
+  if (schema && typeof schema === 'object') {
+    const { additionalProperties: _omit, ...rest } = schema;
+    const out: Record<string, any> = {};
+    for (const [key, value] of Object.entries(rest)) {
+      out[key] = stripAdditionalProperties(value);
+    }
+    return out;
+  }
+  return schema;
+}
+
 async function handleEvaluateAI(
   payload: z.infer<typeof RequestSchema>,
   supabase: ReturnType<typeof createClient>
@@ -635,8 +657,20 @@ async function handleEvaluateAI(
     .map(m => m.trim())
     .filter(Boolean);
 
-  if (!openRouterApiKey) {
-    return jsonResponse({ error: 'OPENROUTER_API_KEY não configurada no Supabase Secrets' }, 500);
+  // Fallback opcional: quando os modelos :free do pool compartilhado do
+  // OpenRouter estão indisponíveis/sobrecarregados (erro de rede, 429, ou
+  // resposta que não segue o schema), tenta direto na API do Gemini
+  // (Google AI Studio) antes de desistir e cair no fallback local do
+  // front-end. Sem GEMINI_API_KEY configurada, o comportamento é o mesmo
+  // de antes (só OpenRouter). gemini-3.6-flash é o sucessor recomendado
+  // pelo próprio Google para o antigo gemini-2.5-flash (descontinuado para
+  // novas chaves) — testado manualmente e confirmado respeitando
+  // responseSchema estrito.
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
+
+  if (!openRouterApiKey && !geminiApiKey) {
+    return jsonResponse({ error: 'Nenhum provedor de IA configurado (OPENROUTER_API_KEY ou GEMINI_API_KEY) no Supabase Secrets' }, 500);
   }
 
   // Monta o JSON Schema dinamicamente a partir das perguntas da ficha,
@@ -756,37 +790,82 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
    já respondeu nos passos 1 e 2. NUNCA deixe "score" ou "summary" vazios/zerados: eles resumem o que você
    acabou de avaliar.`;
 
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${openRouterApiKey}`,
-        // Cabeçalhos recomendados pelo OpenRouter para identificar a app
-        // (não obrigatórios, mas ajudam a evitar throttling nos modelos :free).
-        'HTTP-Referer': Deno.env.get('FRONTEND_URL') || 'https://qualitrack.app',
-        'X-Title': 'QualiTrack',
-      },
-      body: JSON.stringify({
-        models: openRouterModels,
-        temperature: 0.2,
-        messages: [{ role: 'user', content: prompt }],
-        response_format: {
-          type: 'json_schema',
-          json_schema: { name: 'avaliacao_atendimento', strict: true, schema: responseSchema },
+  // Faz a chamada num provedor específico e devolve o JSON já parseado e
+  // validado contra o schema — ou lança erro (rede, HTTP, ou resposta fora
+  // do formato esperado) pra quem chamou decidir se tenta o próximo provedor.
+  async function callAndValidate(provider: 'openrouter' | 'gemini'): Promise<any> {
+    let text: string | undefined;
+
+    if (provider === 'openrouter') {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${openRouterApiKey}`,
+          // Cabeçalhos recomendados pelo OpenRouter para identificar a app
+          // (não obrigatórios, mas ajudam a evitar throttling nos modelos :free).
+          'HTTP-Referer': Deno.env.get('FRONTEND_URL') || 'https://qualitrack.app',
+          'X-Title': 'QualiTrack',
         },
-      }),
-    });
+        body: JSON.stringify({
+          models: openRouterModels,
+          temperature: 0.2,
+          messages: [{ role: 'user', content: prompt }],
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: 'avaliacao_atendimento', strict: true, schema: responseSchema },
+          },
+        }),
+      });
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      throw new Error(`OpenRouter API falhou (${response.status}): ${errText}`);
-    }
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        throw new Error(`OpenRouter API falhou (${response.status}): ${errText}`);
+      }
 
-    const data = await response.json();
-    let text: string | undefined = data.choices?.[0]?.message?.content;
-    if (!text) {
-      throw new Error('Resposta vazia da IA (modelo pode ter recusado ou atingido limite gratuito)');
+      const data = await response.json();
+      text = data.choices?.[0]?.message?.content;
+      if (!text) {
+        throw new Error('Resposta vazia da IA (modelo pode ter recusado ou atingido limite gratuito)');
+      }
+    } else {
+      // API nativa do Gemini (Google AI Studio) — formato de request e de
+      // schema diferentes do padrão OpenAI usado pelo OpenRouter acima.
+      // responseSchema do Gemini é um subconjunto do OpenAPI 3.0 Schema e
+      // não aceita "additionalProperties", por isso o schema é limpo antes
+      // de ir na requisição (o schema completo, com additionalProperties,
+      // continua sendo usado pra validar a resposta abaixo).
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': geminiApiKey!,
+          },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.2,
+              responseMimeType: 'application/json',
+              responseSchema: stripAdditionalProperties(responseSchema),
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        throw new Error(`Gemini API falhou (${response.status}): ${errText}`);
+      }
+
+      const data = await response.json();
+      text = (data.candidates?.[0]?.content?.parts || [])
+        .map((p: any) => p.text || '')
+        .join('');
+      if (!text) {
+        throw new Error('Resposta vazia do Gemini (pode ter sido bloqueada por filtro de segurança ou cota esgotada)');
+      }
     }
 
     // Alguns modelos gratuitos ignoram o strict mode e envolvem o JSON em
@@ -809,6 +888,35 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     const hasRealSummary = typeof parsed.summary === 'string' && parsed.summary.trim().length > 0;
     if (!hasRealScore || !hasRealSummary || !hasAllQuestions) {
       throw new Error('Resposta da IA fora do formato esperado (modelo não seguiu o schema).');
+    }
+
+    return parsed;
+  }
+
+  try {
+    let parsed: any;
+    let lastError: any;
+
+    if (openRouterApiKey) {
+      try {
+        parsed = await callAndValidate('openrouter');
+      } catch (e: any) {
+        lastError = e;
+        console.warn('[helpdesk-queue] OpenRouter falhou ou respondeu fora do schema, tentando fallback Gemini:', e.message);
+      }
+    }
+
+    if (!parsed && geminiApiKey) {
+      try {
+        parsed = await callAndValidate('gemini');
+      } catch (e: any) {
+        lastError = e;
+        console.error('[helpdesk-queue] Fallback Gemini também falhou:', e.message);
+      }
+    }
+
+    if (!parsed) {
+      throw lastError || new Error('Nenhum provedor de IA disponível');
     }
 
     const suggested_answers: Record<string, string> = {};
@@ -836,7 +944,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
       },
     }, 200);
   } catch (error: any) {
-    console.error('[helpdesk-queue] Erro na avaliação com IA (OpenRouter):', error);
+    console.error('[helpdesk-queue] Erro na avaliação com IA (todos os provedores falharam):', error);
     return jsonResponse({ error: error.message || 'Falha ao avaliar com IA' }, 502);
   }
 }
