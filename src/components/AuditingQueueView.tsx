@@ -54,6 +54,7 @@ interface AuditingQueueViewProps {
   currentUserId?: string;
   onStartAudit: (prefill: {
     ticket_id: string;
+    ticket_subject?: string;
     form_id?: string;
     evaluated_id?: string;
     team_id?: string;
@@ -335,6 +336,7 @@ export default function AuditingQueueView({
 
     onStartAudit({
       ticket_id: ticket.ticket_id,
+      ticket_subject: ticket.subject,
       form_id: draft.form_id,
       evaluated_id: draft.agent_id,
       team_id: draft.team_id,
@@ -510,7 +512,7 @@ export default function AuditingQueueView({
           onClick={() => setActiveQueue('proativas')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
             activeQueue === 'proativas'
-              ? 'bg-brand-highlight/15 text-brand-highlight border border-brand-highlight/30 shadow-sm'
+              ? 'bg-info/15 text-info border border-info/30 shadow-sm'
               : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
           }`}
         >
@@ -621,6 +623,7 @@ export default function AuditingQueueView({
                       // agentes estar atualizado.
                       onStartAudit({
                         ticket_id: ticket.ticket_id,
+                        ticket_subject: ticket.subject,
                         evaluated_id: ticket.agent_id || matchedAgent?.id,
                         team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
                         channel: normalizeChannel(ticket.channel),
@@ -643,12 +646,12 @@ export default function AuditingQueueView({
       {/* Conteúdo da Fila: PROATIVAS (Amostragem Justa) */}
       {activeQueue === 'proativas' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-brand-highlight/10 border border-brand-highlight/25 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-brand-highlight text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+          <div className="p-4 rounded-2xl bg-info/10 border border-info/25 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-info text-white flex items-center justify-center flex-shrink-0 shadow-sm">
               <Zap className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-xs font-black uppercase tracking-wider text-brand-highlight">
+              <h3 className="text-xs font-black uppercase tracking-wider text-info">
                 Fila de Equidade Proativa
               </h3>
               <p className="text-[11px] font-semibold text-brand-primary/80">
@@ -668,7 +671,7 @@ export default function AuditingQueueView({
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-surface-border bg-surface-subtle/40 flex-shrink-0"
                   title={`${agent.days_since_last_audit >= 999 ? 'Nunca auditado' : `${agent.days_since_last_audit}d sem monitoria`}`}
                 >
-                  <span className="w-4 h-4 rounded-full bg-brand-highlight text-white flex items-center justify-center text-[9px] font-black flex-shrink-0">
+                  <span className="w-4 h-4 rounded-full bg-info text-white flex items-center justify-center text-[9px] font-black flex-shrink-0">
                     {index + 1}
                   </span>
                   <span className="text-[10px] font-bold text-brand-primary whitespace-nowrap">{agent.agent_name}</span>
@@ -682,7 +685,7 @@ export default function AuditingQueueView({
             {filteredTickets.map(ticket => {
               const isPriority = ticket.agent_email && topPriorityEmails.has(ticket.agent_email.toLowerCase());
               return (
-                <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-brand-highlight/40 transition-all">
+                <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-info/40 transition-all">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
@@ -693,7 +696,7 @@ export default function AuditingQueueView({
                           href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-info hover:underline"
                           title="Abrir no Zendesk"
                         >
                           <ExternalLink className="w-2.5 h-2.5" />
@@ -722,7 +725,7 @@ export default function AuditingQueueView({
                   <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-1 border-t border-surface-border">
                     <div className="flex items-center gap-3">
                       <span className="flex items-center gap-1">
-                        <UserIcon className="w-3 h-3 text-brand-highlight" />
+                        <UserIcon className="w-3 h-3 text-info" />
                         {ticket.agent_name || 'Agente'}
                       </span>
                       <span className="flex items-center gap-1">
@@ -732,7 +735,7 @@ export default function AuditingQueueView({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {renderAiActions(ticket, 'bg-gradient-to-r from-brand-highlight to-brand-highlight/80')}
+                      {renderAiActions(ticket, 'bg-gradient-to-r from-info to-info/80')}
                     </div>
                   </div>
                 </Card>
