@@ -167,12 +167,14 @@ export async function fetchQueueTickets(
     }
   }
 
-  // Fila de Negativas: chamados já validados (macro/tag aplicada no Zendesk,
-  // filtrada na Edge Function) ou que já possuem monitoria registrada no
-  // QualiTrack não devem mais aparecer — a apuração já foi concluída.
-  if (type === 'negativas') {
-    tickets = tickets.filter(t => !t.already_audited);
-  }
+  // Chamado que já virou monitoria de verdade (registro em `monitorias`,
+  // não só rascunho de IA) não deve mais aparecer em NENHUMA fila — a
+  // apuração/avaliação já foi concluída. Antes isso só valia pra Negativas
+  // (macro/tag do Zendesk + já auditado no QualiTrack); Positivas e
+  // Proativas ficavam mostrando o ticket com badge "Auditado" só depois de
+  // "Reavaliar"/"Avaliar com IA" de novo, mesmo já tendo monitoria salva —
+  // confuso e deixava a fila "suja" com trabalho já concluído.
+  tickets = tickets.filter(t => !t.already_audited);
 
   // Fila de Positivas: trava de no máximo 2 avaliações por atendente no mês,
   // usando o e-mail como chave de identificação agnóstica de plataforma.
