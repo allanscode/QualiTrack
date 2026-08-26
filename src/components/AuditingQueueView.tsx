@@ -734,7 +734,7 @@ export default function AuditingQueueView({
                         {ticket.subject}
                       </h4>
                     </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <div className="flex items-center gap-2.5 flex-shrink-0">
                       {renderScoreBadge(ticket)}
                       <Badge variant="neutral" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
                         CSAT Vazio
@@ -742,7 +742,7 @@ export default function AuditingQueueView({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-1 border-t border-surface-border">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                     <div className="flex items-center gap-3">
                       <span className="flex items-center gap-1">
                         <UserIcon className="w-3 h-3 text-info" />
@@ -827,7 +827,7 @@ export default function AuditingQueueView({
                   </div>
                 )}
 
-                <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-1 border-t border-surface-border">
+                <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1">
                       <UserIcon className="w-3 h-3 text-brand-highlight" />
