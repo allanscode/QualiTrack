@@ -404,6 +404,15 @@ export default function MonitoriaForm({
                 </p>
               )}
               {initialData?.display_id && <Badge variant="info" className="mt-1">Mon: {initialData.display_id}</Badge>}
+              {/* Mesmo título/preview do ticket que já aparece no card da
+                  Central de Filas — só existe quando o formulário foi aberto
+                  a partir de lá (Auditar Chamado / Lançar Monitoria), não é
+                  persistido na monitoria. */}
+              {(initialData as any)?.ticket_subject && (
+                <p className="text-xs font-bold text-brand-primary mt-1.5 max-w-md line-clamp-1" title={(initialData as any).ticket_subject}>
+                  {(initialData as any).ticket_subject}
+                </p>
+              )}
             </div>
           </div>
           <button onClick={onCancel} className="p-2 hover:bg-surface-subtle rounded-xl transition-all text-brand-muted"><X className="w-6 h-6" /></button>

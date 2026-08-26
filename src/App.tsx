@@ -390,6 +390,7 @@ function MainApp({
 
     setFormPrefillData({
       ticket_id: prefill.ticket_id,
+      ticket_subject: prefill.ticket_subject,
       form_id: prefill.form_id,
       evaluated_id: prefill.evaluated_id,
       team_id: prefill.team_id,
