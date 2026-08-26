@@ -640,6 +640,19 @@ async function handleEvaluateAI(
     return jsonResponse({ error: 'ticket_id e form_criteria são obrigatórios para evaluate_ai' }, 400);
   }
 
+  // Provedor principal: API nativa do Gemini (Google AI Studio) — mais
+  // confiável por chamada que o pool gratuito do OpenRouter (ver abaixo),
+  // porque não compete com o tráfego de todo mundo que usa modelos :free
+  // no OpenRouter ao mesmo tempo. gemini-3.6-flash é o sucessor recomendado
+  // pelo próprio Google para o antigo gemini-2.5-flash (descontinuado para
+  // novas chaves) — testado manualmente e confirmado respeitando
+  // responseSchema estrito. Tem cota própria por minuto/dia (bem menor que
+  // o pool do OpenRouter), por isso o OpenRouter continua como fallback:
+  // se a cota do dia estourar ou a chamada falhar por qualquer motivo, cai
+  // pra cadeia de modelos gratuitos abaixo antes de desistir de vez.
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
+
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
   // Testado manualmente com o schema real (16 critérios): DeepSeek e Gemini
   // não têm nenhum modelo :free no OpenRouter atualmente — só modelos que
@@ -647,27 +660,15 @@ async function handleEvaluateAI(
   // (via grammar constraint nativo do provedor). minimax-m3/m2.7 e
   // dots-studio IGNORAM o schema e devolvem 200 OK com campos inventados —
   // mais perigoso que lento, corrompe a ficha em silêncio se não fosse a
-  // validação após o parse. nemotron-3-ultra (550B) vai primeiro: mesma
-  // confiabilidade do -super, mas ~10x menos tokens de raciocínio pra
-  // chegar na resposta — só é mais sujeito a "sobrecarregado" no pool
-  // compartilhado (modelo grande), por isso o -super continua logo atrás
-  // como fallback comprovado. gemma/minimax só como último recurso.
+  // validação após o parse. nemotron-3-ultra (550B) vai primeiro dentro
+  // dessa cadeia: mesma confiabilidade do -super, mas ~10x menos tokens de
+  // raciocínio pra chegar na resposta — só é mais sujeito a "sobrecarregado"
+  // no pool compartilhado (modelo grande), por isso o -super continua logo
+  // atrás como fallback comprovado. gemma/minimax só como último recurso.
   const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free,minimax/minimax-m3:free')
     .split(',')
     .map(m => m.trim())
     .filter(Boolean);
-
-  // Fallback opcional: quando os modelos :free do pool compartilhado do
-  // OpenRouter estão indisponíveis/sobrecarregados (erro de rede, 429, ou
-  // resposta que não segue o schema), tenta direto na API do Gemini
-  // (Google AI Studio) antes de desistir e cair no fallback local do
-  // front-end. Sem GEMINI_API_KEY configurada, o comportamento é o mesmo
-  // de antes (só OpenRouter). gemini-3.6-flash é o sucessor recomendado
-  // pelo próprio Google para o antigo gemini-2.5-flash (descontinuado para
-  // novas chaves) — testado manualmente e confirmado respeitando
-  // responseSchema estrito.
-  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
 
   if (!openRouterApiKey && !geminiApiKey) {
     return jsonResponse({ error: 'Nenhum provedor de IA configurado (OPENROUTER_API_KEY ou GEMINI_API_KEY) no Supabase Secrets' }, 500);
@@ -897,21 +898,21 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     let parsed: any;
     let lastError: any;
 
-    if (openRouterApiKey) {
-      try {
-        parsed = await callAndValidate('openrouter');
-      } catch (e: any) {
-        lastError = e;
-        console.warn('[helpdesk-queue] OpenRouter falhou ou respondeu fora do schema, tentando fallback Gemini:', e.message);
-      }
-    }
-
-    if (!parsed && geminiApiKey) {
+    if (geminiApiKey) {
       try {
         parsed = await callAndValidate('gemini');
       } catch (e: any) {
         lastError = e;
-        console.error('[helpdesk-queue] Fallback Gemini também falhou:', e.message);
+        console.warn('[helpdesk-queue] Gemini falhou ou respondeu fora do schema, tentando fallback OpenRouter:', e.message);
+      }
+    }
+
+    if (!parsed && openRouterApiKey) {
+      try {
+        parsed = await callAndValidate('openrouter');
+      } catch (e: any) {
+        lastError = e;
+        console.error('[helpdesk-queue] Fallback OpenRouter também falhou:', e.message);
       }
     }
 
