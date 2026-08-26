@@ -2,6 +2,7 @@ import { useTransition } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { User, Monitoria, MonitoriaHistoryEntry, EvaluationForm, Team, DissatisfactionField } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
+import { backfillAgentTeam } from '../lib/helpdeskQueue';
 import { toast } from 'sonner';
 
 interface SaveHookDeps {
@@ -199,6 +200,16 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           }
         }
         toast.success('Monitoria salva com sucesso!');
+
+        // Completa a equipe do agente avaliado se ele ainda estiver sem
+        // primary_team_id (conta criada antes do import de equipes do
+        // Zendesk, ou cadastrada manualmente sem selecionar equipe) — agora
+        // que essa monitoria confirmou a equipe certa. Best-effort, não
+        // bloqueia o fluxo: a monitoria já foi salva com sucesso acima.
+        if (deps.header.evaluated_id && deps.header.team_id && !evaluatedUser?.primary_team_id) {
+          backfillAgentTeam(deps.header.evaluated_id, deps.header.team_id);
+        }
+
         deps.onSaved(savedId);
       } catch (e: any) {
         console.error('[Monitoria] Falha ao salvar:', e);
