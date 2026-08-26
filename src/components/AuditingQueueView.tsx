@@ -359,8 +359,30 @@ export default function AuditingQueueView({
     return new Set(agentQueue.slice(0, 5).map(a => a.agent_email?.toLowerCase()).filter(Boolean));
   }, [agentQueue]);
 
-  // Bloco de ações de IA (nota sugerida / Avaliar com IA / Reavaliar /
-  // Lançar Monitoria) — igual pra Positivas e Proativas, só muda a cor de
+  // Nota sugerida pela IA — mostrada em cima, ao lado do badge de CSAT
+  // (Bom/Vazio), não mais colada na data lá embaixo. Maior que um Badge
+  // "xs" comum pra ficar legível de relance no card.
+  const renderScoreBadge = (ticket: AuditingQueueTicket) => {
+    const draft = drafts[ticket.ticket_id];
+    if (!draft) return null;
+
+    return (
+      <span
+        title="Nota sugerida pela IA"
+        className="inline-flex items-center px-2.5 py-1 rounded-lg bg-functional-success text-functional-success text-xs font-mono font-black flex-shrink-0"
+      >
+        {Math.round(draft.result.score)}%
+      </span>
+    );
+  };
+
+  // Largura mínima compartilhada pelos botões de ação de IA — sem ela,
+  // "Reavaliar" e "Lançar Monitoria" ficavam com tamanhos bem diferentes
+  // (cada Button só cresce até caber o próprio texto).
+  const AI_ACTION_BUTTON_CLASS = 'justify-center min-w-[132px]';
+
+  // Bloco de botões de ação de IA (Avaliar com IA / Reavaliar / Lançar
+  // Monitoria) — igual pra Positivas e Proativas, só muda a cor de
   // destaque. Extraído pra não duplicar a mesma lógica duas vezes.
   const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
     const draft = drafts[ticket.ticket_id];
@@ -368,18 +390,13 @@ export default function AuditingQueueView({
     if (draft) {
       return (
         <>
-          <span title="Nota sugerida pela IA">
-            <Badge variant="success" size="xs" className="font-mono font-black">
-              {Math.round(draft.result.score)}%
-            </Badge>
-          </span>
           {!ticket.positive_cap_reached && (
             <Button
               size="sm"
               variant="outline"
               disabled={evaluatingTicketId === ticket.ticket_id}
               onClick={() => openGuidelinePicker(ticket)}
-              className="flex items-center gap-1 text-[10px]"
+              className={`flex items-center gap-1 text-[10px] ${AI_ACTION_BUTTON_CLASS}`}
               title="Roda a IA de novo e sobrescreve este rascunho"
             >
               <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
@@ -390,7 +407,7 @@ export default function AuditingQueueView({
             size="sm"
             variant="primary"
             onClick={() => handleLaunchMonitoria(ticket)}
-            className={`flex items-center gap-1 ${accentClass} text-white font-bold`}
+            className={`flex items-center gap-1 ${accentClass} text-white font-bold ${AI_ACTION_BUTTON_CLASS}`}
           >
             <Rocket className="w-3 h-3" />
             <span>Lançar Monitoria</span>
@@ -415,7 +432,7 @@ export default function AuditingQueueView({
         variant="primary"
         disabled={evaluatingTicketId === ticket.ticket_id}
         onClick={() => openGuidelinePicker(ticket)}
-        className={`flex items-center gap-1 ${accentClass} text-white font-bold`}
+        className={`flex items-center gap-1 ${accentClass} text-white font-bold ${AI_ACTION_BUTTON_CLASS}`}
       >
         <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
         <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
@@ -717,9 +734,12 @@ export default function AuditingQueueView({
                         {ticket.subject}
                       </h4>
                     </div>
-                    <Badge variant="neutral" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
-                      CSAT Vazio
-                    </Badge>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {renderScoreBadge(ticket)}
+                      <Badge variant="neutral" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
+                        CSAT Vazio
+                      </Badge>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-1 border-t border-surface-border">
@@ -793,9 +813,12 @@ export default function AuditingQueueView({
                       {ticket.subject}
                     </h4>
                   </div>
-                  <Badge variant="success" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
-                    CSAT Bom
-                  </Badge>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {renderScoreBadge(ticket)}
+                    <Badge variant="success" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
+                      CSAT Bom
+                    </Badge>
+                  </div>
                 </div>
 
                 {ticket.csat_comment && (
