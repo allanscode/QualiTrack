@@ -1,11 +1,10 @@
 
-# verify_jwt declarado explicitamente: esta função publica comentários em
-# tickets reais assinados pelo perfil da Qualidade. Ela também confere o papel
-# do chamador internamente (ver index.ts), mas exigir o JWT na borda impede que
-# qualquer requisição anônima sequer alcance esse código.
+# Active authenticated functions validate the user token explicitly with
+# Auth getUser(token) and check the active role before privileged operations.
+# This supports both legacy and new project signing/API keys.
 [functions.helpdesk-publish-evaluation]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/helpdesk-publish-evaluation/index.ts"
 
 [functions.admin-create-user]
@@ -21,7 +20,7 @@ entrypoint = "./functions/admin-create-user/index.ts"
 
 [functions.admin-invite-user]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/admin-invite-user/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -32,6 +31,22 @@ entrypoint = "./functions/admin-invite-user/index.ts"
 
 [functions.admin-update-user-email]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/admin-update-user-email/deno.json"
 entrypoint = "./functions/admin-update-user-email/index.ts"
+[functions.send-email]
+enabled = true
+# JWT is validated explicitly with getUser(token), including new signing keys.
+verify_jwt = false
+entrypoint = "./functions/send-email/index.ts"
+
+[functions.public-access]
+enabled = true
+# Intentionally public; validates CAPTCHA and persistent rate limits internally.
+verify_jwt = false
+entrypoint = "./functions/public-access/index.ts"
+
+[functions.helpdesk-queue]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/helpdesk-queue/index.ts"

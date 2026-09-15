@@ -27,3 +27,7 @@ Sistema de gestão de qualidade para operações de suporte ao cliente.
 ## Documentation
 
 See `docs/` for full documentation. Start with `docs/onboarding/dev-setup.md`.
+# Segurança e migração Supabase
+
+Correções do reporte, ativação de CAPTCHA/SMTP, migrations e plano de troca de projeto:
+[Guia de segurança e migração](docs/security-and-supabase-migration.md).

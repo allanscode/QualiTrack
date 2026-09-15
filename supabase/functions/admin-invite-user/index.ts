@@ -1,11 +1,11 @@
+import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
+import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2'
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts"
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') || '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
+
 
 const InviteSchema = z.object({
   email: z.string().email(),
@@ -61,6 +61,8 @@ async function syncUserTeams(supabaseAdmin: any, userId: string, teamIds: string
 }
 
 serve(async (req) => {
+  const rejected = rejectRequest(req, corsHeaders);
+  if (rejected) return rejected;
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -99,11 +101,11 @@ serve(async (req) => {
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      publicApiKey(),
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace(/^Bearer\s+/i, ''))
 
     if (userError || !user) {
       return new Response(JSON.stringify({ success: false, error: 'Unauthorized', details: userError }), {
@@ -151,7 +153,7 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      secretApiKey()
     )
 
     const userPayload = {
@@ -184,7 +186,7 @@ serve(async (req) => {
 
       await syncUserTeams(supabaseAdmin, existingUser.id, team_ids || [])
 
-      const origin = req.headers.get('Origin') || Deno.env.get('FRONTEND_URL') || 'http://localhost:3000'
+      const origin = configuredOrigin(Deno.env.get('FRONTEND_URL'))
       const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email.toLowerCase(), {
         redirectTo: origin
       })
@@ -209,7 +211,7 @@ serve(async (req) => {
     // Observação: o Supabase valida este valor contra a lista de Redirect URLs
     // do projeto; se a URL não estiver liberada lá, ele cai no Site URL de
     // qualquer forma. Configurar ambos no painel continua sendo necessário.
-    const inviteOrigin = req.headers.get('Origin') || Deno.env.get('FRONTEND_URL') || 'http://localhost:3000'
+    const inviteOrigin = configuredOrigin(Deno.env.get('FRONTEND_URL'))
     const { data: authData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: { name },
       redirectTo: inviteOrigin
@@ -238,7 +240,7 @@ serve(async (req) => {
 
           await syncUserTeams(supabaseAdmin, foundUser.id, team_ids || [])
 
-          const origin = req.headers.get('Origin') || Deno.env.get('FRONTEND_URL') || 'http://localhost:3000'
+          const origin = configuredOrigin(Deno.env.get('FRONTEND_URL'))
           const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email.toLowerCase(), {
             redirectTo: origin
           })
@@ -287,9 +289,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Catch Error:', error)
-    return new Response(JSON.stringify({ success: false, error: 'Internal Server Error', message: error.message }), {
+    return new Response(JSON.stringify({ success: false, error: 'Não foi possível processar o convite.' }), {
       status: 500,
-      headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 })

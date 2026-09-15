@@ -20,6 +20,8 @@ export default defineConfig({
       exclude: ['src/**/*.d.ts', 'src/test/**', 'src/main.tsx', 'src/vite-env.d.ts'],
     },
     alias: {
+      './mockDb': path.resolve(__dirname, './src/lib/mockDb.dev.ts'),
+      './mockQueue': path.resolve(__dirname, './src/lib/mockQueue.dev.ts'),
       '@': path.resolve(__dirname, './src'),
     },
   },

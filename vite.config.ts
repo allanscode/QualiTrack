@@ -1,9 +1,9 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 
-const csp = "default-src 'self'; script-src 'self' 'sha256-89EsJ0gg8fA1Joh8OF4yrUg7+lme5ZrRRU6JRRnO0iM=' 'sha256-Z2/iFzh9VMlVkEOar1f/oSHWwQk3ve1qk/C2WdsC4Xk=' 'sha256-dN0GWK6Ci/4pOCyKHcyOwmqaKlVRrq9ofFuvyJnWb8E='; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co ";
+const csp = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com 'sha256-89EsJ0gg8fA1Joh8OF4yrUg7+lme5ZrRRU6JRRnO0iM=' 'sha256-Z2/iFzh9VMlVkEOar1f/oSHWwQk3ve1qk/C2WdsC4Xk=' 'sha256-dN0GWK6Ci/4pOCyKHcyOwmqaKlVRrq9ofFuvyJnWb8E='; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co; connect-src 'self' https://challenges.cloudflare.com https://*.supabase.co wss://*.supabase.co ";
 
 const securityHeaders = {
   'Content-Security-Policy': csp,
@@ -12,13 +12,32 @@ const securityHeaders = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
 };
 
-export default defineConfig(() => {
+export default defineConfig(({ command, mode, isPreview }) => {
+  const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
+  if (command === 'build') {
+    const url = env.VITE_SUPABASE_URL;
+    const key = env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY;
+    if (!url || !key || /placeholder|your-project/.test(url) || /your-anon/.test(key)) {
+      throw new Error('Configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY) antes do build.');
+    }
+    if (new URL(url).protocol !== 'https:') throw new Error('Produção exige Supabase HTTPS.');
+    if (key.startsWith('sb_secret_')) throw new Error('Nunca use uma secret key no frontend.');
+    if (!env.VITE_TURNSTILE_SITE_KEY) throw new Error('Configure VITE_TURNSTILE_SITE_KEY antes do build.');
+    if (key.startsWith('eyJ')) {
+      const payload = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString());
+      if (payload.role !== 'anon') throw new Error('O frontend aceita somente a chave anon/publicável.');
+    }
+  }
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
-      },
+      alias: [
+        { find: '@', replacement: path.resolve(__dirname, '.') },
+        ...(command === 'serve' && !isPreview ? [
+          { find: './mockDb', replacement: path.resolve(__dirname, 'src/lib/mockDb.dev.ts') },
+          { find: './mockQueue', replacement: path.resolve(__dirname, 'src/lib/mockQueue.dev.ts') },
+        ] : []),
+      ],
     },
     build: {
       // Enable tree-shaking

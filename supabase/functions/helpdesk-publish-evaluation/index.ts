@@ -1,3 +1,5 @@
+import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
+import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 // Orquestra a publicação de uma avaliação de qualidade no helpdesk:
 // autentica o chamador, busca a monitoria, monta o HTML do comentário
 // (sempre no servidor — o frontend nunca envia HTML, só pede o preview
@@ -8,17 +10,15 @@
 // da escolha do provider.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 import type { HelpdeskProvider, PublishResult } from './types.ts';
 import { buildEvaluationHtml } from './template.ts';
 import { ZendeskProvider } from './zendesk.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') || '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
+
 
 const PublishSchema = z.object({
   monitoria_id: z.string().uuid(),
@@ -66,6 +66,8 @@ function resolveProvider(): HelpdeskProvider {
 }
 
 serve(async (req: Request) => {
+  const rejected = rejectRequest(req, corsHeaders);
+  if (rejected) return rejected;
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -79,11 +81,11 @@ serve(async (req: Request) => {
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      publicApiKey(),
       { global: { headers: { Authorization: authHeader } } },
     );
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace(/^Bearer\s+/i, ''));
 
     if (userError || !user) {
       return failure('Usuário não autenticado', 'auth', 401);
@@ -107,7 +109,7 @@ serve(async (req: Request) => {
     // — a Edge Function é a fronteira de autorização aqui, não o RLS.
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      secretApiKey(),
     );
 
     // 2. Buscar a monitoria por monitoria_id. 404 se não existir.

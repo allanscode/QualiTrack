@@ -1,11 +1,11 @@
+import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
+import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') || '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
+
 
 // Rate limiting em memória (reseta a cada cold start) — mesmo padrão já usado
 // em admin-invite-user. Por usuário autenticado (não por IP: esta função
@@ -108,7 +108,7 @@ function jsonResponse(body: any, status: number): Response {
  * de Filas, onde esse agente pode ter sido selecionado direto no dropdown).
  */
 async function backfillAgentTeamIfMissing(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
   currentTeamId: string | null | undefined,
   teamId: string | undefined
@@ -144,7 +144,7 @@ async function backfillAgentTeamIfMissing(
  * o onboarding formal com o mesmo e-mail (trigger `handle_new_user`).
  */
 async function resolveOrCreateAgent(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   email: string | undefined,
   name: string | undefined,
   externalId: string | number | undefined,
@@ -230,6 +230,8 @@ async function resolveOrCreateAgent(
 }
 
 serve(async (req) => {
+  const rejected = rejectRequest(req, corsHeaders);
+  if (rejected) return rejected;
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -241,7 +243,7 @@ serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseServiceKey = secretApiKey();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Valida o usuário autenticado
@@ -656,7 +658,7 @@ serve(async (req) => {
  */
 async function handleResolveAgent(
   payload: z.infer<typeof RequestSchema>,
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   callerId: string
 ): Promise<Response> {
   const { agent_email, agent_name, team_id } = payload;
@@ -709,7 +711,7 @@ function stripAdditionalProperties(schema: any): any {
 
 async function handleEvaluateAI(
   payload: z.infer<typeof RequestSchema>,
-  supabase: ReturnType<typeof createClient>
+  supabase: SupabaseClient
 ): Promise<Response> {
   const { ticket_id, form_criteria, dialogue, agent_info, guideline_ids, ticket_fields } = payload;
 

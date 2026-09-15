@@ -1,3 +1,4 @@
+import { getMockQueueTickets } from './mockQueue';
 import { supabase, isMockMode } from './supabase';
 import {
   AuditingQueueType,
@@ -371,106 +372,6 @@ function getFallbackAIEvaluation(ticketId: string, form: EvaluationForm): AIEval
 /**
  * Mock data para demonstração e desenvolvimento offline
  */
-function getMockQueueTickets(type: AuditingQueueType, auditedIds: Set<string>): AuditingQueueTicket[] {
-  const now = new Date();
-
-  if (type === 'negativas') {
-    return [
-      {
-        ticket_id: '154159',
-        subject: 'Erro ao emitir NFC-e em contingência após atualização',
-        requester_name: 'Posto Estrela do Sul (Carlos)',
-        agent_name: 'Gabriel Dias',
-        agent_email: 'gabriel.dias@webposto.com.br',
-        csat_status: 'bad',
-        csat_comment: 'Demorou muito para responder e o sistema travou o caixa na hora do pico.',
-        channel: 'Chat',
-        ticket_date: new Date(now.getTime() - 1000 * 3600 * 4).toISOString(),
-        status: 'solved',
-        url: 'https://webposto.zendesk.com/agent/tickets/154159',
-        already_audited: auditedIds.has('154159')
-      },
-      {
-        ticket_id: '154230',
-        subject: 'Problema na integração TEF com PinPad',
-        requester_name: 'Auto Posto Alvorada',
-        agent_name: 'João Suporte (Auditado)',
-        agent_email: 'suporte@teste.com',
-        csat_status: 'bad',
-        csat_comment: 'Atendente encerrou o chat antes de confirmar se a transação passou.',
-        channel: 'Chat',
-        ticket_date: new Date(now.getTime() - 1000 * 3600 * 8).toISOString(),
-        status: 'solved',
-        url: 'https://webposto.zendesk.com/agent/tickets/154230',
-        already_audited: auditedIds.has('154230')
-      }
-    ];
-  }
-
-  if (type === 'positivas') {
-    return [
-      {
-        ticket_id: '154509',
-        subject: 'Dúvida sobre cadastro de novos bicos de abastecimento',
-        requester_name: 'Posto Pioneiro (Mariana)',
-        agent_name: 'João Suporte (Auditado)',
-        agent_email: 'suporte@teste.com',
-        csat_status: 'good',
-        csat_comment: 'Excelente atendimento! Muito paciente e explicou o passo a passo com clareza.',
-        channel: 'WhatsApp',
-        ticket_date: new Date(now.getTime() - 1000 * 3600 * 5).toISOString(),
-        status: 'closed',
-        url: 'https://webposto.zendesk.com/agent/tickets/154509',
-        already_audited: auditedIds.has('154509')
-      },
-      {
-        ticket_id: '154610',
-        subject: 'Configuração de impressora de cupom não fiscal',
-        requester_name: 'Posto Rota 101',
-        agent_name: 'Gabriel Dias',
-        agent_email: 'gabriel.dias@webposto.com.br',
-        csat_status: 'good',
-        csat_comment: 'Resolvido em menos de 5 minutos, parabéns à equipe!',
-        channel: 'Chat',
-        ticket_date: new Date(now.getTime() - 1000 * 3600 * 12).toISOString(),
-        status: 'closed',
-        url: 'https://webposto.zendesk.com/agent/tickets/154610',
-        already_audited: auditedIds.has('154610')
-      }
-    ];
-  }
-
-  // Proativas (CSAT Vazio / Unrated)
-  return [
-    {
-      ticket_id: '154780',
-      subject: 'Ajuste no relatório de fechamento de caixa por operador',
-      requester_name: 'Posto São Lucas',
-      agent_name: 'João Suporte (Auditado)',
-      agent_email: 'suporte@teste.com',
-      csat_status: 'unrated',
-      channel: 'Email',
-      ticket_date: new Date(now.getTime() - 1000 * 3600 * 6).toISOString(),
-      status: 'solved',
-      url: 'https://webposto.zendesk.com/agent/tickets/154780',
-      already_audited: auditedIds.has('154780')
-    },
-    {
-      ticket_id: '154812',
-      subject: 'Reenvio de XML para contabilidade mês anterior',
-      requester_name: 'Posto Central Park',
-      agent_name: 'Gabriel Dias',
-      agent_email: 'gabriel.dias@webposto.com.br',
-      csat_status: 'unrated',
-      channel: 'WhatsApp',
-      ticket_date: new Date(now.getTime() - 1000 * 3600 * 14).toISOString(),
-      status: 'closed',
-      url: 'https://webposto.zendesk.com/agent/tickets/154812',
-      already_audited: auditedIds.has('154812')
-    }
-  ];
-}
-
 /**
  * Cadastra (ou encontra, se o e-mail já existir) um agente do helpdesk
  * ainda não formalizado no QualiTrack, direto da ficha de monitoria — sem

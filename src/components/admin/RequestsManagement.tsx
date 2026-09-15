@@ -136,16 +136,14 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
 
         const { error: emailError } = await supabase.functions.invoke('send-email', {
           body: {
-            email: rejectingReq.email,
-            name: rejectingReq.name,
             type: 'rejection',
-            token: rejectReason
+            request_id: rejectingReq.id
           }
         });
-        if (emailError) console.error('Failed to send rejection email:', emailError);
+        if (emailError) toast.warning('Solicitação rejeitada, mas o e-mail não foi enviado. Contate o administrador.');
       }
 
-      toast.success('Solicitação rejeitada e e-mail enviado.');
+      toast.success('Solicitação rejeitada.');
       setIsRejectModalOpen(false);
       await handleRefresh();
     } catch (e: any) {

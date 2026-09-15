@@ -1,5 +1,7 @@
+import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
+import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2'
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts"
 
 // Troca o e-mail de um usuário já existente, nos dois lugares que precisam
@@ -9,10 +11,8 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts"
 // a pessoa logando com o e-mail antigo enquanto a tela mostra o novo — por
 // isso esse único caso passa por uma Edge Function com service role.
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') || '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
+
 
 const RequestSchema = z.object({
   id: z.string().uuid(),
@@ -27,6 +27,8 @@ function jsonResponse(body: any, status: number): Response {
 }
 
 serve(async (req) => {
+  const rejected = rejectRequest(req, corsHeaders);
+  if (rejected) return rejected;
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -39,11 +41,11 @@ serve(async (req) => {
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      publicApiKey(),
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace(/^Bearer\s+/i, ''))
     if (userError || !user) {
       return jsonResponse({ success: false, error: 'Sessão inválida ou expirada' }, 401)
     }
@@ -67,7 +69,7 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      secretApiKey()
     )
 
     // Já confirma o e-mail direto: é um admin corrigindo/atualizando o

@@ -1,3 +1,4 @@
+import { ProtectedAuthForm } from './components/ui/ProtectedAuthForm';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -161,7 +162,7 @@ function AppContent() {
                   {authView === 'login' && (
                     <m.div key="login" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6">
                       <h3 className="text-xl font-bold text-center mb-6">Acesse sua Conta</h3>
-                      <form onSubmit={handleLogin} className="space-y-4 text-left">
+                      <ProtectedAuthForm onSubmit={handleLogin} className="space-y-4 text-left">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">E-mail corporativo</label>
                           <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={credentials.email} onChange={e => setCredentials({...credentials, email: e.target.value})} />
@@ -194,7 +195,7 @@ function AppContent() {
                         <button className="w-full bg-brand-accent text-white py-4 rounded-lg font-bold uppercase tracking-wider shadow-lg hover:bg-brand-accent/90 active:scale-[0.98] transition-all flex items-center justify-center">
                           <span className="text-white">Entrar</span>
                         </button>
-                      </form>
+                      </ProtectedAuthForm>
                       <button onClick={() => setAuthView('request-access')} className="text-sm font-bold text-brand-accent hover:text-brand-primary transition-colors">Não tem acesso? Solicite aqui</button>
                     </m.div>
                   )}
@@ -202,7 +203,7 @@ function AppContent() {
                   {authView === 'request-access' && (
                     <m.div key="request" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
                       <h3 className="text-xl font-bold text-center mb-6 text-brand-primary">Solicitar Novo Acesso</h3>
-                      <form onSubmit={handleRequestAccess} className="space-y-4">
+                      <ProtectedAuthForm onSubmit={handleRequestAccess} className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">Nome completo</label>
                           <input type="text" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={requestData.name} onChange={e => setRequestData({...requestData, name: e.target.value})} />
@@ -215,7 +216,7 @@ function AppContent() {
                           <span className="text-white">Enviar Solicitação</span>
                         </button>
                         <button type="button" onClick={() => setAuthView('login')} className="w-full text-sm font-bold text-brand-muted hover:text-brand-primary transition-colors mt-2 text-center">Voltar para Login</button>
-                      </form>
+                      </ProtectedAuthForm>
                     </m.div>
                   )}
 
@@ -291,7 +292,7 @@ function AppContent() {
                   {authView === 'forgot-password' && (
                     <m.div key="forgot" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 text-left">
                       <h3 className="text-xl font-bold text-center mb-6 text-brand-primary">Recuperar Senha</h3>
-                      <form onSubmit={handleForgotPassword} className="space-y-4">
+                      <ProtectedAuthForm onSubmit={handleForgotPassword} className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold text-brand-muted uppercase mb-2">E-mail cadastrado</label>
                           <input type="email" required className="w-full bg-surface-subtle border border-surface-border rounded-lg py-3 px-4 text-sm focus:border-brand-accent focus:outline-none text-brand-primary" value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
@@ -300,7 +301,7 @@ function AppContent() {
                           <span className="text-white">Enviar Link</span>
                         </button>
                         <button type="button" onClick={() => setAuthView('login')} className="w-full py-4 text-brand-muted font-bold hover:text-brand-primary transition-colors text-center">Voltar</button>
-                      </form>
+                      </ProtectedAuthForm>
                     </m.div>
                   )}
                 </AnimatePresence>

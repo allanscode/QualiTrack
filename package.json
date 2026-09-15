@@ -11,6 +11,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test": "vitest run",
+    "test:database": "node --test scripts/security-database.test.mjs",
+    "check:bundle": "node scripts/check-production-bundle.mjs",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage"
   },
@@ -37,17 +39,18 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitest/ui": "^4.1.8",
+    "@vitest/ui": "^4.1.11",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }

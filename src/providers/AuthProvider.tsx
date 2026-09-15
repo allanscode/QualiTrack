@@ -1,3 +1,4 @@
+import { readCaptchaToken } from '../components/ui/ProtectedAuthForm';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase, mockDb, upsertUserPreferences, isMockMode, assertSupabase, initialUrlHash, initialUrlSearch } from '../lib/supabase';
 import { User, UserRole, ROLE_LABELS, UserPreferences } from '../types';
@@ -485,6 +486,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     e.preventDefault();
 
     const emailLower = credentials.email.toLowerCase();
+    let captchaToken: string | undefined;
+    if (!isMockMode) {
+      try { captchaToken = readCaptchaToken(e); }
+      catch { toast.error('Confirme a verificação de segurança antes de entrar.'); return; }
+    }
 
     // ATENCAO — esta trava e uma barreira de USABILIDADE, nao um controle de
     // seguranca. Ela roda no navegador, entao um atacante que chame
@@ -570,7 +576,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const sb = supabase ?? assertSupabase();
         const { error } = await sb.auth.signInWithPassword({
           email: emailLower,
-          password: credentials.password
+          password: credentials.password,
+          options: { captchaToken }
         });
         if (error) throw error;
         try { localStorage.removeItem(lockKey); } catch { /* ignora */ }
@@ -633,30 +640,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         toast.success('Funcionalidade simulada no modo Mock.');
       } else {
         const sb = supabase ?? assertSupabase();
-        const { error } = await sb.auth.resetPasswordForEmail(resetEmail.toLowerCase(), {
-          redirectTo: window.location.origin,
+        const { error } = await sb.functions.invoke('public-access', {
+          body: { action: 'recover', email: resetEmail.trim().toLowerCase(), captchaToken: readCaptchaToken(e) },
         });
         if (error) throw error;
-        toast.success('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
+        toast.success('Se houver uma conta elegível, você receberá as instruções de recuperação.');
         setAuthView('login');
       }
     } catch (e: any) {
-      // A mensagem anterior culpava sempre o e-mail digitado, mesmo quando a
-      // causa era outra. O caso mais comum e o limite de envio do Supabase
-      // Auth (429 over_email_send_rate_limit): no SMTP compartilhado do plano
-      // free sao poucos e-mails por hora, somando convites e recuperacoes.
-      // Mandar o usuario "conferir o e-mail" nesse cenario leva a tentativas
-      // repetidas, que so consomem mais cota.
-      const code = e?.code || e?.error_code;
-      const status = e?.status;
-      if (code === 'over_email_send_rate_limit' || status === 429) {
-        toast.error('Limite de envio de e-mails atingido. Aguarde alguns minutos e tente de novo.');
-      } else {
-        toast.error(e?.message
-          ? `Não foi possível enviar o e-mail de recuperação: ${e.message}`
-          : 'Não foi possível enviar o e-mail de recuperação. Verifique o e-mail digitado.');
-      }
-      console.error('[Auth] Falha ao enviar recuperação de senha:', e);
+      toast.error('Não foi possível processar a solicitação. Confirme a verificação de segurança e tente novamente mais tarde.');
     } finally {
       setLoading(false);
     }
@@ -738,9 +730,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthView('pending');
       } else {
         const sb = supabase ?? assertSupabase();
-        const { error } = await sb.from('access_requests').insert([
-          { name: requestData.name, email: requestData.email.toLowerCase(), status: 'pending' }
-        ]);
+        const { error } = await sb.functions.invoke('public-access', {
+          body: { action: 'request-access', name: requestData.name, email: requestData.email.trim().toLowerCase(), captchaToken: readCaptchaToken(e) },
+        });
         if (error) throw error;
         setAuthView('pending');
       }

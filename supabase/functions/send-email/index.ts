@@ -1,158 +1,65 @@
-import { SmtpClient } from "https://deno.land/x/smtp/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
+import { SmtpClient } from 'https://deno.land/x/smtp@v0.7.0/mod.ts';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
+import { corsFor, rejectRequest, escapeHtml } from '../_shared/http.ts';
 
-// Polyfill para Deno.writeAll
-if (!(Deno as any).writeAll) {
-  (Deno as any).writeAll = async (w: any, b: Uint8Array) => {
-    let nwritten = 0;
-    while (nwritten < b.length) {
-      nwritten += await w.write(b.subarray(nwritten));
-    }
-  };
-}
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') || '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-const EmailSchema = z.object({
-  email: z.string().email(),
-  type: z.enum(['welcome', 'reset', 'rejection']),
-  token: z.string().min(1),
-  name: z.string().min(1)
-});
-
-serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+const runtime = Deno as unknown as { writeAll?: (w: { write(b: Uint8Array): Promise<number> }, b: Uint8Array) => Promise<void> };
+runtime.writeAll ??= async (writer, bytes) => {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const written = await writer.write(bytes.subarray(offset));
+    if (written <= 0) throw new Error('SMTP write failed');
+    offset += written;
   }
+};
+const headers = { ...corsFor(Deno.env.get('FRONTEND_URL')), 'Content-Type': 'application/json' };
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
 
+serve(async req => {
+  const rejected = rejectRequest(req, headers);
+  if (rejected) return rejected;
+  if (req.method === 'OPTIONS') return new Response('ok', { headers });
+  const token = req.headers.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1];
+  if (!token) return json({ success: false, error: 'Sessão necessária' }, 401);
+  const db = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: { user }, error } = await db.auth.getUser(token);
+  if (error || !user) return json({ success: false, error: 'Sessão inválida' }, 401);
+  const { data: caller } = await db.from('users').select('role,active').eq('id', user.id).maybeSingle();
+  if (!caller?.active || !['admin', 'gestor_qualidade'].includes(caller.role)) return json({ success: false, error: 'Acesso negado' }, 403);
+  const body = await req.json().catch(() => null);
+  // Invites/resets belong to Supabase Auth. Never accept arbitrary recipients/HTML.
+  if (body?.type !== 'rejection' || typeof body.request_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.request_id)) return json({ success: false, error: 'Solicitação inválida' }, 400);
+  const { data: request, error: requestError } = await db.from('access_requests')
+    .select('id,email,name,rejection_reason,status').eq('id', body.request_id).maybeSingle();
+  if (requestError || !request || request.status !== 'rejected') return json({ success: false, error: 'Solicitação indisponível' }, 400);
+  const callerLimit = await db.rpc('consume_security_rate_limit', { bucket_key: `mailer:${user.id}`, max_requests: 20, window_seconds: 900 });
+  if (callerLimit.error) return json({ success: false, error: 'Serviço indisponível' }, 503);
+  if (!callerLimit.data) return json({ success: false, error: 'Limite de envio atingido' }, 429);
+  const { data: allowed, error: limitError } = await db.rpc('consume_security_rate_limit', {
+    bucket_key: `rejection:${request.id}`, max_requests: 1, window_seconds: 300,
+  });
+  if (limitError) return json({ success: false, error: 'Serviço indisponível' }, 503);
+  if (!allowed) return json({ success: false, error: 'Aguarde antes de reenviar' }, 429);
+  const client = new SmtpClient();
   try {
-    const body = await req.json();
-    const result = EmailSchema.safeParse(body);
-    
-    if (!result.success) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Invalid payload', details: result.error.errors }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400,
-        }
-      );
-    }
-    
-    const { email, type, token, name } = result.data;
-    console.log(`[LOG] Iniciando envio de e-mail tipo: ${type} para: ${email}`);
-
-    const client = new SmtpClient();
-
-    const smtpUsername = Deno.env.get("SMTP_USERNAME");
-    const smtpPassword = Deno.env.get("SMTP_PASSWORD");
-
-    if (!smtpUsername || !smtpPassword) {
-      throw new Error("SMTP_USERNAME e SMTP_PASSWORD não configurados. Defina via: supabase secrets set SMTP_USERNAME=... SMTP_PASSWORD=...");
-    }
-
-    console.log(`[LOG] Conectando ao smtp.gmail.com...`);
-    await client.connectTLS({
-      hostname: Deno.env.get("SMTP_HOSTNAME") || "smtp.gmail.com",
-      port: parseInt(Deno.env.get("SMTP_PORT") || "465"),
-      username: smtpUsername,
-      password: smtpPassword,
+    const username = Deno.env.get('SMTP_USERNAME');
+    const password = Deno.env.get('SMTP_PASSWORD');
+    if (!username || !password) throw new Error('SMTP not configured');
+    await client.connectTLS({ hostname: Deno.env.get('SMTP_HOSTNAME') || 'smtp.gmail.com', port: Number(Deno.env.get('SMTP_PORT') || '465'), username, password });
+    const name = escapeHtml(request.name);
+    const reason = escapeHtml(request.rejection_reason || 'Não informado.');
+    await client.send({ from: username, to: request.email, subject: 'QualidadeWP - Solicitação de acesso',
+      content: `Olá, ${request.name}. Sua solicitação foi recusada. Motivo: ${request.rejection_reason || 'Não informado.'}`,
+      html: `<p>Olá, ${name}.</p><p>Sua solicitação de acesso foi recusada.</p><p>${reason}</p><p>Em caso de dúvidas, contate o administrador.</p>`,
     });
-
-    const frontendUrl = Deno.env.get("FRONTEND_URL") || "http://localhost:3001";
-    const resetLink = `${frontendUrl}/setup-password?token=${token}`;
-
-    let subject = "";
-    let htmlContent = "";
-
-    if (type === 'welcome') {
-      subject = "Bem-vindo ao QualiTrack - Defina sua senha";
-      htmlContent = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #0A1F44; padding: 20px; border: 1px solid #D8DFEB; border-radius: 12px;">
-          <h2 style="color: #0A1F44;">Olá, ${name}!</h2>
-          <p>Sua conta no QualiTrack foi aprovada com sucesso.</p>
-          <p>Para definir sua senha e começar a usar o sistema, clique no botão abaixo:</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetLink}" style="background-color: #0A1F44; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Definir Minha Senha</a>
-          </div>
-          <p style="font-size: 12px; color: #52617A; border-top: 1px solid #D8DFEB; pt-20px; margin-top: 20px;">
-            Se o botão acima não funcionar, copie e cole este link no seu navegador:<br>
-            ${resetLink}
-          </p>
-        </div>
-      `;
-    } else if (type === 'reset') {
-      subject = "QualiTrack - Recuperação de Senha";
-      htmlContent = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #0A1F44; padding: 20px; border: 1px solid #D8DFEB; border-radius: 12px;">
-          <h2 style="color: #0A1F44;">Olá, ${name || 'Usuário'}!</h2>
-          <p>Recebemos uma solicitação de recuperação de senha para sua conta.</p>
-          <p>Para definir uma nova senha, clique no botão abaixo:</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetLink}" style="background-color: #D31E1E; color: #FFFFFF; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Redefinir Minha Senha</a>
-          </div>
-          <p style="font-size: 12px; color: #52617A; border-top: 1px solid #D8DFEB; pt-20px; margin-top: 20px;">
-            Se o botão acima não funcionar, copie e cole este link no seu navegador:<br>
-            ${resetLink}
-          </p>
-        </div>
-      `;
-    } else if (type === 'rejection') {
-      const reason = token; // Reuse the token field for the rejection reason text
-      subject = "QualiTrack - Solicitação de Acesso";
-      htmlContent = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #0A1F44; padding: 20px; border: 1px solid #D8DFEB; border-radius: 12px;">
-          <h2 style="color: #0A1F44;">Olá, ${name}!</h2>
-          <p>Sua solicitação de acesso ao sistema QualiTrack foi analisada.</p>
-          <p>Infelizmente, não foi possível aprovar seu acesso neste momento pelo seguinte motivo:</p>
-          <div style="background-color: #FFFFFF; border: 1px solid #D8DFEB; padding: 15px; border-radius: 8px; font-style: italic; margin: 20px 0;">
-            "${reason || 'Não informado.'}"
-          </div>
-          <p>Caso tenha dúvidas, entre em contato com o administrador do sistema.</p>
-        </div>
-      `;
-    }
-
-    console.log(`[LOG] Enviando e-mail via SMTP...`);
-    
-    // Criar uma versão em texto simples amigável para o campo 'content'
-    let plainTextContent = "";
-    if (type === 'rejection') {
-      plainTextContent = `Olá, ${name}!\n\nSua solicitação de acesso ao QualiTrack foi analisada.\nInfelizmente, seu acesso não foi aprovado pelo seguinte motivo:\n\n"${token}"\n\nCaso tenha dúvidas, entre em contato com o administrador.`;
-    } else {
-      plainTextContent = `Olá, ${name}!\n\nSua conta no QualiTrack foi aprovada.\nPara definir sua senha, acesse o link: ${resetLink}`;
-    }
-
-  await client.send({
-    from: Deno.env.get("SMTP_USERNAME") || "qualidade@webposto.com.br",
-      to: email,
-      subject: subject,
-      content: plainTextContent,
-      html: htmlContent,
-    });
-
-    console.log(`[LOG] E-mail enviado com sucesso para ${email}`);
-    await client.close();
-
-    return new Response(
-      JSON.stringify({ success: true, message: "E-mail enviado com sucesso" }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      },
-    );
-  } catch (error: any) {
-    console.error('[ERRO SMTP]:', error);
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      },
-    );
+    return json({ success: true });
+  } catch {
+    console.error('send-email: falha no envio SMTP');
+    return json({ success: false, error: 'Não foi possível enviar a notificação. Contate o administrador.' }, 503);
+  } finally {
+    try { await client.close(); } catch { /* connection may not have opened */ }
   }
 });
