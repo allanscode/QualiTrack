@@ -41,8 +41,16 @@ export function ProtectedAuthForm({ onSubmit, children, className }: {
     try { await onSubmit(event); } finally { if (widget.current) window.turnstile?.reset(widget.current); }
   }}>
     {children}
-    {!isMockMode && <div ref={element} />}
-    {!isMockMode && (!sitekey || failed) && <p role="alert">Verificação de segurança indisponível. Contate o administrador.</p>}
+    {!isMockMode && (
+      <div className="flex w-full justify-center">
+        <div ref={element} />
+      </div>
+    )}
+    {!isMockMode && (!sitekey || failed) && (
+      <p className="text-center" role="alert">
+        Verificação de segurança indisponível. Contate o administrador.
+      </p>
+    )}
   </form>;
 }
 
