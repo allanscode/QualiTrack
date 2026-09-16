@@ -1,4 +1,4 @@
-# QualiTrack
+# QualidadeWP
 
 Sistema de gestão de qualidade para operações de suporte ao cliente.
 

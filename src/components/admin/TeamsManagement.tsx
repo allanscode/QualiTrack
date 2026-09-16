@@ -407,7 +407,7 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
           onClick={handleSyncZendeskGroups}
           disabled={syncingZendesk}
           icon={syncingZendesk ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          title="Cria uma equipe para cada grupo do Zendesk que ainda não existe no QualiTrack"
+          title="Cria uma equipe para cada grupo do Zendesk que ainda não existe no QualidadeWP"
         >
           {syncingZendesk ? 'SINCRONIZANDO...' : 'IMPORTAR DO ZENDESK'}
         </Button>

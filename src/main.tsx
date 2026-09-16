@@ -13,7 +13,7 @@ initSentry();
 // Production guard: warn if running in mock mode
 if (import.meta.env.PROD && isMockMode) {
   console.error(
-    '[QualiTrack] MOCK MODE ATIVO EM PRODUÇÃO! ' +
+    '[QualidadeWP] MOCK MODE ATIVO EM PRODUÇÃO! ' +
     'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no ambiente de produção.'
   );
 }

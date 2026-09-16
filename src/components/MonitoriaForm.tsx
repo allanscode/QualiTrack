@@ -521,7 +521,7 @@ export default function MonitoriaForm({
                   {unregisteredAgentPreview && !header.evaluated_id && (
                     <p className="text-[10px] font-bold text-functional-warning ml-1">
                       * {unregisteredAgentPreview.name} ({unregisteredAgentPreview.email}) — atendente do
-                      Zendesk deste ticket, ainda não cadastrado no QualiTrack. Clique em
+                      Zendesk deste ticket, ainda não cadastrado no QualidadeWP. Clique em
                       "Agente não cadastrado?" acima para cadastrar.
                     </p>
                   )}
@@ -1029,7 +1029,7 @@ export default function MonitoriaForm({
                 </Button>
               </div>
               <p className="text-[11px] font-semibold text-brand-muted">
-                Para um atendente do Zendesk que ainda não tem conta formal no QualiTrack. Cria um registro
+                Para um atendente do Zendesk que ainda não tem conta formal no QualidadeWP. Cria um registro
                 provisório vinculado ao e-mail — quando ele fizer o onboarding com o mesmo e-mail, o histórico
                 é herdado automaticamente pela conta definitiva.
               </p>

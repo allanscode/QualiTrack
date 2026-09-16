@@ -885,7 +885,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
           // Cabeçalhos recomendados pelo OpenRouter para identificar a app
           // (não obrigatórios, mas ajudam a evitar throttling nos modelos :free).
           'HTTP-Referer': Deno.env.get('FRONTEND_URL') || 'https://qualitrack.app',
-          'X-Title': 'QualiTrack',
+          'X-Title': 'QualidadeWP',
         },
         body: JSON.stringify({
           models: openRouterModels,
