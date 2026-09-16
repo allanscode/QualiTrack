@@ -11,7 +11,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test": "vitest run",
-    "test:database": "node --test scripts/security-database.test.mjs",
+    "test:database": "node --test scripts/security-database.test.mjs scripts/fresh-database.test.mjs scripts/deployment-security.test.mjs",
+    "prepare:supabase": "node scripts/prepare-supabase.mjs",
     "check:bundle": "node scripts/check-production-bundle.mjs",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage"

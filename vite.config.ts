@@ -6,10 +6,12 @@ import { defineConfig, loadEnv } from 'vite';
 const csp = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com 'sha256-89EsJ0gg8fA1Joh8OF4yrUg7+lme5ZrRRU6JRRnO0iM=' 'sha256-Z2/iFzh9VMlVkEOar1f/oSHWwQk3ve1qk/C2WdsC4Xk=' 'sha256-dN0GWK6Ci/4pOCyKHcyOwmqaKlVRrq9ofFuvyJnWb8E='; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co; connect-src 'self' https://challenges.cloudflare.com https://*.supabase.co wss://*.supabase.co ";
 
 const securityHeaders = {
-  'Content-Security-Policy': csp,
+  'Content-Security-Policy': csp + "; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
   'X-Frame-Options': 'DENY',
   'X-Content-Type-Options': 'nosniff',
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Cross-Origin-Opener-Policy': 'same-origin'
 };
 
 export default defineConfig(({ command, mode, isPreview }) => {
@@ -82,7 +84,9 @@ export default defineConfig(({ command, mode, isPreview }) => {
       port: 3001,
       strictPort: true,
       hmr: process.env.DISABLE_HMR !== 'true' ? { host: 'localhost' } : false,
-      headers: securityHeaders
+      // React Refresh injects a development-only inline preamble; HMR uses WS.
+      // Never use this development policy for deployed assets.
+      headers: { ...securityHeaders, 'Content-Security-Policy': securityHeaders['Content-Security-Policy'].replace(/ 'sha256-[^']+'/g, '').replace("script-src 'self'", "script-src 'self' 'unsafe-inline'").replace("connect-src 'self'", "connect-src 'self' ws://localhost:* ws://127.0.0.1:*") }
     },
     preview: {
       headers: securityHeaders

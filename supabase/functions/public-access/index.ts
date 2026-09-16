@@ -2,6 +2,7 @@ import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
+import { emailRecipientAllowed } from '../_shared/email-policy.ts';
 const headers = { ...corsFor(Deno.env.get('FRONTEND_URL')), 'Content-Type': 'application/json' };
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
 const accepted = () => reply({ success: true, message: 'Se aplicável, a solicitação será processada.' });
@@ -20,6 +21,7 @@ serve(async req => {
   if (!secret) return reply({ error: 'Verificação de segurança não configurada' }, 503);
   try {
     if (body.action === 'recover') {
+      if (!emailRecipientAllowed(body.email.trim().toLowerCase(), Deno.env.get('EMAIL_ALLOWED_RECIPIENTS'))) return accepted();
       // Auth validates the single-use CAPTCHA itself (do not consume it twice).
       const auth = createClient(Deno.env.get('SUPABASE_URL')!, publicApiKey(), { auth: { persistSession: false, autoRefreshToken: false } });
       const { error } = await auth.auth.resetPasswordForEmail(body.email.trim().toLowerCase(), {

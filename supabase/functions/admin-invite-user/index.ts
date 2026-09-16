@@ -1,5 +1,6 @@
 import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
 import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
+import { emailRecipientAllowed, canManageIdentity } from '../_shared/email-policy.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2'
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts"
@@ -140,6 +141,11 @@ serve(async (req) => {
     }
 
     const { email, name, role, team_ids } = result.data
+    if (!emailRecipientAllowed(email.toLowerCase(), Deno.env.get('EMAIL_ALLOWED_RECIPIENTS'))) {
+      return new Response(JSON.stringify({ success: false, error: 'Envio não habilitado para este destinatário no ambiente.' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     // Defesa em profundidade: o papel vem do cliente e o InviteSchema aceita
     // 'admin'. Sem esta checagem, um gestor_qualidade poderia criar uma conta
@@ -165,15 +171,27 @@ serve(async (req) => {
 
     const { data: existingUser, error: searchError } = await supabaseAdmin
       .from('users')
-      .select('id, active')
+      .select('id, active, role, is_provisional')
       .eq('email', email.toLowerCase())
       .maybeSingle()
 
     if (searchError) {
-      console.warn('Search User Error (non-fatal):', searchError)
+      throw new Error('Não foi possível verificar a identidade existente')
     }
 
-    if (existingUser) {
+    if (existingUser && !canManageIdentity(adminUser.role, existingUser.role)) {
+      return new Response(JSON.stringify({ success: false, error: 'Apenas administradores podem alterar outro administrador.' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    const limit = await supabaseAdmin.rpc('consume_security_rate_limit', { bucket_key: `invite-user:${user.id}`, max_requests: 10, window_seconds: 900 });
+    if (limit.error || !limit.data) {
+      return new Response(JSON.stringify({ success: false, error: limit.error ? 'Serviço indisponível' : 'Limite de convites atingido' }), {
+        status: limit.error ? 503 : 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (existingUser && !existingUser.is_provisional) {
       const { error: dbError } = await supabaseAdmin.from('users').update(userPayload).eq('id', existingUser.id)
 
       if (dbError) {

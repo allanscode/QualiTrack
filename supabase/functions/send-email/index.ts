@@ -3,6 +3,7 @@ import { SmtpClient } from 'https://deno.land/x/smtp@v0.7.0/mod.ts';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { corsFor, rejectRequest, escapeHtml } from '../_shared/http.ts';
+import { emailRecipientAllowed, smtpConfiguration } from '../_shared/email-policy.ts';
 
 const runtime = Deno as unknown as { writeAll?: (w: { write(b: Uint8Array): Promise<number> }, b: Uint8Array) => Promise<void> };
 runtime.writeAll ??= async (writer, bytes) => {
@@ -35,6 +36,7 @@ serve(async req => {
   const { data: request, error: requestError } = await db.from('access_requests')
     .select('id,email,name,rejection_reason,status').eq('id', body.request_id).maybeSingle();
   if (requestError || !request || request.status !== 'rejected') return json({ success: false, error: 'Solicitação indisponível' }, 400);
+  if (!emailRecipientAllowed(request.email, Deno.env.get('EMAIL_ALLOWED_RECIPIENTS'))) return json({ success: false, error: 'Envio não habilitado para este destinatário no ambiente.' }, 403);
   const callerLimit = await db.rpc('consume_security_rate_limit', { bucket_key: `mailer:${user.id}`, max_requests: 20, window_seconds: 900 });
   if (callerLimit.error) return json({ success: false, error: 'Serviço indisponível' }, 503);
   if (!callerLimit.data) return json({ success: false, error: 'Limite de envio atingido' }, 429);
@@ -45,10 +47,9 @@ serve(async req => {
   if (!allowed) return json({ success: false, error: 'Aguarde antes de reenviar' }, 429);
   const client = new SmtpClient();
   try {
-    const username = Deno.env.get('SMTP_USERNAME');
-    const password = Deno.env.get('SMTP_PASSWORD');
-    if (!username || !password) throw new Error('SMTP not configured');
-    await client.connectTLS({ hostname: Deno.env.get('SMTP_HOSTNAME') || 'smtp.gmail.com', port: Number(Deno.env.get('SMTP_PORT') || '465'), username, password });
+    const config = smtpConfiguration({ SMTP_USERNAME: Deno.env.get('SMTP_USERNAME'), SMTP_PASSWORD: Deno.env.get('SMTP_PASSWORD'), SMTP_HOSTNAME: Deno.env.get('SMTP_HOSTNAME'), SMTP_PORT: Deno.env.get('SMTP_PORT') });
+    await client.connectTLS(config);
+    const username = config.username;
     const name = escapeHtml(request.name);
     const reason = escapeHtml(request.rejection_reason || 'Não informado.');
     await client.send({ from: username, to: request.email, subject: 'QualidadeWP - Solicitação de acesso',

@@ -1,6 +1,6 @@
 # Segurança e preparação para outro projeto Supabase
 
-Data: 15/09/2026. Base: `origin/main` em `42eb708`.
+Atualização: 16/09/2026. Base: `origin/main` em `42eb708`.
 Branch: `codex/security-supabase-migration`.
 
 ## Entrega e limites
@@ -75,69 +75,50 @@ runtime e tem fallback para as variáveis legadas. Não remover a validação in
 O placeholder `admin-create-user` continua sem implementação e não faz parte deste deploy.
 Referência: [migração de API keys](https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys).
 
-## Migração futura: ambiente e dados
+## Novo destino: arquitetura sem dados de teste
 
-O código não depende da referência do projeto antigo. O cliente aceita
-`VITE_SUPABASE_PUBLISHABLE_KEY` ou a chave anon legada. Um novo destino exige novo
-build na Vercel, pois variáveis `VITE_*` são embutidas no bundle. Sessões do projeto
-antigo não autenticam no novo: planejar novo login após o corte.
+**Decisão atual do usuário:** nunca houve produção; os registros são somente testes
+da equipe de desenvolvimento. Portanto, o caminho escolhido é instalação limpa,
+não backup/restauração de usuários e monitorias.
 
-O workflow GitHub usa configuração fictícia apenas para compilar/testar e não
-publica esse bundle. A Vercel compila com suas próprias variáveis. O job Docker
-recompila com as quatro variáveis públicas do repositório (`vars.VITE_*`); configurá-las
-antes de um merge na `main`, caso a publicação da imagem seja utilizada.
+O pacote reproduzível está implementado em `supabase/bootstrap` e
+`scripts/prepare-supabase.mjs`. O procedimento completo, com comandos para o
+workdir isolado da CLI, está em [Instalação limpa](supabase-clean-install.md).
+O histórico legado foi preservado; não executar toda a cadeia antiga no destino.
+As duas migrations de segurança já estão incluídas na base nova.
 
-| Camada | O que conferir no destino |
-| --- | --- |
-| Frontend | URL Supabase, chave pública, site key CAPTCHA; variáveis separadas para Preview/Production e rebuild. |
-| Banco | Dados, UUIDs, sequências, constraints, índices, funções, RLS, schema `_private` e histórico `supabase_migrations`. |
-| Auth | Usuários/senhas preservados por restauração suportada, configurações, Site URL, redirects exatos, templates, SMTP, CAPTCHA e limites. |
-| Edge | Publicar a mesma revisão Git; recriar secrets SMTP, Turnstile, Zendesk, Gemini/OpenRouter. Chaves reservadas Supabase vêm do novo projeto. |
-| Storage | Buckets, arquivos de manuais IA, políticas e caminhos; URLs absolutas persistidas precisam apontar ao destino. |
-| Agendamentos | Extensões, cron de prazo de ação, webhooks e publicações Realtime. Executar os jobs em apenas um ambiente durante o corte. |
-| Integrações | Credenciais de helpdesk/IA e prevenção de envio duplicado ao Zendesk. |
+Para o banco atual, continuam valendo somente as migrations incrementais revisadas
+e o procedimento acima, depois de conferir o estado real. O instalador novo **não
+é uma atualização do projeto free existente**.
 
-### Caminho escolhido para preservar o sistema atual
+## Complementos implementados nesta etapa
 
-Restaurar um backup do schema/dados atuais em um projeto de homologação e depois no
-destino. Não reconstruir o banco por seed. Não recriar usuários com novos UUIDs:
-monitorias, vínculos e histórico dependem desses identificadores.
+- Remoção da CSP conflitante do HTML; CAPTCHA permitido pelos headers. Remoção
+  das referências de metadados ao domínio não pertencente ao usuário.
+- Headers Permissions-Policy, COOP e CSP reforçada no deploy. Políticas de
+  desenvolvimento separadas, sem forçar HTTPS no localhost.
+- Pacote com 15 tabelas vazias, RLS, trigger Auth, Storage privado e Realtime.
+  Guarda contra instalação em banco preenchido e primeiro admin sem senha fixa.
+- SMTP Gmail com validação TLS e allowlist de destinatários. **Configurar
+  EMAIL_ALLOWED_RECIPIENTS antes do deploy**, senão nossas funções bloqueiam envios.
+  Limites desse bloqueio e configuração separada do Auth em [SMTP Gmail](smtp-gmail.md).
+- Gestor de qualidade não pode alterar identidade de administrador pelas funções
+  de convite/e-mail. Convites têm também limite persistente no banco.
+- Identidades provisórias seguem o fluxo de convite/trigger, em vez de tentar
+  recuperar senha de uma conta que ainda não existe no Auth.
 
-O histórico antigo NÃO é uma sequência validada de bootstrap vazio: por exemplo,
-`foundation` referencia `users.team_id` que a base inicial não cria, e migrations
-antigas recriam tabelas já existentes. `apply_all_pending.sql` é um consolidado
-manual, não um passo seguro de migração. Esta entrega neutraliza o seed destrutivo
-`20260521000001`, mantendo seu número, mas não reescreve todo o histórico.
-Por isso, não executar `db reset`, `db push --include-all` nem o consolidado no destino.
-Exportar o estado real e preservar o histórico aplicado é necessário antes de usar
-`db push` para versões futuras.
+## Pendências que impedem declarar liberação para produção
 
-1. Inventariar origem e destino com `supabase/verification/migration-preflight.sql`.
-   Guardar as contagens e nomes das policies em local privado. Comparar com a branch.
-2. Fazer ensaio de backup/restauração em projeto descartável usando o
-   [procedimento oficial de backup e restauração](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore).
-   Esse procedimento inclui schema/dados/roles, histórico da CLI e restauração
-   separada das customizações de `auth`/`storage`; arquivos Storage precisam de cópia
-   própria. Não versionar dumps com usuários ou dados reais. `backups/` está ignorado.
-3. Garantir que `on_auth_user_created` aponta para a função desta branch no destino.
-   Não deixar a trigger rodar durante a restauração de usuários Auth; seguir o modo de
-   restauração indicado na documentação para não recriar/perder identidades.
-4. Conferir os schemas privados, as extensões e eventual Vault/criptografia de colunas
-   antes de restaurar; seguir os passos específicos do provedor se usados.
-5. Comparar contagens de tabelas, UUIDs, relacionamentos, arquivos e histórico. Verificar
-   especialmente `users`, `user_teams`, `monitorias`, `helpdesk_submissions`,
-   `ai_evaluation_guidelines` e `ai_evaluation_drafts`.
-6. Configurar e validar as camadas da tabela acima. Aplicar as duas novas migrations
-   apenas se não estiverem no snapshot/histórico restaurado.
-7. Para o corte final, suspender novas escritas, parar cron/integrações da origem,
-   capturar backup final, restaurar, validar e publicar a Vercel com as variáveis novas.
-8. Manter origem e backup até a validação operacional. Rollback antes de novas escritas
-   no destino = voltar o deploy/configuração e reativar a origem. Se houver escritas no
-   destino, conciliá-las antes: voltar cegamente perderia os dados novos.
-
-Para upgrade mantendo o mesmo projeto, avaliar a opção de alterar o plano sem trocar
-o banco. Para mudança entre projetos, ver
-[migração dentro do Supabase](https://supabase.com/docs/guides/platform/migrating-within-supabase).
+- Aplicação em Supabase real, configuração Auth/CAPTCHA/SMTP e deploy Vercel.
+- Homologação de entrega de e-mail, runtime Edge, cron, Realtime e fluxos completos.
+- Re-teste do relatório contra o ambiente configurado; a proteção do nosso endpoint
+  não modifica o comportamento dos endpoints gerenciados do Supabase Auth.
+- Revisão de anonimato do auditor em chamadas diretas à tabela/JSON de histórico,
+  além da ocultação pela view na interface.
+- Regras de transição/coluna para UPDATE de monitorias: a RLS herdada limita as
+  linhas, mas não impõe sozinha todas as ações permitidas pela interface.
+- Desativação controlada da conta indicada no reporte no ambiente de testes antigo,
+  após confirmar acesso e identidade. Nenhuma conta foi removida nesta execução.
 
 ## Validação reproduzível
 
