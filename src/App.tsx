@@ -148,16 +148,16 @@ function AppContent() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="h-screen w-screen flex flex-col items-center justify-center bg-surface-bg p-6 text-brand-primary"
+            className="auth-screen h-screen w-screen flex flex-col items-center justify-center bg-surface-bg p-6 text-brand-primary"
           >
-            <div className="max-w-md w-full text-center space-y-8">
+            <div className="auth-content max-w-md w-full text-center space-y-8">
               <h1 className="inline-flex items-center gap-1 bg-[#0A1F44] px-3 py-1.5 rounded-xl text-5xl font-bold tracking-tight">
                 <span className="text-white">Qualidade</span>
                 <span className="inline-flex items-center bg-white px-1.5 py-0.5 rounded-md leading-none">
                   <span className="text-[#B3141B]">W</span><span className="text-[#0A1F44]">P</span>
                 </span>
               </h1>
-              <div className="bg-surface-card p-8 rounded-[40px] border border-surface-border shadow-premium min-h-[400px] flex flex-col justify-center">
+              <div className="auth-card bg-surface-card p-8 rounded-[40px] border border-surface-border shadow-premium min-h-[400px] flex flex-col justify-center">
                 <AnimatePresence mode="wait">
                   {authView === 'login' && (
                     <m.div key="login" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6">

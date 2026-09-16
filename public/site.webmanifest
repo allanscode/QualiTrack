@@ -4,16 +4,16 @@
   "description": "Sistema de gestão de qualidade para operações de suporte ao cliente",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0A1F44",
+  "background_color": "#F3F6FA",
+  "theme_color": "#243B5A",
   "orientation": "portrait-primary",
   "scope": "/",
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "/favicon.png",
+      "sizes": "77x35",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "categories": ["business", "productivity"],

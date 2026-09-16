@@ -39,29 +39,27 @@
 color-scheme: light;
 /* Light Theme (Default) */
   /* WebPosto brand palette (values from logo artwork; verify against official brandbook when available). */
-  --brand-primary: #0A1F44;
-  --brand-highlight: #B3141B;
-  --brand-accent: #B3141B;
-  /* Acao primaria (botoes de destaque): NAO inverte entre os temas. O rubro
-     clareado do tema escuro nao sustenta texto branco (3.49:1), entao a cor
-     de marca fica fixa aqui -- branco sobre #B3141B da 6.92:1. */
-  --action-primary-bg: #B3141B;
+  --brand-primary: #243B5A;
+  --brand-highlight: #B83238;
+  --brand-accent: #B83238;
+  /* Primary actions stay darker than accent text so white labels remain readable. */
+  --action-primary-bg: #A9272D;
   --action-primary-fg: #FFFFFF;
-  --brand-muted: #52617A;
-  --brand-subtle: #E8ECF3;
+  --brand-muted: #64748B;
+  --brand-subtle: #E9EEF5;
   --brand-on-primary: #FFFFFF; /* White text on dark primary (Light Mode) */
 
-  --surface-bg: #F9F9F6;
-  --surface-card: #FFFFFF;
-  --surface-subtle: #F4F6FA;
+  --surface-bg: #F3F6FA;
+  --surface-card: #FCFDFE;
+  --surface-subtle: #EDF2F7;
 
   /* Role Sidebar Colors (Light Mode — neutral gray) */
-  --sidebar-bg-admin: #F9F9F6;
-  --sidebar-bg-qualidade: #F9F9F6;
-  --sidebar-bg-gestor-qualidade: #F9F9F6;
-  --sidebar-bg-gestor-suporte: #F9F9F6;
-  --sidebar-bg-suporte: #F9F9F6;
-  --surface-border: #D8DFEB;
+  --sidebar-bg-admin: #F6F8FB;
+  --sidebar-bg-qualidade: #F6F8FB;
+  --sidebar-bg-gestor-qualidade: #F6F8FB;
+  --sidebar-bg-gestor-suporte: #F6F8FB;
+  --sidebar-bg-suporte: #F6F8FB;
+  --surface-border: #D9E2EC;
   
   --shadow-premium: 0 10px 40px -10px rgba(10, 31, 68, 0.1);
   --shadow-premium-sm: 0 4px 20px -5px rgba(10, 31, 68, 0.05);
@@ -85,27 +83,27 @@ color-scheme: light;
 color-scheme: dark;
 /* Dark Theme Overrides */
   /* Keep text tokens readable on dark surfaces; red is softened for text contrast. */
-  --brand-primary: #FFFFFF;
-  --brand-highlight: #EF5350;
-  --brand-accent: #EF5350;
-  --brand-muted: #B2BDCE;
-  --brand-subtle: #202D45;
+  --brand-primary: #E8EEF7;
+  --brand-highlight: #EE8B8F;
+  --brand-accent: #EE8B8F;
+  --brand-muted: #A9B6C9;
+  --brand-subtle: #22314A;
   --brand-on-primary: #0A1F44; /* Dark text on light primary (Dark Mode) */
 
-  --surface-bg: #081631;
-  --surface-card: #102143;
-  --surface-subtle: #182A4D;
-  --surface-border: #2A3D63;
+  --surface-bg: #111C2F;
+  --surface-card: #18263D;
+  --surface-subtle: #22314A;
+  --surface-border: #34445E;
 
   --shadow-premium: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
   --shadow-premium-sm: 0 4px 20px -5px rgba(0, 0, 0, 0.3);
 
   /* Role Sidebar Colors (Dark Mode — neutral gray) */
-  --sidebar-bg-admin: #1F2937;
-  --sidebar-bg-qualidade: #1F2937;
-  --sidebar-bg-gestor-qualidade: #1F2937;
-  --sidebar-bg-gestor-suporte: #1F2937;
-  --sidebar-bg-suporte: #1F2937;
+  --sidebar-bg-admin: #172338;
+  --sidebar-bg-qualidade: #172338;
+  --sidebar-bg-gestor-qualidade: #172338;
+  --sidebar-bg-gestor-suporte: #172338;
+  --sidebar-bg-suporte: #172338;
 
   /* Functional color tokens (dark mode — pastel/soft) */
   --error-pastel: #FCA5A5;
@@ -139,6 +137,50 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--color-surface-bg);
   color: var(--color-brand-primary);
+}
+
+/* Keep branded actions calm and readable independently from accent text/icons. */
+.bg-brand-accent.text-white {
+  background-color: var(--action-primary-bg);
+  color: var(--action-primary-fg);
+}
+
+/* Authentication artwork is isolated from the logged-in application shell. */
+.auth-screen {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.auth-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: url('/qualidadewp-login-wallpaper.png') center / cover no-repeat;
+  opacity: 0.32;
+  transform: scale(1.01);
+}
+
+.auth-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(135deg, rgba(243, 246, 250, 0.78), rgba(243, 246, 250, 0.58));
+}
+
+.dark .auth-screen::before { opacity: 0.22; }
+.dark .auth-screen::after {
+  background: linear-gradient(135deg, rgba(17, 28, 47, 0.82), rgba(17, 28, 47, 0.68));
+}
+
+.auth-content { position: relative; z-index: 1; }
+.auth-card {
+  background-color: color-mix(in srgb, var(--surface-card) 94%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 20px 55px -24px rgba(10, 31, 68, 0.38);
 }
 
 /* A aplicação é um app shell: a raiz ocupa exatamente a altura da janela
