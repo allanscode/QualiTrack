@@ -77,7 +77,7 @@ export default function FilterBar() {
         <button
           onClick={refresh}
           disabled={loading || !!refreshCooldownRemaining}
-          className="flex items-center gap-2 px-3 py-1.5 text-brand-muted hover:text-brand-primary transition-colors text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-3 py-1.5 text-brand-muted hover:text-brand-primary transition-colors text-xs font-semibold tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           {loading ? 'Atualizando...' : refreshCooldownRemaining ? `Atualizar (${refreshCooldownRemaining})` : 'Atualizar Dados'}
@@ -95,7 +95,7 @@ export default function FilterBar() {
               placeholder="Data inicial"
               size="sm"
             />
-            <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest shrink-0">até</span>
+            <span className="text-brand-muted/70 font-medium text-xs shrink-0">até</span>
             <CustomDatepicker
               value={filters.endDate}
               onChange={(val: string) => setFilters({ ...filters, endDate: val })}

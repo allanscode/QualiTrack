@@ -787,14 +787,14 @@ function MainApp({
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-col">
-              <h2 className="text-xl font-black text-brand-primary tracking-tight">
+              <h2 className="text-xl font-bold text-brand-primary tracking-tight leading-snug">
                 {activeTab === 'dashboard'
                   ? `Olá, ${userData?.name.split(' ')[0]}! 👋`
                   : activeTab === 'monitorias'
                   ? 'Gestão de Monitorias'
                   : 'Configurações do Sistema'}
               </h2>
-              <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest mt-0.5">
+              <p className="text-xs font-semibold text-brand-muted tracking-wide mt-1 leading-relaxed">
                 {activeTab === 'dashboard'
                   ? (userData?.role === 'suporte'
                     ? 'Acompanhe seu desempenho e evolução individual'
@@ -810,10 +810,10 @@ function MainApp({
 
           <div className="flex items-center gap-6">
             <div className="hidden xl:flex flex-col items-end">
-              <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">{formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
+              <p className="text-xs font-semibold text-brand-muted capitalize tracking-wide">{formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <div className={`w-1.5 h-1.5 rounded-full ${isSystemOnline ? 'bg-success animate-pulse' : 'bg-error'} ${isReconnecting ? 'animate-bounce' : ''}`} />
-                <span className={`text-[9px] font-bold uppercase tracking-tight ${isSystemOnline ? 'text-brand-primary' : 'text-error'}`}>
+                <span className={`text-[11px] font-semibold tracking-normal ${isSystemOnline ? 'text-brand-primary' : 'text-error'}`}>
                   {isReconnecting ? 'Reconectando...' : isSystemOnline ? 'Sistema Online' : 'Sistema Offline'}
                 </span>
               </div>
@@ -823,7 +823,7 @@ function MainApp({
               {userData?.role === 'qualidade' && (
                 <button
                   onClick={() => setIsFormOpen(true)}
-                  className="action-primary h-10 px-5 rounded-xl text-xs font-black shadow-premium transition-all flex items-center gap-2"
+                  className="action-primary h-10 px-5 rounded-xl text-sm font-semibold shadow-premium transition-all flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" /> Nova Monitoria
                 </button>

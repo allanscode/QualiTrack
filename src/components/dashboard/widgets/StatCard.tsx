@@ -244,7 +244,7 @@ export default function StatCard({
           </AnimatePresence>
           </div>
           <div className="min-w-0 flex-1">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-normal leading-snug block">
+            <span className="text-sm font-semibold text-slate-600 dark:text-slate-300 tracking-normal whitespace-normal leading-snug block">
               {title}
             </span>
           </div>
@@ -255,7 +255,7 @@ export default function StatCard({
               e.stopPropagation();
               setShowOnlineModal(true);
             } : undefined}
-            className={`text-3xl font-black leading-none ${valueColorClass || 'text-slate-900 dark:text-slate-50'} ${
+            className={`text-3xl font-bold leading-none tracking-tight ${valueColorClass || 'text-slate-900 dark:text-slate-50'} ${
               isOnlineUsersCard ? 'cursor-pointer hover:opacity-80' : ''
             }`}
           >
