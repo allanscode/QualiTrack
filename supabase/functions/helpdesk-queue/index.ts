@@ -51,8 +51,8 @@ const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '';
 // buscava ticket nenhum do Zendesk, só sorteava um número de ticket
 // FICTÍCIO pra abrir a ficha. Agora usa tickets reais, igual as outras duas.
 const PROACTIVE_VIEW_ID = Deno.env.get('HELPDESK_PROACTIVE_VIEW_ID') || '';
-const CHILD_VIEW_ID = Deno.env.get('HELPDESK_CHILD_VIEW_ID') || '';
-const INVALID_CHILD_VIEW_ID = Deno.env.get('HELPDESK_INVALID_CHILD_VIEW_ID') || '';
+const CHILD_VIEW_ID = Deno.env.get('HELPDESK_CHILD_VIEW_ID') || '47405806430228';
+const INVALID_CHILD_VIEW_ID = Deno.env.get('HELPDESK_INVALID_CHILD_VIEW_ID') || '47656856998292';
 
 // Página pequena (25) em vez de buscar tudo de uma vez — views com centenas
 // de tickets (ex.: 808 em Proativas) estourariam o rate limit do Zendesk
@@ -539,6 +539,23 @@ serve(async (req) => {
           childMacroType = 'produtividade';
         }
 
+        let parentTicketId: string | undefined;
+        if (Array.isArray(t.custom_fields)) {
+          for (const cf of t.custom_fields) {
+            if (cf.value && typeof cf.value === 'string' && /^\d{5,9}$/.test(cf.value.trim())) {
+              parentTicketId = cf.value.trim();
+              break;
+            }
+          }
+        }
+        if (!parentTicketId && t.problem_id) {
+          parentTicketId = String(t.problem_id);
+        }
+        if (!parentTicketId && t.subject) {
+          const match = t.subject.match(/#(\d{5,9})/);
+          if (match) parentTicketId = match[1];
+        }
+
         return {
           ticket_id: String(t.id),
           subject: t.subject || 'Sem assunto',
@@ -557,6 +574,7 @@ serve(async (req) => {
           organization_name: org?.name,
           organization_tags: Array.isArray(org?.tags) ? org.tags : [],
           child_macro_type: childMacroType,
+          parent_ticket_id: parentTicketId,
         };
       }));
 

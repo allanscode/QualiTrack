@@ -379,6 +379,7 @@ function MainApp({
   const { users, teams, forms, refreshAll } = useStaticData();
   const { monitorias } = useMonitoriaData(userData, activeTab);
   const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
+  const [isSettingsHovered, setIsSettingsHovered] = React.useState(false);
 
   const handleStartAuditFromQueue = (prefill: any) => {
     // O agente pode ter sido criado agora mesmo (conta provisória) pela
@@ -537,15 +538,17 @@ function MainApp({
         </div>
 
         <nav className="flex-1 px-3 space-y-1 py-4">
-          <NavItem isDark={sidebarIsDark} icon={<DashboardIcon className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
-          <NavItem isDark={sidebarIsDark} icon={<ClipboardCheck className="w-5 h-5" />} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
+          <NavItem isDark={sidebarIsDark} icon={AnimatedDashboardIcon} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
+          <NavItem isDark={sidebarIsDark} icon={AnimatedMonitoriasIcon} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
           {userData?.role !== 'suporte' && (
-            <NavItem isDark={sidebarIsDark} icon={<Layers className="w-5 h-5" />} label="Filas de Triagem" active={activeTab === 'filas'} onClick={() => setActiveTab('filas')} isOpen={sidebarTextVisible} />
+            <NavItem isDark={sidebarIsDark} icon={AnimatedLayersIcon} label="Filas de Triagem" active={activeTab === 'filas'} onClick={() => setActiveTab('filas')} isOpen={sidebarTextVisible} />
           )}
           {userData?.role === 'admin' && (
             <div className="space-y-1">
               <button
                 onClick={handleSettingsClick}
+                onMouseEnter={() => setIsSettingsHovered(true)}
+                onMouseLeave={() => setIsSettingsHovered(false)}
                 className={`
                   w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
                   ${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen)
@@ -560,7 +563,7 @@ function MainApp({
                   />
                 )}
                 <div className={`${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen) ? 'text-current' : (sidebarIsDark ? 'text-white/30 group-hover:text-white' : 'text-slate-900/30 group-hover:text-slate-900')}`}>
-                  <Settings className="w-5 h-5" />
+                  <AnimatedSettingsIcon isHovered={isSettingsHovered} active={(activeTab === 'admin' || activeTab === 'custom_dashboard') || isSettingsOpen} className="w-5 h-5" />
                 </div>
                 <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${sidebarTextVisible ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
                   <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
@@ -883,10 +886,106 @@ function MainApp({
   );
 }
 
-function NavItem({ icon, label, active, onClick, isOpen, isDark, badge }: any) {
+function AnimatedDashboardIcon({ isHovered, active, className }: { isHovered?: boolean; active?: boolean; className?: string }) {
+  const isTriggered = !!(isHovered || active);
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className || "w-5 h-5"}>
+      <m.rect
+        x="3" y="3" width="7" height="9" rx="1"
+        animate={{ x: isTriggered ? 2 : 3, y: isTriggered ? 2 : 3 }}
+        transition={{ type: "spring", stiffness: 450, damping: 22 }}
+      />
+      <m.rect
+        x="14" y="3" width="7" height="5" rx="1"
+        animate={{ x: isTriggered ? 15 : 14, y: isTriggered ? 2 : 3 }}
+        transition={{ type: "spring", stiffness: 450, damping: 22 }}
+      />
+      <m.rect
+        x="14" y="12" width="7" height="9" rx="1"
+        animate={{ x: isTriggered ? 15 : 14, y: isTriggered ? 13 : 12 }}
+        transition={{ type: "spring", stiffness: 450, damping: 22 }}
+      />
+      <m.rect
+        x="3" y="16" width="7" height="5" rx="1"
+        animate={{ x: isTriggered ? 2 : 3, y: isTriggered ? 17 : 16 }}
+        transition={{ type: "spring", stiffness: 450, damping: 22 }}
+      />
+    </svg>
+  );
+}
+
+function AnimatedMonitoriasIcon({ isHovered, active, className }: { isHovered?: boolean; active?: boolean; className?: string }) {
+  const isTriggered = !!(isHovered || active);
+  return (
+    <m.svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className || "w-5 h-5"}
+      animate={{ scale: isTriggered ? [1, 1.08, 1] : 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <m.path
+        d="m9 14 2 2 4-4"
+        animate={isTriggered ? { pathLength: [0, 1], opacity: [0.4, 1] } : { pathLength: 1, opacity: 1 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+      />
+    </m.svg>
+  );
+}
+
+function AnimatedLayersIcon({ isHovered, active, className }: { isHovered?: boolean; active?: boolean; className?: string }) {
+  const isTriggered = !!(isHovered || active);
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className || "w-5 h-5"}>
+      <m.path
+        d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
+        animate={{ y: isTriggered ? -2.5 : 0 }}
+        transition={{ type: "spring", stiffness: 350, damping: 20 }}
+      />
+      <path d="m2 12 8.58 3.91a2 2 0 0 0 1.66 0L21 12" />
+      <m.path
+        d="m2 17 8.58 3.91a2 2 0 0 0 1.66 0L21 17"
+        animate={{ y: isTriggered ? 2.5 : 0 }}
+        transition={{ type: "spring", stiffness: 350, damping: 20 }}
+      />
+    </svg>
+  );
+}
+
+function AnimatedSettingsIcon({ isHovered, active, className }: { isHovered?: boolean; active?: boolean; className?: string }) {
+  const isTriggered = !!(isHovered || active);
+  return (
+    <m.svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className || "w-5 h-5"}
+      animate={{ rotate: isTriggered ? 90 : 0 }}
+      transition={{ type: "spring", stiffness: 220, damping: 18 }}
+    >
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
+    </m.svg>
+  );
+}
+
+function NavItem({ icon: IconComponent, label, active, onClick, isOpen, isDark, badge }: any) {
+  const [isHovered, setIsHovered] = React.useState(false);
+
   return (
     <button
       onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       className={`
         w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative
         ${active
@@ -901,7 +1000,13 @@ function NavItem({ icon, label, active, onClick, isOpen, isDark, badge }: any) {
         />
       )}
       <div className={`${active ? 'text-current' : (isDark ? 'text-white/30 group-hover:text-white' : 'text-slate-900/30 group-hover:text-slate-900')}`}>
-        {icon}
+        {typeof IconComponent === 'function' ? (
+          <IconComponent isHovered={isHovered} active={active} className="w-5 h-5" />
+        ) : React.isValidElement(IconComponent) ? (
+          React.cloneElement(IconComponent as React.ReactElement<any>, { isHovered, active })
+        ) : (
+          IconComponent
+        )}
       </div>
       <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${isOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
         <span className="text-sm tracking-tight whitespace-nowrap block pl-1">

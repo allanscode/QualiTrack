@@ -575,79 +575,93 @@ export default function AuditingQueueView({
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Barra Unificada de Navegação de Filas e Controles */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        {/* Tabs de Navegação das Filas */}
-        <div className="flex items-center gap-1.5 p-1 bg-surface-subtle/60 rounded-2xl border border-surface-border overflow-x-auto max-w-full">
-          <button
-            onClick={() => setActiveQueue('negativas')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeQueue === 'negativas'
-                ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
-                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-            }`}
-          >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span>CSAT Negativas</span>
-            {pendingNegativesCount > 0 && (
-              <span className="px-1.5 py-0.5 text-[10px] font-black bg-functional-error text-white rounded-full">
-                {pendingNegativesCount}
-              </span>
-            )}
-          </button>
+      {/* 1. Barra de Abas das Filas: Grid responsivo de 5 colunas sem scroll horizontal */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-1.5 bg-surface-subtle/40 rounded-2xl border border-surface-border">
+        <button
+          onClick={() => setActiveQueue('negativas')}
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            activeQueue === 'negativas'
+              ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
+              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+          }`}
+        >
+          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">CSAT Negativas</span>
+          {pendingNegativesCount > 0 && (
+            <span className="px-1.5 py-0.5 text-[10px] font-black bg-functional-error text-white rounded-full flex-shrink-0">
+              {pendingNegativesCount}
+            </span>
+          )}
+        </button>
 
-          <button
-            onClick={() => setActiveQueue('proativas')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeQueue === 'proativas'
-                ? 'bg-info/15 text-info border border-info/30 shadow-sm'
-                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5" />
-            <span>Fila Proativa</span>
-          </button>
+        <button
+          onClick={() => setActiveQueue('proativas')}
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            activeQueue === 'proativas'
+              ? 'bg-info/15 text-info border border-info/30 shadow-sm'
+              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+          }`}
+        >
+          <Zap className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">Fila Proativa</span>
+        </button>
 
-          <button
-            onClick={() => setActiveQueue('positivas')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeQueue === 'positivas'
-                ? 'bg-functional-success/15 text-functional-success border border-functional-success/30 shadow-sm'
-                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>CSAT Positivas (+ IA)</span>
-          </button>
+        <button
+          onClick={() => setActiveQueue('positivas')}
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            activeQueue === 'positivas'
+              ? 'bg-functional-success/15 text-functional-success border border-functional-success/30 shadow-sm'
+              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">CSAT Positivas (+ IA)</span>
+        </button>
 
-          <button
-            onClick={() => setActiveQueue('filhos')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeQueue === 'filhos'
-                ? 'bg-brand-highlight/15 text-brand-highlight border border-brand-highlight/30 shadow-sm'
-                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-            }`}
-          >
-            <GitFork className="w-3.5 h-3.5" />
-            <span>Chamados Filhos</span>
-          </button>
+        <button
+          onClick={() => setActiveQueue('filhos')}
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            activeQueue === 'filhos'
+              ? 'bg-brand-highlight/15 text-brand-highlight border border-brand-highlight/30 shadow-sm'
+              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+          }`}
+          title="Filtro Zendesk: 47405806430228"
+        >
+          <GitFork className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">Chamados Filhos</span>
+        </button>
 
-          <button
-            onClick={() => setActiveQueue('filhos_invalidos')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeQueue === 'filhos_invalidos'
-                ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
-                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-            }`}
-          >
-            <AlertOctagon className="w-3.5 h-3.5" />
-            <span>Filhos Inválidos</span>
-          </button>
+        <button
+          onClick={() => setActiveQueue('filhos_invalidos')}
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            activeQueue === 'filhos_invalidos'
+              ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
+              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+          }`}
+          title="Filtro Zendesk: 47656856998292"
+        >
+          <AlertOctagon className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">Filhos Inválidos</span>
+        </button>
+      </div>
+
+      {/* 2. Barra de Contexto Compacta & Ações (Filtros, Busca e Atualização) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-bold text-brand-primary truncate">
+            {activeQueue === 'negativas' && 'Fila Prioritária de Insatisfação (Reversão CSAT)'}
+            {activeQueue === 'proativas' && 'Fila de Equidade Proativa (Amostragem Justa de Atendentes)'}
+            {activeQueue === 'positivas' && 'Fila de Elogios e Avaliação com IA Copilot'}
+            {activeQueue === 'filhos' && 'Triagem de Chamados Filhos (View Zendesk #47405806430228)'}
+            {activeQueue === 'filhos_invalidos' && 'Chamados Filhos Inválidos (View Zendesk #47656856998292)'}
+          </span>
+          <span className="text-[10px] text-brand-muted whitespace-nowrap hidden sm:inline">
+            • {filteredTickets.length} chamado(s) nesta página
+          </span>
         </div>
 
-        {/* Controles de Busca e Atualização */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="relative w-full sm:w-60">
+          <div className="relative w-full sm:w-64">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
             <input
               type="text"
@@ -679,7 +693,7 @@ export default function AuditingQueueView({
             title="Recarregar fila do Zendesk"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Atualizar Filas</span>
+            <span className="hidden sm:inline">Atualizar</span>
           </Button>
         </div>
       </div>
@@ -687,25 +701,6 @@ export default function AuditingQueueView({
       {/* Conteúdo da Fila: NEGATIVAS */}
       {activeQueue === 'negativas' && (
         <div className="space-y-4">
-          {/* Banner de Alerta */}
-          <div className="p-4 rounded-2xl bg-functional-error/10 border border-functional-error/25 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-functional-error text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                <AlertTriangle className="w-5 h-5 animate-pulse" />
-              </div>
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-wider text-functional-error">
-                  Fila Prioritária de Insatisfação
-                </h3>
-                <p className="text-[11px] font-semibold text-brand-primary/80">
-                  Estes chamados receberam avaliação negativa do cliente no Zendesk e requerem monitoria para apuração e contato de reversão.
-                </p>
-              </div>
-            </div>
-            <Badge variant="error" size="sm" className="font-black font-mono">
-              Alta Prioridade
-            </Badge>
-          </div>
 
           {/* Lista de Tickets Negativos */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -802,20 +797,6 @@ export default function AuditingQueueView({
       {/* Conteúdo da Fila: PROATIVAS (Amostragem Justa) */}
       {activeQueue === 'proativas' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-info/10 border border-info/25 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-info text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-xs font-black uppercase tracking-wider text-info">
-                Fila de Equidade Proativa
-              </h3>
-              <p className="text-[11px] font-semibold text-brand-primary/80">
-                Chamados com CSAT vazio/não avaliado no Zendesk — a mesma IA da fila de Positivas avalia e
-                sugere a monitoria, que você revisa antes de lançar. Cards de agentes com <Badge variant="warning" size="xs" className="text-[9px] align-middle">prioritário</Badge> pertencem a quem está há mais tempo sem monitoria.
-              </p>
-            </div>
-          </div>
 
           {/* Ranking de prioridade — só informativo, ajuda a escolher qual
               ticket revisar primeiro entre os desta página. */}
@@ -908,20 +889,6 @@ export default function AuditingQueueView({
       {/* Conteúdo da Fila: POSITIVAS (+ IA Copilot) */}
       {activeQueue === 'positivas' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-functional-success/10 border border-functional-success/25 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-functional-success text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-xs font-black uppercase tracking-wider text-functional-success">
-                Fila de Elogios e Avaliação com IA
-              </h3>
-              <p className="text-[11px] font-semibold text-brand-primary/80">
-                Chamados com CSAT Positivo no Zendesk. A IA lê o diálogo, avalia os critérios operacionais e pré-preenche a monitoria com sugestão de elogios.
-              </p>
-            </div>
-          </div>
-
           {/* Lista de Chamados Positivos */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredTickets.map(ticket => (
@@ -992,24 +959,6 @@ export default function AuditingQueueView({
       {/* Conteúdo da Fila: CHAMADOS FILHOS */}
       {activeQueue === 'filhos' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-brand-highlight/10 border border-brand-highlight/25 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-brand-highlight text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                <GitFork className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-wider text-brand-highlight">
-                  Triagem de Chamados Filhos
-                </h3>
-                <p className="text-[11px] font-semibold text-brand-primary/80">
-                  Auditoria de conformidade dos 4 padrões de abertura: Nova Demanda, Análise Técnica N2, Apoio Técnico e Produtividade.
-                </p>
-              </div>
-            </div>
-            <Badge variant="primary" size="sm" className="font-black font-mono">
-              4 Padrões Operacionais
-            </Badge>
-          </div>
 
           {filteredTickets.length === 0 ? (
             <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
