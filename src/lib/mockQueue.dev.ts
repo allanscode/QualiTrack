@@ -16,7 +16,10 @@ export function getMockQueueTickets(type: AuditingQueueType, auditedIds: Set<str
         ticket_date: new Date(now.getTime() - 1000 * 3600 * 4).toISOString(),
         status: 'solved',
         url: 'https://example.invalid/agent/tickets/900001',
-        already_audited: auditedIds.has('900001')
+        already_audited: auditedIds.has('900001'),
+        tags: ['cliente_final'],
+        organization_name: 'Posto Estrela do Sul',
+        organization_tags: ['cliente_final'],
       },
       {
         ticket_id: '900002',
@@ -30,7 +33,10 @@ export function getMockQueueTickets(type: AuditingQueueType, auditedIds: Set<str
         ticket_date: new Date(now.getTime() - 1000 * 3600 * 8).toISOString(),
         status: 'solved',
         url: 'https://example.invalid/agent/tickets/900002',
-        already_audited: auditedIds.has('900002')
+        already_audited: auditedIds.has('900002'),
+        tags: ['cliente_final'],
+        organization_name: 'Auto Posto Alvorada',
+        organization_tags: ['cliente_final'],
       }
     ];
   }
@@ -49,7 +55,10 @@ export function getMockQueueTickets(type: AuditingQueueType, auditedIds: Set<str
         ticket_date: new Date(now.getTime() - 1000 * 3600 * 5).toISOString(),
         status: 'closed',
         url: 'https://example.invalid/agent/tickets/900003',
-        already_audited: auditedIds.has('900003')
+        already_audited: auditedIds.has('900003'),
+        tags: ['cliente_final'],
+        organization_name: 'Posto Pioneiro',
+        organization_tags: ['cliente_final'],
       },
       {
         ticket_id: '900004',
@@ -63,7 +72,10 @@ export function getMockQueueTickets(type: AuditingQueueType, auditedIds: Set<str
         ticket_date: new Date(now.getTime() - 1000 * 3600 * 12).toISOString(),
         status: 'closed',
         url: 'https://example.invalid/agent/tickets/900004',
-        already_audited: auditedIds.has('900004')
+        already_audited: auditedIds.has('900004'),
+        tags: ['cliente_final'],
+        organization_name: 'Posto Rota 101',
+        organization_tags: ['cliente_final'],
       }
     ];
   }
@@ -81,7 +93,10 @@ export function getMockQueueTickets(type: AuditingQueueType, auditedIds: Set<str
       ticket_date: new Date(now.getTime() - 1000 * 3600 * 6).toISOString(),
       status: 'solved',
       url: 'https://example.invalid/agent/tickets/900005',
-      already_audited: auditedIds.has('900005')
+      already_audited: auditedIds.has('900005'),
+      tags: ['cliente_final'],
+      organization_name: 'Posto São Lucas',
+      organization_tags: ['cliente_final'],
     },
     {
       ticket_id: '900006',
@@ -94,7 +109,10 @@ export function getMockQueueTickets(type: AuditingQueueType, auditedIds: Set<str
       ticket_date: new Date(now.getTime() - 1000 * 3600 * 14).toISOString(),
       status: 'closed',
       url: 'https://example.invalid/agent/tickets/900006',
-      already_audited: auditedIds.has('900006')
+      already_audited: auditedIds.has('900006'),
+      tags: ['cliente_final'],
+      organization_name: 'Posto Central Park',
+      organization_tags: ['cliente_final'],
     }
   ];
 }

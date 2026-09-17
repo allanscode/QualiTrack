@@ -66,6 +66,15 @@ test('PostgreSQL: restrictive RLS, rate limits and safe Auth identity migration'
       assert.equal((await asUser(6, () => db.query('SELECT * FROM users'))).rows.length,1);
       const changed = await asUser(3, () => db.query(`UPDATE monitorias SET score=0 WHERE id='${id(302)}' RETURNING id`));
       assert.equal(changed.rows.length,0);
+
+      // Aplica a migration de integridade de UPDATE em monitorias
+      await db.exec(await migration('20260917000001_monitorias_update_integrity_and_anonymity'));
+
+      // Suporte tentando alterar a própria nota diretamente via UPDATE deve ser rejeitado pela trigger
+      await assert.rejects(
+        asUser(1, () => db.query(`UPDATE monitorias SET score=100 WHERE id='${id(301)}'`)),
+        /Atendentes não têm permissão para alterar nota/
+      );
     });
     await t.test('direct anonymous/authenticated access requests and rate-limit RPC are denied', async () => {
       await db.exec('SET ROLE anon');

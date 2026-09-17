@@ -16,7 +16,9 @@ import {
   evaluateTicketWithAI,
   fetchTicketDialogue,
   normalizeChannel,
-  csatStatusToSatisfactionResult
+  csatStatusToSatisfactionResult,
+  resolveCustomerType,
+  resolveFormAndGuidelineForCustomerType,
 } from '../lib/helpdeskQueue';
 import { fetchAIGuidelines } from '../lib/aiGuidelines';
 import { fetchAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
@@ -39,7 +41,9 @@ import {
   BookOpen,
   Rocket,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Lock,
+  FileText
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -63,6 +67,8 @@ interface AuditingQueueViewProps {
     satisfaction_has_record?: boolean;
     satisfaction_record_text?: string;
     aiEvaluation?: AIEvaluationResult;
+    isAiLocked?: boolean;
+    customerType?: string;
   }) => void;
 }
 
@@ -89,7 +95,6 @@ export default function AuditingQueueView({
   const [guidelineOptions, setGuidelineOptions] = useState<AIEvaluationGuideline[]>([]);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [guidelinePickerTicket, setGuidelinePickerTicket] = useState<AuditingQueueTicket | null>(null);
-  const [selectedGuidelineIds, setSelectedGuidelineIds] = useState<Set<string>>(new Set());
 
   // Rascunhos de avaliação da IA já prontos (persistidos), por ticket_id —
   // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
@@ -233,15 +238,14 @@ export default function AuditingQueueView({
     });
   }, [tickets, searchTerm, selectedAgentFilter]);
 
-  // Abre o popup de seleção de manual antes de avaliar com IA — o monitor
-  // escolhe qual(is) manual(is) essa avaliação deve usar como referência.
+  // Abre o popup de confirmação da avaliação da IA com a seleção automática
+  // de ficha e manual baseada no tipo de cliente (organização no Zendesk).
   const openGuidelinePicker = async (ticket: AuditingQueueTicket) => {
     if (ticket.positive_cap_reached) {
       toast.warning('Este atendente já atingiu o máximo de 2 avaliações positivas no mês.');
       return;
     }
     setGuidelinePickerTicket(ticket);
-    setSelectedGuidelineIds(new Set());
     setLoadingGuidelines(true);
     try {
       const all = await fetchAIGuidelines();
@@ -254,19 +258,13 @@ export default function AuditingQueueView({
     }
   };
 
-  // Ação de avaliar com IA — chamada depois que o monitor confirma (ou pula)
-  // a seleção de manual no popup. Só roda a IA e SALVA o resultado como
-  // rascunho; não abre a ficha sozinha — isso fica pro botão "Lançar
-  // Monitoria" (handleLaunchMonitoria), pra não obrigar o monitor a decidir
-  // na hora e pra não precisar rodar a IA de novo se ele só quiser revisar
-  // depois.
-  const handleEvaluateWithAI = async (ticket: AuditingQueueTicket, guidelineIds: string[]) => {
-    const defaultForm = forms.find(f => f.active !== false) || forms[0];
-    if (!defaultForm) {
-      toast.error('Nenhum formulário ativo encontrado para avaliação.');
-      return;
-    }
-
+  // Ação de avaliar com IA — roda a IA com a ficha e manual auto-selecionados
+  // e SALVA o resultado como rascunho persistido.
+  const handleEvaluateWithAI = async (
+    ticket: AuditingQueueTicket,
+    formToUse: EvaluationForm,
+    guidelineIds: string[]
+  ) => {
     // Encontra o agente correspondente pelo e-mail (chave universal) ou nome
     const matchedAgent = agents.find(a =>
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
@@ -278,8 +276,16 @@ export default function AuditingQueueView({
     setEvaluatingTicketId(ticket.ticket_id);
     try {
       toast.info(`Buscando diálogo e analisando ticket #${ticket.ticket_id} com IA...`);
-      const { comments: dialogue, ticketFields } = await fetchTicketDialogue(ticket.ticket_id);
-      const aiResult = await evaluateTicketWithAI(ticket.ticket_id, defaultForm, dialogue, {
+      const { comments: dialogue, ticketFields, tags, organizationName, organizationTags } = await fetchTicketDialogue(ticket.ticket_id);
+
+      // Atualiza tags e organização caso venham enriquecidos da busca individual
+      if ((tags && tags.length > 0) || organizationName || (organizationTags && organizationTags.length > 0)) {
+        ticket.tags = tags || ticket.tags;
+        ticket.organization_name = organizationName || ticket.organization_name;
+        ticket.organization_tags = organizationTags || ticket.organization_tags;
+      }
+
+      const aiResult = await evaluateTicketWithAI(ticket.ticket_id, formToUse, dialogue, {
         name: matchedAgent?.name || ticket.agent_name,
         email: matchedAgent?.email || ticket.agent_email,
         team_name: teamId ? teamsMap[teamId] : undefined,
@@ -288,7 +294,7 @@ export default function AuditingQueueView({
 
       await saveAIDraft({
         ticketId: ticket.ticket_id,
-        formId: defaultForm.id,
+        formId: formToUse.id,
         agentName: matchedAgent?.name || ticket.agent_name,
         agentEmail: matchedAgent?.email || ticket.agent_email,
         agentId,
@@ -305,7 +311,7 @@ export default function AuditingQueueView({
         [ticket.ticket_id]: {
           id: prev[ticket.ticket_id]?.id || ticket.ticket_id,
           ticket_id: ticket.ticket_id,
-          form_id: defaultForm.id,
+          form_id: formToUse.id,
           agent_name: matchedAgent?.name || ticket.agent_name,
           agent_email: matchedAgent?.email || ticket.agent_email,
           agent_id: agentId,
@@ -319,7 +325,7 @@ export default function AuditingQueueView({
         }
       }));
 
-      toast.success(`Avaliação pronta para o ticket #${ticket.ticket_id} — confira e clique em "Lançar Monitoria".`);
+      toast.success(`Avaliação pronta para o ticket #${ticket.ticket_id} (${formToUse.title}) — confira e clique em "Lançar Monitoria".`);
     } catch (err: any) {
       console.error('Erro na avaliação com IA:', err);
       toast.error(err?.message || 'Falha ao processar avaliação com IA');
@@ -329,10 +335,12 @@ export default function AuditingQueueView({
   };
 
   // Abre a ficha de monitoria com o rascunho da IA já salvo pra esse
-  // ticket — sem rodar a IA de novo.
+  // ticket — com o form_id bloqueado para alteração manual.
   const handleLaunchMonitoria = (ticket: AuditingQueueTicket) => {
     const draft = drafts[ticket.ticket_id];
     if (!draft) return;
+
+    const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
 
     onStartAudit({
       ticket_id: ticket.ticket_id,
@@ -341,13 +349,12 @@ export default function AuditingQueueView({
       evaluated_id: draft.agent_id,
       team_id: draft.team_id,
       channel: normalizeChannel(draft.channel),
-      // A IA agora avalia Positivas e Proativas — o resultado da pesquisa
-      // precisa refletir o CSAT real do ticket, não ficar fixo em
-      // 'Positiva' (Proativas normalmente é 'Sem pesquisa').
       satisfaction_result: csatStatusToSatisfactionResult(ticket.csat_status),
       satisfaction_has_record: !!draft.satisfaction_comment,
       satisfaction_record_text: draft.satisfaction_comment,
-      aiEvaluation: draft.result
+      aiEvaluation: draft.result,
+      isAiLocked: true,
+      customerType,
     });
   };
 
@@ -638,13 +645,18 @@ export default function AuditingQueueView({
                       // garante o vínculo/conta provisória pelo e-mail) — mais
                       // confiável que o match local, que depende do cache de
                       // agentes estar atualizado.
+                      const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
+                      const { form: autoForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
                       onStartAudit({
                         ticket_id: ticket.ticket_id,
                         ticket_subject: ticket.subject,
+                        form_id: autoForm?.id,
                         evaluated_id: ticket.agent_id || matchedAgent?.id,
                         team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
                         channel: normalizeChannel(ticket.channel),
-                        satisfaction_result: 'Negativa'
+                        satisfaction_result: 'Negativa',
+                        isAiLocked: true,
+                        customerType,
                       });
                     }}
                     className="flex items-center gap-1"
@@ -850,103 +862,181 @@ export default function AuditingQueueView({
         </div>
       )}
 
-      {/* Popup: escolha do manual antes de avaliar com IA */}
-      {guidelinePickerTicket && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={() => setGuidelinePickerTicket(null)}
-        >
-          <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-lg">
-            <Card className="p-6 space-y-4 max-h-[85vh] overflow-y-auto">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-brand-highlight" />
-                  <h3 className="text-sm font-black text-brand-primary">
-                    Qual manual a IA deve usar?
-                  </h3>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setGuidelinePickerTicket(null)}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-              <p className="text-[11px] font-semibold text-brand-muted">
-                Ticket #{guidelinePickerTicket.ticket_id} — escolha só os manuais relevantes para esse
-                atendimento. Menos manuais = resposta mais rápida e mais barata (menos tokens enviados à IA).
-              </p>
+      {/* Popup: Confirmação da seleção automática da IA com base nas tags do Zendesk */}
+      {guidelinePickerTicket && (() => {
+        const detectedCustomerType = resolveCustomerType(
+          guidelinePickerTicket.tags,
+          guidelinePickerTicket.organization_tags
+        );
+        const { form: autoForm, guideline: autoGuideline } = resolveFormAndGuidelineForCustomerType(
+          detectedCustomerType,
+          forms,
+          guidelineOptions
+        );
 
-              {loadingGuidelines ? (
-                <div className="flex items-center justify-center py-6">
-                  <RefreshCw className="w-5 h-5 animate-spin text-brand-muted" />
+        return (
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"
+            onClick={() => setGuidelinePickerTicket(null)}
+          >
+            <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-lg">
+              <Card className="p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl border-surface-border">
+                <div className="flex items-center justify-between pb-3 border-b border-surface-border">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center flex-shrink-0">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-brand-primary">
+                        Avaliação com IA — Seleção Automática
+                      </h3>
+                      <p className="text-[10px] font-semibold text-brand-muted">
+                        Ticket #{guidelinePickerTicket.ticket_id} • Zendesk
+                      </p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setGuidelinePickerTicket(null)}>
+                    <X className="w-4 h-4" />
+                  </Button>
                 </div>
-              ) : guidelineOptions.length === 0 ? (
-                <div className="p-4 rounded-xl bg-surface-subtle text-xs font-semibold text-brand-muted text-center">
-                  Nenhum manual cadastrado ainda (Admin &gt; Manual da IA). A IA vai avaliar só com os
-                  critérios da própria ficha.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {guidelineOptions.map(g => {
-                    const checked = selectedGuidelineIds.has(g.id);
-                    return (
-                      <label
-                        key={g.id}
-                        className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
-                          checked ? 'border-brand-highlight bg-brand-highlight/5' : 'border-surface-border hover:bg-surface-subtle'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => {
-                            setSelectedGuidelineIds(prev => {
-                              const next = new Set(prev);
-                              if (next.has(g.id)) next.delete(g.id); else next.add(g.id);
-                              return next;
-                            });
-                          }}
-                          className="mt-0.5 w-4 h-4 rounded text-brand-highlight focus:ring-brand-highlight"
-                        />
-                        <div className="min-w-0">
-                          <div className="text-xs font-black text-brand-primary">{g.title}</div>
-                          <div className="text-[10px] font-medium text-brand-muted line-clamp-2">{g.content}</div>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-border">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    const ticket = guidelinePickerTicket;
-                    setGuidelinePickerTicket(null);
-                    if (ticket) handleEvaluateWithAI(ticket, []);
-                  }}
-                >
-                  Avaliar sem manual
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="flex items-center gap-1.5"
-                  onClick={() => {
-                    const ticket = guidelinePickerTicket;
-                    const ids = Array.from(selectedGuidelineIds);
-                    setGuidelinePickerTicket(null);
-                    if (ticket) handleEvaluateWithAI(ticket, ids);
-                  }}
-                >
-                  <Bot className="w-3.5 h-3.5" />
-                  <span>Avaliar com IA{selectedGuidelineIds.size > 0 ? ` (${selectedGuidelineIds.size} manual${selectedGuidelineIds.size > 1 ? 'is' : ''})` : ''}</span>
-                </Button>
-              </div>
-            </Card>
+                {/* Informações do Ticket & Cliente Detectado */}
+                <div className="p-3.5 rounded-2xl bg-surface-subtle/80 border border-surface-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
+                      Classificação do Cliente
+                    </span>
+                    <Badge
+                      variant={detectedCustomerType === 'cliente_final' ? 'success' : 'info'}
+                      size="xs"
+                      className="font-black text-[10px] uppercase tracking-wider"
+                    >
+                      {detectedCustomerType === 'cliente_final' ? 'Cliente Final' : detectedCustomerType === 'revenda' ? 'Revenda' : 'Padrão'}
+                    </Badge>
+                  </div>
+                  <div className="text-xs font-bold text-brand-primary line-clamp-1">
+                    {guidelinePickerTicket.subject}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {guidelinePickerTicket.organization_name && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-muted bg-surface-card px-2 py-0.5 rounded-lg border border-surface-border">
+                        <Tag className="w-2.5 h-2.5" />
+                        {guidelinePickerTicket.organization_name}
+                      </span>
+                    )}
+                    {((guidelinePickerTicket.tags?.length || 0) > 0 || (guidelinePickerTicket.organization_tags?.length || 0) > 0) ? (
+                      [...(guidelinePickerTicket.organization_tags || []), ...(guidelinePickerTicket.tags || [])]
+                        .slice(0, 4)
+                        .map((tag, idx) => (
+                          <span key={idx} className="text-[9px] font-mono font-semibold text-brand-muted bg-surface-card px-1.5 py-0.5 rounded border border-surface-border">
+                            #{tag}
+                          </span>
+                        ))
+                    ) : (
+                      <span className="text-[10px] font-semibold text-brand-muted italic">
+                        Tag padrão: #cliente_final
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Opções selecionadas pela IA (Travadas / Read-Only) */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between ml-0.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
+                      Critérios e Manual Vinculados (Bloqueados)
+                    </span>
+                    <span className="flex items-center gap-1 text-[9px] font-bold text-brand-highlight">
+                      <Lock className="w-2.5 h-2.5" />
+                      <span>Seleção Automática</span>
+                    </span>
+                  </div>
+
+                  {/* Ficha Selecionada */}
+                  <div className="p-3.5 rounded-xl border border-surface-border bg-surface-subtle/50 flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-lg bg-info/10 text-info flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
+                          Ficha de Monitoria
+                        </span>
+                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">
+                          Somente Leitura
+                        </Badge>
+                      </div>
+                      <div className="text-xs font-black text-brand-primary mt-0.5">
+                        {autoForm?.title || 'Ficha de Atendimento Geral'}
+                      </div>
+                      <p className="text-[10px] font-medium text-brand-muted mt-0.5">
+                        Definida com base no tipo de cliente ({detectedCustomerType === 'cliente_final' ? 'Cliente Final' : 'Revenda'})
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Manual Selecionado */}
+                  <div className="p-3.5 rounded-xl border border-surface-border bg-surface-subtle/50 flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-lg bg-brand-highlight/10 text-brand-highlight flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
+                          Manual de Atendimento
+                        </span>
+                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">
+                          Somente Leitura
+                        </Badge>
+                      </div>
+                      <div className="text-xs font-black text-brand-primary mt-0.5">
+                        {autoGuideline?.title || 'Critérios padrão da ficha'}
+                      </div>
+                      <p className="text-[10px] font-medium text-brand-muted mt-0.5 line-clamp-1">
+                        {autoGuideline?.content ? autoGuideline.content.slice(0, 100) + '...' : 'Diretrizes operacionais alinhadas à organização do chamado.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mensagem de trava */}
+                <div className="p-3 rounded-xl bg-brand-highlight/5 border border-brand-highlight/15 text-[11px] font-medium text-brand-primary/80 flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-brand-highlight flex-shrink-0" />
+                  <span>
+                    A ficha e o manual são definidos automaticamente pelo tipo de cliente ({detectedCustomerType === 'cliente_final' ? 'Cliente Final' : 'Revenda'}) e não podem ser alterados manualmente.
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-border">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setGuidelinePickerTicket(null)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="flex items-center gap-1.5"
+                    disabled={!autoForm || evaluatingTicketId === guidelinePickerTicket.ticket_id}
+                    onClick={() => {
+                      const ticket = guidelinePickerTicket;
+                      const formToUse = autoForm!;
+                      const guidelineIds = autoGuideline ? [autoGuideline.id] : [];
+                      setGuidelinePickerTicket(null);
+                      handleEvaluateWithAI(ticket, formToUse, guidelineIds);
+                    }}
+                  >
+                    <Bot className="w-3.5 h-3.5" />
+                    <span>Confirmar e Avaliar com IA</span>
+                  </Button>
+                </div>
+              </Card>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

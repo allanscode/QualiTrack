@@ -8,7 +8,8 @@ import {
   AIEvaluationResult,
   User,
   Monitoria,
-  EvaluationForm
+  EvaluationForm,
+  AIEvaluationGuideline
 } from '../types';
 
 /**
@@ -233,6 +234,68 @@ function countPositiveEvaluationsThisMonthByEmail(
 export interface TicketDialogueResult {
   comments: TicketCommentMessage[];
   ticketFields: { title: string; value: string }[];
+  tags?: string[];
+  organizationName?: string;
+  organizationTags?: string[];
+}
+
+export type CustomerType = 'cliente_final' | 'revenda' | 'outro';
+
+/**
+ * Determina o tipo de cliente (Cliente Final vs Revenda) baseado nas tags do ticket
+ * e da organização vindas do Zendesk.
+ */
+export function resolveCustomerType(tags: string[] = [], orgTags: string[] = []): CustomerType {
+  const combined = [...tags, ...orgTags].map(t => (t || '').toLowerCase().trim());
+
+  const isRevenda = combined.some(t => t === 'revenda' || t.includes('revenda'));
+  if (isRevenda) return 'revenda';
+
+  const isClienteFinal = combined.some(t =>
+    t === 'cliente_final' ||
+    t === 'clientefinal' ||
+    t === 'cliente-final' ||
+    t.includes('cliente_final') ||
+    t.includes('cliente final') ||
+    t === 'final'
+  );
+  if (isClienteFinal) return 'cliente_final';
+
+  // Por padrão no ecossistema Webposto, clientes atendidos sem tag de revenda são tratados como Cliente Final
+  return 'cliente_final';
+}
+
+/**
+ * Seleciona automaticamente a Ficha e o Manual de atendimento apropriados
+ * com base no tipo de cliente identificado pelas tags da organização/ticket.
+ */
+export function resolveFormAndGuidelineForCustomerType(
+  customerType: CustomerType,
+  forms: EvaluationForm[],
+  guidelines: AIEvaluationGuideline[]
+): { form: EvaluationForm | undefined; guideline: AIEvaluationGuideline | undefined } {
+  let matchedForm: EvaluationForm | undefined;
+  let matchedGuideline: AIEvaluationGuideline | undefined;
+
+  if (customerType === 'cliente_final') {
+    matchedForm = forms.find(f => f.active !== false && /cliente.*final/i.test(f.title))
+      || forms.find(f => f.active !== false && /final/i.test(f.title));
+    matchedGuideline = guidelines.find(g => g.active && /cliente.*final/i.test(g.title))
+      || guidelines.find(g => g.active && /final/i.test(g.title));
+  } else if (customerType === 'revenda') {
+    matchedForm = forms.find(f => f.active !== false && /revenda/i.test(f.title));
+    matchedGuideline = guidelines.find(g => g.active && /revenda/i.test(g.title));
+  }
+
+  // Fallback seguro se não encontrar pelo nome exato: primeiro ativo
+  if (!matchedForm) {
+    matchedForm = forms.find(f => f.active !== false) || forms[0];
+  }
+  if (!matchedGuideline) {
+    matchedGuideline = guidelines.find(g => g.active) || guidelines[0];
+  }
+
+  return { form: matchedForm, guideline: matchedGuideline };
 }
 
 export async function fetchTicketDialogue(ticketId: string): Promise<TicketDialogueResult> {
@@ -267,7 +330,10 @@ export async function fetchTicketDialogue(ticketId: string): Promise<TicketDialo
       ticketFields: [
         { title: 'Categoria', value: 'Suporte Técnico' },
         { title: 'Motivo do Contato', value: 'Erro de sincronização' }
-      ]
+      ],
+      tags: ['cliente_final'],
+      organizationName: 'Posto Exemplo',
+      organizationTags: ['cliente_final']
     };
   }
 
@@ -283,6 +349,9 @@ export async function fetchTicketDialogue(ticketId: string): Promise<TicketDialo
     return {
       comments: data.comments as TicketCommentMessage[],
       ticketFields: (data.ticket_fields || []) as { title: string; value: string }[],
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      organizationName: data.organization_name,
+      organizationTags: Array.isArray(data.organization_tags) ? data.organization_tags : [],
     };
   } catch (err: any) {
     console.error('[HelpdeskQueue] Erro ao carregar diálogo:', err);

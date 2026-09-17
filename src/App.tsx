@@ -399,6 +399,8 @@ function MainApp({
       satisfaction_result: prefill.satisfaction_result,
       satisfaction_has_record: prefill.satisfaction_has_record,
       satisfaction_record_text: prefill.satisfaction_record_text,
+      isAiLocked: prefill.isAiLocked,
+      customerType: prefill.customerType,
       ...(prefill.aiEvaluation ? {
         answers: prefill.aiEvaluation.suggested_answers,
         question_observations: prefill.aiEvaluation.suggested_observations,

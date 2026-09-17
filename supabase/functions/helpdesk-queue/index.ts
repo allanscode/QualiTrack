@@ -416,6 +416,7 @@ serve(async (req) => {
       let results: any[];
       let sideloadedUsers: Map<number, any>;
       let sideloadedGroups: Map<number, any>;
+      let sideloadedOrgs: Map<number, any>;
       let nextCursor: string | null = null;
       let hasMore = false;
 
@@ -429,7 +430,7 @@ serve(async (req) => {
 
       if (viewId) {
         const url = parseResult.data.cursor
-          || `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups&page[size]=${PAGE_SIZE}`;
+          || `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
 
         const response = await fetch(url, { headers: zendeskHeaders });
         if (!response.ok) {
@@ -441,6 +442,7 @@ serve(async (req) => {
         results = viewData.tickets || [];
         sideloadedUsers = new Map<number, any>((viewData.users || []).map((u: any) => [u.id, u]));
         sideloadedGroups = new Map<number, any>((viewData.groups || []).map((g: any) => [g.id, g]));
+        sideloadedOrgs = new Map<number, any>((viewData.organizations || []).map((o: any) => [o.id, o]));
         hasMore = !!viewData.meta?.has_more;
         nextCursor = hasMore ? (viewData.links?.next || null) : null;
       } else {
@@ -462,10 +464,10 @@ serve(async (req) => {
           searchQuery += ' satisfaction_score:unoffered';
         }
 
-        // Sideload de usuários e grupos para resolver o atendente (nome/e-mail)
-        // e a equipe de origem de cada chamado, sem depender de lista local.
+        // Sideload de usuários, grupos e organizações para resolver o atendente (nome/e-mail),
+        // a equipe de origem e o tipo de cliente (organização/tags) de cada chamado.
         const url = parseResult.data.cursor
-          || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups&page[size]=${PAGE_SIZE}`;
+          || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
         const response = await fetch(url, { headers: zendeskHeaders });
 
         if (!response.ok) {
@@ -477,6 +479,7 @@ serve(async (req) => {
         results = searchData.results || [];
         sideloadedUsers = new Map<number, any>((searchData.users || []).map((u: any) => [u.id, u]));
         sideloadedGroups = new Map<number, any>((searchData.groups || []).map((g: any) => [g.id, g]));
+        sideloadedOrgs = new Map<number, any>((searchData.organizations || []).map((o: any) => [o.id, o]));
         hasMore = !!searchData.meta?.has_more;
         nextCursor = hasMore ? (searchData.links?.next || null) : null;
       }
@@ -494,6 +497,7 @@ serve(async (req) => {
 
         const assignee = t.assignee_id ? sideloadedUsers.get(t.assignee_id) : undefined;
         const group = t.group_id ? sideloadedGroups.get(t.group_id) : undefined;
+        const org = t.organization_id ? sideloadedOrgs.get(t.organization_id) : undefined;
 
         const agentLink = await resolveOrCreateAgent(
           supabase,
@@ -517,6 +521,10 @@ serve(async (req) => {
           agent_email: assignee?.email,
           agent_id: agentLink?.id,
           team_id: agentLink?.team_id,
+          tags: Array.isArray(t.tags) ? t.tags : [],
+          organization_id: t.organization_id,
+          organization_name: org?.name,
+          organization_tags: Array.isArray(org?.tags) ? org.tags : [],
         };
       }));
 
@@ -556,16 +564,30 @@ serve(async (req) => {
       // opção (o value bruto do ticket é só a "tag" interna, não o texto
       // que o atendente via na tela).
       let ticket_fields: { title: string; value: string }[] = [];
+      let ticketTags: string[] = [];
+      let orgName: string | undefined;
+      let orgTags: string[] = [];
       try {
         const [ticketResp, fieldsResp] = await Promise.all([
-          fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json`, { headers: zendeskHeaders }),
+          fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json?include=users,groups,organizations`, { headers: zendeskHeaders }),
           fetch(`https://${subdomain}.zendesk.com/api/v2/ticket_fields.json`, { headers: zendeskHeaders }),
         ]);
 
         if (ticketResp.ok && fieldsResp.ok) {
           const ticketJson = await ticketResp.json();
           const fieldsJson = await fieldsResp.json();
-          const customFields: { id: number; value: any }[] = ticketJson.ticket?.custom_fields || [];
+          const ticket = ticketJson.ticket;
+          ticketTags = Array.isArray(ticket?.tags) ? ticket.tags : [];
+          
+          if (ticket?.organization_id && Array.isArray(ticketJson.organizations)) {
+            const org = ticketJson.organizations.find((o: any) => o.id === ticket.organization_id);
+            if (org) {
+              orgName = org.name;
+              orgTags = Array.isArray(org.tags) ? org.tags : [];
+            }
+          }
+
+          const customFields: { id: number; value: any }[] = ticket?.custom_fields || [];
           const fieldDefs = new Map<number, any>((fieldsJson.ticket_fields || []).map((f: any) => [f.id, f]));
 
           ticket_fields = customFields
@@ -579,12 +601,19 @@ serve(async (req) => {
             });
         }
       } catch (e) {
-        // Campos de classificação são só um bônus de contexto — falha aqui
+        // Campos de classificação e tags são bônus de contexto — falha aqui
         // não deve impedir a avaliação de seguir com a transcrição normal.
-        console.warn('[helpdesk-queue] Falha ao buscar campos de classificação do ticket:', e);
+        console.warn('[helpdesk-queue] Falha ao buscar campos e organização do ticket:', e);
       }
 
-      return jsonResponse({ success: true, comments: mappedComments, ticket_fields }, 200);
+      return jsonResponse({
+        success: true,
+        comments: mappedComments,
+        ticket_fields,
+        tags: ticketTags,
+        organization_name: orgName,
+        organization_tags: orgTags,
+      }, 200);
     }
 
     // 5. Busca só o atendente responsável por um ticket digitado manualmente

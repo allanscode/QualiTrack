@@ -446,13 +446,21 @@ export default function MonitoriaForm({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">Ficha de Avaliação *</label>
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Ficha de Avaliação *</label>
+                    {((initialData as any)?.isAiLocked || (initialData as any)?.aiEvaluation) && (
+                      <span className="flex items-center gap-1 text-[10px] font-black text-brand-highlight">
+                        <Lock className="w-3 h-3" />
+                        <span>Definida pela IA ({(initialData as any)?.customerType === 'revenda' ? 'Revenda' : 'Cliente Final'})</span>
+                      </span>
+                    )}
+                  </div>
                   <CustomSelect
                     value={header.form_id}
                     onChange={val => setHeader({...header, form_id: val})}
                     options={[{ value: '', label: 'Selecione a ficha...' }, ...forms.map(f => ({ value: f.id, label: f.title }))]}
                     className="w-full"
-                    disabled={isViewOnly || isReevaluating}
+                    disabled={isViewOnly || isReevaluating || !!((initialData as any)?.isAiLocked || (initialData as any)?.aiEvaluation)}
                   />
                 </div>
 

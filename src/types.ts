@@ -227,6 +227,11 @@ export interface AuditingQueueTicket {
   already_audited?: boolean;
   /** true = atendente já atingiu o máximo de 2 avaliações positivas no mês. */
   positive_cap_reached?: boolean;
+  tags?: string[];
+  organization_id?: number | string;
+  organization_name?: string;
+  organization_tags?: string[];
+  customer_type?: 'cliente_final' | 'revenda' | 'outro';
 }
 
 export interface AgentQueueSummary {
