@@ -208,7 +208,41 @@ export interface HelpdeskSubmission {
 // Filas de Triagem e Auditoria Inteligente (CSAT Negativas, Proativas e Positivas)
 // ---------------------------------------------------------------------
 
-export type AuditingQueueType = 'negativas' | 'proativas' | 'positivas';
+export type AuditingQueueType = 'negativas' | 'proativas' | 'positivas' | 'filhos' | 'filhos_invalidos';
+
+export type ChildTicketMacroType = 'nova_demanda' | 'analise_tecnica' | 'apoio_tecnico' | 'produtividade';
+
+export interface ChildTicketCheckResult {
+  rule: string;
+  passed: boolean;
+  details: string;
+}
+
+export interface ChildTicketAiEvaluation {
+  detected_type: ChildTicketMacroType | 'desconhecido';
+  status: 'conforme' | 'nao_conforme' | 'atencao';
+  score: number;
+  summary: string;
+  checks: ChildTicketCheckResult[];
+  recommendations: string[];
+}
+
+export interface AIEvaluationLog {
+  id: string;
+  ticket_id: string;
+  ticket_subject?: string;
+  evaluation_type: 'atendimento' | 'chamado_filho';
+  provider: 'gemini' | 'openrouter';
+  model: string;
+  duration_ms?: number;
+  prompt_text?: string;
+  sanitized_dialogue?: string;
+  response_json?: any;
+  status: 'success' | 'error';
+  error_message?: string;
+  created_by?: string;
+  created_at: string;
+}
 
 export interface AuditingQueueTicket {
   ticket_id: string;
@@ -232,6 +266,10 @@ export interface AuditingQueueTicket {
   organization_name?: string;
   organization_tags?: string[];
   customer_type?: 'cliente_final' | 'revenda' | 'outro';
+  /** Dados específicos de abertura de chamados filhos */
+  parent_ticket_id?: string;
+  child_macro_type?: ChildTicketMacroType;
+  child_evaluation?: ChildTicketAiEvaluation;
 }
 
 export interface AgentQueueSummary {

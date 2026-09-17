@@ -22,11 +22,11 @@ import TeamsManagement from './admin/TeamsManagement';
 import FormsManagement from './admin/FormsManagement';
 import RequestsManagement from './admin/RequestsManagement';
 import DissatisfactionFieldsManagement from './admin/DissatisfactionFieldsManagement';
-import AIGuidelinesManagement from './admin/AIGuidelinesManagement';
+import AIHubManagement from './admin/AIHubManagement';
 
 export default function AdminPanel({ user: currentUser }: { user: User | null }) {
   const staticData = useStaticData();
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_manual'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub'>('users');
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -104,7 +104,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           { key: 'operacao', label: 'Operação', icon: Calendar },
           { key: 'metas', label: 'Metas', icon: Target },
           { key: 'campos_extras', label: 'Campos Extras', icon: Sliders },
-          { key: 'ia_manual', label: 'Manual da IA', icon: Brain },
+          { key: 'ia_hub', label: 'Inteligência Artificial', icon: Brain },
         ].map((item) => {
           const Icon = item.icon;
           const active = activeSubTab === item.key;
@@ -141,7 +141,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           {activeSubTab === 'operacao' && <QualityConfigManagement mode="operacao" />}
           {activeSubTab === 'metas' && <QualityConfigManagement mode="metas" />}
           {activeSubTab === 'campos_extras' && <DissatisfactionFieldsManagement forms={staticData.forms} />}
-          {activeSubTab === 'ia_manual' && <AIGuidelinesManagement currentUser={currentUser} />}
+          {activeSubTab === 'ia_hub' && <AIHubManagement currentUser={currentUser} />}
         </m.div>
       </AnimatePresence>
     </div>

@@ -3,6 +3,7 @@ import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { sanitizeDialogue } from './sanitizer.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 
@@ -50,6 +51,8 @@ const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '';
 // buscava ticket nenhum do Zendesk, só sorteava um número de ticket
 // FICTÍCIO pra abrir a ficha. Agora usa tickets reais, igual as outras duas.
 const PROACTIVE_VIEW_ID = Deno.env.get('HELPDESK_PROACTIVE_VIEW_ID') || '';
+const CHILD_VIEW_ID = Deno.env.get('HELPDESK_CHILD_VIEW_ID') || '';
+const INVALID_CHILD_VIEW_ID = Deno.env.get('HELPDESK_INVALID_CHILD_VIEW_ID') || '';
 
 // Página pequena (25) em vez de buscar tudo de uma vez — views com centenas
 // de tickets (ex.: 808 em Proativas) estourariam o rate limit do Zendesk
@@ -58,9 +61,19 @@ const PROACTIVE_VIEW_ID = Deno.env.get('HELPDESK_PROACTIVE_VIEW_ID') || '';
 const PAGE_SIZE = 25;
 
 const RequestSchema = z.object({
-  action: z.enum(['fetch_queue', 'fetch_dialogue', 'evaluate_ai', 'resolve_agent', 'lookup_ticket_agent', 'sync_zendesk_groups', 'backfill_agent_team']),
-  queue_type: z.enum(['negativas', 'proativas', 'positivas']).optional(),
+  action: z.enum([
+    'fetch_queue',
+    'fetch_dialogue',
+    'evaluate_ai',
+    'evaluate_child_ticket',
+    'resolve_agent',
+    'lookup_ticket_agent',
+    'sync_zendesk_groups',
+    'backfill_agent_team'
+  ]),
+  queue_type: z.enum(['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos']).optional(),
   ticket_id: z.string().optional(),
+  ticket_subject: z.string().optional(),
   // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
   // de fetch_queue. Ausente/null = primeira página.
   cursor: z.string().nullable().optional(),
@@ -72,22 +85,16 @@ const RequestSchema = z.object({
     team_name: z.string().optional(),
     channel: z.string().optional(),
   }).optional(),
-  // Manuais escolhidos pelo monitor para essa avaliação (ver Admin > Manual
-  // da IA). undefined = comportamento antigo (usa todos os ativos, para não
-  // quebrar chamadas antigas); [] = avaliar sem nenhum manual.
   guideline_ids: z.array(z.string()).optional(),
+  ticket_fields: z.array(z.any()).optional(),
+  tags: z.array(z.string()).optional(),
+  macro_type: z.string().optional(),
   // action: 'resolve_agent' — cadastro manual de um agente do helpdesk que
   // ainda não tem conta no QualiTrack, direto na ficha de monitoria.
   agent_email: z.string().email().optional(),
   agent_name: z.string().optional(),
   team_id: z.string().optional(),
-  // action: 'backfill_agent_team' — id do agente (já existente no
-  // QualiTrack) cuja equipe deve ser completada, disparado logo após salvar
-  // uma monitoria.
-  evaluated_id: z.string().uuid().optional(),
-  // Campos de classificação do próprio ticket no Zendesk (categoria, motivo
-  // do contato etc.), usados como contexto extra na avaliação com IA.
-  ticket_fields: z.array(z.object({ title: z.string(), value: z.string() })).optional(),
+  evaluated_id: z.string().optional(),
 });
 
 function jsonResponse(body: any, status: number): Response {
@@ -309,9 +316,13 @@ serve(async (req) => {
       return jsonResponse({ error: 'ticket_id deve ser numérico.' }, 400);
     }
 
-    // 3. Avaliação com IA (OpenRouter) — não depende do Zendesk
+    // 3. Avaliação com IA (Gemini com fallback OpenRouter) — não depende do Zendesk
     if (action === 'evaluate_ai') {
-      return await handleEvaluateAI(parseResult.data, supabase);
+      return await handleEvaluateAI(parseResult.data, supabase, user.id);
+    }
+
+    if (action === 'evaluate_child_ticket') {
+      return await handleEvaluateChildTicket(parseResult.data, supabase, user.id);
     }
 
     // 4. Cadastro manual de agente ainda não existente no QualiTrack, feito
@@ -426,6 +437,8 @@ serve(async (req) => {
       const viewId = queue_type === 'negativas' ? NEGATIVE_VIEW_ID
         : queue_type === 'positivas' ? POSITIVE_VIEW_ID
         : queue_type === 'proativas' ? PROACTIVE_VIEW_ID
+        : queue_type === 'filhos' ? CHILD_VIEW_ID
+        : queue_type === 'filhos_invalidos' ? INVALID_CHILD_VIEW_ID
         : '';
 
       if (viewId) {
@@ -457,6 +470,10 @@ serve(async (req) => {
           }
         } else if (queue_type === 'positivas') {
           searchQuery += ' satisfaction_score:good satisfaction_score:good_with_comment';
+        } else if (queue_type === 'filhos') {
+          searchQuery += ' tags:existe_ticket_filho';
+        } else if (queue_type === 'filhos_invalidos') {
+          searchQuery += ' tags:ticket_filho_invalido';
         } else {
           // Proativas: CSAT nunca respondido pelo cliente (não é "sem
           // filtro nenhum" como antes — isso trazia qualquer ticket
@@ -508,6 +525,20 @@ serve(async (req) => {
           group?.name
         );
 
+        let childMacroType: 'nova_demanda' | 'analise_tecnica' | 'apoio_tecnico' | 'produtividade' | undefined;
+        const lowerTags = (Array.isArray(t.tags) ? t.tags : []).map((tg: string) => tg.toLowerCase());
+        const lowerSubject = (t.subject || '').toLowerCase();
+
+        if (lowerTags.includes('existe_nova_demanda') || lowerSubject.includes('nova demanda')) {
+          childMacroType = 'nova_demanda';
+        } else if (lowerTags.includes('analise_tecnica') || lowerSubject.includes('análise técnica') || lowerSubject.includes('analise tecnica')) {
+          childMacroType = 'analise_tecnica';
+        } else if (lowerTags.includes('apoio_tecnico') || lowerTags.includes('apoio_analise_tecnica') || lowerSubject.includes('apoio análise') || lowerSubject.includes('apoio analise')) {
+          childMacroType = 'apoio_tecnico';
+        } else if (lowerTags.includes('produtividade') || lowerTags.includes('filho_produtividade') || lowerSubject.includes('produtividade')) {
+          childMacroType = 'produtividade';
+        }
+
         return {
           ticket_id: String(t.id),
           subject: t.subject || 'Sem assunto',
@@ -525,6 +556,7 @@ serve(async (req) => {
           organization_id: t.organization_id,
           organization_name: org?.name,
           organization_tags: Array.isArray(org?.tags) ? org.tags : [],
+          child_macro_type: childMacroType,
         };
       }));
 
@@ -740,13 +772,16 @@ function stripAdditionalProperties(schema: any): any {
 
 async function handleEvaluateAI(
   payload: z.infer<typeof RequestSchema>,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  callerId?: string
 ): Promise<Response> {
   const { ticket_id, form_criteria, dialogue, agent_info, guideline_ids, ticket_fields } = payload;
 
   if (!ticket_id || !form_criteria?.sections) {
     return jsonResponse({ error: 'ticket_id e form_criteria são obrigatórios para evaluate_ai' }, 400);
   }
+
+  const startTime = Date.now();
 
   // Provedor principal: API nativa do Gemini (Google AI Studio) — mais
   // confiável por chamada que o pool gratuito do OpenRouter (ver abaixo),
@@ -824,18 +859,16 @@ async function handleEvaluateAI(
     additionalProperties: false,
   };
 
-  const dialogueText = (dialogue || [])
-    .map((m: any) => `[${m.author_role === 'agent' ? 'ATENDENTE' : m.author_role === 'end_user' ? 'CLIENTE' : 'SISTEMA'}] ${m.author_name || ''}: ${m.body}`)
-    .join('\n');
+  // Sanitização anti-ruído: remove assinaturas, disclaimers legais e citações em cascata
+  const dialogueText = sanitizeDialogue(dialogue || []);
 
   const criteriaText = form_criteria.sections
     .map((s: any) => `Seção "${s.title}":\n${(s.questions || []).map((q: any) => `- [${q.id}] ${q.text}${q.is_critical ? ' (ERRO CRÍTICO)' : ''}`).join('\n')}`)
     .join('\n\n');
 
   // Manual de padrões de atendimento (cadastrado em Admin > Manual da IA):
-  // contexto normativo adicional além dos critérios da própria ficha.
-  // Limitado em tamanho para não estourar o contexto do modelo gratuito.
-  const MAX_GUIDELINES_CHARS = 6000;
+  // ampliado para 40.000 caracteres para suportar o manual completo sem truncamento.
+  const MAX_GUIDELINES_CHARS = 40000;
   let guidelinesText = '';
   // guideline_ids: undefined = comportamento antigo (todos os ativos, para
   // não quebrar chamadas de código anterior); [] = o monitor escolheu
@@ -1005,10 +1038,14 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
   try {
     let parsed: any;
     let lastError: any;
+    let usedProvider = 'gemini';
+    let usedModel = geminiModel;
 
     if (geminiApiKey) {
       try {
         parsed = await callAndValidate('gemini');
+        usedProvider = 'gemini';
+        usedModel = geminiModel;
       } catch (e: any) {
         lastError = e;
         console.warn('[helpdesk-queue] Gemini falhou ou respondeu fora do schema, tentando fallback OpenRouter:', e.message);
@@ -1018,6 +1055,8 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     if (!parsed && openRouterApiKey) {
       try {
         parsed = await callAndValidate('openrouter');
+        usedProvider = 'openrouter';
+        usedModel = openRouterModels[0] || 'openrouter';
       } catch (e: any) {
         lastError = e;
         console.error('[helpdesk-queue] Fallback OpenRouter também falhou:', e.message);
@@ -1026,6 +1065,27 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
 
     if (!parsed) {
       throw lastError || new Error('Nenhum provedor de IA disponível');
+    }
+
+    const durationMs = Date.now() - startTime;
+
+    // Registra log para auditoria de administradores
+    try {
+      await supabase.from('ai_evaluation_logs').insert({
+        ticket_id: String(ticket_id),
+        ticket_subject: agent_info?.team_name ? `Atendimento (${agent_info.team_name})` : `Ticket #${ticket_id}`,
+        evaluation_type: 'atendimento',
+        provider: usedProvider,
+        model: usedModel,
+        duration_ms: durationMs,
+        prompt_text: prompt,
+        sanitized_dialogue: dialogueText,
+        response_json: parsed,
+        status: 'success',
+        created_by: callerId || null,
+      });
+    } catch (logErr) {
+      console.warn('[helpdesk-queue] Falha ao registrar log de IA:', logErr);
     }
 
     const suggested_answers: Record<string, string> = {};
@@ -1054,6 +1114,244 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     }, 200);
   } catch (error: any) {
     console.error('[helpdesk-queue] Erro na avaliação com IA (todos os provedores falharam):', error);
+
+    try {
+      await supabase.from('ai_evaluation_logs').insert({
+        ticket_id: String(ticket_id),
+        ticket_subject: `Ticket #${ticket_id}`,
+        evaluation_type: 'atendimento',
+        provider: geminiApiKey ? 'gemini' : 'openrouter',
+        model: geminiApiKey ? geminiModel : (openRouterModels[0] || 'unknown'),
+        duration_ms: Date.now() - startTime,
+        prompt_text: prompt,
+        sanitized_dialogue: dialogueText,
+        status: 'error',
+        error_message: error?.message || 'Falha ao avaliar com IA',
+        created_by: callerId || null,
+      });
+    } catch (_) {}
+
     return jsonResponse({ error: error.message || 'Falha ao avaliar com IA' }, 502);
+  }
+}
+
+async function handleEvaluateChildTicket(
+  payload: z.infer<typeof RequestSchema>,
+  supabase: SupabaseClient,
+  callerId?: string
+): Promise<Response> {
+  const { ticket_id, ticket_subject, dialogue, ticket_fields, tags, macro_type } = payload;
+
+  if (!ticket_id) {
+    return jsonResponse({ error: 'ticket_id é obrigatório para evaluate_child_ticket' }, 400);
+  }
+
+  const startTime = Date.now();
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
+  const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
+  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-31b-it:free')
+    .split(',')
+    .map(m => m.trim())
+    .filter(Boolean);
+
+  if (!openRouterApiKey && !geminiApiKey) {
+    return jsonResponse({ error: 'Nenhum provedor de IA configurado no Supabase Secrets' }, 500);
+  }
+
+  const dialogueText = sanitizeDialogue(dialogue || []);
+  const ticketFieldsText = (ticket_fields || []).map((f: any) => `- ${f.title}: ${f.value}`).join('\n');
+  const tagsText = (tags || []).join(', ');
+
+  const responseSchema = {
+    type: 'object',
+    properties: {
+      detected_type: {
+        type: 'string',
+        enum: ['nova_demanda', 'analise_tecnica', 'apoio_tecnico', 'produtividade', 'desconhecido'],
+        description: 'Tipo de macro/abertura identificado no chamado filho'
+      },
+      status: {
+        type: 'string',
+        enum: ['conforme', 'nao_conforme', 'atencao'],
+        description: 'Status geral da conformidade de abertura'
+      },
+      score: {
+        type: 'number',
+        description: 'Nota de conformidade de 0 a 100'
+      },
+      summary: {
+        type: 'string',
+        description: 'Resumo executivo do parecer de qualidade sobre o chamado filho'
+      },
+      checks: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            rule: { type: 'string', description: 'Nome da regra validada' },
+            passed: { type: 'boolean', description: 'Se a regra foi cumprida' },
+            details: { type: 'string', description: 'Justificativa objetiva citando os campos ou tags' }
+          },
+          required: ['rule', 'passed', 'details'],
+          additionalProperties: false
+        }
+      },
+      recommendations: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Orientações práticas para o monitor ou analista'
+      }
+    },
+    required: ['detected_type', 'status', 'score', 'summary', 'checks', 'recommendations'],
+    additionalProperties: false
+  };
+
+  const prompt = `Você é um auditor sênior de qualidade da WebPosto especialista em auditoria de Chamados Filhos.
+Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base nas regras operacionais abaixo:
+
+PADRÕES DE ABERTURA DE TICKETS FILHOS:
+1. "Nova Demanda":
+   - Campo "Para" (Assignee): Deve estar atribuído ao PRÓPRIO analista que abriu (auto-atribuição).
+   - Tags obrigatórias: DEVE conter as tags 'existe_ticket_filho' e 'existe_nova_demanda'.
+   - Descrição: Deve conter a contextualização clara da demanda/melhoria.
+
+2. "Enviar para Análise Técnica":
+   - Campo "Para": Deve ser direcionado para um GRUPO Especialista Técnico (ex: Suporte N2, Análise Técnica, Desenvolvimento), NUNCA para uma pessoa física específica.
+   - Assunto: Deve conter o padrão técnico fixo de abertura.
+   - Descrição: Deve conter passos de reprodução, logs ou evidências técnicas.
+
+3. "Apoio Análise Técnica":
+   - Campo "Para": Deve estar direcionado ao analista técnico N2 específico que prestou o auxílio.
+   - Diálogo/Descrição: Deve conter o registro do auxílio prestado e a dúvida sanada.
+
+4. "Produtividade":
+   - Checagem do campo personalizado "Ticket Filho Produtividade" (deve estar devidamente selecionado e preenchido).
+
+DADOS DO CHAMADO FILHO:
+- Ticket: #${ticket_id}
+- Assunto: ${ticket_subject || 'Não informado'}
+- Tipo Sugerido: ${macro_type || 'Detectar automaticamente'}
+- Tags do Chamado: ${tagsText || '(sem tags)'}
+- Campos do Ticket:
+${ticketFieldsText || '(nenhum campo extra)'}
+
+CONTEÚDO / DESCRIÇÃO / NOTAS:
+${dialogueText || '(sem texto registrado)'}
+
+Analise rigorosamente se os campos, tags e atribuição estão conforme as regras acima.
+Gere a resposta estritamente no JSON solicitado.`;
+
+  async function callChildModel(provider: 'gemini' | 'openrouter'): Promise<any> {
+    let text: string | undefined;
+    if (provider === 'openrouter') {
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${openRouterApiKey}`,
+          'HTTP-Referer': Deno.env.get('FRONTEND_URL') || 'https://qualitrack.app',
+          'X-Title': 'QualidadeWP',
+        },
+        body: JSON.stringify({
+          models: openRouterModels,
+          temperature: 0.1,
+          messages: [{ role: 'user', content: prompt }],
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: 'auditoria_chamado_filho', strict: true, schema: responseSchema }
+          }
+        })
+      });
+      if (!resp.ok) throw new Error(`OpenRouter falhou: ${resp.status}`);
+      const data = await resp.json();
+      text = data.choices?.[0]?.message?.content;
+    } else {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey! },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+              responseSchema: stripAdditionalProperties(responseSchema),
+            }
+          })
+        }
+      );
+      if (!resp.ok) throw new Error(`Gemini falhou: ${resp.status}`);
+      const data = await resp.json();
+      text = (data.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || '').join('');
+    }
+
+    if (!text) throw new Error('Resposta vazia da IA');
+    text = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    return JSON.parse(text);
+  }
+
+  try {
+    let parsed: any;
+    let usedProvider: 'gemini' | 'openrouter' = 'gemini';
+    let usedModel = geminiModel;
+
+    if (geminiApiKey) {
+      try {
+        parsed = await callChildModel('gemini');
+      } catch (e: any) {
+        console.warn('[helpdesk-queue] Gemini falhou para chamado filho, tentando OpenRouter:', e.message);
+      }
+    }
+
+    if (!parsed && openRouterApiKey) {
+      parsed = await callChildModel('openrouter');
+      usedProvider = 'openrouter';
+      usedModel = openRouterModels[0];
+    }
+
+    if (!parsed) {
+      throw new Error('Nenhum provedor de IA conseguiu avaliar o chamado filho.');
+    }
+
+    const durationMs = Date.now() - startTime;
+    try {
+      await supabase.from('ai_evaluation_logs').insert({
+        ticket_id: String(ticket_id),
+        ticket_subject: ticket_subject || `Chamado Filho #${ticket_id}`,
+        evaluation_type: 'chamado_filho',
+        provider: usedProvider,
+        model: usedModel,
+        duration_ms: durationMs,
+        prompt_text: prompt,
+        sanitized_dialogue: dialogueText,
+        response_json: parsed,
+        status: 'success',
+        created_by: callerId || null,
+      });
+    } catch (logErr) {
+      console.warn('[helpdesk-queue] Falha ao registrar log de chamado filho:', logErr);
+    }
+
+    return jsonResponse({ success: true, result: parsed }, 200);
+  } catch (err: any) {
+    console.error('[helpdesk-queue] Erro ao avaliar chamado filho:', err);
+    try {
+      await supabase.from('ai_evaluation_logs').insert({
+        ticket_id: String(ticket_id),
+        ticket_subject: ticket_subject || `Chamado Filho #${ticket_id}`,
+        evaluation_type: 'chamado_filho',
+        provider: geminiApiKey ? 'gemini' : 'openrouter',
+        model: geminiApiKey ? geminiModel : 'unknown',
+        duration_ms: Date.now() - startTime,
+        prompt_text: prompt,
+        sanitized_dialogue: dialogueText,
+        status: 'error',
+        error_message: err.message,
+        created_by: callerId || null,
+      });
+    } catch (_) {}
+    return jsonResponse({ error: err.message || 'Falha ao avaliar chamado filho' }, 502);
   }
 }

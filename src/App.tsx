@@ -794,6 +794,8 @@ function MainApp({
                   ? `Olá, ${userData?.name.split(' ')[0]}! 👋`
                   : activeTab === 'monitorias'
                   ? 'Gestão de Monitorias'
+                  : activeTab === 'filas'
+                  ? 'Central de Filas & Triagem'
                   : 'Configurações do Sistema'}
               </h2>
               <p className="text-xs font-semibold text-brand-muted tracking-wide mt-1 leading-relaxed">
@@ -805,7 +807,9 @@ function MainApp({
                     : 'Visão executiva da performance e KPIs globais')
                   : activeTab === 'monitorias'
                   ? 'Fluxo de auditoria, contestações e reavaliações'
-                  : 'Parâmetros de qualidade, prazos de ação e horários comerciais'}
+                  : activeTab === 'filas'
+                  ? 'Triagem inteligente de chamados do Zendesk por CSAT e tickets filhos'
+                  : 'Parâmetros de qualidade, usuários, equipes e inteligência artificial'}
               </p>
             </div>
           </div>

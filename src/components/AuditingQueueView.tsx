@@ -3,17 +3,21 @@ import {
   AuditingQueueType,
   AuditingQueueTicket,
   AgentQueueSummary,
+  TicketCommentMessage,
+  AIEvaluationResult,
+  AIEvaluationGuideline,
+  ChildTicketAiEvaluation,
+  ChildTicketMacroType,
   User,
   Monitoria,
   EvaluationForm,
   Team,
-  AIEvaluationResult,
-  AIEvaluationGuideline
 } from '../types';
 import {
   fetchQueueTickets,
   computeAgentQueuePriorities,
   evaluateTicketWithAI,
+  evaluateChildTicketWithAI,
   fetchTicketDialogue,
   normalizeChannel,
   csatStatusToSatisfactionResult,
@@ -26,6 +30,7 @@ import {
   AlertTriangle,
   Sparkles,
   CheckCircle2,
+  XCircle,
   Clock,
   User as UserIcon,
   Tag,
@@ -43,7 +48,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
-  FileText
+  FileText,
+  GitFork,
+  AlertOctagon,
+  ListChecks,
+  CheckSquare
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -88,6 +97,13 @@ export default function AuditingQueueView({
 
   // Estado para modal/visualização rápida de IA
   const [evaluatingTicketId, setEvaluatingTicketId] = useState<string | null>(null);
+
+  // Estado para auditoria de conformidade de chamados filhos
+  const [evaluatingChildTicketId, setEvaluatingChildTicketId] = useState<string | null>(null);
+  const [childPreviewTicket, setChildPreviewTicket] = useState<AuditingQueueTicket | null>(null);
+  const [childAiEvaluation, setChildAiEvaluation] = useState<ChildTicketAiEvaluation | null>(null);
+  const [loadingChildAi, setLoadingChildAi] = useState(false);
+  const [validatedChildTickets, setValidatedChildTickets] = useState<Set<string>>(new Set());
 
   // Popup de seleção do manual antes de avaliar com IA: deixa o monitor
   // escolher qual(is) manual(is) a IA deve ler para aquele ticket em vez de
@@ -334,6 +350,38 @@ export default function AuditingQueueView({
     }
   };
 
+  // Avaliação de conformidade com IA para tickets filhos
+  const handleEvaluateChildTicket = async (ticket: AuditingQueueTicket) => {
+    setEvaluatingChildTicketId(ticket.ticket_id);
+    setChildPreviewTicket(ticket);
+    setLoadingChildAi(true);
+    setChildAiEvaluation(ticket.child_evaluation || null);
+
+    try {
+      toast.info(`Auditando abertura do chamado filho #${ticket.ticket_id} com IA...`);
+      const { comments, ticketFields, tags } = await fetchTicketDialogue(ticket.ticket_id);
+
+      const result = await evaluateChildTicketWithAI(
+        ticket.ticket_id,
+        ticket.subject,
+        comments,
+        tags || ticket.tags,
+        ticketFields,
+        ticket.child_macro_type
+      );
+
+      setChildAiEvaluation(result);
+      ticket.child_evaluation = result;
+      toast.success(`Parecer de conformidade gerado para o chamado filho #${ticket.ticket_id}!`);
+    } catch (err: any) {
+      console.error('Erro ao auditar chamado filho:', err);
+      toast.error(err?.message || 'Falha ao auditar chamado filho');
+    } finally {
+      setLoadingChildAi(false);
+      setEvaluatingChildTicketId(null);
+    }
+  };
+
   // Abre a ficha de monitoria com o rascunho da IA já salvo pra esse
   // ticket — com o form_id bloqueado para alteração manual.
   const handleLaunchMonitoria = (ticket: AuditingQueueTicket) => {
@@ -447,8 +495,56 @@ export default function AuditingQueueView({
     );
   };
 
-  // Controles de paginação (25 tickets por página) — reaproveitados em
-  // Negativas, Proativas e Positivas.
+  const getMacroBadge = (type?: ChildTicketMacroType) => {
+    switch (type) {
+      case 'nova_demanda':
+        return <Badge variant="primary" size="xs" className="font-bold">Nova Demanda</Badge>;
+      case 'analise_tecnica':
+        return <Badge variant="info" size="xs" className="font-bold">Análise Técnica N2</Badge>;
+      case 'apoio_tecnico':
+        return <Badge variant="warning" size="xs" className="font-bold">Apoio Técnico N2</Badge>;
+      case 'produtividade':
+        return <Badge variant="success" size="xs" className="font-bold">Produtividade</Badge>;
+      default:
+        return <Badge variant="neutral" size="xs" className="font-bold">Filho Geral</Badge>;
+    }
+  };
+
+  const getChildStatusBadge = (status?: 'conforme' | 'nao_conforme' | 'atencao') => {
+    switch (status) {
+      case 'conforme':
+        return <Badge variant="success" size="xs" className="font-black uppercase tracking-wider">Conforme</Badge>;
+      case 'nao_conforme':
+        return <Badge variant="error" size="xs" className="font-black uppercase tracking-wider">Não Conforme</Badge>;
+      case 'atencao':
+        return <Badge variant="warning" size="xs" className="font-black uppercase tracking-wider">Atenção</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const handleStartChildAudit = (ticket: AuditingQueueTicket) => {
+    const matchedAgent = agents.find(a =>
+      (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
+      (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
+    );
+    const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
+    const { form: autoForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
+
+    onStartAudit({
+      ticket_id: ticket.ticket_id,
+      ticket_subject: ticket.subject,
+      form_id: autoForm?.id,
+      evaluated_id: ticket.agent_id || matchedAgent?.id,
+      team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
+      channel: normalizeChannel(ticket.channel),
+      satisfaction_result: 'Sem pesquisa',
+      isAiLocked: true,
+      customerType,
+    });
+  };
+
+  // Controles de paginação (25 tickets por página) — reaproveitados em todas as filas.
   const renderPagination = () => (
     <div className="flex items-center justify-between pt-2">
       <span className="text-[10px] font-bold text-brand-muted">Página {pageNumber}</span>
@@ -479,23 +575,97 @@ export default function AuditingQueueView({
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-surface-border pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-black text-brand-primary tracking-tight">
-              Central de Filas & Triagem
-            </h1>
-            <Badge variant="primary" size="xs" className="uppercase font-bold tracking-wider">
-              Zendesk Sync
-            </Badge>
-          </div>
-          <p className="text-xs font-semibold text-brand-muted mt-0.5">
-            Triagem automatizada de chamados por pesquisa de satisfação (CSAT) e amostragem justa de atendentes.
-          </p>
+      {/* Barra Unificada de Navegação de Filas e Controles */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        {/* Tabs de Navegação das Filas */}
+        <div className="flex items-center gap-1.5 p-1 bg-surface-subtle/60 rounded-2xl border border-surface-border overflow-x-auto max-w-full">
+          <button
+            onClick={() => setActiveQueue('negativas')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeQueue === 'negativas'
+                ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
+                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>CSAT Negativas</span>
+            {pendingNegativesCount > 0 && (
+              <span className="px-1.5 py-0.5 text-[10px] font-black bg-functional-error text-white rounded-full">
+                {pendingNegativesCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveQueue('proativas')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeQueue === 'proativas'
+                ? 'bg-info/15 text-info border border-info/30 shadow-sm'
+                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>Fila Proativa</span>
+          </button>
+
+          <button
+            onClick={() => setActiveQueue('positivas')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeQueue === 'positivas'
+                ? 'bg-functional-success/15 text-functional-success border border-functional-success/30 shadow-sm'
+                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>CSAT Positivas (+ IA)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveQueue('filhos')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeQueue === 'filhos'
+                ? 'bg-brand-highlight/15 text-brand-highlight border border-brand-highlight/30 shadow-sm'
+                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+            }`}
+          >
+            <GitFork className="w-3.5 h-3.5" />
+            <span>Chamados Filhos</span>
+          </button>
+
+          <button
+            onClick={() => setActiveQueue('filhos_invalidos')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeQueue === 'filhos_invalidos'
+                ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
+                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+            }`}
+          >
+            <AlertOctagon className="w-3.5 h-3.5" />
+            <span>Filhos Inválidos</span>
+          </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Controles de Busca e Atualização */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="relative w-full sm:w-60">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+            <input
+              type="text"
+              placeholder="Buscar por ID, assunto ou agente..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl bg-surface-subtle/50 border border-surface-border text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-highlight transition-all"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-primary"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
           <Button
             variant="ghost"
             size="sm"
@@ -505,56 +675,13 @@ export default function AuditingQueueView({
               loadQueueData(null);
             }}
             disabled={loading}
-            className="flex items-center gap-1.5"
+            className="flex items-center gap-1.5 flex-shrink-0"
+            title="Recarregar fila do Zendesk"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Atualizar Filas</span>
+            <span className="hidden sm:inline">Atualizar Filas</span>
           </Button>
         </div>
-      </div>
-
-      {/* Tabs de Navegação das Filas */}
-      <div className="flex items-center gap-2 p-1 bg-surface-subtle/60 rounded-2xl border border-surface-border w-fit max-w-full overflow-x-auto">
-        <button
-          onClick={() => setActiveQueue('negativas')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-            activeQueue === 'negativas'
-              ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-          }`}
-        >
-          <AlertTriangle className="w-3.5 h-3.5" />
-          <span>CSAT Negativas</span>
-          {pendingNegativesCount > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-black bg-functional-error text-white rounded-full">
-              {pendingNegativesCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveQueue('proativas')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-            activeQueue === 'proativas'
-              ? 'bg-info/15 text-info border border-info/30 shadow-sm'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-          }`}
-        >
-          <Zap className="w-3.5 h-3.5" />
-          <span>Fila Proativa (Amostragem Justa)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveQueue('positivas')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-            activeQueue === 'positivas'
-              ? 'bg-functional-success/15 text-functional-success border border-functional-success/30 shadow-sm'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>CSAT Positivas (+ IA Copilot)</span>
-        </button>
       </div>
 
       {/* Conteúdo da Fila: NEGATIVAS */}
@@ -859,6 +986,462 @@ export default function AuditingQueueView({
             ))}
           </div>
           {renderPagination()}
+        </div>
+      )}
+
+      {/* Conteúdo da Fila: CHAMADOS FILHOS */}
+      {activeQueue === 'filhos' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-brand-highlight/10 border border-brand-highlight/25 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-highlight text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                <GitFork className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-brand-highlight">
+                  Triagem de Chamados Filhos
+                </h3>
+                <p className="text-[11px] font-semibold text-brand-primary/80">
+                  Auditoria de conformidade dos 4 padrões de abertura: Nova Demanda, Análise Técnica N2, Apoio Técnico e Produtividade.
+                </p>
+              </div>
+            </div>
+            <Badge variant="primary" size="sm" className="font-black font-mono">
+              4 Padrões Operacionais
+            </Badge>
+          </div>
+
+          {filteredTickets.length === 0 ? (
+            <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
+              <GitFork className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
+              <p className="text-xs font-bold text-brand-muted">Nenhum chamado filho pendente nesta fila.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredTickets.map(ticket => {
+                const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
+                const evaluation = ticket.child_evaluation;
+
+                return (
+                  <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-brand-highlight/40 transition-all">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono text-xs font-black text-brand-primary">
+                            #{ticket.ticket_id}
+                          </span>
+                          {ticket.parent_ticket_id && (
+                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
+                              Pai: #{ticket.parent_ticket_id}
+                            </span>
+                          )}
+                          <a
+                            href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
+                            title="Abrir no Zendesk"
+                          >
+                            <ExternalLink className="w-2.5 h-2.5" />
+                            <span>Zendesk</span>
+                          </a>
+                          {isValidated && (
+                            <Badge variant="success" size="xs" className="text-[9px]">
+                              Validado
+                            </Badge>
+                          )}
+                        </div>
+                        <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                          {ticket.subject}
+                        </h4>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
+                        {evaluation && getChildStatusBadge(evaluation.status)}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1">
+                          <UserIcon className="w-3 h-3 text-brand-highlight" />
+                          {ticket.agent_name || 'Agente'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 opacity-60" />
+                          {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={isValidated ? "outline" : "primary"}
+                          disabled={evaluatingChildTicketId === ticket.ticket_id}
+                          onClick={() => handleEvaluateChildTicket(ticket)}
+                          className="flex items-center gap-1.5 text-xs font-bold"
+                        >
+                          <Bot className={`w-3.5 h-3.5 ${evaluatingChildTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+                          <span>
+                            {evaluatingChildTicketId === ticket.ticket_id
+                              ? 'Auditando com IA...'
+                              : evaluation
+                              ? 'Ver Parecer IA'
+                              : 'Conferir com IA'}
+                          </span>
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+          {renderPagination()}
+        </div>
+      )}
+
+      {/* Conteúdo da Fila: FILHOS INVÁLIDOS */}
+      {activeQueue === 'filhos_invalidos' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-functional-error/10 border border-functional-error/25 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-functional-error text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                <AlertOctagon className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-functional-error">
+                  Fila de Chamados Filhos Inválidos
+                </h3>
+                <p className="text-[11px] font-semibold text-brand-primary/80">
+                  Chamados abertos fora do padrão ou com inconsistências (falta de tags obrigatórias, destinatário incorreto, falta de detalhamento).
+                </p>
+              </div>
+            </div>
+            <Badge variant="error" size="sm" className="font-black font-mono">
+              Inconformidade
+            </Badge>
+          </div>
+
+          {filteredTickets.length === 0 ? (
+            <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
+              <AlertOctagon className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
+              <p className="text-xs font-bold text-brand-muted">Nenhum chamado filho inválido pendente nesta fila.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredTickets.map(ticket => {
+                const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
+                const evaluation = ticket.child_evaluation;
+
+                return (
+                  <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-functional-error/40 transition-all">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono text-xs font-black text-brand-primary">
+                            #{ticket.ticket_id}
+                          </span>
+                          {ticket.parent_ticket_id && (
+                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
+                              Pai: #{ticket.parent_ticket_id}
+                            </span>
+                          )}
+                          <a
+                            href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
+                            title="Abrir no Zendesk"
+                          >
+                            <ExternalLink className="w-2.5 h-2.5" />
+                            <span>Zendesk</span>
+                          </a>
+                          <Badge variant="error" size="xs" className="text-[9px]">
+                            Inválido
+                          </Badge>
+                        </div>
+                        <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                          {ticket.subject}
+                        </h4>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
+                        {evaluation && getChildStatusBadge(evaluation.status)}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1">
+                          <UserIcon className="w-3 h-3 text-brand-highlight" />
+                          {ticket.agent_name || 'Agente'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 opacity-60" />
+                          {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={evaluatingChildTicketId === ticket.ticket_id}
+                          onClick={() => handleEvaluateChildTicket(ticket)}
+                          className="flex items-center gap-1.5 text-xs font-bold"
+                        >
+                          <Bot className={`w-3.5 h-3.5 ${evaluatingChildTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+                          <span>
+                            {evaluatingChildTicketId === ticket.ticket_id
+                              ? 'Auditando com IA...'
+                              : evaluation
+                              ? 'Ver Parecer IA'
+                              : 'Conferir com IA'}
+                          </span>
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+          {renderPagination()}
+        </div>
+      )}
+
+      {/* Modal: Parecer de Conformidade do Chamado Filho com IA */}
+      {childPreviewTicket && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"
+          onClick={() => setChildPreviewTicket(null)}
+        >
+          <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-2xl">
+            <Card className="p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl border-surface-border">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-surface-border">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-black text-brand-primary">
+                        Auditoria de Conformidade — Chamado Filho #{childPreviewTicket.ticket_id}
+                      </h3>
+                      {childPreviewTicket.child_macro_type && getMacroBadge(childPreviewTicket.child_macro_type)}
+                    </div>
+                    <p className="text-[10px] font-semibold text-brand-muted">
+                      {childPreviewTicket.parent_ticket_id ? `Vinculado ao chamado pai #${childPreviewTicket.parent_ticket_id}` : 'Chamado Filho'} • Zendesk
+                    </p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setChildPreviewTicket(null)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {/* Informações Básicas do Chamado */}
+              <div className="p-3.5 rounded-2xl bg-surface-subtle/80 border border-surface-border space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-brand-primary">
+                    Assunto: {childPreviewTicket.subject}
+                  </span>
+                  <span className="text-[10px] text-brand-muted">
+                    Atendente: {childPreviewTicket.agent_name || 'N/D'}
+                  </span>
+                </div>
+                {childPreviewTicket.tags && childPreviewTicket.tags.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Tags:</span>
+                    {childPreviewTicket.tags.map((tag, idx) => (
+                      <span key={idx} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-brand-muted">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Loading State */}
+              {loadingChildAi && (
+                <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
+                  <RefreshCw className="w-8 h-8 text-brand-highlight animate-spin" />
+                  <p className="text-xs font-bold text-brand-primary">Avaliando conformidade do chamado filho com IA...</p>
+                  <p className="text-[10px] text-brand-muted">Verificando destinatário ("Para"), tags obrigatórias, formato e evidências técnicas.</p>
+                </div>
+              )}
+
+              {/* Result State */}
+              {!loadingChildAi && childAiEvaluation && (
+                <div className="space-y-4">
+                  {/* Status & Score Header Card */}
+                  <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${
+                    childAiEvaluation.status === 'conforme'
+                      ? 'bg-functional-success/10 border-functional-success/30 text-functional-success'
+                      : childAiEvaluation.status === 'nao_conforme'
+                      ? 'bg-functional-error/10 border-functional-error/30 text-functional-error'
+                      : 'bg-warning/10 border-warning/30 text-warning'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${
+                        childAiEvaluation.status === 'conforme'
+                          ? 'bg-functional-success'
+                          : childAiEvaluation.status === 'nao_conforme'
+                          ? 'bg-functional-error'
+                          : 'bg-warning'
+                      }`}>
+                        {childAiEvaluation.status === 'conforme' ? (
+                          <CheckCircle2 className="w-6 h-6" />
+                        ) : childAiEvaluation.status === 'nao_conforme' ? (
+                          <XCircle className="w-6 h-6" />
+                        ) : (
+                          <AlertTriangle className="w-6 h-6" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-wider">
+                          {childAiEvaluation.status === 'conforme'
+                            ? 'Conforme (Abertura Regular)'
+                            : childAiEvaluation.status === 'nao_conforme'
+                            ? 'Não Conforme (Desvio de Padrão)'
+                            : 'Atenção (Inconsistência Leve)'}
+                        </div>
+                        <div className="text-[11px] font-semibold text-brand-primary/90 mt-0.5">
+                          Padrão: {childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : childAiEvaluation.detected_type === 'produtividade' ? 'Produtividade' : 'Desconhecido / Fora do Padrão'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-2xl font-black font-mono">
+                        {childAiEvaluation.score}%
+                      </div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-brand-muted">
+                        Conformidade
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Resumo do Parecer */}
+                  <div className="p-3.5 rounded-xl bg-surface-subtle/80 border border-surface-border text-xs text-brand-primary/90 leading-relaxed">
+                    <span className="font-bold text-brand-primary block mb-1">Resumo do Parecer:</span>
+                    {childAiEvaluation.summary}
+                  </div>
+
+                  {/* Checklist de Regras */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
+                      Checklist Operacional de Regras
+                    </span>
+                    <div className="space-y-2">
+                      {childAiEvaluation.checks?.map((chk, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                            chk.passed
+                              ? 'bg-functional-success/5 border-functional-success/20'
+                              : 'bg-functional-error/5 border-functional-error/20'
+                          }`}
+                        >
+                          {chk.passed ? (
+                            <CheckCircle2 className="w-4 h-4 text-functional-success flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-functional-error flex-shrink-0 mt-0.5" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-bold text-brand-primary">{chk.rule}</span>
+                              <Badge variant={chk.passed ? 'success' : 'error'} size="xs" className="text-[9px] font-bold">
+                                {chk.passed ? 'Atendido' : 'Pendente'}
+                              </Badge>
+                            </div>
+                            {chk.details && (
+                              <p className="text-[11px] text-brand-muted mt-1 bg-surface-card p-1.5 rounded border border-surface-border">
+                                {chk.details}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Recomendações */}
+                  {childAiEvaluation.recommendations?.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
+                        Recomendações e Correções
+                      </span>
+                      <ul className="space-y-1 bg-surface-subtle/50 p-3 rounded-xl border border-surface-border">
+                        {childAiEvaluation.recommendations.map((rec, idx) => (
+                          <li key={idx} className="text-[11px] text-brand-primary/90 flex items-start gap-2">
+                            <span className="text-brand-highlight font-bold">•</span>
+                            <span>{rec}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between pt-3 border-t border-surface-border">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setChildPreviewTicket(null)}
+                >
+                  Fechar
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={loadingChildAi}
+                    onClick={() => handleEvaluateChildTicket(childPreviewTicket)}
+                    className="flex items-center gap-1 text-xs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingChildAi ? 'animate-spin' : ''}`} />
+                    <span>Reanalisar</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1 text-xs"
+                    onClick={() => {
+                      const t = childPreviewTicket;
+                      setChildPreviewTicket(null);
+                      handleStartChildAudit(t);
+                    }}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Abrir Monitoria</span>
+                  </Button>
+
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="flex items-center gap-1.5 text-xs font-bold"
+                    onClick={() => {
+                      setValidatedChildTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
+                      toast.success(`Chamado filho #${childPreviewTicket.ticket_id} validado com sucesso!`);
+                      setChildPreviewTicket(null);
+                    }}
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Validar Chamado</span>
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
       )}
 
