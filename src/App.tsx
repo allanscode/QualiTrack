@@ -889,28 +889,42 @@ function MainApp({
 function AnimatedDashboardIcon({ isHovered, active, className }: { isHovered?: boolean; active?: boolean; className?: string }) {
   const isTriggered = !!(isHovered || active);
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className || "w-5 h-5"}>
+    <m.svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className || "w-5 h-5"}
+      animate={{ scale: isTriggered ? 1.08 : 1 }}
+      transition={{ type: "spring", stiffness: 400, damping: 20 }}
+    >
+      {/* Top-left: grande */}
       <m.rect
         x="3" y="3" width="7" height="9" rx="1"
-        animate={{ x: isTriggered ? 2 : 3, y: isTriggered ? 2 : 3 }}
-        transition={{ type: "spring", stiffness: 450, damping: 22 }}
+        animate={{ width: isTriggered ? 8 : 7, height: isTriggered ? 10 : 9 }}
+        transition={{ type: "spring", stiffness: 380, damping: 22 }}
       />
+      {/* Top-right: pequeno */}
       <m.rect
         x="14" y="3" width="7" height="5" rx="1"
-        animate={{ x: isTriggered ? 15 : 14, y: isTriggered ? 2 : 3 }}
-        transition={{ type: "spring", stiffness: 450, damping: 22 }}
+        animate={{ width: isTriggered ? 8 : 7, height: isTriggered ? 4 : 5 }}
+        transition={{ type: "spring", stiffness: 380, damping: 22 }}
       />
+      {/* Bottom-right: grande */}
       <m.rect
         x="14" y="12" width="7" height="9" rx="1"
-        animate={{ x: isTriggered ? 15 : 14, y: isTriggered ? 13 : 12 }}
-        transition={{ type: "spring", stiffness: 450, damping: 22 }}
+        animate={{ width: isTriggered ? 8 : 7, height: isTriggered ? 10 : 9 }}
+        transition={{ type: "spring", stiffness: 380, damping: 22 }}
       />
+      {/* Bottom-left: pequeno */}
       <m.rect
         x="3" y="16" width="7" height="5" rx="1"
-        animate={{ x: isTriggered ? 2 : 3, y: isTriggered ? 17 : 16 }}
-        transition={{ type: "spring", stiffness: 450, damping: 22 }}
+        animate={{ width: isTriggered ? 8 : 7, height: isTriggered ? 4 : 5 }}
+        transition={{ type: "spring", stiffness: 380, damping: 22 }}
       />
-    </svg>
+    </m.svg>
   );
 }
 

@@ -540,20 +540,24 @@ serve(async (req) => {
         }
 
         let parentTicketId: string | undefined;
-        if (Array.isArray(t.custom_fields)) {
+        // 1. problem_id é o campo nativo do Zendesk para relação pai → filho — máxima prioridade.
+        if (t.problem_id && Number(t.problem_id) > 0) {
+          parentTicketId = String(t.problem_id);
+        }
+        // 2. Regex no assunto: ex. "Filho #168555 - Análise Técnica"
+        if (!parentTicketId && t.subject) {
+          const match = t.subject.match(/#(\d{5,9})/);
+          if (match) parentTicketId = match[1];
+        }
+        // 3. Último recurso: custom_fields com 6+ dígitos (exige 6 para evitar capturar
+        //    IDs internos curtos, como IDs de categorias/classificações com 5 dígitos).
+        if (!parentTicketId && Array.isArray(t.custom_fields)) {
           for (const cf of t.custom_fields) {
-            if (cf.value && typeof cf.value === 'string' && /^\d{5,9}$/.test(cf.value.trim())) {
+            if (cf.value && typeof cf.value === 'string' && /^\d{6,9}$/.test(cf.value.trim())) {
               parentTicketId = cf.value.trim();
               break;
             }
           }
-        }
-        if (!parentTicketId && t.problem_id) {
-          parentTicketId = String(t.problem_id);
-        }
-        if (!parentTicketId && t.subject) {
-          const match = t.subject.match(/#(\d{5,9})/);
-          if (match) parentTicketId = match[1];
         }
 
         return {
