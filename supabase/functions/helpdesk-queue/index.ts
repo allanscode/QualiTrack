@@ -923,8 +923,8 @@ async function handleEvaluateAI(
     .join('\n');
 
   const prompt = `Você é um analista sênior de qualidade de atendimento ao cliente da WebPosto.
-Avalie o atendimento abaixo com base na ficha de critérios fornecida${guidelinesText ? ' e no manual de padrões de atendimento abaixo' : ''}.
-${guidelinesText ? `\nMANUAL DE PADRÕES DE ATENDIMENTO (referência normativa da empresa):\n${guidelinesText}\n` : ''}
+Avalie o atendimento abaixo com base na ficha de critérios fornecida${guidelinesText ? ' e no manual de padrões de atendimento abaixo (formatado em Markdown)' : ''}.
+${guidelinesText ? `\nMANUAL DE PADRÕES DE ATENDIMENTO (referência normativa da empresa — formato Markdown, interprete títulos, listas e destaques como estrutura semântica):\n${guidelinesText}\n` : ''}
 DADOS DO ATENDIMENTO:
 - Atendente: ${agent_info?.name || 'não informado'}
 - E-mail: ${agent_info?.email || 'não informado'}

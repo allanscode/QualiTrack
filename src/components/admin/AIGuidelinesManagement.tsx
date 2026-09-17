@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { AIEvaluationGuideline, User } from '../../types';
 import {
   fetchAIGuidelines,
@@ -31,6 +32,8 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
   // Quando preenchido, o modal abre em modo edição (título/conteúdo de um
   // manual já existente) em vez de criar um novo.
   const [editingGuideline, setEditingGuideline] = useState<AIEvaluationGuideline | null>(null);
+  // Aba ativa no editor de conteúdo: 'edit' = textarea, 'preview' = render Markdown
+  const [contentTab, setContentTab] = useState<'edit' | 'preview'>('edit');
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -55,6 +58,7 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
     setContent('');
     setFile(null);
     setEditingGuideline(null);
+    setContentTab('edit');
   };
 
   const openEditModal = (g: AIEvaluationGuideline) => {
@@ -185,13 +189,16 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
           <Card key={g.id} className="p-4 space-y-2">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h4 className="text-xs font-black text-brand-primary truncate">{g.title}</h4>
                   <Badge variant={g.active ? 'success' : 'neutral'} size="xs">
                     {g.active ? 'Ativo' : 'Inativo'}
                   </Badge>
+                  <span className="text-[10px] font-bold text-brand-muted bg-surface-subtle border border-surface-border rounded px-1">.md</span>
                 </div>
-                <p className="text-[11px] font-medium text-brand-muted mt-1 line-clamp-2">{g.content}</p>
+                <p className="text-[11px] font-medium text-brand-muted mt-1 line-clamp-2">
+                  {g.content.replace(/#{1,6}\s/g, '').replace(/\*\*/g, '').replace(/\*/g, '').replace(/`/g, '')}
+                </p>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 {g.file_path && (
@@ -269,21 +276,49 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
             )}
 
             <div className="space-y-1">
-              <label className="text-[11px] font-black uppercase tracking-wider text-brand-muted">
-                Conteúdo (o que a IA efetivamente lê) *
-              </label>
-              <textarea
-                value={content}
-                onChange={e => setContent(e.target.value)}
-                rows={10}
-                placeholder="Cole aqui o texto do manual, ou anexe um PDF acima para extrair automaticamente."
-                className="w-full px-3 py-2 rounded-xl border border-surface-border bg-surface-subtle text-xs font-medium resize-y"
-              />
-              {editingGuideline && (
-                <p className="text-[10px] font-semibold text-brand-muted">
-                  Edite livremente pra adicionar mais contexto — o PDF original (se houver) continua disponível
-                  pra download, só o texto usado pela IA muda aqui.
-                </p>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-black uppercase tracking-wider text-brand-muted">
+                  Conteúdo (o que a IA efetivamente lê) * — suporta Markdown
+                </label>
+                <div className="flex items-center gap-0.5 bg-surface-subtle border border-surface-border rounded-lg p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setContentTab('edit')}
+                    className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-colors ${contentTab === 'edit' ? 'bg-white dark:bg-surface-base text-brand-primary shadow-sm' : 'text-brand-muted hover:text-brand-primary'}`}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setContentTab('preview')}
+                    className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-colors ${contentTab === 'preview' ? 'bg-white dark:bg-surface-base text-brand-primary shadow-sm' : 'text-brand-muted hover:text-brand-primary'}`}
+                  >
+                    Pré-visualizar
+                  </button>
+                </div>
+              </div>
+              {contentTab === 'edit' ? (
+                <>
+                  <textarea
+                    value={content}
+                    onChange={e => setContent(e.target.value)}
+                    rows={12}
+                    placeholder={`Cole aqui o texto do manual em Markdown, ou anexe um arquivo acima para extrair automaticamente.\n\nExemplo:\n# Política de Atendimento\n## Regras de Saudação\n- O atendente deve usar o nome do cliente\n- Linguagem formal em todos os canais`}
+                    className="w-full px-3 py-2 rounded-xl border border-surface-border bg-surface-subtle text-xs font-medium resize-y font-mono"
+                  />
+                  <p className="text-[10px] font-semibold text-brand-muted">
+                    💡 Use Markdown: <code className="bg-surface-subtle px-1 rounded"># Título</code>, <code className="bg-surface-subtle px-1 rounded">## Seção</code>, <code className="bg-surface-subtle px-1 rounded">- item</code>, <code className="bg-surface-subtle px-1 rounded">**negrito**</code>. A IA interpreta a estrutura semântica.
+                    {editingGuideline && ' O PDF original (se houver) continua disponível para download; só o texto muda aqui.'}
+                  </p>
+                </>
+              ) : (
+                <div className="w-full min-h-[280px] px-4 py-3 rounded-xl border border-surface-border bg-surface-subtle overflow-y-auto text-xs text-brand-primary [&_h1]:text-sm [&_h1]:font-black [&_h1]:mb-2 [&_h2]:text-xs [&_h2]:font-black [&_h2]:mb-1.5 [&_h3]:text-xs [&_h3]:font-bold [&_h3]:mb-1 [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:mb-2 [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:mb-2 [&_li]:mb-0.5 [&_strong]:font-bold [&_em]:italic [&_code]:bg-surface-base [&_code]:px-1 [&_code]:rounded [&_code]:text-[10px] [&_pre]:bg-surface-base [&_pre]:p-2 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:mb-2 [&_blockquote]:border-l-2 [&_blockquote]:border-surface-border [&_blockquote]:pl-3 [&_blockquote]:text-brand-muted [&_blockquote]:mb-2 [&_hr]:border-surface-border [&_hr]:my-2">
+                  {content.trim() ? (
+                    <ReactMarkdown>{content}</ReactMarkdown>
+                  ) : (
+                    <p className="text-brand-muted italic">Nada para pré-visualizar. Escreva o conteúdo na aba Editar.</p>
+                  )}
+                </div>
               )}
             </div>
 
