@@ -2,7 +2,7 @@
 ## Guia Operacional de Conformidade, Auditoria e Validação de Macros do Zendesk
 
 > **Versão:** 1.2 — Atualização Setembro / 2026  
-> **Referência Técnica:** Guia Operacional: Catálogo e Utilização de Macros do Zendesk (POP v1.1) • Projeto DB-361  
+> **Referência Técnica:** Guia Operacional: Catálogo e Utilização de Macros do Zendesk (POP v1.1)  
 > **Plataforma:** Zendesk Support & Side Conversations (Conversas Paralelas)  
 > **Público-Alvo:** Monitores de Qualidade (QA), Supervisores de Suporte e Analistas de Atendimento  
 

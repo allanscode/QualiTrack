@@ -1335,7 +1335,7 @@ async function handleEvaluateChildTicket(
   };
 
   const prompt = `Você é um auditor sênior de qualidade da WebPosto especialista em auditoria de Chamados Filhos (Side Conversations do Zendesk).
-Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base no Manual - Guia Operacional de Macros do Zendesk (POP v1.1 • Projeto DB-361).
+Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base no Manual - Guia Operacional de Macros do Zendesk (POP v1.1).
 
 O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentais:
 

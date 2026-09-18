@@ -47,8 +47,8 @@ export async function extractPlainText(file: File): Promise<string> {
 
 export const DEFAULT_CHILD_TICKET_GUIDELINE: AIEvaluationGuideline = {
   id: 'guideline-child-tickets-pop-v1',
-  title: 'Manual de Chamados Filhos — POP v1.1 (Projeto DB-361)',
-  content: `# Manual Operacional de Chamados Filhos — POP v1.1 (Projeto DB-361)
+  title: 'Manual de Chamados Filhos — POP v1.1',
+  content: `# Manual Operacional de Chamados Filhos — POP v1.1
 
 ## 1. Visão Geral e Objetivo
 Este manual normatiza a criação e governança de chamados filhos (Side Conversations) abertos a partir de tickets do Zendesk na operação WebPosto. A conformidade de abertura é auditada automaticamente pelo QualiTrack através de 4 critérios mandatórios.

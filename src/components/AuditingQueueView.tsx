@@ -2043,7 +2043,7 @@ export default function AuditingQueueView({
                     <div>
                       <div className="text-[9px] font-black uppercase tracking-wider text-brand-muted">Manual Vinculado Homologado</div>
                       <div className="text-xs font-black text-brand-primary">
-                        Manual de Chamados Filhos — POP v1.1 (Projeto DB-361)
+                        Manual de Chamados Filhos — POP v1.1
                       </div>
                     </div>
                   </div>
