@@ -52,12 +52,14 @@ import {
   GitFork,
   AlertOctagon,
   ListChecks,
-  CheckSquare
+  CheckSquare,
+  Eye
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import { toast } from 'sonner';
+import TicketAuditInspectorModal from './TicketAuditInspectorModal';
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -120,6 +122,9 @@ export default function AuditingQueueView({
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const batchCancelRef = useRef(false);
+
+  // Ticket em visualização detalhada / confronto no TicketAuditInspectorModal
+  const [inspectingTicket, setInspectingTicket] = useState<AuditingQueueTicket | null>(null);
 
   // Paginação: 25 tickets por página (definido no backend). Views grandes
   // (Proativas chega a ter centenas de CSAT vazio) não cabem numa carga só
@@ -542,7 +547,17 @@ export default function AuditingQueueView({
 
     if (draft) {
       return (
-        <>
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setInspectingTicket(ticket)}
+            className={`flex items-center gap-1 text-[10px] ${AI_ACTION_BUTTON_CLASS}`}
+            title="Confrontar evidências do chamado com o parecer e critérios da IA"
+          >
+            <Eye className="w-3 h-3 text-brand-highlight" />
+            <span>Confrontar IA</span>
+          </Button>
           {!ticket.positive_cap_reached && (
             <Button
               size="sm"
@@ -565,7 +580,7 @@ export default function AuditingQueueView({
             <Rocket className="w-3 h-3" />
             <span>Lançar Monitoria</span>
           </Button>
-        </>
+        </div>
       );
     }
 
@@ -580,16 +595,28 @@ export default function AuditingQueueView({
     }
 
     return (
-      <Button
-        size="sm"
-        variant="primary"
-        disabled={evaluatingTicketId === ticket.ticket_id}
-        onClick={() => openGuidelinePicker(ticket)}
-        className={`flex items-center gap-1 ${accentClass} text-white font-bold ${AI_ACTION_BUTTON_CLASS}`}
-      >
-        <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
-        <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
-      </Button>
+      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setInspectingTicket(ticket)}
+          className="flex items-center gap-1 text-[10px]"
+          title="Ver diálogo tratado e campos do chamado antes de avaliar"
+        >
+          <Eye className="w-3 h-3 text-brand-muted" />
+          <span>Ver Diálogo</span>
+        </Button>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={evaluatingTicketId === ticket.ticket_id}
+          onClick={() => openGuidelinePicker(ticket)}
+          className={`flex items-center gap-1 ${accentClass} text-white font-bold ${AI_ACTION_BUTTON_CLASS}`}
+        >
+          <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+          <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
+        </Button>
+      </div>
     );
   };
 
@@ -1707,6 +1734,33 @@ export default function AuditingQueueView({
               </Card>
             </div>
           </div>
+        );
+      })()}
+
+      {/* Modal de Inspeção e Confronto de Auditoria */}
+      {inspectingTicket && (() => {
+        const draft = drafts[inspectingTicket.ticket_id];
+        const customerType = resolveCustomerType(inspectingTicket.tags, inspectingTicket.organization_tags);
+        const { form: autoForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
+        const formToUse = forms.find(f => f.id === draft?.form_id) || autoForm;
+
+        return (
+          <TicketAuditInspectorModal
+            ticket={inspectingTicket}
+            form={formToUse}
+            aiDraft={draft}
+            onClose={() => setInspectingTicket(null)}
+            onLaunchAudit={(t) => {
+              setInspectingTicket(null);
+              handleLaunchMonitoria(t);
+            }}
+            onReevaluate={async (t) => {
+              if (!formToUse) return;
+              const allGuidelines = await fetchAIGuidelines().catch(() => []);
+              const guidelineIds = allGuidelines.filter(g => g.active).map(g => g.id);
+              await handleEvaluateWithAI(t, formToUse, guidelineIds);
+            }}
+          />
         );
       })()}
     </div>
