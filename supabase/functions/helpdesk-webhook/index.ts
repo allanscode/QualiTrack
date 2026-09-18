@@ -23,9 +23,9 @@ const WebhookPayloadSchema = z.object({
   group_name: z.string().optional(),
   csat_status: z.enum(['bad', 'good', 'offered', 'unrated']).optional(),
   csat_comment: z.string().optional(),
-  parent_ticket_id: z.union([z.string(), z.number()]).optional().transform(v => v ? String(v) : undefined),
+  parent_ticket_id: z.union([z.string(), z.number()]).optional().transform(v => (v && String(v).trim()) ? String(v).trim() : undefined),
   macro_type: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+  tags: z.union([z.array(z.string()), z.string().transform(s => s.split(/\s+/).filter(Boolean))]).optional(),
   ticket_fields: z.array(z.object({
     title: z.string(),
     value: z.string(),
@@ -89,6 +89,17 @@ serve(async (req: Request) => {
       });
     }
 
+    // Resposta rápida para testes de conectividade do Zendesk (botão "Testar webhook" no Admin Center)
+    if (rawBody.test !== undefined || !rawBody.ticket_id || rawBody.event === 'ping') {
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'QualiTrack Webhook endpoint ativo e autenticado com sucesso.',
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const parseResult = WebhookPayloadSchema.safeParse(rawBody);
     if (!parseResult.success) {
       return new Response(JSON.stringify({
@@ -101,17 +112,6 @@ serve(async (req: Request) => {
     }
 
     const payload = parseResult.data;
-
-    // Resposta rápida para pings de teste do Zendesk
-    if (payload.event === 'ping') {
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'QualiTrack Webhook endpoint ativo e autenticado com sucesso.',
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
