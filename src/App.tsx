@@ -528,17 +528,19 @@ function MainApp({
       });
     }
 
-    // Notificação do sistema padrão (operacional)
-    list.push({
-      id: 'system-status-ok',
-      title: 'Sistema QualiTrack Conectado',
-      message: 'Integração Zendesk API e IA Gemini 2.5 Flash sincronizadas em tempo real.',
-      time: `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`,
-      type: 'sistema',
-      iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-      icon: <Clock className="w-3.5 h-3.5" />,
-      read: readNotificationIds.has('system-status-ok')
-    });
+    // Notificação do sistema: status de conexão e IA (exclusivo para Administrador)
+    if (userData?.role === 'admin') {
+      list.push({
+        id: 'system-status-ok',
+        title: 'Sistema QualiTrack Conectado',
+        message: 'Integração Zendesk API e IA Gemini 2.5 Flash sincronizadas em tempo real.',
+        time: `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`,
+        type: 'sistema',
+        iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+        icon: <Clock className="w-3.5 h-3.5" />,
+        read: readNotificationIds.has('system-status-ok')
+      });
+    }
 
     return list;
   }, [userData, monitorias, readNotificationIds, sessionStartTime]);
