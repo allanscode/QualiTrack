@@ -397,15 +397,18 @@ export async function evaluateTicketWithAI(
       }
     });
 
-    if (error || !data?.result) {
-      console.warn(`[HelpdeskQueue] Falha ao avaliar com Gemini (${error?.message}). Usando fallback local.`);
-      return getFallbackAIEvaluation(ticketId, form);
+    if (error) {
+      throw new Error(error.message || 'Erro de comunicação com a IA');
+    }
+
+    if (!data?.result) {
+      throw new Error(data?.error || 'A IA não retornou resultado para este ticket');
     }
 
     return data.result as AIEvaluationResult;
-  } catch (err) {
+  } catch (err: any) {
     console.error('[HelpdeskQueue] Erro ao chamar avaliação com IA:', err);
-    return getFallbackAIEvaluation(ticketId, form);
+    throw err;
   }
 }
 

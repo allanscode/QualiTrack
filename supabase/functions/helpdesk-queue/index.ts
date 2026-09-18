@@ -1016,6 +1016,9 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
    já respondeu nos passos 1 e 2. NUNCA deixe "score" ou "summary" vazios/zerados: eles resumem o que você
    acabou de avaliar.`;
 
+  let usedProvider: 'gemini' | 'openrouter' = 'gemini';
+  let usedModel = geminiModel;
+
   // Faz a chamada num provedor específico e devolve o JSON já parseado e
   // validado contra o schema — ou lança erro (rede, HTTP, ou resposta fora
   // do formato esperado) pra quem chamou decidir se tenta o próximo provedor.
@@ -1025,7 +1028,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     if (provider === 'openrouter') {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(15000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openRouterApiKey}`,
@@ -1055,11 +1058,13 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
       if (!text) {
         throw new Error('Resposta vazia da IA (modelo pode ter recusado ou atingido limite gratuito)');
       }
+      usedProvider = 'openrouter';
+      usedModel = data.model || openRouterModels[0] || 'openrouter';
     } else {
       // API nativa do Gemini (Google AI Studio)
       const candidateModels = [
-        geminiModel,
         'gemini-3.5-flash-lite',
+        geminiModel,
         'gemini-3.7-flash',
         'gemini-3.8-flash',
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
@@ -1083,7 +1088,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
                   responseSchema: stripAdditionalProperties(responseSchema),
                 },
               }),
-              signal: AbortSignal.timeout(12000),
+              signal: AbortSignal.timeout(10000),
             }
           );
 
@@ -1165,14 +1170,10 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
   try {
     let parsed: any;
     let lastError: any;
-    let usedProvider = 'gemini';
-    let usedModel = geminiModel;
 
     if (geminiApiKey) {
       try {
         parsed = await callAndValidate('gemini');
-        usedProvider = 'gemini';
-        if (!usedModel) usedModel = geminiModel;
       } catch (e: any) {
         lastError = e;
         console.warn('[helpdesk-queue] Gemini falhou ou respondeu fora do schema, tentando fallback OpenRouter:', e.message);
@@ -1182,8 +1183,6 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     if (!parsed && openRouterApiKey) {
       try {
         parsed = await callAndValidate('openrouter');
-        usedProvider = 'openrouter';
-        usedModel = openRouterModels[0] || 'openrouter';
       } catch (e: any) {
         lastError = e;
         console.error('[helpdesk-queue] Fallback OpenRouter também falhou:', e.message);
@@ -1432,8 +1431,8 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
       text = data.choices?.[0]?.message?.content;
     } else {
       const candidateModels = [
-        geminiModel,
         'gemini-3.5-flash-lite',
+        geminiModel,
         'gemini-3.7-flash',
         'gemini-3.8-flash',
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
@@ -1445,7 +1444,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
             `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${geminiApiKey}`,
             {
               method: 'POST',
-              signal: AbortSignal.timeout(12000),
+              signal: AbortSignal.timeout(10000),
               headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey! },
               body: JSON.stringify({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
