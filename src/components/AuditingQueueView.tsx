@@ -297,8 +297,8 @@ export default function AuditingQueueView({
     });
   }, [tickets, searchTerm, selectedAgentFilter]);
 
-  // Paginação configurável por página (5, 10, 15, 20) com padrão 10
-  const [pageSize, setPageSize] = useState<number>(10);
+  // Paginação configurável por página (5, 10, 15, 20) com padrão 5
+  const [pageSize, setPageSize] = useState<number>(5);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Reseta para a primeira página quando muda a busca, filtro de agente, tamanho de página ou fila
