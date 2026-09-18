@@ -20,13 +20,15 @@ import { AuthProvider, useAuth } from './providers/AuthProvider';
 import { useSidebarManager } from './hooks/useSidebarManager';
 import { useMonitoriaData } from './hooks/useMonitoriaData';
 
+import { lazyWithRetry } from './utils/lazyWithRetry';
+
 // Components
-const DashboardMain = React.lazy(() => import('./components/dashboard/DashboardMain'));
-const MonitoriaList = React.lazy(() => import('./components/MonitoriaList'));
-const MonitoriaForm = React.lazy(() => import('./components/MonitoriaForm'));
-const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
-const CustomDashboardManagement = React.lazy(() => import('./components/CustomDashboardManagement'));
-const AuditingQueueView = React.lazy(() => import('./components/AuditingQueueView'));
+const DashboardMain = lazyWithRetry(() => import('./components/dashboard/DashboardMain'));
+const MonitoriaList = lazyWithRetry(() => import('./components/MonitoriaList'));
+const MonitoriaForm = lazyWithRetry(() => import('./components/MonitoriaForm'));
+const AdminPanel = lazyWithRetry(() => import('./components/AdminPanel'));
+const CustomDashboardManagement = lazyWithRetry(() => import('./components/CustomDashboardManagement'));
+const AuditingQueueView = lazyWithRetry(() => import('./components/AuditingQueueView'));
 
 export default function App() {
   return (

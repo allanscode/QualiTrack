@@ -10,6 +10,16 @@ import { isMockMode } from './lib/supabase.ts';
 // Initialize Sentry early
 initSentry();
 
+// Auto-recuperação de chunks desatualizados após novos deploys na nuvem
+window.addEventListener('vite:preloadError', (event) => {
+  const hasRefreshed = sessionStorage.getItem('vite-preload-refreshed') === 'true';
+  if (!hasRefreshed) {
+    sessionStorage.setItem('vite-preload-refreshed', 'true');
+    event.preventDefault();
+    window.location.reload();
+  }
+});
+
 // Production guard: warn if running in mock mode
 if (import.meta.env.PROD && isMockMode) {
   console.error(

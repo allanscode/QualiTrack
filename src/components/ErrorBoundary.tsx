@@ -46,28 +46,35 @@ export class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      const isChunkError =
+        this.state.error?.message?.includes('Failed to fetch dynamically imported module') ||
+        this.state.error?.message?.includes('dynamically imported module') ||
+        this.state.error?.message?.includes('Loading chunk');
+
       return (
         <div className="min-h-screen flex items-center justify-center bg-surface-bg p-4">
           <Card className="max-w-md w-full shadow-2xl border border-surface-border">
             <div className="p-8 text-center space-y-6">
-              <div className="w-16 h-16 rounded-2xl bg-error/10 flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-8 h-8 text-error" />
+              <div className="w-16 h-16 rounded-2xl bg-brand-highlight/10 flex items-center justify-center mx-auto">
+                <RefreshCw className="w-8 h-8 text-brand-highlight" />
               </div>
               <div className="space-y-2">
                 <h2 className="text-xl font-black text-brand-primary uppercase tracking-tight">
-                  Ops! Algo deu errado
+                  {isChunkError ? 'Nova versão disponível' : 'Ops! Algo deu errado'}
                 </h2>
-                <p className="text-brand-muted text-sm">
-                  Ocorreu um erro inesperado. Nossa equipe foi notificada automaticamente.
+                <p className="text-brand-muted text-sm leading-relaxed">
+                  {isChunkError
+                    ? 'Uma nova versão do QualiTrack foi publicada. Clique no botão abaixo para carregar as alterações mais recentes.'
+                    : 'Ocorreu um erro inesperado. Nossa equipe foi notificada automaticamente.'}
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <Button
-                  onClick={this.handleRetry}
+                  onClick={() => window.location.reload()}
                   className="flex-1"
                   icon={<RefreshCw className="w-4 h-4" />}
                 >
-                  Tentar Novamente
+                  {isChunkError ? 'Atualizar Agora' : 'Tentar Novamente'}
                 </Button>
                 <Button
                   variant="ghost"
