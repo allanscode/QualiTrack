@@ -116,6 +116,11 @@ export default function AuditingQueueView({
   // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
   const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>({});
 
+  // Avaliação em lote: processa todos os tickets da página atual sequencialmente.
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const batchCancelRef = useRef(false);
+
   // Paginação: 25 tickets por página (definido no backend). Views grandes
   // (Proativas chega a ter centenas de CSAT vazio) não cabem numa carga só
   // sem arriscar o rate limit do Zendesk. `prevCursors` guarda o histórico
@@ -279,7 +284,9 @@ export default function AuditingQueueView({
   const handleEvaluateWithAI = async (
     ticket: AuditingQueueTicket,
     formToUse: EvaluationForm,
-    guidelineIds: string[]
+    guidelineIds: string[],
+    // quando chamado pelo lote, o toast de progresso não é criado aqui
+    silent = false
   ) => {
     // Encontra o agente correspondente pelo e-mail (chave universal) ou nome
     const matchedAgent = agents.find(a =>
@@ -290,8 +297,14 @@ export default function AuditingQueueView({
     const agentId = ticket.agent_id || matchedAgent?.id;
 
     setEvaluatingTicketId(ticket.ticket_id);
+
+    // Toast de progresso por etapas (apenas quando não está em modo silencioso/lote)
+    const toastId = silent ? null : toast.loading(
+      `⏳ Etapa 1/3 · Buscando diálogo do ticket #${ticket.ticket_id}...`,
+      { duration: Infinity }
+    );
+
     try {
-      toast.info(`Buscando diálogo e analisando ticket #${ticket.ticket_id} com IA...`);
       const { comments: dialogue, ticketFields, tags, organizationName, organizationTags } = await fetchTicketDialogue(ticket.ticket_id);
 
       // Atualiza tags e organização caso venham enriquecidos da busca individual
@@ -301,12 +314,22 @@ export default function AuditingQueueView({
         ticket.organization_tags = organizationTags || ticket.organization_tags;
       }
 
+      if (toastId) toast.loading(
+        `🤖 Etapa 2/3 · Analisando com IA (Gemini → OpenRouter como fallback)...`,
+        { id: toastId, duration: Infinity }
+      );
+
       const aiResult = await evaluateTicketWithAI(ticket.ticket_id, formToUse, dialogue, {
         name: matchedAgent?.name || ticket.agent_name,
         email: matchedAgent?.email || ticket.agent_email,
         team_name: teamId ? teamsMap[teamId] : undefined,
         channel: ticket.channel,
       }, guidelineIds, ticketFields);
+
+      if (toastId) toast.loading(
+        `💾 Etapa 3/3 · Salvando rascunho...`,
+        { id: toastId, duration: Infinity }
+      );
 
       await saveAIDraft({
         ticketId: ticket.ticket_id,
@@ -341,12 +364,87 @@ export default function AuditingQueueView({
         }
       }));
 
-      toast.success(`Avaliação pronta para o ticket #${ticket.ticket_id} (${formToUse.title}) — confira e clique em "Lançar Monitoria".`);
+      if (toastId) toast.success(
+        `✅ Ticket #${ticket.ticket_id} avaliado (${formToUse.title}) — clique em "Lançar Monitoria".`,
+        { id: toastId, duration: 5000 }
+      );
     } catch (err: any) {
       console.error('Erro na avaliação com IA:', err);
-      toast.error(err?.message || 'Falha ao processar avaliação com IA');
+      if (toastId) {
+        toast.error(`❌ Falha no ticket #${ticket.ticket_id}: ${err?.message || 'Erro desconhecido'}`, { id: toastId, duration: 6000 });
+      }
+      throw err; // relança para o batch capturar individualmente
     } finally {
       setEvaluatingTicketId(null);
+    }
+  };
+
+  // Avaliação em LOTE — processa todos os tickets da página atual sem rascunho.
+  // Pula: já avaliados, com cap atingido, já auditados.
+  const handleBatchEvaluate = async () => {
+    const pending = filteredTickets.filter(t =>
+      !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached
+    );
+    if (pending.length === 0) {
+      toast.info('Todos os tickets desta página já possuem avaliação ou foram auditados.');
+      return;
+    }
+
+    // Carregar manuais ativos uma única vez para o lote
+    const allGuidelines = await fetchAIGuidelines().catch(() => [] as AIEvaluationGuideline[]);
+    const activeGuidelineIds = allGuidelines.filter(g => g.active).map(g => g.id);
+
+    setBatchRunning(true);
+    batchCancelRef.current = false;
+    setBatchProgress({ done: 0, total: pending.length, current: '' });
+
+    const batchToastId = toast.loading(
+      `🚀 Avaliação em lote iniciada — 0/${pending.length} tickets`,
+      { duration: Infinity }
+    );
+
+    let done = 0;
+    let errors = 0;
+
+    for (const ticket of pending) {
+      if (batchCancelRef.current) break;
+
+      const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
+      const { form: autoForm, guideline: autoGuideline } = resolveFormAndGuidelineForCustomerType(
+        customerType,
+        forms,
+        allGuidelines
+      );
+      if (!autoForm) { errors++; continue; }
+      const guidelineIds = autoGuideline ? [autoGuideline.id] : activeGuidelineIds;
+
+      setBatchProgress({ done, total: pending.length, current: ticket.ticket_id });
+      toast.loading(
+        `🤖 Lote: processando ticket #${ticket.ticket_id} (${done + 1}/${pending.length})...`,
+        { id: batchToastId, duration: Infinity }
+      );
+
+      try {
+        await handleEvaluateWithAI(ticket, autoForm, guidelineIds, true);
+        done++;
+      } catch {
+        errors++;
+      }
+
+      setBatchProgress({ done, total: pending.length, current: '' });
+    }
+
+    setBatchRunning(false);
+    batchCancelRef.current = false;
+    setBatchProgress(null);
+
+    const cancelled = batchCancelRef.current;
+    if (cancelled) {
+      toast.warning(`⏸ Lote interrompido — ${done}/${pending.length} tickets avaliados.`, { id: batchToastId, duration: 5000 });
+    } else if (errors > 0) {
+      toast.warning(`✅ Lote concluído — ${done} avaliados, ${errors} falharam. Verifique os tickets com erro.`, { id: batchToastId, duration: 8000 });
+    } else {
+      toast.success(`✅ Lote concluído — ${done}/${pending.length} tickets avaliados com sucesso!`, { id: batchToastId, duration: 6000 });
     }
   };
 
@@ -679,6 +777,48 @@ export default function AuditingQueueView({
               </button>
             )}
           </div>
+
+          {/* Botão Avaliar em Lote — só nas filas com IA */}
+          {(activeQueue === 'positivas' || activeQueue === 'proativas') && (
+            batchRunning ? (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {batchProgress && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-1.5 bg-surface-border rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-brand-highlight rounded-full transition-all duration-500"
+                        style={{ width: `${Math.round((batchProgress.done / batchProgress.total) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold text-brand-muted whitespace-nowrap">
+                      {batchProgress.done}/{batchProgress.total}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { batchCancelRef.current = true; }}
+                  className="flex items-center gap-1.5 text-functional-error flex-shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Cancelar Lote</span>
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBatchEvaluate}
+                disabled={loading || filteredTickets.length === 0}
+                className="flex items-center gap-1.5 flex-shrink-0 text-brand-highlight hover:text-brand-highlight"
+                title="Avaliar todos os tickets desta página com IA de uma vez"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Avaliar Página com IA</span>
+              </Button>
+            )
+          )}
 
           <Button
             variant="ghost"

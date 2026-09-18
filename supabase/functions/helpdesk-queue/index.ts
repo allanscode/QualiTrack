@@ -830,10 +830,12 @@ async function handleEvaluateAI(
   // raciocínio pra chegar na resposta — só é mais sujeito a "sobrecarregado"
   // no pool compartilhado (modelo grande), por isso o -super continua logo
   // atrás como fallback comprovado. gemma/minimax só como último recurso.
-  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free,minimax/minimax-m3:free')
+  // OpenRouter aceita no máximo 3 modelos no campo "models" — truncar para evitar HTTP 400.
+  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free')
     .split(',')
     .map(m => m.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, 3); // máximo 3 — limite hard da API OpenRouter
 
   if (!openRouterApiKey && !geminiApiKey) {
     return jsonResponse({ error: 'Nenhum provedor de IA configurado (OPENROUTER_API_KEY ou GEMINI_API_KEY) no Supabase Secrets' }, 500);
@@ -1175,7 +1177,8 @@ async function handleEvaluateChildTicket(
   const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-31b-it:free')
     .split(',')
     .map(m => m.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, 3); // máximo 3 — limite hard da API OpenRouter
 
   if (!openRouterApiKey && !geminiApiKey) {
     return jsonResponse({ error: 'Nenhum provedor de IA configurado no Supabase Secrets' }, 500);
