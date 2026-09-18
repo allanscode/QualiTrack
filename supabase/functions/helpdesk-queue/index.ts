@@ -1232,40 +1232,75 @@ async function handleEvaluateChildTicket(
     additionalProperties: false
   };
 
-  const prompt = `Você é um auditor sênior de qualidade da WebPosto especialista em auditoria de Chamados Filhos.
-Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base nas regras operacionais abaixo:
+  const prompt = `Você é um auditor sênior de qualidade da WebPosto especialista em auditoria de Chamados Filhos (Side Conversations do Zendesk).
+Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base no Manual - Guia Operacional de Macros do Zendesk (POP v1.1 • Projeto DB-361).
 
-PADRÕES DE ABERTURA DE TICKETS FILHOS:
-1. "Nova Demanda":
-   - Campo "Para" (Assignee): Deve estar atribuído ao PRÓPRIO analista que abriu (auto-atribuição).
-   - Tags obrigatórias: DEVE conter as tags 'existe_ticket_filho' e 'existe_nova_demanda'.
-   - Descrição: Deve conter a contextualização clara da demanda/melhoria.
+O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentais:
 
-2. "Enviar para Análise Técnica":
-   - Campo "Para": Deve ser direcionado para um GRUPO Especialista Técnico (ex: Suporte N2, Análise Técnica, Desenvolvimento), NUNCA para uma pessoa física específica.
-   - Assunto: Deve conter o padrão técnico fixo de abertura.
-   - Descrição: Deve conter passos de reprodução, logs ou evidências técnicas.
+=============================================================================
+1. PRESERVAÇÃO DO ASSUNTO (INALTERABILIDADE - REGRA CRÍTICA):
+=============================================================================
+- REGRA DE OURO: O ASSUNTO DO TICKET FILHO NUNCA PODE SER ALTERADO PELO ANALISTA.
+- MOTIVO TÉCNICO: O Zendesk possui 5 gatilhos estruturais de automação (DB-361) que lêem EXATAMENTE a string de texto fixa do assunto preenchido pela macro. Se o analista alterar uma única letra, abreviar, inserir número de chamado pai ou personalizar o título, os gatilhos falham e o chamado vira "Ticket Filho Inválido" (Fila #47656856998292).
+- ASSUNTOS PADRÃO HOMOLOGADOS:
+  * "Encaminhado para Análise Técnica Cliente Final"
+  * "Encaminhado para Análise Técnica REVENDA"
+  * "Encaminhado para Análise Técnica Fiscal"
+  * "Encaminhado para Análise Técnica Contábil"
+  * "Encaminhado para Análise Técnica - Correções" (ou "Encaminhado para Análise de Correções Cliente Final")
+  * "Encaminhado para Desenvolvimento" (P&D)
+  * "Nova Demanda" (ou "Nova Demanda - Mais Pagamentos")
+  * "Apoio Análise Técnica"
+- SE O ASSUNTO FOI ALTERADO: O check "Preservação do Assunto" DEVE FALHAR (passed: false), score máximo limitado a 50, status "nao_conforme".
 
-3. "Apoio Análise Técnica":
-   - Campo "Para": Deve estar direcionado ao analista técnico N2 específico que prestou o auxílio.
-   - Diálogo/Descrição: Deve conter o registro do auxílio prestado e a dúvida sanada.
+=============================================================================
+2. PRESERVAÇÃO DO TEXTO DA MACRO COM ENRIQUECIMENTO TÉCNICO:
+=============================================================================
+- REGRA: O COMENTÁRIO/DESCRIÇÃO PRECISA CONTER A MENSAGEM INTEGRAL DA MACRO.
+- O analista PODE E DEVE adicionar mais informações complementares (dados do cliente/posto, versão do sistema, AnyDesk/senha, descrição detalhada do erro, logs do PDV, prints, passos de reprodução e testes já executados).
+- O que NÃO PODE: O analista NÃO PODE apagar o texto da macro e deixar apenas um texto genérico ou em branco. O texto-base estrutural da macro deve estar contido.
+- Se o texto da macro estiver presente (mesmo enriquecido com mais detalhes): Check "Preservação do Texto da Macro" passa (passed: true).
+- Se o analista apagou o texto da macro ou deixou vazio: Check falha (passed: false).
 
-4. "Produtividade":
-   - Checagem do campo personalizado "Ticket Filho Produtividade" (deve estar devidamente selecionado e preenchido).
+=============================================================================
+3. DIRECIONAMENTO CORRETO (CAMPO "PARA" / ASSIGNEE):
+=============================================================================
+- "Enviar para Análise Técnica" (Cliente Final, Revenda, Fiscal, Contábil, Correções, Desenvolvimento):
+  * O campo "Para" DEVE ser direcionado ao GRUPO Técnico Especialista correspondente (ex: "Análise Técnica Fiscal", "Análise Técnica Revenda", etc.).
+  * NUNCA PODE SER ATRIBUÍDO A UMA PESSOA FÍSICA / ANALISTA ESPECÍFICO.
+- "Registrar Nova Demanda" (Geral ou Mais Pagamentos):
+  * O campo "Para" DEVE ser atribuído a SI MESMO (o próprio analista solicitante) para acompanhamento da resolução.
+- "Apoio Análise Técnica":
+  * O campo "Para" DEVE ser atribuído nominalmente ao Analista Técnico N2 que prestou a consultoria pontual.
+- "Mais Pagamentos":
+  * Direcionamento ao Grupo Mais Pagamentos (ID 50800061906068) / marca dedicada.
+- Check "Direcionamento Correto ('Para')" deve validar essa correspondência com rigor.
 
-DADOS DO CHAMADO FILHO:
+=============================================================================
+4. GOVERNANÇA DE TAGS E AUTOMAÇÃO:
+=============================================================================
+- Nova Demanda: Presença obrigatória das tags 'existe_ticket_filho' e 'existe_nova_demanda' (ou 'maispag_nova_demanda').
+- Análise Técnica: Presença de 'transferencia_analise', 'transferencia_analise_fiscal', 'transferencia_analise_contabil', etc.
+- Uso de current_tags (adicionar) e não remoção de tags de auditoria.
+
+DADOS DO CHAMADO FILHO SOB AUDITORIA:
 - Ticket: #${ticket_id}
-- Assunto: ${ticket_subject || 'Não informado'}
-- Tipo Sugerido: ${macro_type || 'Detectar automaticamente'}
+- Assunto Registrado: ${ticket_subject || 'Não informado'}
+- Tipo Sugerido/Macro: ${macro_type || 'Detectar automaticamente'}
 - Tags do Chamado: ${tagsText || '(sem tags)'}
 - Campos do Ticket:
 ${ticketFieldsText || '(nenhum campo extra)'}
 
-CONTEÚDO / DESCRIÇÃO / NOTAS:
+CONTEÚDO / DESCRIÇÃO / COMENTÁRIOS DO TICKET FILHO:
 ${dialogueText || '(sem texto registrado)'}
 
-Analise rigorosamente se os campos, tags e atribuição estão conforme as regras acima.
-Gere a resposta estritamente no JSON solicitado.`;
+CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
+1. rule: "Preservação do Assunto (Inalterabilidade)"
+2. rule: "Preservação do Texto da Macro"
+3. rule: "Direcionamento Correto ('Para')"
+4. rule: "Governança de Tags e Automação"
+
+Analise os dados reais do ticket contra essas regras operacionais e gere o parecer estritamente no JSON do schema.`;
 
   async function callChildModel(provider: 'gemini' | 'openrouter'): Promise<any> {
     let text: string | undefined;

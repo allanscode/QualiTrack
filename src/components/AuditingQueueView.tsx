@@ -1360,7 +1360,7 @@ export default function AuditingQueueView({
                 <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
                   <RefreshCw className="w-8 h-8 text-brand-highlight animate-spin" />
                   <p className="text-xs font-bold text-brand-primary">Avaliando conformidade do chamado filho com IA...</p>
-                  <p className="text-[10px] text-brand-muted">Verificando destinatário ("Para"), tags obrigatórias, formato e evidências técnicas.</p>
+                  <p className="text-[10px] text-brand-muted">Verificando inalterabilidade do assunto, preservação do texto da macro, direcionamento ("Para") e tags estruturais.</p>
                 </div>
               )}
 
