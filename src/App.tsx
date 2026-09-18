@@ -1184,28 +1184,30 @@ function AnimatedMonitoriasIcon({ isHovered, active, className }: { isHovered?: 
 function AnimatedLayersIcon({ isHovered, active, className }: { isHovered?: boolean; active?: boolean; className?: string }) {
   const isTriggered = !!(isHovered || active);
   return (
-    <svg
-      viewBox="0 -2 24 28"
+    <m.svg
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
+      className={`overflow-visible ${className || "w-5 h-5"}`}
       style={{ overflow: 'visible' }}
-      className={className || "w-5 h-5"}
     >
-      <m.path
-        d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
-        animate={{ y: isTriggered ? -2.5 : 0 }}
-        transition={{ type: "spring", stiffness: 350, damping: 20 }}
-      />
-      <path d="m2 12 8.58 3.91a2 2 0 0 0 1.66 0L21 12" />
-      <m.path
-        d="m2 17 8.58 3.91a2 2 0 0 0 1.66 0L21 17"
-        animate={{ y: isTriggered ? 2.5 : 0 }}
-        transition={{ type: "spring", stiffness: 350, damping: 20 }}
-      />
-    </svg>
+      <g transform="translate(0, 1) scale(0.92) translate(1, 0)">
+        <m.path
+          d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
+          animate={{ y: isTriggered ? -2 : 0 }}
+          transition={{ type: "spring", stiffness: 350, damping: 20 }}
+        />
+        <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+        <m.path
+          d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"
+          animate={{ y: isTriggered ? 2 : 0 }}
+          transition={{ type: "spring", stiffness: 350, damping: 20 }}
+        />
+      </g>
+    </m.svg>
   );
 }
 
