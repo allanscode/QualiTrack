@@ -78,6 +78,7 @@ interface AuditingQueueViewProps {
     satisfaction_has_record?: boolean;
     satisfaction_record_text?: string;
     aiEvaluation?: AIEvaluationResult;
+    child_evaluation?: ChildTicketAiEvaluation;
     ticket_fields?: { title: string; value: string }[];
     isAiLocked?: boolean;
     customerType?: string;
@@ -576,6 +577,7 @@ export default function AuditingQueueView({
       ticket_fields: draft.result?.ticket_fields || ticket.ticket_fields,
       isAiLocked: true,
       customerType,
+      child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
     });
   };
 
@@ -864,6 +866,8 @@ export default function AuditingQueueView({
       satisfaction_result: 'Sem pesquisa',
       isAiLocked: true,
       customerType,
+      ticket_fields: ticket.ticket_fields,
+      child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
     });
   };
 

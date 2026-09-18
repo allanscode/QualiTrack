@@ -1,0 +1,154 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.108.2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+
+/**
+ * Edge Function: helpdesk-webhook
+ * Receptor oficial e seguro para eventos orientados a webhook do Zendesk (Opção B).
+ * 
+ * SEGURANÇA:
+ * Exige cabeçalho de autenticação compartilhado:
+ * - Header `x-qualitrack-webhook-token` OU `Authorization: Bearer <token>`
+ * - Comparado estritamente com `HELPDESK_WEBHOOK_SECRET` nos Secrets do Supabase.
+ * - Requisições sem o token ou com token inválido recebem HTTP 401 Unauthorized imediato.
+ */
+
+const WebhookPayloadSchema = z.object({
+  event: z.enum(['csat_bad', 'child_ticket_created', 'ticket_updated', 'ping']).default('ticket_updated'),
+  ticket_id: z.union([z.string(), z.number()]).transform(v => String(v)),
+  subject: z.string().optional(),
+  requester_name: z.string().optional(),
+  assignee_name: z.string().optional(),
+  assignee_email: z.string().optional(),
+  group_name: z.string().optional(),
+  csat_status: z.enum(['bad', 'good', 'offered', 'unrated']).optional(),
+  csat_comment: z.string().optional(),
+  parent_ticket_id: z.union([z.string(), z.number()]).optional().transform(v => v ? String(v) : undefined),
+  macro_type: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  ticket_fields: z.array(z.object({
+    title: z.string(),
+    value: z.string(),
+  })).optional(),
+  timestamp: z.string().optional(),
+});
+
+serve(async (req: Request) => {
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-qualitrack-webhook-token',
+      },
+    });
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Método não permitido. Utilize POST.' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // 1. VALIDAÇÃO RIGOROSA DE AUTENTICAÇÃO DO WEBHOOK
+  const expectedSecret = Deno.env.get('HELPDESK_WEBHOOK_SECRET');
+  if (!expectedSecret) {
+    console.error('[helpdesk-webhook] Erro de configuração: HELPDESK_WEBHOOK_SECRET não definido no Supabase Secrets');
+    return new Response(JSON.stringify({ error: 'Configuração de autenticação pendente no servidor' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const customHeaderToken = req.headers.get('x-qualitrack-webhook-token');
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
+  const bearerToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
+
+  const clientToken = customHeaderToken?.trim() || bearerToken;
+
+  if (!clientToken || clientToken !== expectedSecret) {
+    console.warn('[helpdesk-webhook] Tentativa não autorizada rejeitada (token ausente ou inválido)');
+    return new Response(JSON.stringify({
+      error: 'Unauthorized: Webhook token inválido ou ausente. Forneça o header x-qualitrack-webhook-token correto.',
+    }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // 2. PARSE E PROCESSAMENTO DO PAYLOAD
+  try {
+    const rawBody = await req.json().catch(() => null);
+    if (!rawBody) {
+      return new Response(JSON.stringify({ error: 'Payload JSON inválido ou vazio' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const parseResult = WebhookPayloadSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({
+        error: 'Schema do payload inválido',
+        details: parseResult.error.format(),
+      }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const payload = parseResult.data;
+
+    // Resposta rápida para pings de teste do Zendesk
+    if (payload.event === 'ping') {
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'QualiTrack Webhook endpoint ativo e autenticado com sucesso.',
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Registra log para auditoria de administradores
+    try {
+      await supabase.from('ai_evaluation_logs').insert({
+        ticket_id: payload.ticket_id,
+        ticket_subject: payload.subject || `Webhook Event: ${payload.event}`,
+        evaluation_type: payload.event === 'child_ticket_created' ? 'chamado_filho' : 'atendimento',
+        provider: 'gemini',
+        model: 'webhook-trigger',
+        prompt_text: `Evento recebido via Webhook Zendesk: ${payload.event}`,
+        response_json: payload,
+        status: 'success',
+      });
+    } catch (logErr) {
+      console.warn('[helpdesk-webhook] Aviso ao registrar log de webhook:', logErr);
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: `Evento '${payload.event}' do ticket #${payload.ticket_id} recebido e autenticado com sucesso.`,
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  } catch (error: any) {
+    console.error('[helpdesk-webhook] Erro interno:', error);
+    return new Response(JSON.stringify({
+      error: 'Erro interno ao processar webhook',
+      message: error?.message,
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+});

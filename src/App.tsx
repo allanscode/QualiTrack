@@ -403,6 +403,8 @@ function MainApp({
       isAiLocked: prefill.isAiLocked,
       customerType: prefill.customerType,
       ticket_fields: prefill.ticket_fields || prefill.aiEvaluation?.ticket_fields,
+      aiEvaluation: prefill.aiEvaluation,
+      childAiEvaluation: prefill.child_evaluation || prefill.childAiEvaluation,
       ...(prefill.aiEvaluation ? {
         answers: prefill.aiEvaluation.suggested_answers,
         question_observations: prefill.aiEvaluation.suggested_observations,
@@ -981,7 +983,7 @@ function MainApp({
                       <span>{notifications.length} evento(s) no histórico</span>
                       {unreadNotificationsCount === 0 && (
                         <span className="inline-flex items-center gap-1 text-functional-success font-bold">
-                          <CheckCheck className="w-3 h-3" /> Envelope aberto (em dia)
+                          <CheckCheck className="w-3 h-3" /> Em dia
                         </span>
                       )}
                     </div>

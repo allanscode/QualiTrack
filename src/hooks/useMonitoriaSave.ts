@@ -159,7 +159,11 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           client_contact_log: deps.header.client_contact_success ? deps.header.client_contact_log : '',
           client_contact_success: deps.header.client_contact_success,
           active: true,
-          form_snapshot: deps.selectedForm,
+          form_snapshot: {
+            ...(deps.selectedForm as any),
+            ai_evaluation: (deps.initialData as any)?.aiEvaluation || (deps.initialData as any)?.form_snapshot?.ai_evaluation,
+            child_ai_evaluation: (deps.initialData as any)?.childAiEvaluation || (deps.initialData as any)?.form_snapshot?.child_ai_evaluation,
+          },
           history: [...(deps.initialData?.history || []), historyEntry],
           action_deadline_at: (deps.initialData?.action_deadline_at && !deps.isReevaluating && !deps.isAdminEdit) ? deps.initialData.action_deadline_at : getDeadline(),
           evaluator_name: currentUser.name,

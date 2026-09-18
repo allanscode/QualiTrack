@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { User, Monitoria } from '../types';
+import { User, Monitoria, AIEvaluationResult, ChildTicketAiEvaluation } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../providers/ThemeProvider';
 import {
@@ -11,6 +11,11 @@ import {
   AlertOctagon,
   Info,
   CheckCircle2,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Bot,
+  RotateCcw,
   MessageSquare,
   Hash,
   Clock,
@@ -77,6 +82,14 @@ export default function MonitoriaForm({
   const isViewOnly = !!(initialData as any)?.id && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit;
   const isReevaluating = !!(initialData as any)?._reevaluate;
   const isAdminEdit = !!(initialData as any)?._adminEdit;
+
+  const aiEval: AIEvaluationResult | undefined =
+    (initialData as any)?.aiEvaluation ||
+    (initialData as any)?.form_snapshot?.ai_evaluation;
+
+  const childAiEval: ChildTicketAiEvaluation | undefined =
+    (initialData as any)?.childAiEvaluation ||
+    (initialData as any)?.form_snapshot?.child_ai_evaluation;
 
   const shouldReduceMotion = useReducedMotion();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -891,6 +904,66 @@ export default function MonitoriaForm({
                           </div>
                         </div>
                         <textarea value={observations[q.id] || ''} onChange={e => !isViewOnly && setObservations({...observations, [q.id]: e.target.value})} placeholder="Adicionar observação específica para este item..." className="w-full mt-4 bg-surface-subtle border border-surface-border rounded-lg p-3 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all" disabled={isViewOnly} />
+
+                        {/* Base de Confronto da IA (quando avaliado previamente) */}
+                        {(() => {
+                          const aiAnswer = aiEval?.suggested_answers?.[q.id];
+                          const aiObs = aiEval?.suggested_observations?.[q.id];
+                          const aiCrit = aiEval?.suggested_critical_errors?.[q.id];
+                          if (!aiAnswer && !aiObs && aiCrit === undefined) return null;
+
+                          return (
+                            <div className="mt-3 p-3.5 rounded-xl bg-surface-subtle/70 border border-brand-highlight/20 space-y-2">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <div className="flex items-center gap-1.5 text-xs font-black text-brand-highlight">
+                                  <Bot className="w-3.5 h-3.5" />
+                                  <span>Base de Confronto da IA</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {aiAnswer && (
+                                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                                      aiAnswer === 'SIM'
+                                        ? 'bg-functional-success/10 text-functional-success border-functional-success/25'
+                                        : aiAnswer === 'NAO'
+                                        ? 'bg-functional-error/10 text-functional-error border-functional-error/25'
+                                        : 'bg-surface-subtle text-brand-muted border-surface-border'
+                                    }`}>
+                                      Sugestão IA: {aiAnswer}
+                                    </span>
+                                  )}
+                                  {aiCrit && (
+                                    <Badge variant="error" size="sm" className="text-[9px] font-black">
+                                      Erro Crítico Apontado
+                                    </Badge>
+                                  )}
+                                  {!isViewOnly && aiObs && observations[q.id] !== aiObs && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setObservations(prev => ({ ...prev, [q.id]: aiObs }))}
+                                      className="text-[10px] font-bold text-brand-muted hover:text-brand-highlight underline flex items-center gap-1 cursor-pointer transition-colors"
+                                      title="Restaurar a justificativa/citação original da IA neste campo"
+                                    >
+                                      <RotateCcw className="w-2.5 h-2.5" />
+                                      Restaurar texto da IA
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              {aiObs ? (
+                                <div className="text-[11px] text-brand-muted bg-surface-card p-2.5 rounded-lg border border-surface-border leading-relaxed select-text">
+                                  <span className="font-bold text-brand-primary block text-[10px] uppercase tracking-wider mb-1">
+                                    Evidência / Motivo apurado pela IA no diálogo:
+                                  </span>
+                                  <p className="font-mono text-[11px] text-brand-primary/90 bg-surface-subtle/50 p-2 rounded border border-surface-border/50">
+                                    "{aiObs}"
+                                  </p>
+                                </div>
+                              ) : (
+                                <p className="text-[10px] text-brand-muted italic">Critério validado automaticamente sem observação adicional.</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </Card>
                     ))}
                   </div>
@@ -929,6 +1002,164 @@ export default function MonitoriaForm({
                   className="w-full bg-surface-card border border-surface-border rounded-xl p-5 text-xs font-medium min-h-[150px] focus:border-brand-accent focus:outline-none shadow-premium-sm"
                   placeholder="Escreva aqui as observações gerais da auditoria..."
                 />
+
+                {/* Retorno da Base de Avaliação e Confronto da IA */}
+                {(aiEval || childAiEval) && (
+                  <div className="mt-4 rounded-2xl border border-brand-highlight/25 bg-surface-card p-6 shadow-premium space-y-5 animate-fade-in">
+                    <div className="flex items-center justify-between pb-3 border-b border-surface-border">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center flex-shrink-0">
+                          <Bot className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-brand-primary tracking-wider">
+                            Base de Confronto e Avaliação da IA
+                          </h4>
+                          <p className="text-[10px] text-brand-muted">
+                            Retorno detalhado dos motivos, regras e evidências levantadas pela IA para confronto do auditor
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {aiEval?.score !== undefined && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-brand-muted uppercase">Score IA:</span>
+                            <Badge variant={aiEval.score >= 85 ? 'success' : aiEval.score >= 70 ? 'warning' : 'error'} className="font-mono font-bold">
+                              {Math.round(aiEval.score)}%
+                            </Badge>
+                          </div>
+                        )}
+                        {!isViewOnly && !isReevaluating && aiEval?.summary && header.evaluator_note !== aiEval.summary && (
+                          <button
+                            type="button"
+                            onClick={() => setHeader(prev => ({ ...prev, evaluator_note: aiEval.summary }))}
+                            className="text-[10px] font-bold text-brand-muted hover:text-brand-highlight underline flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Restaurar o parecer geral original sugerido pela IA"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            Restaurar parecer da IA
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Motivos Avaliados nos Confrontos (Melhorias / Falhas Apontadas) */}
+                    {aiEval?.improvements && aiEval.improvements.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs font-black text-functional-error uppercase tracking-wider">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          <span>Motivos Avaliados nos Confrontos / Oportunidades de Melhoria ({aiEval.improvements.length})</span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2">
+                          {aiEval.improvements.map((imp, idx) => (
+                            <div key={idx} className="flex items-start gap-2.5 p-3 rounded-xl bg-functional-error/5 border border-functional-error/15 text-xs">
+                              <span className="w-4 h-4 rounded-full bg-functional-error/10 text-functional-error flex items-center justify-center text-[10px] font-black flex-shrink-0 mt-0.5">
+                                {idx + 1}
+                              </span>
+                              <p className="text-brand-primary leading-relaxed font-medium">{imp}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pontos Fortes Constatados pela IA */}
+                    {aiEval?.strengths && aiEval.strengths.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs font-black text-functional-success uppercase tracking-wider">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          <span>Pontos Fortes Identificados ({aiEval.strengths.length})</span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2">
+                          {aiEval.strengths.map((st, idx) => (
+                            <div key={idx} className="flex items-start gap-2.5 p-3 rounded-xl bg-functional-success/5 border border-functional-success/15 text-xs">
+                              <span className="w-4 h-4 rounded-full bg-functional-success/10 text-functional-success flex items-center justify-center text-[10px] font-black flex-shrink-0 mt-0.5">
+                                ✓
+                              </span>
+                              <p className="text-brand-primary leading-relaxed font-medium">{st}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Se for Chamado Filho: Regras e Confrontos do POP v1.1 */}
+                    {childAiEval && (
+                      <div className="space-y-3 pt-3 border-t border-surface-border">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-brand-primary uppercase tracking-wider">
+                              Confronto de Padrão do Chamado Filho
+                            </span>
+                            <Badge variant={childAiEval.status === 'conforme' ? 'success' : childAiEval.status === 'nao_conforme' ? 'error' : 'warning'}>
+                              {childAiEval.status === 'conforme' ? 'Conforme' : childAiEval.status === 'nao_conforme' ? 'Não Conforme' : 'Atenção'}
+                            </Badge>
+                          </div>
+                          {childAiEval.score !== undefined && (
+                            <span className="text-xs font-mono font-bold text-brand-muted">
+                              Conformidade: {childAiEval.score}%
+                            </span>
+                          )}
+                        </div>
+
+                        {childAiEval.checks && childAiEval.checks.length > 0 && (
+                          <div className="grid grid-cols-1 gap-2">
+                            {childAiEval.checks.map((chk, idx) => (
+                              <div
+                                key={idx}
+                                className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                                  chk.passed
+                                    ? 'bg-functional-success/5 border-functional-success/20'
+                                    : 'bg-functional-error/5 border-functional-error/20'
+                                }`}
+                              >
+                                {chk.passed ? (
+                                  <CheckCircle className="w-4 h-4 text-functional-success flex-shrink-0 mt-0.5" />
+                                ) : (
+                                  <XCircle className="w-4 h-4 text-functional-error flex-shrink-0 mt-0.5" />
+                                )}
+                                <div className="space-y-0.5 flex-1">
+                                  <p className="font-bold text-brand-primary">{chk.rule}</p>
+                                  <p className="text-[11px] text-brand-muted leading-relaxed">{chk.details}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {childAiEval.recommendations && childAiEval.recommendations.length > 0 && (
+                          <div className="p-3 bg-surface-subtle rounded-xl border border-surface-border space-y-1.5">
+                            <p className="text-[10px] font-black uppercase text-brand-muted tracking-wider">Orientações Práticas da IA:</p>
+                            <ul className="list-disc list-inside space-y-1 text-xs text-brand-muted">
+                              {childAiEval.recommendations.map((rec, idx) => (
+                                <li key={idx} className="leading-relaxed">{rec}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Contexto dos Campos do Ticket Utilizados no Confronto */}
+                    {Array.isArray((initialData as any)?.ticket_fields) && (initialData as any).ticket_fields.length > 0 && (
+                      <div className="pt-3 border-t border-surface-border">
+                        <details className="group/ticketFields">
+                          <summary className="text-[10px] font-black uppercase text-brand-muted tracking-wider cursor-pointer hover:text-brand-primary flex items-center gap-1">
+                            <span>Visualizar dados do formulário Zendesk confrontados ({ (initialData as any).ticket_fields.length } campos)</span>
+                          </summary>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 pt-2">
+                            {(initialData as any).ticket_fields.map((f: { title: string; value: string }, idx: number) => (
+                              <div key={idx} className="p-2 rounded bg-surface-subtle border border-surface-border text-xs">
+                                <span className="font-semibold text-brand-primary block text-[10px]">{f.title}:</span>
+                                <span className="text-brand-muted text-[11px]">{f.value || '—'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {(() => {
