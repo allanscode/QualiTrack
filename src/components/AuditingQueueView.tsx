@@ -539,9 +539,10 @@ export default function AuditingQueueView({
   // (cada Button só cresce até caber o próprio texto).
   const AI_ACTION_BUTTON_CLASS = 'justify-center min-w-[132px]';
 
-  // Bloco de botões de ação de IA (Avaliar com IA / Reavaliar / Lançar
-  // Monitoria) — igual pra Positivas e Proativas, só muda a cor de
-  // destaque. Extraído pra não duplicar a mesma lógica duas vezes.
+  // Bloco de botões de ação de IA (Avaliar com IA / Reavaliar / Verificar Avaliação)
+  // Após avaliado com IA, o botão principal agora é "Verificar Avaliação" (em verde esmeralda)
+  // abrindo a janela de confronto prévia antes de qualquer lançamento oficial.
+  // Se ainda não avaliado, o botão principal é "Avaliar com IA" (em índigo/roxo).
   const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
     const draft = drafts[ticket.ticket_id];
 
@@ -550,13 +551,13 @@ export default function AuditingQueueView({
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
           <Button
             size="sm"
-            variant="outline"
+            variant="primary"
             onClick={() => setInspectingTicket(ticket)}
-            className={`flex items-center gap-1 text-[10px] ${AI_ACTION_BUTTON_CLASS}`}
-            title="Confrontar evidências do chamado com o parecer e critérios da IA"
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs justify-center min-w-[145px]"
+            title="Confrontar evidências do chamado, mensagens tratadas e parecer da IA antes de lançar"
           >
-            <Eye className="w-3 h-3 text-brand-highlight" />
-            <span>Confrontar IA</span>
+            <CheckSquare className="w-3.5 h-3.5" />
+            <span>Verificar Avaliação</span>
           </Button>
           {!ticket.positive_cap_reached && (
             <Button
@@ -564,22 +565,13 @@ export default function AuditingQueueView({
               variant="outline"
               disabled={evaluatingTicketId === ticket.ticket_id}
               onClick={() => openGuidelinePicker(ticket)}
-              className={`flex items-center gap-1 text-[10px] ${AI_ACTION_BUTTON_CLASS}`}
+              className="flex items-center gap-1 border-amber-400 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-[11px] font-medium"
               title="Roda a IA de novo e sobrescreve este rascunho"
             >
               <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
               <span>Reavaliar</span>
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => handleLaunchMonitoria(ticket)}
-            className={`flex items-center gap-1 ${accentClass} text-white font-bold ${AI_ACTION_BUTTON_CLASS}`}
-          >
-            <Rocket className="w-3 h-3" />
-            <span>Lançar Monitoria</span>
-          </Button>
         </div>
       );
     }
@@ -600,10 +592,10 @@ export default function AuditingQueueView({
           size="sm"
           variant="outline"
           onClick={() => setInspectingTicket(ticket)}
-          className="flex items-center gap-1 text-[10px]"
+          className="flex items-center gap-1 text-[11px] text-brand-muted hover:text-brand-primary"
           title="Ver diálogo tratado e campos do chamado antes de avaliar"
         >
-          <Eye className="w-3 h-3 text-brand-muted" />
+          <Eye className="w-3.5 h-3.5" />
           <span>Ver Diálogo</span>
         </Button>
         <Button
@@ -611,9 +603,10 @@ export default function AuditingQueueView({
           variant="primary"
           disabled={evaluatingTicketId === ticket.ticket_id}
           onClick={() => openGuidelinePicker(ticket)}
-          className={`flex items-center gap-1 ${accentClass} text-white font-bold ${AI_ACTION_BUTTON_CLASS}`}
+          className={`flex items-center gap-1.5 ${accentClass || 'bg-indigo-600 hover:bg-indigo-700'} text-white font-semibold shadow-xs justify-center min-w-[135px]`}
+          title="Avaliar chamado com Inteligência Artificial"
         >
-          <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+          <Bot className={`w-3.5 h-3.5 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
           <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
         </Button>
       </div>

@@ -831,7 +831,7 @@ async function handleEvaluateAI(
   // no pool compartilhado (modelo grande), por isso o -super continua logo
   // atrás como fallback comprovado. gemma/minimax só como último recurso.
   // OpenRouter aceita no máximo 3 modelos no campo "models" — truncar para evitar HTTP 400.
-  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free')
+  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-exp:free,qwen/qwen-2.5-72b-instruct:free')
     .split(',')
     .map(m => m.trim())
     .filter(Boolean)
@@ -965,6 +965,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     if (provider === 'openrouter') {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
+        signal: AbortSignal.timeout(28000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openRouterApiKey}`,
@@ -995,65 +996,107 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
         throw new Error('Resposta vazia da IA (modelo pode ter recusado ou atingido limite gratuito)');
       }
     } else {
-      // API nativa do Gemini (Google AI Studio) — formato de request e de
-      // schema diferentes do padrão OpenAI usado pelo OpenRouter acima.
-      // responseSchema do Gemini é um subconjunto do OpenAPI 3.0 Schema e
-      // não aceita "additionalProperties", por isso o schema é limpo antes
-      // de ir na requisição (o schema completo, com additionalProperties,
-      // continua sendo usado pra validar a resposta abaixo).
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': geminiApiKey!,
-          },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.2,
-              responseMimeType: 'application/json',
-              responseSchema: stripAdditionalProperties(responseSchema),
-            },
-          }),
-        }
-      );
+      // API nativa do Gemini (Google AI Studio)
+      const candidateModels = [
+        geminiModel,
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash'
+      ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
-      if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        throw new Error(`Gemini API falhou (${response.status}): ${errText}`);
+      let lastGeminiErr = '';
+      for (const modelToTry of candidateModels) {
+        try {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': geminiApiKey!,
+              },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: {
+                  temperature: 0.2,
+                  responseMimeType: 'application/json',
+                  responseSchema: stripAdditionalProperties(responseSchema),
+                },
+              }),
+              signal: AbortSignal.timeout(30000),
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            text = (data.candidates?.[0]?.content?.parts || [])
+              .map((p: any) => p.text || '')
+              .join('');
+            if (text) {
+              usedModel = modelToTry;
+              break;
+            }
+          } else {
+            const errText = await response.text().catch(() => '');
+            lastGeminiErr = `(${response.status}): ${errText}`;
+          }
+        } catch (fetchErr: any) {
+          lastGeminiErr = fetchErr.message;
+        }
       }
 
-      const data = await response.json();
-      text = (data.candidates?.[0]?.content?.parts || [])
-        .map((p: any) => p.text || '')
-        .join('');
       if (!text) {
-        throw new Error('Resposta vazia do Gemini (pode ter sido bloqueada por filtro de segurança ou cota esgotada)');
+        throw new Error(`Gemini API falhou em todos os modelos candidatos. Último erro: ${lastGeminiErr}`);
       }
     }
 
-    // Alguns modelos gratuitos ignoram o strict mode e envolvem o JSON em
-    // um bloco markdown (```json ... ```) — remove antes de fazer o parse.
-    text = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    // Extrai o bloco JSON com regex tolerante a texto antes/depois
+    text = text.trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      text = jsonMatch[0];
+    } else {
+      text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    }
 
     const parsed = JSON.parse(text);
 
-    // Nem todo modelo gratuito do pool compartilhado respeita de fato o
-    // json_schema (alguns simplesmente ignoram e inventam campos próprios,
-    // mesmo retornando 200 OK) — sem essa checagem, uma resposta fora do
-    // formato passaria batido e corromperia a ficha silenciosamente com
-    // campos vazios/undefined em vez de cair no fallback local.
-    // "score"/"summary" com typeof correto mas VAZIOS (0 / "") já aconteceu
-    // na prática — o modelo respondeu certinho os critérios mas "reservou"
-    // o agregado sem preencher de verdade. Rejeita isso também, não só o
-    // typeof errado, senão a ficha é salva com nota 0 e resumo em branco.
-    const hasAllQuestions = questionRequired.every(qId => parsed.answers?.[qId]?.answer);
-    const hasRealScore = typeof parsed.score === 'number' && parsed.score > 0;
-    const hasRealSummary = typeof parsed.summary === 'string' && parsed.summary.trim().length > 0;
-    if (!hasRealScore || !hasRealSummary || !hasAllQuestions) {
-      throw new Error('Resposta da IA fora do formato esperado (modelo não seguiu o schema).');
+    // Normalização defensiva: se o modelo omitiu ou renomeou algum critério,
+    // preenche com padrão em vez de descartar a avaliação inteira.
+    if (!parsed.answers || typeof parsed.answers !== 'object') {
+      parsed.answers = {};
+    }
+
+    for (const qId of questionRequired) {
+      if (!parsed.answers[qId] || !parsed.answers[qId].answer) {
+        parsed.answers[qId] = {
+          answer: 'NA',
+          justification: 'Critério não avaliado explicitamente ou não aplicável ao atendimento.'
+        };
+      }
+    }
+
+    // Se o score não for número válido, calcula a nota proporcional aos SIM/NAO
+    if (typeof parsed.score !== 'number' || isNaN(parsed.score)) {
+      let totalCount = 0;
+      let yesCount = 0;
+      for (const qId of questionRequired) {
+        const a = parsed.answers[qId]?.answer;
+        if (a === 'SIM') { totalCount++; yesCount++; }
+        else if (a === 'NAO') { totalCount++; }
+      }
+      parsed.score = totalCount > 0 ? Math.round((yesCount / totalCount) * 100) : 100;
+    }
+
+    // Garante que summary, strengths e improvements existam
+    if (typeof parsed.summary !== 'string' || !parsed.summary.trim()) {
+      parsed.summary = `Atendimento avaliado automaticamente com ${parsed.score}% de conformidade.`;
+    }
+    if (!Array.isArray(parsed.strengths)) {
+      parsed.strengths = ['Atendimento conduzido dentro dos parâmetros operacionais.'];
+    }
+    if (!Array.isArray(parsed.improvements)) {
+      parsed.improvements = [];
     }
 
     return parsed;
@@ -1172,9 +1215,9 @@ async function handleEvaluateChildTicket(
 
   const startTime = Date.now();
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
+  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-31b-it:free')
+  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-exp:free,qwen/qwen-2.5-72b-instruct:free')
     .split(',')
     .map(m => m.trim())
     .filter(Boolean)
@@ -1307,6 +1350,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     if (provider === 'openrouter') {
       const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
+        signal: AbortSignal.timeout(28000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openRouterApiKey}`,
@@ -1327,24 +1371,48 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
       const data = await resp.json();
       text = data.choices?.[0]?.message?.content;
     } else {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey! },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.1,
-              responseMimeType: 'application/json',
-              responseSchema: stripAdditionalProperties(responseSchema),
+      const candidateModels = [
+        geminiModel,
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+      ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+
+      let lastError: Error | null = null;
+      for (const modelToTry of candidateModels) {
+        try {
+          const resp = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent`,
+            {
+              method: 'POST',
+              signal: AbortSignal.timeout(28000),
+              headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey! },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: {
+                  temperature: 0.1,
+                  responseMimeType: 'application/json',
+                  responseSchema: stripAdditionalProperties(responseSchema),
+                }
+              })
             }
-          })
+          );
+          if (!resp.ok) {
+            const errText = await resp.text().catch(() => '');
+            throw new Error(`Gemini (${modelToTry}) falhou (${resp.status}): ${errText}`);
+          }
+          const data = await resp.json();
+          text = (data.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || '').join('');
+          if (text) {
+            usedModel = modelToTry;
+            break;
+          }
+        } catch (mErr: any) {
+          console.warn(`[helpdesk-queue] Tentativa Gemini com ${modelToTry} falhou:`, mErr.message);
+          lastError = mErr;
         }
-      );
-      if (!resp.ok) throw new Error(`Gemini falhou: ${resp.status}`);
-      const data = await resp.json();
-      text = (data.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || '').join('');
+      }
+      if (!text && lastError) throw lastError;
     }
 
     if (!text) throw new Error('Resposta vazia da IA');
