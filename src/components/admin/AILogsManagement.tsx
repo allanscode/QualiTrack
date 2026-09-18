@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../../lib/supabase';
 import { AIEvaluationLog, User } from '../../types';
 import {
@@ -35,6 +36,15 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
   const [selectedLog, setSelectedLog] = useState<AIEvaluationLog | null>(null);
   const [inspectorTab, setInspectorTab] = useState<'prompt' | 'dialogue' | 'response' | 'metrics'>('response');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: !!selectedLog } }));
+    return () => {
+      if (selectedLog) {
+        window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: false } }));
+      }
+    };
+  }, [selectedLog]);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -247,10 +257,10 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
         </div>
       )}
 
-      {/* Modal de Inspeção Detalhada */}
-      {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-surface-card border border-surface-border rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      {/* Modal de Inspeção Detalhada com createPortal e z-[9999] */}
+      {selectedLog && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
+          <div className="bg-surface-card border border-surface-border rounded-2xl w-full max-w-4xl h-[92vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
             {/* Header Modal */}
             <div className="p-4 border-b border-surface-border flex items-center justify-between bg-surface-subtle/50">
               <div className="flex items-center gap-3">
@@ -428,13 +438,14 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
             </div>
 
             {/* Rodapé Modal */}
-            <div className="p-3 border-t border-surface-border flex justify-end bg-surface-subtle/50">
+            <div className="p-3 border-t border-surface-border flex justify-end bg-surface-subtle/50 flex-shrink-0">
               <Button size="sm" variant="primary" onClick={() => setSelectedLog(null)}>
                 Fechar
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

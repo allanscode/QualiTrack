@@ -78,10 +78,21 @@ interface AuditingQueueViewProps {
     satisfaction_has_record?: boolean;
     satisfaction_record_text?: string;
     aiEvaluation?: AIEvaluationResult;
+    ticket_fields?: { title: string; value: string }[];
     isAiLocked?: boolean;
     customerType?: string;
   }) => void;
   onModalStateChange?: (isOpen: boolean) => void;
+}
+
+// Gerenciador global de tickets atualmente em avaliação pela IA (persiste mesmo ao alternar abas/telas)
+const globalEvaluatingTickets = new Set<string>();
+const globalEvaluatingListeners = new Set<() => void>();
+
+function notifyGlobalEvaluating() {
+  globalEvaluatingListeners.forEach(fn => {
+    try { fn(); } catch {}
+  });
 }
 
 export default function AuditingQueueView({
@@ -101,6 +112,18 @@ export default function AuditingQueueView({
 
   // Estado para modal/visualização rápida de IA
   const [evaluatingTicketId, setEvaluatingTicketId] = useState<string | null>(null);
+
+  // Escuta mudanças nas avaliações globais que continuam rodando ao trocar de aba
+  const [, setGlobalEvalTick] = useState(0);
+  useEffect(() => {
+    const handleUpdate = () => setGlobalEvalTick(t => t + 1);
+    globalEvaluatingListeners.add(handleUpdate);
+    return () => {
+      globalEvaluatingListeners.delete(handleUpdate);
+    };
+  }, []);
+
+  const isEvaluatingTicket = (ticketId: string) => globalEvaluatingTickets.has(ticketId) || evaluatingTicketId === ticketId;
 
   // Estado para auditoria de conformidade de chamados filhos
   const [evaluatingChildTicketId, setEvaluatingChildTicketId] = useState<string | null>(null);
@@ -307,6 +330,8 @@ export default function AuditingQueueView({
     const teamId = matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0] || ticket.team_id;
     const agentId = ticket.agent_id || matchedAgent?.id;
 
+    globalEvaluatingTickets.add(ticket.ticket_id);
+    notifyGlobalEvaluating();
     setEvaluatingTicketId(ticket.ticket_id);
 
     // Toast de progresso por etapas (apenas quando não está em modo silencioso/lote)
@@ -324,6 +349,7 @@ export default function AuditingQueueView({
         ticket.organization_name = organizationName || ticket.organization_name;
         ticket.organization_tags = organizationTags || ticket.organization_tags;
       }
+      ticket.ticket_fields = ticketFields;
 
       if (toastId) toast.loading(
         `🤖 Etapa 2/3 · Analisando com IA (Gemini → OpenRouter como fallback)...`,
@@ -336,6 +362,8 @@ export default function AuditingQueueView({
         team_name: teamId ? teamsMap[teamId] : undefined,
         channel: ticket.channel,
       }, guidelineIds, ticketFields);
+
+      aiResult.ticket_fields = ticketFields;
 
       if (toastId) toast.loading(
         `💾 Etapa 3/3 · Salvando rascunho...`,
@@ -386,6 +414,8 @@ export default function AuditingQueueView({
       }
       throw err; // relança para o batch capturar individualmente
     } finally {
+      globalEvaluatingTickets.delete(ticket.ticket_id);
+      notifyGlobalEvaluating();
       setEvaluatingTicketId(null);
     }
   };
@@ -510,7 +540,32 @@ export default function AuditingQueueView({
       satisfaction_has_record: !!draft.satisfaction_comment,
       satisfaction_record_text: draft.satisfaction_comment,
       aiEvaluation: draft.result,
+      ticket_fields: draft.result?.ticket_fields || ticket.ticket_fields,
       isAiLocked: true,
+      customerType,
+    });
+  };
+
+  // Inicia auditoria manual direta (sem IA prévia) abrindo o fluxo oficial 1-2-3-4
+  const handleStartManualAudit = (ticket: AuditingQueueTicket) => {
+    const matchedAgent = agents.find(a =>
+      (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
+      (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
+    );
+    const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
+    const { form: autoForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
+
+    onStartAudit({
+      ticket_id: ticket.ticket_id,
+      ticket_subject: ticket.subject,
+      form_id: autoForm?.id,
+      evaluated_id: ticket.agent_id || matchedAgent?.id,
+      team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
+      channel: normalizeChannel(ticket.channel),
+      satisfaction_result: csatStatusToSatisfactionResult(ticket.csat_status),
+      satisfaction_has_record: !!ticket.csat_comment,
+      satisfaction_record_text: ticket.csat_comment,
+      ticket_fields: ticket.ticket_fields,
       customerType,
     });
   };
@@ -550,6 +605,26 @@ export default function AuditingQueueView({
   // diretamente o formulário oficial no fluxo das 4 etapas (1-2-3-4) para ir batendo os dados.
   // Se ainda não avaliado, o botão principal é "Avaliar com IA" (índigo/roxo) ou "Auditar Manual".
   const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
+    const isEvaluating = isEvaluatingTicket(ticket.ticket_id);
+
+    // Se o ticket está em processo de avaliação (mesmo que o usuário tenha mudado de tela/aba),
+    // mantém o botão em loading ativo até concluir!
+    if (isEvaluating) {
+      return (
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={true}
+            className="flex items-center gap-1.5 bg-indigo-600/80 text-white font-semibold shadow-xs justify-center min-w-[145px] cursor-not-allowed"
+          >
+            <Bot className="w-3.5 h-3.5 animate-spin" />
+            <span>Analisando com IA...</span>
+          </Button>
+        </div>
+      );
+    }
+
     const draft = drafts[ticket.ticket_id];
 
     if (draft) {
@@ -569,12 +644,12 @@ export default function AuditingQueueView({
             <Button
               size="sm"
               variant="outline"
-              disabled={evaluatingTicketId === ticket.ticket_id}
+              disabled={isEvaluating}
               onClick={() => openGuidelinePicker(ticket)}
               className="flex items-center gap-1 border-amber-400 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-[11px] font-medium"
               title="Roda a IA de novo e sobrescreve este rascunho"
             >
-              <Bot className={`w-3 h-3 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+              <Bot className={`w-3 h-3 ${isEvaluating ? 'animate-spin' : ''}`} />
               <span>Reavaliar</span>
             </Button>
           )}
@@ -597,7 +672,7 @@ export default function AuditingQueueView({
         <Button
           size="sm"
           variant="outline"
-          onClick={() => handleLaunchMonitoria(ticket)}
+          onClick={() => handleStartManualAudit(ticket)}
           className="flex items-center gap-1 text-[11px] text-brand-muted hover:text-brand-primary"
           title="Abrir monitoria manual no fluxo oficial 1-2-3-4"
         >
@@ -607,13 +682,13 @@ export default function AuditingQueueView({
         <Button
           size="sm"
           variant="primary"
-          disabled={evaluatingTicketId === ticket.ticket_id}
+          disabled={isEvaluating}
           onClick={() => openGuidelinePicker(ticket)}
           className={`flex items-center gap-1.5 ${accentClass || 'bg-indigo-600 hover:bg-indigo-700'} text-white font-semibold shadow-xs justify-center min-w-[135px]`}
           title="Avaliar chamado com Inteligência Artificial"
         >
-          <Bot className={`w-3.5 h-3.5 ${evaluatingTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
-          <span>{evaluatingTicketId === ticket.ticket_id ? 'Analisando...' : 'Avaliar com IA'}</span>
+          <Bot className={`w-3.5 h-3.5 ${isEvaluating ? 'animate-spin' : ''}`} />
+          <span>{isEvaluating ? 'Analisando...' : 'Avaliar com IA'}</span>
         </Button>
       </div>
     );
@@ -943,6 +1018,7 @@ export default function AuditingQueueView({
                         team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
                         channel: normalizeChannel(ticket.channel),
                         satisfaction_result: 'Negativa',
+                        ticket_fields: ticket.ticket_fields,
                         isAiLocked: true,
                         customerType,
                       });

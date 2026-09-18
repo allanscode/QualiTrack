@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { AIEvaluationGuideline, User } from '../../types';
 import {
@@ -47,6 +48,15 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
   const [extracting, setExtracting] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editingGuideline, setEditingGuideline] = useState<AIEvaluationGuideline | null>(null);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: isModalOpen } }));
+    return () => {
+      if (isModalOpen) {
+        window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: false } }));
+      }
+    };
+  }, [isModalOpen]);
   // Aba do modal: 'file' = fonte/arquivo, 'preview' = visualizar conteúdo Markdown extraído
   const [modalTab, setModalTab] = useState<'file' | 'preview'>('file');
 
@@ -279,10 +289,10 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
         ))}
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setIsModalOpen(false); resetForm(); }}>
+      {isModalOpen && createPortal(
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-[9999] p-2 sm:p-4 md:p-6 animate-fade-in" onClick={() => { setIsModalOpen(false); resetForm(); }}>
           <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-2xl">
-          <Card className="p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <Card className="p-6 space-y-4 max-h-[92vh] overflow-y-auto no-scrollbar shadow-2xl border border-surface-border">
             {/* Header */}
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-brand-primary">
@@ -303,28 +313,53 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
               />
             </div>
 
-            {/* Tabs: Arquivo / Conteúdo */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-0.5 bg-surface-subtle border border-surface-border rounded-lg p-0.5 w-fit">
-                <button
-                  type="button"
-                  onClick={() => setModalTab('file')}
-                  className={`px-3 py-1 rounded-md text-[11px] font-bold transition-colors ${modalTab === 'file' ? 'bg-white dark:bg-surface-base text-brand-primary shadow-sm' : 'text-brand-muted hover:text-brand-primary'}`}
-                >
-                  Arquivo Fonte
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalTab('preview')}
-                  disabled={!previewContent}
-                  className={`px-3 py-1 rounded-md text-[11px] font-bold transition-colors ${modalTab === 'preview' ? 'bg-white dark:bg-surface-base text-brand-primary shadow-sm' : 'text-brand-muted hover:text-brand-primary'} disabled:opacity-40 disabled:cursor-not-allowed`}
-                >
-                  Conteúdo que a IA lê
-                </button>
-              </div>
+            {/* Abas do Modal */}
+            <div className="flex border-b border-surface-border gap-2">
+              <button
+                type="button"
+                onClick={() => setModalTab('file')}
+                className={`py-2 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                  modalTab === 'file'
+                    ? 'border-brand-highlight text-brand-highlight'
+                    : 'border-transparent text-brand-muted hover:text-brand-primary'
+                }`}
+              >
+                📎 Arquivo / Fonte
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('preview')}
+                className={`py-2 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                  modalTab === 'preview'
+                    ? 'border-brand-highlight text-brand-highlight'
+                    : 'border-transparent text-brand-muted hover:text-brand-primary'
+                }`}
+              >
+                👁️ Visualizar Markdown Extraído
+              </button>
+            </div>
 
+            {/* Conteúdo da Aba */}
+            <div>
               {modalTab === 'file' && (
                 <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-brand-muted">Arquivo do Manual (.pdf, .md, .txt)</label>
+                    <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-surface-border rounded-xl cursor-pointer hover:border-brand-highlight hover:bg-surface-subtle/50 transition-all">
+                      <Upload className="w-8 h-8 text-brand-muted mb-2" />
+                      <span className="text-xs font-bold text-brand-primary">
+                        {file ? file.name : (editingGuideline?.file_name ? `Substituir ${editingGuideline.file_name}` : 'Selecionar arquivo...')}
+                      </span>
+                      <span className="text-[10px] text-brand-muted mt-1">PDF, Markdown ou Texto puro (máx. 10MB)</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.md,.markdown,.txt"
+                        className="hidden"
+                        onChange={e => handleFileChange(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  </div>
+
                   {/* Arquivo atual (modo edição) */}
                   {editingGuideline?.file_name && (
                     <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-surface-border bg-surface-subtle">
@@ -340,47 +375,6 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
                       </Button>
                     </div>
                   )}
-
-                  {/* Upload de novo arquivo */}
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-black uppercase tracking-wider text-brand-muted">
-                      {editingGuideline?.file_name ? 'Substituir arquivo (opcional)' : 'Arquivo do manual *'}
-                    </label>
-                    <label className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
-                      file ? 'border-functional-success/50 bg-functional-success/5' : 'border-surface-border bg-surface-subtle hover:border-brand-highlight/50'
-                    }`}>
-                      {file ? (
-                        <>
-                          <CheckCircle2 className="w-4 h-4 text-functional-success flex-shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-brand-primary">{file.name}</p>
-                            <p className="text-[10px] font-semibold text-functional-success mt-0.5">
-                              {extracting ? 'Extraindo conteúdo...' : `${(extractedContent.length / 1000).toFixed(1)}k caracteres extraídos`}
-                            </p>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-4 h-4 text-brand-muted flex-shrink-0" />
-                          <div>
-                            <p className="text-xs font-bold text-brand-primary">
-                              {extracting ? 'Extraindo conteúdo do arquivo...' : 'Selecionar arquivo'}
-                            </p>
-                            <p className="text-[10px] font-semibold text-brand-muted mt-0.5">
-                              PDF, .md, .txt ou .csv — o texto é extraído automaticamente para a IA
-                            </p>
-                          </div>
-                        </>
-                      )}
-                      <input
-                        type="file"
-                        accept="application/pdf,.pdf,text/plain,.txt,.md,.markdown,text/markdown,.csv,text/csv"
-                        className="hidden"
-                        disabled={extracting}
-                        onChange={e => handleFileChange(e.target.files?.[0] || null)}
-                      />
-                    </label>
-                  </div>
 
                   {!editingGuideline && !file && (
                     <p className="text-[10px] font-semibold text-brand-muted">
@@ -418,7 +412,8 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
             </div>
           </Card>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

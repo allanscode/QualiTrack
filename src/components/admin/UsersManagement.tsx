@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, mockDb, requireAccessToken } from '../../lib/supabase';
 import { User, Team, ROLE_LABELS } from '../../types';
 import { 
@@ -44,6 +45,15 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
   const [teamSearch, setTeamSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [teamFilter, setTeamFilter] = useState('');
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: isModalOpen } }));
+    return () => {
+      if (isModalOpen) {
+        window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: false } }));
+      }
+    };
+  }, [isModalOpen]);
 
   const filteredUsers = useMemo(() => {
     return users
@@ -425,9 +435,9 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
       </Card>
 
       <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <Card className="max-w-md w-full animate-in zoom-in-95 duration-200">
+        {isModalOpen && createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
+            <Card className="max-w-md w-full max-h-[92vh] flex flex-col shadow-2xl overflow-y-auto no-scrollbar border border-surface-border">
               <header className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">{editingUser.id ? 'Editar Usuário' : 'Novo Usuário'}</h3>
                 <button onClick={() => { setIsModalOpen(false); setTeamSearch(''); }} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
@@ -543,7 +553,8 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                 </Button>
               </div>
             </Card>
-          </div>
+          </div>,
+          document.body
         )}
       </AnimatePresence>
     </div>

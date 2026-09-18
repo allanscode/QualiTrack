@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, mockDb, requireAccessToken } from '../../lib/supabase';
 import { User, Team } from '../../types';
 import { 
@@ -110,6 +111,16 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
   const [operationLoading, setOperationLoading] = useState(false);
   const [syncingZendesk, setSyncingZendesk] = useState(false);
   const [isIconDropdownOpen, setIsIconDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    const hasModal = isModalOpen || !!selectedDrawerTeam;
+    window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: hasModal } }));
+    return () => {
+      if (hasModal) {
+        window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: false } }));
+      }
+    };
+  }, [isModalOpen, selectedDrawerTeam]);
 
   const TEAM_ICONS_LIST = [
     { id: 'Shield', icon: Shield },
@@ -521,9 +532,9 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
       </div>
 
       <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <Card className="max-w-md w-full relative">
+        {isModalOpen && createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
+            <Card className="max-w-md w-full max-h-[92vh] flex flex-col shadow-2xl overflow-y-auto no-scrollbar border border-surface-border relative">
               <header className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">{editingTeam.id ? 'Editar Equipe' : 'Nova Equipe'}</h3>
                 <button onClick={() => { setIsModalOpen(false); setIsIconDropdownOpen(false); }} className="text-brand-muted hover:text-brand-primary transition-colors"><X className="w-6 h-6" /></button>
@@ -660,18 +671,19 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                 </Button>
               </div>
             </Card>
-          </div>
+          </div>,
+          document.body
         )}
 
-        {activeDrawerTeam && (
-          <div className="fixed inset-0 z-50 overflow-hidden">
+        {activeDrawerTeam && createPortal(
+          <div className="fixed inset-0 z-[9999] overflow-hidden">
             {/* Backdrop with transition */}
             <m.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/75 backdrop-blur-xs"
               onClick={() => setSelectedDrawerTeam(null)}
             />
             
@@ -787,7 +799,8 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                 </footer>
               </m.div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </AnimatePresence>
     </div>

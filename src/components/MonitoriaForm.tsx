@@ -23,7 +23,8 @@ import {
   Lock,
   Send,
   ExternalLink,
-  UserPlus
+  UserPlus,
+  FileText
 } from 'lucide-react';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
@@ -633,6 +634,33 @@ export default function MonitoriaForm({
                   </div>
                 </div>
               </div>
+
+              {/* Campos do Formulário no Zendesk (exclusivamente campos do formulário ativo, sem campos ocultos) */}
+              {Array.isArray((initialData as any)?.ticket_fields) && (initialData as any).ticket_fields.length > 0 && (
+                <div className="mt-8 pt-6 border-t border-surface-border/60 animate-fade-in">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="w-4 h-4 text-brand-highlight" />
+                    <h4 className="text-xs font-black uppercase text-brand-primary tracking-wider">
+                      Campos do Formulário no Zendesk ({(initialData as any).ticket_fields.length})
+                    </h4>
+                    <span className="text-[10px] text-brand-muted font-bold hidden sm:inline">
+                      · Dados reais preenchidos no chamado para validação
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {(initialData as any).ticket_fields.map((field: { title: string; value: string }, idx: number) => (
+                      <div key={idx} className="p-3 bg-surface-card border border-surface-border rounded-xl shadow-xs space-y-1">
+                        <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted line-clamp-1" title={field.title}>
+                          {field.title}
+                        </p>
+                        <p className="text-xs font-bold text-brand-primary line-clamp-2" title={field.value}>
+                          {field.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 

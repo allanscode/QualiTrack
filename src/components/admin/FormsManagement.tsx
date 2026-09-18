@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, mockDb } from '../../lib/supabase';
 import { User, Team, EvaluationForm, FormSection, Question } from '../../types';
 import { 
@@ -45,6 +46,15 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
   const [draftRecoveredOrDismissed, setDraftRecoveredOrDismissed] = useState(false);
   const lastSavedDraftRef = React.useRef<string | null>(null);
   const recoveringDraftRef = React.useRef(false);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: isModalOpen } }));
+    return () => {
+      if (isModalOpen) {
+        window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: false } }));
+      }
+    };
+  }, [isModalOpen]);
 
   // Auto-save logic with strict comparison to prevent immediate draft re-write
   useEffect(() => {
@@ -383,9 +393,9 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
       </div>
 
       <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <m.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-3xl w-full min-h-[600px] h-[650px] max-h-[90vh] overflow-hidden flex flex-col bg-surface-card border border-surface-border rounded-[32px] shadow-2xl">
+        {isModalOpen && createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
+            <m.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-3xl w-full min-h-[600px] h-[92vh] max-h-[92vh] overflow-hidden flex flex-col bg-surface-card border border-surface-border rounded-2xl shadow-2xl">
               <header className="flex items-center justify-between p-6 border-b border-surface-border bg-surface-card sticky top-0 z-10">
                 <div className="flex items-center gap-4">
                   <div className="w-11 h-11 rounded-xl bg-surface-subtle flex items-center justify-center text-brand-primary">
@@ -728,7 +738,8 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                 </div>
               </footer>
             </m.div>
-          </div>
+          </div>,
+          document.body
         )}
       </AnimatePresence>
     </div>

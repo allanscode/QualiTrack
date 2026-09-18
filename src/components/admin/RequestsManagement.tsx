@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, mockDb, requireAccessToken } from '../../lib/supabase';
 import { User, Team, AccessRequest } from '../../types';
 import { 
@@ -42,6 +43,16 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
   const [approveData, setApproveData] = useState<{ name: string, email: string, role: string, team_ids: string[] }>({ name: '', email: '', role: 'suporte', team_ids: [] });
   const [saving, setSaving] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
+
+  useEffect(() => {
+    const hasModal = isApproveModalOpen || isRejectModalOpen;
+    window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: hasModal } }));
+    return () => {
+      if (hasModal) {
+        window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: false } }));
+      }
+    };
+  }, [isApproveModalOpen, isRejectModalOpen]);
 
   useEffect(() => { setRequests(initialRequests); }, [initialRequests]);
 
@@ -243,9 +254,9 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
       </div>
 
       <AnimatePresence>
-        {isApproveModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <Card className="max-w-md w-full">
+        {isApproveModalOpen && createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
+            <Card className="max-w-md w-full max-h-[92vh] flex flex-col shadow-2xl overflow-y-auto no-scrollbar border border-surface-border">
               <header className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Aprovar Solicitação</h3>
                 <button onClick={() => setIsApproveModalOpen(false)} className="text-brand-muted hover:text-brand-primary"><X className="w-6 h-6" /></button>
@@ -318,12 +329,13 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                 <Button className="w-full mt-4 transition-all duration-200 cursor-pointer hover:bg-opacity-90 dark:hover:bg-neutral-200" onClick={handleApprove} disabled={saving} icon={<Check className="w-4 h-4" />}>{saving ? 'Processando...' : 'Confirmar Aprovação'}</Button>
               </div>
             </Card>
-          </div>
+          </div>,
+          document.body
         )}
 
-        {isRejectModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <Card className="max-w-md w-full">
+        {isRejectModalOpen && createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
+            <Card className="max-w-md w-full max-h-[92vh] flex flex-col shadow-2xl overflow-y-auto no-scrollbar border border-surface-border">
               <header className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2 text-error">
                   <AlertCircle className="w-5 h-5" />
@@ -358,7 +370,8 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                 </div>
               </div>
             </Card>
-          </div>
+          </div>,
+          document.body
         )}
       </AnimatePresence>
     </div>

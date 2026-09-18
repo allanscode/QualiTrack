@@ -266,6 +266,7 @@ export interface AuditingQueueTicket {
   organization_name?: string;
   organization_tags?: string[];
   customer_type?: 'cliente_final' | 'revenda' | 'outro';
+  ticket_fields?: { title: string; value: string }[];
   /** Dados específicos de abertura de chamados filhos */
   parent_ticket_id?: string;
   child_macro_type?: ChildTicketMacroType;
@@ -315,5 +316,6 @@ export interface AIEvaluationResult {
   suggested_answers: Record<string, 'SIM' | 'NAO' | 'NA'>;
   suggested_observations: Record<string, string>;
   suggested_critical_errors: Record<string, boolean>;
+  ticket_fields?: { title: string; value: string }[];
 }
 

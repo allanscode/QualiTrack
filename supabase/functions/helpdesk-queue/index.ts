@@ -623,7 +623,7 @@ serve(async (req) => {
       let orgTags: string[] = [];
       try {
         const [ticketResp, fieldsResp] = await Promise.all([
-          fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json?include=users,groups,organizations`, { headers: zendeskHeaders }),
+          fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json?include=users,groups,organizations,ticket_forms`, { headers: zendeskHeaders }),
           fetch(`https://${subdomain}.zendesk.com/api/v2/ticket_fields.json`, { headers: zendeskHeaders }),
         ]);
 
@@ -641,18 +641,90 @@ serve(async (req) => {
             }
           }
 
+          // Identifica os campos pertencentes ao formulário ativo do ticket (ticket_form)
+          let allowedFieldIds: Set<number> | null = null;
+          const ticketFormId = ticket?.ticket_form_id;
+
+          if (Array.isArray(ticketJson.ticket_forms) && ticketFormId) {
+            const currentForm = ticketJson.ticket_forms.find((f: any) => f.id === ticketFormId);
+            if (currentForm && Array.isArray(currentForm.ticket_field_ids)) {
+              allowedFieldIds = new Set(currentForm.ticket_field_ids);
+            }
+          }
+
+          // Fallback caso ticket_forms não venha no include mas haja ticketFormId
+          if (!allowedFieldIds && ticketFormId) {
+            try {
+              const formResp = await fetch(`https://${subdomain}.zendesk.com/api/v2/ticket_forms/${ticketFormId}.json`, { headers: zendeskHeaders });
+              if (formResp.ok) {
+                const formJson = await formResp.json();
+                if (Array.isArray(formJson?.ticket_form?.ticket_field_ids)) {
+                  allowedFieldIds = new Set(formJson.ticket_form.ticket_field_ids);
+                }
+              }
+            } catch (formErr) {
+              console.warn('[helpdesk-queue] Falha ao consultar ticket_form individual:', formErr);
+            }
+          }
+
           const customFields: { id: number; value: any }[] = ticket?.custom_fields || [];
           const fieldDefs = new Map<number, any>((fieldsJson.ticket_fields || []).map((f: any) => [f.id, f]));
 
+          // Padrões de flags de controle/automação interna do Zendesk que não devem poluir a avaliação
+          const SYSTEM_FLAGS_REGEX = /^(não conformidade|ticket pai|ticket filho|ticket filho nova demanda|ticket filho produtividade|analisado)$/i;
+
           ticket_fields = customFields
-            .filter(cf => cf.value !== null && cf.value !== undefined && cf.value !== '')
+            .filter(cf => {
+              // 1. Se o formulário tiver lista de campos, deve pertencer a ele (campos de outros formulários são ignorados)
+              if (allowedFieldIds && !allowedFieldIds.has(cf.id)) {
+                return false;
+              }
+
+              // 2. Não exibe valores nulos, indefinidos ou vazios
+              if (cf.value === null || cf.value === undefined || cf.value === '') {
+                return false;
+              }
+
+              // 3. Flags booleanas desmarcadas (false / 'false') são ocultas
+              if (cf.value === false || cf.value === 'false') {
+                return false;
+              }
+
+              const def = fieldDefs.get(cf.id);
+
+              // 4. Campos inativos no Zendesk não devem aparecer
+              if (def && def.active === false) {
+                return false;
+              }
+
+              const title = (def?.title_in_portal || def?.title || '').trim();
+
+              // 5. Flags de controle internas desmarcadas ou irrelevantes não devem aparecer
+              if (SYSTEM_FLAGS_REGEX.test(title) && (cf.value === false || cf.value === 'false' || !cf.value)) {
+                return false;
+              }
+
+              return true;
+            })
             .map(cf => {
               const def = fieldDefs.get(cf.id);
               const title = def?.title_in_portal || def?.title || `Campo ${cf.id}`;
-              const option = def?.custom_field_options?.find((o: any) => o.value === cf.value);
-              const value = option?.name || (Array.isArray(cf.value) ? cf.value.join(', ') : String(cf.value));
-              return { title, value };
-            });
+
+              let formattedValue = '';
+              if (def?.type === 'checkbox') {
+                formattedValue = (cf.value === true || cf.value === 'true') ? 'Sim' : String(cf.value);
+              } else if (def?.custom_field_options && Array.isArray(def.custom_field_options)) {
+                const option = def.custom_field_options.find((o: any) => o.value === cf.value);
+                formattedValue = option?.name || (Array.isArray(cf.value) ? cf.value.join(', ') : String(cf.value));
+              } else if (Array.isArray(cf.value)) {
+                formattedValue = cf.value.join(', ');
+              } else {
+                formattedValue = String(cf.value);
+              }
+
+              return { title, value: formattedValue.trim() };
+            })
+            .filter(f => f.value.length > 0 && f.value !== 'false');
         }
       } catch (e) {
         // Campos de classificação e tags são bônus de contexto — falha aqui
@@ -816,21 +888,9 @@ async function handleEvaluateAI(
   // se a cota do dia estourar ou a chamada falhar por qualquer motivo, cai
   // pra cadeia de modelos gratuitos abaixo antes de desistir de vez.
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
+  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
 
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  // Testado manualmente com o schema real (16 critérios): DeepSeek e Gemini
-  // não têm nenhum modelo :free no OpenRouter atualmente — só modelos que
-  // seguem essa cadeia foram confirmados respeitando o json_schema à risca
-  // (via grammar constraint nativo do provedor). minimax-m3/m2.7 e
-  // dots-studio IGNORAM o schema e devolvem 200 OK com campos inventados —
-  // mais perigoso que lento, corrompe a ficha em silêncio se não fosse a
-  // validação após o parse. nemotron-3-ultra (550B) vai primeiro dentro
-  // dessa cadeia: mesma confiabilidade do -super, mas ~10x menos tokens de
-  // raciocínio pra chegar na resposta — só é mais sujeito a "sobrecarregado"
-  // no pool compartilhado (modelo grande), por isso o -super continua logo
-  // atrás como fallback comprovado. gemma/minimax só como último recurso.
-  // OpenRouter aceita no máximo 3 modelos no campo "models" — truncar para evitar HTTP 400.
   const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-exp:free,qwen/qwen-2.5-72b-instruct:free')
     .split(',')
     .map(m => m.trim())
@@ -965,7 +1025,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     if (provider === 'openrouter') {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        signal: AbortSignal.timeout(28000),
+        signal: AbortSignal.timeout(45000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openRouterApiKey}`,
@@ -998,10 +1058,9 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     } else {
       // API nativa do Gemini (Google AI Studio)
       const candidateModels = [
-        geminiModel,
         'gemini-2.5-flash',
+        'gemini-1.5-flash',
         'gemini-2.0-flash',
-        'gemini-1.5-flash'
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
       let lastGeminiErr = '';
@@ -1023,7 +1082,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
                   responseSchema: stripAdditionalProperties(responseSchema),
                 },
               }),
-              signal: AbortSignal.timeout(30000),
+              signal: AbortSignal.timeout(45000),
             }
           );
 

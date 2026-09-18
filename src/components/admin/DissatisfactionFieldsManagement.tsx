@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, mockDb } from '../../lib/supabase';
 import { DissatisfactionField, EvaluationForm } from '../../types';
 import { 
@@ -33,6 +34,15 @@ export default function DissatisfactionFieldsManagement({ forms }: Dissatisfacti
   const [formFilter, setFormFilter] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: isModalOpen } }));
+    return () => {
+      if (isModalOpen) {
+        window.dispatchEvent(new CustomEvent('qualitrack:modal', { detail: { open: false } }));
+      }
+    };
+  }, [isModalOpen]);
 
   // Form State
   const [editingField, setEditingField] = useState<Partial<DissatisfactionField>>({
@@ -336,9 +346,9 @@ export default function DissatisfactionFieldsManagement({ forms }: Dissatisfacti
       </Card>
 
       <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <Card className="max-w-md w-full animate-in zoom-in-95 duration-200" padding="lg">
+        {isModalOpen && createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
+            <Card className="max-w-md w-full max-h-[92vh] flex flex-col shadow-2xl overflow-y-auto no-scrollbar border border-surface-border" padding="lg">
               <header className="flex items-center justify-between mb-6">
                 <h3 className="text-base font-bold text-brand-primary tracking-tight uppercase">
                   {editingField.id ? 'Editar Campo Extra' : 'Novo Campo Extra'}
@@ -449,7 +459,8 @@ export default function DissatisfactionFieldsManagement({ forms }: Dissatisfacti
                 </Button>
               </div>
             </Card>
-          </div>
+          </div>,
+          document.body
         )}
       </AnimatePresence>
     </div>

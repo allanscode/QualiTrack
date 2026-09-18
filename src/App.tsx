@@ -402,6 +402,7 @@ function MainApp({
       satisfaction_record_text: prefill.satisfaction_record_text,
       isAiLocked: prefill.isAiLocked,
       customerType: prefill.customerType,
+      ticket_fields: prefill.ticket_fields || prefill.aiEvaluation?.ticket_fields,
       ...(prefill.aiEvaluation ? {
         answers: prefill.aiEvaluation.suggested_answers,
         question_observations: prefill.aiEvaluation.suggested_observations,
@@ -429,7 +430,7 @@ function MainApp({
   const [isQueueModalOpen, setIsQueueModalOpen] = React.useState(false);
 
   // Encolhe a barra lateral ao abrir "Nova Monitoria" ou qualquer card/modal
-  // de inspeção/confronto nas Filas de Triagem, dando foco e todo o espaço para a tela,
+  // de inspeção/confronto ou configurações, dando foco e todo o espaço para a tela,
   // e restaura o estado anterior ao fechar.
   const sidebarWasOpenRef = React.useRef(isSidebarOpen);
   React.useEffect(() => {
@@ -441,6 +442,21 @@ function MainApp({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFormOpen, isQueueModalOpen]);
+
+  // Listener universal para qualquer modal aberto via qualitrack:modal
+  React.useEffect(() => {
+    const handleGlobalModal = (e: any) => {
+      const open = !!e.detail?.open;
+      if (open) {
+        sidebarWasOpenRef.current = isSidebarOpen;
+        setIsSidebarOpen(false);
+      } else {
+        setIsSidebarOpen(sidebarWasOpenRef.current);
+      }
+    };
+    window.addEventListener('qualitrack:modal', handleGlobalModal);
+    return () => window.removeEventListener('qualitrack:modal', handleGlobalModal);
+  }, [isSidebarOpen]);
 
   const toggleSidebar = () => {
     const willBeOpen = !isSidebarOpen;
