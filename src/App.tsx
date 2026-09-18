@@ -880,10 +880,10 @@ function MainApp({
                     }}
                     className="flex items-center justify-center"
                   >
-                    <NotificationLetterClosedIcon className="w-4 h-4 drop-shadow-xs" />
+                    <Mail className="w-4 h-4" />
                   </m.div>
                 ) : (
-                  <NotificationLetterOpenIcon className="w-4 h-4 text-brand-muted hover:text-brand-primary transition-colors" />
+                  <MailOpen className="w-4 h-4 text-brand-muted hover:text-brand-primary transition-colors" />
                 )}
 
                 {unreadNotificationsCount > 0 && (
@@ -906,12 +906,12 @@ function MainApp({
                     <div className="p-3.5 border-b border-surface-border bg-surface-subtle/40 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {unreadNotificationsCount > 0 ? (
-                          <div className="w-7 h-7 rounded-lg bg-brand-highlight/15 flex items-center justify-center">
-                            <NotificationLetterClosedIcon className="w-4 h-4" />
+                          <div className="w-7 h-7 rounded-lg bg-brand-highlight/15 text-brand-highlight flex items-center justify-center">
+                            <Mail className="w-4 h-4" />
                           </div>
                         ) : (
                           <div className="w-7 h-7 rounded-lg bg-surface-card text-brand-muted border border-surface-border flex items-center justify-center">
-                            <NotificationLetterOpenIcon className="w-4 h-4" />
+                            <MailOpen className="w-4 h-4" />
                           </div>
                         )}
                         <div>
@@ -940,7 +940,7 @@ function MainApp({
                     <div className="max-h-80 overflow-y-auto divide-y divide-surface-border/50 no-scrollbar">
                       {notifications.length === 0 ? (
                         <div className="p-8 text-center text-brand-muted">
-                          <NotificationLetterOpenIcon className="w-8 h-8 opacity-35 mx-auto mb-2 text-brand-muted" />
+                          <MailOpen className="w-8 h-8 opacity-35 mx-auto mb-2 text-brand-muted" />
                           <p className="text-xs font-semibold">Caixa de entrada limpa!</p>
                           <p className="text-[10px]">Nenhuma nova notificação pendente.</p>
                         </div>
@@ -1371,131 +1371,4 @@ function SubNavItem({ label, active, onClick, isOpen, isDark, badge }: any) {
   );
 }
 
-/**
- * Ícone de Carta Fechada:
- * - Corpo com fundo branco puro (#FFFFFF)
- * - Contorno e listras pretas internas (#000000) bem definidas (aba em V, dobras e linhas de texto/envelope)
- */
-function NotificationLetterClosedIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      style={{ overflow: 'visible' }}
-    >
-      {/* Corpo retangular do envelope: papel branco com contorno preto nítido */}
-      <rect
-        x="2"
-        y="4"
-        width="20"
-        height="16"
-        rx="2.5"
-        fill="#FFFFFF"
-        stroke="#000000"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      {/* Aba superior dobrada em V com listra preta marcante */}
-      <path
-        d="M2.5 5.5L12 12.5L21.5 5.5"
-        stroke="#000000"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Dobras diagonais inferiores da carta */}
-      <path
-        d="M2.5 19.5L8.5 13.5"
-        stroke="#000000"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-      <path
-        d="M21.5 19.5L15.5 13.5"
-        stroke="#000000"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-      {/* Listras pretas horizontais internas (linhas de escrita e endereço da carta) */}
-      <line
-        x1="9.5"
-        y1="15"
-        x2="14.5"
-        y2="15"
-        stroke="#000000"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-      <line
-        x1="10"
-        y1="17.4"
-        x2="14"
-        y2="17.4"
-        stroke="#000000"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/**
- * Ícone de Carta Aberta:
- * - Aba superior aberta para cima
- * - Folha de papel branca saindo com listras pretas de leitura
- * - Fundo e contorno nítidos
- */
-function NotificationLetterOpenIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      style={{ overflow: 'visible' }}
-    >
-      {/* Aba superior aberta para cima com papel branco */}
-      <path
-        d="M21.5 8L12 2.5L2.5 8"
-        fill="#FFFFFF"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Folha de papel saindo da carta */}
-      <rect
-        x="5"
-        y="4.5"
-        width="14"
-        height="8"
-        rx="1.5"
-        fill="#FFFFFF"
-        stroke="currentColor"
-        strokeWidth="1.4"
-      />
-      {/* Listras horizontais da folha da carta */}
-      <line x1="7.5" y1="7.5" x2="16.5" y2="7.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      <line x1="7.5" y1="9.8" x2="13.5" y2="9.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      {/* Corpo inferior do envelope */}
-      <path
-        d="M2 8.5V19C2 20.1 2.9 21 4 21H20C21.1 21 22 20.1 22 19V8.5"
-        fill="#FFFFFF"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      {/* Dobras frontais da carta */}
-      <path
-        d="M2.5 8.5L12 14.5L21.5 8.5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
