@@ -7,7 +7,7 @@ import { ProtectedAuthForm } from './components/ui/ProtectedAuthForm';
 import React, { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck, Mail, MailOpen } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -840,19 +840,41 @@ function MainApp({
               </button>
             )}
 
-            {/* Central de Notificações */}
+            {/* Notificações do Sistema: Carta Animada (Fechada com animação e branco preenchido quando há novas / Aberta estática quando todas lidas) */}
             <div className="relative">
               <button
                 onClick={() => {
                   setShowNotifications(!showNotifications);
                   setShowTeamList(false);
                 }}
-                className="notifications-toggle-btn relative p-2.5 rounded-xl border border-surface-border/60 hover:bg-surface-subtle transition-all cursor-pointer shadow-xs text-brand-muted hover:text-brand-primary flex items-center justify-center"
-                title="Central de Notificações"
+                className={`notifications-toggle-btn relative p-2.5 rounded-xl border transition-all cursor-pointer shadow-xs flex items-center justify-center ${
+                  unreadNotificationsCount > 0
+                    ? 'bg-brand-highlight text-white border-brand-highlight hover:bg-brand-highlight/90 shadow-md ring-2 ring-brand-highlight/25'
+                    : 'bg-surface-card border-surface-border/60 hover:bg-surface-subtle text-brand-muted hover:text-brand-primary'
+                }`}
+                title={unreadNotificationsCount > 0 ? `${unreadNotificationsCount} novas notificações (carta fechada)` : 'Todas as notificações foram lidas (carta aberta)'}
               >
-                <Bell className="w-4 h-4" />
+                {unreadNotificationsCount > 0 ? (
+                  <m.div
+                    animate={{
+                      scale: [1, 1.14, 1],
+                      rotate: [0, -6, 6, 0]
+                    }}
+                    transition={{
+                      repeat: Infinity,
+                      duration: 2.2,
+                      ease: "easeInOut"
+                    }}
+                    className="flex items-center justify-center"
+                  >
+                    <Mail className="w-4 h-4 text-white fill-white drop-shadow-xs" />
+                  </m.div>
+                ) : (
+                  <MailOpen className="w-4 h-4 text-brand-muted hover:text-brand-primary transition-colors" />
+                )}
+
                 {unreadNotificationsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-brand-highlight text-white text-[10px] font-black flex items-center justify-center px-1 shadow-sm">
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-functional-error text-white text-[9px] font-black flex items-center justify-center px-1 border-2 border-surface-bg shadow-sm">
                     {unreadNotificationsCount}
                   </span>
                 )}
@@ -867,28 +889,46 @@ function MainApp({
                     transition={{ duration: 0.15 }}
                     className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-surface-card border border-surface-border rounded-2xl shadow-premium z-50 text-brand-primary notifications-popover overflow-hidden"
                   >
+                    {/* Header do Menu */}
                     <div className="p-3.5 border-b border-surface-border bg-surface-subtle/40 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Bell className="w-4 h-4 text-brand-highlight" />
-                        <h4 className="text-xs font-black text-brand-primary">Notificações</h4>
-                        <span className="px-1.5 py-0.5 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold text-[9px]">
-                          {unreadNotificationsCount} novas
-                        </span>
+                        {unreadNotificationsCount > 0 ? (
+                          <div className="w-6 h-6 rounded-lg bg-brand-highlight/20 text-brand-highlight flex items-center justify-center">
+                            <Mail className="w-3.5 h-3.5 fill-brand-highlight" />
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 rounded-lg bg-surface-card text-brand-muted border border-surface-border flex items-center justify-center">
+                            <MailOpen className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                        <div>
+                          <h4 className="text-xs font-black text-brand-primary leading-tight">Histórico de Notificações</h4>
+                          <p className="text-[10px] text-brand-muted">
+                            {unreadNotificationsCount > 0
+                              ? `${unreadNotificationsCount} pendente(s) de leitura`
+                              : 'Todas as notificações marcadas como lidas'}
+                          </p>
+                        </div>
                       </div>
-                      <button
-                        onClick={markAllNotificationsAsRead}
-                        className="text-[10px] font-semibold text-brand-muted hover:text-brand-primary flex items-center gap-1 cursor-pointer transition-colors"
-                      >
-                        <CheckCheck className="w-3 h-3" />
-                        <span>Marcar lidas</span>
-                      </button>
+
+                      {unreadNotificationsCount > 0 && (
+                        <button
+                          onClick={markAllNotificationsAsRead}
+                          className="text-[10px] font-bold text-brand-highlight hover:text-brand-highlight/80 hover:bg-brand-highlight/10 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all border border-brand-highlight/30"
+                          title="Marcar todas como lidas e abrir o envelope"
+                        >
+                          <CheckCheck className="w-3.5 h-3.5" />
+                          <span>Marcar lidas</span>
+                        </button>
+                      )}
                     </div>
 
+                    {/* Lista do Histórico */}
                     <div className="max-h-80 overflow-y-auto divide-y divide-surface-border/50 no-scrollbar">
                       {notifications.length === 0 ? (
                         <div className="p-8 text-center text-brand-muted">
-                          <Bell className="w-8 h-8 opacity-20 mx-auto mb-2" />
-                          <p className="text-xs font-semibold">Tudo em dia!</p>
+                          <MailOpen className="w-8 h-8 opacity-25 mx-auto mb-2" />
+                          <p className="text-xs font-semibold">Caixa de entrada limpa!</p>
                           <p className="text-[10px]">Nenhuma nova notificação pendente.</p>
                         </div>
                       ) : (
@@ -896,23 +936,35 @@ function MainApp({
                           <div
                             key={item.id}
                             onClick={() => handleNotificationClick(item)}
-                            className={`p-3 hover:bg-surface-subtle/80 transition-colors cursor-pointer flex items-start gap-3 ${item.read ? 'opacity-70' : 'bg-brand-highlight/[0.03]'}`}
+                            className={`p-3.5 hover:bg-surface-subtle transition-colors cursor-pointer flex items-start gap-3 ${
+                              item.read ? 'opacity-65' : 'bg-brand-highlight/[0.04]'
+                            }`}
                           >
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${item.iconBg}`}>
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs ${item.iconBg}`}>
                               {item.icon}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-1">
-                                <p className="text-[11px] font-bold text-brand-primary truncate">{item.title}</p>
-                                <span className="text-[9px] text-brand-muted whitespace-nowrap">{item.time}</span>
+                                <p className="text-xs font-bold text-brand-primary truncate">{item.title}</p>
+                                <span className="text-[9px] font-semibold text-brand-muted whitespace-nowrap">{item.time}</span>
                               </div>
-                              <p className="text-[10px] text-brand-muted line-clamp-2 mt-0.5">{item.message}</p>
+                              <p className="text-[11px] text-brand-muted line-clamp-2 mt-0.5 leading-snug">{item.message}</p>
                             </div>
                             {!item.read && (
-                              <div className="w-1.5 h-1.5 rounded-full bg-brand-highlight flex-shrink-0 mt-2" />
+                              <div className="w-2 h-2 rounded-full bg-brand-highlight flex-shrink-0 mt-2 shadow-xs animate-pulse" />
                             )}
                           </div>
                         ))
+                      )}
+                    </div>
+
+                    {/* Rodapé com status do envelope */}
+                    <div className="p-2.5 border-t border-surface-border bg-surface-subtle/20 flex items-center justify-between text-[10px] text-brand-muted">
+                      <span>{notifications.length} evento(s) no histórico</span>
+                      {unreadNotificationsCount === 0 && (
+                        <span className="inline-flex items-center gap-1 text-functional-success font-bold">
+                          <CheckCheck className="w-3 h-3" /> Envelope aberto (em dia)
+                        </span>
                       )}
                     </div>
                   </m.div>

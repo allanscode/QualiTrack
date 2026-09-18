@@ -296,9 +296,17 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
             </div>
           </div>
 
-          {/* Status Tabs (Unified inside) */}
-          <div className="pt-4 border-t border-surface-border/50 flex flex-wrap gap-2">
-            {['todas', 'pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade', 'concluida', 'expiradas_prazo'].map(t => {
+          {/* Status Tabs (Unified inside) — Leitura completa e agradável sem cortes com '...' */}
+          <div className="pt-4 border-t border-surface-border/50 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+            {[
+              { id: 'todas', label: 'Todas' },
+              { id: 'pendente_revisao', label: 'Pendente Revisão' },
+              { id: 'em_contestacao', label: 'Em Contestação' },
+              { id: 'aguardando_gestor_suporte', label: 'Gestão Suporte' },
+              { id: 'aguardando_gestor_qualidade', label: 'Gestão Qualidade' },
+              { id: 'concluida', label: 'Concluídas' },
+              { id: 'expiradas_prazo', label: 'Finalizadas por SLA' },
+            ].map(({ id: t, label: tabLabel }) => {
               const count = monitorias.filter(m => {
                 const matchesActiveStatus = filters.statusFilter === 'active' ? m.active !== false : m.active === false;
 
@@ -319,16 +327,25 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                 return matchesActiveStatus && matchesTab;
               }).length;
 
-              const tabLabel = t === 'todas' ? 'Tudo' : t === 'expiradas_prazo' ? 'Concluída Sist.' : getStatusConfig(t as any).shortLabel;
-
               return (
                 <button
                   key={t}
                   onClick={() => filters.setTab(t as any)}
-                  className={`flex-1 min-w-[110px] px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-between gap-2 ${filters.tab === t ? 'bg-brand-primary text-brand-on-primary shadow-lg' : 'bg-surface-subtle text-brand-primary hover:bg-surface-card border border-surface-border/50'}`}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 whitespace-nowrap cursor-pointer ${
+                    filters.tab === t
+                      ? 'bg-brand-primary text-brand-on-primary shadow-sm ring-1 ring-brand-primary'
+                      : 'bg-surface-subtle text-brand-primary hover:bg-surface-card hover:border-surface-border border border-surface-border/50'
+                  }`}
+                  title={tabLabel}
                 >
-                  <span className="truncate">{tabLabel}</span>
-                  <span className={`px-1.5 py-0.5 rounded-lg text-[8px] flex-shrink-0 ${filters.tab === t ? 'bg-black/10 text-brand-on-primary' : 'bg-surface-card text-brand-primary shadow-sm'}`}>
+                  <span className="whitespace-nowrap">{tabLabel}</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black flex-shrink-0 ${
+                      filters.tab === t
+                        ? 'bg-black/20 text-brand-on-primary'
+                        : 'bg-surface-card text-brand-muted border border-surface-border/60'
+                    }`}
+                  >
                     {count}
                   </span>
                 </button>
