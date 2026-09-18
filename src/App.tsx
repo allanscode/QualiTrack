@@ -439,6 +439,8 @@ function MainApp({
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(activeTab === 'admin' || activeTab === 'custom_dashboard');
   const [isQueueModalOpen, setIsQueueModalOpen] = React.useState(false);
 
+  const [sessionStartTime] = React.useState(() => new Date());
+
   const notifications = React.useMemo(() => {
     const list: Array<{
       id: string;
@@ -457,11 +459,15 @@ function MainApp({
       const myMonitorias = monitorias.filter((m: any) => m.evaluated_id === userData.id);
       const contested = myMonitorias.filter((m: any) => m.status === 'contestado');
       if (contested.length > 0) {
+        const itemDate = contested[0].updated_at || contested[0].created_at;
+        const timeStr = itemDate
+          ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
+          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
         list.push({
           id: `contested-${contested[0].id}`,
           title: 'Contestação em Análise',
           message: `Sua contestação da monitoria #${contested[0].ticket_id || contested[0].id.slice(0, 6)} está sendo reavaliada pela Qualidade.`,
-          time: 'Em andamento',
+          time: timeStr,
           type: 'contestacao',
           iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
           icon: <AlertTriangle className="w-3.5 h-3.5" />,
@@ -471,11 +477,14 @@ function MainApp({
       }
       if (myMonitorias.length > 0) {
         const latest = myMonitorias[0];
+        const timeStr = latest.created_at
+          ? formatDate(new Date(latest.created_at), "dd/MM 'às' HH:mm")
+          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
         list.push({
           id: `eval-${latest.id}`,
           title: 'Nova Avaliação Disponível',
           message: `Monitoria referente ao chamado #${latest.ticket_id} foi publicada com nota ${latest.score}%.`,
-          time: latest.created_at ? formatDate(new Date(latest.created_at), 'dd/MM HH:mm') : 'Recente',
+          time: timeStr,
           type: 'monitoria',
           iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
           icon: <ClipboardCheck className="w-3.5 h-3.5" />,
@@ -489,11 +498,15 @@ function MainApp({
     if (userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') {
       const pendingContestations = monitorias.filter((m: any) => m.status === 'contestado');
       if (pendingContestations.length > 0) {
+        const itemDate = pendingContestations[0]?.updated_at || pendingContestations[0]?.created_at;
+        const timeStr = itemDate
+          ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
+          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
         list.push({
           id: `admin-contest-${pendingContestations.length}`,
           title: `${pendingContestations.length} Contestação(ões) Pendente(s)`,
           message: 'Monitorias contestadas por analistas aguardando reanálise e parecer da equipe de Qualidade.',
-          time: 'Ação necessária',
+          time: timeStr,
           type: 'contestacao',
           iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
           icon: <AlertTriangle className="w-3.5 h-3.5" />,
@@ -506,7 +519,7 @@ function MainApp({
         id: 'queue-csat-negativas',
         title: 'Fila de Triagem Atualizada',
         message: 'Chamados com CSAT Ruim e Chamados Filhos disponíveis para auditoria com IA.',
-        time: 'Hoje',
+        time: `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`,
         type: 'fila',
         iconBg: 'bg-brand-highlight/10 text-brand-highlight',
         icon: <Layers className="w-3.5 h-3.5" />,
@@ -520,7 +533,7 @@ function MainApp({
       id: 'system-status-ok',
       title: 'Sistema QualiTrack Conectado',
       message: 'Integração Zendesk API e IA Gemini 2.5 Flash sincronizadas em tempo real.',
-      time: 'Online',
+      time: `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`,
       type: 'sistema',
       iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
       icon: <Clock className="w-3.5 h-3.5" />,
@@ -528,7 +541,7 @@ function MainApp({
     });
 
     return list;
-  }, [userData, monitorias, readNotificationIds]);
+  }, [userData, monitorias, readNotificationIds, sessionStartTime]);
 
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
 
@@ -867,10 +880,10 @@ function MainApp({
                     }}
                     className="flex items-center justify-center"
                   >
-                    <Mail className="w-4 h-4 text-white fill-white drop-shadow-xs" />
+                    <NotificationLetterClosedIcon className="w-4 h-4 drop-shadow-xs" />
                   </m.div>
                 ) : (
-                  <MailOpen className="w-4 h-4 text-brand-muted hover:text-brand-primary transition-colors" />
+                  <NotificationLetterOpenIcon className="w-4 h-4 text-brand-muted hover:text-brand-primary transition-colors" />
                 )}
 
                 {unreadNotificationsCount > 0 && (
@@ -893,12 +906,12 @@ function MainApp({
                     <div className="p-3.5 border-b border-surface-border bg-surface-subtle/40 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {unreadNotificationsCount > 0 ? (
-                          <div className="w-6 h-6 rounded-lg bg-brand-highlight/20 text-brand-highlight flex items-center justify-center">
-                            <Mail className="w-3.5 h-3.5 fill-brand-highlight" />
+                          <div className="w-7 h-7 rounded-lg bg-brand-highlight/15 flex items-center justify-center">
+                            <NotificationLetterClosedIcon className="w-4 h-4" />
                           </div>
                         ) : (
-                          <div className="w-6 h-6 rounded-lg bg-surface-card text-brand-muted border border-surface-border flex items-center justify-center">
-                            <MailOpen className="w-3.5 h-3.5" />
+                          <div className="w-7 h-7 rounded-lg bg-surface-card text-brand-muted border border-surface-border flex items-center justify-center">
+                            <NotificationLetterOpenIcon className="w-4 h-4" />
                           </div>
                         )}
                         <div>
@@ -927,7 +940,7 @@ function MainApp({
                     <div className="max-h-80 overflow-y-auto divide-y divide-surface-border/50 no-scrollbar">
                       {notifications.length === 0 ? (
                         <div className="p-8 text-center text-brand-muted">
-                          <MailOpen className="w-8 h-8 opacity-25 mx-auto mb-2" />
+                          <NotificationLetterOpenIcon className="w-8 h-8 opacity-35 mx-auto mb-2 text-brand-muted" />
                           <p className="text-xs font-semibold">Caixa de entrada limpa!</p>
                           <p className="text-[10px]">Nenhuma nova notificação pendente.</p>
                         </div>
@@ -944,9 +957,12 @@ function MainApp({
                               {item.icon}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-1">
+                              <div className="flex items-center justify-between gap-1.5">
                                 <p className="text-xs font-bold text-brand-primary truncate">{item.title}</p>
-                                <span className="text-[9px] font-semibold text-brand-muted whitespace-nowrap">{item.time}</span>
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-muted whitespace-nowrap bg-surface-subtle px-1.5 py-0.5 rounded-md border border-surface-border/40">
+                                  <Clock className="w-2.5 h-2.5 opacity-70" />
+                                  {item.time}
+                                </span>
                               </div>
                               <p className="text-[11px] text-brand-muted line-clamp-2 mt-0.5 leading-snug">{item.message}</p>
                             </div>
@@ -1354,3 +1370,132 @@ function SubNavItem({ label, active, onClick, isOpen, isDark, badge }: any) {
     </button>
   );
 }
+
+/**
+ * Ícone de Carta Fechada:
+ * - Corpo com fundo branco puro (#FFFFFF)
+ * - Contorno e listras pretas internas (#000000) bem definidas (aba em V, dobras e linhas de texto/envelope)
+ */
+function NotificationLetterClosedIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      style={{ overflow: 'visible' }}
+    >
+      {/* Corpo retangular do envelope: papel branco com contorno preto nítido */}
+      <rect
+        x="2"
+        y="4"
+        width="20"
+        height="16"
+        rx="2.5"
+        fill="#FFFFFF"
+        stroke="#000000"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      {/* Aba superior dobrada em V com listra preta marcante */}
+      <path
+        d="M2.5 5.5L12 12.5L21.5 5.5"
+        stroke="#000000"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Dobras diagonais inferiores da carta */}
+      <path
+        d="M2.5 19.5L8.5 13.5"
+        stroke="#000000"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <path
+        d="M21.5 19.5L15.5 13.5"
+        stroke="#000000"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      {/* Listras pretas horizontais internas (linhas de escrita e endereço da carta) */}
+      <line
+        x1="9.5"
+        y1="15"
+        x2="14.5"
+        y2="15"
+        stroke="#000000"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <line
+        x1="10"
+        y1="17.4"
+        x2="14"
+        y2="17.4"
+        stroke="#000000"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Ícone de Carta Aberta:
+ * - Aba superior aberta para cima
+ * - Folha de papel branca saindo com listras pretas de leitura
+ * - Fundo e contorno nítidos
+ */
+function NotificationLetterOpenIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      style={{ overflow: 'visible' }}
+    >
+      {/* Aba superior aberta para cima com papel branco */}
+      <path
+        d="M21.5 8L12 2.5L2.5 8"
+        fill="#FFFFFF"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Folha de papel saindo da carta */}
+      <rect
+        x="5"
+        y="4.5"
+        width="14"
+        height="8"
+        rx="1.5"
+        fill="#FFFFFF"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      {/* Listras horizontais da folha da carta */}
+      <line x1="7.5" y1="7.5" x2="16.5" y2="7.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <line x1="7.5" y1="9.8" x2="13.5" y2="9.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      {/* Corpo inferior do envelope */}
+      <path
+        d="M2 8.5V19C2 20.1 2.9 21 4 21H20C21.1 21 22 20.1 22 19V8.5"
+        fill="#FFFFFF"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      {/* Dobras frontais da carta */}
+      <path
+        d="M2.5 8.5L12 14.5L21.5 8.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
