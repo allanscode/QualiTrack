@@ -126,10 +126,10 @@ export default function AIPipelineView() {
 
         <div className="space-y-2 text-[11px] text-brand-muted">
           <p>
-            • <strong>Provedor 1 (Principal):</strong> Google AI Studio (<code className="font-mono text-brand-primary font-bold">gemini-3.6-flash</code>). Alta velocidade (~2.5s), suporte nativo a JSON Schema estrito e ampla janela de contexto.
+            • <strong>Provedor 1 (Principal):</strong> Google AI Studio (<code className="font-mono text-brand-primary font-bold">gemini-3.6-flash</code> padrão gratuito, com cascata imediata para <code className="font-mono text-brand-primary font-bold">gemini-3.5-flash-lite</code> em caso de pico de demanda). Alta velocidade, suporte nativo a JSON Schema estrito e ampla janela de contexto.
           </p>
           <p>
-            • <strong>Provedor 2 (Fallback Automático):</strong> OpenRouter (<code className="font-mono text-brand-primary font-bold">nvidia/nemotron-3-ultra-550b:free</code>). Ativado de forma invisível se o Gemini atingir cota por minuto ou oscilação de rede, garantindo que a triagem nunca trave.
+            • <strong>Provedor 2 (Fallback Externo):</strong> OpenRouter (<code className="font-mono text-brand-primary font-bold">deepseek/deepseek-v4-flash-0731:free, qwen/qwen3.8-27b:free</code>). Ativado de forma invisível caso a API do Google atinja cota por minuto ou oscilação de rede, garantindo que a triagem nunca trave.
           </p>
         </div>
       </Card>

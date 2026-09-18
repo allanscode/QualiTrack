@@ -888,10 +888,10 @@ async function handleEvaluateAI(
   // se a cota do dia estourar ou a chamada falhar por qualquer motivo, cai
   // pra cadeia de modelos gratuitos abaixo antes de desistir de vez.
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
+  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
 
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-exp:free,qwen/qwen-2.5-72b-instruct:free')
+  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'deepseek/deepseek-v4-flash-0731:free,qwen/qwen3.8-27b:free,google/gemma-4-26b-a4b-it:free')
     .split(',')
     .map(m => m.trim())
     .filter(Boolean)
@@ -1058,16 +1058,17 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     } else {
       // API nativa do Gemini (Google AI Studio)
       const candidateModels = [
-        'gemini-2.5-flash',
-        'gemini-1.5-flash',
-        'gemini-2.0-flash',
+        geminiModel,
+        'gemini-3.5-flash-lite',
+        'gemini-3.7-flash',
+        'gemini-3.8-flash',
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
       let lastGeminiErr = '';
       for (const modelToTry of candidateModels) {
         try {
           const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${geminiApiKey}`,
             {
               method: 'POST',
               headers: {
@@ -1082,7 +1083,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
                   responseSchema: stripAdditionalProperties(responseSchema),
                 },
               }),
-              signal: AbortSignal.timeout(45000),
+              signal: AbortSignal.timeout(12000),
             }
           );
 
@@ -1097,10 +1098,10 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
             }
           } else {
             const errText = await response.text().catch(() => '');
-            lastGeminiErr = `(${response.status}): ${errText}`;
+            lastGeminiErr = `(${response.status} ${modelToTry}): ${errText}`;
           }
         } catch (fetchErr: any) {
-          lastGeminiErr = fetchErr.message;
+          lastGeminiErr = `${modelToTry}: ${fetchErr.message}`;
         }
       }
 
@@ -1171,7 +1172,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
       try {
         parsed = await callAndValidate('gemini');
         usedProvider = 'gemini';
-        usedModel = geminiModel;
+        if (!usedModel) usedModel = geminiModel;
       } catch (e: any) {
         lastError = e;
         console.warn('[helpdesk-queue] Gemini falhou ou respondeu fora do schema, tentando fallback OpenRouter:', e.message);
@@ -1274,9 +1275,9 @@ async function handleEvaluateChildTicket(
 
   const startTime = Date.now();
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
+  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-exp:free,qwen/qwen-2.5-72b-instruct:free')
+  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'deepseek/deepseek-v4-flash-0731:free,qwen/qwen3.8-27b:free,google/gemma-4-26b-a4b-it:free')
     .split(',')
     .map(m => m.trim())
     .filter(Boolean)
@@ -1432,19 +1433,19 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     } else {
       const candidateModels = [
         geminiModel,
-        'gemini-2.5-flash',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.7-flash',
+        'gemini-3.8-flash',
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
       let lastError: Error | null = null;
       for (const modelToTry of candidateModels) {
         try {
           const resp = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${geminiApiKey}`,
             {
               method: 'POST',
-              signal: AbortSignal.timeout(28000),
+              signal: AbortSignal.timeout(12000),
               headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey! },
               body: JSON.stringify({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
