@@ -7,7 +7,7 @@ import { ProtectedAuthForm } from './components/ui/ProtectedAuthForm';
 import React, { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -424,10 +424,135 @@ function MainApp({
   } = useSidebarManager({ userData });
 
   const [showTeamList, setShowTeamList] = React.useState(false);
+  const [showNotifications, setShowNotifications] = React.useState(false);
+  const [readNotificationIds, setReadNotificationIds] = React.useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('qualitrack_read_notifications');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(activeTab === 'admin' || activeTab === 'custom_dashboard');
   const [isQueueModalOpen, setIsQueueModalOpen] = React.useState(false);
+
+  const notifications = React.useMemo(() => {
+    const list: Array<{
+      id: string;
+      title: string;
+      message: string;
+      time: string;
+      type: 'contestacao' | 'monitoria' | 'fila' | 'sistema';
+      iconBg: string;
+      icon: React.ReactNode;
+      targetTab?: string;
+      read: boolean;
+    }> = [];
+
+    // Notificações para Suporte
+    if (userData?.role === 'suporte') {
+      const myMonitorias = monitorias.filter((m: any) => m.evaluated_id === userData.id);
+      const contested = myMonitorias.filter((m: any) => m.status === 'contestado');
+      if (contested.length > 0) {
+        list.push({
+          id: `contested-${contested[0].id}`,
+          title: 'Contestação em Análise',
+          message: `Sua contestação da monitoria #${contested[0].ticket_id || contested[0].id.slice(0, 6)} está sendo reavaliada pela Qualidade.`,
+          time: 'Em andamento',
+          type: 'contestacao',
+          iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+          icon: <AlertTriangle className="w-3.5 h-3.5" />,
+          targetTab: 'monitorias',
+          read: readNotificationIds.has(`contested-${contested[0].id}`)
+        });
+      }
+      if (myMonitorias.length > 0) {
+        const latest = myMonitorias[0];
+        list.push({
+          id: `eval-${latest.id}`,
+          title: 'Nova Avaliação Disponível',
+          message: `Monitoria referente ao chamado #${latest.ticket_id} foi publicada com nota ${latest.score}%.`,
+          time: latest.created_at ? formatDate(new Date(latest.created_at), 'dd/MM HH:mm') : 'Recente',
+          type: 'monitoria',
+          iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+          icon: <ClipboardCheck className="w-3.5 h-3.5" />,
+          targetTab: 'monitorias',
+          read: readNotificationIds.has(`eval-${latest.id}`)
+        });
+      }
+    }
+
+    // Notificações para Qualidade / Gestores / Admin
+    if (userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') {
+      const pendingContestations = monitorias.filter((m: any) => m.status === 'contestado');
+      if (pendingContestations.length > 0) {
+        list.push({
+          id: `admin-contest-${pendingContestations.length}`,
+          title: `${pendingContestations.length} Contestação(ões) Pendente(s)`,
+          message: 'Monitorias contestadas por analistas aguardando reanálise e parecer da equipe de Qualidade.',
+          time: 'Ação necessária',
+          type: 'contestacao',
+          iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+          icon: <AlertTriangle className="w-3.5 h-3.5" />,
+          targetTab: 'monitorias',
+          read: readNotificationIds.has(`admin-contest-${pendingContestations.length}`)
+        });
+      }
+
+      list.push({
+        id: 'queue-csat-negativas',
+        title: 'Fila de Triagem Atualizada',
+        message: 'Chamados com CSAT Ruim e Chamados Filhos disponíveis para auditoria com IA.',
+        time: 'Hoje',
+        type: 'fila',
+        iconBg: 'bg-brand-highlight/10 text-brand-highlight',
+        icon: <Layers className="w-3.5 h-3.5" />,
+        targetTab: 'filas',
+        read: readNotificationIds.has('queue-csat-negativas')
+      });
+    }
+
+    // Notificação do sistema padrão (operacional)
+    list.push({
+      id: 'system-status-ok',
+      title: 'Sistema QualiTrack Conectado',
+      message: 'Integração Zendesk API e IA Gemini 2.5 Flash sincronizadas em tempo real.',
+      time: 'Online',
+      type: 'sistema',
+      iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+      icon: <Clock className="w-3.5 h-3.5" />,
+      read: readNotificationIds.has('system-status-ok')
+    });
+
+    return list;
+  }, [userData, monitorias, readNotificationIds]);
+
+  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+
+  const markAllNotificationsAsRead = () => {
+    const allIds = new Set(notifications.map(n => n.id));
+    setReadNotificationIds(allIds);
+    try {
+      localStorage.setItem('qualitrack_read_notifications', JSON.stringify(Array.from(allIds)));
+    } catch {}
+    toast.success('Todas as notificações foram marcadas como lidas.');
+  };
+
+  const handleNotificationClick = (item: any) => {
+    const next = new Set(readNotificationIds);
+    next.add(item.id);
+    setReadNotificationIds(next);
+    try {
+      localStorage.setItem('qualitrack_read_notifications', JSON.stringify(Array.from(next)));
+    } catch {}
+    if (item.targetTab) {
+      setActiveTab(item.targetTab);
+    }
+    setShowNotifications(false);
+  };
 
   // Encolhe a barra lateral ao abrir "Nova Monitoria" ou qualquer card/modal
   // de inspeção/confronto ou configurações, dando foco e todo o espaço para a tela,
@@ -498,7 +623,20 @@ function MainApp({
 
   useEffect(() => {
     setShowTeamList(false);
+    setShowNotifications(false);
   }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (!showNotifications) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.notifications-popover') && !target.closest('.notifications-toggle-btn')) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick, true);
+    return () => document.removeEventListener('click', handleOutsideClick, true);
+  }, [showNotifications]);
 
   const userTeams = teams.filter(t => (userData?.team_ids || []).includes(t.id));
   const teamNames = userTeams.map(t => t.name).join(', ');
@@ -621,173 +759,31 @@ function MainApp({
         </nav>
 
         <div className="p-3 border-t border-white/5 interactive-sidebar-item">
-          <div className="relative interactive-sidebar-item">
-            <div className="flex items-center gap-3 p-2 rounded-xl bg-black/10 overflow-hidden">
-              <button
-                onClick={() => setShowTeamList(!showTeamList)}
-                className="profile-toggle-btn w-9 h-9 rounded-lg bg-black/10 flex items-center justify-center flex-shrink-0 hover:bg-black/20 transition-all relative cursor-pointer"
-              >
-                <UserIcon className="w-5 h-5" />
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 rounded-full transition-colors duration-300" style={{ borderColor: sidebarColor || `var(--sidebar-bg-${(userData?.role || 'admin').replace('_', '-')})` }} />
-              </button>
-
-              <div className="flex-1 flex items-center gap-2 min-w-0 overflow-hidden" style={{ opacity: sidebarTextVisible ? 1 : 0, maxWidth: sidebarTextVisible ? undefined : 0, transition: 'opacity 0.15s ease' }}>
-                <button
-                  onClick={() => setShowTeamList(!showTeamList)}
-                  className="profile-toggle-btn min-w-0 flex-1 py-1 text-left cursor-pointer hover:opacity-80 transition-opacity"
-                >
-                  <p className="text-xs font-bold leading-tight truncate">{userData?.name}</p>
-                  <p className={`text-[10px] font-medium ${sidebarContrastSubtle} uppercase tracking-wider mt-0.5 leading-tight truncate`}>
-                    {userData ? ROLE_LABELS[userData.role as UserRole] : ''}
-                  </p>
-                </button>
-
-                <button
-                  onClick={handleLogout}
-                  className={`p-1.5 ${sidebarIsDark ? 'hover:bg-white/10 text-white/40 hover:text-white' : 'hover:bg-black/10 text-slate-900/40 hover:text-slate-900'} rounded-lg transition-colors cursor-pointer flex-shrink-0`}
-                  title="Sair"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
+          <div
+            className="flex items-center gap-3 p-2 rounded-xl bg-black/10 overflow-hidden"
+            title={`${isReconnecting ? 'Reconectando...' : isSystemOnline ? 'Sistema Online' : 'Sistema Offline'} — ${formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}`}
+          >
+            <div className="w-9 h-9 rounded-lg bg-black/10 flex items-center justify-center flex-shrink-0 relative">
+              <div className={`w-2.5 h-2.5 rounded-full ${isSystemOnline ? 'bg-success animate-pulse' : 'bg-error'} ${isReconnecting ? 'animate-bounce' : ''}`} />
             </div>
 
-            <AnimatePresence>
-              {showTeamList && (
-                <m.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className={`absolute w-56 bg-surface-card border border-surface-border rounded-2xl shadow-premium z-50 text-brand-primary interactive-sidebar-popover overflow-hidden ${isSidebarOpen ? 'bottom-full left-0 mb-2' : 'bottom-0 left-full ml-2' }`}
-                >
-                  <div className="p-3 space-y-0.5">
-                    <div>
-                      <button
-                        onClick={() => setSidebarAccordion(sidebarAccordion === 'teams' ? null : 'teams')}
-                        className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Users className="w-4 h-4 text-brand-accent" />
-                          <span className="text-[11px] font-black uppercase tracking-wider">Equipes</span>
-                        </div>
-                        <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'teams' ? 'rotate-180' : ''}`} />
-                      </button>
-                      <AnimatePresence initial={false}>
-                        {sidebarAccordion === 'teams' && (
-                          <m.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            className="overflow-hidden"
-                          >
-                            <div className="pb-2 px-2 space-y-0.5">
-                              {userTeams.length > 0 ? userTeams.map(t => (
-                                <div key={t.id} className="text-[11px] py-1 px-2 rounded-lg font-semibold text-brand-muted">{t.name}</div>
-                              )) : (
-                                <div className="text-[10px] text-brand-muted italic px-2 py-1">Nenhuma equipe vinculada</div>
-                              )}
-                            </div>
-                          </m.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    <div className="border-t border-surface-border">
-                      <button
-                        onClick={() => setSidebarAccordion(sidebarAccordion === 'avatar' ? null : 'avatar')}
-                        className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2">
-                          <UserIcon className="w-4 h-4 text-brand-accent" />
-                          <span className="text-[11px] font-black uppercase tracking-wider">Avatar</span>
-                        </div>
-                        <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'avatar' ? 'rotate-180' : ''}`} />
-                      </button>
-                      <AnimatePresence initial={false}>
-                        {sidebarAccordion === 'avatar' && (
-                          <m.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            className="overflow-hidden"
-                          >
-                            <div className="pb-2 px-2">
-                              <div className="text-[10px] text-brand-muted italic py-1">Em breve</div>
-                            </div>
-                          </m.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    <div className="border-t border-surface-border">
-                      <button
-                        onClick={() => setSidebarAccordion(sidebarAccordion === 'appearance' ? null : 'appearance')}
-                        className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2">
-                          {theme === 'dark' ? <Moon className="w-4 h-4 text-brand-accent" /> : theme === 'light' ? <Sun className="w-4 h-4 text-brand-accent" /> : <Monitor className="w-4 h-4 text-brand-accent" />}
-                          <span className="text-[11px] font-black uppercase tracking-wider">Aparência</span>
-                          <span className="text-[10px] font-semibold text-brand-muted normal-case tracking-normal">
-                            {theme === 'light' ? 'Claro' : theme === 'dark' ? 'Escuro' : 'Sistema'}
-                          </span>
-                        </div>
-                        <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'appearance' ? 'rotate-180' : ''}`} />
-                      </button>
-                      <AnimatePresence initial={false}>
-                        {sidebarAccordion === 'appearance' && (
-                          <m.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            className="overflow-hidden"
-                          >
-                            <div className="pb-2 px-2">
-                              <div className="grid grid-cols-3 gap-1 bg-surface-subtle p-1 rounded-xl border border-surface-border">
-                                {[
-                                  { value: 'light', label: 'Claro', icon: Sun },
-                                  { value: 'dark', label: 'Escuro', icon: Moon },
-                                  { value: 'system', label: 'Sistema', icon: Monitor }
-                                ].map(opt => {
-                                  const Icon = opt.icon;
-                                  const isActive = theme === opt.value;
-                                  return (
-                                    <button
-                                      key={opt.value}
-                                      onClick={(e) => { e.stopPropagation(); handleThemeChange(opt.value as Theme); }}
-                                      className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                                        isActive
-                                          ? 'bg-surface-card text-brand-primary shadow-sm border border-surface-border'
-                                          : 'text-brand-muted hover:text-brand-primary hover:bg-surface-card/30 border border-transparent'
-                                      }`}
-                                    >
-                                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-brand-accent' : 'text-brand-muted'}`} />
-                                      <span>{opt.label}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </m.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    <div className="border-t border-surface-border pt-1 mt-1">
-                      <button
-                        onClick={() => { setShowTeamList(false); handleLogout(); }}
-                        className="w-full flex items-center gap-2 py-2 px-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span className="text-[11px] font-black uppercase tracking-wider">Sair</span>
-                      </button>
-                    </div>
-                  </div>
-                </m.div>
-              )}
-            </AnimatePresence>
+            <div
+              className="flex-1 min-w-0 overflow-hidden"
+              style={{
+                opacity: sidebarTextVisible ? 1 : 0,
+                maxWidth: sidebarTextVisible ? undefined : 0,
+                transition: 'opacity 0.15s ease'
+              }}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[11px] font-bold tracking-normal leading-tight truncate ${isSystemOnline ? '' : 'text-error'}`}>
+                  {isReconnecting ? 'Reconectando...' : isSystemOnline ? 'Sistema Online' : 'Sistema Offline'}
+                </span>
+              </div>
+              <p className={`text-[10px] font-medium ${sidebarContrastSubtle} capitalize tracking-wider mt-0.5 leading-tight truncate`}>
+                {formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+              </p>
+            </div>
           </div>
         </div>
       </m.aside>
@@ -834,26 +830,240 @@ function MainApp({
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="hidden xl:flex flex-col items-end">
-              <p className="text-xs font-semibold text-brand-muted capitalize tracking-wide">{formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <div className={`w-1.5 h-1.5 rounded-full ${isSystemOnline ? 'bg-success animate-pulse' : 'bg-error'} ${isReconnecting ? 'animate-bounce' : ''}`} />
-                <span className={`text-[11px] font-semibold tracking-normal ${isSystemOnline ? 'text-brand-primary' : 'text-error'}`}>
-                  {isReconnecting ? 'Reconectando...' : isSystemOnline ? 'Sistema Online' : 'Sistema Offline'}
-                </span>
-              </div>
+          <div className="flex items-center gap-4">
+            {userData?.role === 'qualidade' && (
+              <button
+                onClick={() => setIsFormOpen(true)}
+                className="action-primary h-10 px-5 rounded-xl text-sm font-semibold shadow-premium transition-all flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Nova Monitoria
+              </button>
+            )}
+
+            {/* Central de Notificações */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowNotifications(!showNotifications);
+                  setShowTeamList(false);
+                }}
+                className="notifications-toggle-btn relative p-2.5 rounded-xl border border-surface-border/60 hover:bg-surface-subtle transition-all cursor-pointer shadow-xs text-brand-muted hover:text-brand-primary flex items-center justify-center"
+                title="Central de Notificações"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-brand-highlight text-white text-[10px] font-black flex items-center justify-center px-1 shadow-sm">
+                    {unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {showNotifications && (
+                  <m.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-surface-card border border-surface-border rounded-2xl shadow-premium z-50 text-brand-primary notifications-popover overflow-hidden"
+                  >
+                    <div className="p-3.5 border-b border-surface-border bg-surface-subtle/40 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-brand-highlight" />
+                        <h4 className="text-xs font-black text-brand-primary">Notificações</h4>
+                        <span className="px-1.5 py-0.5 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold text-[9px]">
+                          {unreadNotificationsCount} novas
+                        </span>
+                      </div>
+                      <button
+                        onClick={markAllNotificationsAsRead}
+                        className="text-[10px] font-semibold text-brand-muted hover:text-brand-primary flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <CheckCheck className="w-3 h-3" />
+                        <span>Marcar lidas</span>
+                      </button>
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto divide-y divide-surface-border/50 no-scrollbar">
+                      {notifications.length === 0 ? (
+                        <div className="p-8 text-center text-brand-muted">
+                          <Bell className="w-8 h-8 opacity-20 mx-auto mb-2" />
+                          <p className="text-xs font-semibold">Tudo em dia!</p>
+                          <p className="text-[10px]">Nenhuma nova notificação pendente.</p>
+                        </div>
+                      ) : (
+                        notifications.map(item => (
+                          <div
+                            key={item.id}
+                            onClick={() => handleNotificationClick(item)}
+                            className={`p-3 hover:bg-surface-subtle/80 transition-colors cursor-pointer flex items-start gap-3 ${item.read ? 'opacity-70' : 'bg-brand-highlight/[0.03]'}`}
+                          >
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${item.iconBg}`}>
+                              {item.icon}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <p className="text-[11px] font-bold text-brand-primary truncate">{item.title}</p>
+                                <span className="text-[9px] text-brand-muted whitespace-nowrap">{item.time}</span>
+                              </div>
+                              <p className="text-[10px] text-brand-muted line-clamp-2 mt-0.5">{item.message}</p>
+                            </div>
+                            {!item.read && (
+                              <div className="w-1.5 h-1.5 rounded-full bg-brand-highlight flex-shrink-0 mt-2" />
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </m.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            <div className="flex items-center gap-4">
-              {userData?.role === 'qualidade' && (
-                <button
-                  onClick={() => setIsFormOpen(true)}
-                  className="action-primary h-10 px-5 rounded-xl text-sm font-semibold shadow-premium transition-all flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" /> Nova Monitoria
-                </button>
-              )}
+            {/* Perfil do Usuário com Menu Dropdown Completo */}
+            <div className="relative">
+              <button
+                onClick={() => setShowTeamList(!showTeamList)}
+                className="profile-toggle-btn flex items-center gap-2.5 p-1.5 pr-3 rounded-xl border border-surface-border/60 hover:bg-surface-subtle transition-all cursor-pointer shadow-xs group"
+                title="Meu Perfil"
+              >
+                <div className="w-8 h-8 rounded-lg bg-brand-highlight/10 text-brand-highlight flex items-center justify-center font-bold text-xs flex-shrink-0 relative">
+                  {userData?.name ? userData.name.substring(0, 2).toUpperCase() : <UserIcon className="w-4 h-4" />}
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-bg ${isSystemOnline ? 'bg-success' : 'bg-error'}`} />
+                </div>
+                <div className="hidden sm:flex flex-col text-left min-w-0 max-w-[140px]">
+                  <p className="text-xs font-bold text-brand-primary truncate leading-tight">{userData?.name}</p>
+                  <p className="text-[10px] font-medium text-brand-muted uppercase tracking-wider truncate leading-tight mt-0.5">
+                    {userData ? ROLE_LABELS[userData.role as UserRole] : ''}
+                  </p>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${showTeamList ? 'rotate-180' : ''}`} />
+              </button>
+
+              <AnimatePresence>
+                {showTeamList && (
+                  <m.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-2 w-64 bg-surface-card border border-surface-border rounded-2xl shadow-premium z-50 text-brand-primary interactive-sidebar-popover overflow-hidden"
+                  >
+                    <div className="p-3 border-b border-surface-border bg-surface-subtle/30">
+                      <p className="text-xs font-bold text-brand-primary truncate">{userData?.name}</p>
+                      <p className="text-[10px] text-brand-muted truncate">{userData?.email}</p>
+                      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                        <span className="px-1.5 py-0.5 rounded-md bg-brand-highlight/10 text-brand-highlight text-[9px] font-bold uppercase tracking-wider">
+                          {userData ? ROLE_LABELS[userData.role as UserRole] : ''}
+                        </span>
+                        {userTeams.length > 0 && (
+                          <span className="text-[10px] text-brand-muted truncate max-w-[160px]" title={teamNames}>
+                            • {userTeams[0].name} {userTeams.length > 1 ? `(+${userTeams.length - 1})` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-2 space-y-0.5">
+                      <div>
+                        <button
+                          onClick={() => setSidebarAccordion(sidebarAccordion === 'teams' ? null : 'teams')}
+                          className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4 text-brand-accent" />
+                            <span className="text-[11px] font-bold">Minhas Equipes</span>
+                          </div>
+                          <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'teams' ? 'rotate-180' : ''}`} />
+                        </button>
+                        <AnimatePresence initial={false}>
+                          {sidebarAccordion === 'teams' && (
+                            <m.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2, ease: 'easeInOut' }}
+                              className="overflow-hidden"
+                            >
+                              <div className="pb-2 px-2 space-y-0.5">
+                                {userTeams.length > 0 ? userTeams.map(t => (
+                                  <div key={t.id} className="text-[11px] py-1 px-2 rounded-lg font-semibold text-brand-muted">{t.name}</div>
+                                )) : (
+                                  <div className="text-[10px] text-brand-muted italic px-2 py-1">Nenhuma equipe vinculada</div>
+                                )}
+                              </div>
+                            </m.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      <div className="border-t border-surface-border">
+                        <button
+                          onClick={() => setSidebarAccordion(sidebarAccordion === 'appearance' ? null : 'appearance')}
+                          className="w-full flex items-center justify-between gap-2 py-2 px-2 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2">
+                            {theme === 'dark' ? <Moon className="w-4 h-4 text-brand-accent" /> : theme === 'light' ? <Sun className="w-4 h-4 text-brand-accent" /> : <Monitor className="w-4 h-4 text-brand-accent" />}
+                            <span className="text-[11px] font-bold">Aparência</span>
+                            <span className="text-[10px] font-semibold text-brand-muted normal-case tracking-normal">
+                              {theme === 'light' ? 'Claro' : theme === 'dark' ? 'Escuro' : 'Sistema'}
+                            </span>
+                          </div>
+                          <ChevronDown className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${sidebarAccordion === 'appearance' ? 'rotate-180' : ''}`} />
+                        </button>
+                        <AnimatePresence initial={false}>
+                          {sidebarAccordion === 'appearance' && (
+                            <m.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2, ease: 'easeInOut' }}
+                              className="overflow-hidden"
+                            >
+                              <div className="pb-2 px-2">
+                                <div className="grid grid-cols-3 gap-1 bg-surface-subtle p-1 rounded-xl border border-surface-border">
+                                  {[
+                                    { value: 'light', label: 'Claro', icon: Sun },
+                                    { value: 'dark', label: 'Escuro', icon: Moon },
+                                    { value: 'system', label: 'Sistema', icon: Monitor }
+                                  ].map(opt => {
+                                    const Icon = opt.icon;
+                                    const isActive = theme === opt.value;
+                                    return (
+                                      <button
+                                        key={opt.value}
+                                        onClick={(e) => { e.stopPropagation(); handleThemeChange(opt.value as Theme); }}
+                                        className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                          isActive
+                                            ? 'bg-surface-card text-brand-primary shadow-sm border border-surface-border'
+                                            : 'text-brand-muted hover:text-brand-primary hover:bg-surface-card/30 border border-transparent'
+                                        }`}
+                                      >
+                                        <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-brand-accent' : 'text-brand-muted'}`} />
+                                        <span>{opt.label}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </m.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      <div className="border-t border-surface-border pt-1 mt-1">
+                        <button
+                          onClick={() => { setShowTeamList(false); handleLogout(); }}
+                          className="w-full flex items-center gap-2 py-2 px-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span className="text-[11px] font-bold">Sair da Conta</span>
+                        </button>
+                      </div>
+                    </div>
+                  </m.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>
@@ -974,7 +1184,16 @@ function AnimatedMonitoriasIcon({ isHovered, active, className }: { isHovered?: 
 function AnimatedLayersIcon({ isHovered, active, className }: { isHovered?: boolean; active?: boolean; className?: string }) {
   const isTriggered = !!(isHovered || active);
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className || "w-5 h-5"}>
+    <svg
+      viewBox="0 -2 24 28"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ overflow: 'visible' }}
+      className={className || "w-5 h-5"}
+    >
       <m.path
         d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
         animate={{ y: isTriggered ? -2.5 : 0 }}

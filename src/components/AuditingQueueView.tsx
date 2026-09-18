@@ -25,7 +25,7 @@ import {
   resolveCustomerType,
   resolveFormAndGuidelineForCustomerType,
 } from '../lib/helpdeskQueue';
-import { fetchAIGuidelines } from '../lib/aiGuidelines';
+import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
 import { fetchAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import {
   AlertTriangle,
@@ -138,6 +138,8 @@ export default function AuditingQueueView({
   const [guidelineOptions, setGuidelineOptions] = useState<AIEvaluationGuideline[]>([]);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [guidelinePickerTicket, setGuidelinePickerTicket] = useState<AuditingQueueTicket | null>(null);
+  const [childGuidelineModalTicket, setChildGuidelineModalTicket] = useState<AuditingQueueTicket | null>(null);
+  const [showFullChildManual, setShowFullChildManual] = useState(false);
 
   // Rascunhos de avaliação da IA já prontos (persistidos), por ticket_id —
   // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
@@ -151,9 +153,9 @@ export default function AuditingQueueView({
   // Notifica o container pai (App.tsx) se algum modal de prévia está aberto,
   // para que a barra lateral se recolha automaticamente liberando espaço total da tela.
   useEffect(() => {
-    const isAnyModalOpen = Boolean(childPreviewTicket || guidelinePickerTicket);
+    const isAnyModalOpen = Boolean(childPreviewTicket || guidelinePickerTicket || childGuidelineModalTicket);
     onModalStateChange?.(isAnyModalOpen);
-  }, [childPreviewTicket, guidelinePickerTicket, onModalStateChange]);
+  }, [childPreviewTicket, guidelinePickerTicket, childGuidelineModalTicket, onModalStateChange]);
 
   // Paginação: 25 tickets por página (definido no backend). Views grandes
   // (Proativas chega a ter centenas de CSAT vazio) não cabem numa carga só
@@ -210,6 +212,7 @@ export default function AuditingQueueView({
     if (!hasMore || !cursor) return;
     setPrevCursors(prev => [...prev, cursor]);
     setPageNumber(p => p + 1);
+    setCurrentPage(1);
     loadQueueData(cursor);
   };
 
@@ -220,6 +223,7 @@ export default function AuditingQueueView({
     const target = stack.length > 0 ? stack[stack.length - 1] : null;
     setPrevCursors(stack);
     setPageNumber(p => Math.max(1, p - 1));
+    setCurrentPage(1);
     loadQueueData(target);
   };
 
@@ -237,6 +241,7 @@ export default function AuditingQueueView({
       setPrevCursors([]);
       setHasMore(false);
       setPageNumber(1);
+      setCurrentPage(1);
       prevQueueRef.current = activeQueue;
       loadQueueData(null);
     } else {
@@ -245,10 +250,9 @@ export default function AuditingQueueView({
   }, [activeQueue, monitorias.length]);
 
   // Carrega os rascunhos de IA já prontos para os tickets da página atual —
-  // relevante nas filas de Positivas e Proativas, onde a avaliação com IA
-  // acontece (Negativas ainda não tem IA).
+  // agora ativo nas filas de Negativas, Positivas e Proativas.
   useEffect(() => {
-    if ((activeQueue !== 'positivas' && activeQueue !== 'proativas') || tickets.length === 0) {
+    if ((activeQueue !== 'positivas' && activeQueue !== 'proativas' && activeQueue !== 'negativas') || tickets.length === 0) {
       setDrafts({});
       return;
     }
@@ -293,9 +297,34 @@ export default function AuditingQueueView({
     });
   }, [tickets, searchTerm, selectedAgentFilter]);
 
+  // Paginação configurável por página (5, 10, 15, 20) com padrão 10
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Reseta para a primeira página quando muda a busca, filtro de agente, tamanho de página ou fila
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedAgentFilter, activeQueue, pageSize]);
+
+  const totalItems = filteredTickets.length;
+  const totalLocalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalLocalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+
+  const paginatedTickets = useMemo(() => {
+    return filteredTickets.slice(startIndex, endIndex);
+  }, [filteredTickets, startIndex, endIndex]);
+
+
   // Abre o popup de confirmação da avaliação da IA com a seleção automática
   // de ficha e manual baseada no tipo de cliente (organização no Zendesk).
   const openGuidelinePicker = async (ticket: AuditingQueueTicket) => {
+    const pendingInfo = getPendingFormInfo(ticket);
+    if (pendingInfo.isPending) {
+      toast.warning(`A ficha de monitoria da equipe ${pendingInfo.label} está em elaboração pela Qualidade.`);
+      return;
+    }
     if (ticket.positive_cap_reached) {
       toast.warning('Este atendente já atingiu o máximo de 2 avaliações positivas no mês.');
       return;
@@ -420,14 +449,18 @@ export default function AuditingQueueView({
     }
   };
 
-  // Avaliação em LOTE — processa todos os tickets da página atual sem rascunho.
-  // Pula: já avaliados, com cap atingido, já auditados.
+  // Avaliação em LOTE — processa estritamente os tickets da página visível no momento (respeitando o pageSize: 5, 10, 15, 20...).
+  // Pula: já avaliados, com cap atingido, já auditados ou equipes com ficha em elaboração.
   const handleBatchEvaluate = async () => {
-    const pending = filteredTickets.filter(t =>
-      !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached
-    );
+    const pending = paginatedTickets.filter(t => {
+      if (drafts[t.ticket_id] || t.already_audited || t.positive_cap_reached) return false;
+      const pendingInfo = getPendingFormInfo(t);
+      if (pendingInfo.isPending) return false;
+      return true;
+    });
+
     if (pending.length === 0) {
-      toast.info('Todos os tickets desta página já possuem avaliação ou foram auditados.');
+      toast.info('Todos os tickets visíveis desta página já possuem avaliação, foram auditados ou estão com ficha em elaboração.');
       return;
     }
 
@@ -548,6 +581,11 @@ export default function AuditingQueueView({
 
   // Inicia auditoria manual direta (sem IA prévia) abrindo o fluxo oficial 1-2-3-4
   const handleStartManualAudit = (ticket: AuditingQueueTicket) => {
+    const pendingInfo = getPendingFormInfo(ticket);
+    if (pendingInfo.isPending) {
+      toast.warning(`A auditoria para a equipe ${pendingInfo.label} está temporariamente suspensa (ficha em elaboração).`);
+      return;
+    }
     const matchedAgent = agents.find(a =>
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
       (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
@@ -599,6 +637,73 @@ export default function AuditingQueueView({
   // "Reavaliar" e "Lançar Monitoria" ficavam com tamanhos bem diferentes
   // (cada Button só cresce até caber o próprio texto).
   const AI_ACTION_BUTTON_CLASS = 'justify-center min-w-[132px]';
+
+  // Verifica se o atendente do ticket pertence a uma EQUIPE cujos critérios e manual ainda estão em elaboração (Contábil, Fiscal, TEF).
+  // A verificação é ESTRITA à equipe do atendente (NUNCA tags ou assunto do chamado, permitindo que chamados sobre temas fiscais atendidos por outras equipes sigam normalmente).
+  const getPendingFormInfo = (ticket: AuditingQueueTicket) => {
+    const matchedAgent = agents.find(a =>
+      (ticket.agent_email && a.email?.toLowerCase() === ticket.agent_email.toLowerCase()) ||
+      (ticket.agent_name && a.name?.toLowerCase() === ticket.agent_name.toLowerCase()) ||
+      (ticket.agent_id && a.id === ticket.agent_id)
+    );
+
+    const teamNames: string[] = [];
+    if (ticket.team_id && teamsMap[ticket.team_id]) {
+      teamNames.push(teamsMap[ticket.team_id]);
+    }
+    if (matchedAgent?.primary_team_id && teamsMap[matchedAgent.primary_team_id]) {
+      teamNames.push(teamsMap[matchedAgent.primary_team_id]);
+    }
+    if (Array.isArray(matchedAgent?.team_ids)) {
+      matchedAgent.team_ids.forEach(tid => {
+        if (teamsMap[tid]) teamNames.push(teamsMap[tid]);
+      });
+    }
+
+    const teamString = teamNames.join(' ').toLowerCase();
+
+    if (/cont[aá]bil/i.test(teamString)) {
+      return { isPending: true, label: 'Contábil' };
+    }
+    if (/fiscal/i.test(teamString)) {
+      return { isPending: true, label: 'Fiscal' };
+    }
+    if (/\btef\b/i.test(teamString)) {
+      return { isPending: true, label: 'TEF' };
+    }
+
+    return { isPending: false, label: '' };
+  };
+
+  // Exibição consistente e destacada do atendente: caso o ticket não possua atendente individual
+  // atribuído (atribuído apenas a um grupo no Zendesk), exibe um badge visual de alerta.
+  const renderAgentInfo = (ticket: AuditingQueueTicket) => {
+    const rawName = (ticket.agent_name || '').trim();
+    const hasAgent = rawName.length > 0 &&
+      !/^não\s*atribu[ií]do$/i.test(rawName) &&
+      !/^sem\s*atendente$/i.test(rawName) &&
+      rawName.toLowerCase() !== 'agente' &&
+      rawName.toLowerCase() !== 'n/d';
+
+    if (!hasAgent) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 font-bold text-[10px]"
+          title="Chamado atribuído apenas a Grupo de atendimento no Zendesk, sem analista específico atribuído."
+        >
+          <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+          <span>Sem atendente atribuído (Apenas Grupo)</span>
+        </span>
+      );
+    }
+
+    return (
+      <span className="flex items-center gap-1 text-brand-secondary font-semibold">
+        <UserIcon className="w-3 h-3 text-brand-highlight shrink-0" />
+        <span>{ticket.agent_name}</span>
+      </span>
+    );
+  };
 
   // Bloco de botões de ação de IA (Avaliar com IA / Reavaliar / Verificar Avaliação)
   // Após avaliado com IA, o botão é "Verificar Avaliação" (em verde esmeralda) e abre
@@ -664,6 +769,25 @@ export default function AuditingQueueView({
             Máximo de 2 por agente atingido
           </Badge>
         </span>
+      );
+    }
+
+    const pendingInfo = getPendingFormInfo(ticket);
+    if (pendingInfo.isPending) {
+      return (
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          <span title={`A Ficha de Critérios e o Manual de Atendimento da equipe ${pendingInfo.label} ainda estão em elaboração pela equipe de Qualidade. Auditorias manual e com IA estão temporariamente suspensas para esta equipe.`}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={true}
+              className="flex items-center gap-1.5 opacity-75 cursor-not-allowed text-xs font-semibold border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 justify-center min-w-[175px]"
+            >
+              <Bot className="w-3.5 h-3.5 opacity-60 text-amber-500" />
+              <span>Ficha em Elaboração ({pendingInfo.label})</span>
+            </Button>
+          </span>
+        </div>
       );
     }
 
@@ -743,34 +867,81 @@ export default function AuditingQueueView({
     });
   };
 
-  // Controles de paginação (25 tickets por página) — reaproveitados em todas as filas.
-  const renderPagination = () => (
-    <div className="flex items-center justify-between pt-2">
-      <span className="text-[10px] font-bold text-brand-muted">Página {pageNumber}</span>
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={prevCursors.length === 0 || loading}
-          onClick={goToPrevPage}
-          className="flex items-center gap-1 text-[10px]"
-        >
-          <ChevronLeft className="w-3 h-3" />
-          <span>Anterior</span>
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={!hasMore || loading}
-          onClick={goToNextPage}
-          className="flex items-center gap-1 text-[10px]"
-        >
-          <span>Próxima</span>
-          <ChevronRight className="w-3 h-3" />
-        </Button>
+  // Controles de paginação com seletor de itens por página (5, 10, 15, 20) — padrão 10
+  const renderPagination = () => {
+    if (totalItems === 0) return null;
+
+    const canGoPrev = validCurrentPage > 1 || prevCursors.length > 0;
+    const canGoNext = validCurrentPage < totalLocalPages || hasMore;
+
+    const handlePrev = () => {
+      if (validCurrentPage > 1) {
+        setCurrentPage(p => Math.max(1, p - 1));
+      } else if (prevCursors.length > 0) {
+        goToPrevPage();
+      }
+    };
+
+    const handleNext = () => {
+      if (validCurrentPage < totalLocalPages) {
+        setCurrentPage(p => p + 1);
+      } else if (hasMore) {
+        goToNextPage();
+      }
+    };
+
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-surface-border mt-4">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-brand-muted">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium text-brand-muted">Exibir:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="bg-surface border border-surface-border rounded-lg px-2 py-1 text-xs font-bold text-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-highlight cursor-pointer hover:border-brand-highlight/50 transition-colors"
+            >
+              <option value={5}>5 por página</option>
+              <option value={10}>10 por página</option>
+              <option value={15}>15 por página</option>
+              <option value={20}>20 por página</option>
+            </select>
+          </div>
+          <span className="text-[11px] text-brand-muted">
+            Mostrando <strong className="text-brand-primary font-bold">{startIndex + 1}–{endIndex}</strong> de <strong className="text-brand-primary font-bold">{totalItems}</strong> chamados
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-brand-muted mr-1">
+            Página {validCurrentPage} de {totalLocalPages}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!canGoPrev || loading}
+            onClick={handlePrev}
+            className="flex items-center gap-1 text-[11px] h-8 px-2.5"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span>Anterior</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!canGoNext || loading}
+            onClick={handleNext}
+            className="flex items-center gap-1 text-[11px] h-8 px-2.5"
+          >
+            <span>Próxima</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -785,7 +956,7 @@ export default function AuditingQueueView({
           }`}
         >
           <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">CSAT Negativas</span>
+          <span className="truncate">CSAT Negativas (+ IA)</span>
           {pendingNegativesCount > 0 && (
             <span className="px-1.5 py-0.5 text-[10px] font-black bg-functional-error text-white rounded-full flex-shrink-0">
               {pendingNegativesCount}
@@ -855,7 +1026,7 @@ export default function AuditingQueueView({
             {activeQueue === 'filhos_invalidos' && 'Chamados Filhos Inválidos (View Zendesk #47656856998292)'}
           </span>
           <span className="text-[10px] text-brand-muted whitespace-nowrap hidden sm:inline">
-            • {filteredTickets.length} chamado(s) nesta página
+            • {filteredTickets.length} chamado(s) encontrados
           </span>
         </div>
 
@@ -879,8 +1050,8 @@ export default function AuditingQueueView({
             )}
           </div>
 
-          {/* Botão Avaliar em Lote — só nas filas com IA */}
-          {(activeQueue === 'positivas' || activeQueue === 'proativas') && (
+          {/* Botão Avaliar em Lote — nas filas com IA */}
+          {(activeQueue === 'positivas' || activeQueue === 'proativas' || activeQueue === 'negativas') && (
             batchRunning ? (
               <div className="flex items-center gap-2 flex-shrink-0">
                 {batchProgress && (
@@ -911,12 +1082,18 @@ export default function AuditingQueueView({
                 variant="ghost"
                 size="sm"
                 onClick={handleBatchEvaluate}
-                disabled={loading || filteredTickets.length === 0}
-                className="flex items-center gap-1.5 flex-shrink-0 text-brand-highlight hover:text-brand-highlight"
-                title="Avaliar todos os tickets desta página com IA de uma vez"
+                disabled={loading || paginatedTickets.length === 0}
+                className={`flex items-center gap-1.5 flex-shrink-0 font-bold transition-all ${
+                  activeQueue === 'negativas'
+                    ? 'text-functional-error hover:text-functional-error hover:bg-functional-error/10 border border-functional-error/30'
+                    : 'text-brand-highlight hover:text-brand-highlight'
+                }`}
+                title="Avaliar todos os tickets elegíveis visíveis desta página com IA de uma vez"
               >
                 <Zap className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Avaliar Página com IA</span>
+                <span className="hidden sm:inline">
+                  Avaliar Página com IA ({paginatedTickets.filter(t => !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached && !getPendingFormInfo(t).isPending).length})
+                </span>
               </Button>
             )
           )}
@@ -945,14 +1122,19 @@ export default function AuditingQueueView({
 
           {/* Lista de Tickets Negativos */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredTickets.map(ticket => (
+            {paginatedTickets.map(ticket => (
               <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-brand-highlight/40 transition-all">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs font-black text-brand-primary">
                         #{ticket.ticket_id}
                       </span>
+                      {getPendingFormInfo(ticket).isPending && (
+                        <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                        </Badge>
+                      )}
                       <a
                         href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
                         target="_blank"
@@ -973,9 +1155,12 @@ export default function AuditingQueueView({
                       {ticket.subject}
                     </h4>
                   </div>
-                  <Badge variant="error" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
-                    CSAT Ruim
-                  </Badge>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {renderScoreBadge(ticket)}
+                    <Badge variant="error" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
+                      CSAT Ruim
+                    </Badge>
+                  </div>
                 </div>
 
                 {ticket.csat_comment && (
@@ -984,50 +1169,18 @@ export default function AuditingQueueView({
                   </div>
                 )}
 
-                <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-1 border-t border-surface-border">
+                <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                   <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1">
-                      <UserIcon className="w-3 h-3 text-brand-highlight" />
-                      {ticket.agent_name || 'Agente'}
-                    </span>
+                    {renderAgentInfo(ticket)}
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 opacity-60" />
                       {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
                     </span>
                   </div>
 
-                  <Button
-                    size="sm"
-                    variant={ticket.already_audited ? 'outline' : 'primary'}
-                    onClick={() => {
-                      const matchedAgent = agents.find(a =>
-                        (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
-                        (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
-                      );
-                      // ticket.agent_id vem resolvido pela Edge Function (que já
-                      // garante o vínculo/conta provisória pelo e-mail) — mais
-                      // confiável que o match local, que depende do cache de
-                      // agentes estar atualizado.
-                      const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
-                      const { form: autoForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
-                      onStartAudit({
-                        ticket_id: ticket.ticket_id,
-                        ticket_subject: ticket.subject,
-                        form_id: autoForm?.id,
-                        evaluated_id: ticket.agent_id || matchedAgent?.id,
-                        team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
-                        channel: normalizeChannel(ticket.channel),
-                        satisfaction_result: 'Negativa',
-                        ticket_fields: ticket.ticket_fields,
-                        isAiLocked: true,
-                        customerType,
-                      });
-                    }}
-                    className="flex items-center gap-1"
-                  >
-                    <span>{ticket.already_audited ? 'Reavaliar' : 'Auditar Chamado'}</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {renderAiActions(ticket, 'bg-functional-error hover:bg-functional-error/90')}
+                  </div>
                 </div>
               </Card>
             ))}
@@ -1061,16 +1214,21 @@ export default function AuditingQueueView({
 
           {/* Lista de Chamados com CSAT Vazio */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredTickets.map(ticket => {
+            {paginatedTickets.map(ticket => {
               const isPriority = ticket.agent_email && topPriorityEmails.has(ticket.agent_email.toLowerCase());
               return (
                 <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-info/40 transition-all">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs font-black text-brand-primary">
                           #{ticket.ticket_id}
                         </span>
+                        {getPendingFormInfo(ticket).isPending && (
+                          <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                            Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                          </Badge>
+                        )}
                         <a
                           href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
                           target="_blank"
@@ -1106,10 +1264,7 @@ export default function AuditingQueueView({
 
                   <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                     <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1">
-                        <UserIcon className="w-3 h-3 text-info" />
-                        {ticket.agent_name || 'Agente'}
-                      </span>
+                      {renderAgentInfo(ticket)}
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3 opacity-60" />
                         {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
@@ -1133,14 +1288,19 @@ export default function AuditingQueueView({
         <div className="space-y-4">
           {/* Lista de Chamados Positivos */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredTickets.map(ticket => (
+            {paginatedTickets.map(ticket => (
               <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-functional-success/40 transition-all">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs font-black text-brand-primary">
                         #{ticket.ticket_id}
                       </span>
+                      {getPendingFormInfo(ticket).isPending && (
+                        <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                        </Badge>
+                      )}
                       <a
                         href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
                         target="_blank"
@@ -1177,10 +1337,7 @@ export default function AuditingQueueView({
 
                 <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                   <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1">
-                      <UserIcon className="w-3 h-3 text-brand-highlight" />
-                      {ticket.agent_name || 'Agente'}
-                    </span>
+                    {renderAgentInfo(ticket)}
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 opacity-60" />
                       {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
@@ -1209,7 +1366,7 @@ export default function AuditingQueueView({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredTickets.map(ticket => {
+              {paginatedTickets.map(ticket => {
                 const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
                 const evaluation = ticket.child_evaluation;
 
@@ -1255,10 +1412,7 @@ export default function AuditingQueueView({
 
                     <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                       <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1">
-                          <UserIcon className="w-3 h-3 text-brand-highlight" />
-                          {ticket.agent_name || 'Agente'}
-                        </span>
+                        {renderAgentInfo(ticket)}
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 opacity-60" />
                           {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
@@ -1270,7 +1424,14 @@ export default function AuditingQueueView({
                           size="sm"
                           variant={isValidated ? "outline" : "primary"}
                           disabled={evaluatingChildTicketId === ticket.ticket_id}
-                          onClick={() => handleEvaluateChildTicket(ticket)}
+                          onClick={() => {
+                            if (evaluation) {
+                              setChildPreviewTicket(ticket);
+                              setChildAiEvaluation(evaluation);
+                            } else {
+                              setChildGuidelineModalTicket(ticket);
+                            }
+                          }}
                           className="flex items-center gap-1.5 text-xs font-bold"
                         >
                           <Bot className={`w-3.5 h-3.5 ${evaluatingChildTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
@@ -1322,7 +1483,7 @@ export default function AuditingQueueView({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredTickets.map(ticket => {
+              {paginatedTickets.map(ticket => {
                 const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
                 const evaluation = ticket.child_evaluation;
 
@@ -1366,10 +1527,7 @@ export default function AuditingQueueView({
 
                     <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                       <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1">
-                          <UserIcon className="w-3 h-3 text-brand-highlight" />
-                          {ticket.agent_name || 'Agente'}
-                        </span>
+                        {renderAgentInfo(ticket)}
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 opacity-60" />
                           {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
@@ -1381,7 +1539,14 @@ export default function AuditingQueueView({
                           size="sm"
                           variant="outline"
                           disabled={evaluatingChildTicketId === ticket.ticket_id}
-                          onClick={() => handleEvaluateChildTicket(ticket)}
+                          onClick={() => {
+                            if (evaluation) {
+                              setChildPreviewTicket(ticket);
+                              setChildAiEvaluation(evaluation);
+                            } else {
+                              setChildGuidelineModalTicket(ticket);
+                            }
+                          }}
                           className="flex items-center gap-1.5 text-xs font-bold"
                         >
                           <Bot className={`w-3.5 h-3.5 ${evaluatingChildTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
@@ -1813,6 +1978,162 @@ export default function AuditingQueueView({
           document.body
         );
       })()}
+
+      {/* Modal Prévio de Apresentação do Manual de Chamados Filhos */}
+      {childGuidelineModalTicket && createPortal(
+        <div
+          className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-[9999] p-4 animate-fade-in"
+          onClick={() => {
+            setChildGuidelineModalTicket(null);
+            setShowFullChildManual(false);
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xl animate-scale-up"
+          >
+            <Card className="p-6 space-y-4 shadow-2xl border border-surface-border">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-brand-highlight/10 text-brand-highlight flex items-center justify-center">
+                    <Bot className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-brand-primary">
+                      Auditoria de Chamado Filho com IA
+                    </h3>
+                    <p className="text-[11px] font-medium text-brand-muted">
+                      Conferência de conformidade do Ticket #{childGuidelineModalTicket.ticket_id}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setChildGuidelineModalTicket(null);
+                    setShowFullChildManual(false);
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {/* Informações do Chamado */}
+              <div className="p-3 rounded-xl bg-surface-subtle border border-surface-border space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-brand-primary truncate max-w-[320px]">
+                    {childGuidelineModalTicket.subject}
+                  </span>
+                  {childGuidelineModalTicket.child_macro_type && getMacroBadge(childGuidelineModalTicket.child_macro_type)}
+                </div>
+                <div className="flex items-center gap-3 text-[10px] text-brand-muted">
+                  <span>Atendente: <strong className="text-brand-primary">{childGuidelineModalTicket.agent_name || 'Não atribuído (Apenas Grupo)'}</strong></span>
+                  <span>•</span>
+                  <span>Data: {new Date(childGuidelineModalTicket.ticket_date).toLocaleDateString('pt-BR')}</span>
+                </div>
+              </div>
+
+              {/* Manual Vinculado com Destaque */}
+              <div className="p-4 rounded-xl border border-brand-highlight/30 bg-brand-highlight/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-brand-highlight flex-shrink-0" />
+                    <div>
+                      <div className="text-[9px] font-black uppercase tracking-wider text-brand-muted">Manual Vinculado Homologado</div>
+                      <div className="text-xs font-black text-brand-primary">
+                        Manual de Chamados Filhos — POP v1.1 (Projeto DB-361)
+                      </div>
+                    </div>
+                  </div>
+                  <Badge variant="primary" size="xs" className="font-bold">
+                    Padrão Ativo
+                  </Badge>
+                </div>
+
+                <div className="text-[11px] font-semibold text-brand-primary/80">
+                  A IA auditará a abertura deste chamado baseando-se estritamente nas 4 regras de conformidade:
+                </div>
+
+                {/* As 4 Regras de Ouro */}
+                <div className="space-y-1.5 text-[10px]">
+                  <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">1</span>
+                    <div>
+                      <strong className="text-brand-primary">Preservação do Assunto:</strong> Inalterabilidade da macro base. Aceita identificador do chamado pai e prefixos (ex: <code>"Ticket Nova Demanda do #169238"</code>).
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">2</span>
+                    <div>
+                      <strong className="text-brand-primary">Corpo da Mensagem e Enriquecimento:</strong> Manutenção da estrutura da macro com preenchimento dos dados técnicos (versão, logs, AnyDesk, testes realizados).
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">3</span>
+                    <div>
+                      <strong className="text-brand-primary">Direcionamento ("Para"):</strong> Destinatário correto (Grupo para Análise Técnica; Próprio analista para Nova Demanda; Analista N2 nominal para Apoio Técnico).
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">4</span>
+                    <div>
+                      <strong className="text-brand-primary">Governança de Tags:</strong> Preservação das tags nativas da macro (<code>existe_ticket_filho</code>, <code>transferencia_analise</code>, etc.).
+                    </div>
+                  </div>
+                </div>
+
+                {/* Opção para ler o manual completo */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowFullChildManual(!showFullChildManual)}
+                    className="text-[10px] font-bold text-brand-highlight hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Eye className="w-3 h-3" />
+                    <span>{showFullChildManual ? 'Ocultar Texto Completo do Manual' : 'Ver Texto Completo do POP v1.1 na Íntegra'}</span>
+                  </button>
+                  {showFullChildManual && (
+                    <div className="mt-2 p-3 max-h-48 overflow-y-auto rounded-lg bg-surface-card border border-surface-border text-[10px] text-brand-muted whitespace-pre-line font-mono leading-relaxed">
+                      {DEFAULT_CHILD_TICKET_GUIDELINE.content}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Ações do Modal */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-border">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setChildGuidelineModalTicket(null);
+                    setShowFullChildManual(false);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                  onClick={() => {
+                    const ticketToEvaluate = childGuidelineModalTicket;
+                    setChildGuidelineModalTicket(null);
+                    setShowFullChildManual(false);
+                    handleEvaluateChildTicket(ticketToEvaluate);
+                  }}
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>Iniciar Auditoria com IA</span>
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

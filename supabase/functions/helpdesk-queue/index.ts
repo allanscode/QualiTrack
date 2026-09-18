@@ -1342,18 +1342,21 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
 =============================================================================
 1. PRESERVAÇÃO DO ASSUNTO (INALTERABILIDADE - REGRA CRÍTICA):
 =============================================================================
-- REGRA DE OURO: O ASSUNTO DO TICKET FILHO NUNCA PODE SER ALTERADO PELO ANALISTA.
-- MOTIVO TÉCNICO: O Zendesk possui 5 gatilhos estruturais de automação (DB-361) que lêem EXATAMENTE a string de texto fixa do assunto preenchido pela macro. Se o analista alterar uma única letra, abreviar, inserir número de chamado pai ou personalizar o título, os gatilhos falham e o chamado vira "Ticket Filho Inválido" (Fila #47656856998292).
-- ASSUNTOS PADRÃO HOMOLOGADOS:
+- O assunto do ticket filho DEVE conter o nome da macro padrão homologada.
+- O Zendesk e as automações frequentemente adicionam:
+  * O prefixo "Ticket " (ex: "Ticket Nova Demanda")
+  * O sufixo ou complemento com o número do chamado pai, como "do #169238", "#169238", "do chamado #169238", "do ticket #169238" (ex: "Nova Demanda do #169238", "Ticket Nova Demanda do #169238", "Encaminhado para Análise Técnica... do #169238")
+- REGRA DE OURO DA AUDITORIA: TODAS ESSAS FORMAS SÃO 100% CONFORMES E HOMOLOGADAS! A presença do prefixo "Ticket" ou do sufixo com o número do chamado pai (ex: "do #169238") NÃO VIOLA A REGRA e DEVE PASSAR (passed: true).
+- ASSUNTOS PADRÃO HOMOLOGADOS (válidos com ou sem "Ticket" e com ou sem "do #<id>"):
+  * "Nova Demanda" (ou "Nova Demanda - Mais Pagamentos")
   * "Encaminhado para Análise Técnica Cliente Final"
   * "Encaminhado para Análise Técnica REVENDA"
   * "Encaminhado para Análise Técnica Fiscal"
   * "Encaminhado para Análise Técnica Contábil"
-  * "Encaminhado para Análise Técnica - Correções" (ou "Encaminhado para Análise de Correções Cliente Final")
-  * "Encaminhado para Desenvolvimento" (P&D)
-  * "Nova Demanda" (ou "Nova Demanda - Mais Pagamentos")
+  * "Encaminhado para Análise Técnica - Correções" (ou "Encaminhado para Análise de Correções")
+  * "Encaminhado para Desenvolvimento"
   * "Apoio Análise Técnica"
-- SE O ASSUNTO FOI ALTERADO: O check "Preservação do Assunto" DEVE FALHAR (passed: false), score máximo limitado a 50, status "nao_conforme".
+- QUANDO DEVE FALHAR (passed: false): APENAS se o assunto foi totalmente descaracterizado e substituído por texto livre que não contém nenhuma das macros homologadas acima (ex: "Erro no PDV", "Cliente com dúvida", "Impressora travada").
 
 =============================================================================
 2. PRESERVAÇÃO DO TEXTO DA MACRO COM ENRIQUECIMENTO TÉCNICO:
