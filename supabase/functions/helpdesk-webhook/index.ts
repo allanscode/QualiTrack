@@ -89,6 +89,52 @@ serve(async (req: Request) => {
       });
     }
 
+    if (rawBody.event === 'check_zendesk_triggers') {
+      const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
+      const email = Deno.env.get('ZENDESK_EMAIL');
+      const apiToken = Deno.env.get('ZENDESK_API_TOKEN');
+
+      if (!subdomain || !email || !apiToken) {
+        return new Response(JSON.stringify({ error: 'Credenciais do Zendesk ausentes nos secrets' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const zendeskAuth = btoa(`${email}/token:${apiToken}`);
+      const zHeaders = {
+        Authorization: `Basic ${zendeskAuth}`,
+        'Content-Type': 'application/json',
+      };
+
+      const resp = await fetch(`https://${subdomain}.zendesk.com/api/v2/triggers.json?active=true`, { headers: zHeaders });
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        return new Response(JSON.stringify({ error: `Zendesk API erro: ${resp.status}`, details: errText }), {
+          status: 502,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      const data = await resp.json();
+      const triggers = (data.triggers || []).map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        active: t.active,
+        actions: t.actions,
+        conditions: t.conditions,
+      }));
+
+      return new Response(JSON.stringify({
+        success: true,
+        subdomain,
+        total_triggers: triggers.length,
+        triggers,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     // Resposta rápida para testes de conectividade do Zendesk (botão "Testar webhook" no Admin Center)
     if (rawBody.test !== undefined || !rawBody.ticket_id || rawBody.event === 'ping') {
       return new Response(JSON.stringify({
