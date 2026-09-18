@@ -426,20 +426,21 @@ function MainApp({
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(activeTab === 'admin' || activeTab === 'custom_dashboard');
+  const [isQueueModalOpen, setIsQueueModalOpen] = React.useState(false);
 
-  // Mesmo comportamento de MonitoriaList.tsx: encolhe a barra lateral ao
-  // abrir "Nova Monitoria", dando mais espaço ao formulário, e restaura o
-  // estado anterior ao fechar.
+  // Encolhe a barra lateral ao abrir "Nova Monitoria" ou qualquer card/modal
+  // de inspeção/confronto nas Filas de Triagem, dando foco e todo o espaço para a tela,
+  // e restaura o estado anterior ao fechar.
   const sidebarWasOpenRef = React.useRef(isSidebarOpen);
   React.useEffect(() => {
-    if (isFormOpen) {
+    if (isFormOpen || isQueueModalOpen) {
       sidebarWasOpenRef.current = isSidebarOpen;
       setIsSidebarOpen(false);
     } else {
       setIsSidebarOpen(sidebarWasOpenRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFormOpen]);
+  }, [isFormOpen, isQueueModalOpen]);
 
   const toggleSidebar = () => {
     const willBeOpen = !isSidebarOpen;
@@ -862,6 +863,7 @@ function MainApp({
                   monitorias={monitorias}
                   currentUserId={userData?.id}
                   onStartAudit={handleStartAuditFromQueue}
+                  onModalStateChange={setIsQueueModalOpen}
                 />
               </div>
             )}

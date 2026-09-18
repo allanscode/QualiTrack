@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { User, Monitoria } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../providers/ThemeProvider';
@@ -373,23 +374,22 @@ export default function MonitoriaForm({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden animate-fade-in">
       <m.div
         initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 10 }}
         animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
-        className="bg-surface-bg rounded-2xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col overflow-hidden"
-        style={{ height: '90vh' }}
+        className="bg-surface-bg rounded-2xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col h-[94vh] max-h-[94vh] overflow-hidden border border-surface-border"
       >
         {/* Top Header */}
-        <div className="p-6 border-b border-surface-border flex items-center justify-between bg-surface-card">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-brand-subtle flex items-center justify-center text-brand-primary">
-              <CheckCircle2 className="w-6 h-6" />
+        <div className="px-5 py-3 border-b border-surface-border flex items-center justify-between bg-surface-card flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-brand-subtle flex items-center justify-center text-brand-primary">
+              <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-xl font-black text-brand-primary tracking-tight uppercase">
+                <h2 className="text-lg font-black text-brand-primary tracking-tight uppercase">
                   {isViewOnly ? 'Visualizar' : isAdminEdit ? 'Editar (Admin)' : isReevaluating ? 'Reavaliar' : 'Nova'} Monitoria
                 </h2>
                 {isViewOnly && (
@@ -399,29 +399,25 @@ export default function MonitoriaForm({
                 )}
               </div>
               {isViewOnly && (
-                <p className="text-[11px] text-brand-muted mt-1.5 max-w-md leading-relaxed">
+                <p className="text-[11px] text-brand-muted mt-0.5 max-w-md leading-relaxed">
                   Monitorias salvas não podem ser editadas. Para alterar, use <span className="text-brand-primary font-bold">Reavaliar</span> — disponível quando o suporte contesta.
                 </p>
               )}
-              {initialData?.display_id && <Badge variant="info" className="mt-1">Mon: {initialData.display_id}</Badge>}
-              {/* Mesmo título/preview do ticket que já aparece no card da
-                  Central de Filas — só existe quando o formulário foi aberto
-                  a partir de lá (Auditar Chamado / Lançar Monitoria), não é
-                  persistido na monitoria. */}
+              {initialData?.display_id && <Badge variant="info" className="mt-0.5">Mon: {initialData.display_id}</Badge>}
               {(initialData as any)?.ticket_subject && (
-                <p className="text-xs font-bold text-brand-primary mt-1.5 max-w-md line-clamp-1" title={(initialData as any).ticket_subject}>
+                <p className="text-xs font-bold text-brand-primary mt-0.5 max-w-md line-clamp-1" title={(initialData as any).ticket_subject}>
                   {(initialData as any).ticket_subject}
                 </p>
               )}
             </div>
           </div>
-          <button onClick={onCancel} className="p-2 hover:bg-surface-subtle rounded-xl transition-all text-brand-muted"><X className="w-6 h-6" /></button>
+          <button onClick={onCancel} className="p-1.5 hover:bg-surface-subtle rounded-xl transition-all text-brand-muted"><X className="w-5 h-5" /></button>
         </div>
 
         {/* Form Content */}
-        <div ref={contentRef} className="flex-1 overflow-y-auto p-8 space-y-10 no-scrollbar">
+        <div ref={contentRef} className="flex-1 overflow-y-auto px-5 py-4 md:px-8 md:py-6 space-y-6 no-scrollbar min-h-0">
           {/* Stepper Progress */}
-          <div className="flex items-center justify-center gap-6 md:gap-10">
+          <div className="flex items-center justify-center gap-4 md:gap-8 pb-3 border-b border-surface-border/50">
             {[
               { n: 1, label: 'Identificação' },
               { n: 2, label: 'Pesquisa' },
@@ -974,14 +970,15 @@ export default function MonitoriaForm({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-8 bg-surface-card border-t border-surface-border flex items-center justify-between">
-          <Button variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5" />}>
+        <div className="px-6 py-3.5 bg-surface-card border-t border-surface-border flex items-center justify-between flex-shrink-0 z-10">
+          <Button variant="ghost" size="sm" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5" />}>
             {isViewOnly ? 'Anterior' : 'Voltar'}
           </Button>
 
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             {step < 4 ? (
               <Button
+                size="sm"
                 onClick={() => {
                   // Em modo leitura os campos estão desabilitados, então validar
                   // aqui prenderia o usuário: ele não tem como corrigir o que a
@@ -998,14 +995,14 @@ export default function MonitoriaForm({
                 <button
                   type="button"
                   onClick={() => initialData && setHelpdeskModal({ monitoriaId: initialData.id, fromConclusion: false })}
-                  className="action-primary group inline-flex items-center justify-center gap-2 px-8 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 active:scale-[0.98]"
+                  className="action-primary group inline-flex items-center justify-center gap-2 px-6 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 active:scale-[0.98]"
                 >
                   <Send className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
                   Enviar ao Zendesk
                 </button>
               )
             ) : (
-              <Button onClick={handleSave} disabled={isPending} variant="primary" className="px-12" icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}>
+              <Button onClick={handleSave} disabled={isPending} variant="primary" size="sm" className="px-8" icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}>
                 {isPending ? 'Processando...' : 'Finalizar Monitoria'}
               </Button>
             )}
@@ -1076,6 +1073,7 @@ export default function MonitoriaForm({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

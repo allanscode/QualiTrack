@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AuditingQueueType,
   AuditingQueueTicket,
@@ -59,7 +60,6 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import { toast } from 'sonner';
-import TicketAuditInspectorModal from './TicketAuditInspectorModal';
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -81,6 +81,7 @@ interface AuditingQueueViewProps {
     isAiLocked?: boolean;
     customerType?: string;
   }) => void;
+  onModalStateChange?: (isOpen: boolean) => void;
 }
 
 export default function AuditingQueueView({
@@ -90,6 +91,7 @@ export default function AuditingQueueView({
   monitorias,
   currentUserId,
   onStartAudit,
+  onModalStateChange,
 }: AuditingQueueViewProps) {
   const [activeQueue, setActiveQueue] = useState<AuditingQueueType>('negativas');
   const [loading, setLoading] = useState(false);
@@ -123,8 +125,12 @@ export default function AuditingQueueView({
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const batchCancelRef = useRef(false);
 
-  // Ticket em visualização detalhada / confronto no TicketAuditInspectorModal
-  const [inspectingTicket, setInspectingTicket] = useState<AuditingQueueTicket | null>(null);
+  // Notifica o container pai (App.tsx) se algum modal de prévia está aberto,
+  // para que a barra lateral se recolha automaticamente liberando espaço total da tela.
+  useEffect(() => {
+    const isAnyModalOpen = Boolean(childPreviewTicket || guidelinePickerTicket);
+    onModalStateChange?.(isAnyModalOpen);
+  }, [childPreviewTicket, guidelinePickerTicket, onModalStateChange]);
 
   // Paginação: 25 tickets por página (definido no backend). Views grandes
   // (Proativas chega a ter centenas de CSAT vazio) não cabem numa carga só
@@ -540,9 +546,9 @@ export default function AuditingQueueView({
   const AI_ACTION_BUTTON_CLASS = 'justify-center min-w-[132px]';
 
   // Bloco de botões de ação de IA (Avaliar com IA / Reavaliar / Verificar Avaliação)
-  // Após avaliado com IA, o botão principal agora é "Verificar Avaliação" (em verde esmeralda)
-  // abrindo a janela de confronto prévia antes de qualquer lançamento oficial.
-  // Se ainda não avaliado, o botão principal é "Avaliar com IA" (em índigo/roxo).
+  // Após avaliado com IA, o botão é "Verificar Avaliação" (em verde esmeralda) e abre
+  // diretamente o formulário oficial no fluxo das 4 etapas (1-2-3-4) para ir batendo os dados.
+  // Se ainda não avaliado, o botão principal é "Avaliar com IA" (índigo/roxo) ou "Auditar Manual".
   const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
     const draft = drafts[ticket.ticket_id];
 
@@ -552,9 +558,9 @@ export default function AuditingQueueView({
           <Button
             size="sm"
             variant="primary"
-            onClick={() => setInspectingTicket(ticket)}
+            onClick={() => handleLaunchMonitoria(ticket)}
             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs justify-center min-w-[145px]"
-            title="Confrontar evidências do chamado, mensagens tratadas e parecer da IA antes de lançar"
+            title="Abrir formulário oficial (fluxo 1-2-3-4) para conferir e bater as respostas da IA"
           >
             <CheckSquare className="w-3.5 h-3.5" />
             <span>Verificar Avaliação</span>
@@ -591,12 +597,12 @@ export default function AuditingQueueView({
         <Button
           size="sm"
           variant="outline"
-          onClick={() => setInspectingTicket(ticket)}
+          onClick={() => handleLaunchMonitoria(ticket)}
           className="flex items-center gap-1 text-[11px] text-brand-muted hover:text-brand-primary"
-          title="Ver diálogo tratado e campos do chamado antes de avaliar"
+          title="Abrir monitoria manual no fluxo oficial 1-2-3-4"
         >
-          <Eye className="w-3.5 h-3.5" />
-          <span>Ver Diálogo</span>
+          <FileText className="w-3.5 h-3.5" />
+          <span>Auditar Manual</span>
         </Button>
         <Button
           size="sm"
@@ -1323,9 +1329,9 @@ export default function AuditingQueueView({
       )}
 
       {/* Modal: Parecer de Conformidade do Chamado Filho com IA */}
-      {childPreviewTicket && (
+      {childPreviewTicket && createPortal(
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"
+          className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-[9999] p-4 animate-fade-in"
           onClick={() => setChildPreviewTicket(null)}
         >
           <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-2xl">
@@ -1551,7 +1557,8 @@ export default function AuditingQueueView({
               </div>
             </Card>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Popup: Confirmação da seleção automática da IA com base nas tags do Zendesk */}
@@ -1566,9 +1573,9 @@ export default function AuditingQueueView({
           guidelineOptions
         );
 
-        return (
+        return createPortal(
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"
+            className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-[9999] p-4 animate-fade-in"
             onClick={() => setGuidelinePickerTicket(null)}
           >
             <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-lg">
@@ -1726,34 +1733,8 @@ export default function AuditingQueueView({
                 </div>
               </Card>
             </div>
-          </div>
-        );
-      })()}
-
-      {/* Modal de Inspeção e Confronto de Auditoria */}
-      {inspectingTicket && (() => {
-        const draft = drafts[inspectingTicket.ticket_id];
-        const customerType = resolveCustomerType(inspectingTicket.tags, inspectingTicket.organization_tags);
-        const { form: autoForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
-        const formToUse = forms.find(f => f.id === draft?.form_id) || autoForm;
-
-        return (
-          <TicketAuditInspectorModal
-            ticket={inspectingTicket}
-            form={formToUse}
-            aiDraft={draft}
-            onClose={() => setInspectingTicket(null)}
-            onLaunchAudit={(t) => {
-              setInspectingTicket(null);
-              handleLaunchMonitoria(t);
-            }}
-            onReevaluate={async (t) => {
-              if (!formToUse) return;
-              const allGuidelines = await fetchAIGuidelines().catch(() => []);
-              const guidelineIds = allGuidelines.filter(g => g.active).map(g => g.id);
-              await handleEvaluateWithAI(t, formToUse, guidelineIds);
-            }}
-          />
+          </div>,
+          document.body
         );
       })()}
     </div>
