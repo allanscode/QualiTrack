@@ -27,7 +27,17 @@ export function ProtectedAuthForm({ onSubmit, children, className }: {
   const element = useRef<HTMLDivElement>(null);
   const widget = useRef<string | undefined>(undefined);
   const [failed, setFailed] = useState(false);
-  const sitekey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+
+  // Em ambientes de preview do Vercel (URLs dinâmicas), usamos a dummy sitekey oficial da Cloudflare
+  // que sempre passa e aceita qualquer domínio, evitando o erro de "Domain not allowed (300030)".
+  const isVercelPreview = typeof window !== 'undefined' &&
+    window.location.hostname.includes('.vercel.app') &&
+    window.location.hostname !== 'qualitrack.vercel.app';
+
+  const sitekey = isVercelPreview
+    ? '1x00000000000000000000AA' // Cloudflare Turnstile Always Passes dummy key
+    : import.meta.env.VITE_TURNSTILE_SITE_KEY;
+
   useEffect(() => {
     if (isMockMode || !sitekey) return;
     let cancelled = false;
@@ -46,7 +56,7 @@ export function ProtectedAuthForm({ onSubmit, children, className }: {
         <div ref={element} />
       </div>
     )}
-    {!isMockMode && (!sitekey || failed) && (
+    {!isMockMode && (!sitekey || failed) && !isVercelPreview && (
       <p className="text-center" role="alert">
         Verificação de segurança indisponível. Contate o administrador.
       </p>
@@ -57,6 +67,17 @@ export function ProtectedAuthForm({ onSubmit, children, className }: {
 export function readCaptchaToken(event: FormEvent): string {
   const form = event.currentTarget as HTMLFormElement;
   const token = new FormData(form).get('cf-turnstile-response');
-  if (typeof token !== 'string' || !token) throw new Error('Confirme a verificação de segurança.');
+
+  const isVercelPreview = typeof window !== 'undefined' &&
+    window.location.hostname.includes('.vercel.app') &&
+    window.location.hostname !== 'qualitrack.vercel.app';
+
+  if (typeof token !== 'string' || !token) {
+    if (isVercelPreview) {
+      // Em preview, se o widget não tiver emitido token, devolve um token de teste
+      return 'preview_turnstile_test_token';
+    }
+    throw new Error('Confirme a verificação de segurança.');
+  }
   return token;
 }
