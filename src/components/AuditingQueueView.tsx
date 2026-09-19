@@ -82,6 +82,7 @@ interface AuditingQueueViewProps {
     ticket_fields?: { title: string; value: string }[];
     isAiLocked?: boolean;
     customerType?: string;
+    dialogue?: TicketCommentMessage[];
   }) => void;
   onModalStateChange?: (isOpen: boolean) => void;
 }
@@ -380,6 +381,7 @@ export default function AuditingQueueView({
         ticket.organization_tags = organizationTags || ticket.organization_tags;
       }
       ticket.ticket_fields = ticketFields;
+      ticket.dialogue = dialogue;
 
       if (toastId) toast.loading(
         `🤖 Etapa 2/3 · Analisando com IA (Gemini → OpenRouter como fallback)...`,
@@ -394,6 +396,7 @@ export default function AuditingQueueView({
       }, guidelineIds, ticketFields);
 
       aiResult.ticket_fields = ticketFields;
+      aiResult.dialogue = dialogue;
 
       if (toastId) toast.loading(
         `💾 Etapa 3/3 · Salvando rascunho...`,
@@ -578,6 +581,7 @@ export default function AuditingQueueView({
       isAiLocked: true,
       customerType,
       child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
+      dialogue: draft.result?.dialogue || ticket.dialogue,
     });
   };
 
@@ -607,6 +611,7 @@ export default function AuditingQueueView({
       satisfaction_record_text: ticket.csat_comment,
       ticket_fields: ticket.ticket_fields,
       customerType,
+      dialogue: ticket.dialogue,
     });
   };
 
@@ -868,6 +873,7 @@ export default function AuditingQueueView({
       customerType,
       ticket_fields: ticket.ticket_fields,
       child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
+      dialogue: ticket.dialogue,
     });
   };
 

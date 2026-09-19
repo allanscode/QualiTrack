@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { User, Monitoria, AIEvaluationResult, ChildTicketAiEvaluation } from '../types';
+import { User, Monitoria, AIEvaluationResult, ChildTicketAiEvaluation, TicketCommentMessage } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../providers/ThemeProvider';
 import {
@@ -29,13 +29,15 @@ import {
   Send,
   ExternalLink,
   UserPlus,
-  FileText
+  FileText,
+  Quote,
+  Search
 } from 'lucide-react';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import { toast } from 'sonner';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
-import { resolveManualAgent, lookupTicketAgent, TicketAgentLookup } from '../lib/helpdeskQueue';
+import { resolveManualAgent, lookupTicketAgent, TicketAgentLookup, fetchTicketDialogue } from '../lib/helpdeskQueue';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import Card from './ui/Card';
@@ -104,16 +106,28 @@ export default function MonitoriaForm({
   // ele ainda não tem conta no QualiTrack (ver efeito de lookup abaixo).
   const [unregisteredAgentPreview, setUnregisteredAgentPreview] = useState<TicketAgentLookup | null>(null);
 
-  // Card do score encolhe ao rolar para baixo na etapa de avaliação, para
-  // ocupar menos espaço e não poluir a tela enquanto se responde as perguntas.
+  // Card do score encolhe ao rolar para baixo na etapa de avaliação e acopla no topo
   const [scoreCompact, setScoreCompact] = useState(false);
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
-    const onScroll = () => setScoreCompact(el.scrollTop > 40);
+    const onScroll = () => setScoreCompact(el.scrollTop > 45);
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Diálogo e evidências do atendimento
+  const [dialogue, setDialogue] = useState<TicketCommentMessage[]>(() =>
+    (initialData as any)?.dialogue ||
+    (initialData as any)?.aiEvaluation?.dialogue ||
+    []
+  );
+  const [loadingDialogue, setLoadingDialogue] = useState(false);
+  const [showDialogueDrawer, setShowDialogueDrawer] = useState(false);
+  const [dialogueSearch, setDialogueSearch] = useState('');
+  const [dialogueFilter, setDialogueFilter] = useState<'all' | 'end_user' | 'agent' | 'internal'>('all');
+  const [selectedQuestionForDialogue, setSelectedQuestionForDialogue] = useState<string | null>(null);
+  const [showStep4Dialogue, setShowStep4Dialogue] = useState(false);
 
   const forms = useMemo(() =>
     staticData.forms.filter(f => f.active !== false).sort((a, b) => a.title.localeCompare(b.title)),
@@ -148,8 +162,85 @@ export default function MonitoriaForm({
   useEffect(() => {
     if (contentRef.current) {
       contentRef.current.scrollTop = 0;
+      setScoreCompact(false);
     }
   }, [step]);
+
+  // Carregamento resiliente do diálogo: se o ticket_id existe mas ainda não temos mensagens, busca no Helpdesk
+  useEffect(() => {
+    const ticketId = header.ticket_id?.trim();
+    if (!ticketId || dialogue.length > 0) return;
+
+    let cancelled = false;
+    setLoadingDialogue(true);
+    fetchTicketDialogue(ticketId)
+      .then(res => {
+        if (!cancelled && res?.comments && res.comments.length > 0) {
+          setDialogue(res.comments);
+        }
+      })
+      .catch(err => {
+        console.warn('[MonitoriaForm] Diálogo não carregado automaticamente:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDialogue(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [header.ticket_id, dialogue.length]);
+
+  const evaluatedAgent = useMemo(() => agents.find(a => a.id === header.evaluated_id), [agents, header.evaluated_id]);
+  const evaluatedTeam = useMemo(() => teams.find(t => t.id === header.team_id), [teams, header.team_id]);
+  const headerSubtitle = evaluatedAgent?.name
+    ? `Resolvido por ${evaluatedAgent.name}${evaluatedTeam?.name ? ` da equipe ${evaluatedTeam.name}` : ''}`
+    : ((initialData as any)?.ticket_subject || '');
+
+  const scoreLevel = useMemo(() => getLevelForScore(score), [getLevelForScore, score]);
+  const isScoreTarget = useMemo(() => isAboveTarget(score), [isAboveTarget, score]);
+
+  const subtleScoreClass = useMemo(() => {
+    const textColor = scoreLevel.color;
+    if (textColor.includes('excelente')) return 'bg-level-excelente/10 text-level-excelente';
+    if (textColor.includes('aceitavel')) return 'bg-level-aceitavel/10 text-level-aceitavel';
+    if (textColor.includes('atencao')) return 'bg-level-atencao/10 text-level-atencao';
+    if (textColor.includes('ruim')) return 'bg-level-ruim/10 text-level-ruim';
+    if (textColor.includes('roxo')) return 'bg-level-roxo/10 text-level-roxo';
+    return 'bg-brand-subtle/10 text-brand-primary';
+  }, [scoreLevel.color]);
+  const [scoreBgClass, scoreTextClass] = subtleScoreClass.split(' ');
+
+  const filteredDialogue = useMemo(() => {
+    return dialogue.filter(msg => {
+      if (dialogueFilter === 'end_user' && msg.author_role !== 'end_user') return false;
+      if (dialogueFilter === 'agent' && msg.author_role !== 'agent' && msg.author_role !== 'admin') return false;
+      if (dialogueFilter === 'internal' && msg.is_public) return false;
+      if (dialogueSearch.trim()) {
+        const query = dialogueSearch.toLowerCase();
+        const inBody = (msg.body || '').toLowerCase().includes(query);
+        const inAuthor = (msg.author_name || '').toLowerCase().includes(query);
+        return inBody || inAuthor;
+      }
+      return true;
+    });
+  }, [dialogue, dialogueFilter, dialogueSearch]);
+
+  const handleCiteInObservation = (commentText: string, authorName: string, questionId?: string) => {
+    const targetQId = questionId || selectedQuestionForDialogue;
+    const citation = `"${commentText.trim()}" (${authorName})`;
+    if (targetQId) {
+      setObservations(prev => {
+        const current = prev[targetQId] || '';
+        return {
+          ...prev,
+          [targetQId]: current ? `${current}\n${citation}` : citation
+        };
+      });
+      toast.success('Trecho citado inserido na observação do critério!');
+    } else {
+      navigator.clipboard.writeText(citation);
+      toast.success('Trecho copiado para a área de transferência!');
+    }
+  };
 
   // Aviso (não bloqueio) de ticket já avaliado. Não há UNIQUE em
   // monitorias.ticket_id nem checagem alguma hoje — confirmado no banco:
@@ -393,21 +484,21 @@ export default function MonitoriaForm({
       <m.div
         initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 10 }}
         animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
-        className="bg-surface-bg rounded-2xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col h-[94vh] max-h-[94vh] overflow-hidden border border-surface-border"
+        className="bg-surface-bg rounded-2xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col h-[94vh] max-h-[94vh] overflow-hidden border border-surface-border relative"
       >
         {/* Top Header */}
-        <div className="px-5 py-3 border-b border-surface-border flex items-center justify-between bg-surface-card flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-brand-subtle flex items-center justify-center text-brand-primary">
+        <div className="px-5 py-3 border-b border-surface-border flex items-center justify-between bg-surface-card flex-shrink-0 gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-brand-subtle flex items-center justify-center text-brand-primary flex-shrink-0">
               <CheckCircle2 className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-black text-brand-primary tracking-tight uppercase">
+                <h2 className="text-lg font-black text-brand-primary tracking-tight uppercase truncate">
                   {isViewOnly ? 'Visualizar' : isAdminEdit ? 'Editar (Admin)' : isReevaluating ? 'Reavaliar' : 'Nova'} Monitoria
                 </h2>
                 {isViewOnly && (
-                  <Badge variant="warning" className="flex items-center gap-1">
+                  <Badge variant="warning" className="flex items-center gap-1 flex-shrink-0">
                     <Lock className="w-3 h-3" /> Somente leitura
                   </Badge>
                 )}
@@ -418,14 +509,53 @@ export default function MonitoriaForm({
                 </p>
               )}
               {initialData?.display_id && <Badge variant="info" className="mt-0.5">Mon: {initialData.display_id}</Badge>}
-              {(initialData as any)?.ticket_subject && (
-                <p className="text-xs font-bold text-brand-primary mt-0.5 max-w-md line-clamp-1" title={(initialData as any).ticket_subject}>
-                  {(initialData as any).ticket_subject}
+              {headerSubtitle && (
+                <p className="text-xs font-bold text-brand-primary mt-0.5 max-w-md truncate" title={headerSubtitle}>
+                  {headerSubtitle}
                 </p>
               )}
             </div>
           </div>
-          <button onClick={onCancel} className="p-1.5 hover:bg-surface-subtle rounded-xl transition-all text-brand-muted"><X className="w-5 h-5" /></button>
+
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {/* Docked Score Badge in Top Header (appears on scroll in step 3 - exact area marked by red rectangle in user screenshot) */}
+            <AnimatePresence>
+              {scoreCompact && step === 3 && selectedForm && (
+                <m.div
+                  key="header-docked-score"
+                  initial={{ opacity: 0, scale: 0.72, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.72, y: -4 }}
+                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                  className="flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 rounded-xl border border-surface-border bg-surface-subtle shadow-premium-sm"
+                >
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${scoreBgClass}`}>
+                    <Target className={`w-3.5 h-3.5 ${scoreTextClass}`} />
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted hidden md:inline">Score:</span>
+                    <span className={`text-sm sm:text-base font-black tabular-nums ${scoreTextClass}`}>
+                      {score.toFixed(2)}%
+                    </span>
+                    <span className="text-[9px] sm:text-[10px] font-black uppercase text-brand-muted tracking-wider">
+                      - {scoreLevel.label}
+                    </span>
+                  </div>
+                  <Badge
+                    variant={isScoreTarget ? 'success' : 'error'}
+                    size="sm"
+                    className="font-black uppercase tracking-wider text-[9px] px-2 py-0.5 ml-0.5 sm:ml-1"
+                  >
+                    {isScoreTarget ? 'Meta Atingida' : 'Abaixo da Meta'}
+                  </Badge>
+                </m.div>
+              )}
+            </AnimatePresence>
+
+            <button onClick={onCancel} className="p-1.5 hover:bg-surface-subtle rounded-xl transition-all text-brand-muted cursor-pointer" title="Fechar">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Form Content */}
@@ -800,59 +930,85 @@ export default function MonitoriaForm({
           )}
 
           {step === 3 && selectedForm && (
-            <section className="space-y-10 animate-fade-in max-w-4xl mx-auto">
-              {(() => {
-                const level = getLevelForScore(score);
-                const isTarget = isAboveTarget(score);
-
-                const getSubtleBgClass = (textColor: string) => {
-                  if (textColor.includes('excelente')) return 'bg-level-excelente/10 text-level-excelente';
-                  if (textColor.includes('aceitavel')) return 'bg-level-aceitavel/10 text-level-aceitavel';
-                  if (textColor.includes('atencao')) return 'bg-level-atencao/10 text-level-atencao';
-                  if (textColor.includes('ruim')) return 'bg-level-ruim/10 text-level-ruim';
-                  if (textColor.includes('roxo')) return 'bg-level-roxo/10 text-level-roxo';
-                  return 'bg-brand-subtle/10 text-brand-primary';
-                };
-
-                const subtleClass = getSubtleBgClass(level.color);
-                const [bgClass, textClass] = subtleClass.split(' ');
-
-                return (
-                  // sticky top-0: mantém o score fixo no topo da área de
-                  // rolagem enquanto o avaliador desce respondendo as
-                  // perguntas, acompanhando a nota subir/descer em tempo real.
-                  // z-30 fica acima dos cards de pergunta; bg sólido + shadow
-                  // impedem o conteúdo de aparecer atrás ao rolar.
-                  <div className={`sticky top-0 z-30 rounded-2xl border border-surface-border flex items-center justify-between bg-surface-card shadow-premium gap-4 transition-all duration-300 ${scoreCompact ? 'flex-row p-3' : 'flex-col sm:flex-row p-6'}`}>
-                    <div className="flex items-center gap-4">
-                      <div className={`rounded-xl flex items-center justify-center transition-all duration-300 ${bgClass} ${scoreCompact ? 'w-9 h-9' : 'w-12 h-12'}`}>
-                        <Target className={`transition-all duration-300 ${textClass} ${scoreCompact ? 'w-4 h-4' : 'w-6 h-6'}`} />
-                      </div>
-                      <div>
-                        {!scoreCompact && (
+            <section className="space-y-8 animate-fade-in max-w-4xl mx-auto">
+              {/* Score Banner Principal - Animação de encolher ao rolar para baixo e transferir para o topo fixo */}
+              <AnimatePresence>
+                {!scoreCompact && (
+                  <m.div
+                    key="step3-main-score-banner"
+                    initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                    exit={{ opacity: 0, height: 0, scale: 0.92 }}
+                    transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                    className="overflow-hidden mb-6"
+                  >
+                    <div className="rounded-2xl border border-surface-border flex flex-col sm:flex-row items-center justify-between bg-surface-card shadow-premium gap-4 p-6">
+                      <div className="flex items-center gap-4">
+                        <div className={`rounded-xl flex items-center justify-center w-12 h-12 ${scoreBgClass}`}>
+                          <Target className={`w-6 h-6 ${scoreTextClass}`} />
+                        </div>
+                        <div>
                           <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em]">Score de Avaliação</p>
-                        )}
-                        <div className={`flex items-baseline gap-2 ${scoreCompact ? '' : 'mt-1'}`}>
-                          <span className={`font-black tabular-nums transition-all duration-300 ${textClass} ${scoreCompact ? 'text-xl' : 'text-3xl'}`}>
-                            {score.toFixed(2)}%
-                          </span>
-                          <span className="text-[10px] font-black text-brand-muted uppercase tracking-wider">
-                            - {level.label}
-                          </span>
+                          <div className="flex items-baseline gap-2 mt-1">
+                            <span className={`text-3xl font-black tabular-nums ${scoreTextClass}`}>
+                              {score.toFixed(2)}%
+                            </span>
+                            <span className="text-[10px] font-black text-brand-muted uppercase tracking-wider">
+                              - {scoreLevel.label}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="text-center sm:text-right">
-                      <Badge variant={isTarget ? 'success' : 'error'} className={`font-black uppercase tracking-wider ${scoreCompact ? 'px-2.5 py-0.5 text-[9px]' : 'px-3.5 py-1 text-[10px]'}`}>
-                        {isTarget ? 'Meta Atingida' : 'Abaixo da Meta'}
-                      </Badge>
-                      {!scoreCompact && (
+                      <div className="text-center sm:text-right">
+                        <Badge variant={isScoreTarget ? 'success' : 'error'} className="font-black uppercase tracking-wider px-3.5 py-1 text-[10px]">
+                          {isScoreTarget ? 'Meta Atingida' : 'Abaixo da Meta'}
+                        </Badge>
                         <p className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1.5">Calculado em tempo real</p>
-                      )}
+                      </div>
                     </div>
+                  </m.div>
+                )}
+              </AnimatePresence>
+
+              {/* Barra de Evidências por Escrito do Atendimento */}
+              <div className="rounded-2xl border border-brand-highlight/25 bg-surface-card p-4 sm:p-5 shadow-premium-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center flex-shrink-0">
+                    <MessageSquare className="w-5 h-5" />
                   </div>
-                );
-              })()}
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-xs sm:text-sm font-black uppercase text-brand-primary tracking-wider">
+                        Evidências por Escrito do Atendimento
+                      </h4>
+                      {dialogue.length > 0 ? (
+                        <Badge variant="info" size="sm" className="font-mono font-bold text-[10px]">
+                          {dialogue.length} {dialogue.length === 1 ? 'mensagem' : 'mensagens'}
+                        </Badge>
+                      ) : loadingDialogue ? (
+                        <span className="text-[10px] text-brand-muted animate-pulse font-bold">Carregando mensagens...</span>
+                      ) : null}
+                    </div>
+                    <p className="text-[11px] text-brand-muted mt-0.5">
+                      Consulte as transcrições e falas registradas no ticket #{header.ticket_id || '—'} para confrontar com fatos concretos.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedQuestionForDialogue(null);
+                    setDialogueSearch('');
+                    setShowDialogueDrawer(true);
+                  }}
+                  className="flex items-center gap-2 text-xs font-bold w-full sm:w-auto justify-center cursor-pointer flex-shrink-0"
+                >
+                  <FileText className="w-4 h-4 text-brand-highlight" />
+                  <span>{showDialogueDrawer ? 'Painel Aberto' : 'Ver Diálogo Completo'}</span>
+                </Button>
+              </div>
 
               {selectedForm.sections.map((section, sIdx) => (
                 <div key={section.id} className="space-y-6">
@@ -903,21 +1059,52 @@ export default function MonitoriaForm({
                             ))}
                           </div>
                         </div>
-                        <textarea value={observations[q.id] || ''} onChange={e => !isViewOnly && setObservations({...observations, [q.id]: e.target.value})} placeholder="Adicionar observação específica para este item..." className="w-full mt-4 bg-surface-subtle border border-surface-border rounded-lg p-3 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all" disabled={isViewOnly} />
 
-                        {/* Base de Confronto da IA (quando avaliado previamente) */}
+                        {/* Campo de Observação do Auditor */}
+                        <div className="space-y-1.5 mt-4">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
+                              Observação do Auditor para este critério
+                            </label>
+                            {dialogue.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedQuestionForDialogue(q.id);
+                                  setShowDialogueDrawer(true);
+                                }}
+                                className="text-[10px] font-bold text-brand-highlight hover:underline flex items-center gap-1 cursor-pointer"
+                              >
+                                <MessageSquare className="w-3 h-3" />
+                                <span>Ver evidências no diálogo</span>
+                              </button>
+                            )}
+                          </div>
+                          <textarea
+                            value={observations[q.id] || ''}
+                            onChange={e => !isViewOnly && setObservations({...observations, [q.id]: e.target.value})}
+                            placeholder="Adicionar observação técnica ou justificativa do auditor para este item..."
+                            className="w-full bg-surface-subtle border border-surface-border rounded-lg p-3 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all"
+                            disabled={isViewOnly}
+                          />
+                        </div>
+
+                        {/* Base de Confronto da IA & Evidências por Escrito do Atendimento */}
                         {(() => {
                           const aiAnswer = aiEval?.suggested_answers?.[q.id];
                           const aiObs = aiEval?.suggested_observations?.[q.id];
                           const aiCrit = aiEval?.suggested_critical_errors?.[q.id];
                           if (!aiAnswer && !aiObs && aiCrit === undefined) return null;
 
+                          const quoteMatch = aiObs ? aiObs.match(/["“]([^"”]{4,})["”]/) : null;
+                          const quotedSnippet = quoteMatch ? quoteMatch[1] : null;
+
                           return (
-                            <div className="mt-3 p-3.5 rounded-xl bg-surface-subtle/70 border border-brand-highlight/20 space-y-2">
+                            <div className="mt-3 p-3.5 rounded-xl bg-surface-subtle/70 border border-brand-highlight/20 space-y-2.5">
                               <div className="flex items-center justify-between gap-2 flex-wrap">
                                 <div className="flex items-center gap-1.5 text-xs font-black text-brand-highlight">
                                   <Bot className="w-3.5 h-3.5" />
-                                  <span>Base de Confronto da IA</span>
+                                  <span>Base de Confronto & Parecer da IA</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {aiAnswer && (
@@ -936,30 +1123,86 @@ export default function MonitoriaForm({
                                       Erro Crítico Apontado
                                     </Badge>
                                   )}
-                                  {!isViewOnly && aiObs && observations[q.id] !== aiObs && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setObservations(prev => ({ ...prev, [q.id]: aiObs }))}
-                                      className="text-[10px] font-bold text-brand-muted hover:text-brand-highlight underline flex items-center gap-1 cursor-pointer transition-colors"
-                                      title="Restaurar a justificativa/citação original da IA neste campo"
-                                    >
-                                      <RotateCcw className="w-2.5 h-2.5" />
-                                      Restaurar texto da IA
-                                    </button>
-                                  )}
                                 </div>
                               </div>
+
+                              {/* Evidência Textual Extraída do Atendimento */}
+                              {quotedSnippet && (
+                                <div className="p-2.5 rounded-lg bg-surface-card border border-brand-highlight/30 space-y-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-brand-highlight flex items-center gap-1.5">
+                                      <Quote className="w-3 h-3" />
+                                      <span>Citação Extraída do Atendimento:</span>
+                                    </span>
+                                    {dialogue.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedQuestionForDialogue(q.id);
+                                          const searchWords = quotedSnippet.split(' ').filter(w => w.length > 3).slice(0, 2).join(' ');
+                                          setDialogueSearch(searchWords);
+                                          setShowDialogueDrawer(true);
+                                        }}
+                                        className="text-[10px] font-bold text-brand-muted hover:text-brand-highlight underline cursor-pointer"
+                                      >
+                                        Localizar no diálogo
+                                      </button>
+                                    )}
+                                  </div>
+                                  <p className="font-mono text-[11px] text-brand-primary italic select-text bg-surface-subtle/60 p-2 rounded border border-surface-border/50">
+                                    "{quotedSnippet}"
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Parecer Analítico da IA */}
                               {aiObs ? (
-                                <div className="text-[11px] text-brand-muted bg-surface-card p-2.5 rounded-lg border border-surface-border leading-relaxed select-text">
-                                  <span className="font-bold text-brand-primary block text-[10px] uppercase tracking-wider mb-1">
-                                    Evidência / Motivo apurado pela IA no diálogo:
-                                  </span>
-                                  <p className="font-mono text-[11px] text-brand-primary/90 bg-surface-subtle/50 p-2 rounded border border-surface-border/50">
-                                    "{aiObs}"
+                                <div className="text-[11px] text-brand-muted bg-surface-card p-3 rounded-lg border border-surface-border leading-relaxed select-text space-y-1.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-bold text-brand-primary text-[10px] uppercase tracking-wider">
+                                      Análise e Motivo da IA:
+                                    </span>
+                                    {!isViewOnly && observations[q.id] !== aiObs && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setObservations(prev => ({ ...prev, [q.id]: aiObs }))}
+                                        className="text-[10px] font-bold text-brand-highlight hover:underline flex items-center gap-1 cursor-pointer transition-colors"
+                                        title="Copiar texto da IA para a observação deste critério"
+                                      >
+                                        <RotateCcw className="w-2.5 h-2.5" />
+                                        Copiar para observação do auditor
+                                      </button>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-brand-primary/90 leading-relaxed font-sans">
+                                    {aiObs}
                                   </p>
                                 </div>
                               ) : (
                                 <p className="text-[10px] text-brand-muted italic">Critério validado automaticamente sem observação adicional.</p>
+                              )}
+
+                              {/* Atalho para confrontar com o diálogo real */}
+                              {dialogue.length > 0 && (
+                                <div className="pt-1 flex items-center justify-between text-[10px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedQuestionForDialogue(q.id);
+                                      if (quotedSnippet) {
+                                        const searchWords = quotedSnippet.split(' ').filter(w => w.length > 3).slice(0, 2).join(' ');
+                                        setDialogueSearch(searchWords);
+                                      } else {
+                                        setDialogueSearch('');
+                                      }
+                                      setShowDialogueDrawer(true);
+                                    }}
+                                    className="text-brand-muted hover:text-brand-primary font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5 text-brand-highlight" />
+                                    <span>Confrontar no Diálogo do Atendimento ({dialogue.length} mensagens gravadas)</span>
+                                  </button>
+                                </div>
                               )}
                             </div>
                           );
@@ -1160,6 +1403,93 @@ export default function MonitoriaForm({
                     )}
                   </div>
                 )}
+
+                {/* Evidências Documentais do Atendimento (Transcrição Completa do Chamado) */}
+                <div className="mt-4 rounded-2xl border border-surface-border bg-surface-card p-6 shadow-premium space-y-4 animate-fade-in">
+                  <div className="flex items-center justify-between pb-3 border-b border-surface-border">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center flex-shrink-0">
+                        <MessageSquare className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-brand-primary tracking-wider">
+                          Evidências por Escrito do Atendimento
+                        </h4>
+                        <p className="text-[10px] text-brand-muted">
+                          Transcrição documental das mensagens trocadas no ticket #{header.ticket_id || '—'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {dialogue.length > 0 && (
+                        <Badge variant="neutral" size="sm" className="font-mono font-bold text-[10px]">
+                          {dialogue.length} {dialogue.length === 1 ? 'mensagem' : 'mensagens'}
+                        </Badge>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowStep4Dialogue(prev => !prev)}
+                        className="text-xs font-bold cursor-pointer"
+                      >
+                        {showStep4Dialogue ? 'Ocultar Transcrição' : 'Expandir Transcrição'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {showStep4Dialogue && (
+                    <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1 no-scrollbar animate-fade-in">
+                      {loadingDialogue ? (
+                        <div className="py-8 text-center text-xs text-brand-muted">
+                          Carregando histórico do Helpdesk...
+                        </div>
+                      ) : dialogue.length === 0 ? (
+                        <div className="py-6 text-center text-xs text-brand-muted">
+                          Nenhuma mensagem registrada no diálogo deste ticket.
+                        </div>
+                      ) : (
+                        dialogue.map((msg, idx) => {
+                          const isEndUser = msg.author_role === 'end_user';
+                          const isInternal = !msg.is_public;
+                          return (
+                            <div
+                              key={msg.id || idx}
+                              className={`p-3.5 rounded-xl border text-xs space-y-1.5 select-text ${
+                                isEndUser
+                                  ? 'bg-blue-500/5 border-blue-500/20'
+                                  : isInternal
+                                  ? 'bg-amber-500/5 border-amber-500/20'
+                                  : 'bg-surface-subtle border-surface-border'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-brand-primary">{msg.author_name}</span>
+                                  <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                    isEndUser
+                                      ? 'bg-blue-500/10 text-blue-500 border-blue-500/25'
+                                      : isInternal
+                                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/25'
+                                      : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25'
+                                  }`}>
+                                    {isEndUser ? 'Cliente' : isInternal ? 'Nota Interna' : 'Atendente'}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-brand-muted font-mono">
+                                  {msg.created_at ? new Date(msg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                                </span>
+                              </div>
+                              <p className="text-brand-primary whitespace-pre-wrap leading-relaxed">
+                                {msg.body}
+                              </p>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {(() => {
@@ -1267,6 +1597,199 @@ export default function MonitoriaForm({
             )}
           </div>
         </div>
+
+        {/* SLIDE-OVER DRAWER: EVIDÊNCIAS POR ESCRITO DO ATENDIMENTO */}
+        <AnimatePresence>
+          {showDialogueDrawer && (
+            <>
+              {/* Backdrop overlay for drawer */}
+              <m.div
+                key="dialogue-drawer-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowDialogueDrawer(false)}
+                className="absolute inset-0 bg-black/40 backdrop-blur-xs z-40"
+              />
+
+              {/* Drawer content */}
+              <m.div
+                key="dialogue-drawer"
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+                className="absolute top-0 right-0 bottom-0 w-full sm:w-[480px] md:w-[540px] bg-surface-card border-l border-surface-border shadow-2xl z-50 flex flex-col overflow-hidden"
+              >
+                {/* Drawer Header */}
+                <div className="p-4 border-b border-surface-border flex items-center justify-between bg-surface-subtle/70">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center flex-shrink-0">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black uppercase text-brand-primary tracking-tight">
+                        Evidências do Atendimento
+                      </h3>
+                      <p className="text-[11px] text-brand-muted font-mono">
+                        Ticket #{header.ticket_id || '—'} · {dialogue.length} {dialogue.length === 1 ? 'mensagem' : 'mensagens'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowDialogueDrawer(false)}
+                    className="p-1.5 hover:bg-surface-card rounded-lg transition-colors text-brand-muted cursor-pointer"
+                    title="Fechar painel"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Selected question target indicator */}
+                {selectedQuestionForDialogue && (
+                  <div className="px-4 py-2 bg-brand-highlight/10 border-b border-brand-highlight/20 flex items-center justify-between text-xs">
+                    <span className="text-brand-highlight font-bold flex items-center gap-1.5 text-[11px]">
+                      <Bot className="w-3.5 h-3.5" />
+                      <span>Vinculado à observação do critério</span>
+                    </span>
+                    <button
+                      onClick={() => setSelectedQuestionForDialogue(null)}
+                      className="text-[10px] text-brand-muted hover:text-brand-primary underline"
+                    >
+                      Desvincular
+                    </button>
+                  </div>
+                )}
+
+                {/* Search & Filters */}
+                <div className="p-3 border-b border-surface-border bg-surface-card space-y-2.5">
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+                    <input
+                      type="text"
+                      value={dialogueSearch}
+                      onChange={e => setDialogueSearch(e.target.value)}
+                      placeholder="Buscar termos no diálogo (ex.: PDV, erro, webhook)..."
+                      className="w-full pl-9 pr-8 py-2 text-xs bg-surface-subtle border border-surface-border rounded-lg text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-accent"
+                    />
+                    {dialogueSearch && (
+                      <button
+                        onClick={() => setDialogueSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-primary"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-[10px]">
+                    {[
+                      { id: 'all', label: `Todas (${dialogue.length})` },
+                      { id: 'end_user', label: `Cliente (${dialogue.filter(d => d.author_role === 'end_user').length})` },
+                      { id: 'agent', label: `Atendente (${dialogue.filter(d => d.author_role === 'agent' || d.author_role === 'admin').length})` },
+                      { id: 'internal', label: `Internas (${dialogue.filter(d => !d.is_public).length})` }
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => setDialogueFilter(f.id as any)}
+                        className={`px-2.5 py-1 rounded-md font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+                          dialogueFilter === f.id
+                            ? 'bg-brand-primary text-white'
+                            : 'bg-surface-subtle text-brand-muted hover:text-brand-primary hover:bg-surface-border'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Message List */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3.5 no-scrollbar">
+                  {loadingDialogue ? (
+                    <div className="py-12 text-center space-y-3">
+                      <div className="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin mx-auto" />
+                      <p className="text-xs text-brand-muted">Carregando diálogo completo do ticket no Zendesk...</p>
+                    </div>
+                  ) : filteredDialogue.length === 0 ? (
+                    <div className="py-12 text-center space-y-2">
+                      <p className="text-xs font-bold text-brand-primary">Nenhuma mensagem encontrada</p>
+                      <p className="text-[11px] text-brand-muted">
+                        {dialogueSearch ? 'Nenhum trecho corresponde aos termos pesquisados.' : 'Nenhuma mensagem disponível para este ticket.'}
+                      </p>
+                      {header.ticket_id && (
+                        <button
+                          onClick={() => {
+                            setLoadingDialogue(true);
+                            fetchTicketDialogue(header.ticket_id.trim())
+                              .then(res => { if (res?.comments) setDialogue(res.comments); })
+                              .finally(() => setLoadingDialogue(false));
+                          }}
+                          className="mt-2 text-xs font-bold text-brand-highlight hover:underline"
+                        >
+                          Recarregar mensagens do Helpdesk
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    filteredDialogue.map((msg, idx) => {
+                      const isEndUser = msg.author_role === 'end_user';
+                      const isAgent = msg.author_role === 'agent' || msg.author_role === 'admin';
+                      const isInternal = !msg.is_public;
+
+                      return (
+                        <div
+                          key={msg.id || idx}
+                          className={`p-3.5 rounded-xl border transition-all text-xs space-y-2 select-text ${
+                            isEndUser
+                              ? 'bg-blue-500/5 border-blue-500/20'
+                              : isInternal
+                              ? 'bg-amber-500/5 border-amber-500/20'
+                              : 'bg-surface-subtle border-surface-border'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-black text-brand-primary">{msg.author_name}</span>
+                              <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                isEndUser
+                                  ? 'bg-blue-500/10 text-blue-500 border-blue-500/25'
+                                  : isInternal
+                                  ? 'bg-amber-500/10 text-amber-500 border-amber-500/25'
+                                  : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25'
+                              }`}>
+                                {isEndUser ? 'Cliente' : isInternal ? 'Nota Interna' : 'Atendente'}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono text-brand-muted">
+                              {msg.created_at ? new Date(msg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                            </span>
+                          </div>
+
+                          <p className="text-brand-primary leading-relaxed whitespace-pre-wrap font-sans text-xs">
+                            {msg.body}
+                          </p>
+
+                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-surface-border/50">
+                            <button
+                              type="button"
+                              onClick={() => handleCiteInObservation(msg.body, msg.author_name, selectedQuestionForDialogue || undefined)}
+                              className="text-[10px] font-bold text-brand-muted hover:text-brand-primary flex items-center gap-1 cursor-pointer transition-colors"
+                              title={selectedQuestionForDialogue ? 'Inserir citação na observação do critério' : 'Copiar trecho'}
+                            >
+                              <Quote className="w-2.5 h-2.5" />
+                              <span>{selectedQuestionForDialogue ? 'Inserir na observação do critério' : 'Copiar trecho'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </m.div>
+            </>
+          )}
+        </AnimatePresence>
       </m.div>
 
       {helpdeskModal && (

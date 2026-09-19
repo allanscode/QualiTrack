@@ -68,9 +68,9 @@ export function formatDurationMs(ms: number): string {
 }
 
 export interface TimelineMessageItem {
-  id: number;
+  id: number | string;
   authorName: string;
-  authorRole: 'agent' | 'end_user' | 'system';
+  authorRole: string;
   createdAt: string;
   timestamp: number;
   rawBody: string;

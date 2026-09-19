@@ -140,6 +140,7 @@ export interface Monitoria {
   finished_at?: string;
   concluded_at?: string;
   applied_config?: Record<string, unknown>;
+  dialogue?: TicketCommentMessage[];
   created_at: string;
   updated_at: string;
 }
@@ -271,6 +272,7 @@ export interface AuditingQueueTicket {
   parent_ticket_id?: string;
   child_macro_type?: ChildTicketMacroType;
   child_evaluation?: ChildTicketAiEvaluation;
+  dialogue?: TicketCommentMessage[];
 }
 
 export interface AgentQueueSummary {
@@ -287,9 +289,9 @@ export interface AgentQueueSummary {
 }
 
 export interface TicketCommentMessage {
-  id: number;
+  id: number | string;
   author_name: string;
-  author_role: 'agent' | 'end_user' | 'system';
+  author_role: 'agent' | 'end_user' | 'system' | 'admin' | string;
   created_at: string;
   body: string;
   is_public: boolean;
@@ -317,5 +319,6 @@ export interface AIEvaluationResult {
   suggested_observations: Record<string, string>;
   suggested_critical_errors: Record<string, boolean>;
   ticket_fields?: { title: string; value: string }[];
+  dialogue?: TicketCommentMessage[];
 }
 

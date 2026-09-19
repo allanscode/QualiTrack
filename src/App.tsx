@@ -407,6 +407,7 @@ function MainApp({
       ticket_fields: prefill.ticket_fields || prefill.aiEvaluation?.ticket_fields,
       aiEvaluation: prefill.aiEvaluation,
       childAiEvaluation: prefill.child_evaluation || prefill.childAiEvaluation,
+      dialogue: prefill.dialogue || prefill.aiEvaluation?.dialogue,
       ...(prefill.aiEvaluation ? {
         answers: prefill.aiEvaluation.suggested_answers,
         question_observations: prefill.aiEvaluation.suggested_observations,
