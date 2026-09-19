@@ -1203,24 +1203,7 @@ export default function AuditingQueueView({
       {activeQueue === 'proativas' && (
         <div className="space-y-4">
 
-          {/* Ranking de prioridade — só informativo, ajuda a escolher qual
-              ticket revisar primeiro entre os desta página. */}
-          {agentQueue.length > 0 && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {agentQueue.slice(0, 5).map((agent, index) => (
-                <div
-                  key={agent.agent_id}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-surface-border bg-surface-subtle/40 flex-shrink-0"
-                  title={`${agent.days_since_last_audit >= 999 ? 'Nunca auditado' : `${agent.days_since_last_audit}d sem monitoria`}`}
-                >
-                  <span className="w-4 h-4 rounded-full bg-info text-white flex items-center justify-center text-[9px] font-black flex-shrink-0">
-                    {index + 1}
-                  </span>
-                  <span className="text-[10px] font-bold text-brand-primary whitespace-nowrap">{agent.agent_name}</span>
-                </div>
-              ))}
-            </div>
-          )}
+
 
           {/* Lista de Chamados com CSAT Vazio */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

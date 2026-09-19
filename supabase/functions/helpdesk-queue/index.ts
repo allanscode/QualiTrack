@@ -3,7 +3,7 @@ import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-import { sanitizeDialogue } from './sanitizer.ts';
+import { sanitizeDialogue, isChatTranscript, parseZendeskChatTranscript } from './sanitizer.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 
@@ -591,7 +591,7 @@ serve(async (req) => {
         return jsonResponse({ error: 'ticket_id é obrigatório para fetch_dialogue' }, 400);
       }
 
-      const commentsUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}/comments.json`;
+      const commentsUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}/comments.json?include=users`;
       const response = await fetch(commentsUrl, { headers: zendeskHeaders });
 
       if (!response.ok) {
@@ -602,13 +602,53 @@ serve(async (req) => {
       const commentsData = await response.json();
       const comments = commentsData.comments || [];
 
-      const mappedComments = comments.map((c: any) => ({
-        id: c.id,
-        author_role: c.public ? 'agent' : 'system',
-        created_at: c.created_at,
-        body: c.body || c.html_body || '',
-        is_public: c.public !== false,
-      }));
+      // Mapeia usuários para resolução precisa de autor e papel (end_user vs agent)
+      const sideloadedUsers = new Map<number, { name: string; role: string }>();
+      if (Array.isArray(commentsData.users)) {
+        for (const u of commentsData.users) {
+          sideloadedUsers.set(u.id, {
+            name: u.name || '',
+            role: u.role === 'end-user' ? 'end_user' : (u.role === 'admin' ? 'admin' : 'agent'),
+          });
+        }
+      }
+
+      const mappedComments: any[] = [];
+      for (const c of comments) {
+        const userInfo = sideloadedUsers.get(c.author_id);
+        const authorName = userInfo?.name || '';
+        let role = userInfo?.role || (c.public ? 'agent' : 'system');
+        if (!c.public) {
+          role = 'system';
+        }
+
+        const body = c.body || c.html_body || '';
+
+        // Se o comentário contiver transcrição inteira de chat consolidada, desmembra em falas individuais:
+        if (isChatTranscript(body)) {
+          const chatMsgs = parseZendeskChatTranscript(body, {
+            parentDate: c.created_at,
+            parentId: c.id,
+            isPublic: c.public !== false,
+          });
+          if (chatMsgs.length > 0) {
+            mappedComments.push(...chatMsgs);
+            continue;
+          }
+        }
+
+        mappedComments.push({
+          id: c.id,
+          author_name: authorName || (role === 'end_user' ? 'Cliente' : role === 'system' ? 'Sistema' : 'Atendente'),
+          author_role: role,
+          created_at: c.created_at,
+          body,
+          is_public: c.public !== false,
+        });
+      }
+
+      // Ordena cronologicamente para exibição fidedigna
+      mappedComments.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
 
       // Campos de classificação preenchidos pelo atendente no próprio
       // ticket (categoria, motivo do contato, tipificação etc.) — servem
@@ -943,8 +983,8 @@ async function handleEvaluateAI(
     additionalProperties: false,
   };
 
-  // Sanitização anti-ruído: remove assinaturas, disclaimers legais e citações em cascata
-  const dialogueText = sanitizeDialogue(dialogue || []);
+  // Sanitização anti-ruído: remove assinaturas, disclaimers legais e decompõe transcrições de chat
+  const dialogueText = sanitizeDialogue(dialogue || [], agent_info?.name);
 
   const criteriaText = form_criteria.sections
     .map((s: any) => `Seção "${s.title}":\n${(s.questions || []).map((q: any) => `- [${q.id}] ${q.text}${q.is_critical ? ' (ERRO CRÍTICO)' : ''}`).join('\n')}`)

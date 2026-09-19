@@ -13,6 +13,7 @@ import {
   EvaluationForm,
   AIEvaluationGuideline
 } from '../types';
+import { normalizeTicketDialogue } from './zendeskChatParser';
 
 /**
  * Extrai a mensagem de erro real devolvida pela Edge Function. Em status
@@ -348,8 +349,11 @@ export async function fetchTicketDialogue(ticketId: string): Promise<TicketDialo
       throw new Error(error?.message || 'Falha ao obter diálogo do ticket');
     }
 
+    const rawComments = (data.comments || []) as TicketCommentMessage[];
+    const normalizedComments = normalizeTicketDialogue(rawComments);
+
     return {
-      comments: data.comments as TicketCommentMessage[],
+      comments: normalizedComments,
       ticketFields: (data.ticket_fields || []) as { title: string; value: string }[],
       tags: Array.isArray(data.tags) ? data.tags : [],
       organizationName: data.organization_name,

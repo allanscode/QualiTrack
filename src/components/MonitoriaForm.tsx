@@ -38,6 +38,7 @@ import { useQualityConfig } from '../lib/useQualityConfig';
 import { toast } from 'sonner';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
 import { resolveManualAgent, lookupTicketAgent, TicketAgentLookup, fetchTicketDialogue } from '../lib/helpdeskQueue';
+import { normalizeTicketDialogue } from '../lib/zendeskChatParser';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import Card from './ui/Card';
@@ -117,17 +118,24 @@ export default function MonitoriaForm({
   }, []);
 
   // Diálogo e evidências do atendimento
-  const [dialogue, setDialogue] = useState<TicketCommentMessage[]>(() =>
-    (initialData as any)?.dialogue ||
-    (initialData as any)?.aiEvaluation?.dialogue ||
-    []
-  );
+  const [dialogue, setDialogue] = useState<TicketCommentMessage[]>(() => {
+    const raw = (initialData as any)?.dialogue ||
+      (initialData as any)?.aiEvaluation?.dialogue ||
+      [];
+    const agentName = (initialData as any)?.evaluated_name || (initialData as any)?.agent_name;
+    return normalizeTicketDialogue(raw, agentName);
+  });
   const [loadingDialogue, setLoadingDialogue] = useState(false);
   const [showDialogueDrawer, setShowDialogueDrawer] = useState(false);
   const [dialogueSearch, setDialogueSearch] = useState('');
-  const [dialogueFilter, setDialogueFilter] = useState<'all' | 'end_user' | 'agent' | 'internal'>('all');
+  const [dialogueFilter, setDialogueFilter] = useState<'all' | 'end_user' | 'agent' | 'system' | 'internal'>('all');
   const [selectedQuestionForDialogue, setSelectedQuestionForDialogue] = useState<string | null>(null);
   const [showStep4Dialogue, setShowStep4Dialogue] = useState(false);
+  const [expandedDialogueMsgIds, setExpandedDialogueMsgIds] = useState<Record<string, boolean>>({});
+
+  const toggleDialogueMsgExpand = (id: string | number) => {
+    setExpandedDialogueMsgIds(prev => ({ ...prev, [String(id)]: !prev[String(id)] }));
+  };
 
   const forms = useMemo(() =>
     staticData.forms.filter(f => f.active !== false).sort((a, b) => a.title.localeCompare(b.title)),
@@ -166,6 +174,12 @@ export default function MonitoriaForm({
     }
   }, [step]);
 
+  const evaluatedAgent = useMemo(() => agents.find(a => a.id === header.evaluated_id), [agents, header.evaluated_id]);
+  const evaluatedTeam = useMemo(() => teams.find(t => t.id === header.team_id), [teams, header.team_id]);
+  const headerSubtitle = evaluatedAgent?.name
+    ? `Resolvido por ${evaluatedAgent.name}${evaluatedTeam?.name ? ` da equipe ${evaluatedTeam.name}` : ''}`
+    : ((initialData as any)?.ticket_subject || '');
+
   // Carregamento resiliente do diálogo: se o ticket_id existe mas ainda não temos mensagens, busca no Helpdesk
   useEffect(() => {
     const ticketId = header.ticket_id?.trim();
@@ -176,7 +190,7 @@ export default function MonitoriaForm({
     fetchTicketDialogue(ticketId)
       .then(res => {
         if (!cancelled && res?.comments && res.comments.length > 0) {
-          setDialogue(res.comments);
+          setDialogue(normalizeTicketDialogue(res.comments, evaluatedAgent?.name));
         }
       })
       .catch(err => {
@@ -187,13 +201,14 @@ export default function MonitoriaForm({
       });
 
     return () => { cancelled = true; };
-  }, [header.ticket_id, dialogue.length]);
+  }, [header.ticket_id, dialogue.length, evaluatedAgent?.name]);
 
-  const evaluatedAgent = useMemo(() => agents.find(a => a.id === header.evaluated_id), [agents, header.evaluated_id]);
-  const evaluatedTeam = useMemo(() => teams.find(t => t.id === header.team_id), [teams, header.team_id]);
-  const headerSubtitle = evaluatedAgent?.name
-    ? `Resolvido por ${evaluatedAgent.name}${evaluatedTeam?.name ? ` da equipe ${evaluatedTeam.name}` : ''}`
-    : ((initialData as any)?.ticket_subject || '');
+  // Se o agente for selecionado ou alterado, revalida papéis no diálogo existente
+  useEffect(() => {
+    if (dialogue.length > 0 && evaluatedAgent?.name) {
+      setDialogue(prev => normalizeTicketDialogue(prev, evaluatedAgent.name));
+    }
+  }, [evaluatedAgent?.name]);
 
   const scoreLevel = useMemo(() => getLevelForScore(score), [getLevelForScore, score]);
   const isScoreTarget = useMemo(() => isAboveTarget(score), [isAboveTarget, score]);
@@ -213,6 +228,7 @@ export default function MonitoriaForm({
     return dialogue.filter(msg => {
       if (dialogueFilter === 'end_user' && msg.author_role !== 'end_user') return false;
       if (dialogueFilter === 'agent' && msg.author_role !== 'agent' && msg.author_role !== 'admin') return false;
+      if (dialogueFilter === 'system' && (msg.author_role !== 'system' || !msg.is_public)) return false;
       if (dialogueFilter === 'internal' && msg.is_public) return false;
       if (dialogueSearch.trim()) {
         const query = dialogueSearch.toLowerCase();
@@ -1452,14 +1468,23 @@ export default function MonitoriaForm({
                         dialogue.map((msg, idx) => {
                           const isEndUser = msg.author_role === 'end_user';
                           const isInternal = !msg.is_public;
+                          const isSystemBot = msg.author_role === 'system' && msg.is_public;
+                          const msgId = `step4_${msg.id || idx}`;
+                          const isExpanded = !!expandedDialogueMsgIds[msgId];
+                          const body = msg.body || '';
+                          const hasLogSnippet = /(?:\[FireDAC\]|ERROR:|Script nao executado:|relation ".*?" already exists|Exception:|Traceback|ALTER TABLE|CREATE TABLE)/i.test(body);
+                          const isLong = body.length > 320 || body.split('\n').length > 5;
+
                           return (
                             <div
                               key={msg.id || idx}
-                              className={`p-3.5 rounded-xl border text-xs space-y-1.5 select-text ${
+                              className={`p-3.5 rounded-xl border text-xs space-y-2 select-text ${
                                 isEndUser
                                   ? 'bg-blue-500/5 border-blue-500/20'
                                   : isInternal
                                   ? 'bg-amber-500/5 border-amber-500/20'
+                                  : isSystemBot
+                                  ? 'bg-purple-500/5 border-purple-500/20'
                                   : 'bg-surface-subtle border-surface-border'
                               }`}
                             >
@@ -1471,18 +1496,40 @@ export default function MonitoriaForm({
                                       ? 'bg-blue-500/10 text-blue-500 border-blue-500/25'
                                       : isInternal
                                       ? 'bg-amber-500/10 text-amber-500 border-amber-500/25'
+                                      : isSystemBot
+                                      ? 'bg-purple-500/10 text-purple-500 border-purple-500/25'
                                       : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25'
                                   }`}>
-                                    {isEndUser ? 'Cliente' : isInternal ? 'Nota Interna' : 'Atendente'}
+                                    {isEndUser ? 'Cliente' : isInternal ? 'Nota Interna' : isSystemBot ? 'Bot / Sistema' : 'Atendente'}
                                   </span>
                                 </div>
                                 <span className="text-[10px] text-brand-muted font-mono">
                                   {msg.created_at ? new Date(msg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
                                 </span>
                               </div>
-                              <p className="text-brand-primary whitespace-pre-wrap leading-relaxed">
-                                {msg.body}
-                              </p>
+                              <div className="space-y-1">
+                                <div
+                                  className={`leading-relaxed whitespace-pre-wrap text-xs select-text ${
+                                    hasLogSnippet
+                                      ? 'font-mono text-[11px] bg-black/10 dark:bg-black/35 p-2.5 rounded-lg border border-surface-border/60 text-brand-primary'
+                                      : 'text-brand-primary'
+                                  } ${!isExpanded && isLong ? 'max-h-24 overflow-hidden relative' : ''}`}
+                                >
+                                  {body}
+                                  {!isExpanded && isLong && (
+                                    <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface-card to-transparent pointer-events-none" />
+                                  )}
+                                </div>
+                                {isLong && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleDialogueMsgExpand(msgId)}
+                                    className="text-[10px] font-bold text-brand-accent hover:underline flex items-center gap-1 cursor-pointer"
+                                  >
+                                    {isExpanded ? 'Recolher trecho' : 'Ver texto completo...'}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           );
                         })
@@ -1683,24 +1730,29 @@ export default function MonitoriaForm({
                   </div>
 
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-[10px]">
-                    {[
-                      { id: 'all', label: `Todas (${dialogue.length})` },
-                      { id: 'end_user', label: `Cliente (${dialogue.filter(d => d.author_role === 'end_user').length})` },
-                      { id: 'agent', label: `Atendente (${dialogue.filter(d => d.author_role === 'agent' || d.author_role === 'admin').length})` },
-                      { id: 'internal', label: `Internas (${dialogue.filter(d => !d.is_public).length})` }
-                    ].map(f => (
-                      <button
-                        key={f.id}
-                        onClick={() => setDialogueFilter(f.id as any)}
-                        className={`px-2.5 py-1 rounded-md font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
-                          dialogueFilter === f.id
-                            ? 'bg-brand-primary text-white'
-                            : 'bg-surface-subtle text-brand-muted hover:text-brand-primary hover:bg-surface-border'
-                        }`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
+                    {(() => {
+                      const systemCount = dialogue.filter(d => d.author_role === 'system' && d.is_public).length;
+                      const filterList = [
+                        { id: 'all', label: `Todas (${dialogue.length})` },
+                        { id: 'end_user', label: `Cliente (${dialogue.filter(d => d.author_role === 'end_user').length})` },
+                        { id: 'agent', label: `Atendente (${dialogue.filter(d => d.author_role === 'agent' || d.author_role === 'admin').length})` },
+                        ...(systemCount > 0 ? [{ id: 'system', label: `Bot / IA (${systemCount})` }] : []),
+                        { id: 'internal', label: `Internas (${dialogue.filter(d => !d.is_public).length})` }
+                      ];
+                      return filterList.map(f => (
+                        <button
+                          key={f.id}
+                          onClick={() => setDialogueFilter(f.id as any)}
+                          className={`px-2.5 py-1 rounded-md font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+                            dialogueFilter === f.id
+                              ? 'bg-brand-primary text-white'
+                              : 'bg-surface-subtle text-brand-muted hover:text-brand-primary hover:bg-surface-border'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ));
+                    })()}
                   </div>
                 </div>
 
@@ -1722,7 +1774,7 @@ export default function MonitoriaForm({
                           onClick={() => {
                             setLoadingDialogue(true);
                             fetchTicketDialogue(header.ticket_id.trim())
-                              .then(res => { if (res?.comments) setDialogue(res.comments); })
+                              .then(res => { if (res?.comments) setDialogue(normalizeTicketDialogue(res.comments, evaluatedAgent?.name)); })
                               .finally(() => setLoadingDialogue(false));
                           }}
                           className="mt-2 text-xs font-bold text-brand-highlight hover:underline"
@@ -1736,6 +1788,12 @@ export default function MonitoriaForm({
                       const isEndUser = msg.author_role === 'end_user';
                       const isAgent = msg.author_role === 'agent' || msg.author_role === 'admin';
                       const isInternal = !msg.is_public;
+                      const isSystemBot = msg.author_role === 'system' && msg.is_public;
+                      const msgId = `drawer_${msg.id || idx}`;
+                      const isExpanded = !!expandedDialogueMsgIds[msgId];
+                      const body = msg.body || '';
+                      const hasLogSnippet = /(?:\[FireDAC\]|ERROR:|Script nao executado:|relation ".*?" already exists|Exception:|Traceback|ALTER TABLE|CREATE TABLE)/i.test(body);
+                      const isLong = body.length > 320 || body.split('\n').length > 5;
 
                       return (
                         <div
@@ -1745,6 +1803,8 @@ export default function MonitoriaForm({
                               ? 'bg-blue-500/5 border-blue-500/20'
                               : isInternal
                               ? 'bg-amber-500/5 border-amber-500/20'
+                              : isSystemBot
+                              ? 'bg-purple-500/5 border-purple-500/20'
                               : 'bg-surface-subtle border-surface-border'
                           }`}
                         >
@@ -1756,9 +1816,11 @@ export default function MonitoriaForm({
                                   ? 'bg-blue-500/10 text-blue-500 border-blue-500/25'
                                   : isInternal
                                   ? 'bg-amber-500/10 text-amber-500 border-amber-500/25'
+                                  : isSystemBot
+                                  ? 'bg-purple-500/10 text-purple-500 border-purple-500/25'
                                   : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25'
                               }`}>
-                                {isEndUser ? 'Cliente' : isInternal ? 'Nota Interna' : 'Atendente'}
+                                {isEndUser ? 'Cliente' : isInternal ? 'Nota Interna' : isSystemBot ? 'Bot / Sistema' : 'Atendente'}
                               </span>
                             </div>
                             <span className="text-[10px] font-mono text-brand-muted">
@@ -1766,9 +1828,29 @@ export default function MonitoriaForm({
                             </span>
                           </div>
 
-                          <p className="text-brand-primary leading-relaxed whitespace-pre-wrap font-sans text-xs">
-                            {msg.body}
-                          </p>
+                          <div className="space-y-1">
+                            <div
+                              className={`leading-relaxed whitespace-pre-wrap text-xs select-text ${
+                                hasLogSnippet
+                                  ? 'font-mono text-[11px] bg-black/10 dark:bg-black/35 p-2.5 rounded-lg border border-surface-border/60 text-brand-primary'
+                                  : 'text-brand-primary font-sans'
+                              } ${!isExpanded && isLong ? 'max-h-28 overflow-hidden relative' : ''}`}
+                            >
+                              {body}
+                              {!isExpanded && isLong && (
+                                <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-card to-transparent pointer-events-none" />
+                              )}
+                            </div>
+                            {isLong && (
+                              <button
+                                type="button"
+                                onClick={() => toggleDialogueMsgExpand(msgId)}
+                                className="text-[10px] font-bold text-brand-accent hover:underline flex items-center gap-1 cursor-pointer"
+                              >
+                                {isExpanded ? 'Recolher trecho' : 'Ver texto completo...'}
+                              </button>
+                            )}
+                          </div>
 
                           <div className="flex items-center justify-end gap-2 pt-1 border-t border-surface-border/50">
                             <button
