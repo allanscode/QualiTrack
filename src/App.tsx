@@ -91,7 +91,7 @@ function AppContent() {
 
   return (
     <>
-      <Toaster position="top-right" richColors />
+      <Toaster position="top-right" richColors closeButton duration={4000} />
       <AnimatePresence>
         {showIdleWarning && currentUser && (
           <m.div
@@ -997,16 +997,25 @@ function MainApp({
                         </div>
                       </div>
 
-                      {unreadNotificationsCount > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        {unreadNotificationsCount > 0 && (
+                          <button
+                            onClick={markAllNotificationsAsRead}
+                            className="text-[10px] font-bold text-brand-highlight hover:text-brand-highlight/80 hover:bg-brand-highlight/10 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all border border-brand-highlight/30"
+                            title="Marcar todas como lidas e abrir o envelope"
+                          >
+                            <CheckCheck className="w-3.5 h-3.5" />
+                            <span>Marcar lidas</span>
+                          </button>
+                        )}
                         <button
-                          onClick={markAllNotificationsAsRead}
-                          className="text-[10px] font-bold text-brand-highlight hover:text-brand-highlight/80 hover:bg-brand-highlight/10 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all border border-brand-highlight/30"
-                          title="Marcar todas como lidas e abrir o envelope"
+                          onClick={() => setShowNotifications(false)}
+                          className="p-1 text-brand-muted hover:text-brand-primary hover:bg-surface-subtle rounded-lg transition-colors cursor-pointer"
+                          title="Fechar notificações"
                         >
-                          <CheckCheck className="w-3.5 h-3.5" />
-                          <span>Marcar lidas</span>
+                          <X className="w-4 h-4" />
                         </button>
-                      )}
+                      </div>
                     </div>
 
                     {/* Lista do Histórico */}

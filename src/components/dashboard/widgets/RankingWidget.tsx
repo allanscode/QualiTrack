@@ -217,7 +217,7 @@ export default function RankingWidget({
           </AnimatePresence>
         </div>
           <div className="flex-1">
-            <h3 className="text-[11px] font-black uppercase tracking-wider text-black dark:text-slate-200 leading-tight whitespace-normal">{title}</h3>
+            <h3 className="text-[11px] font-black uppercase tracking-wider text-brand-primary leading-tight whitespace-normal">{title}</h3>
           </div>
         </div>
       )}

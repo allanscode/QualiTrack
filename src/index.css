@@ -92,6 +92,7 @@ color-scheme: dark;
   --brand-accent: #F43F5E;
   --action-primary-bg: #E11D48;
   --action-primary-fg: #FFFFFF;
+  --brand-muted: #94A3B8;
   --brand-subtle: #22314A;
   --brand-on-primary: #0A1F44; /* Dark text on light primary (Dark Mode) */
 
@@ -547,14 +548,22 @@ input[type="date"].bg-transparent:focus {
   outline: none !important;
 }
 
-/* ── Light Mode High-Contrast Typography ── */
-/* Garante que títulos e textos do modo claro sejam renderizados com máximo contraste */
+/* ── Theme-Adaptive High-Contrast Typography ── */
 html:not(.dark) {
   --brand-primary: #000000;
-  --brand-muted: #1E293B;
+  --brand-muted: #334155;
 }
 
 html:not(.dark) body {
   color: #000000;
+}
+
+html.dark {
+  --brand-primary: #F8FAFC;
+  --brand-muted: #94A3B8;
+}
+
+html.dark body {
+  color: #F8FAFC;
 }
 

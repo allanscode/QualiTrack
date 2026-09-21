@@ -49,7 +49,22 @@ export function determineParticipantRole(
     return 'system';
   }
 
-  // 2. Se temos o nome do atendente atribuído ao ticket
+  // 2. Se o nome contém termos óbvios de equipe técnica/suporte da WebPosto
+  if (
+    lower.includes('suporte') ||
+    lower.includes('webposto') ||
+    lower.includes('atendente') ||
+    lower.includes('analista') ||
+    lower.includes('técnico') ||
+    lower.includes('tecnico') ||
+    lower.includes('especialista') ||
+    lower.includes('moderador') ||
+    lower.includes('qualidade')
+  ) {
+    return 'agent';
+  }
+
+  // 3. Se temos o nome do atendente atribuído ao ticket
   if (agentName) {
     const lowerAgent = agentName.toLowerCase().trim();
     const agentParts = lowerAgent.split(/\s+/).filter(Boolean);
@@ -63,7 +78,7 @@ export function determineParticipantRole(
     }
   }
 
-  // 3. Caso padrão para clientes / solicitantes
+  // 4. Caso padrão para clientes / solicitantes
   return 'end_user';
 }
 
@@ -192,17 +207,21 @@ export function normalizeTicketDialogue(
     let role = comment.author_role;
     const authorName = comment.author_name || '';
 
-    // Se o papel não veio definido ou veio genericamente como 'agent':
-    if (!role || role === 'agent') {
+    if (comment.is_public === false) {
+      role = role === 'agent' ? 'agent' : 'system';
+    } else if (!role) {
+      role = determineParticipantRole(authorName, agentName);
+    } else if (role === 'end_user') {
       const detectedRole = determineParticipantRole(authorName, agentName);
-      // Se detectou como bot ou se era uma nota de sistema
+      if (detectedRole === 'agent') {
+        role = 'agent';
+      } else if (detectedRole === 'system') {
+        role = 'system';
+      }
+    } else if (role === 'agent') {
+      const detectedRole = determineParticipantRole(authorName, agentName);
       if (detectedRole === 'system') {
         role = 'system';
-      } else if (!comment.is_public) {
-        role = 'system';
-      } else if (detectedRole === 'end_user' && (!comment.author_role || comment.author_role === 'agent')) {
-        // Se o nome do autor não bate com o agente do ticket, pode ser o cliente
-        role = 'end_user';
       }
     }
 
