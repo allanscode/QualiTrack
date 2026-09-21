@@ -5,13 +5,15 @@ interface BadgeProps {
   variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
   className?: string;
   size?: 'xs' | 'sm' | 'md';
+  title?: string;
 }
 
 export default function Badge({
   children,
   variant = 'neutral',
   className = '',
-  size = 'sm'
+  size = 'sm',
+  title
 }: BadgeProps) {
   // All variants use design system tokens instead of raw Tailwind color classes
   const variants = {
@@ -31,7 +33,7 @@ export default function Badge({
   };
 
   return (
-    <span className={`inline-flex items-center gap-1.5 font-semibold rounded-full transition-colors ${variants[variant]} ${sizes[size]} ${className}`}>
+    <span title={title} className={`inline-flex items-center gap-1.5 font-semibold rounded-full transition-colors ${variants[variant]} ${sizes[size]} ${className}`}>
       {children}
     </span>
   );

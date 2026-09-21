@@ -179,6 +179,14 @@ export default function MonitoriaForm({
 
   const evaluatedAgent = useMemo(() => agents.find(a => a.id === header.evaluated_id), [agents, header.evaluated_id]);
   const evaluatedTeam = useMemo(() => teams.find(t => t.id === header.team_id), [teams, header.team_id]);
+  const specializedTeamLabel = useMemo(() => {
+    if ((initialData as any)?.specializedTeamLabel) return (initialData as any).specializedTeamLabel as string;
+    const teamName = (evaluatedTeam?.name || '').toLowerCase();
+    if (/cont[aá]bil/i.test(teamName)) return 'Contábil';
+    if (/fiscal/i.test(teamName)) return 'Fiscal';
+    if (/\btef\b/i.test(teamName)) return 'TEF';
+    return null;
+  }, [initialData, evaluatedTeam]);
   const headerSubtitle = evaluatedAgent?.name
     ? `Resolvido por ${evaluatedAgent.name}${evaluatedTeam?.name ? ` da equipe ${evaluatedTeam.name}` : ''}`
     : ((initialData as any)?.ticket_subject || '');
@@ -644,6 +652,20 @@ export default function MonitoriaForm({
                 <h3 className="text-xl font-black text-brand-primary uppercase tracking-tight">Dados da Avaliação</h3>
                 <p className="text-xs font-bold text-brand-muted uppercase tracking-widest mt-1">Preencha as informações básicas do ticket</p>
               </div>
+
+              {specializedTeamLabel && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-amber-700 dark:text-amber-300 shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="text-xs font-bold">
+                      Observação: Atendimento da equipe <strong>{specializedTeamLabel}</strong> — avaliado utilizando a ficha ativa disponível ({selectedForm?.title || 'Ficha Padrão'}).
+                    </span>
+                  </div>
+                  <Badge variant="warning" size="xs" className="font-black text-[10px] uppercase tracking-wider bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 shrink-0">
+                    {specializedTeamLabel}
+                  </Badge>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 <div className="space-y-2">
@@ -1297,6 +1319,19 @@ export default function MonitoriaForm({
 
           {step === 4 && (
             <section className="space-y-10 animate-fade-in max-w-4xl mx-auto w-full">
+              {specializedTeamLabel && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-amber-700 dark:text-amber-300 shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="text-xs font-bold">
+                      Observação: Atendimento da equipe <strong>{specializedTeamLabel}</strong> — avaliado utilizando a ficha ativa disponível.
+                    </span>
+                  </div>
+                  <Badge variant="warning" size="xs" className="font-black text-[10px] uppercase tracking-wider bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 shrink-0">
+                    {specializedTeamLabel}
+                  </Badge>
+                </div>
+              )}
               <div className="space-y-4">
                 <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Registro do Auditor</p>
                 <textarea

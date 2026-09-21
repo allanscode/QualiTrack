@@ -83,6 +83,7 @@ interface AuditingQueueViewProps {
     ticket_fields?: { title: string; value: string }[];
     isAiLocked?: boolean;
     customerType?: string;
+    specializedTeamLabel?: string;
     dialogue?: TicketCommentMessage[];
   }) => void;
   onModalStateChange?: (isOpen: boolean) => void;
@@ -365,11 +366,6 @@ export default function AuditingQueueView({
   // Abre o popup de confirmação da avaliação da IA com a seleção automática
   // de ficha e manual baseada no tipo de cliente (organização no Zendesk).
   const openGuidelinePicker = async (ticket: AuditingQueueTicket) => {
-    const pendingInfo = getPendingFormInfo(ticket);
-    if (pendingInfo.isPending) {
-      toast.warning(`A ficha de monitoria da equipe ${pendingInfo.label} está em elaboração pela Qualidade.`);
-      return;
-    }
     if (ticket.positive_cap_reached) {
       toast.warning('Este atendente já atingiu o máximo de 2 avaliações positivas no mês.');
       return;
@@ -505,15 +501,13 @@ export default function AuditingQueueView({
 
     const pending = candidateTickets.filter(t => {
       if (drafts[t.ticket_id] || t.already_audited || t.positive_cap_reached) return false;
-      const pendingInfo = getPendingFormInfo(t);
-      if (pendingInfo.isPending) return false;
       return true;
     });
 
     if (pending.length === 0) {
       toast.info(selectedTicketIds.size > 0
-        ? 'Os chamados selecionados já possuem avaliação, foram auditados ou estão com ficha em elaboração.'
-        : 'Todos os chamados visíveis desta página já possuem avaliação, foram auditados ou estão com ficha em elaboração.');
+        ? 'Os chamados selecionados já possuem avaliação ou foram auditados.'
+        : 'Todos os chamados visíveis desta página já possuem avaliação ou foram auditados.');
       return;
     }
 
@@ -615,6 +609,8 @@ export default function AuditingQueueView({
 
     const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
 
+    const specInfo = getSpecializedTeamInfo(ticket);
+
     onStartAudit({
       ticket_id: ticket.ticket_id,
       ticket_subject: ticket.subject,
@@ -629,6 +625,7 @@ export default function AuditingQueueView({
       ticket_fields: draft.result?.ticket_fields || ticket.ticket_fields,
       isAiLocked: true,
       customerType,
+      specializedTeamLabel: specInfo.label || undefined,
       child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
       dialogue: draft.result?.dialogue || ticket.dialogue,
     });
@@ -636,11 +633,7 @@ export default function AuditingQueueView({
 
   // Inicia auditoria manual direta (sem IA prévia) abrindo o fluxo oficial 1-2-3-4
   const handleStartManualAudit = (ticket: AuditingQueueTicket) => {
-    const pendingInfo = getPendingFormInfo(ticket);
-    if (pendingInfo.isPending) {
-      toast.warning(`A auditoria para a equipe ${pendingInfo.label} está temporariamente suspensa (ficha em elaboração).`);
-      return;
-    }
+    const specInfo = getSpecializedTeamInfo(ticket);
     const matchedAgent = agents.find(a =>
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
       (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
@@ -660,6 +653,7 @@ export default function AuditingQueueView({
       satisfaction_record_text: ticket.csat_comment,
       ticket_fields: ticket.ticket_fields,
       customerType,
+      specializedTeamLabel: specInfo.label || undefined,
       dialogue: ticket.dialogue,
     });
   };
@@ -694,9 +688,10 @@ export default function AuditingQueueView({
   // (cada Button só cresce até caber o próprio texto).
   const AI_ACTION_BUTTON_CLASS = 'justify-center min-w-[132px]';
 
-  // Verifica se o atendente do ticket pertence a uma EQUIPE cujos critérios e manual ainda estão em elaboração (Contábil, Fiscal, TEF).
-  // A verificação é ESTRITA à equipe do atendente (NUNCA tags ou assunto do chamado, permitindo que chamados sobre temas fiscais atendidos por outras equipes sigam normalmente).
-  const getPendingFormInfo = (ticket: AuditingQueueTicket) => {
+  // Identifica se o ticket/atendente pertence à equipe TEF, Contábil ou Fiscal.
+  // Liberado para avaliação da IA e auditoria manual com as fichas ativas disponíveis,
+  // com sinalização destacada em amarelo no card e nas observações.
+  const getSpecializedTeamInfo = (ticket: AuditingQueueTicket) => {
     const matchedAgent = agents.find(a =>
       (ticket.agent_email && a.email?.toLowerCase() === ticket.agent_email.toLowerCase()) ||
       (ticket.agent_name && a.name?.toLowerCase() === ticket.agent_name.toLowerCase()) ||
@@ -717,19 +712,21 @@ export default function AuditingQueueView({
     }
 
     const teamString = teamNames.join(' ').toLowerCase();
+    const tagsList = (ticket.tags || []).map(t => (t || '').toLowerCase());
 
-    if (/cont[aá]bil/i.test(teamString)) {
-      return { isPending: true, label: 'Contábil' };
+    if (/cont[aá]bil/i.test(teamString) || tagsList.includes('contabil') || tagsList.includes('contabilidade') || tagsList.some(t => t.includes('contabil'))) {
+      return { isSpecialized: true, label: 'Contábil' };
     }
-    if (/fiscal/i.test(teamString)) {
-      return { isPending: true, label: 'Fiscal' };
+    if (/fiscal/i.test(teamString) || tagsList.includes('fiscal') || tagsList.some(t => t.includes('fiscal'))) {
+      return { isSpecialized: true, label: 'Fiscal' };
     }
-    if (/\btef\b/i.test(teamString)) {
-      return { isPending: true, label: 'TEF' };
+    if (/\btef\b/i.test(teamString) || tagsList.includes('tef') || tagsList.some(t => t.includes('tef'))) {
+      return { isSpecialized: true, label: 'TEF' };
     }
 
-    return { isPending: false, label: '' };
+    return { isSpecialized: false, label: '' };
   };
+  const getPendingFormInfo = getSpecializedTeamInfo;
 
   // Exibição consistente e destacada do atendente: caso o ticket não possua atendente individual
   // atribuído (atribuído apenas a um grupo no Zendesk), exibe um badge visual de alerta.
@@ -828,24 +825,6 @@ export default function AuditingQueueView({
       );
     }
 
-    const pendingInfo = getPendingFormInfo(ticket);
-    if (pendingInfo.isPending) {
-      return (
-        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          <span title={`A Ficha de Critérios e o Manual de Atendimento da equipe ${pendingInfo.label} ainda estão em elaboração pela equipe de Qualidade. Auditorias manual e com IA estão temporariamente suspensas para esta equipe.`}>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={true}
-              className="flex items-center gap-1.5 opacity-75 cursor-not-allowed text-xs font-semibold border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 justify-center min-w-[175px]"
-            >
-              <Bot className="w-3.5 h-3.5 opacity-60 text-amber-500" />
-              <span>Ficha em Elaboração ({pendingInfo.label})</span>
-            </Button>
-          </span>
-        </div>
-      );
-    }
 
     return (
       <div className="flex items-center gap-1.5 flex-wrap justify-end">
@@ -1218,7 +1197,7 @@ export default function AuditingQueueView({
               <span>
                 {selectedTicketIds.size > 0
                   ? `Avaliar Selecionados (${selectedTicketIds.size})`
-                  : `Avaliar Página (${paginatedTickets.filter(t => !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached && !getPendingFormInfo(t).isPending).length})`}
+                  : `Avaliar Página (${paginatedTickets.filter(t => !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached).length})`}
               </span>
             </Button>
           )}
@@ -1295,9 +1274,10 @@ export default function AuditingQueueView({
                         <span className="font-mono text-xs font-black text-brand-primary">
                           #{ticket.ticket_id}
                         </span>
-                        {getPendingFormInfo(ticket).isPending && (
-                          <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                            Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                        {getSpecializedTeamInfo(ticket).label && (
+                          <Badge variant="warning" size="xs" className="text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shadow-2xs" title={`Atendimento da equipe ${getSpecializedTeamInfo(ticket).label} — avaliado com as fichas ativas`}>
+                            <AlertTriangle className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+                            <span>{getSpecializedTeamInfo(ticket).label}</span>
                           </Badge>
                         )}
                         <a
@@ -1390,9 +1370,10 @@ export default function AuditingQueueView({
                               <span className="font-mono text-xs font-black text-brand-primary">
                                 #{ticket.ticket_id}
                               </span>
-                              {getPendingFormInfo(ticket).isPending && (
-                                <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                                  Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                              {getSpecializedTeamInfo(ticket).label && (
+                                <Badge variant="warning" size="xs" className="text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shadow-2xs" title={`Atendimento da equipe ${getSpecializedTeamInfo(ticket).label} — avaliado com as fichas ativas`}>
+                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+                                  <span>{getSpecializedTeamInfo(ticket).label}</span>
                                 </Badge>
                               )}
                               <a
@@ -1483,9 +1464,10 @@ export default function AuditingQueueView({
                             <span className="font-mono text-xs font-black text-brand-primary">
                               #{ticket.ticket_id}
                             </span>
-                            {getPendingFormInfo(ticket).isPending && (
-                              <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                                Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                            {getSpecializedTeamInfo(ticket).label && (
+                              <Badge variant="warning" size="xs" className="text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shadow-2xs" title={`Atendimento da equipe ${getSpecializedTeamInfo(ticket).label} — avaliado com as fichas ativas`}>
+                                <AlertTriangle className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+                                <span>{getSpecializedTeamInfo(ticket).label}</span>
                               </Badge>
                             )}
                             <a
@@ -1595,6 +1577,12 @@ export default function AuditingQueueView({
                                 <ExternalLink className="w-2.5 h-2.5" />
                                 <span>Zendesk</span>
                               </a>
+                              {getSpecializedTeamInfo(ticket).label && (
+                                <Badge variant="warning" size="xs" className="text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shadow-2xs" title={`Atendimento da equipe ${getSpecializedTeamInfo(ticket).label}`}>
+                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+                                  <span>{getSpecializedTeamInfo(ticket).label}</span>
+                                </Badge>
+                              )}
                               {isValidated && (
                                 <Badge variant="success" size="xs" className="text-[9px]">
                                   Validado
@@ -1726,6 +1714,12 @@ export default function AuditingQueueView({
                                 <ExternalLink className="w-2.5 h-2.5" />
                                 <span>Zendesk</span>
                               </a>
+                              {getSpecializedTeamInfo(ticket).label && (
+                                <Badge variant="warning" size="xs" className="text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shadow-2xs" title={`Atendimento da equipe ${getSpecializedTeamInfo(ticket).label}`}>
+                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+                                  <span>{getSpecializedTeamInfo(ticket).label}</span>
+                                </Badge>
+                              )}
                               <Badge variant="error" size="xs" className="text-[9px]">
                                 Inválido
                               </Badge>
@@ -2285,6 +2279,25 @@ ${checksSummary}${recs}`;
                     )}
                   </div>
                 </div>
+
+                {/* Sinalização de Equipe Especializada (TEF / Contábil / Fiscal) */}
+                {(() => {
+                  const spec = getSpecializedTeamInfo(guidelinePickerTicket);
+                  if (!spec.label) return null;
+                  return (
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-2 text-xs font-bold text-amber-700 dark:text-amber-300">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span>
+                          Atendimento da equipe <strong>{spec.label}</strong> — avaliação liberada com a ficha ativa padrão.
+                        </span>
+                      </div>
+                      <Badge variant="warning" size="xs" className="font-black text-[9px] uppercase tracking-wider bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 shrink-0">
+                        {spec.label}
+                      </Badge>
+                    </div>
+                  );
+                })()}
 
                 {/* Opções selecionadas pela IA (Travadas / Read-Only) */}
                 <div className="space-y-3">
