@@ -164,19 +164,180 @@ export async function saveAIGuideline(params: {
 }
 
 /**
- * Edita título e/ou conteúdo de um manual já cadastrado — útil pra ajustar
- * ou complementar o texto de contexto sem precisar recriar o registro (e
- * sem precisar reenviar o PDF, que fica como está).
+ * Edita diretamente um manual (usado quando o próprio Administrador faz a alteração).
+ * Registra a versão anterior no histórico para rastreabilidade completa.
  */
-export async function updateAIGuideline(id: string, params: { title: string; content: string }): Promise<void> {
+export async function updateAIGuideline(
+  id: string,
+  params: { title: string; content: string },
+  guideline?: AIEvaluationGuideline,
+  user?: { id?: string; name?: string; role?: string }
+): Promise<void> {
   if (isMockMode || !supabase) {
     throw new Error('Não é possível editar manuais em modo mock/offline.');
   }
+
+  const currentVersion = guideline?.version || 1;
+  const currentHistory = guideline?.history || [];
+
+  const newHistoryEntry = guideline ? [{
+    version: currentVersion,
+    title: guideline.title,
+    content: guideline.content,
+    modified_by_id: user?.id,
+    modified_by_name: user?.name || 'Administrador',
+    modified_by_role: user?.role || 'admin',
+    created_at: new Date().toISOString(),
+    status: 'approved' as const
+  }, ...currentHistory] : currentHistory;
+
   const { error } = await supabase
     .from('ai_evaluation_guidelines')
-    .update({ title: params.title, content: params.content })
+    .update({
+      title: params.title,
+      content: params.content,
+      version: currentVersion + 1,
+      status: 'approved',
+      history: newHistoryEntry,
+      pending_title: null,
+      pending_content: null,
+      pending_modified_by_name: null,
+      pending_modified_by_role: null,
+      pending_modified_at: null,
+      updated_at: new Date().toISOString()
+    })
     .eq('id', id);
+
   if (error) throw new Error(`Falha ao editar o manual: ${error.message}`);
+}
+
+/**
+ * Submete proposta de alteração (usado por Monitores ou Gestores de Qualidade).
+ * Mantém o manual oficial ativo inalterado para a IA e coloca a proposta como 'pending_approval'
+ * para verificação pelo Administrador.
+ */
+export async function proposeGuidelineUpdate(
+  guideline: AIEvaluationGuideline,
+  params: { title: string; content: string },
+  user: { id?: string; name?: string; role?: string }
+): Promise<void> {
+  if (isMockMode || !supabase) {
+    throw new Error('Não é possível propor alterações em modo mock/offline.');
+  }
+
+  const currentHistory = guideline.history || [];
+  const proposedVersion = (guideline.version || 1) + 1;
+
+  const pendingHistoryEntry = {
+    version: proposedVersion,
+    title: params.title,
+    content: params.content,
+    modified_by_id: user.id,
+    modified_by_name: user.name || 'Monitor de Qualidade',
+    modified_by_role: user.role || 'qualidade',
+    created_at: new Date().toISOString(),
+    status: 'pending_approval' as const
+  };
+
+  const { error } = await supabase
+    .from('ai_evaluation_guidelines')
+    .update({
+      status: 'pending_approval',
+      pending_title: params.title,
+      pending_content: params.content,
+      pending_modified_by_name: user.name || 'Monitor de Qualidade',
+      pending_modified_by_role: user.role || 'qualidade',
+      pending_modified_at: new Date().toISOString(),
+      history: [pendingHistoryEntry, ...currentHistory],
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', guideline.id);
+
+  if (error) throw new Error(`Falha ao submeter proposta de alteração: ${error.message}`);
+}
+
+/**
+ * Aprova alteração pendente (exclusivo para Administradores).
+ * Promove o conteúdo proposto para o manual oficial utilizado pela IA e incrementa a versão.
+ */
+export async function approveGuidelineUpdate(
+  guideline: AIEvaluationGuideline,
+  adminUser: { id?: string; name?: string }
+): Promise<void> {
+  if (isMockMode || !supabase) {
+    throw new Error('Não é possível aprovar alterações em modo mock/offline.');
+  }
+
+  if (!guideline.pending_content) {
+    throw new Error('Não há alteração pendente para aprovação.');
+  }
+
+  const newVersion = (guideline.version || 1) + 1;
+  const currentHistory = guideline.history || [];
+
+  // Atualiza a entrada do histórico correspondente para 'approved'
+  const updatedHistory = currentHistory.map(entry => {
+    if (entry.status === 'pending_approval') {
+      return { ...entry, status: 'approved' as const, approved_by_name: adminUser.name };
+    }
+    return entry;
+  });
+
+  const { error } = await supabase
+    .from('ai_evaluation_guidelines')
+    .update({
+      title: guideline.pending_title || guideline.title,
+      content: guideline.pending_content,
+      version: newVersion,
+      status: 'approved',
+      pending_title: null,
+      pending_content: null,
+      pending_modified_by_name: null,
+      pending_modified_by_role: null,
+      pending_modified_at: null,
+      history: updatedHistory,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', guideline.id);
+
+  if (error) throw new Error(`Falha ao aprovar alteração do manual: ${error.message}`);
+}
+
+/**
+ * Rejeita alteração pendente (exclusivo para Administradores).
+ * Descarta o conteúdo proposto, mantém o manual atual ativo e registra a rejeição no histórico.
+ */
+export async function rejectGuidelineUpdate(
+  guideline: AIEvaluationGuideline,
+  reason: string = 'Alteração rejeitada pelo Administrador'
+): Promise<void> {
+  if (isMockMode || !supabase) {
+    throw new Error('Não é possível rejeitar alterações em modo mock/offline.');
+  }
+
+  const currentHistory = guideline.history || [];
+  const updatedHistory = currentHistory.map(entry => {
+    if (entry.status === 'pending_approval') {
+      return { ...entry, status: 'rejected' as const, rejection_reason: reason };
+    }
+    return entry;
+  });
+
+  const { error } = await supabase
+    .from('ai_evaluation_guidelines')
+    .update({
+      status: 'approved',
+      pending_title: null,
+      pending_content: null,
+      pending_modified_by_name: null,
+      pending_modified_by_role: null,
+      pending_modified_at: null,
+      history: updatedHistory,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', guideline.id);
+
+  if (error) throw new Error(`Falha ao rejeitar alteração do manual: ${error.message}`);
 }
 
 export async function toggleAIGuidelineActive(id: string, active: boolean): Promise<void> {

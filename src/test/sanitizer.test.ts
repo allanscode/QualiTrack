@@ -48,8 +48,23 @@ Esta mensagem e seus anexos são confidenciais e destinados exclusivamente ao de
     ];
 
     const dialogue = sanitizeDialogue(messages);
-    expect(dialogue).toContain('[CLIENTE] Maria: Meu fechamento de caixa travou.');
-    expect(dialogue).toContain('[ATENDENTE] Lucas: Olá Maria, estou abrindo o chamado.');
+    expect(dialogue).toContain('[CLIENTE: Maria] Meu fechamento de caixa travou.');
+    expect(dialogue).toContain('[ATENDENTE: Lucas] Olá Maria, estou abrindo o chamado.');
     expect(dialogue).not.toContain('Cordialmente');
+  });
+
+  it('identifica estritamente "IA webPosto" como bot e preserva atendentes transferidos mesmo com "ia" no nome', () => {
+    const messages = [
+      { author_role: 'system', author_name: 'IA webPosto', body: 'Olá! Sou a assistente virtual da WebPosto.' },
+      { author_role: 'agent', author_name: 'Mariana Silva', body: 'Olá, assumi o atendimento transferido.' },
+      { author_role: 'agent', author_name: 'Iago Santos', body: 'Também acompanhei a resolução técnica.' }
+    ];
+
+    const dialogue = sanitizeDialogue(messages);
+    expect(dialogue).toContain('[BOT - IA webPosto] Olá! Sou a assistente virtual da WebPosto.');
+    expect(dialogue).toContain('[ATENDENTE: Mariana Silva] Olá, assumi o atendimento transferido.');
+    expect(dialogue).toContain('[ATENDENTE: Iago Santos] Também acompanhei a resolução técnica.');
+    expect(dialogue).not.toContain('[SISTEMA] Mariana Silva');
+    expect(dialogue).not.toContain('[BOT] Mariana Silva');
   });
 });

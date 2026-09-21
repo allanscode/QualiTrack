@@ -616,10 +616,12 @@ serve(async (req) => {
       const mappedComments: any[] = [];
       for (const c of comments) {
         const userInfo = sideloadedUsers.get(c.author_id);
-        const authorName = userInfo?.name || '';
-        let role = userInfo?.role || (c.public ? 'agent' : 'system');
-        if (!c.public) {
-          role = 'system';
+        const authorName = (userInfo?.name || '').trim();
+        const isBotAuthor = authorName.toLowerCase().includes('ia webposto');
+        let role = isBotAuthor ? 'system' : (userInfo?.role || (c.public ? 'agent' : 'system'));
+        // Se o autor é agente/admin mas fez nota interna (c.public === false), mantém como agent
+        if (!c.public && (userInfo?.role === 'agent' || userInfo?.role === 'admin')) {
+          role = 'agent';
         }
 
         const body = c.body || c.html_body || '';
@@ -1068,7 +1070,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     if (provider === 'openrouter') {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openRouterApiKey}`,
@@ -1101,12 +1103,11 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
       usedProvider = 'openrouter';
       usedModel = data.model || openRouterModels[0] || 'openrouter';
     } else {
-      // API nativa do Gemini (Google AI Studio)
+      // API nativa do Gemini (Google AI Studio) com timeout realista de 35s
       const candidateModels = [
-        geminiModel,
-        'gemini-3.5-flash-lite',
-        'gemini-3.7-flash',
-        'gemini-3.8-flash',
+        geminiModel || 'gemini-2.5-flash',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
       let lastGeminiErr = '';
@@ -1128,7 +1129,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
                   responseSchema: stripAdditionalProperties(responseSchema),
                 },
               }),
-              signal: AbortSignal.timeout(10000),
+              signal: AbortSignal.timeout(35000),
             }
           );
 
@@ -1147,6 +1148,10 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
           }
         } catch (fetchErr: any) {
           lastGeminiErr = `${modelToTry}: ${fetchErr.message}`;
+          // Se deu timeout de 35s, interrompe o loop para não encadear múltiplos minutos de espera
+          if (fetchErr.name === 'TimeoutError' || fetchErr.message?.includes('timed out')) {
+            break;
+          }
         }
       }
 
@@ -1452,7 +1457,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     if (provider === 'openrouter') {
       const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        signal: AbortSignal.timeout(28000),
+        signal: AbortSignal.timeout(30000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openRouterApiKey}`,
@@ -1474,10 +1479,9 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
       text = data.choices?.[0]?.message?.content;
     } else {
       const candidateModels = [
-        geminiModel,
-        'gemini-3.5-flash-lite',
-        'gemini-3.7-flash',
-        'gemini-3.8-flash',
+        geminiModel || 'gemini-2.5-flash',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
       let lastError: Error | null = null;
@@ -1487,7 +1491,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
             `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${geminiApiKey}`,
             {
               method: 'POST',
-              signal: AbortSignal.timeout(10000),
+              signal: AbortSignal.timeout(35000),
               headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey! },
               body: JSON.stringify({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -1512,6 +1516,9 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
         } catch (mErr: any) {
           console.warn(`[helpdesk-queue] Tentativa Gemini com ${modelToTry} falhou:`, mErr.message);
           lastError = mErr;
+          if (mErr.name === 'TimeoutError' || mErr.message?.includes('timed out')) {
+            break;
+          }
         }
       }
       if (!text && lastError) throw lastError;

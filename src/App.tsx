@@ -621,7 +621,11 @@ function MainApp({
   };
 
   React.useEffect(() => {
-    if (userData && userData.role !== 'admin' && (activeTab === 'admin' || activeTab === 'custom_dashboard')) {
+    const allowedAdminRoles = ['admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte'];
+    if (userData && !allowedAdminRoles.includes(userData.role) && activeTab === 'admin') {
+      setActiveTab('dashboard');
+    }
+    if (userData && userData.role !== 'admin' && activeTab === 'custom_dashboard') {
       setActiveTab('dashboard');
     }
   }, [userData?.role, activeTab]);
@@ -718,7 +722,7 @@ function MainApp({
           {userData?.role !== 'suporte' && (
             <NavItem isDark={sidebarIsDark} icon={AnimatedLayersIcon} label="Filas de Triagem" active={activeTab === 'filas'} onClick={() => setActiveTab('filas')} isOpen={sidebarTextVisible} />
           )}
-          {userData?.role === 'admin' && (
+          {userData?.role === 'admin' ? (
             <div className="space-y-1">
               <button
                 onClick={handleSettingsClick}
@@ -775,7 +779,16 @@ function MainApp({
                 )}
               </AnimatePresence>
             </div>
-          )}
+          ) : ['gestor_qualidade', 'qualidade', 'gestor_suporte'].includes(userData?.role || '') ? (
+            <NavItem
+              isDark={sidebarIsDark}
+              icon={AnimatedSettingsIcon}
+              label="Configurações"
+              active={activeTab === 'admin'}
+              onClick={() => setActiveTab('admin')}
+              isOpen={sidebarTextVisible}
+            />
+          ) : null}
         </nav>
 
         <div className="p-3 border-t border-white/5 interactive-sidebar-item">
@@ -1177,19 +1190,15 @@ function MainApp({
                 />
               </div>
             )}
-            {userData?.role === 'admin' && (
-              <>
-                {activeTab === 'admin' && (
-                  <div className="animate-fade-in">
-                    <AdminPanel user={userData} />
-                  </div>
-                )}
-                {activeTab === 'custom_dashboard' && (
-                  <div className="animate-fade-in">
-                    <CustomDashboardManagement user={userData} />
-                  </div>
-                )}
-              </>
+            {['admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte'].includes(userData?.role || '') && activeTab === 'admin' && (
+              <div className="animate-fade-in">
+                <AdminPanel user={userData} />
+              </div>
+            )}
+            {userData?.role === 'admin' && activeTab === 'custom_dashboard' && (
+              <div className="animate-fade-in">
+                <CustomDashboardManagement user={userData} />
+              </div>
             )}
           </React.Suspense>
         </div>

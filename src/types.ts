@@ -297,6 +297,18 @@ export interface TicketCommentMessage {
   is_public: boolean;
 }
 
+export interface GuidelineVersion {
+  version: number;
+  title: string;
+  content: string;
+  modified_by_id?: string;
+  modified_by_name?: string;
+  modified_by_role?: string;
+  created_at: string;
+  status: 'approved' | 'pending_approval' | 'rejected';
+  rejection_reason?: string;
+}
+
 /** Manual de padrões de atendimento usado como contexto extra pela IA. */
 export interface AIEvaluationGuideline {
   id: string;
@@ -308,6 +320,15 @@ export interface AIEvaluationGuideline {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  /** Status da versão atual: 'approved' em produção pela IA ou 'pending_approval' aguardando verificação do admin */
+  status?: 'approved' | 'pending_approval';
+  pending_title?: string;
+  pending_content?: string;
+  pending_modified_by_name?: string;
+  pending_modified_by_role?: string;
+  pending_modified_at?: string;
+  version?: number;
+  history?: GuidelineVersion[];
 }
 
 export interface AIEvaluationResult {

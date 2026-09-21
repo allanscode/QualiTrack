@@ -22,25 +22,48 @@ export function isChatTranscript(text?: string): boolean {
 
 export function determineParticipantRole(
   authorName: string,
-  agentName?: string
+  agentName?: string,
+  customerName?: string
 ): 'agent' | 'end_user' | 'system' {
   const lower = (authorName || '').toLowerCase().trim();
 
-  // 1. Bots e mensagens automáticas do sistema
+  // 1. Robô de autoatendimento da WebPosto: estritamente "IA webPosto"
   if (
-    lower.includes('ia ') ||
-    lower.includes('bot') ||
-    lower.includes('system') ||
-    lower.includes('sistema') ||
-    lower.startsWith('ia ') ||
     lower === 'ia webposto' ||
+    lower.startsWith('ia webposto') ||
+    lower.includes('ia webposto') ||
     lower === 'workflow' ||
-    lower.includes('zendesk')
+    lower === 'sistema' ||
+    lower === 'system'
   ) {
     return 'system';
   }
 
-  // 2. Se temos o nome do atendente atribuído ao ticket
+  // 2. Se temos o nome do cliente / solicitante identificado, confirma se é o cliente
+  if (customerName) {
+    const lowerCust = customerName.toLowerCase().trim();
+    if (lower && (lower.includes(lowerCust) || lowerCust.includes(lower))) {
+      return 'end_user';
+    }
+  }
+
+  // 3. Se o nome contém termos de equipe técnica/suporte da WebPosto
+  if (
+    lower.includes('suporte') ||
+    lower.includes('webposto') ||
+    lower.includes('atendente') ||
+    lower.includes('analista') ||
+    lower.includes('técnico') ||
+    lower.includes('tecnico') ||
+    lower.includes('especialista') ||
+    lower.includes('moderador') ||
+    lower.includes('qualidade') ||
+    lower.includes('atendimento')
+  ) {
+    return 'agent';
+  }
+
+  // 4. Se temos o nome do atendente principal atribuído ao ticket
   if (agentName) {
     const lowerAgent = agentName.toLowerCase().trim();
     const agentParts = lowerAgent.split(/\s+/).filter(Boolean);
@@ -54,7 +77,7 @@ export function determineParticipantRole(
     }
   }
 
-  // 3. Caso padrão para clientes / solicitantes
+  // 5. Caso padrão para clientes / solicitantes
   return 'end_user';
 }
 
@@ -191,7 +214,18 @@ export function sanitizeMessageBody(rawBody: string): string {
     }
   }
 
-  // 5. Remove excesso de espaços em branco e quebras consecutivas
+  // 5. Compactação inteligente de logs e stack traces técnicos volumosos
+  // (Previne estourar cota de tokens e elimina timeouts da IA em chamados com dumps extensos de erro)
+  if (text.length > 1200) {
+    const hasHeavyLog = /(?:\[FireDAC\]|Traceback|Exception in thread|CREATE TABLE|ALTER TABLE|SELECT\s+.*?FROM|INSERT\s+INTO)/i.test(text);
+    if (hasHeavyLog) {
+      const head = text.slice(0, 450);
+      const tail = text.slice(-350);
+      text = `${head}\n\n[...trecho técnico intermediário de log/stack trace resumido para agilizar avaliação...]\n\n${tail}`;
+    }
+  }
+
+  // 6. Remove excesso de espaços em branco e quebras consecutivas
   text = text
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -226,10 +260,23 @@ export function sanitizeDialogue(
 
   return expandedMessages
     .map(m => {
-      const role = m.author_role === 'agent' ? 'ATENDENTE' : m.author_role === 'end_user' ? 'CLIENTE' : 'SISTEMA';
+      const author = (m.author_name || '').trim();
+      const isBot = m.author_role === 'system' || author.toLowerCase().includes('ia webposto');
+      const isAgent = m.author_role === 'agent' && !isBot;
+      const isClient = m.author_role === 'end_user' && !isBot;
+
+      let roleLabel = 'SISTEMA';
+      if (isBot) {
+        roleLabel = 'BOT - IA webPosto';
+      } else if (isAgent) {
+        roleLabel = author ? `ATENDENTE: ${author}` : 'ATENDENTE';
+      } else if (isClient) {
+        roleLabel = author ? `CLIENTE: ${author}` : 'CLIENTE';
+      }
+
       const cleanBody = sanitizeMessageBody(m.body || '');
       if (!cleanBody) return null;
-      return `[${role}] ${m.author_name || ''}: ${cleanBody}`;
+      return `[${roleLabel}] ${cleanBody}`;
     })
     .filter(Boolean)
     .join('\n\n');

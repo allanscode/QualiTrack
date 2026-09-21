@@ -28,28 +28,37 @@ interface ParseChatOptions {
 
 /**
  * Determina o papel de um participante do chat pelo nome e contexto.
+ * Regra estrita: apenas "IA webPosto" é classificado como robô/bot.
+ * Qualquer outro agente ou analista em casos de transferência deve ser identificado como atendente.
  */
 export function determineParticipantRole(
   authorName: string,
-  agentName?: string
+  agentName?: string,
+  customerName?: string
 ): 'agent' | 'end_user' | 'system' {
   const lower = (authorName || '').toLowerCase().trim();
 
-  // 1. Bots e mensagens automáticas do sistema
+  // 1. Robô de autoatendimento da WebPosto: estritamente "IA webPosto"
   if (
-    lower.includes('ia ') ||
-    lower.includes('bot') ||
-    lower.includes('system') ||
-    lower.includes('sistema') ||
-    lower.startsWith('ia ') ||
     lower === 'ia webposto' ||
+    lower.startsWith('ia webposto') ||
+    lower.includes('ia webposto') ||
     lower === 'workflow' ||
-    lower.includes('zendesk')
+    lower === 'sistema' ||
+    lower === 'system'
   ) {
     return 'system';
   }
 
-  // 2. Se o nome contém termos óbvios de equipe técnica/suporte da WebPosto
+  // 2. Se temos o nome do cliente / solicitante identificado, confirma se é o cliente
+  if (customerName) {
+    const lowerCust = customerName.toLowerCase().trim();
+    if (lower && (lower.includes(lowerCust) || lowerCust.includes(lower))) {
+      return 'end_user';
+    }
+  }
+
+  // 3. Se o nome contém termos óbvios de equipe técnica/suporte da WebPosto
   if (
     lower.includes('suporte') ||
     lower.includes('webposto') ||
@@ -59,12 +68,13 @@ export function determineParticipantRole(
     lower.includes('tecnico') ||
     lower.includes('especialista') ||
     lower.includes('moderador') ||
-    lower.includes('qualidade')
+    lower.includes('qualidade') ||
+    lower.includes('atendimento')
   ) {
     return 'agent';
   }
 
-  // 3. Se temos o nome do atendente atribuído ao ticket
+  // 4. Se temos o nome do atendente principal atribuído ao ticket
   if (agentName) {
     const lowerAgent = agentName.toLowerCase().trim();
     const agentParts = lowerAgent.split(/\s+/).filter(Boolean);
@@ -78,7 +88,7 @@ export function determineParticipantRole(
     }
   }
 
-  // 4. Caso padrão para clientes / solicitantes
+  // 5. Caso padrão para clientes / solicitantes
   return 'end_user';
 }
 

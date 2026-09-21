@@ -16,7 +16,8 @@ import {
   ExternalLink,
   ChevronRight,
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  Bot
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Card from '../ui/Card';
@@ -264,8 +265,8 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
             {/* Header Modal */}
             <div className="p-4 border-b border-surface-border flex items-center justify-between bg-surface-subtle/50">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-brand-highlight/15 text-brand-highlight flex items-center justify-center font-black">
-                  #{selectedLog.ticket_id}
+                <div className="w-9 h-9 rounded-xl bg-brand-highlight/15 text-brand-highlight flex items-center justify-center flex-shrink-0">
+                  <Bot className="w-5 h-5" />
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-brand-primary">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { User, Team, EvaluationForm, AccessRequest } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
@@ -24,11 +24,51 @@ import RequestsManagement from './admin/RequestsManagement';
 import DissatisfactionFieldsManagement from './admin/DissatisfactionFieldsManagement';
 import AIHubManagement from './admin/AIHubManagement';
 
+type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub';
+
+interface TabItem {
+  key: AdminSubTab;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const ALL_ADMIN_TABS: TabItem[] = [
+  { key: 'users', label: 'Usuários', icon: Users },
+  { key: 'teams', label: 'Equipes', icon: Shield },
+  { key: 'forms', label: 'Formulários', icon: ClipboardList },
+  { key: 'requests', label: 'Solicitações', icon: UserPlus },
+  { key: 'operacao', label: 'Operação', icon: Calendar },
+  { key: 'metas', label: 'Metas', icon: Target },
+  { key: 'campos_extras', label: 'Campos Extras', icon: Sliders },
+  { key: 'ia_hub', label: 'Inteligência Artificial', icon: Brain },
+];
+
+function getAvailableTabs(role?: string): TabItem[] {
+  if (role === 'admin') return ALL_ADMIN_TABS;
+  if (role === 'gestor_qualidade' || role === 'qualidade') {
+    return ALL_ADMIN_TABS.filter(t => ['teams', 'forms', 'campos_extras', 'ia_hub'].includes(t.key));
+  }
+  if (role === 'gestor_suporte') {
+    return ALL_ADMIN_TABS.filter(t => t.key === 'teams');
+  }
+  return [];
+}
+
 export default function AdminPanel({ user: currentUser }: { user: User | null }) {
   const staticData = useStaticData();
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub'>('users');
+  const availableTabs = useMemo(() => getAvailableTabs(currentUser?.role), [currentUser?.role]);
+  const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>(() => {
+    const tabs = getAvailableTabs(currentUser?.role);
+    return tabs[0]?.key || 'users';
+  });
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!availableTabs.some(t => t.key === activeSubTab)) {
+      setActiveSubTab(availableTabs[0]?.key || 'users');
+    }
+  }, [availableTabs, activeSubTab]);
 
   const loadRequests = async () => {
     setLoading(true);
@@ -96,22 +136,13 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center gap-6 border-b border-slate-200 dark:border-slate-800 w-full overflow-x-auto no-scrollbar pb-0">
-        {[
-          { key: 'users', label: 'Usuários', icon: Users },
-          { key: 'teams', label: 'Equipes', icon: Shield },
-          { key: 'forms', label: 'Formulários', icon: ClipboardList },
-          { key: 'requests', label: 'Solicitações', icon: UserPlus },
-          { key: 'operacao', label: 'Operação', icon: Calendar },
-          { key: 'metas', label: 'Metas', icon: Target },
-          { key: 'campos_extras', label: 'Campos Extras', icon: Sliders },
-          { key: 'ia_hub', label: 'Inteligência Artificial', icon: Brain },
-        ].map((item) => {
+        {availableTabs.map((item) => {
           const Icon = item.icon;
           const active = activeSubTab === item.key;
           return (
             <button
               key={item.key}
-              onClick={() => setActiveSubTab(item.key as any)}
+              onClick={() => setActiveSubTab(item.key)}
               className={`
               flex items-center gap-2 px-1 pb-3 text-sm transition-colors duration-200 -mb-px border-b-2
               ${active
@@ -135,7 +166,7 @@ export default function AdminPanel({ user: currentUser }: { user: User | null })
           transition={{ duration: 0.2 }}
         >
           {activeSubTab === 'users' && <UsersManagement users={staticData.users} teams={staticData.teams} loadData={loadAllData} />}
-          {activeSubTab === 'teams' && <TeamsManagement teams={staticData.teams} users={staticData.users} loadData={loadAllData} />}
+          {activeSubTab === 'teams' && <TeamsManagement teams={staticData.teams} users={staticData.users} loadData={loadAllData} currentUser={currentUser} />}
           {activeSubTab === 'forms' && <FormsManagement currentUser={currentUser} teams={staticData.teams} loadData={loadAllData} />}
           {activeSubTab === 'requests' && <RequestsManagement requests={requests} users={staticData.users} teams={staticData.teams} loadData={loadAllData} />}
           {activeSubTab === 'operacao' && <QualityConfigManagement mode="operacao" />}

@@ -95,9 +95,24 @@ interface TeamsManagementProps {
   teams: Team[];
   users: User[];
   loadData: () => void;
+  currentUser?: User | null;
 }
 
-export default function TeamsManagement({ teams, users, loadData }: TeamsManagementProps) {
+export default function TeamsManagement({ teams, users, loadData, currentUser }: TeamsManagementProps) {
+  const isReadOnly = currentUser?.role === 'gestor_suporte';
+
+  const userAllowedTeamIds = useMemo(() => {
+    if (currentUser?.role !== 'gestor_suporte') return null;
+    const ids = new Set<string>();
+    if (currentUser.team_ids && Array.isArray(currentUser.team_ids)) {
+      currentUser.team_ids.forEach(id => ids.add(id));
+    }
+    if (currentUser.primary_team_id) {
+      ids.add(currentUser.primary_team_id);
+    }
+    return ids;
+  }, [currentUser]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Partial<Team>>({ name: '', sigla: '', description: '', icon: '' });
   const [saving, setSaving] = useState(false);
@@ -194,10 +209,11 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
 
   const filteredTeams = useMemo(() => {
     return teams
+      .filter(t => userAllowedTeamIds ? userAllowedTeamIds.has(t.id) : true)
       .filter(t => statusFilter === 'active' ? t.active !== false : t.active === false)
       .filter(t => matchesSearch(t.name, searchTerm))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [teams, statusFilter, searchTerm]);
+  }, [teams, userAllowedTeamIds, statusFilter, searchTerm]);
 
   const isSiglaDuplicate = useMemo(() => {
     if (!editingTeam.sigla?.trim()) return false;
@@ -413,26 +429,30 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
             />
           </div>
         </div>
-        <Button
-          variant="ghost"
-          onClick={handleSyncZendeskGroups}
-          disabled={syncingZendesk}
-          icon={syncingZendesk ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          title="Cria uma equipe para cada grupo do Zendesk que ainda não existe no QualidadeWP"
-        >
-          {syncingZendesk ? 'SINCRONIZANDO...' : 'IMPORTAR DO ZENDESK'}
-        </Button>
-        <Button
-          onClick={() => {
-            setEditingTeam({ name: '', sigla: '', description: '', icon: '' });
-            setIsIconDropdownOpen(false);
-            setIsModalOpen(true);
-          }}
-          icon={<Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90" />}
-          className="group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200"
-        >
-          NOVA EQUIPE
-        </Button>
+        {!isReadOnly && (
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              onClick={handleSyncZendeskGroups}
+              disabled={syncingZendesk}
+              icon={syncingZendesk ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              title="Cria uma equipe para cada grupo do Zendesk que ainda não existe no QualidadeWP"
+            >
+              {syncingZendesk ? 'SINCRONIZANDO...' : 'IMPORTAR DO ZENDESK'}
+            </Button>
+            <Button
+              onClick={() => {
+                setEditingTeam({ name: '', sigla: '', description: '', icon: '' });
+                setIsIconDropdownOpen(false);
+                setIsModalOpen(true);
+              }}
+              icon={<Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90" />}
+              className="group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200"
+            >
+              NOVA EQUIPE
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-stretch">
@@ -442,7 +462,16 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
           const activeAgentsCount = activeAgents.length;
           
           return (
-            <Card key={t.id} padding="sm" className="group hover:border-brand-accent transition-all relative flex flex-col justify-center min-h-[90px]">
+            <Card 
+              key={t.id} 
+              padding="sm" 
+              onClick={() => {
+                if (isReadOnly) {
+                  setSelectedDrawerTeam(t);
+                }
+              }}
+              className={`group hover:border-brand-accent transition-all relative flex flex-col justify-center min-h-[90px] ${isReadOnly ? 'cursor-pointer hover:shadow-md' : ''}`}
+            >
               {t.active === false && (
                 <div className="absolute inset-0 bg-surface-bg/60 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-card">
                   <Badge variant="error">Desativada</Badge>
@@ -505,26 +534,28 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={() => { 
-                      setEditingTeam(t); 
-                      setIsIconDropdownOpen(false);
-                      setIsModalOpen(true); 
-                    }} 
-                    className="p-1.5 rounded-lg hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  {deleteConfirmId === t.id ? (
-                    <div className="flex items-center gap-0.5 animate-in fade-in slide-in-from-right-2">
-                      <button onClick={() => handleToggleStatus(t.id, false)} className="px-1.5 py-1 rounded-md bg-error text-white text-[8px] font-black uppercase cursor-pointer">Sim</button>
-                      <button onClick={() => setDeleteConfirmId(null)} className="px-1.5 py-1 rounded-md bg-surface-subtle text-brand-muted text-[8px] font-black uppercase cursor-pointer">Não</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setDeleteConfirmId(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-brand-muted hover:text-error dark:hover:text-red-400 transition-all cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                  )}
-                </div>
+                {!isReadOnly && (
+                  <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => { 
+                        setEditingTeam(t); 
+                        setIsIconDropdownOpen(false);
+                        setIsModalOpen(true); 
+                      }} 
+                      className="p-1.5 rounded-lg hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all cursor-pointer"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    {deleteConfirmId === t.id ? (
+                      <div className="flex items-center gap-0.5 animate-in fade-in slide-in-from-right-2">
+                        <button onClick={() => handleToggleStatus(t.id, false)} className="px-1.5 py-1 rounded-md bg-error text-white text-[8px] font-black uppercase cursor-pointer">Sim</button>
+                        <button onClick={() => setDeleteConfirmId(null)} className="px-1.5 py-1 rounded-md bg-surface-subtle text-brand-muted text-[8px] font-black uppercase cursor-pointer">Não</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDeleteConfirmId(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-brand-muted hover:text-error dark:hover:text-red-400 transition-all cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                    )}
+                  </div>
+                )}
               </div>
             </Card>
           );
@@ -720,30 +751,32 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 thin-scrollbar">
                   {/* Section B: Add Member */}
-                  <div className="bg-slate-50/50 dark:bg-slate-900/30 p-4 border border-slate-100 dark:border-slate-800/60 rounded-xl space-y-3">
-                    <h4 className="text-[10px] uppercase tracking-widest font-black text-slate-400 dark:text-slate-500">
-                      Vincular Novo Agente
-                    </h4>
-                    
-                    <div className="flex gap-2">
-                      <CustomSelect
-                        value={selectedUserToAdd}
-                        onChange={(val) => setSelectedUserToAdd(val)}
-                        options={availableUsersToLink.map(u => ({ value: u.id, label: `${u.name} (${u.email})` }))}
-                        placeholder="Buscar usuário..."
-                        className="flex-1"
-                        size="sm"
-                      />
-                      <Button
-                        onClick={handleAddUserToTeamLocal}
-                        disabled={!selectedUserToAdd || operationLoading}
-                        className="h-9 px-4 shrink-0 text-[10px] font-black uppercase tracking-wider rounded-lg bg-brand-primary text-brand-on-primary hover:bg-brand-primary/90 transition-all duration-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1 group"
-                      >
-                        <Plus className="w-3.5 h-3.5 transition-transform duration-300 group-hover:rotate-90" />
-                        <span>Adicionar</span>
-                      </Button>
+                  {!isReadOnly && (
+                    <div className="bg-slate-50/50 dark:bg-slate-900/30 p-4 border border-slate-100 dark:border-slate-800/60 rounded-xl space-y-3">
+                      <h4 className="text-[10px] uppercase tracking-widest font-black text-slate-400 dark:text-slate-500">
+                        Vincular Novo Agente
+                      </h4>
+                      
+                      <div className="flex gap-2">
+                        <CustomSelect
+                          value={selectedUserToAdd}
+                          onChange={(val) => setSelectedUserToAdd(val)}
+                          options={availableUsersToLink.map(u => ({ value: u.id, label: `${u.name} (${u.email})` }))}
+                          placeholder="Buscar usuário..."
+                          className="flex-1"
+                          size="sm"
+                        />
+                        <Button
+                          onClick={handleAddUserToTeamLocal}
+                          disabled={!selectedUserToAdd || operationLoading}
+                          className="h-9 px-4 shrink-0 text-[10px] font-black uppercase tracking-wider rounded-lg bg-brand-primary text-brand-on-primary hover:bg-brand-primary/90 transition-all duration-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1 group"
+                        >
+                          <Plus className="w-3.5 h-3.5 transition-transform duration-300 group-hover:rotate-90" />
+                          <span>Adicionar</span>
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Section A: Members List */}
                   <div className="space-y-3">
@@ -771,14 +804,16 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                                 <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{u.email}</p>
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleRemoveUserFromTeamLocal(u.id)}
-                              disabled={operationLoading}
-                              title="Remover da equipe"
-                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-slate-400 hover:text-error dark:hover:text-red-400 transition-all cursor-pointer opacity-0 group-hover/member:opacity-100 focus:opacity-100 disabled:opacity-50"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {!isReadOnly && (
+                              <button
+                                onClick={() => handleRemoveUserFromTeamLocal(u.id)}
+                                disabled={operationLoading}
+                                title="Remover da equipe"
+                                className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-slate-400 hover:text-error dark:hover:text-red-400 transition-all cursor-pointer opacity-0 group-hover/member:opacity-100 focus:opacity-100 disabled:opacity-50"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -787,16 +822,18 @@ export default function TeamsManagement({ teams, users, loadData }: TeamsManagem
                 </div>
 
                 {/* Footer */}
-                <footer className="p-6 border-t border-slate-100 dark:border-slate-800/80 bg-white dark:bg-slate-900 flex items-center justify-end shrink-0">
-                  <Button
-                    onClick={handleSaveTeamUsers}
-                    disabled={operationLoading}
-                    className="w-full group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:bg-surface-border dark:disabled:bg-surface-border disabled:text-brand-muted dark:disabled:text-brand-muted disabled:opacity-100 disabled:transform-none disabled:shadow-none transition-all duration-200 py-2.5 px-8"
-                    icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
-                  >
-                    {operationLoading ? 'SALVANDO...' : 'SALVAR ALTERAÇÕES'}
-                  </Button>
-                </footer>
+                {!isReadOnly && (
+                  <footer className="p-6 border-t border-slate-100 dark:border-slate-800/80 bg-white dark:bg-slate-900 flex items-center justify-end shrink-0">
+                    <Button
+                      onClick={handleSaveTeamUsers}
+                      disabled={operationLoading}
+                      className="w-full group bg-brand-primary text-brand-on-primary hover:bg-brand-primary/95 hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:bg-surface-border dark:disabled:bg-surface-border disabled:text-brand-muted dark:disabled:text-brand-muted disabled:opacity-100 disabled:transform-none disabled:shadow-none transition-all duration-200 py-2.5 px-8"
+                      icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
+                    >
+                      {operationLoading ? 'SALVANDO...' : 'SALVAR ALTERAÇÕES'}
+                    </Button>
+                  </footer>
+                )}
               </m.div>
             </div>
           </div>,
