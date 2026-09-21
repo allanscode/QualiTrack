@@ -54,7 +54,8 @@ import {
   AlertOctagon,
   ListChecks,
   CheckSquare,
-  Eye
+  Eye,
+  Copy
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -146,6 +147,16 @@ export default function AuditingQueueView({
   // Rascunhos de avaliação da IA já prontos (persistidos), por ticket_id —
   // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
   const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>({});
+
+  // Filtro de rascunhos feitos pela IA (Todos | Com Rascunho IA | Sem Rascunho IA)
+  const [aiDraftFilter, setAiDraftFilter] = useState<'all' | 'with_draft' | 'without_draft'>('all');
+
+  // Seleção de tickets individuais para avaliação em lote customizada
+  const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
+
+  // Veredito e controle para chamados filhos (Válido / Inválido e cópia da macro)
+  const [childManualVerdict, setChildManualVerdict] = useState<'conforme' | 'nao_conforme' | null>(null);
+  const [copiedChildMacro, setCopiedChildMacro] = useState(false);
 
   // Avaliação em lote: processa todos os tickets da página atual sequencialmente.
   const [batchRunning, setBatchRunning] = useState(false);
@@ -284,7 +295,7 @@ export default function AuditingQueueView({
     return 0;
   }, [tickets, activeQueue]);
 
-  // Filtro de busca na lista de tickets
+  // Filtro de busca na lista de tickets com suporte a filtro de rascunhos da IA
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
       const matchesSearch = !searchTerm ||
@@ -295,18 +306,23 @@ export default function AuditingQueueView({
 
       const matchesAgent = !selectedAgentFilter || t.agent_name?.toLowerCase().includes(selectedAgentFilter.toLowerCase());
 
+      const hasDraft = !!drafts[t.ticket_id] || (activeQueue === 'filhos' && (!!t.child_evaluation || validatedChildTickets.has(t.ticket_id)));
+      if (aiDraftFilter === 'with_draft' && !hasDraft) return false;
+      if (aiDraftFilter === 'without_draft' && hasDraft) return false;
+
       return matchesSearch && matchesAgent;
     });
-  }, [tickets, searchTerm, selectedAgentFilter]);
+  }, [tickets, searchTerm, selectedAgentFilter, drafts, activeQueue, validatedChildTickets, aiDraftFilter]);
 
   // Paginação configurável por página (5, 10, 15, 20) com padrão 5
   const [pageSize, setPageSize] = useState<number>(5);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
-  // Reseta para a primeira página quando muda a busca, filtro de agente, tamanho de página ou fila
+  // Reseta para a primeira página e limpa seleção quando muda a busca, filtro de agente, rascunho, tamanho de página ou fila
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedAgentFilter, activeQueue, pageSize]);
+    setSelectedTicketIds(new Set());
+  }, [searchTerm, selectedAgentFilter, activeQueue, pageSize, aiDraftFilter]);
 
   const totalItems = filteredTickets.length;
   const totalLocalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -317,6 +333,33 @@ export default function AuditingQueueView({
   const paginatedTickets = useMemo(() => {
     return filteredTickets.slice(startIndex, endIndex);
   }, [filteredTickets, startIndex, endIndex]);
+
+  const toggleTicketSelection = (ticketId: string) => {
+    setSelectedTicketIds(prev => {
+      const next = new Set(prev);
+      if (next.has(ticketId)) {
+        next.delete(ticketId);
+      } else {
+        next.add(ticketId);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAllCurrentPage = () => {
+    const pageIds = paginatedTickets.map(t => t.ticket_id);
+    const allSelected = pageIds.length > 0 && pageIds.every(id => selectedTicketIds.has(id));
+
+    setSelectedTicketIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        pageIds.forEach(id => next.delete(id));
+      } else {
+        pageIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
 
 
   // Abre o popup de confirmação da avaliação da IA com a seleção automática
@@ -453,10 +496,14 @@ export default function AuditingQueueView({
     }
   };
 
-  // Avaliação em LOTE — processa estritamente os tickets da página visível no momento (respeitando o pageSize: 5, 10, 15, 20...).
-  // Pula: já avaliados, com cap atingido, já auditados ou equipes com ficha em elaboração.
+  // Avaliação em LOTE — se houver tickets selecionados via checkbox, avalia apenas eles.
+  // Caso contrário, avalia todos os tickets elegíveis visíveis da página atual.
   const handleBatchEvaluate = async () => {
-    const pending = paginatedTickets.filter(t => {
+    const candidateTickets = selectedTicketIds.size > 0
+      ? paginatedTickets.filter(t => selectedTicketIds.has(t.ticket_id))
+      : paginatedTickets;
+
+    const pending = candidateTickets.filter(t => {
       if (drafts[t.ticket_id] || t.already_audited || t.positive_cap_reached) return false;
       const pendingInfo = getPendingFormInfo(t);
       if (pendingInfo.isPending) return false;
@@ -464,7 +511,9 @@ export default function AuditingQueueView({
     });
 
     if (pending.length === 0) {
-      toast.info('Todos os tickets visíveis desta página já possuem avaliação, foram auditados ou estão com ficha em elaboração.');
+      toast.info(selectedTicketIds.size > 0
+        ? 'Os chamados selecionados já possuem avaliação, foram auditados ou estão com ficha em elaboração.'
+        : 'Todos os chamados visíveis desta página já possuem avaliação, foram auditados ou estão com ficha em elaboração.');
       return;
     }
 
@@ -1064,77 +1113,114 @@ export default function AuditingQueueView({
         </button>
       </div>
 
-      {/* 2. Barra de Busca e Ações (Filtros, Busca e Atualização) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
-        {/* Campo de Busca posicionado à esquerda no lugar dos subtítulos */}
-        <div className="relative w-full sm:w-80">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
-          <input
-            type="text"
-            placeholder="Buscar por ID, assunto ou agente..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl bg-surface-subtle/50 border border-surface-border text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-highlight transition-all"
-          />
-          {searchTerm && (
+      {/* 2. Barra de Busca e Ações (Filtros, Busca, Seleção e Atualização) */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-1">
+        {/* Campo de Busca e Filtro de Rascunho IA */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+          <div className="relative w-full sm:w-72">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+            <input
+              type="text"
+              placeholder="Buscar por ID, assunto ou agente..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl bg-surface-subtle/50 border border-surface-border text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-highlight transition-all"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-primary cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Filtro de Rascunhos da IA */}
+          <div className="flex items-center gap-1 bg-surface-subtle/60 p-1 rounded-xl border border-surface-border text-[10px] font-bold">
             <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-primary cursor-pointer"
+              type="button"
+              onClick={() => setAiDraftFilter('all')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                aiDraftFilter === 'all'
+                  ? 'bg-surface-card text-brand-primary shadow-xs font-black'
+                  : 'text-brand-muted hover:text-brand-primary'
+              }`}
             >
-              <X className="w-3 h-3" />
+              Todos
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => setAiDraftFilter('with_draft')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                aiDraftFilter === 'with_draft'
+                  ? 'bg-brand-highlight/15 text-brand-highlight shadow-xs font-black'
+                  : 'text-brand-muted hover:text-brand-primary'
+              }`}
+              title="Exibir apenas chamados que já possuem rascunho ou parecer da IA"
+            >
+              <Bot className="w-3 h-3" />
+              <span>Com Rascunho IA</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAiDraftFilter('without_draft')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                aiDraftFilter === 'without_draft'
+                  ? 'bg-surface-card text-brand-primary shadow-xs font-black'
+                  : 'text-brand-muted hover:text-brand-primary'
+              }`}
+              title="Exibir chamados pendentes de análise pela IA"
+            >
+              Sem Rascunho
+            </button>
+          </div>
         </div>
 
         {/* Botões de Ação mantidos à direita */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          {/* Botão de Selecionar Todos da Página Atual */}
+          {paginatedTickets.length > 0 && (
+            <label className="flex items-center gap-1.5 text-[11px] font-bold text-brand-muted hover:text-brand-primary cursor-pointer px-2.5 py-1.5 rounded-xl border border-surface-border bg-surface-subtle/40 transition-colors">
+              <input
+                type="checkbox"
+                checked={paginatedTickets.length > 0 && paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id))}
+                onChange={handleToggleSelectAllCurrentPage}
+                disabled={batchRunning}
+                className="w-3.5 h-3.5 rounded text-brand-highlight focus:ring-brand-highlight border-surface-border cursor-pointer"
+              />
+              <span>
+                {paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar Todos' : 'Selecionar Página'}
+              </span>
+              {selectedTicketIds.size > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-brand-highlight text-white text-[9px] font-black">
+                  {selectedTicketIds.size}
+                </span>
+              )}
+            </label>
+          )}
 
           {/* Botão Avaliar em Lote — nas filas com IA */}
           {(activeQueue === 'positivas' || activeQueue === 'proativas' || activeQueue === 'negativas') && (
-            batchRunning ? (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {batchProgress && (
-                  <div className="flex items-center gap-2">
-                    <div className="w-24 h-1.5 bg-surface-border rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-brand-highlight rounded-full transition-all duration-500"
-                        style={{ width: `${Math.round((batchProgress.done / batchProgress.total) * 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] font-bold text-brand-muted whitespace-nowrap">
-                      {batchProgress.done}/{batchProgress.total}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { batchCancelRef.current = true; }}
-                  className="flex items-center gap-1.5 text-functional-error flex-shrink-0"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Cancelar Lote</span>
-                </Button>
-              </div>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleBatchEvaluate}
-                disabled={loading || paginatedTickets.length === 0}
-                className={`flex items-center gap-1.5 flex-shrink-0 font-bold transition-all ${
-                  activeQueue === 'negativas'
-                    ? 'text-functional-error hover:text-functional-error hover:bg-functional-error/10 border border-functional-error/30'
-                    : 'text-brand-highlight hover:text-brand-highlight'
-                }`}
-                title="Avaliar todos os tickets elegíveis visíveis desta página com IA de uma vez"
-              >
-                <Zap className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">
-                  Avaliar Página com IA ({paginatedTickets.filter(t => !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached && !getPendingFormInfo(t).isPending).length})
-                </span>
-              </Button>
-            )
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleBatchEvaluate}
+              disabled={loading || paginatedTickets.length === 0 || batchRunning}
+              className={`flex items-center gap-1.5 flex-shrink-0 font-bold transition-all ${
+                activeQueue === 'negativas'
+                  ? 'text-functional-error hover:text-functional-error hover:bg-functional-error/10 border border-functional-error/30'
+                  : 'text-brand-highlight hover:text-brand-highlight border border-brand-highlight/30'
+              }`}
+              title="Avaliar tickets selecionados com IA"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>
+                {selectedTicketIds.size > 0
+                  ? `Avaliar Selecionados (${selectedTicketIds.size})`
+                  : `Avaliar Página (${paginatedTickets.filter(t => !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached && !getPendingFormInfo(t).isPending).length})`}
+              </span>
+            </Button>
           )}
 
           {loading && (
@@ -1193,37 +1279,47 @@ export default function AuditingQueueView({
               {/* Lista de Tickets Negativos */}
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
             {paginatedTickets.map(ticket => (
-              <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-brand-highlight/40 transition-all">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-black text-brand-primary">
-                        #{ticket.ticket_id}
-                      </span>
-                      {getPendingFormInfo(ticket).isPending && (
-                        <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                          Ficha em Elaboração ({getPendingFormInfo(ticket).label})
-                        </Badge>
-                      )}
-                      <a
-                        href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
-                        title="Abrir no Zendesk"
-                      >
-                        <ExternalLink className="w-2.5 h-2.5" />
-                        <span>Zendesk</span>
-                      </a>
-                      {ticket.already_audited && (
-                        <Badge variant="success" size="xs" className="text-[9px]">
-                          Auditado
-                        </Badge>
-                      )}
+              <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedTicketIds.has(ticket.ticket_id)}
+                      onChange={() => toggleTicketSelection(ticket.ticket_id)}
+                      disabled={batchRunning}
+                      className="w-4 h-4 mt-0.5 rounded text-brand-highlight focus:ring-brand-highlight border-surface-border cursor-pointer flex-shrink-0"
+                      title="Selecionar para avaliação"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-black text-brand-primary">
+                          #{ticket.ticket_id}
+                        </span>
+                        {getPendingFormInfo(ticket).isPending && (
+                          <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                            Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                          </Badge>
+                        )}
+                        <a
+                          href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
+                          title="Abrir no Zendesk"
+                        >
+                          <ExternalLink className="w-2.5 h-2.5" />
+                          <span>Zendesk</span>
+                        </a>
+                        {ticket.already_audited && (
+                          <Badge variant="success" size="xs" className="text-[9px]">
+                            Auditado
+                          </Badge>
+                        )}
+                      </div>
+                      <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                        {ticket.subject}
+                      </h4>
                     </div>
-                    <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
-                      {ticket.subject}
-                    </h4>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     {renderScoreBadge(ticket)}
@@ -1278,42 +1374,52 @@ export default function AuditingQueueView({
                 {paginatedTickets.map(ticket => {
                   const isPriority = ticket.agent_email && topPriorityEmails.has(ticket.agent_email.toLowerCase());
                   return (
-                    <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-info/40 transition-all">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-xs font-black text-brand-primary">
-                              #{ticket.ticket_id}
-                            </span>
-                            {getPendingFormInfo(ticket).isPending && (
-                              <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                                Ficha em Elaboração ({getPendingFormInfo(ticket).label})
-                              </Badge>
-                            )}
-                            <a
-                              href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-info hover:underline"
-                              title="Abrir no Zendesk"
-                            >
-                              <ExternalLink className="w-2.5 h-2.5" />
-                              <span>Zendesk</span>
-                            </a>
-                            {ticket.already_audited && (
-                              <Badge variant="success" size="xs" className="text-[9px]">
-                                Auditado
-                              </Badge>
-                            )}
-                            {isPriority && (
-                              <Badge variant="warning" size="xs" className="text-[9px]">
-                                Prioritário
-                              </Badge>
-                            )}
+                    <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-info/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-info/40 border-info/50 bg-info/3' : ''}`}>
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={selectedTicketIds.has(ticket.ticket_id)}
+                            onChange={() => toggleTicketSelection(ticket.ticket_id)}
+                            disabled={batchRunning}
+                            className="w-4 h-4 mt-0.5 rounded text-info focus:ring-info border-surface-border cursor-pointer flex-shrink-0"
+                            title="Selecionar para avaliação"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-xs font-black text-brand-primary">
+                                #{ticket.ticket_id}
+                              </span>
+                              {getPendingFormInfo(ticket).isPending && (
+                                <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                  Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                                </Badge>
+                              )}
+                              <a
+                                href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-info hover:underline"
+                                title="Abrir no Zendesk"
+                              >
+                                <ExternalLink className="w-2.5 h-2.5" />
+                                <span>Zendesk</span>
+                              </a>
+                              {ticket.already_audited && (
+                                <Badge variant="success" size="xs" className="text-[9px]">
+                                  Auditado
+                                </Badge>
+                              )}
+                              {isPriority && (
+                                <Badge variant="warning" size="xs" className="text-[9px]">
+                                  Prioritário
+                                </Badge>
+                              )}
+                            </div>
+                            <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                              {ticket.subject}
+                            </h4>
                           </div>
-                          <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
-                            {ticket.subject}
-                          </h4>
                         </div>
                         <div className="flex items-center gap-2.5 flex-shrink-0">
                           {renderScoreBadge(ticket)}
@@ -1361,37 +1467,47 @@ export default function AuditingQueueView({
               {/* Lista de Chamados Positivos */}
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
                 {paginatedTickets.map(ticket => (
-                  <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-functional-success/40 transition-all">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs font-black text-brand-primary">
-                            #{ticket.ticket_id}
-                          </span>
-                          {getPendingFormInfo(ticket).isPending && (
-                            <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                              Ficha em Elaboração ({getPendingFormInfo(ticket).label})
-                            </Badge>
-                          )}
-                          <a
-                            href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
-                            title="Abrir no Zendesk"
-                          >
-                            <ExternalLink className="w-2.5 h-2.5" />
-                            <span>Zendesk</span>
-                          </a>
-                          {ticket.already_audited && (
-                            <Badge variant="success" size="xs" className="text-[9px]">
-                              Auditado
-                            </Badge>
-                          )}
+                  <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-functional-success/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-emerald-500/40 border-emerald-500/50 bg-emerald-500/3' : ''}`}>
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedTicketIds.has(ticket.ticket_id)}
+                          onChange={() => toggleTicketSelection(ticket.ticket_id)}
+                          disabled={batchRunning}
+                          className="w-4 h-4 mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 border-surface-border cursor-pointer flex-shrink-0"
+                          title="Selecionar para avaliação"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-black text-brand-primary">
+                              #{ticket.ticket_id}
+                            </span>
+                            {getPendingFormInfo(ticket).isPending && (
+                              <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                              </Badge>
+                            )}
+                            <a
+                              href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
+                              title="Abrir no Zendesk"
+                            >
+                              <ExternalLink className="w-2.5 h-2.5" />
+                              <span>Zendesk</span>
+                            </a>
+                            {ticket.already_audited && (
+                              <Badge variant="success" size="xs" className="text-[9px]">
+                                Auditado
+                              </Badge>
+                            )}
+                          </div>
+                          <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                            {ticket.subject}
+                          </h4>
                         </div>
-                        <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
-                          {ticket.subject}
-                        </h4>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {renderScoreBadge(ticket)}
@@ -1448,37 +1564,47 @@ export default function AuditingQueueView({
                   const evaluation = ticket.child_evaluation;
 
                   return (
-                    <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-brand-highlight/40 transition-all">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-mono text-xs font-black text-brand-primary">
-                              #{ticket.ticket_id}
-                            </span>
-                            {ticket.parent_ticket_id && (
-                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
-                                Pai: #{ticket.parent_ticket_id}
+                    <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={selectedTicketIds.has(ticket.ticket_id)}
+                            onChange={() => toggleTicketSelection(ticket.ticket_id)}
+                            disabled={batchRunning}
+                            className="w-4 h-4 mt-0.5 rounded text-brand-highlight focus:ring-brand-highlight border-surface-border cursor-pointer flex-shrink-0"
+                            title="Selecionar para avaliação"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-mono text-xs font-black text-brand-primary">
+                                #{ticket.ticket_id}
                               </span>
-                            )}
-                            <a
-                              href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
-                              title="Abrir no Zendesk"
-                            >
-                              <ExternalLink className="w-2.5 h-2.5" />
-                              <span>Zendesk</span>
-                            </a>
-                            {isValidated && (
-                              <Badge variant="success" size="xs" className="text-[9px]">
-                                Validado
-                              </Badge>
-                            )}
+                              {ticket.parent_ticket_id && (
+                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
+                                  Pai: #{ticket.parent_ticket_id}
+                                </span>
+                              )}
+                              <a
+                                href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
+                                title="Abrir no Zendesk"
+                              >
+                                <ExternalLink className="w-2.5 h-2.5" />
+                                <span>Zendesk</span>
+                              </a>
+                              {isValidated && (
+                                <Badge variant="success" size="xs" className="text-[9px]">
+                                  Validado
+                                </Badge>
+                              )}
+                            </div>
+                            <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                              {ticket.subject}
+                            </h4>
                           </div>
-                          <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
-                            {ticket.subject}
-                          </h4>
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1569,35 +1695,45 @@ export default function AuditingQueueView({
                   const evaluation = ticket.child_evaluation;
 
                   return (
-                    <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-functional-error/40 transition-all">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-mono text-xs font-black text-brand-primary">
-                              #{ticket.ticket_id}
-                            </span>
-                            {ticket.parent_ticket_id && (
-                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
-                                Pai: #{ticket.parent_ticket_id}
+                    <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-functional-error/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-functional-error/40 border-functional-error/50 bg-functional-error/3' : ''}`}>
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={selectedTicketIds.has(ticket.ticket_id)}
+                            onChange={() => toggleTicketSelection(ticket.ticket_id)}
+                            disabled={batchRunning}
+                            className="w-4 h-4 mt-0.5 rounded text-functional-error focus:ring-functional-error border-surface-border cursor-pointer flex-shrink-0"
+                            title="Selecionar para avaliação"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-mono text-xs font-black text-brand-primary">
+                                #{ticket.ticket_id}
                               </span>
-                            )}
-                            <a
-                              href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
-                              title="Abrir no Zendesk"
-                            >
-                              <ExternalLink className="w-2.5 h-2.5" />
-                              <span>Zendesk</span>
-                            </a>
-                            <Badge variant="error" size="xs" className="text-[9px]">
-                              Inválido
-                            </Badge>
+                              {ticket.parent_ticket_id && (
+                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
+                                  Pai: #{ticket.parent_ticket_id}
+                                </span>
+                              )}
+                              <a
+                                href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
+                                title="Abrir no Zendesk"
+                              >
+                                <ExternalLink className="w-2.5 h-2.5" />
+                                <span>Zendesk</span>
+                              </a>
+                              <Badge variant="error" size="xs" className="text-[9px]">
+                                Inválido
+                              </Badge>
+                            </div>
+                            <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                              {ticket.subject}
+                            </h4>
                           </div>
-                          <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
-                            {ticket.subject}
-                          </h4>
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1651,11 +1787,72 @@ export default function AuditingQueueView({
         </div>
       )}
 
-      {/* Modal: Parecer de Conformidade do Chamado Filho com IA */}
+      {/* Modal Central de Processamento em Lote com IA */}
+      {batchRunning && batchProgress && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[9999] p-4 animate-fade-in">
+          <Card className="w-full max-w-md p-6 space-y-5 shadow-2xl border-surface-border">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-highlight/15 text-brand-highlight flex items-center justify-center flex-shrink-0">
+                <Bot className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-brand-primary">Avaliação em Lote com IA</h3>
+                <p className="text-[11px] text-brand-muted">Processando chamados selecionados com manuais operacionais</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="text-brand-primary truncate max-w-[260px]">
+                  {batchProgress.current ? `Processando chamado #${batchProgress.current}...` : 'Preparando próximo chamado...'}
+                </span>
+                <span className="text-brand-highlight font-mono font-black">
+                  {batchProgress.total > 0 ? Math.round((batchProgress.done / batchProgress.total) * 100) : 0}%
+                </span>
+              </div>
+              <div className="w-full h-2.5 bg-surface-border rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-brand-highlight rounded-full transition-all duration-500"
+                  style={{ width: `${batchProgress.total > 0 ? Math.round((batchProgress.done / batchProgress.total) * 100) : 0}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-brand-muted font-semibold">
+                <span>{batchProgress.done} de {batchProgress.total} chamados avaliados</span>
+                <span>Restantes: {Math.max(0, batchProgress.total - batchProgress.done)}</span>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-surface-subtle border border-surface-border text-xs text-brand-muted flex items-center gap-2">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-highlight flex-shrink-0" />
+              <span>A tela está bloqueada contra múltiplos cliques até a finalização do lote.</span>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-surface-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { batchCancelRef.current = true; }}
+                className="text-functional-error hover:bg-functional-error/10 font-bold flex items-center gap-1.5"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Interromper Lote</span>
+              </Button>
+            </div>
+          </Card>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Parecer e Base Oficial de Auditoria do Chamado Filho */}
       {childPreviewTicket && createPortal(
         <div
           className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-[9999] p-4 animate-fade-in"
-          onClick={() => !loadingChildAi && setChildPreviewTicket(null)}
+          onClick={() => {
+            if (!loadingChildAi) {
+              setChildPreviewTicket(null);
+              setChildManualVerdict(null);
+            }
+          }}
         >
           <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-2xl">
             <Card className="p-6 space-y-5 max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl border-surface-border">
@@ -1673,104 +1870,169 @@ export default function AuditingQueueView({
                       {childPreviewTicket.child_macro_type && getMacroBadge(childPreviewTicket.child_macro_type)}
                     </div>
                     <p className="text-[10px] font-semibold text-brand-muted">
-                      {childPreviewTicket.parent_ticket_id ? `Vinculado ao chamado pai #${childPreviewTicket.parent_ticket_id}` : 'Chamado Filho'} • Zendesk
+                      {childPreviewTicket.parent_ticket_id ? `Vinculado ao chamado pai #${childPreviewTicket.parent_ticket_id}` : 'Chamado Filho Interno'} • Base Oficial de Avaliação
                     </p>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" disabled={loadingChildAi} onClick={() => !loadingChildAi && setChildPreviewTicket(null)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={loadingChildAi}
+                  onClick={() => {
+                    if (!loadingChildAi) {
+                      setChildPreviewTicket(null);
+                      setChildManualVerdict(null);
+                    }
+                  }}
+                >
                   <X className="w-4 h-4" />
                 </Button>
               </div>
 
-              {/* Informações Básicas do Chamado */}
+              {/* Informações Básicas do Chamado Filho com tags limpas (sem poluição visual) */}
               <div className="p-3.5 rounded-2xl bg-surface-subtle/80 border border-surface-border space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-mono font-bold text-brand-primary">
                     Assunto: {childPreviewTicket.subject}
                   </span>
                   <span className="text-[10px] text-brand-muted">
-                    Atendente: {childPreviewTicket.agent_name || 'N/D'}
+                    Atendente: {childPreviewTicket.agent_name || 'Não atribuído (Apenas Grupo)'}
                   </span>
                 </div>
-                {childPreviewTicket.tags && childPreviewTicket.tags.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Tags:</span>
-                    {childPreviewTicket.tags.map((tag, idx) => (
-                      <span key={idx} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-brand-muted">
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
+
+                {/* Exibição limpa das tags relevantes de governança */}
+                {(() => {
+                  const allTags = childPreviewTicket.tags || [];
+                  const structuralTags = allTags.filter(tag =>
+                    tag.startsWith('existe_') ||
+                    tag.startsWith('transferencia_') ||
+                    tag.startsWith('maispag_') ||
+                    tag.includes('filho') ||
+                    tag.includes('demanda') ||
+                    tag.includes('analise')
+                  );
+                  const displayTags = structuralTags.length > 0 ? structuralTags : allTags.slice(0, 3);
+                  const hiddenCount = allTags.length - displayTags.length;
+
+                  if (displayTags.length === 0) return null;
+
+                  return (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-surface-border/50">
+                      <span className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Tags do Chamado:</span>
+                      {displayTags.map((tag, idx) => (
+                        <span key={idx} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-surface-card border border-surface-border text-brand-muted">
+                          #{tag}
+                        </span>
+                      ))}
+                      {hiddenCount > 0 && (
+                        <span className="text-[9px] text-brand-muted font-semibold">
+                          +{hiddenCount} outras tags
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
-              {/* Loading State */}
+              {/* Loading State: Skeleton Shimmer com etapas de verificação */}
               {loadingChildAi && (
-                <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
-                  <RefreshCw className="w-8 h-8 text-brand-highlight animate-spin" />
-                  <p className="text-xs font-bold text-brand-primary">Avaliando conformidade do chamado filho com IA...</p>
-                  <p className="text-[10px] text-brand-muted">Verificando inalterabilidade do assunto, preservação do texto da macro, direcionamento ("Para") e tags estruturais.</p>
+                <div className="py-6 space-y-4 animate-fade-in">
+                  <div className="p-4 rounded-2xl bg-surface-subtle/70 border border-surface-border relative overflow-hidden space-y-3">
+                    <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-brand-highlight/15 to-transparent pointer-events-none" />
+                    <div className="flex items-center justify-between">
+                      <div className="h-5 w-48 rounded bg-surface-border/60 animate-pulse" />
+                      <div className="h-5 w-24 rounded-full bg-surface-border/60 animate-pulse" />
+                    </div>
+                    <div className="h-3 w-3/4 rounded bg-surface-border/40 animate-pulse" />
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-surface-card border border-surface-border space-y-2">
+                    <div className="h-4 w-48 rounded bg-surface-border/50 animate-pulse" />
+                    <div className="space-y-1.5 pt-1">
+                      {[
+                        'Verificando inalterabilidade do assunto da macro homologada...',
+                        'Conferindo preservação do texto estrutural e enriquecimento técnico...',
+                        'Validando direcionamento ("Para") ao grupo especialista correto...',
+                        'Checando governança de tags nativas de automação...'
+                      ].map((stepLabel, idx) => (
+                        <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-surface-subtle/50 text-[11px] text-brand-muted">
+                          <RefreshCw className="w-3 h-3 animate-spin text-brand-highlight flex-shrink-0" />
+                          <span>{stepLabel}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
               {/* Result State */}
               {!loadingChildAi && childAiEvaluation && (
                 <div className="space-y-4">
-                  {/* Status & Score Header Card */}
-                  <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${
-                    childAiEvaluation.status === 'conforme'
-                      ? 'bg-functional-success/10 border-functional-success/30 text-functional-success'
-                      : childAiEvaluation.status === 'nao_conforme'
-                      ? 'bg-functional-error/10 border-functional-error/30 text-functional-error'
-                      : 'bg-warning/10 border-warning/30 text-warning'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${
-                        childAiEvaluation.status === 'conforme'
-                          ? 'bg-functional-success'
-                          : childAiEvaluation.status === 'nao_conforme'
-                          ? 'bg-functional-error'
-                          : 'bg-warning'
-                      }`}>
-                        {childAiEvaluation.status === 'conforme' ? (
-                          <CheckCircle2 className="w-6 h-6" />
-                        ) : childAiEvaluation.status === 'nao_conforme' ? (
-                          <XCircle className="w-6 h-6" />
-                        ) : (
-                          <AlertTriangle className="w-6 h-6" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-xs font-black uppercase tracking-wider">
-                          {childAiEvaluation.status === 'conforme'
-                            ? 'Conforme (Abertura Regular)'
-                            : childAiEvaluation.status === 'nao_conforme'
-                            ? 'Não Conforme (Desvio de Padrão)'
-                            : 'Atenção (Inconsistência Leve)'}
-                        </div>
-                        <div className="text-[11px] font-semibold text-brand-primary/90 mt-0.5">
-                          Padrão: {childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : childAiEvaluation.detected_type === 'produtividade' ? 'Produtividade' : 'Desconhecido / Fora do Padrão'}
-                        </div>
-                      </div>
-                    </div>
+                  {/* Status do Chamado Filho: VÁLIDO ou INVÁLIDO (sem score numérico de 1 a 100) */}
+                  {(() => {
+                    const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
+                    const isValido = currentVerdict === 'conforme';
 
-                    <div className="text-right">
-                      <div className="text-2xl font-black font-mono">
-                        {childAiEvaluation.score}%
+                    return (
+                      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                        isValido
+                          ? 'bg-functional-success/10 border-functional-success/30 text-functional-success'
+                          : 'bg-functional-error/10 border-functional-error/30 text-functional-error'
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0 ${
+                            isValido ? 'bg-functional-success' : 'bg-functional-error'
+                          }`}>
+                            {isValido ? <CheckCircle2 className="w-6 h-6" /> : <XCircle className="w-6 h-6" />}
+                          </div>
+                          <div>
+                            <div className="text-xs font-black uppercase tracking-wider">
+                              {isValido ? 'Chamado Filho Válido' : 'Chamado Filho Inválido'}
+                            </div>
+                            <div className="text-[11px] font-semibold text-brand-primary/90 mt-0.5">
+                              Padrão: {childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : childAiEvaluation.detected_type === 'produtividade' ? 'Produtividade' : 'Escalonamento Interno'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Alternador Manual Válido / Inválido */}
+                        <div className="flex items-center gap-1.5 bg-surface-card/80 p-1 rounded-xl border border-surface-border self-start sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => setChildManualVerdict('conforme')}
+                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              isValido
+                                ? 'bg-functional-success text-white shadow-xs font-black'
+                                : 'text-brand-muted hover:text-brand-primary'
+                            }`}
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Válido</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setChildManualVerdict('nao_conforme')}
+                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              !isValido
+                                ? 'bg-functional-error text-white shadow-xs font-black'
+                                : 'text-brand-muted hover:text-brand-primary'
+                            }`}
+                          >
+                            <X className="w-3 h-3" />
+                            <span>Inválido</span>
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-brand-muted">
-                        Conformidade
-                      </span>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* Resumo do Parecer */}
                   <div className="p-3.5 rounded-xl bg-surface-subtle/80 border border-surface-border text-xs text-brand-primary/90 leading-relaxed">
-                    <span className="font-bold text-brand-primary block mb-1">Resumo do Parecer:</span>
+                    <span className="font-bold text-brand-primary block mb-1">Resumo do Parecer da Qualidade:</span>
                     {childAiEvaluation.summary}
                   </div>
 
-                  {/* Checklist de Regras */}
+                  {/* Checklist de Regras Operacionais */}
                   <div className="space-y-2">
                     <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
                       Checklist Operacional de Regras
@@ -1794,7 +2056,7 @@ export default function AuditingQueueView({
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-xs font-bold text-brand-primary">{chk.rule}</span>
                               <Badge variant={chk.passed ? 'success' : 'error'} size="xs" className="text-[9px] font-bold">
-                                {chk.passed ? 'Atendido' : 'Pendente'}
+                                {chk.passed ? 'Atendido' : 'Não Conforme'}
                               </Badge>
                             </div>
                             {chk.details && (
@@ -1824,6 +2086,65 @@ export default function AuditingQueueView({
                       </ul>
                     </div>
                   )}
+
+                  {/* Macro Pronta para o Zendesk */}
+                  {(() => {
+                    const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
+                    const isValido = currentVerdict === 'conforme';
+                    const typeLabel = childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : 'Escalonamento Interno';
+                    const checksSummary = (childAiEvaluation.checks || [])
+                      .map(c => `• ${c.rule}: ${c.passed ? 'OK' : 'NÃO CONFORME'} (${c.details})`)
+                      .join('\n');
+                    const recs = childAiEvaluation.recommendations?.length
+                      ? `\n\nRecomendações:\n${childAiEvaluation.recommendations.map(r => `• ${r}`).join('\n')}`
+                      : '';
+
+                    const macroText = `${isValido ? '✅ Auditoria de Chamado Filho — VÁLIDO' : '❌ Auditoria de Chamado Filho — INVÁLIDO'} (#${childPreviewTicket.ticket_id})
+
+Tipo Identificado: ${typeLabel}
+Assunto: ${childPreviewTicket.subject}
+
+Parecer da Qualidade:
+${childAiEvaluation.summary}
+
+Checklist de Conformidade (POP v1.1):
+${checksSummary}${recs}`;
+
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
+                            Macro Formatada para o Zendesk
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(macroText);
+                              setCopiedChildMacro(true);
+                              toast.success('Macro do chamado filho copiada!');
+                              setTimeout(() => setCopiedChildMacro(false), 2500);
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-highlight hover:underline cursor-pointer"
+                          >
+                            {copiedChildMacro ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-functional-success" />
+                                <span className="text-functional-success">Copiada!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copiar Macro</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="p-3 rounded-xl border border-surface-border bg-surface-subtle text-xs font-mono text-brand-primary whitespace-pre-wrap max-h-40 overflow-y-auto select-all leading-relaxed">
+                          {macroText}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1834,7 +2155,12 @@ export default function AuditingQueueView({
                   size="sm"
                   disabled={loadingChildAi}
                   className="disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => !loadingChildAi && setChildPreviewTicket(null)}
+                  onClick={() => {
+                    if (!loadingChildAi) {
+                      setChildPreviewTicket(null);
+                      setChildManualVerdict(null);
+                    }
+                  }}
                 >
                   Fechar
                 </Button>
@@ -1852,35 +2178,27 @@ export default function AuditingQueueView({
                   </Button>
 
                   <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={loadingChildAi || !childAiEvaluation}
-                    className="flex items-center gap-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                    onClick={() => {
-                      if (loadingChildAi || !childAiEvaluation) return;
-                      const t = childPreviewTicket;
-                      setChildPreviewTicket(null);
-                      handleStartChildAudit(t);
-                    }}
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>Abrir Monitoria</span>
-                  </Button>
-
-                  <Button
                     variant="primary"
                     size="sm"
                     disabled={loadingChildAi || !childAiEvaluation}
                     className="flex items-center gap-1.5 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                     onClick={() => {
                       if (loadingChildAi || !childAiEvaluation) return;
+                      const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
+                      const isValido = currentVerdict === 'conforme';
+
+                      childPreviewTicket.child_evaluation = {
+                        ...childAiEvaluation,
+                        status: isValido ? 'conforme' : 'nao_conforme',
+                      };
                       setValidatedChildTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
-                      toast.success(`Chamado filho #${childPreviewTicket.ticket_id} validado com sucesso!`);
+                      toast.success(`Chamado filho #${childPreviewTicket.ticket_id} salvo como ${isValido ? 'Válido' : 'Inválido'} no QualiTrack!`);
                       setChildPreviewTicket(null);
+                      setChildManualVerdict(null);
                     }}
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>Validar Chamado</span>
+                    <span>Salvar no QualiTrack</span>
                   </Button>
                 </div>
               </div>

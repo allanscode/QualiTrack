@@ -1103,8 +1103,8 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     } else {
       // API nativa do Gemini (Google AI Studio)
       const candidateModels = [
-        'gemini-3.5-flash-lite',
         geminiModel,
+        'gemini-3.5-flash-lite',
         'gemini-3.7-flash',
         'gemini-3.8-flash',
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
@@ -1474,8 +1474,8 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
       text = data.choices?.[0]?.message?.content;
     } else {
       const candidateModels = [
-        'gemini-3.5-flash-lite',
         geminiModel,
+        'gemini-3.5-flash-lite',
         'gemini-3.7-flash',
         'gemini-3.8-flash',
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);

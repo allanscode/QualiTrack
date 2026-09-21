@@ -31,7 +31,9 @@ import {
   UserPlus,
   FileText,
   Quote,
-  Search
+  Search,
+  Copy,
+  Check
 } from 'lucide-react';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
@@ -409,6 +411,14 @@ export default function MonitoriaForm({
   // o modal é mantido montado dentro do MonitoriaForm até esse momento, em
   // vez de o form fechar (e desmontar o modal) assim que o save termina.
   const [helpdeskModal, setHelpdeskModal] = useState<{ monitoriaId: string; fromConclusion: boolean } | null>(null);
+  // Estado pós-salvamento: apresenta modal com a macro formatada para cópia manual em 1 clique
+  const [saveSuccessData, setSaveSuccessData] = useState<{
+    monitoriaId: string;
+    outcome: EvaluationOutcome;
+    macroText: string;
+  } | null>(null);
+  const [copiedSuccessMacro, setCopiedSuccessMacro] = useState(false);
+
   const canSendToHelpdesk = isViewOnly
     && !!initialData?.status
     && HELPDESK_ELIGIBLE_STATUSES.includes(initialData.status)
@@ -422,9 +432,6 @@ export default function MonitoriaForm({
     const wasFromConclusion = helpdeskModal?.fromConclusion;
     const savedMonitoriaId = helpdeskModal?.monitoriaId;
     setHelpdeskModal(null);
-    // Só agora — com o modal já fechado — o formulário é liberado para
-    // fechar. Se chamássemos onSaved antes, o componente pai desmontaria o
-    // MonitoriaForm (e o modal, seu filho) antes do auditor ver o preview.
     if (wasFromConclusion && savedMonitoriaId) onSaved(savedMonitoriaId);
   };
 
@@ -449,21 +456,33 @@ export default function MonitoriaForm({
     clientFieldsToShow,
     qualityFieldsToShow,
     onSaved: (savedMonitoriaId: string) => {
-      // Envio automático só faz sentido para a conclusão de uma avaliação
-      // pelo auditor: em edição administrativa ou reavaliação, o comentário
-      // já foi publicado antes e reenviar duplicaria o comentário no ticket
-      // real do cliente — esses fluxos continuam só com o botão manual.
-      const ticketIdTrimmed = header.ticket_id?.trim() || '';
-      const shouldAutoSend = !isMockMode
-        && /^\d+$/.test(ticketIdTrimmed)
-        && !isAdminEdit
-        && !isReevaluating;
+      // O envio automático direto ao Zendesk foi desativado conforme alinhado:
+      // os testes práticos com os monitores iniciam em outubro. Por enquanto,
+      // a monitoria fica 100% salva no QWP e apresentamos a macro formatada
+      // para cópia manual imediata em 1 clique.
+      const hasCritical = Object.values(criticalErrors).some(Boolean);
+      const outcome: EvaluationOutcome = hasCritical ? 'negativa' : 'positiva';
 
-      if (shouldAutoSend) {
-        setHelpdeskModal({ monitoriaId: savedMonitoriaId, fromConclusion: true });
-      } else {
-        onSaved(savedMonitoriaId);
+      const isPositiva = outcome === 'positiva';
+      const macroHeader = isPositiva
+        ? '✅ Ticket validado pela Qualidade'
+        : '❌ Ticket invalidado pela Qualidade';
+
+      const macroIntro = isPositiva
+        ? 'Após análise realizada pela equipe de Qualidade, identificamos que o chamado atende aos critérios estabelecidos.\nDessa forma, o ticket foi validado.'
+        : 'Após análise realizada pela equipe de Qualidade, identificamos que o chamado não atende aos critérios estabelecidos para validação.\nDessa forma, o ticket foi invalidado e seguirá para tratativa do Gestor responsável.\n\nOrientamos a revisão das informações conforme os padrões definidos.';
+
+      let macroText = `${macroHeader}\n\n${macroIntro}\n\nRegistro do analista:\n${header.evaluator_note?.trim() || '(Sem observações adicionais)'}`;
+
+      if (header.satisfaction_has_record && header.satisfaction_record_text?.trim()) {
+        macroText += `\n\nRetorno do cliente:\n${header.satisfaction_record_text.trim()}`;
       }
+
+      setSaveSuccessData({
+        monitoriaId: savedMonitoriaId,
+        outcome,
+        macroText,
+      });
     },
   });
 
@@ -584,14 +603,39 @@ export default function MonitoriaForm({
               { n: 2, label: 'Avaliação' },
               { n: 3, label: 'Pesquisa' },
               { n: 4, label: 'Registro/Log' }
-            ].map(s => (
-              <div key={s.n} className="flex flex-col items-center gap-1.5 group">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black font-mono transition-all ${step >= s.n ? 'bg-brand-accent text-white shadow-xs' : 'bg-surface-subtle text-brand-muted'}`}>
-                  {s.n}
-                </div>
-                <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
-              </div>
-            ))}
+            ].map(s => {
+              const isCurrent = step === s.n;
+              const isPast = step > s.n;
+              const canClick = isViewOnly || s.n < step || (s.n === step + 1 && validateStep(step));
+              return (
+                <button
+                  key={s.n}
+                  type="button"
+                  onClick={() => {
+                    if (s.n < step || isViewOnly) {
+                      setStep(s.n);
+                    } else if (s.n === step + 1 && validateStep(step)) {
+                      setStep(s.n);
+                    }
+                  }}
+                  className={`flex flex-col items-center gap-1.5 group transition-all ${
+                    canClick ? 'cursor-pointer hover:opacity-90' : 'cursor-default'
+                  }`}
+                  title={canClick ? `Ir para etapa ${s.n} (${s.label})` : s.label}
+                >
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black font-mono transition-all ${
+                    isCurrent
+                      ? 'bg-brand-accent text-white shadow-xs ring-2 ring-brand-accent/30'
+                      : isPast
+                      ? 'bg-brand-accent/20 text-brand-accent border border-brand-accent/30'
+                      : 'bg-surface-subtle text-brand-muted'
+                  }`}>
+                    {s.n}
+                  </div>
+                  <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {step === 1 && (
@@ -1760,6 +1804,114 @@ export default function MonitoriaForm({
           fromConclusion={helpdeskModal.fromConclusion}
           onClose={handleHelpdeskModalClose}
         />
+      )}
+
+      {saveSuccessData && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[10000] p-4 animate-fade-in"
+          onClick={() => {}}
+        >
+          <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-lg">
+            <Card className="p-6 space-y-4 shadow-2xl border-surface-border">
+              <div className="flex items-center justify-between pb-3 border-b border-surface-border">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-functional-success/10 text-functional-success flex items-center justify-center flex-shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-brand-primary">Monitoria Salva no QualiTrack!</h3>
+                    <p className="text-[10px] font-semibold text-brand-muted">
+                      Ticket #{header.ticket_id} • Score: {score.toFixed(1)}% • {saveSuccessData.outcome === 'positiva' ? 'Válido' : 'Invalidado'}
+                    </p>
+                  </div>
+                </div>
+                <Badge variant={saveSuccessData.outcome === 'positiva' ? 'success' : 'error'} size="sm">
+                  {saveSuccessData.outcome === 'positiva' ? 'Ticket Válido' : 'Ticket Invalidado'}
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">
+                    Macro Formatada para o Zendesk (Envio Manual)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(saveSuccessData.macroText);
+                      setCopiedSuccessMacro(true);
+                      toast.success('Macro copiada para a área de transferência!');
+                      setTimeout(() => setCopiedSuccessMacro(false), 2500);
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-highlight hover:underline cursor-pointer"
+                  >
+                    {copiedSuccessMacro ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-functional-success" />
+                        <span className="text-functional-success">Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar Macro</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="p-3.5 rounded-xl border border-surface-border bg-surface-subtle text-xs font-mono text-brand-primary whitespace-pre-wrap max-h-56 overflow-y-auto leading-relaxed select-all">
+                  {saveSuccessData.macroText}
+                </div>
+                <p className="text-[10px] text-brand-muted leading-relaxed">
+                  O envio automático está suspenso para a fase de testes dos monitores. Cole o texto acima diretamente no ticket do Zendesk como comentário interno/público.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-surface-border gap-2">
+                {canSendToHelpdesk && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-[10px] text-brand-muted"
+                    onClick={() => {
+                      const id = saveSuccessData.monitoriaId;
+                      setSaveSuccessData(null);
+                      setHelpdeskModal({ monitoriaId: id, fromConclusion: true });
+                    }}
+                  >
+                    Testar Envio via API
+                  </Button>
+                )}
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(saveSuccessData.macroText);
+                      setCopiedSuccessMacro(true);
+                      toast.success('Macro copiada para a área de transferência!');
+                      setTimeout(() => setCopiedSuccessMacro(false), 2500);
+                    }}
+                    icon={copiedSuccessMacro ? <Check className="w-3.5 h-3.5 text-functional-success" /> : <Copy className="w-3.5 h-3.5" />}
+                  >
+                    {copiedSuccessMacro ? 'Macro Copiada!' : 'Copiar Macro'}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      const id = saveSuccessData.monitoriaId;
+                      setSaveSuccessData(null);
+                      onSaved(id);
+                    }}
+                    className="font-bold"
+                  >
+                    Concluir e Fechar
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
       )}
 
       {newAgentModalOpen && (
