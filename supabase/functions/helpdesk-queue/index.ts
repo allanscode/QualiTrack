@@ -1070,7 +1070,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     if (provider === 'openrouter') {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(25000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openRouterApiKey}`,
@@ -1082,11 +1082,8 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
         body: JSON.stringify({
           models: openRouterModels,
           temperature: 0.2,
-          messages: [{ role: 'user', content: prompt }],
-          response_format: {
-            type: 'json_schema',
-            json_schema: { name: 'avaliacao_atendimento', strict: true, schema: responseSchema },
-          },
+          messages: [{ role: 'user', content: prompt + '\n\nIMPORTANTE: Responda exclusivamente em formato JSON válido com as chaves solicitadas.' }],
+          response_format: { type: 'json_object' },
         }),
       });
 
@@ -1098,14 +1095,15 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
       const data = await response.json();
       text = data.choices?.[0]?.message?.content;
       if (!text) {
-        throw new Error('Resposta vazia da IA (modelo pode ter recusado ou atingido limite gratuito)');
+        throw new Error('Resposta vazia da IA no OpenRouter');
       }
       usedProvider = 'openrouter';
       usedModel = data.model || openRouterModels[0] || 'openrouter';
     } else {
-      // API nativa do Gemini (Google AI Studio) com timeout realista de 35s
+      // API nativa do Gemini (Google AI Studio) com prioridade para gemini-3.5-flash-lite (rápido 4-8s)
       const candidateModels = [
-        geminiModel || 'gemini-2.5-flash',
+        'gemini-3.5-flash-lite',
+        geminiModel || 'gemini-3.6-flash',
         'gemini-2.5-flash',
         'gemini-2.0-flash',
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
@@ -1129,7 +1127,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
                   responseSchema: stripAdditionalProperties(responseSchema),
                 },
               }),
-              signal: AbortSignal.timeout(35000),
+              signal: AbortSignal.timeout(20000),
             }
           );
 
@@ -1148,9 +1146,9 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
           }
         } catch (fetchErr: any) {
           lastGeminiErr = `${modelToTry}: ${fetchErr.message}`;
-          // Se deu timeout de 35s, interrompe o loop para não encadear múltiplos minutos de espera
           if (fetchErr.name === 'TimeoutError' || fetchErr.message?.includes('timed out')) {
-            break;
+            // Se o modelo excedeu o tempo, tenta o próximo candidato imediatamente
+            continue;
           }
         }
       }
@@ -1457,7 +1455,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     if (provider === 'openrouter') {
       const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(25000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openRouterApiKey}`,
@@ -1467,11 +1465,8 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
         body: JSON.stringify({
           models: openRouterModels,
           temperature: 0.1,
-          messages: [{ role: 'user', content: prompt }],
-          response_format: {
-            type: 'json_schema',
-            json_schema: { name: 'auditoria_chamado_filho', strict: true, schema: responseSchema }
-          }
+          messages: [{ role: 'user', content: prompt + '\n\nIMPORTANTE: Responda exclusivamente em formato JSON válido.' }],
+          response_format: { type: 'json_object' }
         })
       });
       if (!resp.ok) throw new Error(`OpenRouter falhou: ${resp.status}`);
@@ -1479,7 +1474,8 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
       text = data.choices?.[0]?.message?.content;
     } else {
       const candidateModels = [
-        geminiModel || 'gemini-2.5-flash',
+        'gemini-3.5-flash-lite',
+        geminiModel || 'gemini-3.6-flash',
         'gemini-2.5-flash',
         'gemini-2.0-flash',
       ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
@@ -1491,7 +1487,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
             `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${geminiApiKey}`,
             {
               method: 'POST',
-              signal: AbortSignal.timeout(35000),
+              signal: AbortSignal.timeout(20000),
               headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey! },
               body: JSON.stringify({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -1517,7 +1513,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
           console.warn(`[helpdesk-queue] Tentativa Gemini com ${modelToTry} falhou:`, mErr.message);
           lastError = mErr;
           if (mErr.name === 'TimeoutError' || mErr.message?.includes('timed out')) {
-            break;
+            continue;
           }
         }
       }

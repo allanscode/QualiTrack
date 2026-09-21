@@ -285,8 +285,22 @@ ${checksSummary}${recs}`;
   };
 
   // Avaliação em lote: processa todos os tickets da página atual sequencialmente.
+  interface BatchItemStatus {
+    ticket_id: string;
+    subject?: string;
+    agent_name?: string;
+    status: 'pending' | 'processing' | 'done' | 'error';
+  }
+
   const [batchRunning, setBatchRunning] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{
+    done: number;
+    total: number;
+    currentTicketId: string;
+    currentSubject?: string;
+    currentAgent?: string;
+    items: BatchItemStatus[];
+  } | null>(null);
   const batchCancelRef = useRef(false);
 
   // Notifica o container pai (App.tsx) se algum modal de prévia está aberto,
@@ -636,24 +650,33 @@ ${checksSummary}${recs}`;
       return;
     }
 
-    // Carregar manuais ativos uma única vez para o lote
     const allGuidelines = await fetchAIGuidelines().catch(() => [] as AIEvaluationGuideline[]);
     const activeGuidelineIds = allGuidelines.filter(g => g.active).map(g => g.id);
 
+    const initialItems: BatchItemStatus[] = pending.map(p => ({
+      ticket_id: p.ticket_id,
+      subject: p.subject,
+      agent_name: p.agent_name,
+      status: 'pending',
+    }));
+
     setBatchRunning(true);
     batchCancelRef.current = false;
-    setBatchProgress({ done: 0, total: pending.length, current: '' });
-
-    const batchToastId = toast.loading(
-      `🚀 Avaliação em lote iniciada — 0/${pending.length} tickets`,
-      { duration: Infinity }
-    );
+    setBatchProgress({
+      done: 0,
+      total: pending.length,
+      currentTicketId: pending[0]?.ticket_id || '',
+      currentSubject: pending[0]?.subject,
+      currentAgent: pending[0]?.agent_name,
+      items: initialItems,
+    });
 
     let done = 0;
     let errors = 0;
 
-    for (const ticket of pending) {
+    for (let i = 0; i < pending.length; i++) {
       if (batchCancelRef.current) break;
+      const ticket = pending[i];
 
       const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
       const { form: autoForm, guideline: autoGuideline } = resolveFormAndGuidelineForCustomerType(
@@ -661,36 +684,51 @@ ${checksSummary}${recs}`;
         forms,
         allGuidelines
       );
-      if (!autoForm) { errors++; continue; }
+      if (!autoForm) {
+        errors++;
+        initialItems[i].status = 'error';
+        setBatchProgress(prev => prev ? { ...prev, items: [...initialItems] } : null);
+        continue;
+      }
       const guidelineIds = autoGuideline ? [autoGuideline.id] : activeGuidelineIds;
 
-      setBatchProgress({ done, total: pending.length, current: ticket.ticket_id });
-      toast.loading(
-        `🤖 Lote: processando ticket #${ticket.ticket_id} (${done + 1}/${pending.length})...`,
-        { id: batchToastId, duration: Infinity }
-      );
+      initialItems[i].status = 'processing';
+      setBatchProgress({
+        done,
+        total: pending.length,
+        currentTicketId: ticket.ticket_id,
+        currentSubject: ticket.subject,
+        currentAgent: ticket.agent_name,
+        items: [...initialItems],
+      });
 
       try {
         await handleEvaluateWithAI(ticket, autoForm, guidelineIds, true);
         done++;
+        initialItems[i].status = 'done';
       } catch {
         errors++;
+        initialItems[i].status = 'error';
       }
 
-      setBatchProgress({ done, total: pending.length, current: '' });
+      setBatchProgress(prev => prev ? {
+        ...prev,
+        done,
+        items: [...initialItems],
+      } : null);
     }
 
     setBatchRunning(false);
+    const cancelled = batchCancelRef.current;
     batchCancelRef.current = false;
     setBatchProgress(null);
 
-    const cancelled = batchCancelRef.current;
     if (cancelled) {
-      toast.warning(`⏸ Lote interrompido — ${done}/${pending.length} tickets avaliados.`, { id: batchToastId, duration: 5000 });
+      toast.warning(`⏸ Lote interrompido — ${done}/${pending.length} tickets avaliados.`, { duration: 5000 });
     } else if (errors > 0) {
-      toast.warning(`✅ Lote concluído — ${done} avaliados, ${errors} falharam. Verifique os tickets com erro.`, { id: batchToastId, duration: 8000 });
+      toast.warning(`✅ Lote concluído — ${done} avaliados, ${errors} falharam. Verifique os tickets com erro.`, { duration: 8000 });
     } else {
-      toast.success(`✅ Lote concluído — ${done}/${pending.length} tickets avaliados com sucesso!`, { id: batchToastId, duration: 6000 });
+      toast.success(`✅ Lote concluído — ${done}/${pending.length} tickets avaliados com sucesso!`, { duration: 6000 });
     }
   };
 
@@ -1910,52 +1948,160 @@ ${checksSummary}${recs}`;
 
       {/* Modal Central de Processamento em Lote com IA */}
       {batchRunning && batchProgress && createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[9999] p-4 animate-fade-in">
-          <Card className="w-full max-w-md p-6 space-y-5 shadow-2xl border-surface-border">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-brand-highlight/15 text-brand-highlight flex items-center justify-center flex-shrink-0">
-                <Bot className="w-5 h-5 animate-pulse" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-brand-primary">Avaliação em Lote com IA</h3>
-                <p className="text-[11px] text-brand-muted">Processando chamados selecionados com manuais operacionais</p>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-fade-in">
+          <Card className="w-full max-w-lg p-6 space-y-5 shadow-2xl border border-surface-border bg-surface-card overflow-hidden relative">
+            {/* Linha superior com gradiente de destaque */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-primary via-[#B3141B] to-brand-highlight" />
+
+            {/* Cabeçalho do Modal */}
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative flex items-center justify-center">
+                  <div className="w-11 h-11 rounded-2xl bg-brand-highlight/15 text-brand-highlight flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-highlight opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-highlight" />
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-brand-primary tracking-tight">Avaliação em Lote com IA</h3>
+                    <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-brand-highlight/10 text-brand-highlight border border-brand-highlight/20">
+                      {Math.min(batchProgress.total, batchProgress.done + 1)} de {batchProgress.total}
+                    </span>
+                  </div>
+                  <p className="text-xs text-brand-muted truncate">Auditoria automatizada de conformidade e critérios operacionais</p>
+                </div>
               </div>
             </div>
 
+            {/* Card Central Integrado (Substitui o toast flutuante no topo direito) */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-surface-subtle to-surface-subtle/40 border border-brand-highlight/25 space-y-2.5 relative overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-brand-highlight text-white shadow-xs">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    Auditando Agora
+                  </span>
+                  <span className="font-mono font-bold text-sm text-brand-primary truncate">
+                    #{batchProgress.currentTicketId}
+                  </span>
+                </div>
+                {batchProgress.currentAgent && (
+                  <span className="text-[11px] text-brand-muted truncate font-semibold bg-surface-card px-2 py-0.5 rounded-md border border-surface-border">
+                    {batchProgress.currentAgent}
+                  </span>
+                )}
+              </div>
+
+              {batchProgress.currentSubject && (
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-2 leading-relaxed">
+                  {batchProgress.currentSubject}
+                </p>
+              )}
+
+              <div className="flex items-center gap-2 text-[11px] text-brand-highlight font-medium pt-1">
+                <Sparkles className="w-3.5 h-3.5 shrink-0 animate-pulse" />
+                <span className="truncate">Sanitizando diálogo, confrontando com manuais e calculando nota...</span>
+              </div>
+            </div>
+
+            {/* Barra de Progresso e Indicadores */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-brand-primary truncate max-w-[260px]">
-                  {batchProgress.current ? `Processando chamado #${batchProgress.current}...` : 'Preparando próximo chamado...'}
-                </span>
-                <span className="text-brand-highlight font-mono font-black">
+                <span className="text-brand-muted font-semibold">Progresso Geral</span>
+                <span className="text-brand-highlight font-mono font-black text-sm">
                   {batchProgress.total > 0 ? Math.round((batchProgress.done / batchProgress.total) * 100) : 0}%
                 </span>
               </div>
-              <div className="w-full h-2.5 bg-surface-border rounded-full overflow-hidden">
+
+              <div className="w-full h-3 bg-surface-border/60 rounded-full overflow-hidden p-0.5 border border-surface-border">
                 <div
-                  className="h-full bg-brand-highlight rounded-full transition-all duration-500"
-                  style={{ width: `${batchProgress.total > 0 ? Math.round((batchProgress.done / batchProgress.total) * 100) : 0}%` }}
+                  className="h-full bg-gradient-to-r from-[#0A1F44] via-[#B3141B] to-brand-highlight rounded-full transition-all duration-500 shadow-sm"
+                  style={{ width: `${batchProgress.total > 0 ? Math.max(4, Math.round((batchProgress.done / batchProgress.total) * 100)) : 0}%` }}
                 />
               </div>
-              <div className="flex items-center justify-between text-[10px] text-brand-muted font-semibold">
-                <span>{batchProgress.done} de {batchProgress.total} chamados avaliados</span>
-                <span>Restantes: {Math.max(0, batchProgress.total - batchProgress.done)}</span>
+
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Avaliados</div>
+                  <div className="text-sm font-black text-functional-success font-mono flex items-center justify-center gap-1 mt-0.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {batchProgress.done}
+                  </div>
+                </div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Restantes</div>
+                  <div className="text-sm font-black text-brand-primary font-mono flex items-center justify-center gap-1 mt-0.5">
+                    <Clock className="w-3.5 h-3.5 text-brand-muted" />
+                    {Math.max(0, batchProgress.total - batchProgress.done)}
+                  </div>
+                </div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Total do Lote</div>
+                  <div className="text-sm font-black text-brand-primary font-mono mt-0.5">
+                    {batchProgress.total}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-surface-subtle border border-surface-border text-xs text-brand-muted flex items-center gap-2">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-highlight flex-shrink-0" />
-              <span>A tela está bloqueada contra múltiplos cliques até a finalização do lote.</span>
-            </div>
+            {/* Mini Fila de Chamados Selecionados */}
+            {batchProgress.items && batchProgress.items.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <div className="text-[10px] font-black uppercase tracking-wider text-brand-muted flex items-center justify-between">
+                  <span>Fila de Chamados ({batchProgress.items.length})</span>
+                  <span>Status em Tempo Real</span>
+                </div>
+                <div className="max-h-28 overflow-y-auto thin-scrollbar space-y-1 pr-1 border border-surface-border/60 rounded-xl p-1.5 bg-surface-subtle/30">
+                  {batchProgress.items.map((it) => (
+                    <div
+                      key={it.ticket_id}
+                      className={`flex items-center justify-between p-1.5 rounded-lg text-xs transition-all ${
+                        it.status === 'processing'
+                          ? 'bg-brand-highlight/10 border border-brand-highlight/30 text-brand-primary font-bold'
+                          : it.status === 'done'
+                          ? 'bg-functional-success/5 text-slate-700 dark:text-slate-300'
+                          : it.status === 'error'
+                          ? 'bg-functional-error/5 text-functional-error'
+                          : 'text-brand-muted'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {it.status === 'processing' && <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-highlight shrink-0" />}
+                        {it.status === 'done' && <CheckCircle2 className="w-3.5 h-3.5 text-functional-success shrink-0" />}
+                        {it.status === 'error' && <XCircle className="w-3.5 h-3.5 text-functional-error shrink-0" />}
+                        {it.status === 'pending' && <Clock className="w-3.5 h-3.5 text-brand-muted shrink-0" />}
+                        <span className="font-mono text-[11px] shrink-0 font-bold">#{it.ticket_id}</span>
+                        <span className="truncate text-[11px]">{it.subject || 'Sem assunto'}</span>
+                      </div>
+                      <span className="text-[10px] font-semibold shrink-0 ml-2">
+                        {it.status === 'processing' && <span className="text-brand-highlight font-bold">Auditando</span>}
+                        {it.status === 'done' && <span className="text-functional-success font-bold">Concluído</span>}
+                        {it.status === 'error' && <span className="text-functional-error font-bold">Falhou</span>}
+                        {it.status === 'pending' && <span className="text-brand-muted">Aguardando</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            <div className="flex justify-end pt-2 border-t border-surface-border">
+            {/* Rodapé Seguro com Botão de Interrupção */}
+            <div className="flex items-center justify-between pt-3 border-t border-surface-border">
+              <div className="flex items-center gap-2 text-[11px] text-brand-muted">
+                <Lock className="w-3.5 h-3.5 text-brand-muted shrink-0" />
+                <span>Navegação segura protegida contra duplo clique</span>
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => { batchCancelRef.current = true; }}
-                className="text-functional-error hover:bg-functional-error/10 font-bold flex items-center gap-1.5"
+                className="text-functional-error hover:bg-functional-error/10 font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
                 <span>Interromper Lote</span>
               </Button>
             </div>
