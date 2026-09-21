@@ -1854,7 +1854,7 @@ export default function MonitoriaForm({
                     <CheckCircle2 className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-brand-primary">Monitoria Salva no QualiTrack!</h3>
+                    <h3 className="text-sm font-black text-brand-primary">Monitoria Salva no QualidadeWP!</h3>
                     <p className="text-[10px] font-semibold text-brand-muted">
                       Ticket #{header.ticket_id} • Score: {score.toFixed(1)}% • {saveSuccessData.outcome === 'positiva' ? 'Válido' : 'Invalidado'}
                     </p>
@@ -1867,9 +1867,14 @@ export default function MonitoriaForm({
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">
-                    Macro Formatada para o Zendesk (Envio Manual)
-                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">
+                      Macro Formatada para o Zendesk (Envio Manual)
+                    </label>
+                    <span className="text-[10px] text-brand-muted font-medium">
+                      (Editável)
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -1893,11 +1898,18 @@ export default function MonitoriaForm({
                     )}
                   </button>
                 </div>
-                <div className="p-3.5 rounded-xl border border-surface-border bg-surface-subtle text-xs font-mono text-brand-primary whitespace-pre-wrap max-h-56 overflow-y-auto leading-relaxed select-all">
-                  {saveSuccessData.macroText}
-                </div>
+                <textarea
+                  value={saveSuccessData.macroText}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setSaveSuccessData(prev => prev ? ({ ...prev, macroText: val }) : null);
+                  }}
+                  rows={7}
+                  className="w-full p-3.5 rounded-xl border border-surface-border bg-surface-subtle text-xs font-mono text-brand-primary leading-relaxed focus:outline-none focus:border-brand-highlight focus:ring-1 focus:ring-brand-highlight resize-y"
+                  placeholder="Edite o texto da macro que será copiado para o Zendesk..."
+                />
                 <p className="text-[10px] text-brand-muted leading-relaxed">
-                  O envio automático está suspenso para a fase de testes dos monitores. Cole o texto acima diretamente no ticket do Zendesk como comentário interno/público.
+                  O envio automático está suspenso para a fase de testes dos monitores. Você pode editar o texto acima livremente antes de copiar e colar no ticket do Zendesk.
                 </p>
               </div>
 

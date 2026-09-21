@@ -537,7 +537,7 @@ function MainApp({
     if (userData?.role === 'admin') {
       list.push({
         id: 'system-status-ok',
-        title: 'Sistema QualiTrack Conectado',
+        title: 'Sistema QualidadeWP Conectado',
         message: 'Integração Zendesk API e IA Gemini 2.5 Flash sincronizadas em tempo real.',
         time: `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`,
         type: 'sistema',

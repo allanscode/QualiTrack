@@ -158,6 +158,37 @@ export default function AuditingQueueView({
   // Veredito e controle para chamados filhos (Válido / Inválido e cópia da macro)
   const [childManualVerdict, setChildManualVerdict] = useState<'conforme' | 'nao_conforme' | null>(null);
   const [copiedChildMacro, setCopiedChildMacro] = useState(false);
+  const [childCustomMacro, setChildCustomMacro] = useState<string>('');
+
+  // Sincroniza o texto gerado da macro do chamado filho sempre que a avaliação da IA ou o veredito mudar
+  useEffect(() => {
+    if (!childPreviewTicket || !childAiEvaluation) {
+      setChildCustomMacro('');
+      return;
+    }
+    const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
+    const isValido = currentVerdict === 'conforme';
+    const typeLabel = childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : 'Escalonamento Interno';
+    const checksSummary = (childAiEvaluation.checks || [])
+      .map(c => `• ${c.rule}: ${c.passed ? 'OK' : 'NÃO CONFORME'} (${c.details})`)
+      .join('\n');
+    const recs = childAiEvaluation.recommendations?.length
+      ? `\n\nRecomendações:\n${childAiEvaluation.recommendations.map(r => `• ${r}`).join('\n')}`
+      : '';
+
+    const defaultMacro = `${isValido ? '✅ Auditoria de Chamado Filho — VÁLIDO' : '❌ Auditoria de Chamado Filho — INVÁLIDO'} (#${childPreviewTicket.ticket_id})
+
+Tipo Identificado: ${typeLabel}
+Assunto: ${childPreviewTicket.subject}
+
+Parecer da Qualidade:
+${childAiEvaluation.summary}
+
+Checklist de Conformidade (POP v1.1):
+${checksSummary}${recs}`;
+
+    setChildCustomMacro(defaultMacro);
+  }, [childPreviewTicket?.ticket_id, childAiEvaluation, childManualVerdict]);
 
   // Avaliação em lote: processa todos os tickets da página atual sequencialmente.
   const [batchRunning, setBatchRunning] = useState(false);
@@ -2107,35 +2138,61 @@ ${checksSummary}${recs}`;
                     return (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
-                            Macro Formatada para o Zendesk
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(macroText);
-                              setCopiedChildMacro(true);
-                              toast.success('Macro do chamado filho copiada!');
-                              setTimeout(() => setCopiedChildMacro(false), 2500);
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-highlight hover:underline cursor-pointer"
-                          >
-                            {copiedChildMacro ? (
-                              <>
-                                <Check className="w-3.5 h-3.5 text-functional-success" />
-                                <span className="text-functional-success">Copiada!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3.5 h-3.5" />
-                                <span>Copiar Macro</span>
-                              </>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
+                              Macro Formatada para o Zendesk
+                            </span>
+                            <span className="text-[10px] text-brand-muted font-medium">
+                              (Editável)
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setChildCustomMacro(macroText);
+                                toast.info('Macro restaurada para o padrão!');
+                              }}
+                              className="text-[10px] font-bold text-brand-muted hover:text-brand-primary underline cursor-pointer"
+                              title="Restaurar o texto sugerido original"
+                            >
+                              Restaurar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const textToCopy = childCustomMacro || macroText;
+                                navigator.clipboard.writeText(textToCopy);
+                                setCopiedChildMacro(true);
+                                toast.success('Macro do chamado filho copiada para colar no Zendesk!');
+                                setTimeout(() => setCopiedChildMacro(false), 2500);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-highlight hover:underline cursor-pointer"
+                            >
+                              {copiedChildMacro ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-functional-success" />
+                                  <span className="text-functional-success">Copiada!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copiar Macro</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
-                        <div className="p-3 rounded-xl border border-surface-border bg-surface-subtle text-xs font-mono text-brand-primary whitespace-pre-wrap max-h-40 overflow-y-auto select-all leading-relaxed">
-                          {macroText}
-                        </div>
+                        <textarea
+                          value={childCustomMacro || macroText}
+                          onChange={e => setChildCustomMacro(e.target.value)}
+                          rows={6}
+                          className="w-full p-3 rounded-xl border border-surface-border bg-surface-subtle text-xs font-mono text-brand-primary leading-relaxed focus:outline-none focus:border-brand-highlight focus:ring-1 focus:ring-brand-highlight resize-y"
+                          placeholder="Texto da macro que será copiado para o Zendesk..."
+                        />
+                        <p className="text-[10px] text-brand-muted">
+                          Você pode editar o texto acima livremente. Ao clicar em <strong>Copiar Macro</strong>, o conteúdo exato deste campo será copiado para colar no Zendesk.
+                        </p>
                       </div>
                     );
                   })()}
@@ -2153,6 +2210,7 @@ ${checksSummary}${recs}`;
                     if (!loadingChildAi) {
                       setChildPreviewTicket(null);
                       setChildManualVerdict(null);
+                      setChildCustomMacro('');
                     }
                   }}
                 >
@@ -2186,13 +2244,14 @@ ${checksSummary}${recs}`;
                         status: isValido ? 'conforme' : 'nao_conforme',
                       };
                       setValidatedChildTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
-                      toast.success(`Chamado filho #${childPreviewTicket.ticket_id} salvo como ${isValido ? 'Válido' : 'Inválido'} no QualiTrack!`);
+                      toast.success(`Chamado filho #${childPreviewTicket.ticket_id} salvo como ${isValido ? 'Válido' : 'Inválido'} no QualidadeWP!`);
                       setChildPreviewTicket(null);
                       setChildManualVerdict(null);
+                      setChildCustomMacro('');
                     }}
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>Salvar no QualiTrack</span>
+                    <span>Salvar Monitoria</span>
                   </Button>
                 </div>
               </div>

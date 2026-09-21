@@ -64,7 +64,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 </h2>
                 <p className="text-brand-muted text-sm leading-relaxed">
                   {isChunkError
-                    ? 'Uma nova versão do QualiTrack foi publicada. Clique no botão abaixo para carregar as alterações mais recentes.'
+                    ? 'Uma nova versão do QualidadeWP foi publicada. Clique no botão abaixo para carregar as alterações mais recentes.'
                     : 'Ocorreu um erro inesperado. Nossa equipe foi notificada automaticamente.'}
                 </p>
               </div>
