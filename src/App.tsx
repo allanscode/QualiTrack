@@ -7,18 +7,21 @@ import { ProtectedAuthForm } from './components/ui/ProtectedAuthForm';
 import React, { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck, Mail, MailOpen } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck, Mail, MailOpen, BookOpen, Sparkles, Brain } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
-import { User, ROLE_LABELS, UserRole } from './types';
+import { User, ROLE_LABELS, UserRole, AIEvaluationGuideline } from './types';
 import { QualityConfigProvider } from './lib/useQualityConfig';
 import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
 import { ThemeProvider, useTheme, resolveSystemTheme, applyThemeToDOM, type Theme } from './providers/ThemeProvider';
 import { AuthProvider, useAuth } from './providers/AuthProvider';
 import { useSidebarManager } from './hooks/useSidebarManager';
 import { useMonitoriaData } from './hooks/useMonitoriaData';
+import { supabase } from './lib/supabase';
+import { fetchAIGuidelines } from './lib/aiGuidelines';
+import type { AdminSubTab } from './components/AdminPanel';
 
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
@@ -445,6 +448,92 @@ function MainApp({
   const [isQueueModalOpen, setIsQueueModalOpen] = React.useState(false);
 
   const [sessionStartTime] = React.useState(() => new Date());
+  const [guidelines, setGuidelines] = React.useState<AIEvaluationGuideline[]>([]);
+  const [adminSubTab, setAdminSubTab] = React.useState<AdminSubTab | undefined>(undefined);
+
+  const loadGuidelines = React.useCallback(async () => {
+    try {
+      const data = await fetchAIGuidelines();
+      setGuidelines(data);
+    } catch (e) {
+      console.warn('[App] Falha ao carregar manuais de IA:', e);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!userData) return;
+    loadGuidelines();
+
+    const handleGuidelineEvent = (e: any) => {
+      loadGuidelines();
+      const detail = e.detail;
+      if (!detail) return;
+
+      if (userData.role === 'admin' && detail.type === 'proposed') {
+        toast.info(
+          `Nova proposta de alteração recebida para o manual "${detail.title}"! Verifique no envelope de notificações.`,
+          { duration: 6000 }
+        );
+      } else if (
+        (userData.role === 'qualidade' || userData.role === 'gestor_qualidade') &&
+        detail.type === 'approved'
+      ) {
+        toast.success(
+          `Manual "${detail.title}" homologado pelo Administrador (v${detail.version})! As novas diretrizes já estão ativas para a IA.`,
+          { duration: 6000 }
+        );
+      } else if (
+        (userData.role === 'qualidade' || userData.role === 'gestor_qualidade') &&
+        detail.type === 'rejected'
+      ) {
+        toast.error(
+          `A proposta para o manual "${detail.title}" foi devolvida pelo Administrador.`,
+          { duration: 6000 }
+        );
+      }
+    };
+
+    window.addEventListener('qualitrack:guideline_event', handleGuidelineEvent);
+
+    let channel: any = null;
+    if (supabase) {
+      const channelName = `guidelines-rt-${Math.random().toString(36).substring(2, 9)}`;
+      channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'ai_evaluation_guidelines' },
+          (payload: any) => {
+            loadGuidelines();
+            const record = payload.new;
+            if (!record) return;
+            if (userData.role === 'admin' && record.status === 'pending_approval') {
+              toast.info(
+                `Nova proposta de manual recebida: "${record.pending_title || record.title}". Verifique no envelope de notificações.`,
+                { duration: 6000 }
+              );
+            } else if (
+              (userData.role === 'qualidade' || userData.role === 'gestor_qualidade') &&
+              record.status === 'approved' &&
+              record.version > 1
+            ) {
+              toast.success(
+                `Manual de IA atualizado: "${record.title}" foi homologado pelo Administrador (v${record.version}).`,
+                { duration: 6000 }
+              );
+            }
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      window.removeEventListener('qualitrack:guideline_event', handleGuidelineEvent);
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [userData, loadGuidelines]);
 
   const notifications = React.useMemo(() => {
     const list: Array<{
@@ -452,10 +541,13 @@ function MainApp({
       title: string;
       message: string;
       time: string;
-      type: 'contestacao' | 'monitoria' | 'fila' | 'sistema';
+      type: 'contestacao' | 'monitoria' | 'fila' | 'sistema' | 'manual';
       iconBg: string;
       icon: React.ReactNode;
       targetTab?: string;
+      targetSubTab?: AdminSubTab;
+      guidelineId?: string;
+      actionType?: 'review';
       read: boolean;
     }> = [];
 
@@ -533,12 +625,97 @@ function MainApp({
       });
     }
 
+    // Notificações de Manuais para Administrador (Propostas de Atualização Pendentes)
+    if (userData?.role === 'admin') {
+      const pendingGuidelines = guidelines.filter(
+        g => g.status === 'pending_approval' && Boolean(g.pending_content)
+      );
+
+      pendingGuidelines.forEach(g => {
+        const itemDate = g.pending_modified_at || g.updated_at;
+        const timeStr = itemDate
+          ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
+          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+        const notifId = `guideline-pending-${g.id}-${new Date(itemDate || Date.now()).getTime()}`;
+
+        list.push({
+          id: notifId,
+          title: 'Revisão de Manual Pendente',
+          message: `O monitor ${g.pending_modified_by_name || 'de Qualidade'} enviou uma proposta de alteração no manual "${g.pending_title || g.title}". Clique para analisar e homologar.`,
+          time: timeStr,
+          type: 'manual',
+          iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+          icon: <BookOpen className="w-3.5 h-3.5" />,
+          targetTab: 'admin',
+          targetSubTab: 'ia_hub',
+          guidelineId: g.id,
+          actionType: 'review',
+          read: readNotificationIds.has(notifId)
+        });
+      });
+    }
+
+    // Notificações de Manuais para Monitores de Qualidade (Homologação Concluída)
+    if (userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade') {
+      guidelines.forEach(g => {
+        const approvedEntry = g.history?.find(h => h.status === 'approved');
+        const hasApproval = (g.version && g.version > 1) || Boolean(approvedEntry);
+
+        if (g.status === 'approved' && hasApproval) {
+          const versionNum = approvedEntry?.version || g.version || 1;
+          const itemDate = approvedEntry?.created_at || g.updated_at;
+          const timeStr = itemDate
+            ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
+            : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+          const notifId = `guideline-approved-${g.id}-v${versionNum}`;
+          const approverName = approvedEntry?.approved_by_name || 'Administrador';
+
+          list.push({
+            id: notifId,
+            title: 'Manual de IA Atualizado',
+            message: `O manual "${g.title}" foi homologado pelo Administrador (${approverName}) na versão v${versionNum}. As diretrizes já estão ativas para as auditorias com IA.`,
+            time: timeStr,
+            type: 'manual',
+            iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+            icon: <Sparkles className="w-3.5 h-3.5" />,
+            targetTab: 'admin',
+            targetSubTab: 'ia_hub',
+            guidelineId: g.id,
+            read: readNotificationIds.has(notifId)
+          });
+        }
+
+        const latestEntry = g.history?.[0];
+        if (latestEntry && latestEntry.status === 'rejected') {
+          const itemDate = latestEntry.created_at;
+          const timeStr = itemDate
+            ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
+            : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+          const notifId = `guideline-rejected-${g.id}-${new Date(itemDate).getTime()}`;
+
+          list.push({
+            id: notifId,
+            title: 'Proposta de Manual Devolvida',
+            message: `A proposta para o manual "${g.title}" foi devolvida pelo Administrador: "${latestEntry.rejection_reason || 'Sem justificativa'}".`,
+            time: timeStr,
+            type: 'manual',
+            iconBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+            icon: <AlertTriangle className="w-3.5 h-3.5" />,
+            targetTab: 'admin',
+            targetSubTab: 'ia_hub',
+            guidelineId: g.id,
+            read: readNotificationIds.has(notifId)
+          });
+        }
+      });
+    }
+
     // Notificação do sistema: status de conexão e IA (exclusivo para Administrador)
     if (userData?.role === 'admin') {
       list.push({
         id: 'system-status-ok',
         title: 'Sistema QualidadeWP Conectado',
-        message: 'Integração Zendesk API e IA Gemini 2.5 Flash sincronizadas em tempo real.',
+        message: 'Integração Zendesk API e IA Gemini sincronizadas em tempo real.',
         time: `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`,
         type: 'sistema',
         iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
@@ -548,7 +725,7 @@ function MainApp({
     }
 
     return list;
-  }, [userData, monitorias, readNotificationIds, sessionStartTime]);
+  }, [userData, monitorias, readNotificationIds, sessionStartTime, guidelines]);
 
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
 
@@ -568,8 +745,26 @@ function MainApp({
     try {
       localStorage.setItem('qualitrack_read_notifications', JSON.stringify(Array.from(next)));
     } catch {}
+
     if (item.targetTab) {
       setActiveTab(item.targetTab);
+    }
+    if (item.targetSubTab) {
+      setAdminSubTab(item.targetSubTab);
+      window.dispatchEvent(
+        new CustomEvent('qualitrack:switch_admin_subtab', {
+          detail: { subTab: item.targetSubTab }
+        })
+      );
+    }
+    if (item.actionType === 'review' && item.guidelineId) {
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent('qualitrack:open_guideline_review', {
+            detail: { guidelineId: item.guidelineId }
+          })
+        );
+      }, 100);
     }
     setShowNotifications(false);
   };
@@ -1192,7 +1387,7 @@ function MainApp({
             )}
             {['admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte'].includes(userData?.role || '') && activeTab === 'admin' && (
               <div className="animate-fade-in">
-                <AdminPanel user={userData} />
+                <AdminPanel user={userData} initialSubTab={adminSubTab} />
               </div>
             )}
             {userData?.role === 'admin' && activeTab === 'custom_dashboard' && (

@@ -296,6 +296,22 @@ export async function proposeGuidelineUpdate(
     .eq('id', guideline.id);
 
   if (error) throw new Error(`Falha ao submeter proposta de alteração: ${error.message}`);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('qualitrack:guideline_event', {
+        detail: {
+          type: 'proposed',
+          guidelineId: guideline.id,
+          title: params.title || guideline.title,
+          proposerName: user.name || 'Monitor de Qualidade',
+          proposerRole: user.role || 'qualidade',
+          version: proposedVersion,
+          timestamp: pendingHistoryEntry.created_at
+        }
+      })
+    );
+  }
 }
 
 /**
@@ -343,6 +359,21 @@ export async function approveGuidelineUpdate(
     .eq('id', guideline.id);
 
   if (error) throw new Error(`Falha ao aprovar alteração do manual: ${error.message}`);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('qualitrack:guideline_event', {
+        detail: {
+          type: 'approved',
+          guidelineId: guideline.id,
+          title: guideline.pending_title || guideline.title,
+          approverName: adminUser.name || 'Administrador',
+          version: newVersion,
+          timestamp: new Date().toISOString()
+        }
+      })
+    );
+  }
 }
 
 /**
@@ -380,6 +411,20 @@ export async function rejectGuidelineUpdate(
     .eq('id', guideline.id);
 
   if (error) throw new Error(`Falha ao rejeitar alteração do manual: ${error.message}`);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('qualitrack:guideline_event', {
+        detail: {
+          type: 'rejected',
+          guidelineId: guideline.id,
+          title: guideline.title,
+          reason,
+          timestamp: new Date().toISOString()
+        }
+      })
+    );
+  }
 }
 
 export async function toggleAIGuidelineActive(id: string, active: boolean): Promise<void> {

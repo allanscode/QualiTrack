@@ -306,6 +306,7 @@ export interface GuidelineVersion {
   modified_by_role?: string;
   created_at: string;
   status: 'approved' | 'pending_approval' | 'rejected';
+  approved_by_name?: string;
   rejection_reason?: string;
 }
 

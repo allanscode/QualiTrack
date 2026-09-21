@@ -24,7 +24,7 @@ import RequestsManagement from './admin/RequestsManagement';
 import DissatisfactionFieldsManagement from './admin/DissatisfactionFieldsManagement';
 import AIHubManagement from './admin/AIHubManagement';
 
-type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub';
+export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub';
 
 interface TabItem {
   key: AdminSubTab;
@@ -54,15 +54,40 @@ function getAvailableTabs(role?: string): TabItem[] {
   return [];
 }
 
-export default function AdminPanel({ user: currentUser }: { user: User | null }) {
+interface AdminPanelProps {
+  user: User | null;
+  initialSubTab?: AdminSubTab;
+}
+
+export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPanelProps) {
   const staticData = useStaticData();
   const availableTabs = useMemo(() => getAvailableTabs(currentUser?.role), [currentUser?.role]);
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>(() => {
+    if (initialSubTab && getAvailableTabs(currentUser?.role).some(t => t.key === initialSubTab)) {
+      return initialSubTab;
+    }
     const tabs = getAvailableTabs(currentUser?.role);
     return tabs[0]?.key || 'users';
   });
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (initialSubTab && availableTabs.some(t => t.key === initialSubTab)) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab, availableTabs]);
+
+  useEffect(() => {
+    const handleSwitchSubTab = (e: any) => {
+      const target = e.detail?.subTab as AdminSubTab;
+      if (target && availableTabs.some(t => t.key === target)) {
+        setActiveSubTab(target);
+      }
+    };
+    window.addEventListener('qualitrack:switch_admin_subtab', handleSwitchSubTab);
+    return () => window.removeEventListener('qualitrack:switch_admin_subtab', handleSwitchSubTab);
+  }, [availableTabs]);
 
   useEffect(() => {
     if (!availableTabs.some(t => t.key === activeSubTab)) {

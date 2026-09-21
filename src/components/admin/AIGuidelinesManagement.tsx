@@ -116,6 +116,30 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
 
   useEffect(() => { load(); }, []);
 
+  useEffect(() => {
+    const handleGuidelineEvent = () => {
+      load();
+    };
+    const handleOpenReview = (e: any) => {
+      const gId = e.detail?.guidelineId;
+      if (gId) {
+        setGuidelines(prev => {
+          const match = prev.find(item => item.id === gId);
+          if (match && match.status === 'pending_approval') {
+            setReviewGuideline(match);
+          }
+          return prev;
+        });
+      }
+    };
+    window.addEventListener('qualitrack:guideline_event', handleGuidelineEvent);
+    window.addEventListener('qualitrack:open_guideline_review', handleOpenReview);
+    return () => {
+      window.removeEventListener('qualitrack:guideline_event', handleGuidelineEvent);
+      window.removeEventListener('qualitrack:open_guideline_review', handleOpenReview);
+    };
+  }, []);
+
   const resetForm = () => {
     setTitle('');
     setExtractedContent('');
