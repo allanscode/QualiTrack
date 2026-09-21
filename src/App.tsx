@@ -875,7 +875,7 @@ function MainApp({
       </m.aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-surface-bg">
-        <header className="px-8 h-20 flex items-center gap-4 border-b border-surface-border/50">
+        <header className="px-8 h-20 flex items-center gap-4 border-b border-surface-border/60 bg-surface-bg/85 backdrop-blur-md sticky top-0 z-20 transition-colors">
           <button
             onClick={() => toggleSidebar()}
             className="sidebar-toggle-btn p-2 hover:bg-surface-subtle border border-surface-border/40 rounded-xl transition-all text-brand-muted hover:text-brand-primary shadow-sm flex-shrink-0 flex items-center justify-center w-10 h-10 cursor-pointer"

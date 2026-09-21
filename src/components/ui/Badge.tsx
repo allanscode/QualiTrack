@@ -15,23 +15,23 @@ export default function Badge({
 }: BadgeProps) {
   // All variants use design system tokens instead of raw Tailwind color classes
   const variants = {
-    primary: 'bg-brand-primary text-brand-on-primary',
-    secondary: 'bg-surface-subtle text-brand-muted',
-    success: 'bg-functional-success text-functional-success',
-    warning: 'bg-functional-warning text-functional-warning',
-    error: 'bg-functional-error text-functional-error',
-    info: 'bg-info/10 text-info',
-    neutral: 'bg-surface-subtle text-brand-muted',
+    primary: 'bg-brand-accent/10 text-brand-accent border border-brand-accent/25',
+    secondary: 'bg-surface-subtle text-brand-muted border border-surface-border',
+    success: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25',
+    warning: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25',
+    error: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/25',
+    info: 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/25',
+    neutral: 'bg-surface-subtle text-brand-muted border border-surface-border',
   };
 
   const sizes = {
-    xs: 'px-1.5 py-0.5 text-[9px]',
-    sm: 'px-2.5 py-1 text-[10px]',
-    md: 'px-3 py-1.5 text-xs',
+    xs: 'px-2 py-0.5 text-[9px]',
+    sm: 'px-2.5 py-0.5 text-[11px]',
+    md: 'px-3 py-1 text-xs',
   };
 
   return (
-    <span className={`inline-flex items-center font-black uppercase tracking-widest rounded-lg transition-colors ${variants[variant]} ${sizes[size]} ${className}`}>
+    <span className={`inline-flex items-center gap-1.5 font-semibold rounded-full transition-colors ${variants[variant]} ${sizes[size]} ${className}`}>
       {children}
     </span>
   );

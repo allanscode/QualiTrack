@@ -28,8 +28,8 @@
   --color-info: #6366F1;
 
   /* ── Layout Tokens ── */
-  --radius-card: 1.5rem;
-  --radius-panel: 2rem;
+  --radius-card: 1.125rem;
+  --radius-panel: 1.25rem;
   --radius-badge: 9999px;
   
   --shadow-premium: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
@@ -41,12 +41,12 @@
 :root {
 color-scheme: light;
 /* Light Theme (Default) */
-  /* WebPosto brand palette — Alto contraste no Modo Claro: textos principais em preto puro */
+  /* WebPosto brand palette — WebPosto Red Refinado */
   --brand-primary: #000000;
-  --brand-highlight: #B83238;
-  --brand-accent: #B83238;
-  /* Primary actions stay darker than accent text so white labels remain readable. */
-  --action-primary-bg: #A9272D;
+  --brand-highlight: #D9232A;
+  --brand-accent: #D9232A;
+  /* Primary actions: modern energetic red with rich contrast */
+  --action-primary-bg: #D9232A;
   --action-primary-fg: #FFFFFF;
   --brand-muted: #1E293B; /* Slate-800 escuro e nítido (substitui cinza apagado) */
   --brand-subtle: #DEE2E8;
@@ -88,9 +88,10 @@ color-scheme: dark;
 /* Dark Theme Overrides */
   /* Keep text tokens readable on dark surfaces; red is softened for text contrast. */
   --brand-primary: #E8EEF7;
-  --brand-highlight: #EE8B8F;
-  --brand-accent: #EE8B8F;
-  --brand-muted: #A9B6C9;
+  --brand-highlight: #F43F5E;
+  --brand-accent: #F43F5E;
+  --action-primary-bg: #E11D48;
+  --action-primary-fg: #FFFFFF;
   --brand-subtle: #22314A;
   --brand-on-primary: #0A1F44; /* Dark text on light primary (Dark Mode) */
 
@@ -371,8 +372,21 @@ select {
 
 /* ── Icon background tokens (theme-aware, light bg for dark text) ── */
 /* Acao primaria de marca (ver tokens em :root) */
-.action-primary { background-color: var(--action-primary-bg); color: var(--action-primary-fg); }
-.action-primary:hover:not(:disabled) { opacity: 0.9; }
+.action-primary {
+  background-color: var(--action-primary-bg);
+  color: var(--action-primary-fg);
+  box-shadow: 0 2px 8px -1px rgba(217, 35, 42, 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+.action-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px -1px rgba(217, 35, 42, 0.45);
+}
+.action-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
 
 .bg-icon-highlight { background-color: #FBE4E4; }
 .bg-icon-accent { background-color: #FBE4E4; }

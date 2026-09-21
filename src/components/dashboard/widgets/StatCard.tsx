@@ -255,7 +255,7 @@ export default function StatCard({
               e.stopPropagation();
               setShowOnlineModal(true);
             } : undefined}
-            className={`text-3xl font-bold leading-none tracking-tight tabular-nums ${valueColorClass || 'text-black dark:text-slate-50'} ${
+            className={`text-3xl font-bold leading-none tracking-tight tabular-nums font-mono ${valueColorClass || 'text-black dark:text-slate-50'} ${
               isOnlineUsersCard ? 'cursor-pointer hover:opacity-80' : ''
             }`}
           >
