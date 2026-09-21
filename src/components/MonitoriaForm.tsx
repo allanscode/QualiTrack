@@ -535,9 +535,9 @@ export default function MonitoriaForm({
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
-            {/* Docked Score Badge in Top Header (appears on scroll in step 3 - exact area marked by red rectangle in user screenshot) */}
+            {/* Docked Score Badge in Top Header (appears on scroll in step 2 - exact area marked by red rectangle in user screenshot) */}
             <AnimatePresence>
-              {scoreCompact && step === 3 && selectedForm && (
+              {scoreCompact && step === 2 && selectedForm && (
                 <m.div
                   key="header-docked-score"
                   initial={{ opacity: 0, scale: 0.72, y: -4 }}
@@ -581,8 +581,8 @@ export default function MonitoriaForm({
           <div className="flex items-center justify-center gap-4 md:gap-8 pb-3 border-b border-surface-border/50">
             {[
               { n: 1, label: 'Identificação' },
-              { n: 2, label: 'Pesquisa' },
-              { n: 3, label: 'Avaliação' },
+              { n: 2, label: 'Avaliação' },
+              { n: 3, label: 'Pesquisa' },
               { n: 4, label: 'Registro/Log' }
             ].map(s => (
               <div key={s.n} className="flex flex-col items-center gap-1.5 group">
@@ -824,135 +824,13 @@ export default function MonitoriaForm({
             </section>
           )}
 
-          {step === 2 && (
-            <section className="animate-fade-in space-y-10 max-w-4xl mx-auto">
-              <div className="space-y-4">
-                <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1 text-center">Pesquisa de Satisfação</p>
-                <div className="grid grid-cols-3 gap-3.5">
-                  {(['Positiva', 'Negativa', 'Sem pesquisa'] as const).map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => !isViewOnly && !isReevaluating && setHeader({...header, satisfaction_result: opt})}
-                      className={`py-3 px-4 rounded-xl border flex items-center justify-center transition-all text-xs font-black uppercase tracking-widest cursor-pointer ${header.satisfaction_result === opt ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-premium-sm' : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent hover:text-brand-primary'}`}
-                      disabled={isViewOnly || isReevaluating}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {header.satisfaction_result && header.satisfaction_result !== 'Sem pesquisa' && (
-                <m.div initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }} className="space-y-6">
-                  <Card className="bg-surface-card p-5 space-y-4 rounded-xl">
-                    <div className="flex items-center justify-between gap-4">
-                      <p className="text-xs font-black text-brand-primary uppercase tracking-wider">O cliente deixou algum registro (elogio/reclamação)?</p>
-                      <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
-                        {[true, false].map(v => (
-                          <button
-                            key={v ? 'y' : 'n'}
-                            onClick={() => !isViewOnly && setHeader({...header, satisfaction_has_record: v})}
-                            className={`px-3.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${header.satisfaction_has_record === v ? 'bg-brand-primary text-brand-on-primary shadow-sm' : 'text-brand-muted hover:bg-surface-card'}`}
-                            disabled={isViewOnly}
-                          >
-                            {v ? 'SIM' : 'NÃO'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {header.satisfaction_has_record && (
-                      <div className="space-y-2 animate-fade-in">
-                        <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">Registro do Cliente</label>
-                        <textarea
-                          value={header.satisfaction_record_text}
-                          onChange={e => setHeader({...header, satisfaction_record_text: e.target.value})}
-                          disabled={isViewOnly}
-                          className="w-full bg-surface-bg border border-surface-border rounded-xl p-4 text-xs font-medium min-h-[100px] focus:border-brand-accent focus:outline-none placeholder:text-brand-muted/40 text-brand-primary"
-                          placeholder="Transcreva aqui o comentário do cliente..."
-                        />
-                      </div>
-                    )}
-                  </Card>
-
-                  {header.satisfaction_result === 'Negativa' && (
-                    <Card className="bg-error/5 border-error/20 p-5 space-y-4 rounded-xl">
-                      <div className="flex items-center justify-between gap-4">
-                        <p className="text-xs font-black text-error uppercase tracking-wider">Conseguimos contato com o cliente?</p>
-                        <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
-                          {[true, false].map(v => (
-                            <button
-                              key={v ? 'y' : 'n'}
-                              onClick={() => !isViewOnly && setHeader({...header, client_contact_success: v})}
-                              className={`px-3.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${header.client_contact_success === v ? 'bg-error text-white shadow-sm' : 'text-brand-muted hover:bg-surface-card'}`}
-                              disabled={isViewOnly}
-                            >
-                              {v ? 'SIM' : 'NÃO'}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {header.client_contact_success && (
-                        <div className="space-y-2 animate-fade-in">
-                          <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">Registro de Contato/Tentativa</label>
-                          <textarea
-                            value={header.client_contact_log}
-                            onChange={e => setHeader({...header, client_contact_log: e.target.value})}
-                            disabled={isViewOnly}
-                            className="w-full bg-surface-bg border border-surface-border rounded-xl p-4 text-xs font-medium min-h-[100px] focus:border-brand-accent focus:outline-none placeholder:text-brand-muted/40 text-brand-primary"
-                            placeholder="Descreva como foi o contato ou o motivo do insucesso..."
-                          />
-                        </div>
-                      )}
-                    </Card>
-                  )}
-
-                  {header.satisfaction_result === 'Negativa' && (header.satisfaction_has_record || header.client_contact_success) && clientFieldsToShow.length > 0 && (
-                    <div className="space-y-6 pt-4 animate-fade-in">
-                      <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1 text-center">Campos Extras do Cliente</p>
-                      {clientFieldsToShow.map(field => (
-                        <Card key={field.id} className="bg-surface-card p-5 border border-surface-border space-y-4 shadow-premium-sm rounded-xl">
-                          <p className="text-xs font-black text-brand-primary uppercase tracking-wider">{field.title}{!isViewOnly && ' *'}</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            {field.options.map(opt => {
-                              const isChecked = (dissatisfactionAnswers[field.id] || []).includes(opt);
-                              return (
-                                <label
-                                  key={opt}
-                                  className={`flex items-center gap-2.5 py-2.5 px-3.5 rounded-lg border transition-all cursor-pointer ${
-                                    isChecked
-                                      ? 'bg-surface-subtle border-brand-primary/40 text-brand-primary'
-                                      : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent hover:text-brand-primary'
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={e => handleCheckboxChange(field.id, opt, e.target.checked, isViewOnly)}
-                                    disabled={isViewOnly}
-                                    className="w-4.5 h-4.5 rounded text-brand-primary border-surface-border focus:ring-brand-primary"
-                                  />
-                                  <span className="text-[11px] font-black uppercase tracking-wider">{opt}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </m.div>
-              )}
-            </section>
-          )}
-
-          {step === 3 && selectedForm && (
+          {step === 2 && selectedForm && (
             <section className="space-y-8 animate-fade-in max-w-4xl mx-auto">
               {/* Score Banner Principal - Animação de encolher ao rolar para baixo e transferir para o topo fixo */}
               <AnimatePresence>
                 {!scoreCompact && (
                   <m.div
-                    key="step3-main-score-banner"
+                    key="step2-main-score-banner"
                     initial={{ opacity: 0, height: 0, scale: 0.95 }}
                     animate={{ opacity: 1, height: 'auto', scale: 1 }}
                     exit={{ opacity: 0, height: 0, scale: 0.92 }}
@@ -1247,6 +1125,128 @@ export default function MonitoriaForm({
                     ))}
                   </div>
                 </div>
+              )}
+            </section>
+          )}
+
+          {step === 3 && (
+            <section className="animate-fade-in space-y-10 max-w-4xl mx-auto">
+              <div className="space-y-4">
+                <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1 text-center">Pesquisa de Satisfação</p>
+                <div className="grid grid-cols-3 gap-3.5">
+                  {(['Positiva', 'Negativa', 'Sem pesquisa'] as const).map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => !isViewOnly && !isReevaluating && setHeader({...header, satisfaction_result: opt})}
+                      className={`py-3 px-4 rounded-xl border flex items-center justify-center transition-all text-xs font-black uppercase tracking-widest cursor-pointer ${header.satisfaction_result === opt ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-premium-sm' : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent hover:text-brand-primary'}`}
+                      disabled={isViewOnly || isReevaluating}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {header.satisfaction_result && header.satisfaction_result !== 'Sem pesquisa' && (
+                <m.div initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }} className="space-y-6">
+                  <Card className="bg-surface-card p-5 space-y-4 rounded-xl">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="text-xs font-black text-brand-primary uppercase tracking-wider">O cliente deixou algum registro (elogio/reclamação)?</p>
+                      <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
+                        {[true, false].map(v => (
+                          <button
+                            key={v ? 'y' : 'n'}
+                            onClick={() => !isViewOnly && setHeader({...header, satisfaction_has_record: v})}
+                            className={`px-3.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${header.satisfaction_has_record === v ? 'bg-brand-primary text-brand-on-primary shadow-sm' : 'text-brand-muted hover:bg-surface-card'}`}
+                            disabled={isViewOnly}
+                          >
+                            {v ? 'SIM' : 'NÃO'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {header.satisfaction_has_record && (
+                      <div className="space-y-2 animate-fade-in">
+                        <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">Registro do Cliente</label>
+                        <textarea
+                          value={header.satisfaction_record_text}
+                          onChange={e => setHeader({...header, satisfaction_record_text: e.target.value})}
+                          disabled={isViewOnly}
+                          className="w-full bg-surface-bg border border-surface-border rounded-xl p-4 text-xs font-medium min-h-[100px] focus:border-brand-accent focus:outline-none placeholder:text-brand-muted/40 text-brand-primary"
+                          placeholder="Transcreva aqui o comentário do cliente..."
+                        />
+                      </div>
+                    )}
+                  </Card>
+
+                  {header.satisfaction_result === 'Negativa' && (
+                    <Card className="bg-error/5 border-error/20 p-5 space-y-4 rounded-xl">
+                      <div className="flex items-center justify-between gap-4">
+                        <p className="text-xs font-black text-error uppercase tracking-wider">Conseguimos contato com o cliente?</p>
+                        <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
+                          {[true, false].map(v => (
+                            <button
+                              key={v ? 'y' : 'n'}
+                              onClick={() => !isViewOnly && setHeader({...header, client_contact_success: v})}
+                              className={`px-3.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${header.client_contact_success === v ? 'bg-error text-white shadow-sm' : 'text-brand-muted hover:bg-surface-card'}`}
+                              disabled={isViewOnly}
+                            >
+                              {v ? 'SIM' : 'NÃO'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {header.client_contact_success && (
+                        <div className="space-y-2 animate-fade-in">
+                          <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">Registro de Contato/Tentativa</label>
+                          <textarea
+                            value={header.client_contact_log}
+                            onChange={e => setHeader({...header, client_contact_log: e.target.value})}
+                            disabled={isViewOnly}
+                            className="w-full bg-surface-bg border border-surface-border rounded-xl p-4 text-xs font-medium min-h-[100px] focus:border-brand-accent focus:outline-none placeholder:text-brand-muted/40 text-brand-primary"
+                            placeholder="Descreva como foi o contato ou o motivo do insucesso..."
+                          />
+                        </div>
+                      )}
+                    </Card>
+                  )}
+
+                  {header.satisfaction_result === 'Negativa' && (header.satisfaction_has_record || header.client_contact_success) && clientFieldsToShow.length > 0 && (
+                    <div className="space-y-6 pt-4 animate-fade-in">
+                      <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1 text-center">Campos Extras do Cliente</p>
+                      {clientFieldsToShow.map(field => (
+                        <Card key={field.id} className="bg-surface-card p-5 border border-surface-border space-y-4 shadow-premium-sm rounded-xl">
+                          <p className="text-xs font-black text-brand-primary uppercase tracking-wider">{field.title}{!isViewOnly && ' *'}</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {field.options.map(opt => {
+                              const isChecked = (dissatisfactionAnswers[field.id] || []).includes(opt);
+                              return (
+                                <label
+                                  key={opt}
+                                  className={`flex items-center gap-2.5 py-2.5 px-3.5 rounded-lg border transition-all cursor-pointer ${
+                                    isChecked
+                                      ? 'bg-surface-subtle border-brand-primary/40 text-brand-primary'
+                                      : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent hover:text-brand-primary'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={e => handleCheckboxChange(field.id, opt, e.target.checked, isViewOnly)}
+                                    disabled={isViewOnly}
+                                    className="w-4.5 h-4.5 rounded text-brand-primary border-surface-border focus:ring-brand-primary"
+                                  />
+                                  <span className="text-[11px] font-black uppercase tracking-wider">{opt}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </m.div>
               )}
             </section>
           )}

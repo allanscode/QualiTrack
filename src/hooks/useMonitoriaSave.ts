@@ -49,6 +49,12 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
       }
     }
     if (s === 2) {
+      if (!isAllAnswered()) {
+        toast.error('Responda todos os itens da avaliação antes de prosseguir.');
+        return false;
+      }
+    }
+    if (s === 3) {
       if (!deps.header.satisfaction_result) {
         toast.error('Selecione o resultado da pesquisa de satisfação.');
         return false;
@@ -71,12 +77,6 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
             }
           }
         }
-      }
-    }
-    if (s === 3) {
-      if (!isAllAnswered()) {
-        toast.error('Responda todos os itens da avaliação antes de prosseguir.');
-        return false;
       }
     }
     return true;
