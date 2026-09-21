@@ -25,6 +25,7 @@ import {
   resolveCustomerType,
   resolveFormAndGuidelineForCustomerType,
 } from '../lib/helpdeskQueue';
+import { normalizeTicketDialogue } from '../lib/zendeskChatParser';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
 import { fetchAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import {
@@ -55,11 +56,13 @@ import {
   ListChecks,
   CheckSquare,
   Eye,
-  Copy
+  Copy,
+  MessageSquare
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
+import TicketMessageBubble from './TicketMessageBubble';
 import { toast } from 'sonner';
 
 interface AuditingQueueViewProps {
@@ -189,6 +192,97 @@ ${checksSummary}${recs}`;
 
     setChildCustomMacro(defaultMacro);
   }, [childPreviewTicket?.ticket_id, childAiEvaluation, childManualVerdict]);
+
+  // Estado para visualização do diálogo / conversa do chamado filho
+  const [showChildDialogueModal, setShowChildDialogueModal] = useState(false);
+  const [childDialogue, setChildDialogue] = useState<TicketCommentMessage[]>([]);
+  const [parentDialogue, setParentDialogue] = useState<TicketCommentMessage[]>([]);
+  const [activeChildDialogueTab, setActiveChildDialogueTab] = useState<'child' | 'parent'>('child');
+  const [loadingChildDialogue, setLoadingChildDialogue] = useState(false);
+  const [childDialogueSearch, setChildDialogueSearch] = useState('');
+  const [childDialogueFilter, setChildDialogueFilter] = useState<'all' | 'end_user' | 'agent' | 'internal'>('all');
+  const [childExpandedMsgIds, setChildExpandedMsgIds] = useState<Record<string, boolean>>({});
+
+  const toggleChildMsgExpand = (id: string | number) => {
+    setChildExpandedMsgIds(prev => ({ ...prev, [String(id)]: !prev[String(id)] }));
+  };
+
+  // Carrega e abre o diálogo do chamado filho
+  const handleOpenChildDialogue = async (tab: 'child' | 'parent' = 'child') => {
+    if (!childPreviewTicket) return;
+    setShowChildDialogueModal(true);
+    setActiveChildDialogueTab(tab);
+    setChildDialogueSearch('');
+
+    if (tab === 'child') {
+      if (childDialogue.length > 0) return;
+      if (childPreviewTicket.dialogue && childPreviewTicket.dialogue.length > 0) {
+        setChildDialogue(childPreviewTicket.dialogue);
+        return;
+      }
+      setLoadingChildDialogue(true);
+      try {
+        const res = await fetchTicketDialogue(childPreviewTicket.ticket_id);
+        const normalized = normalizeTicketDialogue(res.comments || [], childPreviewTicket.agent_name);
+        childPreviewTicket.dialogue = normalized;
+        setChildDialogue(normalized);
+      } catch (e) {
+        console.error('Erro ao buscar conversa do chamado filho:', e);
+        toast.error('Não foi possível carregar as mensagens do chamado filho.');
+      } finally {
+        setLoadingChildDialogue(false);
+      }
+    } else {
+      if (parentDialogue.length > 0) return;
+      if (!childPreviewTicket.parent_ticket_id) return;
+      setLoadingChildDialogue(true);
+      try {
+        const res = await fetchTicketDialogue(childPreviewTicket.parent_ticket_id);
+        const normalized = normalizeTicketDialogue(res.comments || []);
+        setParentDialogue(normalized);
+      } catch (e) {
+        console.error('Erro ao buscar conversa do chamado pai:', e);
+        toast.error('Não foi possível carregar as mensagens do chamado pai.');
+      } finally {
+        setLoadingChildDialogue(false);
+      }
+    }
+  };
+
+  const currentChildDialogueList = activeChildDialogueTab === 'child' ? childDialogue : parentDialogue;
+  const filteredChildDialogue = useMemo(() => {
+    return currentChildDialogueList.filter(msg => {
+      if (childDialogueFilter === 'end_user' && msg.author_role !== 'end_user') return false;
+      if (childDialogueFilter === 'agent' && msg.author_role !== 'agent' && msg.author_role !== 'admin') return false;
+      if (childDialogueFilter === 'internal' && msg.is_public) return false;
+      if (childDialogueSearch.trim()) {
+        const q = childDialogueSearch.toLowerCase();
+        return (msg.body || '').toLowerCase().includes(q) || (msg.author_name || '').toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [currentChildDialogueList, childDialogueFilter, childDialogueSearch]);
+
+  // Sincroniza diálogo em cache ou limpa ao abrir/trocar childPreviewTicket
+  useEffect(() => {
+    if (childPreviewTicket?.dialogue && childPreviewTicket.dialogue.length > 0) {
+      setChildDialogue(childPreviewTicket.dialogue);
+    } else {
+      setChildDialogue([]);
+    }
+    setParentDialogue([]);
+    setShowChildDialogueModal(false);
+  }, [childPreviewTicket?.ticket_id]);
+
+  const handleCloseChildPreview = () => {
+    if (loadingChildAi) return;
+    setChildPreviewTicket(null);
+    setChildManualVerdict(null);
+    setShowChildDialogueModal(false);
+    setChildDialogue([]);
+    setParentDialogue([]);
+    setChildCustomMacro('');
+  };
 
   // Avaliação em lote: processa todos os tickets da página atual sequencialmente.
   const [batchRunning, setBatchRunning] = useState(false);
@@ -608,8 +702,10 @@ ${checksSummary}${recs}`;
     setChildAiEvaluation(ticket.child_evaluation || null);
 
     try {
-      toast.info(`Auditando abertura do chamado filho #${ticket.ticket_id} com IA...`);
       const { comments, ticketFields, tags } = await fetchTicketDialogue(ticket.ticket_id);
+      const normalizedComments = normalizeTicketDialogue(comments || [], ticket.agent_name);
+      ticket.dialogue = normalizedComments;
+      setChildDialogue(normalizedComments);
 
       const result = await evaluateChildTicketWithAI(
         ticket.ticket_id,
@@ -1872,12 +1968,7 @@ ${checksSummary}${recs}`;
       {childPreviewTicket && createPortal(
         <div
           className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-[9999] p-4 animate-fade-in"
-          onClick={() => {
-            if (!loadingChildAi) {
-              setChildPreviewTicket(null);
-              setChildManualVerdict(null);
-            }
-          }}
+          onClick={handleCloseChildPreview}
         >
           <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-2xl">
             <Card className="p-6 space-y-5 max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl border-surface-border">
@@ -1903,12 +1994,7 @@ ${checksSummary}${recs}`;
                   variant="ghost"
                   size="sm"
                   disabled={loadingChildAi}
-                  onClick={() => {
-                    if (!loadingChildAi) {
-                      setChildPreviewTicket(null);
-                      setChildManualVerdict(null);
-                    }
-                  }}
+                  onClick={handleCloseChildPreview}
                 >
                   <X className="w-4 h-4" />
                 </Button>
@@ -1957,6 +2043,50 @@ ${checksSummary}${recs}`;
                     </div>
                   );
                 })()}
+
+                {/* Ações e Acesso ao Diálogo Completo do Chamado */}
+                <div className="flex flex-wrap items-center justify-between pt-2.5 border-t border-surface-border/60 gap-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleOpenChildDialogue('child')}
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 cursor-pointer shadow-xs border-surface-border hover:border-brand-accent transition-all"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-brand-highlight" />
+                      <span>Ver Conversa</span>
+                      {childDialogue.length > 0 && (
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-brand-highlight/15 text-brand-highlight">
+                          {childDialogue.length}
+                        </span>
+                      )}
+                    </Button>
+
+                    {childPreviewTicket.parent_ticket_id && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenChildDialogue('parent')}
+                        className="flex items-center gap-1.5 text-xs text-brand-muted hover:text-brand-primary cursor-pointer"
+                        title="Ver diálogo do chamado pai de origem"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Conversa do Pai (#{childPreviewTicket.parent_ticket_id})</span>
+                        {parentDialogue.length > 0 && (
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-surface-card border border-surface-border text-brand-muted">
+                            {parentDialogue.length}
+                          </span>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+
+                  <span className="text-[10px] text-brand-muted italic hidden sm:inline">
+                    Confronte o relato com as evidências do chamado
+                  </span>
+                </div>
               </div>
 
               {/* Loading State: Skeleton Shimmer com etapas de verificação */}
@@ -2205,14 +2335,8 @@ ${checksSummary}${recs}`;
                   variant="ghost"
                   size="sm"
                   disabled={loadingChildAi}
-                  className="disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => {
-                    if (!loadingChildAi) {
-                      setChildPreviewTicket(null);
-                      setChildManualVerdict(null);
-                      setChildCustomMacro('');
-                    }
-                  }}
+                  className="disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  onClick={handleCloseChildPreview}
                 >
                   Fechar
                 </Button>
@@ -2223,7 +2347,7 @@ ${checksSummary}${recs}`;
                     size="sm"
                     disabled={loadingChildAi}
                     onClick={() => !loadingChildAi && handleEvaluateChildTicket(childPreviewTicket)}
-                    className="flex items-center gap-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${loadingChildAi ? 'animate-spin' : ''}`} />
                     <span>Reanalisar</span>
@@ -2233,7 +2357,7 @@ ${checksSummary}${recs}`;
                     variant="primary"
                     size="sm"
                     disabled={loadingChildAi || !childAiEvaluation}
-                    className="flex items-center gap-1.5 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1.5 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                     onClick={() => {
                       if (loadingChildAi || !childAiEvaluation) return;
                       const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
@@ -2245,9 +2369,7 @@ ${checksSummary}${recs}`;
                       };
                       setValidatedChildTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
                       toast.success(`Chamado filho #${childPreviewTicket.ticket_id} salvo como ${isValido ? 'Válido' : 'Inválido'} no QualidadeWP!`);
-                      setChildPreviewTicket(null);
-                      setChildManualVerdict(null);
-                      setChildCustomMacro('');
+                      handleCloseChildPreview();
                     }}
                   >
                     <Check className="w-3.5 h-3.5" />
@@ -2256,6 +2378,198 @@ ${checksSummary}${recs}`;
                 </div>
               </div>
             </Card>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Drawer: Visualizador da Conversa / Diálogo do Chamado Filho e Pai */}
+      {showChildDialogueModal && childPreviewTicket && createPortal(
+        <div className="fixed inset-0 z-[10000] flex justify-end">
+          {/* Backdrop escuro */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-fade-in"
+            onClick={() => setShowChildDialogueModal(false)}
+          />
+
+          {/* Drawer Lateral Direito */}
+          <div
+            className="relative w-full sm:w-[500px] md:w-[580px] bg-surface-card border-l border-surface-border shadow-2xl z-10 flex flex-col h-full overflow-hidden animate-slide-in-right"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            {/* Header do Drawer */}
+            <div className="p-4 border-b border-surface-border flex items-center justify-between bg-surface-subtle/70">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center flex-shrink-0">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase text-brand-primary tracking-tight">
+                    {activeChildDialogueTab === 'child' ? 'Conversa do Chamado Filho' : 'Conversa do Chamado Pai'}
+                  </h3>
+                  <p className="text-[11px] text-brand-muted font-mono">
+                    Ticket #{activeChildDialogueTab === 'child' ? childPreviewTicket.ticket_id : childPreviewTicket.parent_ticket_id} • {currentChildDialogueList.length} {currentChildDialogueList.length === 1 ? 'mensagem' : 'mensagens'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowChildDialogueModal(false)}
+                className="p-1.5 hover:bg-surface-card rounded-lg transition-colors text-brand-muted cursor-pointer"
+                title="Fechar conversa"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            {/* Abas para alternar entre Filho e Pai se houver chamado pai */}
+            {childPreviewTicket.parent_ticket_id && (
+              <div className="flex items-center border-b border-surface-border bg-surface-subtle/40 px-3 pt-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenChildDialogue('child')}
+                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeChildDialogueTab === 'child'
+                      ? 'border-brand-accent text-brand-accent'
+                      : 'border-transparent text-brand-muted hover:text-brand-primary'
+                  }`}
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>Filho #{childPreviewTicket.ticket_id}</span>
+                  {childDialogue.length > 0 && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-brand-highlight/15 text-brand-highlight">
+                      {childDialogue.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenChildDialogue('parent')}
+                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeChildDialogueTab === 'parent'
+                      ? 'border-brand-accent text-brand-accent'
+                      : 'border-transparent text-brand-muted hover:text-brand-primary'
+                  }`}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Pai #{childPreviewTicket.parent_ticket_id}</span>
+                  {parentDialogue.length > 0 && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-surface-card border border-surface-border text-brand-muted">
+                      {parentDialogue.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Busca e Filtros */}
+            <div className="p-3 border-b border-surface-border bg-surface-card space-y-2.5">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+                <input
+                  type="text"
+                  value={childDialogueSearch}
+                  onChange={e => setChildDialogueSearch(e.target.value)}
+                  placeholder="Buscar termos na conversa (ex.: erro, PDV, comprovante)..."
+                  className="w-full pl-9 pr-8 py-2 text-xs bg-surface-subtle border border-surface-border rounded-lg text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-accent"
+                />
+                {childDialogueSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setChildDialogueSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-primary cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-[10px]">
+                {(() => {
+                  const filterList = [
+                    { id: 'all', label: `Todas (${currentChildDialogueList.length})` },
+                    { id: 'end_user', label: `Cliente (${currentChildDialogueList.filter(d => d.author_role === 'end_user').length})` },
+                    { id: 'agent', label: `Atendente (${currentChildDialogueList.filter(d => d.author_role === 'agent' || d.author_role === 'admin').length})` },
+                    { id: 'internal', label: `Internas (${currentChildDialogueList.filter(d => !d.is_public).length})` },
+                  ];
+                  return filterList.map(f => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setChildDialogueFilter(f.id as any)}
+                      className={`px-2.5 py-1 rounded-md font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+                        childDialogueFilter === f.id
+                          ? 'bg-brand-accent text-white shadow-xs'
+                          : 'bg-surface-subtle text-brand-muted hover:text-brand-primary hover:bg-surface-border'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ));
+                })()}
+              </div>
+            </div>
+
+            {/* Lista de Mensagens */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 no-scrollbar">
+              {loadingChildDialogue ? (
+                <div className="py-16 text-center space-y-3">
+                  <div className="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-xs text-brand-muted">Carregando histórico de mensagens no Zendesk...</p>
+                </div>
+              ) : filteredChildDialogue.length === 0 ? (
+                <div className="py-16 text-center space-y-2">
+                  <p className="text-xs font-bold text-brand-primary">Nenhuma mensagem encontrada</p>
+                  <p className="text-[11px] text-brand-muted">
+                    {childDialogueSearch ? 'Nenhum trecho corresponde à busca.' : 'Nenhuma mensagem disponível neste chamado.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeChildDialogueTab === 'child') {
+                        setChildDialogue([]);
+                        handleOpenChildDialogue('child');
+                      } else {
+                        setParentDialogue([]);
+                        handleOpenChildDialogue('parent');
+                      }
+                    }}
+                    className="mt-2 text-xs font-bold text-brand-highlight hover:underline cursor-pointer"
+                  >
+                    Recarregar mensagens do Zendesk
+                  </button>
+                </div>
+              ) : (
+                filteredChildDialogue.map((msg, idx) => {
+                  const msgId = `child_drawer_${activeChildDialogueTab}_${msg.id || idx}`;
+                  return (
+                    <TicketMessageBubble
+                      key={msg.id || idx}
+                      msg={msg}
+                      msgId={msgId}
+                      isExpanded={!!childExpandedMsgIds[msgId]}
+                      onToggleExpand={() => toggleChildMsgExpand(msgId)}
+                    />
+                  );
+                })
+              )}
+            </div>
+
+            {/* Rodapé do Drawer */}
+            <div className="p-3 border-t border-surface-border bg-surface-subtle/70 flex items-center justify-between">
+              <span className="text-[10px] text-brand-muted font-mono">
+                {filteredChildDialogue.length} de {currentChildDialogueList.length} exibidas
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowChildDialogueModal(false)}
+                className="text-xs font-bold cursor-pointer"
+              >
+                Voltar à Auditoria
+              </Button>
+            </div>
           </div>
         </div>,
         document.body
