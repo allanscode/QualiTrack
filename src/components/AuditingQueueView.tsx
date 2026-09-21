@@ -959,7 +959,7 @@ export default function AuditingQueueView({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-1.5 bg-surface-subtle/40 rounded-2xl border border-surface-border">
         <button
           onClick={() => setActiveQueue('negativas')}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'negativas'
               ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
               : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
@@ -976,7 +976,7 @@ export default function AuditingQueueView({
 
         <button
           onClick={() => setActiveQueue('proativas')}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'proativas'
               ? 'bg-info/15 text-info border border-info/30 shadow-sm'
               : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
@@ -988,7 +988,7 @@ export default function AuditingQueueView({
 
         <button
           onClick={() => setActiveQueue('positivas')}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'positivas'
               ? 'bg-functional-success/15 text-functional-success border border-functional-success/30 shadow-sm'
               : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
@@ -1000,7 +1000,7 @@ export default function AuditingQueueView({
 
         <button
           onClick={() => setActiveQueue('filhos')}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'filhos'
               ? 'bg-brand-highlight/15 text-brand-highlight border border-brand-highlight/30 shadow-sm'
               : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
@@ -1013,7 +1013,7 @@ export default function AuditingQueueView({
 
         <button
           onClick={() => setActiveQueue('filhos_invalidos')}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'filhos_invalidos'
               ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
               : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'

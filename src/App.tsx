@@ -79,6 +79,7 @@ function AppContent() {
     isSidebarOpen,
     setIsSidebarOpen,
     loadingPreferences,
+    loginAsTestRole,
   } = useAuth();
 
   // Alternar visibilidade da senha. Cada campo tem seu proprio estado para
@@ -199,6 +200,71 @@ function AppContent() {
                         </button>
                       </ProtectedAuthForm>
                       <button onClick={() => setAuthView('request-access')} className="text-sm font-bold text-brand-accent hover:text-brand-primary transition-colors">Não tem acesso? Solicite aqui</button>
+
+                      {/* Painel de Teste e Bypass de Captcha (Branch de Teste) */}
+                      <div className="mt-8 pt-6 border-t border-surface-border text-left">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                            </span>
+                            <span className="text-xs font-bold uppercase tracking-wider text-brand-primary">Acesso Rápido de Teste</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            Sem Captcha
+                          </span>
+                        </div>
+                        <p className="text-xs text-brand-muted mb-3">
+                          Entre instantaneamente com 1 clique para testar as novas interfaces sem validação de captcha:
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => loginAsTestRole('admin')}
+                            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-surface-border bg-surface-subtle/70 hover:bg-surface-subtle hover:border-brand-accent active:scale-[0.98] transition-all text-xs font-semibold text-brand-primary group cursor-pointer"
+                          >
+                            <span className="text-lg">👑</span>
+                            <div className="min-w-0">
+                              <div className="font-bold leading-tight truncate">Administrador</div>
+                              <div className="text-[10px] text-brand-muted leading-tight">Acesso total</div>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => loginAsTestRole('qualidade')}
+                            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-surface-border bg-surface-subtle/70 hover:bg-surface-subtle hover:border-brand-accent active:scale-[0.98] transition-all text-xs font-semibold text-brand-primary group cursor-pointer"
+                          >
+                            <span className="text-lg">🔍</span>
+                            <div className="min-w-0">
+                              <div className="font-bold leading-tight truncate">Qualidade</div>
+                              <div className="text-[10px] text-brand-muted leading-tight">Auditoria & Filas</div>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => loginAsTestRole('gestor_suporte')}
+                            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-surface-border bg-surface-subtle/70 hover:bg-surface-subtle hover:border-brand-accent active:scale-[0.98] transition-all text-xs font-semibold text-brand-primary group cursor-pointer"
+                          >
+                            <span className="text-lg">👔</span>
+                            <div className="min-w-0">
+                              <div className="font-bold leading-tight truncate">Gestor Suporte</div>
+                              <div className="text-[10px] text-brand-muted leading-tight">Visão de time</div>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => loginAsTestRole('suporte')}
+                            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-surface-border bg-surface-subtle/70 hover:bg-surface-subtle hover:border-brand-accent active:scale-[0.98] transition-all text-xs font-semibold text-brand-primary group cursor-pointer"
+                          >
+                            <span className="text-lg">🎧</span>
+                            <div className="min-w-0">
+                              <div className="font-bold leading-tight truncate">Atendente</div>
+                              <div className="text-[10px] text-brand-muted leading-tight">Minhas notas</div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
                     </m.div>
                   )}
 

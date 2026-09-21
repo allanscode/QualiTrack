@@ -211,7 +211,7 @@ export default function StatCard({
 
   return (
     <>
-      <Card onClick={onClick} padding="none" className="px-5 py-4 flex flex-col justify-between min-h-[100px] relative z-10 hover:z-30 transition-all duration-200">
+      <Card onClick={onClick} padding="none" className={`px-5 py-4 flex flex-col justify-between min-h-[100px] relative z-10 hover:z-30 transition-all duration-200 ${onClick ? 'cursor-pointer active:scale-[0.99]' : ''}`}>
         <div className="flex items-center gap-3 mb-3 min-w-0">
         <div
           onClick={canEdit ? handleEditClick : undefined}
@@ -255,7 +255,7 @@ export default function StatCard({
               e.stopPropagation();
               setShowOnlineModal(true);
             } : undefined}
-            className={`text-3xl font-bold leading-none tracking-tight ${valueColorClass || 'text-black dark:text-slate-50'} ${
+            className={`text-3xl font-bold leading-none tracking-tight tabular-nums ${valueColorClass || 'text-black dark:text-slate-50'} ${
               isOnlineUsersCard ? 'cursor-pointer hover:opacity-80' : ''
             }`}
           >

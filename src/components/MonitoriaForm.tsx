@@ -48,6 +48,7 @@ import Select from './ui/Select';
 import CustomSelect from './ui/CustomSelect';
 import CustomDatepicker from './ui/CustomDatepicker';
 import HelpdeskSendModal from './HelpdeskSendModal';
+import TicketMessageBubble from './TicketMessageBubble';
 import { EvaluationOutcome, MonitoriaStatus } from '../types';
 
 const CHANNELS = ['Chat', 'Email', 'Telefone', 'WhatsApp'] as const;
@@ -1466,71 +1467,16 @@ export default function MonitoriaForm({
                         </div>
                       ) : (
                         dialogue.map((msg, idx) => {
-                          const isEndUser = msg.author_role === 'end_user';
-                          const isInternal = !msg.is_public;
-                          const isSystemBot = msg.author_role === 'system' && msg.is_public;
                           const msgId = `step4_${msg.id || idx}`;
-                          const isExpanded = !!expandedDialogueMsgIds[msgId];
-                          const body = msg.body || '';
-                          const hasLogSnippet = /(?:\[FireDAC\]|ERROR:|Script nao executado:|relation ".*?" already exists|Exception:|Traceback|ALTER TABLE|CREATE TABLE)/i.test(body);
-                          const isLong = body.length > 320 || body.split('\n').length > 5;
-
                           return (
-                            <div
+                            <TicketMessageBubble
                               key={msg.id || idx}
-                              className={`p-3.5 rounded-xl border text-xs space-y-2 select-text ${
-                                isEndUser
-                                  ? 'bg-blue-500/5 border-blue-500/20'
-                                  : isInternal
-                                  ? 'bg-amber-500/5 border-amber-500/20'
-                                  : isSystemBot
-                                  ? 'bg-purple-500/5 border-purple-500/20'
-                                  : 'bg-surface-subtle border-surface-border'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-brand-primary">{msg.author_name}</span>
-                                  <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
-                                    isEndUser
-                                      ? 'bg-blue-500/10 text-blue-500 border-blue-500/25'
-                                      : isInternal
-                                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/25'
-                                      : isSystemBot
-                                      ? 'bg-purple-500/10 text-purple-500 border-purple-500/25'
-                                      : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25'
-                                  }`}>
-                                    {isEndUser ? 'Cliente' : isInternal ? 'Nota Interna' : isSystemBot ? 'Bot / Sistema' : 'Atendente'}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] text-brand-muted font-mono">
-                                  {msg.created_at ? new Date(msg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
-                                </span>
-                              </div>
-                              <div className="space-y-1">
-                                <div
-                                  className={`leading-relaxed whitespace-pre-wrap text-xs select-text ${
-                                    hasLogSnippet
-                                      ? 'font-mono text-[11px] bg-black/10 dark:bg-black/35 p-2.5 rounded-lg border border-surface-border/60 text-brand-primary'
-                                      : 'text-brand-primary'
-                                  } ${!isExpanded && isLong ? 'max-h-24 overflow-hidden relative' : ''}`}
-                                >
-                                  {body}
-                                  {!isExpanded && isLong && (
-                                    <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface-card to-transparent pointer-events-none" />
-                                  )}
-                                </div>
-                                {isLong && (
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleDialogueMsgExpand(msgId)}
-                                    className="text-[10px] font-bold text-brand-accent hover:underline flex items-center gap-1 cursor-pointer"
-                                  >
-                                    {isExpanded ? 'Recolher trecho' : 'Ver texto completo...'}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
+                              msg={msg}
+                              msgId={msgId}
+                              isExpanded={!!expandedDialogueMsgIds[msgId]}
+                              onToggleExpand={() => toggleDialogueMsgExpand(msgId)}
+                              onCite={(text, author) => handleCiteInObservation(text, author)}
+                            />
                           );
                         })
                       )}
@@ -1785,85 +1731,17 @@ export default function MonitoriaForm({
                     </div>
                   ) : (
                     filteredDialogue.map((msg, idx) => {
-                      const isEndUser = msg.author_role === 'end_user';
-                      const isAgent = msg.author_role === 'agent' || msg.author_role === 'admin';
-                      const isInternal = !msg.is_public;
-                      const isSystemBot = msg.author_role === 'system' && msg.is_public;
                       const msgId = `drawer_${msg.id || idx}`;
-                      const isExpanded = !!expandedDialogueMsgIds[msgId];
-                      const body = msg.body || '';
-                      const hasLogSnippet = /(?:\[FireDAC\]|ERROR:|Script nao executado:|relation ".*?" already exists|Exception:|Traceback|ALTER TABLE|CREATE TABLE)/i.test(body);
-                      const isLong = body.length > 320 || body.split('\n').length > 5;
-
                       return (
-                        <div
+                        <TicketMessageBubble
                           key={msg.id || idx}
-                          className={`p-3.5 rounded-xl border transition-all text-xs space-y-2 select-text ${
-                            isEndUser
-                              ? 'bg-blue-500/5 border-blue-500/20'
-                              : isInternal
-                              ? 'bg-amber-500/5 border-amber-500/20'
-                              : isSystemBot
-                              ? 'bg-purple-500/5 border-purple-500/20'
-                              : 'bg-surface-subtle border-surface-border'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-black text-brand-primary">{msg.author_name}</span>
-                              <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
-                                isEndUser
-                                  ? 'bg-blue-500/10 text-blue-500 border-blue-500/25'
-                                  : isInternal
-                                  ? 'bg-amber-500/10 text-amber-500 border-amber-500/25'
-                                  : isSystemBot
-                                  ? 'bg-purple-500/10 text-purple-500 border-purple-500/25'
-                                  : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25'
-                              }`}>
-                                {isEndUser ? 'Cliente' : isInternal ? 'Nota Interna' : isSystemBot ? 'Bot / Sistema' : 'Atendente'}
-                              </span>
-                            </div>
-                            <span className="text-[10px] font-mono text-brand-muted">
-                              {msg.created_at ? new Date(msg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
-                            </span>
-                          </div>
-
-                          <div className="space-y-1">
-                            <div
-                              className={`leading-relaxed whitespace-pre-wrap text-xs select-text ${
-                                hasLogSnippet
-                                  ? 'font-mono text-[11px] bg-black/10 dark:bg-black/35 p-2.5 rounded-lg border border-surface-border/60 text-brand-primary'
-                                  : 'text-brand-primary font-sans'
-                              } ${!isExpanded && isLong ? 'max-h-28 overflow-hidden relative' : ''}`}
-                            >
-                              {body}
-                              {!isExpanded && isLong && (
-                                <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-card to-transparent pointer-events-none" />
-                              )}
-                            </div>
-                            {isLong && (
-                              <button
-                                type="button"
-                                onClick={() => toggleDialogueMsgExpand(msgId)}
-                                className="text-[10px] font-bold text-brand-accent hover:underline flex items-center gap-1 cursor-pointer"
-                              >
-                                {isExpanded ? 'Recolher trecho' : 'Ver texto completo...'}
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-surface-border/50">
-                            <button
-                              type="button"
-                              onClick={() => handleCiteInObservation(msg.body, msg.author_name, selectedQuestionForDialogue || undefined)}
-                              className="text-[10px] font-bold text-brand-muted hover:text-brand-primary flex items-center gap-1 cursor-pointer transition-colors"
-                              title={selectedQuestionForDialogue ? 'Inserir citação na observação do critério' : 'Copiar trecho'}
-                            >
-                              <Quote className="w-2.5 h-2.5" />
-                              <span>{selectedQuestionForDialogue ? 'Inserir na observação do critério' : 'Copiar trecho'}</span>
-                            </button>
-                          </div>
-                        </div>
+                          msg={msg}
+                          msgId={msgId}
+                          isExpanded={!!expandedDialogueMsgIds[msgId]}
+                          onToggleExpand={() => toggleDialogueMsgExpand(msgId)}
+                          onCite={(text, author) => handleCiteInObservation(text, author, selectedQuestionForDialogue || undefined)}
+                          hasTargetCriterion={!!selectedQuestionForDialogue}
+                        />
                       );
                     })
                   )}
