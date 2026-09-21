@@ -245,6 +245,15 @@ body,
 .thin-scrollbar::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-brand-accent); }
 
+/* ── Shimmer Loading Animation ── */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.animate-shimmer {
+  animation: shimmer-sweep 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 input[type="date"],
 input[type="time"] {
   color-scheme: light;

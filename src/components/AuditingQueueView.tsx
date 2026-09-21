@@ -953,16 +953,50 @@ export default function AuditingQueueView({
     );
   };
 
+  const renderSkeletonGrid = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+      {[1, 2, 3, 4].map(idx => (
+        <Card key={idx} className="p-4 space-y-3.5 border-surface-border bg-surface-card/70 relative overflow-hidden">
+          {/* Shimmer sweep */}
+          <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-brand-highlight/10 to-transparent pointer-events-none" />
+          
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-2 flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-16 rounded-md bg-surface-subtle animate-pulse" />
+                <div className="h-4 w-24 rounded-full bg-surface-subtle animate-pulse" />
+                <div className="h-3.5 w-12 rounded bg-surface-subtle animate-pulse" />
+              </div>
+              <div className="h-4 w-5/6 rounded-md bg-surface-subtle animate-pulse" />
+            </div>
+            <div className="h-6 w-20 rounded-full bg-surface-subtle animate-pulse flex-shrink-0" />
+          </div>
+
+          <div className="h-10 rounded-xl bg-surface-subtle/50 animate-pulse border border-surface-border/40" />
+
+          <div className="flex items-center justify-between pt-2.5 border-t border-surface-border">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 rounded-full bg-surface-subtle animate-pulse" />
+              <div className="h-3 w-28 rounded bg-surface-subtle animate-pulse" />
+              <div className="h-3 w-16 rounded bg-surface-subtle animate-pulse" />
+            </div>
+            <div className="h-7 w-24 rounded-lg bg-surface-subtle animate-pulse" />
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* 1. Barra de Abas das Filas: Grid responsivo de 5 colunas sem scroll horizontal */}
+      {/* 1. Barra de Abas das Filas: Grid responsivo de 5 colunas com fundo colorido unificado */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-1.5 bg-surface-subtle/40 rounded-2xl border border-surface-border">
         <button
           onClick={() => setActiveQueue('negativas')}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'negativas'
-              ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+              ? 'bg-functional-error/20 text-functional-error border border-functional-error/40 shadow-sm font-black ring-1 ring-functional-error/20'
+              : 'bg-functional-error/6 text-functional-error/80 border border-functional-error/15 hover:bg-functional-error/15 hover:text-functional-error'
           }`}
         >
           <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
@@ -978,8 +1012,8 @@ export default function AuditingQueueView({
           onClick={() => setActiveQueue('proativas')}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'proativas'
-              ? 'bg-info/15 text-info border border-info/30 shadow-sm'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+              ? 'bg-info/20 text-info border border-info/40 shadow-sm font-black ring-1 ring-info/20'
+              : 'bg-info/6 text-info/80 border border-info/15 hover:bg-info/15 hover:text-info'
           }`}
         >
           <Zap className="w-3.5 h-3.5 flex-shrink-0" />
@@ -990,8 +1024,8 @@ export default function AuditingQueueView({
           onClick={() => setActiveQueue('positivas')}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'positivas'
-              ? 'bg-functional-success/15 text-functional-success border border-functional-success/30 shadow-sm'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+              ? 'bg-functional-success/20 text-functional-success border border-functional-success/40 shadow-sm font-black ring-1 ring-functional-success/20'
+              : 'bg-functional-success/6 text-functional-success/80 border border-functional-success/15 hover:bg-functional-success/15 hover:text-functional-success'
           }`}
         >
           <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1002,8 +1036,8 @@ export default function AuditingQueueView({
           onClick={() => setActiveQueue('filhos')}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'filhos'
-              ? 'bg-brand-highlight/15 text-brand-highlight border border-brand-highlight/30 shadow-sm'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+              ? 'bg-brand-highlight/20 text-brand-highlight border border-brand-highlight/40 shadow-sm font-black ring-1 ring-brand-highlight/20'
+              : 'bg-brand-highlight/6 text-brand-highlight/80 border border-brand-highlight/15 hover:bg-brand-highlight/15 hover:text-brand-highlight'
           }`}
           title="Filtro Zendesk: 47405806430228"
         >
@@ -1015,8 +1049,8 @@ export default function AuditingQueueView({
           onClick={() => setActiveQueue('filhos_invalidos')}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'filhos_invalidos'
-              ? 'bg-functional-error/15 text-functional-error border border-functional-error/30 shadow-sm'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+              ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/40 shadow-sm font-black ring-1 ring-amber-500/20'
+              : 'bg-amber-500/6 text-amber-700/80 dark:text-amber-400/80 border border-amber-500/15 hover:bg-amber-500/15 hover:text-amber-600 dark:hover:text-amber-400'
           }`}
           title="Filtro Zendesk: 47656856998292"
         >
@@ -1108,6 +1142,22 @@ export default function AuditingQueueView({
             )
           )}
 
+          {loading && (
+            <div className="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full bg-brand-highlight/10 border border-brand-highlight/25 text-brand-highlight text-[11px] font-bold animate-pulse">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-highlight opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-highlight" />
+              </span>
+              <span>
+                {activeQueue === 'negativas' && 'Sincronizando CSAT Ruim no Zendesk...'}
+                {activeQueue === 'proativas' && 'Sincronizando Fila Proativa no Zendesk...'}
+                {activeQueue === 'positivas' && 'Sincronizando CSAT Positivas no Zendesk...'}
+                {activeQueue === 'filhos' && 'Varrendo Chamados Filhos no Zendesk...'}
+                {activeQueue === 'filhos_invalidos' && 'Consultando Filhos Inválidos no Zendesk...'}
+              </span>
+            </div>
+          )}
+
           <Button
             variant="ghost"
             size="sm"
@@ -1117,21 +1167,36 @@ export default function AuditingQueueView({
               loadQueueData(null);
             }}
             disabled={loading}
-            className="flex items-center gap-1.5 flex-shrink-0"
+            className="flex items-center gap-1.5 flex-shrink-0 cursor-pointer"
             title="Recarregar fila do Zendesk"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Atualizar</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-brand-highlight' : ''}`} />
+            <span className="hidden sm:inline">{loading ? 'Sincronizando...' : 'Atualizar'}</span>
           </Button>
         </div>
       </div>
 
+      {/* Barra de Pulso de Sincronização com Zendesk */}
+      {loading && (
+        <div className="relative w-full h-1 overflow-hidden rounded-full bg-surface-subtle">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-brand-highlight to-transparent animate-shimmer" />
+        </div>
+      )}
+
       {/* Conteúdo da Fila: NEGATIVAS */}
       {activeQueue === 'negativas' && (
         <div className="space-y-4">
-
-          {/* Lista de Tickets Negativos */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {loading && paginatedTickets.length === 0 ? (
+            renderSkeletonGrid()
+          ) : paginatedTickets.length === 0 ? (
+            <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
+              <AlertTriangle className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
+              <p className="text-xs font-bold text-brand-muted">Nenhum chamado com CSAT Ruim pendente nesta fila.</p>
+            </div>
+          ) : (
+            <>
+              {/* Lista de Tickets Negativos */}
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
             {paginatedTickets.map(ticket => (
               <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-brand-highlight/40 transition-all">
                 <div className="flex items-start justify-between gap-2">
@@ -1196,185 +1261,122 @@ export default function AuditingQueueView({
             ))}
           </div>
           {renderPagination()}
+          </>
+        )}
         </div>
       )}
 
       {/* Conteúdo da Fila: PROATIVAS (Amostragem Justa) */}
       {activeQueue === 'proativas' && (
         <div className="space-y-4">
-
-
-
-          {/* Lista de Chamados com CSAT Vazio */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {paginatedTickets.map(ticket => {
-              const isPriority = ticket.agent_email && topPriorityEmails.has(ticket.agent_email.toLowerCase());
-              return (
-                <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-info/40 transition-all">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs font-black text-brand-primary">
-                          #{ticket.ticket_id}
-                        </span>
-                        {getPendingFormInfo(ticket).isPending && (
-                          <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                            Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+          {loading && paginatedTickets.length === 0 ? (
+            renderSkeletonGrid()
+          ) : paginatedTickets.length === 0 ? (
+            <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
+              <Zap className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
+              <p className="text-xs font-bold text-brand-muted">Nenhum chamado com CSAT Vazio pendente nesta fila.</p>
+            </div>
+          ) : (
+            <>
+              {/* Lista de Chamados com CSAT Vazio */}
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+                {paginatedTickets.map(ticket => {
+                  const isPriority = ticket.agent_email && topPriorityEmails.has(ticket.agent_email.toLowerCase());
+                  return (
+                    <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-info/40 transition-all">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-black text-brand-primary">
+                              #{ticket.ticket_id}
+                            </span>
+                            {getPendingFormInfo(ticket).isPending && (
+                              <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                              </Badge>
+                            )}
+                            <a
+                              href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-info hover:underline"
+                              title="Abrir no Zendesk"
+                            >
+                              <ExternalLink className="w-2.5 h-2.5" />
+                              <span>Zendesk</span>
+                            </a>
+                            {ticket.already_audited && (
+                              <Badge variant="success" size="xs" className="text-[9px]">
+                                Auditado
+                              </Badge>
+                            )}
+                            {isPriority && (
+                              <Badge variant="warning" size="xs" className="text-[9px]">
+                                Prioritário
+                              </Badge>
+                            )}
+                          </div>
+                          <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                            {ticket.subject}
+                          </h4>
+                        </div>
+                        <div className="flex items-center gap-2.5 flex-shrink-0">
+                          {renderScoreBadge(ticket)}
+                          <Badge variant="neutral" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
+                            CSAT Vazio
                           </Badge>
-                        )}
-                        <a
-                          href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[10px] font-bold text-info hover:underline"
-                          title="Abrir no Zendesk"
-                        >
-                          <ExternalLink className="w-2.5 h-2.5" />
-                          <span>Zendesk</span>
-                        </a>
-                        {ticket.already_audited && (
-                          <Badge variant="success" size="xs" className="text-[9px]">
-                            Auditado
-                          </Badge>
-                        )}
-                        {isPriority && (
-                          <Badge variant="warning" size="xs" className="text-[9px]">
-                            Prioritário
-                          </Badge>
-                        )}
+                        </div>
                       </div>
-                      <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
-                        {ticket.subject}
-                      </h4>
-                    </div>
-                    <div className="flex items-center gap-2.5 flex-shrink-0">
-                      {renderScoreBadge(ticket)}
-                      <Badge variant="neutral" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
-                        CSAT Vazio
-                      </Badge>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                    <div className="flex items-center gap-3">
-                      {renderAgentInfo(ticket)}
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 opacity-60" />
-                        {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
-                      </span>
-                    </div>
+                      <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
+                        <div className="flex items-center gap-3">
+                          {renderAgentInfo(ticket)}
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 opacity-60" />
+                            {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
 
-                    <div className="flex items-center gap-2">
-                      {renderAiActions(ticket, 'bg-gradient-to-r from-info to-info/80')}
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-          {renderPagination()}
+                        <div className="flex items-center gap-2">
+                          {renderAiActions(ticket, 'bg-gradient-to-r from-info to-info/80')}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+              {renderPagination()}
+            </>
+          )}
         </div>
       )}
 
       {/* Conteúdo da Fila: POSITIVAS (+ IA Copilot) */}
       {activeQueue === 'positivas' && (
         <div className="space-y-4">
-          {/* Lista de Chamados Positivos */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {paginatedTickets.map(ticket => (
-              <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-functional-success/40 transition-all">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-black text-brand-primary">
-                        #{ticket.ticket_id}
-                      </span>
-                      {getPendingFormInfo(ticket).isPending && (
-                        <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                          Ficha em Elaboração ({getPendingFormInfo(ticket).label})
-                        </Badge>
-                      )}
-                      <a
-                        href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
-                        title="Abrir no Zendesk"
-                      >
-                        <ExternalLink className="w-2.5 h-2.5" />
-                        <span>Zendesk</span>
-                      </a>
-                      {ticket.already_audited && (
-                        <Badge variant="success" size="xs" className="text-[9px]">
-                          Auditado
-                        </Badge>
-                      )}
-                    </div>
-                    <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
-                      {ticket.subject}
-                    </h4>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {renderScoreBadge(ticket)}
-                    <Badge variant="success" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
-                      CSAT Bom
-                    </Badge>
-                  </div>
-                </div>
-
-                {ticket.csat_comment && (
-                  <div className="p-2.5 rounded-xl bg-functional-success/5 border border-functional-success/15 text-[11px] font-medium text-brand-primary italic">
-                    "{ticket.csat_comment}"
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                  <div className="flex items-center gap-3">
-                    {renderAgentInfo(ticket)}
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3 opacity-60" />
-                      {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {renderAiActions(ticket, 'bg-gradient-to-r from-emerald-600 to-teal-600')}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-          {renderPagination()}
-        </div>
-      )}
-
-      {/* Conteúdo da Fila: CHAMADOS FILHOS */}
-      {activeQueue === 'filhos' && (
-        <div className="space-y-4">
-
-          {filteredTickets.length === 0 ? (
+          {loading && paginatedTickets.length === 0 ? (
+            renderSkeletonGrid()
+          ) : paginatedTickets.length === 0 ? (
             <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
-              <GitFork className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
-              <p className="text-xs font-bold text-brand-muted">Nenhum chamado filho pendente nesta fila.</p>
+              <Sparkles className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
+              <p className="text-xs font-bold text-brand-muted">Nenhum chamado com CSAT Bom pendente nesta fila.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {paginatedTickets.map(ticket => {
-                const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
-                const evaluation = ticket.child_evaluation;
-
-                return (
-                  <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-brand-highlight/40 transition-all">
+            <>
+              {/* Lista de Chamados Positivos */}
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+                {paginatedTickets.map(ticket => (
+                  <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-functional-success/40 transition-all">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-xs font-black text-brand-primary">
                             #{ticket.ticket_id}
                           </span>
-                          {ticket.parent_ticket_id && (
-                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
-                              Pai: #{ticket.parent_ticket_id}
-                            </span>
+                          {getPendingFormInfo(ticket).isPending && (
+                            <Badge variant="warning" size="xs" className="text-[9px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                              Ficha em Elaboração ({getPendingFormInfo(ticket).label})
+                            </Badge>
                           )}
                           <a
                             href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
@@ -1386,9 +1388,9 @@ export default function AuditingQueueView({
                             <ExternalLink className="w-2.5 h-2.5" />
                             <span>Zendesk</span>
                           </a>
-                          {isValidated && (
+                          {ticket.already_audited && (
                             <Badge variant="success" size="xs" className="text-[9px]">
-                              Validado
+                              Auditado
                             </Badge>
                           )}
                         </div>
@@ -1396,12 +1398,19 @@ export default function AuditingQueueView({
                           {ticket.subject}
                         </h4>
                       </div>
-
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
-                        {evaluation && getChildStatusBadge(evaluation.status)}
+                        {renderScoreBadge(ticket)}
+                        <Badge variant="success" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
+                          CSAT Bom
+                        </Badge>
                       </div>
                     </div>
+
+                    {ticket.csat_comment && (
+                      <div className="p-2.5 rounded-xl bg-functional-success/5 border border-functional-success/15 text-[11px] font-medium text-brand-primary italic">
+                        "{ticket.csat_comment}"
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                       <div className="flex items-center gap-3">
@@ -1413,37 +1422,118 @@ export default function AuditingQueueView({
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant={isValidated ? "outline" : "primary"}
-                          disabled={evaluatingChildTicketId === ticket.ticket_id}
-                          onClick={() => {
-                            if (evaluation) {
-                              setChildPreviewTicket(ticket);
-                              setChildAiEvaluation(evaluation);
-                            } else {
-                              setChildGuidelineModalTicket(ticket);
-                            }
-                          }}
-                          className="flex items-center gap-1.5 text-xs font-bold"
-                        >
-                          <Bot className={`w-3.5 h-3.5 ${evaluatingChildTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
-                          <span>
-                            {evaluatingChildTicketId === ticket.ticket_id
-                              ? 'Auditando com IA...'
-                              : evaluation
-                              ? 'Ver Parecer IA'
-                              : 'Conferir com IA'}
-                          </span>
-                        </Button>
+                        {renderAiActions(ticket, 'bg-gradient-to-r from-emerald-600 to-teal-600')}
                       </div>
                     </div>
                   </Card>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+              {renderPagination()}
+            </>
           )}
-          {renderPagination()}
+        </div>
+      )}
+
+      {/* Conteúdo da Fila: CHAMADOS FILHOS */}
+      {activeQueue === 'filhos' && (
+        <div className="space-y-4">
+
+          {loading && paginatedTickets.length === 0 ? (
+            renderSkeletonGrid()
+          ) : filteredTickets.length === 0 ? (
+            <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
+              <GitFork className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
+              <p className="text-xs font-bold text-brand-muted">Nenhum chamado filho pendente nesta fila.</p>
+            </div>
+          ) : (
+            <>
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+                {paginatedTickets.map(ticket => {
+                  const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
+                  const evaluation = ticket.child_evaluation;
+
+                  return (
+                    <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-brand-highlight/40 transition-all">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-mono text-xs font-black text-brand-primary">
+                              #{ticket.ticket_id}
+                            </span>
+                            {ticket.parent_ticket_id && (
+                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
+                                Pai: #{ticket.parent_ticket_id}
+                              </span>
+                            )}
+                            <a
+                              href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
+                              title="Abrir no Zendesk"
+                            >
+                              <ExternalLink className="w-2.5 h-2.5" />
+                              <span>Zendesk</span>
+                            </a>
+                            {isValidated && (
+                              <Badge variant="success" size="xs" className="text-[9px]">
+                                Validado
+                              </Badge>
+                            )}
+                          </div>
+                          <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                            {ticket.subject}
+                          </h4>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
+                          {evaluation && getChildStatusBadge(evaluation.status)}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
+                        <div className="flex items-center gap-3">
+                          {renderAgentInfo(ticket)}
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 opacity-60" />
+                            {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant={isValidated ? "outline" : "primary"}
+                            disabled={evaluatingChildTicketId === ticket.ticket_id}
+                            onClick={() => {
+                              if (evaluation) {
+                                setChildPreviewTicket(ticket);
+                                setChildAiEvaluation(evaluation);
+                              } else {
+                                setChildGuidelineModalTicket(ticket);
+                              }
+                            }}
+                            className="flex items-center gap-1.5 text-xs font-bold"
+                          >
+                            <Bot className={`w-3.5 h-3.5 ${evaluatingChildTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+                            <span>
+                              {evaluatingChildTicketId === ticket.ticket_id
+                                ? 'Auditando com IA...'
+                                : evaluation
+                                ? 'Ver Parecer IA'
+                                : 'Conferir com IA'}
+                            </span>
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+              {renderPagination()}
+            </>
+          )}
         </div>
       )}
 
@@ -1469,96 +1559,100 @@ export default function AuditingQueueView({
             </Badge>
           </div>
 
-          {filteredTickets.length === 0 ? (
+          {loading && paginatedTickets.length === 0 ? (
+            renderSkeletonGrid()
+          ) : filteredTickets.length === 0 ? (
             <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
               <AlertOctagon className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
               <p className="text-xs font-bold text-brand-muted">Nenhum chamado filho inválido pendente nesta fila.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {paginatedTickets.map(ticket => {
-                const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
-                const evaluation = ticket.child_evaluation;
+            <>
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+                {paginatedTickets.map(ticket => {
+                  const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
+                  const evaluation = ticket.child_evaluation;
 
-                return (
-                  <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-functional-error/40 transition-all">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-mono text-xs font-black text-brand-primary">
-                            #{ticket.ticket_id}
-                          </span>
-                          {ticket.parent_ticket_id && (
-                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
-                              Pai: #{ticket.parent_ticket_id}
+                  return (
+                    <Card key={ticket.ticket_id} className="p-4 space-y-3 hover:border-functional-error/40 transition-all">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-mono text-xs font-black text-brand-primary">
+                              #{ticket.ticket_id}
                             </span>
-                          )}
-                          <a
-                            href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
-                            title="Abrir no Zendesk"
-                          >
-                            <ExternalLink className="w-2.5 h-2.5" />
-                            <span>Zendesk</span>
-                          </a>
-                          <Badge variant="error" size="xs" className="text-[9px]">
-                            Inválido
-                          </Badge>
+                            {ticket.parent_ticket_id && (
+                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
+                                Pai: #{ticket.parent_ticket_id}
+                              </span>
+                            )}
+                            <a
+                              href={ticket.url || `https://webposto.zendesk.com/agent/tickets/${ticket.ticket_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-highlight hover:underline"
+                              title="Abrir no Zendesk"
+                            >
+                              <ExternalLink className="w-2.5 h-2.5" />
+                              <span>Zendesk</span>
+                            </a>
+                            <Badge variant="error" size="xs" className="text-[9px]">
+                              Inválido
+                            </Badge>
+                          </div>
+                          <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                            {ticket.subject}
+                          </h4>
                         </div>
-                        <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
-                          {ticket.subject}
-                        </h4>
+
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
+                          {evaluation && getChildStatusBadge(evaluation.status)}
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
-                        {evaluation && getChildStatusBadge(evaluation.status)}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                      <div className="flex items-center gap-3">
-                        {renderAgentInfo(ticket)}
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 opacity-60" />
-                          {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={evaluatingChildTicketId === ticket.ticket_id}
-                          onClick={() => {
-                            if (evaluation) {
-                              setChildPreviewTicket(ticket);
-                              setChildAiEvaluation(evaluation);
-                            } else {
-                              setChildGuidelineModalTicket(ticket);
-                            }
-                          }}
-                          className="flex items-center gap-1.5 text-xs font-bold"
-                        >
-                          <Bot className={`w-3.5 h-3.5 ${evaluatingChildTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
-                          <span>
-                            {evaluatingChildTicketId === ticket.ticket_id
-                              ? 'Auditando com IA...'
-                              : evaluation
-                              ? 'Ver Parecer IA'
-                              : 'Conferir com IA'}
+                      <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
+                        <div className="flex items-center gap-3">
+                          {renderAgentInfo(ticket)}
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 opacity-60" />
+                            {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
                           </span>
-                        </Button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={evaluatingChildTicketId === ticket.ticket_id}
+                            onClick={() => {
+                              if (evaluation) {
+                                setChildPreviewTicket(ticket);
+                                setChildAiEvaluation(evaluation);
+                              } else {
+                                setChildGuidelineModalTicket(ticket);
+                              }
+                            }}
+                            className="flex items-center gap-1.5 text-xs font-bold"
+                          >
+                            <Bot className={`w-3.5 h-3.5 ${evaluatingChildTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+                            <span>
+                              {evaluatingChildTicketId === ticket.ticket_id
+                                ? 'Auditando com IA...'
+                                : evaluation
+                                ? 'Ver Parecer IA'
+                                : 'Conferir com IA'}
+                            </span>
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
+                    </Card>
+                  );
+                })}
+              </div>
+              {renderPagination()}
+            </>
           )}
-          {renderPagination()}
         </div>
       )}
 
@@ -1566,10 +1660,10 @@ export default function AuditingQueueView({
       {childPreviewTicket && createPortal(
         <div
           className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-[9999] p-4 animate-fade-in"
-          onClick={() => setChildPreviewTicket(null)}
+          onClick={() => !loadingChildAi && setChildPreviewTicket(null)}
         >
           <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-2xl">
-            <Card className="p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl border-surface-border">
+            <Card className="p-6 space-y-5 max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl border-surface-border">
               {/* Modal Header */}
               <div className="flex items-center justify-between pb-3 border-b border-surface-border">
                 <div className="flex items-center gap-2.5">
@@ -1588,7 +1682,7 @@ export default function AuditingQueueView({
                     </p>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setChildPreviewTicket(null)}>
+                <Button variant="ghost" size="sm" disabled={loadingChildAi} onClick={() => !loadingChildAi && setChildPreviewTicket(null)}>
                   <X className="w-4 h-4" />
                 </Button>
               </div>
@@ -1743,7 +1837,9 @@ export default function AuditingQueueView({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setChildPreviewTicket(null)}
+                  disabled={loadingChildAi}
+                  className="disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => !loadingChildAi && setChildPreviewTicket(null)}
                 >
                   Fechar
                 </Button>
@@ -1753,8 +1849,8 @@ export default function AuditingQueueView({
                     variant="outline"
                     size="sm"
                     disabled={loadingChildAi}
-                    onClick={() => handleEvaluateChildTicket(childPreviewTicket)}
-                    className="flex items-center gap-1 text-xs"
+                    onClick={() => !loadingChildAi && handleEvaluateChildTicket(childPreviewTicket)}
+                    className="flex items-center gap-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${loadingChildAi ? 'animate-spin' : ''}`} />
                     <span>Reanalisar</span>
@@ -1763,8 +1859,10 @@ export default function AuditingQueueView({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex items-center gap-1 text-xs"
+                    disabled={loadingChildAi || !childAiEvaluation}
+                    className="flex items-center gap-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                     onClick={() => {
+                      if (loadingChildAi || !childAiEvaluation) return;
                       const t = childPreviewTicket;
                       setChildPreviewTicket(null);
                       handleStartChildAudit(t);
@@ -1777,8 +1875,10 @@ export default function AuditingQueueView({
                   <Button
                     variant="primary"
                     size="sm"
-                    className="flex items-center gap-1.5 text-xs font-bold"
+                    disabled={loadingChildAi || !childAiEvaluation}
+                    className="flex items-center gap-1.5 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                     onClick={() => {
+                      if (loadingChildAi || !childAiEvaluation) return;
                       setValidatedChildTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
                       toast.success(`Chamado filho #${childPreviewTicket.ticket_id} validado com sucesso!`);
                       setChildPreviewTicket(null);
@@ -1813,7 +1913,7 @@ export default function AuditingQueueView({
             onClick={() => setGuidelinePickerTicket(null)}
           >
             <div onClick={(e: React.MouseEvent) => e.stopPropagation()} className="w-full max-w-lg">
-              <Card className="p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl border-surface-border">
+              <Card className="p-6 space-y-5 max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl border-surface-border">
                 <div className="flex items-center justify-between pb-3 border-b border-surface-border">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center flex-shrink-0">
