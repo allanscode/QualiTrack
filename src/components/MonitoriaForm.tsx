@@ -586,7 +586,7 @@ export default function MonitoriaForm({
               { n: 4, label: 'Registro/Log' }
             ].map(s => (
               <div key={s.n} className="flex flex-col items-center gap-1.5 group">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black transition-all ${step >= s.n ? 'bg-brand-primary text-brand-on-primary shadow-sm' : 'bg-surface-subtle text-brand-muted'}`}>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black font-mono transition-all ${step >= s.n ? 'bg-brand-accent text-white shadow-xs' : 'bg-surface-subtle text-brand-muted'}`}>
                   {s.n}
                 </div>
                 <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
@@ -1030,7 +1030,7 @@ export default function MonitoriaForm({
               {selectedForm.sections.map((section, sIdx) => (
                 <div key={section.id} className="space-y-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-brand-primary text-white flex items-center justify-center text-xs font-black">{sIdx + 1}</div>
+                    <div className="w-8 h-8 rounded-xl bg-brand-accent text-white flex items-center justify-center text-xs font-black font-mono shadow-xs">{sIdx + 1}</div>
                     <div>
                       <h3 className="text-lg font-black text-brand-primary tracking-tight uppercase">{section.title}</h3>
                       <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Peso desta seção: {section.weight}%</p>
@@ -1691,7 +1691,7 @@ export default function MonitoriaForm({
                           onClick={() => setDialogueFilter(f.id as any)}
                           className={`px-2.5 py-1 rounded-md font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
                             dialogueFilter === f.id
-                              ? 'bg-brand-primary text-white'
+                              ? 'bg-brand-accent text-white shadow-xs'
                               : 'bg-surface-subtle text-brand-muted hover:text-brand-primary hover:bg-surface-border'
                           }`}
                         >
