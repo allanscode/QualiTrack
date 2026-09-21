@@ -989,55 +989,59 @@ export default function AuditingQueueView({
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* 1. Barra de Abas das Filas: Grid responsivo de 5 colunas com fundo colorido unificado */}
+      {/* 1. Barra de Abas das Filas: Grid responsivo de 5 colunas com cores refinadas e harmônicas */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-1.5 bg-surface-subtle/40 rounded-2xl border border-surface-border">
+        {/* Aba 1: CSAT Negativas - Destaque máximo em Vermelho (WebPosto Red/Rose) */}
         <button
           onClick={() => setActiveQueue('negativas')}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'negativas'
-              ? 'bg-functional-error/20 text-functional-error border border-functional-error/40 shadow-sm font-black ring-1 ring-functional-error/20'
-              : 'bg-functional-error/6 text-functional-error/80 border border-functional-error/15 hover:bg-functional-error/15 hover:text-functional-error'
+              ? 'bg-brand-highlight/20 text-brand-highlight border border-brand-highlight/40 shadow-sm font-black ring-1 ring-brand-highlight/20'
+              : 'bg-brand-highlight/8 text-brand-highlight/90 border border-brand-highlight/20 hover:bg-brand-highlight/15 hover:text-brand-highlight'
           }`}
         >
           <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">CSAT Negativas (+ IA)</span>
+          <span className="truncate">CSAT Negativas</span>
           {pendingNegativesCount > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-black bg-functional-error text-white rounded-full flex-shrink-0">
+            <span className="px-1.5 py-0.5 text-[10px] font-black bg-brand-highlight text-white rounded-full flex-shrink-0">
               {pendingNegativesCount}
             </span>
           )}
         </button>
 
+        {/* Aba 2: Fila Proativa - Azul / Índigo */}
         <button
           onClick={() => setActiveQueue('proativas')}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'proativas'
-              ? 'bg-info/20 text-info border border-info/40 shadow-sm font-black ring-1 ring-info/20'
-              : 'bg-info/6 text-info/80 border border-info/15 hover:bg-info/15 hover:text-info'
+              ? 'bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 border border-indigo-500/40 shadow-sm font-black ring-1 ring-indigo-500/20'
+              : 'bg-indigo-500/8 text-indigo-600 dark:text-indigo-400/90 border border-indigo-500/20 hover:bg-indigo-500/15 hover:text-indigo-500 dark:hover:text-indigo-300'
           }`}
         >
           <Zap className="w-3.5 h-3.5 flex-shrink-0" />
           <span className="truncate">Fila Proativa</span>
         </button>
 
+        {/* Aba 3: CSAT Positivas - Toda Verde em destaque */}
         <button
           onClick={() => setActiveQueue('positivas')}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'positivas'
-              ? 'bg-functional-success/20 text-functional-success border border-functional-success/40 shadow-sm font-black ring-1 ring-functional-success/20'
-              : 'bg-functional-success/6 text-functional-success/80 border border-functional-success/15 hover:bg-functional-success/15 hover:text-functional-success'
+              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 shadow-sm font-black ring-1 ring-emerald-500/20'
+              : 'bg-emerald-500/8 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/15 hover:text-emerald-700 dark:hover:text-emerald-300'
           }`}
         >
           <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">CSAT Positivas (+ IA)</span>
+          <span className="truncate">CSAT Positivas</span>
         </button>
 
+        {/* Aba 4: Chamados Filhos - Estilo clean e nítido (borda demarcada e fundo neutro elegante) */}
         <button
           onClick={() => setActiveQueue('filhos')}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'filhos'
-              ? 'bg-brand-highlight/20 text-brand-highlight border border-brand-highlight/40 shadow-sm font-black ring-1 ring-brand-highlight/20'
-              : 'bg-brand-highlight/6 text-brand-highlight/80 border border-brand-highlight/15 hover:bg-brand-highlight/15 hover:text-brand-highlight'
+              ? 'bg-surface-subtle/80 text-brand-primary border border-surface-border shadow-sm font-black ring-1 ring-surface-border dark:border-slate-300/80 dark:text-white dark:bg-slate-800/60'
+              : 'bg-surface-subtle/40 text-brand-muted border border-surface-border/50 hover:bg-surface-subtle/80 hover:text-brand-primary dark:text-slate-300 dark:border-slate-700/60'
           }`}
           title="Filtro Zendesk: 47405806430228"
         >
@@ -1045,12 +1049,13 @@ export default function AuditingQueueView({
           <span className="truncate">Chamados Filhos</span>
         </button>
 
+        {/* Aba 5: Filhos Inválidos - Âmbar */}
         <button
           onClick={() => setActiveQueue('filhos_invalidos')}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
             activeQueue === 'filhos_invalidos'
               ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/40 shadow-sm font-black ring-1 ring-amber-500/20'
-              : 'bg-amber-500/6 text-amber-700/80 dark:text-amber-400/80 border border-amber-500/15 hover:bg-amber-500/15 hover:text-amber-600 dark:hover:text-amber-400'
+              : 'bg-amber-500/8 text-amber-700/90 dark:text-amber-400/90 border border-amber-500/20 hover:bg-amber-500/15 hover:text-amber-600 dark:hover:text-amber-400'
           }`}
           title="Filtro Zendesk: 47656856998292"
         >
