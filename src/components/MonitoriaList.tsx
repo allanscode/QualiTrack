@@ -296,8 +296,8 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
             </div>
           </div>
 
-          {/* Status Tabs (Unified inside) — Leitura completa e agradável sem cortes com '...' */}
-          <div className="pt-4 border-t border-surface-border/50 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+          {/* Status Tabs (Unified inside) — Tamanho otimizado e compacto para leitura completa de todas as abas sem quebra */}
+          <div className="pt-3 border-t border-surface-border/50 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
             {[
               { id: 'todas', label: 'Todas' },
               { id: 'pendente_revisao', label: 'Pendente Revisão' },
@@ -305,8 +305,8 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
               { id: 'aguardando_gestor_suporte', label: 'Gestão Suporte' },
               { id: 'aguardando_gestor_qualidade', label: 'Gestão Qualidade' },
               { id: 'concluida', label: 'Concluídas' },
-              { id: 'expiradas_prazo', label: 'Finalizadas por SLA' },
-            ].map(({ id: t, label: tabLabel }) => {
+              { id: 'expiradas_prazo', label: 'Finalizadas SLA', fullTitle: 'Finalizadas por SLA (Decurso de Prazo)' },
+            ].map(({ id: t, label: tabLabel, fullTitle }) => {
               const count = monitorias.filter(m => {
                 const matchesActiveStatus = filters.statusFilter === 'active' ? m.active !== false : m.active === false;
 
@@ -331,16 +331,16 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                 <button
                   key={t}
                   onClick={() => filters.setTab(t as any)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 whitespace-nowrap cursor-pointer ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap cursor-pointer active:scale-[0.98] ${
                     filters.tab === t
-                      ? 'bg-brand-primary text-brand-on-primary shadow-sm ring-1 ring-brand-primary'
-                      : 'bg-surface-subtle text-brand-primary hover:bg-surface-card hover:border-surface-border border border-surface-border/50'
+                      ? 'bg-brand-primary text-brand-on-primary shadow-xs ring-1 ring-brand-primary font-black'
+                      : 'bg-surface-subtle/80 text-brand-primary/80 hover:text-brand-primary hover:bg-surface-card hover:border-surface-border border border-surface-border/50'
                   }`}
-                  title={tabLabel}
+                  title={fullTitle || tabLabel}
                 >
                   <span className="whitespace-nowrap">{tabLabel}</span>
                   <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-black flex-shrink-0 ${
+                    className={`px-1.5 py-0.5 rounded-full text-[9px] font-mono font-bold flex-shrink-0 min-w-4 text-center ${
                       filters.tab === t
                         ? 'bg-black/20 text-brand-on-primary'
                         : 'bg-surface-card text-brand-muted border border-surface-border/60'

@@ -911,12 +911,12 @@ export default function AuditingQueueView({
                 setPageSize(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="bg-surface border border-surface-border rounded-lg px-2 py-1 text-xs font-bold text-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-highlight cursor-pointer hover:border-brand-highlight/50 transition-colors"
+              className="bg-surface-card border border-surface-border rounded-lg px-2.5 py-1 text-xs font-bold text-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-highlight cursor-pointer hover:border-brand-highlight/50 transition-colors"
             >
-              <option value={5}>5 por página</option>
-              <option value={10}>10 por página</option>
-              <option value={15}>15 por página</option>
-              <option value={20}>20 por página</option>
+              <option value={5} className="bg-surface-card text-brand-primary">5 por página</option>
+              <option value={10} className="bg-surface-card text-brand-primary">10 por página</option>
+              <option value={15} className="bg-surface-card text-brand-primary">15 por página</option>
+              <option value={20} className="bg-surface-card text-brand-primary">20 por página</option>
             </select>
           </div>
           <span className="text-[11px] text-brand-muted">

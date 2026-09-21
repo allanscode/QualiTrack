@@ -269,6 +269,26 @@ html:not(.dark) input[type="time"] {
   color-scheme: light !important;
 }
 
+/* ── Native Select & Option Color Scheme (Prevents white-on-white text in Dark Mode) ── */
+select,
+option {
+  color-scheme: light;
+}
+
+html.dark select,
+html.dark option {
+  color-scheme: dark;
+  background-color: var(--surface-card, #172338);
+  color: var(--brand-primary, #E8EEF7);
+}
+
+html:not(.dark) select,
+html:not(.dark) option {
+  color-scheme: light !important;
+  background-color: #FFFFFF;
+  color: var(--brand-primary, #000000);
+}
+
 input[type="date"]::-webkit-calendar-picker-indicator {
   position: absolute;
   left: 0;
