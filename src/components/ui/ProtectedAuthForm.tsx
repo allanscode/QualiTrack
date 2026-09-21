@@ -68,9 +68,16 @@ export function readCaptchaToken(event: FormEvent): string {
   const form = event.currentTarget as HTMLFormElement;
   const token = new FormData(form).get('cf-turnstile-response');
 
+  const isVercelPreview = typeof window !== 'undefined' &&
+    window.location.hostname.includes('.vercel.app') &&
+    window.location.hostname !== 'qualitrack.vercel.app';
+
   if (typeof token !== 'string' || !token) {
-    // Na branch de teste/preview, nunca bloqueia o acesso se o captcha falhar ou não for resolvido
-    return 'test_branch_bypass_token';
+    if (isVercelPreview) {
+      // Em preview, se o widget não tiver emitido token, devolve um token de teste
+      return 'preview_turnstile_test_token';
+    }
+    throw new Error('Confirme a verificação de segurança.');
   }
   return token;
 }
