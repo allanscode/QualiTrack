@@ -3,6 +3,10 @@
 @variant dark (&:where(.dark, .dark *));
 
 @theme {
+  /* ── Typography Tokens ── */
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
   /* ── Brand Colors ── */
   --color-brand-primary: var(--brand-primary);
   --color-brand-muted: var(--brand-muted);
@@ -45,20 +49,21 @@ color-scheme: light;
   --action-primary-bg: #A9272D;
   --action-primary-fg: #FFFFFF;
   --brand-muted: #1E293B; /* Slate-800 escuro e nítido (substitui cinza apagado) */
-  --brand-subtle: #E9EEF5;
+  --brand-subtle: #DEE2E8;
   --brand-on-primary: #FFFFFF; /* White text on dark primary (Light Mode) */
 
-  --surface-bg: #F3F6FA;
-  --surface-card: #FCFDFE;
-  --surface-subtle: #EDF2F7;
+  /* Offwhite confortável tendendo ao cinza suave (descanso visual sem ofuscamento) */
+  --surface-bg: #EAECEF;
+  --surface-card: #FDFDFE;
+  --surface-subtle: #DEE2E8;
 
-  /* Role Sidebar Colors (Light Mode — neutral gray) */
-  --sidebar-bg-admin: #F6F8FB;
-  --sidebar-bg-qualidade: #F6F8FB;
-  --sidebar-bg-gestor-qualidade: #F6F8FB;
-  --sidebar-bg-gestor-suporte: #F6F8FB;
-  --sidebar-bg-suporte: #F6F8FB;
-  --surface-border: #D9E2EC;
+  /* Role Sidebar Colors (Light Mode — cinza demarcado e elegante) */
+  --sidebar-bg-admin: #D6DCE4;
+  --sidebar-bg-qualidade: #D6DCE4;
+  --sidebar-bg-gestor-qualidade: #D6DCE4;
+  --sidebar-bg-gestor-suporte: #D6DCE4;
+  --sidebar-bg-suporte: #D6DCE4;
+  --surface-border: #CBD5E1;
   
   --shadow-premium: 0 10px 40px -10px rgba(10, 31, 68, 0.1);
   --shadow-premium-sm: 0 4px 20px -5px rgba(10, 31, 68, 0.05);
@@ -131,11 +136,11 @@ color-scheme: dark;
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
-  font-family: 'Segoe UI Variable', 'Segoe UI', Inter, system-ui, -apple-system, sans-serif;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 15px;
   line-height: 1.5;
   font-weight: 400;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.011em;
   font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
