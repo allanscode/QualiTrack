@@ -306,7 +306,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 { label: 'Gestor Qualidade', field: 'manager_quality' }
               ].map(deadline => (
                 <div key={deadline.field} className="flex flex-col gap-1">
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">{deadline.label}</label>
+                  <label className="block text-xs uppercase tracking-wider text-black dark:text-zinc-300 font-semibold mb-1 ml-0.5">{deadline.label}</label>
                   <div className="relative max-w-[120px] w-full">
                     <input
                       type="number"
@@ -345,7 +345,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                 <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50">
                   <div className="flex items-center gap-4">
                     <div className="w-[140px]">
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">
+                      <label className="block text-xs uppercase tracking-wider text-black dark:text-zinc-300 font-semibold mb-1.5 ml-0.5">
                         Início
                       </label>
                       <input
@@ -356,7 +356,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                       />
                     </div>
                     <div className="w-[140px]">
-                      <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">
+                      <label className="block text-xs uppercase tracking-wider text-black dark:text-zinc-300 font-semibold mb-1.5 ml-0.5">
                         Fim
                       </label>
                       <input
@@ -371,7 +371,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
 
                 {/* SUB-BLOCO 2: Dias Úteis da Semana (Única linha horizontal contínua) */}
                 <div className="bg-surface-subtle/40 p-4 rounded-xl border border-surface-border/50">
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-3 ml-0.5">
+                  <label className="block text-xs uppercase tracking-wider text-black dark:text-zinc-300 font-semibold mb-3 ml-0.5">
                     Dias Úteis da Semana
                   </label>
                   <div className="flex flex-row gap-2 items-center w-full">
@@ -405,7 +405,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
               {/* COLUNA DA DIREITA (Ocupando col-span-5): Feriados */}
               <div className="lg:col-span-5 bg-surface-subtle/40 rounded-xl p-4 border border-surface-border/50 flex flex-col justify-between">
                 <div>
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1.5 ml-0.5">
+                  <label className="block text-xs uppercase tracking-wider text-black dark:text-zinc-300 font-semibold mb-1.5 ml-0.5">
                     Feriados (DD/MM)
                   </label>
                   <div className="flex items-center gap-2 w-full">
@@ -576,7 +576,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
               Score mínimo para o suporte ser considerado dentro da meta. Usado nos rankings Top, Medianos e Oportunidades.
             </p>
             <div className="flex flex-col gap-1">
-              <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">Score Mínimo</label>
+              <label className="block text-xs uppercase tracking-wider text-black dark:text-zinc-300 font-semibold mb-1 ml-0.5">Score Mínimo</label>
               <div className="relative max-w-[100px] w-full">
                 <input
                   type="number"
@@ -604,7 +604,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
               {/* Taxa de Reversão */}
               <div className="space-y-2 flex flex-col max-w-md w-full">
                 <div>
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">
+                  <label className="block text-xs uppercase tracking-wider text-black dark:text-zinc-300 font-semibold mb-1 ml-0.5">
                     Taxa de Reversão
                   </label>
                   <div className="relative max-w-[100px] w-full">
@@ -631,7 +631,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
               {/* Volumetria */}
               <div className="space-y-2 flex flex-col max-w-md w-full">
                 <div>
-                  <label className="block text-xs uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold mb-1 ml-0.5">
+                  <label className="block text-xs uppercase tracking-wider text-black dark:text-zinc-300 font-semibold mb-1 ml-0.5">
                     Volumetria
                   </label>
                   <div className="relative max-w-[120px] w-full">
@@ -665,11 +665,11 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
             <div className="space-y-4">
               {/* Header Row for Large Screens */}
               <div className="hidden lg:grid grid-cols-12 gap-4 px-4 mb-2 w-full select-none">
-                <div className="col-span-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 pl-0.5">Nome do Nível</div>
-                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 text-center pl-0.5">Mínimo</div>
-                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 text-center pl-0.5">Máximo</div>
-                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 pl-0.5">Cor de Destaque</div>
-                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 text-right pr-0.5">Preview</div>
+                <div className="col-span-4 text-[10px] font-black uppercase tracking-widest text-black dark:text-zinc-300 pl-0.5">Nome do Nível</div>
+                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-black dark:text-zinc-300 text-center pl-0.5">Mínimo</div>
+                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-black dark:text-zinc-300 text-center pl-0.5">Máximo</div>
+                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-black dark:text-zinc-300 pl-0.5">Cor de Destaque</div>
+                <div className="col-span-2 text-[10px] font-black uppercase tracking-widest text-black dark:text-zinc-300 text-right pr-0.5">Preview</div>
               </div>
 
               {localConfig.levels.map((level, idx) => {
@@ -679,7 +679,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
                     <div className="grid grid-cols-12 gap-4 items-center w-full">
                       {/* Nome do Nível */}
                       <div className="col-span-4">
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden">Nome do Nível</label>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-black dark:text-zinc-300 mb-1.5 ml-0.5 lg:hidden">Nome do Nível</label>
                         <input
                           type="text"
                           value={level.label}
@@ -690,7 +690,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
 
                       {/* Score Min */}
                       <div className="col-span-2">
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden text-center">Mínimo</label>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-black dark:text-zinc-300 mb-1.5 ml-0.5 lg:hidden text-center">Mínimo</label>
                         <div className="relative">
                           <input
                             type="number"
@@ -706,7 +706,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
 
                       {/* Score Max */}
                       <div className="col-span-2">
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden text-center">Máximo</label>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-black dark:text-zinc-300 mb-1.5 ml-0.5 lg:hidden text-center">Máximo</label>
                         <div className="relative">
                           <input
                             type="number"
@@ -722,7 +722,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
 
                       {/* Cor de Destaque */}
                       <div className="col-span-2 relative">
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden">Cor de Destaque</label>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-black dark:text-zinc-300 mb-1.5 ml-0.5 lg:hidden">Cor de Destaque</label>
                         
                         {/* Custom modern trigger button */}
                         <div
@@ -792,7 +792,7 @@ export default function QualityConfigManagement({ mode = 'operacao' }: { mode?: 
 
                       {/* Preview Badge inline */}
                       <div className="col-span-2">
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-500 mb-1.5 ml-0.5 lg:hidden text-center">Preview</label>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-black dark:text-zinc-300 mb-1.5 ml-0.5 lg:hidden text-center">Preview</label>
                         <div className="flex items-center h-10 pb-0.5 w-full">
                           <span className={`flex items-center gap-1.5 px-3 h-10 rounded-lg text-[10px] font-bold uppercase tracking-wider ${level.bgColor} ${level.color} border border-current/15 shadow-sm w-full justify-center text-center`}>
                             <div className={`w-1.5 h-1.5 rounded-full ${level.color.replace('text-', 'bg-')}`} />

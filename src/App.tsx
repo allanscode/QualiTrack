@@ -727,17 +727,17 @@ function MainApp({
                 className={`
                   w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
                   ${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen)
-                    ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-slate-900')
-                    : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
+                    ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black')
+                    : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5')}
                 `}
               >
                 {(activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen && (
                   <m.div
                     layoutId="active-bar"
-                    className={`absolute left-0 w-1 h-6 rounded-full ${sidebarIsDark ? 'bg-white' : 'bg-slate-900'}`}
+                    className={`absolute left-0 w-1 h-6 rounded-full ${sidebarIsDark ? 'bg-white' : 'bg-black'}`}
                   />
                 )}
-                <div className={`${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen) ? 'text-current' : (sidebarIsDark ? 'text-white/30 group-hover:text-white' : 'text-slate-900/30 group-hover:text-slate-900')}`}>
+                <div className={`${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen) ? 'text-current' : (sidebarIsDark ? 'text-white/30 group-hover:text-white' : 'text-slate-700 group-hover:text-black')}`}>
                   <AnimatedSettingsIcon isHovered={isSettingsHovered} active={(activeTab === 'admin' || activeTab === 'custom_dashboard') || isSettingsOpen} className="w-5 h-5" />
                 </div>
                 <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${sidebarTextVisible ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
@@ -1317,17 +1317,17 @@ function NavItem({ icon: IconComponent, label, active, onClick, isOpen, isDark, 
       className={`
         w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative
         ${active
-          ? (isDark ? 'bg-white/10 text-white' : 'bg-black/10 text-slate-900')
-          : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
+          ? (isDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black font-extrabold')
+          : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5 font-bold')}
       `}
     >
       {active && (
         <m.div
           layoutId="active-bar"
-          className={`absolute left-0 w-1 h-6 rounded-full ${isDark ? 'bg-white' : 'bg-slate-900'}`}
+          className={`absolute left-0 w-1 h-6 rounded-full ${isDark ? 'bg-white' : 'bg-black'}`}
         />
       )}
-      <div className={`${active ? 'text-current' : (isDark ? 'text-white/30 group-hover:text-white' : 'text-slate-900/30 group-hover:text-slate-900')}`}>
+      <div className={`${active ? 'text-current' : (isDark ? 'text-white/30 group-hover:text-white' : 'text-slate-700 group-hover:text-black')}`}>
         {typeof IconComponent === 'function' ? (
           <IconComponent isHovered={isHovered} active={active} className="w-5 h-5" />
         ) : React.isValidElement(IconComponent) ? (
@@ -1341,7 +1341,7 @@ function NavItem({ icon: IconComponent, label, active, onClick, isOpen, isDark, 
           {label}
         </span>
         {badge && (
-          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-dashed ml-2 leading-none whitespace-nowrap ${isDark ? 'border-white/10 text-white/40 bg-white/5' : 'border-slate-300/60 text-slate-500/80 bg-slate-50'}`}>
+          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-dashed ml-2 leading-none whitespace-nowrap ${isDark ? 'border-white/10 text-white/40 bg-white/5' : 'border-slate-300/60 text-slate-800 bg-slate-100'}`}>
             {badge}
           </span>
         )}
@@ -1357,13 +1357,13 @@ function SubNavItem({ label, active, onClick, isOpen, isDark, badge }: any) {
       className={`
         w-full flex items-center justify-between pl-11 pr-4 h-9 rounded-xl transition-all font-medium text-xs group relative
         ${active
-          ? (isDark ? 'bg-white/5 text-white font-bold' : 'bg-black/5 text-slate-900 font-bold')
-          : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-black/5')}
+          ? (isDark ? 'bg-white/5 text-white font-bold' : 'bg-black/5 text-black font-bold')
+          : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5 font-semibold')}
       `}
     >
       {active && (
         <div
-          className={`absolute left-5 w-1 h-4 rounded-full ${isDark ? 'bg-white' : 'bg-slate-900'}`}
+          className={`absolute left-5 w-1 h-4 rounded-full ${isDark ? 'bg-white' : 'bg-black'}`}
         />
       )}
       <span className="tracking-tight whitespace-nowrap block">

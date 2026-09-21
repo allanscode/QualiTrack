@@ -56,8 +56,8 @@ export function useSidebarManager({ userData }: SidebarManagerOptions) {
   };
 
   const sidebarIsDark = isDarkColor(sidebarColor, resolvedTheme);
-  const sidebarContrastClass = sidebarIsDark ? 'text-white' : 'text-slate-900';
-  const sidebarContrastSubtle = sidebarIsDark ? 'text-white/40' : 'text-slate-700/60';
+  const sidebarContrastClass = sidebarIsDark ? 'text-white' : 'text-black';
+  const sidebarContrastSubtle = sidebarIsDark ? 'text-white/40' : 'text-slate-800';
   const sidebarBorderClass = sidebarIsDark ? 'border-white/5' : 'border-black/5';
   const sidebarStyle = {
     backgroundColor: `var(--sidebar-bg-${role.replace('_', '-')})`,

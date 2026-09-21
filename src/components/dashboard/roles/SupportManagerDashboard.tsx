@@ -944,7 +944,7 @@ export default function SupportManagerDashboard({
                     )}
                   </AnimatePresence>
                 </div>
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-tight whitespace-normal flex-1">
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-black dark:text-slate-200 leading-tight whitespace-normal flex-1">
                   Curva de Qualidade (Distribuição por Nível)
                 </h3>
               </div>
@@ -1004,7 +1004,7 @@ export default function SupportManagerDashboard({
                 <Clock className="w-4 h-4 fill-current fill-opacity-15" strokeWidth={2} fill="currentColor" fillOpacity={0.15} />
               </div>
               <div>
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-tight">
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-black dark:text-slate-200 leading-tight">
                   Ações Expirando
                 </h3>
               </div>

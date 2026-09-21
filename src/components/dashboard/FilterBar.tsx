@@ -95,7 +95,7 @@ export default function FilterBar() {
               placeholder="Data inicial"
               size="sm"
             />
-            <span className="text-brand-muted/70 font-medium text-xs shrink-0">até</span>
+            <span className="text-black dark:text-slate-200 font-bold text-xs shrink-0">até</span>
             <CustomDatepicker
               value={filters.endDate}
               onChange={(val: string) => setFilters({ ...filters, endDate: val })}

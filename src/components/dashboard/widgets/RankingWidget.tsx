@@ -217,7 +217,7 @@ export default function RankingWidget({
           </AnimatePresence>
         </div>
           <div className="flex-1">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-tight whitespace-normal">{title}</h3>
+            <h3 className="text-[11px] font-black uppercase tracking-wider text-black dark:text-slate-200 leading-tight whitespace-normal">{title}</h3>
           </div>
         </div>
       )}
@@ -279,7 +279,7 @@ export default function RankingWidget({
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-semibold text-brand-primary uppercase tracking-tight leading-tight">{item.name}</p>
                 {!isCount && (
-                  <p className="text-[9px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">
+                  <p className="text-[9px] font-semibold text-slate-800 dark:text-slate-400 mt-0.5">
                     {item.count} mon.
                   </p>
                 )}

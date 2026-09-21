@@ -205,7 +205,7 @@ export default function CustomSelect({
       {label && (
         <label
           htmlFor={selectId}
-          className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block"
+          className="text-xs uppercase tracking-wider text-black dark:text-slate-300 font-bold mb-1.5 ml-0.5 block"
         >
           {label}
         </label>
@@ -239,7 +239,7 @@ export default function CustomSelect({
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder={selectedOption ? selectedOption.label : placeholder}
-                className={`w-full bg-transparent border-none p-0 focus:ring-0 focus:outline-none shadow-none outline-none font-bold text-brand-primary placeholder:text-brand-muted/60 ${
+                className={`w-full bg-transparent border-none p-0 focus:ring-0 focus:outline-none shadow-none outline-none font-bold text-brand-primary placeholder:text-slate-600 dark:placeholder:text-brand-muted/60 ${
                   isCompact ? 'text-[10px]' : 'text-[11px]'
                 }`}
                 onClick={e => e.stopPropagation()}

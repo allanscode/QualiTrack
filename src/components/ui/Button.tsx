@@ -19,7 +19,7 @@ export default function Button({
 }: ButtonProps) {
   const variants = {
     primary: 'bg-brand-primary text-brand-on-primary hover:bg-brand-primary/90 hover:brightness-110 dark:hover:brightness-125 shadow-premium hover:scale-[1.02] active:scale-[0.98]',
-    secondary: 'bg-brand-accent text-brand-primary hover:bg-brand-accent/90 hover:brightness-110 dark:hover:brightness-125 shadow-premium hover:scale-[1.02] active:scale-[0.98]',
+    secondary: 'bg-brand-accent text-white hover:bg-brand-accent/90 hover:brightness-110 dark:hover:brightness-125 shadow-premium hover:scale-[1.02] active:scale-[0.98]',
     outline: 'bg-transparent border border-surface-border text-brand-primary hover:bg-surface-subtle dark:hover:bg-slate-800/50 hover:scale-[1.02] active:scale-[0.98]',
     danger: 'bg-error text-white hover:bg-error/90 hover:brightness-110 dark:hover:brightness-125 shadow-premium hover:scale-[1.02] active:scale-[0.98]',
     ghost: 'bg-transparent text-brand-muted hover:text-brand-primary hover:bg-surface-subtle dark:hover:bg-slate-800/50 hover:scale-[1.02] active:scale-[0.98]'
