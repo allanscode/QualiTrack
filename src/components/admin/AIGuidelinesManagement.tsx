@@ -14,7 +14,11 @@ import {
   downloadAIGuidelineFile,
   extractPdfText,
   extractPlainText,
-  isPlainTextFile
+  extractDocxText,
+  extractGuidelineFileContent,
+  isSupportedGuidelineFile,
+  isPlainTextFile,
+  isDocxFile
 } from '../../lib/aiGuidelines';
 import {
   Brain,
@@ -134,28 +138,35 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
     setExtractedContent('');
     if (!selected) return;
 
-    const isPdf = selected.type === 'application/pdf' || selected.name.toLowerCase().endsWith('.pdf');
-    const isText = isPlainTextFile(selected);
-
-    if (!isPdf && !isText) {
-      toast.error('Formato não suportado. Use PDF, .txt, .md ou .csv.');
+    if (!isSupportedGuidelineFile(selected)) {
+      toast.error('Formato não suportado. Por favor, envie arquivos Markdown (.md), Word (.docx), PDF (.pdf) ou Texto (.txt).');
       setFile(null);
       return;
     }
 
+    // Se o título do manual estiver vazio, sugere o nome do arquivo sem extensão
+    if (!title.trim()) {
+      const cleanName = selected.name
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[_-]+/g, ' ')
+        .trim();
+      if (cleanName) setTitle(cleanName);
+    }
+
     setExtracting(true);
     try {
-      const text = isPdf ? await extractPdfText(selected) : await extractPlainText(selected);
-      if (!text) {
-        toast.warning('Não foi possível extrair texto do arquivo (PDF pode ser escaneado). Tente outro arquivo.');
+      const text = await extractGuidelineFileContent(selected);
+      if (!text || text.trim().length === 0) {
+        toast.warning('Não foi possível extrair texto do arquivo (o arquivo pode estar vazio ou escaneado como imagem). Tente outro arquivo.');
         setFile(null);
       } else {
         setExtractedContent(text);
-        toast.success(`Conteúdo extraído com sucesso — ${text.length.toLocaleString('pt-BR')} caracteres prontos para a IA.`);
+        setModalTab('preview');
+        toast.success(`Arquivo "${selected.name}" processado com sucesso — ${text.length.toLocaleString('pt-BR')} caracteres prontos para a IA.`);
       }
     } catch (e: any) {
       console.error('Erro ao extrair texto do arquivo:', e);
-      toast.error('Falha ao ler o arquivo. Tente novamente ou use outro formato.');
+      toast.error(e.message || 'Falha ao processar o arquivo. Verifique o formato e tente novamente.');
       setFile(null);
     } finally {
       setExtracting(false);
@@ -484,17 +495,31 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
             <div>
               {modalTab === 'file' && (
                 <div className="space-y-3">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-black uppercase tracking-wider text-brand-muted">Arquivo do Manual (.pdf, .md, .txt)</label>
-                    <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-surface-border rounded-xl cursor-pointer hover:border-brand-highlight hover:bg-surface-subtle/50 transition-all">
-                      <Upload className="w-8 h-8 text-brand-muted mb-2" />
-                      <span className="text-xs font-bold text-brand-primary">
-                        {file ? file.name : (editingGuideline?.file_name ? `Substituir ${editingGuideline.file_name}` : 'Selecionar arquivo...')}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-black uppercase tracking-wider text-brand-muted">
+                        Arquivo do Manual (.md, .docx, .pdf, .txt)
+                      </label>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">.MD</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">.DOCX</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">.PDF</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20">.TXT</span>
+                      </div>
+                    </div>
+                    <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-surface-border rounded-xl cursor-pointer hover:border-brand-highlight hover:bg-surface-subtle/50 transition-all group">
+                      <div className="w-12 h-12 rounded-2xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <span className="text-xs font-bold text-brand-primary text-center px-4">
+                        {file ? file.name : (editingGuideline?.file_name ? `Substituir ${editingGuideline.file_name}` : 'Clique para selecionar ou arraste o arquivo aqui')}
                       </span>
-                      <span className="text-[10px] text-brand-muted mt-1">PDF, Markdown ou Texto puro (máx. 10MB)</span>
+                      <span className="text-[10px] text-brand-muted mt-1.5 text-center">
+                        Arquivos Markdown (.md), Word (.docx), PDF ou Texto puro (.txt) • Máx. 10MB
+                      </span>
                       <input
                         type="file"
-                        accept=".pdf,.md,.markdown,.txt"
+                        accept=".md,.markdown,.docx,.doc,.pdf,.txt"
                         className="hidden"
                         onChange={e => handleFileChange(e.target.files?.[0] || null)}
                       />

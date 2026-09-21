@@ -31,7 +31,7 @@ export async function extractPdfText(file: File): Promise<string> {
   return pages.join('\n\n').trim();
 }
 
-/** Extensões de arquivo de texto puro aceitas além do PDF (lidas via File.text()). */
+/** Extensões de arquivo de texto puro aceitas (.md, .txt, etc.). */
 export const PLAIN_TEXT_EXTENSIONS = ['.txt', '.md', '.markdown', '.csv'];
 
 export function isPlainTextFile(file: File): boolean {
@@ -43,6 +43,48 @@ export function isPlainTextFile(file: File): boolean {
 /** Lê um arquivo de texto puro (.txt, .md, .csv etc.) diretamente como string. */
 export async function extractPlainText(file: File): Promise<string> {
   return (await file.text()).trim();
+}
+
+/** Extensões aceitas para documentos do Word. */
+export const DOCX_EXTENSIONS = ['.docx'];
+
+export function isDocxFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return DOCX_EXTENSIONS.some(ext => name.endsWith(ext))
+    || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+}
+
+/** Extrai texto formatado em Markdown a partir de um documento Word (.docx) no navegador. */
+export async function extractDocxText(file: File): Promise<string> {
+  const mammothModule = await import('mammoth');
+  const mammoth = (mammothModule as any).default || mammothModule;
+  const buffer = await file.arrayBuffer();
+  const result = await mammoth.convertToMarkdown({ arrayBuffer: buffer });
+  return (result.value || '').trim();
+}
+
+/** Verifica se o arquivo é suportado para manuais (.md, .docx, .pdf, .txt, .markdown). */
+export function isSupportedGuidelineFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return file.type === 'application/pdf'
+    || name.endsWith('.pdf')
+    || isDocxFile(file)
+    || isPlainTextFile(file);
+}
+
+/** Extrai o conteúdo formatado em texto/Markdown de qualquer arquivo suportado (.md, .docx, .pdf, .txt). */
+export async function extractGuidelineFileContent(file: File): Promise<string> {
+  const name = file.name.toLowerCase();
+  if (file.type === 'application/pdf' || name.endsWith('.pdf')) {
+    return await extractPdfText(file);
+  }
+  if (isDocxFile(file)) {
+    return await extractDocxText(file);
+  }
+  if (isPlainTextFile(file)) {
+    return await extractPlainText(file);
+  }
+  throw new Error('Formato não suportado. Por favor, envie um arquivo .md, .docx, .pdf ou .txt.');
 }
 
 export const DEFAULT_CHILD_TICKET_GUIDELINE: AIEvaluationGuideline = {
