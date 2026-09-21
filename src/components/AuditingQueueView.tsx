@@ -1059,40 +1059,30 @@ export default function AuditingQueueView({
         </button>
       </div>
 
-      {/* 2. Barra de Contexto Compacta & Ações (Filtros, Busca e Atualização) */}
+      {/* 2. Barra de Busca e Ações (Filtros, Busca e Atualização) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs font-bold text-brand-primary truncate">
-            {activeQueue === 'negativas' && 'Fila Prioritária de Insatisfação (Reversão CSAT)'}
-            {activeQueue === 'proativas' && 'Fila de Equidade Proativa (Amostragem Justa de Atendentes)'}
-            {activeQueue === 'positivas' && 'Fila de Elogios e Avaliação com IA Copilot'}
-            {activeQueue === 'filhos' && 'Triagem de Chamados Filhos (View Zendesk #47405806430228)'}
-            {activeQueue === 'filhos_invalidos' && 'Chamados Filhos Inválidos (View Zendesk #47656856998292)'}
-          </span>
-          <span className="text-[10px] text-brand-muted whitespace-nowrap hidden sm:inline">
-            • {filteredTickets.length} chamado(s) encontrados
-          </span>
+        {/* Campo de Busca posicionado à esquerda no lugar dos subtítulos */}
+        <div className="relative w-full sm:w-80">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+          <input
+            type="text"
+            placeholder="Buscar por ID, assunto ou agente..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl bg-surface-subtle/50 border border-surface-border text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-highlight transition-all"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-primary cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
         </div>
 
+        {/* Botões de Ação mantidos à direita */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
-            <input
-              type="text"
-              placeholder="Buscar por ID, assunto ou agente..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl bg-surface-subtle/50 border border-surface-border text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-highlight transition-all"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-primary"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </div>
 
           {/* Botão Avaliar em Lote — nas filas com IA */}
           {(activeQueue === 'positivas' || activeQueue === 'proativas' || activeQueue === 'negativas') && (
