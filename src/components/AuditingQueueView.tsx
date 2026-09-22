@@ -28,6 +28,7 @@ import {
 import { normalizeTicketDialogue } from '../lib/zendeskChatParser';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
 import { fetchAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
+import { claimAIJob, completeAIJob, failAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
 import {
   AlertTriangle,
   Sparkles,
@@ -67,7 +68,7 @@ import TicketMessageBubble from './TicketMessageBubble';
 import QueueMonitorPresencePanel from './QueueMonitorPresencePanel';
 import QueueMonitorAssignmentModal from './QueueMonitorAssignmentModal';
 import { toast } from 'sonner';
-import { supabase } from '../lib/supabase';
+import { isMockMode, supabase } from '../lib/supabase';
 import {
   isDistributedQueue,
   canManageQueueAssignments,
@@ -189,6 +190,24 @@ export default function AuditingQueueView({
           return { ...prev, [row.queue_type as AuditingQueueType]: forQueue };
         });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_evaluation_jobs' }, (payload: any) => {
+        const job = payload.new as AIEvaluationJob | undefined;
+        if (!job?.ticket_id) return;
+        setAIJobs(previous => ({ ...previous, [job.ticket_id]: job }));
+        if (job.status === 'completed' && job.evaluation_type === 'chamado_filho' && job.result) {
+          setTickets(previous => previous.map(ticket => ticket.ticket_id === job.ticket_id
+            ? { ...ticket, child_evaluation: job.result as ChildTicketAiEvaluation } : ticket));
+        }
+        if (job.status === 'completed' && job.evaluation_type === 'atendimento') {
+          fetchAIDrafts([job.ticket_id]).then(found => {
+            if (!cancelled && found[job.ticket_id]) setDrafts(previous => ({ ...previous, ...found }));
+          });
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_evaluation_drafts' }, (payload: any) => {
+        const draft = payload.new as AIEvaluationDraft | undefined;
+        if (draft?.ticket_id) setDrafts(previous => ({ ...previous, [draft.ticket_id]: draft }));
+      })
       .subscribe();
 
     return () => {
@@ -215,10 +234,10 @@ export default function AuditingQueueView({
     };
   }, []);
 
-  const isEvaluatingTicket = (ticketId: string) => globalEvaluatingTickets.has(ticketId) || evaluatingTicketId === ticketId;
+  const isEvaluatingTicket = (ticketId: string) =>
+    globalEvaluatingTickets.has(ticketId) || evaluatingTicketId === ticketId || aiJobs[ticketId]?.status === 'running';
 
   // Estado para auditoria de conformidade de chamados filhos
-  const [evaluatingChildTicketId, setEvaluatingChildTicketId] = useState<string | null>(null);
   const [childPreviewTicket, setChildPreviewTicket] = useState<AuditingQueueTicket | null>(null);
   const [childAiEvaluation, setChildAiEvaluation] = useState<ChildTicketAiEvaluation | null>(null);
   const [loadingChildAi, setLoadingChildAi] = useState(false);
@@ -236,6 +255,7 @@ export default function AuditingQueueView({
   // Rascunhos de avaliação da IA já prontos (persistidos), por ticket_id —
   // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
   const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>({});
+  const [aiJobs, setAIJobs] = useState<Record<string, AIEvaluationJob>>({});
 
   // Filtro de rascunhos feitos pela IA (Todos | Com Rascunho IA | Sem Rascunho IA)
   const [aiDraftFilter, setAiDraftFilter] = useState<'all' | 'with_draft' | 'without_draft'>('all');
@@ -513,6 +533,23 @@ ${checksSummary}${recs}`;
     });
   }, [activeQueue, tickets]);
 
+  const ticketIdsKey = tickets.map(ticket => ticket.ticket_id).join(',');
+  useEffect(() => {
+    if (!ticketIdsKey) return;
+    let cancelled = false;
+    fetchAIJobs(ticketIdsKey.split(',')).then(found => {
+      if (cancelled) return;
+      setAIJobs(found);
+      setTickets(previous => previous.map(ticket => {
+        const job = found[ticket.ticket_id];
+        return job?.status === 'completed' && job.evaluation_type === 'chamado_filho' && job.result
+          ? { ...ticket, child_evaluation: job.result as ChildTicketAiEvaluation }
+          : ticket;
+      }));
+    }).catch(error => console.error('[AuditingQueue] Falha ao carregar jobs de IA:', error));
+    return () => { cancelled = true; };
+  }, [activeQueue, ticketIdsKey]);
+
   // Contagem de negativas não auditadas
   const pendingNegativesCount = useMemo(() => {
     if (activeQueue === 'negativas') {
@@ -547,7 +584,7 @@ ${checksSummary}${recs}`;
       });
 
     return () => { cancelled = true; };
-  }, [tickets, activeQueue, onlineMonitorKey]);
+  }, [ticketIdsKey, activeQueue, onlineMonitorKey]);
 
   // Filtro de busca na lista de tickets com suporte a filtro de rascunhos da IA
   const filteredTickets = useMemo(() => {
@@ -655,23 +692,6 @@ ${checksSummary}${recs}`;
     });
   };
 
-  const handleRedistributePending = async () => {
-    if (!isDistributedQueue(activeQueue)) {
-      toast.info('Selecione CSAT Negativas ou Chamados Filhos para redistribuir.');
-      return;
-    }
-    const queueType = activeQueue;
-    const ticketIds = tickets.map(ticket => ticket.ticket_id);
-    if (ticketIds.length === 0) {
-      toast.info('Não há chamados pendentes nesta fila.');
-      return;
-    }
-    await syncQueueAssignments(queueType, ticketIds);
-    const assignments = await fetchQueueAssignments(queueType, ticketIds);
-    setQueueAssignments(previous => ({ ...previous, [queueType]: assignments }));
-    toast.success('Chamados pendentes redistribuídos entre os monitores online.');
-  };
-
 
   // Abre o popup de confirmação da avaliação da IA com a seleção automática
   // de ficha e manual baseada no tipo de cliente (organização no Zendesk).
@@ -708,11 +728,17 @@ ${checksSummary}${recs}`;
       throw duplicateError;
     }
 
+    let jobId: string;
     try {
-      await beginAssignedWork(ticket);
+      const job = await claimAIJob(ticket.ticket_id, 'atendimento', currentUserId);
+      if (!job.claimed) throw new Error(`O ticket #${ticket.ticket_id} já está sendo analisado com IA.`);
+      jobId = job.jobId;
+      setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
+        ticket_id: ticket.ticket_id, job_id: jobId, evaluation_type: 'atendimento',
+        status: 'running', started_by: currentUserId || '', result: null,
+      } }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Não foi possível iniciar esta avaliação.';
-      if (!silent) toast.error(message);
+      if (!silent) toast.error(error instanceof Error ? error.message : 'Não foi possível iniciar a análise.');
       throw error;
     }
 
@@ -723,6 +749,16 @@ ${checksSummary}${recs}`;
     );
     const teamId = matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0] || ticket.team_id;
     const agentId = ticket.agent_id || matchedAgent?.id;
+    const draftMeta = {
+      form_id: formToUse.id,
+      agent_name: matchedAgent?.name || ticket.agent_name,
+      agent_email: matchedAgent?.email || ticket.agent_email,
+      agent_id: agentId,
+      team_id: teamId,
+      channel: ticket.channel,
+      satisfaction_comment: ticket.csat_comment,
+      guideline_ids: guidelineIds,
+    };
 
     globalEvaluatingTickets.add(ticket.ticket_id);
     notifyGlobalEvaluating();
@@ -756,7 +792,7 @@ ${checksSummary}${recs}`;
         email: matchedAgent?.email || ticket.agent_email,
         team_name: teamId ? teamsMap[teamId] : undefined,
         channel: ticket.channel,
-      }, guidelineIds, ticketFields);
+      }, guidelineIds, ticketFields, jobId, draftMeta);
 
       aiResult.ticket_fields = ticketFields;
       aiResult.dialogue = dialogue;
@@ -766,19 +802,20 @@ ${checksSummary}${recs}`;
         { id: toastId, duration: Infinity }
       );
 
-      await saveAIDraft({
-        ticketId: ticket.ticket_id,
-        formId: formToUse.id,
+      // Em produção, a Edge Function salva o rascunho e conclui o job de
+      // forma atômica; o navegador pode sair sem perder o resultado.
+      if (isMockMode) await completeAIJob(ticket.ticket_id, jobId, aiResult);
+      if (isMockMode) await saveAIDraft({
+        ticketId: ticket.ticket_id, formId: formToUse.id,
         agentName: matchedAgent?.name || ticket.agent_name,
         agentEmail: matchedAgent?.email || ticket.agent_email,
-        agentId,
-        teamId,
-        channel: ticket.channel,
-        satisfactionComment: ticket.csat_comment,
-        result: aiResult,
-        guidelineIds,
-        createdBy: currentUserId,
+        agentId, teamId, channel: ticket.channel,
+        satisfactionComment: ticket.csat_comment, result: aiResult,
+        guidelineIds, createdBy: currentUserId,
       });
+      setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
+        ...previous[ticket.ticket_id], status: 'completed', result: aiResult,
+      } }));
 
       setDrafts(prev => ({
         ...prev,
@@ -805,9 +842,14 @@ ${checksSummary}${recs}`;
       );
     } catch (err: any) {
       console.error('Erro na avaliação com IA:', err);
-      await releaseAssignedWork(ticket).catch(releaseError => {
-        console.error('[AuditingQueue] Falha ao liberar avaliação interrompida:', releaseError);
+      await failAIJob(ticket.ticket_id, jobId, err?.message || 'Falha na análise').catch(jobError => {
+        console.error('[AuditingQueue] Falha ao registrar erro do job de IA:', jobError);
       });
+      // Um erro de rede no navegador não cancela a execução já iniciada na
+      // Edge Function. O estado definitivo chega pelo Realtime do backend.
+      if (isMockMode) setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
+        ...previous[ticket.ticket_id], status: 'failed',
+      } }));
       if (toastId) {
         toast.error(`❌ Falha no ticket #${ticket.ticket_id}: ${err?.message || 'Erro desconhecido'}`, { id: toastId, duration: 6000 });
       }
@@ -925,13 +967,22 @@ ${checksSummary}${recs}`;
 
   // Avaliação de conformidade com IA para tickets filhos
   const handleEvaluateChildTicket = async (ticket: AuditingQueueTicket) => {
+    let jobId: string;
     try {
-      await beginAssignedWork(ticket);
+      const job = await claimAIJob(ticket.ticket_id, 'chamado_filho', currentUserId);
+      if (!job.claimed) {
+        toast.info(`O chamado filho #${ticket.ticket_id} já está em análise com IA.`);
+        return;
+      }
+      jobId = job.jobId;
+      setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
+        ticket_id: ticket.ticket_id, job_id: jobId, evaluation_type: 'chamado_filho',
+        status: 'running', started_by: currentUserId || '', result: null,
+      } }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Não foi possível iniciar esta avaliação.');
       return;
     }
-    setEvaluatingChildTicketId(ticket.ticket_id);
     setChildPreviewTicket(ticket);
     setLoadingChildAi(true);
     setChildAiEvaluation(ticket.child_evaluation || null);
@@ -948,21 +999,28 @@ ${checksSummary}${recs}`;
         comments,
         tags || ticket.tags,
         ticketFields,
-        ticket.child_macro_type
+        ticket.child_macro_type,
+        jobId
       );
 
+      if (isMockMode) await completeAIJob(ticket.ticket_id, jobId, result);
+      setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
+        ...previous[ticket.ticket_id], status: 'completed', result,
+      } }));
       setChildAiEvaluation(result);
       ticket.child_evaluation = result;
       toast.success(`Parecer de conformidade gerado para o chamado filho #${ticket.ticket_id}!`);
     } catch (err: any) {
       console.error('Erro ao auditar chamado filho:', err);
-      await releaseAssignedWork(ticket).catch(releaseError => {
-        console.error('[AuditingQueue] Falha ao liberar avaliação interrompida:', releaseError);
+      await failAIJob(ticket.ticket_id, jobId, err?.message || 'Falha na análise').catch(jobError => {
+        console.error('[AuditingQueue] Falha ao registrar erro do job de IA:', jobError);
       });
+      if (isMockMode) setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
+        ...previous[ticket.ticket_id], status: 'failed',
+      } }));
       toast.error(err?.message || 'Falha ao auditar chamado filho');
     } finally {
       setLoadingChildAi(false);
-      setEvaluatingChildTicketId(null);
     }
   };
 
@@ -1151,25 +1209,25 @@ ${checksSummary}${recs}`;
     if (!assignment) return null;
     const monitor = qualityMonitors.find(m => m.id === assignment.assigned_to);
     return (
-      <span className="inline-flex items-center gap-1.5">
+      <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
         <Badge
           variant="info"
           size="xs"
-          className="text-[9px] font-black uppercase tracking-wider bg-brand-accent/10 text-brand-accent border border-brand-accent/25 inline-flex items-center gap-1 shadow-2xs"
+          className="min-w-0 max-w-full text-[9px] font-black uppercase tracking-wider bg-brand-accent/10 text-brand-accent border border-brand-accent/25 inline-flex items-center gap-1 shadow-2xs"
           title={`${assignment.assignment_source === 'manual' ? 'Atribuição manual' : 'Distribuição automática'}${assignment.status === 'in_progress' ? ' · Em avaliação' : ''}`}
         >
           <UserIcon className="w-2.5 h-2.5 shrink-0" />
-          <span>{monitor?.name || 'Monitor'}</span>
+          <span className="min-w-0 max-w-[12rem] truncate">{monitor?.name || 'Monitor'}</span>
           {assignment.status === 'in_progress' && <span aria-label="Em avaliação" className="h-1.5 w-1.5 rounded-full bg-functional-warning" />}
         </Badge>
         <button
           type="button"
           onClick={() => setAssignmentModalTicket(ticket)}
-          className="inline-flex items-center gap-1 rounded-lg border border-surface-border bg-surface-card px-2 py-1 text-[9px] font-black uppercase tracking-wider text-brand-muted transition-colors hover:border-brand-accent/40 hover:bg-surface-subtle hover:text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
+          className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-surface-border bg-surface-card px-2 py-1 text-[9px] font-black uppercase tracking-wider text-brand-muted transition-colors hover:border-brand-accent/40 hover:bg-surface-subtle hover:text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
           title="Alterar o monitor responsável"
         >
           <UserCog className="h-3 w-3" />
-          <span>Alterar monitor</span>
+          <span className="min-w-0 whitespace-normal text-left leading-tight">Alterar monitor</span>
         </button>
       </span>
     );
@@ -1449,7 +1507,6 @@ ${checksSummary}${recs}`;
           eligibility={monitorEligibility}
           onlineUserIds={onlineUserIds}
           onEligibilityChange={(userId, enabled) => setMonitorEligibility(prev => ({ ...prev, [userId]: enabled }))}
-          onRedistribute={isDistributedQueue(activeQueue) ? handleRedistributePending : undefined}
         />
       )}
 
@@ -1695,8 +1752,7 @@ ${checksSummary}${recs}`;
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
             {paginatedTickets.map(ticket => (
               <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
-                <div className="flex items-start justify-between gap-2.5">
-                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
                     <input
                       type="checkbox"
                       checked={selectedTicketIds.has(ticket.ticket_id)}
@@ -1705,7 +1761,7 @@ ${checksSummary}${recs}`;
                       className="w-4 h-4 mt-0.5 rounded text-brand-highlight focus:ring-brand-highlight border-surface-border cursor-pointer flex-shrink-0"
                       title="Selecionar para avaliação"
                     />
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs font-black text-brand-primary">
                           #{ticket.ticket_id}
@@ -1736,8 +1792,7 @@ ${checksSummary}${recs}`;
                         {ticket.subject}
                       </h4>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-1.5">
                     {renderAssignedMonitorBadge(ticket)}
                     {renderScoreBadge(ticket)}
                     <Badge variant="error" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
@@ -1752,7 +1807,7 @@ ${checksSummary}${recs}`;
                   </div>
                 )}
 
-                <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                   <div className="flex items-center gap-3">
                     {renderAgentInfo(ticket)}
                     <span className="flex items-center gap-1">
@@ -1847,7 +1902,7 @@ ${checksSummary}${recs}`;
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                         <div className="flex items-center gap-3">
                           {renderAgentInfo(ticket)}
                           <span className="flex items-center gap-1">
@@ -1942,7 +1997,7 @@ ${checksSummary}${recs}`;
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                       <div className="flex items-center gap-3">
                         {renderAgentInfo(ticket)}
                         <span className="flex items-center gap-1">
@@ -1984,8 +2039,7 @@ ${checksSummary}${recs}`;
 
                   return (
                     <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
-                      <div className="flex items-start justify-between gap-2.5">
-                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
                           <input
                             type="checkbox"
                             checked={selectedTicketIds.has(ticket.ticket_id)}
@@ -1994,7 +2048,7 @@ ${checksSummary}${recs}`;
                             className="w-4 h-4 mt-0.5 rounded text-brand-highlight focus:ring-brand-highlight border-surface-border cursor-pointer flex-shrink-0"
                             title="Selecionar para avaliação"
                           />
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="font-mono text-xs font-black text-brand-primary">
                                 #{ticket.ticket_id}
@@ -2030,16 +2084,15 @@ ${checksSummary}${recs}`;
                               {ticket.subject}
                             </h4>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-1.5">
                           {renderAssignedMonitorBadge(ticket)}
                           {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
                           {evaluation && getChildStatusBadge(evaluation.status)}
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                         <div className="flex items-center gap-3">
                           {renderAgentInfo(ticket)}
                           <span className="flex items-center gap-1">
@@ -2052,7 +2105,7 @@ ${checksSummary}${recs}`;
                           <Button
                             size="sm"
                             variant={isValidated ? "outline" : "primary"}
-                            disabled={evaluatingChildTicketId === ticket.ticket_id}
+                            disabled={isEvaluatingTicket(ticket.ticket_id)}
                             onClick={() => {
                               if (evaluation) {
                                 setChildPreviewTicket(ticket);
@@ -2063,9 +2116,9 @@ ${checksSummary}${recs}`;
                             }}
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
-                            <Bot className={`w-3.5 h-3.5 ${evaluatingChildTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+                            <Bot className={`w-3.5 h-3.5 ${isEvaluatingTicket(ticket.ticket_id) ? 'animate-spin' : ''}`} />
                             <span>
-                              {evaluatingChildTicketId === ticket.ticket_id
+                              {isEvaluatingTicket(ticket.ticket_id)
                                 ? 'Auditando com IA...'
                                 : evaluation
                                 ? 'Ver Parecer IA'
@@ -2122,8 +2175,7 @@ ${checksSummary}${recs}`;
 
                   return (
                     <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-functional-error/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-functional-error/40 border-functional-error/50 bg-functional-error/3' : ''}`}>
-                      <div className="flex items-start justify-between gap-2.5">
-                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
                           <input
                             type="checkbox"
                             checked={selectedTicketIds.has(ticket.ticket_id)}
@@ -2132,7 +2184,7 @@ ${checksSummary}${recs}`;
                             className="w-4 h-4 mt-0.5 rounded text-functional-error focus:ring-functional-error border-surface-border cursor-pointer flex-shrink-0"
                             title="Selecionar para avaliação"
                           />
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="font-mono text-xs font-black text-brand-primary">
                                 #{ticket.ticket_id}
@@ -2166,16 +2218,15 @@ ${checksSummary}${recs}`;
                               {ticket.subject}
                             </h4>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-1.5">
                           {renderAssignedMonitorBadge(ticket)}
                           {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
                           {evaluation && getChildStatusBadge(evaluation.status)}
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                         <div className="flex items-center gap-3">
                           {renderAgentInfo(ticket)}
                           <span className="flex items-center gap-1">
@@ -2188,7 +2239,7 @@ ${checksSummary}${recs}`;
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={evaluatingChildTicketId === ticket.ticket_id}
+                            disabled={isEvaluatingTicket(ticket.ticket_id)}
                             onClick={() => {
                               if (evaluation) {
                                 setChildPreviewTicket(ticket);
@@ -2199,9 +2250,9 @@ ${checksSummary}${recs}`;
                             }}
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
-                            <Bot className={`w-3.5 h-3.5 ${evaluatingChildTicketId === ticket.ticket_id ? 'animate-spin' : ''}`} />
+                            <Bot className={`w-3.5 h-3.5 ${isEvaluatingTicket(ticket.ticket_id) ? 'animate-spin' : ''}`} />
                             <span>
-                              {evaluatingChildTicketId === ticket.ticket_id
+                              {isEvaluatingTicket(ticket.ticket_id)
                                 ? 'Auditando com IA...'
                                 : evaluation
                                 ? 'Ver Parecer IA'

@@ -42,4 +42,7 @@ test('backend preserva manual, redistribui offline e impede dois monitores', asy
   expect(result.stdout).toContain('balanceamento preserva atribuição manual');
   expect(result.stdout).toContain('atribuição manual pendente volta ao balanceamento');
   expect(result.stdout).toContain('mantém um único responsável');
+  expect(result.stdout).toContain('dois tickets dão 1/1 e cinco tickets dão 3/2');
+  expect(result.stdout).toContain('refresh não altera donos nem timestamps');
+  expect(result.stdout).toContain('job de IA continua após transferência e só produz um resultado');
 });

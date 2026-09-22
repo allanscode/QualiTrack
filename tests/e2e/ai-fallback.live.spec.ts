@@ -51,6 +51,12 @@ test.describe('fallback real da avaliação com IA', () => {
         method: 'POST',
         body: JSON.stringify({ type: 'magiclink', token_hash: link.hashed_token }),
       }, publishableKey);
+      const claimed = await request<Array<{ job_id: string; claimed: boolean }>>('/rest/v1/rpc/claim_ai_evaluation_job', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ p_ticket_id: ticketId, p_evaluation_type: 'atendimento' }),
+      }, publishableKey);
+      expect(claimed[0].claimed).toBe(true);
 
       const response = await fetch(`${supabaseUrl}/functions/v1/helpdesk-queue`, {
         method: 'POST',
@@ -62,6 +68,7 @@ test.describe('fallback real da avaliação com IA', () => {
         body: JSON.stringify({
           action: 'evaluate_ai',
           ticket_id: ticketId,
+          job_id: claimed[0].job_id,
           form_criteria: {
             sections: [{
               title: 'Atendimento',
@@ -75,12 +82,33 @@ test.describe('fallback real da avaliação com IA', () => {
           agent_info: { name: 'Atendente E2E', channel: 'Chat' },
           guideline_ids: [],
           ticket_fields: [],
+          draft_meta: { form_id: null, agent_name: 'Atendente E2E', guideline_ids: [] },
         }),
       });
       const body = await response.json() as { success?: boolean; result?: { summary?: string }; error?: string };
+      if (!response.ok) {
+        const failedLogs = await request<Array<{ attempts: unknown }>>(
+          `/rest/v1/ai_evaluation_logs?ticket_id=eq.${ticketId}&select=attempts`, { method: 'GET' });
+        console.log(JSON.stringify({ httpStatus: response.status, attempts: failedLogs[0]?.attempts }));
+      }
       expect(response.status, JSON.stringify(body)).toBe(200);
       expect(body.success).toBe(true);
       expect(body.result?.summary).toBeTruthy();
+      const jobs = await request<Array<{ status: string; result: { summary: string } }>>(
+        `/rest/v1/ai_evaluation_jobs?ticket_id=eq.${ticketId}&select=status,result`, { method: 'GET' });
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].status).toBe('completed');
+      expect(jobs[0].result.summary).toBe(body.result?.summary);
+      const drafts = await request<Array<{ ticket_id: string }>>(
+        `/rest/v1/ai_evaluation_drafts?ticket_id=eq.${ticketId}&select=ticket_id`, { method: 'GET' });
+      expect(drafts).toHaveLength(1);
+
+      const duplicateResponse = await fetch(`${supabaseUrl}/functions/v1/helpdesk-queue`, {
+        method: 'POST',
+        headers: { apikey: publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'evaluate_ai', ticket_id: ticketId, job_id: claimed[0].job_id }),
+      });
+      expect(duplicateResponse.status).toBe(409);
 
       const logsResponse = await fetch(`${supabaseUrl}/rest/v1/ai_evaluation_logs?ticket_id=eq.${encodeURIComponent(ticketId)}&select=provider,model,status,fallback_used,attempts`, {
         headers: { apikey: publishableKey, Authorization: `Bearer ${session.access_token}` },
@@ -106,6 +134,14 @@ test.describe('fallback real da avaliação com IA', () => {
         expect(logs[0].attempts[0]).toMatchObject({ provider: 'gemini', status: 'success', attempt: 1 });
       }
     } finally {
+      await fetch(`${supabaseUrl}/rest/v1/ai_evaluation_drafts?ticket_id=eq.${encodeURIComponent(ticketId)}`, {
+        method: 'DELETE',
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+      });
+      await fetch(`${supabaseUrl}/rest/v1/ai_evaluation_jobs?ticket_id=eq.${encodeURIComponent(ticketId)}`, {
+        method: 'DELETE',
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+      });
       await fetch(`${supabaseUrl}/rest/v1/ai_evaluation_logs?ticket_id=eq.${encodeURIComponent(ticketId)}`, {
         method: 'DELETE',
         headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },

@@ -15,6 +15,18 @@ const rebalanceMigration = readFile(
   new URL('../supabase/migrations/20260922000009_rebalance_pending_queue.sql', import.meta.url),
   'utf8',
 );
+const stableMigration = readFile(
+  new URL('../supabase/migrations/20260922000010_stable_queue_and_ai_jobs.sql', import.meta.url),
+  'utf8',
+);
+const serverOwnedMigration = readFile(
+  new URL('../supabase/migrations/20260922000011_server_owned_ai_completion.sql', import.meta.url),
+  'utf8',
+);
+const workerOwnedMigration = readFile(
+  new URL('../supabase/migrations/20260922000012_ai_worker_owns_running_jobs.sql', import.meta.url),
+  'utf8',
+);
 const id = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const session = n => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -25,11 +37,13 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
       CREATE ROLE anon;
       CREATE ROLE authenticated;
       CREATE ROLE service_role BYPASSRLS;
+      CREATE PUBLICATION supabase_realtime;
       CREATE SCHEMA auth;
       CREATE SCHEMA _private;
       CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$
         SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
       $$;
+      CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql AS $$ SELECT current_setting('role', true) $$;
       CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql AS $$
         SELECT coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb)
       $$;
@@ -65,6 +79,15 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
       CREATE TABLE public.ai_evaluation_drafts(
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         ticket_id text NOT NULL UNIQUE,
+        form_id uuid,
+        agent_name text,
+        agent_email text,
+        agent_id uuid,
+        team_id uuid,
+        channel text,
+        satisfaction_comment text,
+        result jsonb NOT NULL,
+        guideline_ids uuid[] DEFAULT '{}',
         created_by uuid REFERENCES public.users(id)
       );
       CREATE FUNCTION _private.is_admin_user() RETURNS boolean
@@ -86,6 +109,9 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
     await db.exec(await migration);
     await db.exec(await manualAssignmentMigration);
     await db.exec(await rebalanceMigration);
+    await db.exec(await stableMigration);
+    await db.exec(await serverOwnedMigration);
+    await db.exec(await workerOwnedMigration);
 
     const asSession = async (userId, sessionId, run) => {
       await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [userId]);
@@ -250,6 +276,89 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
       await asSession(id(1), session(1), () => db.query('SELECT * FROM assign_queue_tickets($1::jsonb)', [JSON.stringify(payload)]));
       counts = (await db.query('SELECT assigned_to, count(*)::int AS n FROM queue_ticket_assignments GROUP BY assigned_to')).rows;
       assert.deepEqual(counts.map(row => row.n).sort(), [3, 3]);
+    });
+
+    await t.test('refresh não altera donos nem timestamps de tickets pendentes', async () => {
+      const payload = Array.from({ length: 6 }, (_, index) => ({ ticket_id: `late-${index + 1}`, queue_type: 'filhos' }));
+      const before = (await db.query("SELECT ticket_id, assigned_to, assigned_at FROM queue_ticket_assignments WHERE ticket_id LIKE 'late-%' ORDER BY ticket_id")).rows;
+      await asSession(id(1), session(1), () => db.query('SELECT * FROM assign_queue_tickets($1::jsonb)', [JSON.stringify(payload)]));
+      const after = (await db.query("SELECT ticket_id, assigned_to, assigned_at FROM queue_ticket_assignments WHERE ticket_id LIKE 'late-%' ORDER BY ticket_id")).rows;
+      assert.deepEqual(after, before);
+    });
+
+    await t.test('job de IA continua após transferência e só produz um resultado', async () => {
+      const assigned = (await db.query("SELECT ticket_id, assigned_to FROM queue_ticket_assignments WHERE ticket_id='late-1'")).rows[0];
+      const other = assigned.assigned_to === id(2) ? id(3) : id(2);
+      const assignedSession = assigned.assigned_to === id(2) ? session(7) : session(9);
+      const firstClaim = await asSession(assigned.assigned_to, assignedSession, () => db.query(
+        "SELECT * FROM claim_ai_evaluation_job('late-1','atendimento')"));
+      assert.equal(firstClaim.rows[0].claimed, true);
+      const duplicate = await asSession(assigned.assigned_to, assignedSession, () => db.query(
+        "SELECT * FROM claim_ai_evaluation_job('late-1','atendimento')"));
+      assert.equal(duplicate.rows[0].claimed, false);
+      assert.equal(duplicate.rows[0].job_id, firstClaim.rows[0].job_id);
+      await db.exec('SET ROLE service_role');
+      try {
+        const firstExecution = await db.query('SELECT begin_ai_evaluation_execution($1,$2) AS started', [
+          firstClaim.rows[0].job_id, assigned.assigned_to,
+        ]);
+        const secondExecution = await db.query('SELECT begin_ai_evaluation_execution($1,$2) AS started', [
+          firstClaim.rows[0].job_id, assigned.assigned_to,
+        ]);
+        assert.equal(firstExecution.rows[0].started, true);
+        assert.equal(secondExecution.rows[0].started, false);
+      } finally {
+        await db.exec('RESET ROLE');
+      }
+      await db.query("UPDATE ai_evaluation_jobs SET started_at=now()-interval '30 minutes' WHERE ticket_id='late-1'");
+      const stillRunning = await asSession(assigned.assigned_to, assignedSession, () => db.query(
+        "SELECT * FROM claim_ai_evaluation_job('late-1','atendimento')"));
+      assert.equal(stillRunning.rows[0].claimed, false);
+
+      await asSession(assigned.assigned_to, assignedSession, () => db.query(
+        "SELECT fail_ai_evaluation_job($1,'Navegador desconectou')", [firstClaim.rows[0].job_id]));
+      assert.equal((await db.query("SELECT status FROM ai_evaluation_jobs WHERE ticket_id='late-1'")).rows[0].status, 'running');
+
+      await asSession(id(1), session(1), () => db.query(
+        'SELECT * FROM reassign_queue_ticket($1,$2,$3,false)', ['late-1', 'filhos', other]));
+      const running = (await db.query("SELECT status FROM ai_evaluation_jobs WHERE ticket_id='late-1'")).rows[0];
+      assert.equal(running.status, 'running');
+      await db.exec('SET ROLE service_role');
+      try {
+        await db.query(
+        'SELECT complete_ai_evaluation_execution($1,$2,$3::jsonb,$4::jsonb)', [
+          firstClaim.rows[0].job_id,
+          assigned.assigned_to,
+          JSON.stringify({ score: 100, summary: 'Avaliação concluída', dialogue: [] }),
+          JSON.stringify({ agent_name: 'Atendente', guideline_ids: [] }),
+        ]);
+      } finally {
+        await db.exec('RESET ROLE');
+      }
+      const final = (await db.query("SELECT status, result->>'summary' AS summary FROM ai_evaluation_jobs WHERE ticket_id='late-1'")).rows[0];
+      assert.deepEqual(final, { status: 'completed', summary: 'Avaliação concluída' });
+      assert.equal((await db.query("SELECT count(*)::int AS n FROM ai_evaluation_drafts WHERE ticket_id='late-1'")).rows[0].n, 1);
+      await db.exec('SET ROLE service_role');
+      try {
+        await assert.rejects(() => db.query(
+          'SELECT complete_ai_evaluation_execution($1,$2,$3::jsonb,$4::jsonb)', [
+            firstClaim.rows[0].job_id, assigned.assigned_to,
+            JSON.stringify({ score: 0, summary: 'duplicado' }), '{}',
+          ]), /já concluído/);
+      } finally {
+        await db.exec('RESET ROLE');
+      }
+    });
+
+    await t.test('dois tickets dão 1/1 e cinco tickets dão 3/2', async () => {
+      await db.exec('DELETE FROM queue_ticket_assignments');
+      for (const total of [2, 5]) {
+        const payload = Array.from({ length: total }, (_, index) => ({ ticket_id: `exact-${total}-${index}`, queue_type: 'filhos' }));
+        await asSession(id(1), session(1), () => db.query('SELECT * FROM assign_queue_tickets($1::jsonb)', [JSON.stringify(payload)]));
+        const counts = (await db.query('SELECT count(*)::int AS n FROM queue_ticket_assignments GROUP BY assigned_to')).rows.map(row => row.n).sort();
+        assert.deepEqual(counts, total === 2 ? [1, 1] : [2, 3]);
+        await db.exec('DELETE FROM queue_ticket_assignments');
+      }
     });
   } finally {
     await db.close();

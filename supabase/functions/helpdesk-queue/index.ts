@@ -83,6 +83,17 @@ const RequestSchema = z.object({
   ]),
   queue_type: z.enum(['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos']).optional(),
   ticket_id: z.string().optional(),
+  job_id: z.string().uuid().optional(),
+  draft_meta: z.object({
+    form_id: z.string().uuid().nullable().optional(),
+    agent_name: z.string().nullable().optional(),
+    agent_email: z.string().nullable().optional(),
+    agent_id: z.string().uuid().nullable().optional(),
+    team_id: z.string().uuid().nullable().optional(),
+    channel: z.string().nullable().optional(),
+    satisfaction_comment: z.string().nullable().optional(),
+    guideline_ids: z.array(z.string().uuid()).optional(),
+  }).optional(),
   ticket_subject: z.string().optional(),
   // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
   // de fetch_queue. Ausente/null = primeira página.
@@ -326,13 +337,28 @@ serve(async (req) => {
       return jsonResponse({ error: 'ticket_id deve ser numérico.' }, 400);
     }
 
+    if (action === 'evaluate_ai' || action === 'evaluate_child_ticket') {
+      if (!parseResult.data.job_id) return jsonResponse({ error: 'Job de IA obrigatório.' }, 400);
+      if (action === 'evaluate_ai' && !parseResult.data.draft_meta) {
+        return jsonResponse({ error: 'Metadados do rascunho obrigatórios.' }, 400);
+      }
+      const { data: started, error: startError } = await supabase.rpc('begin_ai_evaluation_execution', {
+        p_job_id: parseResult.data.job_id,
+        p_caller_id: user.id,
+      });
+      if (startError) return jsonResponse({ error: startError.message }, 500);
+      if (!started) return jsonResponse({ error: 'Este job de IA já está em execução ou não pertence ao usuário.' }, 409);
+    }
+
     // 3. Avaliação com IA (Gemini com fallback OpenRouter) — não depende do Zendesk
     if (action === 'evaluate_ai') {
-      return await handleEvaluateAI(parseResult.data, supabase, user.id);
+      return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
+        () => handleEvaluateAI(parseResult.data, supabase, user.id));
     }
 
     if (action === 'evaluate_child_ticket') {
-      return await handleEvaluateChildTicket(parseResult.data, supabase, user.id);
+      return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
+        () => handleEvaluateChildTicket(parseResult.data, supabase, user.id));
     }
 
     // 4. Cadastro manual de agente ainda não existente no QualiTrack, feito
@@ -1103,6 +1129,51 @@ function validateChildEvaluationResponse(value: unknown): any {
     incompleteResponse('O parecer não contém recommendations válido.');
   }
   return parsed;
+}
+
+async function executeAndPersistAIJob(
+  payload: z.infer<typeof RequestSchema>,
+  supabase: SupabaseClient,
+  callerId: string,
+  evaluate: () => Promise<Response>,
+): Promise<Response> {
+  const jobId = payload.job_id!;
+  try {
+    const response = await evaluate();
+    if (!response.ok) {
+      const details = await response.clone().json().catch(() => ({}));
+      const { error } = await supabase.from('ai_evaluation_jobs')
+        .update({ status: 'failed', finished_at: new Date().toISOString(), error_message: String(details.error || `HTTP ${response.status}`).slice(0, 500) })
+        .eq('job_id', jobId).eq('status', 'running');
+      if (error) console.error('[ai-job] Falha ao registrar erro:', error);
+      return response;
+    }
+
+    const body = await response.clone().json();
+    const result = body?.result;
+    if (!result || typeof result !== 'object') throw new Error('A avaliação não retornou um resultado válido.');
+    if (payload.action === 'evaluate_ai') {
+      result.ticket_fields = payload.ticket_fields || [];
+      result.dialogue = payload.dialogue || [];
+    }
+    const { error } = await supabase.rpc('complete_ai_evaluation_execution', {
+      p_job_id: jobId,
+      p_caller_id: callerId,
+      p_result: result,
+      p_draft: payload.action === 'evaluate_ai' ? payload.draft_meta : null,
+    });
+    if (error) throw new Error(`Falha ao persistir avaliação: ${error.message}`);
+    console.info(`[ai-job] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, status: 'completed' })}`);
+    return jsonResponse({ ...body, result }, 200);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const { error: updateError } = await supabase.from('ai_evaluation_jobs')
+      .update({ status: 'failed', finished_at: new Date().toISOString(), error_message: message.slice(0, 500) })
+      .eq('job_id', jobId).eq('status', 'running');
+    if (updateError) console.error('[ai-job] Falha ao registrar erro:', updateError);
+    console.error(`[ai-job] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, status: 'failed', reason: message })}`);
+    return jsonResponse({ error: message }, 500);
+  }
 }
 
 async function handleEvaluateAI(

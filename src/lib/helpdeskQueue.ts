@@ -382,7 +382,9 @@ export async function evaluateTicketWithAI(
   guidelineIds?: string[],
   // Campos de classificação do próprio ticket (categoria, motivo do
   // contato etc.) — contexto extra pra IA, não altera o schema de resposta.
-  ticketFields?: { title: string; value: string }[]
+  ticketFields?: { title: string; value: string }[],
+  jobId?: string,
+  draftMeta?: Record<string, unknown>,
 ): Promise<AIEvaluationResult> {
   if (isMockMode || !supabase) {
     return getFallbackAIEvaluation(ticketId, form);
@@ -398,6 +400,8 @@ export async function evaluateTicketWithAI(
         agent_info: agentInfo,
         guideline_ids: guidelineIds,
         ticket_fields: ticketFields,
+        job_id: jobId,
+        draft_meta: draftMeta,
       }
     });
 
@@ -457,7 +461,8 @@ export async function evaluateChildTicketWithAI(
   dialogue?: TicketCommentMessage[],
   tags?: string[],
   ticketFields?: { title: string; value: string }[],
-  macroType?: ChildTicketMacroType
+  macroType?: ChildTicketMacroType,
+  jobId?: string,
 ): Promise<ChildTicketAiEvaluation> {
   if (isMockMode || !supabase) {
     return getFallbackChildTicketEvaluation(ticketId, macroType);
@@ -473,18 +478,16 @@ export async function evaluateChildTicketWithAI(
         tags: tags || [],
         ticket_fields: ticketFields,
         macro_type: macroType,
+        job_id: jobId,
       }
     });
 
-    if (error || !data?.result) {
-      console.warn(`[HelpdeskQueue] Falha ao avaliar chamado filho com IA (${error?.message}). Usando fallback.`);
-      return getFallbackChildTicketEvaluation(ticketId, macroType);
-    }
+    if (error || !data?.result) throw new Error(data?.error || error?.message || 'A IA não retornou resultado.');
 
     return data.result as ChildTicketAiEvaluation;
   } catch (err) {
     console.error('[HelpdeskQueue] Erro ao chamar avaliação de chamado filho com IA:', err);
-    return getFallbackChildTicketEvaluation(ticketId, macroType);
+    throw err;
   }
 }
 
