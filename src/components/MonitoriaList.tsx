@@ -461,85 +461,15 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                   {isExpanded && (
                     <motionComponent.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-t border-surface-border/50">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-2">
-                        {/* Coluna 1: Observações, Linha do tempo e Visualizar Avaliação */}
-                        <div className="space-y-6 flex flex-col justify-between h-full">
-                          <div className="space-y-6">
-                            <div>
-                              <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-2 ml-1">Observações da Qualidade</p>
-                              <p className="text-sm text-brand-primary font-medium bg-surface-bg/50 p-4 rounded-3xl border border-surface-border/40 min-h-[80px] leading-relaxed italic">
-                                "{m.evaluator_note || 'Nenhuma observação registrada.'}"
-                              </p>
-                            </div>
-
-                            {m.history?.length > 0 && (
-                              <div>
-                                <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-3 ml-1 flex items-center gap-2">
-                                  <History className="w-3 h-3" /> Linha do Tempo
-                                </p>
-                                <div className="space-y-4 ml-2 border-l-2 border-surface-border/60 pl-6 py-1">
-                                  {m.history.map((h, i) => {
-                                    const ev = getHistoryEventConfig(h.action);
-                                    const EvIcon = ev.icon;
-                                    const evColor = VARIANT_TEXT_CLASS[ev.variant];
-                                    return (
-                                    <div key={i} className="relative">
-                                      <div className={`absolute -left-[32px] top-1 w-3 h-3 rounded-full bg-current border-2 border-surface-bg shadow-sm ${evColor}`} />
-                                      <div className="flex flex-col">
-                                        <span className="text-[11px] font-bold text-brand-primary leading-none flex items-center gap-1.5">
-                                          <EvIcon className={`w-3 h-3 shrink-0 ${evColor}`} /> {h.action}
-                                        </span>
-                                        <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70">
-                                          {(() => {
-                                            const actor = staticData.users.find(u => u.id === h.by_id);
-                                            const isSupportView = user?.role === 'suporte' || user?.role === 'gestor_suporte';
-                                            const isQualityActor = actor && ['qualidade', 'gestor_qualidade'].includes(actor.role);
-                                            return (isSupportView && isQualityActor) ? 'Equipe de Qualidade' : h.by_name;
-                                          })()} <span className="mx-1">•</span> {format(new Date(h.at), 'HH:mm')}
-                                        </span>
-                                        {h.note && (
-                                          <div className="mt-2 text-[11px] text-brand-muted/80 bg-surface-subtle/50 p-2 rounded-xl border border-surface-border/30">
-                                            {h.note}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    );
-                                  })}
-
-                                  {/* Etapa atual: fecha a linha do tempo mostrando
-                                      de quem a monitoria está esperando. Rótulo vem
-                                      do STATUS_CONFIGS, o mesmo usado nos badges e
-                                      filtros — muda num lugar só. Marcador vazado e
-                                      tracejado distingue "pendente" de "concluído"
-                                      sem depender de cor. */}
-                                  {!['concluida', 'finalizada_alterada'].includes(m.status) && (() => {
-                                    const cfg = getStatusConfig(m.status);
-                                    const StepIcon = cfg.icon;
-                                    // Cor vem do variant do STATUS_CONFIGS, o mesmo que
-                                    // pinta os badges da listagem. Aplicada no wrapper e
-                                    // herdada pelo marcador via border-current, para não
-                                    // duplicar o mapa de cores.
-                                    const colorClass = VARIANT_TEXT_CLASS[cfg.variant];
-                                    return (
-                                      <div className={`relative ${colorClass}`}>
-                                        <div className="absolute -left-[32px] top-1 w-3 h-3 rounded-full bg-surface-bg border-2 border-current animate-pulse" />
-                                        <div className="flex flex-col">
-                                          <span className="text-[11px] font-black leading-none flex items-center gap-1.5">
-                                            <StepIcon className="w-3 h-3" /> {cfg.label}
-                                          </span>
-                                          <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1">
-                                            Etapa atual
-                                          </span>
-                                        </div>
-                                      </div>
-                                    );
-                                  })()}
-                                </div>
-                              </div>
-                            )}
+                        {/* Coluna 1: Observações e Visualizar Avaliação */}
+                        <div className="space-y-4">
+                          <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1">Observações da Qualidade</p>
+                          <div className="relative text-sm text-brand-primary font-medium bg-surface-bg/50 p-4 pl-9 rounded-3xl border border-surface-border/40 leading-relaxed italic">
+                            <span className="absolute left-3 top-2 text-3xl font-black text-brand-muted/20 leading-none select-none">"</span>
+                            {m.evaluator_note || 'Nenhuma observação registrada.'}
                           </div>
 
-                          <div className="pt-4 mt-auto">
+                          <div className="pt-2">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -553,7 +483,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                         </div>
 
                         {/* Coluna 2: Ações do Fluxo e Exclusão */}
-                        <div className="flex flex-col justify-between h-full min-h-[220px] items-end space-y-6">
+                        <div className="flex flex-col justify-start items-end space-y-6">
                           <div className="flex flex-wrap gap-3 justify-end items-start w-full">
                             {/* Suporte Actions */}
                             {/* Aprovar/Contestar a tratativa passou a ser exclusivo
@@ -583,6 +513,31 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                                   variant="secondary"
                                   size="sm"
                                   onClick={() => setActionModal({ id: m.id, type: 'aceitar' })}
+                                  icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                                  className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
+                                >
+                                  Aprovar
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
+                                  icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                                  className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                                >
+                                  Contestar
+                                </Button>
+                              </div>
+                            )}
+
+                            {/* Admin / Supervisor de Qualidade cobrindo a etapa do Gestor
+                                de Atendimento — ver mesma justificativa em MonitoriaRow.tsx. */}
+                            {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'pendente_revisao' && (
+                              <div className="flex gap-3 items-center flex-wrap justify-end">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
                                   icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                                   className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
                                 >
@@ -702,6 +657,70 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                           )}
                         </div>
                       </div>
+
+                      {m.history?.length > 0 && (
+                        <div className="pt-2 pb-2">
+                          <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-3 ml-1 flex items-center gap-2">
+                            <History className="w-3 h-3" /> Linha do Tempo
+                          </p>
+                          <div className="overflow-x-auto -mx-1 px-1 pb-1">
+                            <div className="flex items-start min-w-max">
+                              {m.history.map((h, i) => {
+                                const ev = getHistoryEventConfig(h.action);
+                                const EvIcon = ev.icon;
+                                const evColor = VARIANT_TEXT_CLASS[ev.variant];
+                                return (
+                                  <React.Fragment key={i}>
+                                    {i > 0 && <div className="w-8 md:w-12 h-0.5 bg-surface-border/60 mt-[9px] flex-shrink-0" />}
+                                    <div className="flex flex-col items-center text-center w-[140px] flex-shrink-0 px-1">
+                                      <div className={`w-3 h-3 rounded-full bg-current border-2 border-surface-bg shadow-sm flex-shrink-0 ${evColor}`} />
+                                      <span className="mt-2 text-[11px] font-bold text-brand-primary leading-tight flex items-center gap-1.5">
+                                        <EvIcon className={`w-3 h-3 shrink-0 ${evColor}`} /> {h.action}
+                                      </span>
+                                      <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70 leading-tight">
+                                        {(() => {
+                                          const actor = staticData.users.find(u => u.id === h.by_id);
+                                          const isSupportView = user?.role === 'suporte' || user?.role === 'gestor_suporte';
+                                          const isQualityActor = actor && ['qualidade', 'gestor_qualidade'].includes(actor.role);
+                                          return (isSupportView && isQualityActor) ? 'Equipe de Qualidade' : h.by_name;
+                                        })()} <span className="mx-1">•</span> {format(new Date(h.at), 'HH:mm')}
+                                      </span>
+                                      {h.note && (
+                                        <div className="mt-2 text-[10px] text-brand-muted/80 bg-surface-subtle/50 p-2 rounded-xl border border-surface-border/30 leading-snug">
+                                          {h.note}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </React.Fragment>
+                                );
+                              })}
+
+                              {/* Etapa atual: fecha a linha do tempo mostrando de quem a
+                                  monitoria está esperando. Rótulo vem do STATUS_CONFIGS, o
+                                  mesmo usado nos badges e filtros — muda num lugar só. */}
+                              {!['concluida', 'finalizada_alterada'].includes(m.status) && (() => {
+                                const cfg = getStatusConfig(m.status);
+                                const StepIcon = cfg.icon;
+                                const colorClass = VARIANT_TEXT_CLASS[cfg.variant];
+                                return (
+                                  <React.Fragment>
+                                    {m.history.length > 0 && <div className="w-8 md:w-12 h-0.5 bg-surface-border/60 mt-[9px] flex-shrink-0" />}
+                                    <div className={`flex flex-col items-center text-center w-[140px] flex-shrink-0 px-1 ${colorClass}`}>
+                                      <div className="w-3 h-3 rounded-full bg-surface-bg border-2 border-current animate-pulse flex-shrink-0" />
+                                      <span className="mt-2 text-[11px] font-black leading-tight flex items-center gap-1.5">
+                                        <StepIcon className="w-3 h-3 shrink-0" /> {cfg.label}
+                                      </span>
+                                      <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1">
+                                        Etapa atual
+                                      </span>
+                                    </div>
+                                  </React.Fragment>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </motionComponent.div>
                   )}
                 </AnimatePresence>
