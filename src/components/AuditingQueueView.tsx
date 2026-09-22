@@ -815,6 +815,9 @@ ${checksSummary}${recs}`;
       aiResult.dialogue = dialogue;
 
       setTicketProgress(ticket.ticket_id, 3);
+      // A resposta já foi persistida pelo backend; esta curta permanência
+      // permite perceber a etapa final antes de trocar o botão de estado.
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       // Em produção, a Edge Function salva o rascunho e conclui o job de
       // forma atômica; o navegador pode sair sem perder o resultado.
@@ -1033,6 +1036,7 @@ ${checksSummary}${recs}`;
       }
 
       setTicketProgress(ticket.ticket_id, 3);
+      await new Promise(resolve => setTimeout(resolve, 350));
       if (isMockMode) await completeAIJob(ticket.ticket_id, jobId, result);
       setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
         ...previous[ticket.ticket_id], status: 'completed', result,

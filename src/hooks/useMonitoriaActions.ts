@@ -96,6 +96,13 @@ export function useMonitoriaActions(
           p_note: actionNote || '',
         });
         if (error) throw error;
+      } else if (user.role === 'gestor_suporte') {
+        const { error } = await supabase.rpc('act_on_monitoria_as_support_manager', {
+          p_monitoria_id: id,
+          p_action: type,
+          p_note: actionNote || '',
+        });
+        if (error) throw error;
       } else {
         const { error } = await supabase.from('monitorias').update(update).eq('id', id);
         if (error) throw error;
