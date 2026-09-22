@@ -7,6 +7,10 @@ const migration = readFile(
   new URL('../supabase/migrations/20260922000005_authoritative_presence_and_queue_fix.sql', import.meta.url),
   'utf8',
 );
+const manualAssignmentMigration = readFile(
+  new URL('../supabase/migrations/20260922000006_manual_queue_assignment.sql', import.meta.url),
+  'utf8',
+);
 const id = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const session = n => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -49,6 +53,16 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
         completed_at timestamptz,
         UNIQUE(ticket_id, queue_type)
       );
+      CREATE TABLE public.monitorias(
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        ticket_id text NOT NULL,
+        evaluator_id uuid NOT NULL REFERENCES public.users(id)
+      );
+      CREATE TABLE public.ai_evaluation_drafts(
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        ticket_id text NOT NULL UNIQUE,
+        created_by uuid REFERENCES public.users(id)
+      );
       CREATE FUNCTION _private.is_admin_user() RETURNS boolean
       LANGUAGE sql SECURITY DEFINER SET search_path='public' AS $$
         SELECT EXISTS(SELECT 1 FROM public.users WHERE id=auth.uid() AND active AND role IN ('admin','gestor_qualidade'))
@@ -62,9 +76,11 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
       INSERT INTO public.users(id,email,name,role) VALUES
         ('${id(1)}','admin@example.invalid','Administrador','admin'),
         ('${id(2)}','vinicius@example.invalid','Vinicius','qualidade'),
-        ('${id(3)}','gabriel@example.invalid','Gabriel','qualidade');
+        ('${id(3)}','gabriel@example.invalid','Gabriel','qualidade'),
+        ('${id(4)}','supervisor@example.invalid','Supervisora','gestor_qualidade');
     `);
     await db.exec(await migration);
+    await db.exec(await manualAssignmentMigration);
 
     const asSession = async (userId, sessionId, run) => {
       await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [userId]);
@@ -121,6 +137,100 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
       await asSession(id(1), session(1), () => db.query('SELECT * FROM assign_queue_tickets($1::jsonb)', [JSON.stringify(payload)]));
       const counts = (await db.query('SELECT assigned_to, count(*)::int AS n FROM queue_ticket_assignments GROUP BY assigned_to ORDER BY assigned_to')).rows;
       assert.deepEqual(counts.map(row => row.n).sort(), [2, 3]);
+    });
+
+    await t.test('admin e supervisor transferem; monitor comum não tem permissão', async () => {
+      await heartbeat(id(4), session(6));
+      await asSession(id(1), session(1), () => db.query(
+        'SELECT * FROM reassign_queue_ticket($1,$2,$3,false)',
+        ['balanced-1', 'filhos', id(3)],
+      ));
+      let row = (await db.query("SELECT assigned_to, assignment_source FROM queue_ticket_assignments WHERE ticket_id='balanced-1'")).rows[0];
+      assert.deepEqual(row, { assigned_to: id(3), assignment_source: 'manual' });
+
+      await asSession(id(4), session(6), () => db.query(
+        'SELECT * FROM reassign_queue_ticket($1,$2,$3,false)',
+        ['balanced-1', 'filhos', id(2)],
+      ));
+      row = (await db.query("SELECT assigned_to, assignment_source FROM queue_ticket_assignments WHERE ticket_id='balanced-1'")).rows[0];
+      assert.deepEqual(row, { assigned_to: id(2), assignment_source: 'manual' });
+
+      await assert.rejects(
+        () => asSession(id(2), session(4), () => db.query(
+          'SELECT * FROM reassign_queue_ticket($1,$2,$3,false)',
+          ['balanced-1', 'filhos', id(3)],
+        )),
+        /Apenas o Supervisor de Qualidade ou o Administrador/
+      );
+    });
+
+    await t.test('balanceamento preserva atribuição manual enquanto o responsável está online', async () => {
+      await asSession(id(1), session(1), () => db.query(
+        'SELECT * FROM assign_queue_tickets($1::jsonb)',
+        [JSON.stringify([{ ticket_id: 'balanced-1', queue_type: 'filhos' }])],
+      ));
+      const row = (await db.query("SELECT assigned_to, assignment_source FROM queue_ticket_assignments WHERE ticket_id='balanced-1'")).rows[0];
+      assert.deepEqual(row, { assigned_to: id(2), assignment_source: 'manual' });
+    });
+
+    await t.test('atribuição manual pendente volta ao balanceamento quando o responsável fica offline', async () => {
+      await endSession(id(2), session(4));
+      await asSession(id(1), session(1), () => db.query(
+        'SELECT * FROM assign_queue_tickets($1::jsonb)',
+        [JSON.stringify([{ ticket_id: 'balanced-1', queue_type: 'filhos' }])],
+      ));
+      const row = (await db.query("SELECT assigned_to, assignment_source FROM queue_ticket_assignments WHERE ticket_id='balanced-1'")).rows[0];
+      assert.deepEqual(row, { assigned_to: id(3), assignment_source: 'automatic' });
+    });
+
+    await t.test('ticket em avaliação exige confirmação e mantém um único responsável', async () => {
+      await asSession(id(3), session(5), () => db.query(
+        'SELECT * FROM start_queue_ticket_assignment($1,$2)',
+        ['balanced-1', 'filhos'],
+      ));
+
+      await endSession(id(3), session(5));
+      await asSession(id(1), session(1), () => db.query(
+        'SELECT * FROM assign_queue_tickets($1::jsonb)',
+        [JSON.stringify([{ ticket_id: 'balanced-1', queue_type: 'filhos' }])],
+      ));
+      assert.equal(
+        (await db.query("SELECT assigned_to FROM queue_ticket_assignments WHERE ticket_id='balanced-1'")).rows[0].assigned_to,
+        id(3),
+        'trabalho já iniciado não é redistribuído automaticamente quando o monitor fica offline',
+      );
+      await heartbeat(id(3), session(8));
+
+      await assert.rejects(
+        () => asSession(id(1), session(1), () => db.query(
+          'SELECT * FROM reassign_queue_ticket($1,$2,$3,false)',
+          ['balanced-1', 'filhos', id(3)],
+        )),
+        /CONFIRM_IN_PROGRESS/
+      );
+
+      await heartbeat(id(2), session(7));
+      await asSession(id(1), session(1), () => db.query(
+        'SELECT * FROM reassign_queue_ticket($1,$2,$3,true)',
+        ['balanced-1', 'filhos', id(2)],
+      ));
+      const row = (await db.query("SELECT assigned_to, status, started_by FROM queue_ticket_assignments WHERE ticket_id='balanced-1'")).rows[0];
+      assert.deepEqual(row, { assigned_to: id(2), status: 'pending', started_by: null });
+
+      await assert.rejects(
+        () => asSession(id(3), session(5), () => db.query(
+          'INSERT INTO monitorias(ticket_id,evaluator_id) VALUES ($1,$2)',
+          ['balanced-1', id(3)],
+        )),
+        /transferido para outro monitor/
+      );
+      await assert.rejects(
+        () => asSession(id(3), session(5), () => db.query(
+          'INSERT INTO ai_evaluation_drafts(ticket_id,created_by) VALUES ($1,$2)',
+          ['balanced-1', id(3)],
+        )),
+        /transferido para outro monitor/
+      );
     });
   } finally {
     await db.close();

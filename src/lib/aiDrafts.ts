@@ -78,6 +78,9 @@ export async function saveAIDraft(params: {
 
   if (error) {
     console.error('[AIDrafts] Falha ao salvar rascunho:', error.message);
+    if (error.message.includes('transferido para outro monitor')) {
+      throw new Error('Este ticket foi transferido para outro monitor durante a avaliação. O resultado não foi salvo.');
+    }
     // Não interrompe o fluxo — o monitor já viu o resultado na tela, só
     // perde a persistência (vai ter que reavaliar se sair e voltar).
   }

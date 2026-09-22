@@ -22,6 +22,7 @@ import { useSidebarManager } from './hooks/useSidebarManager';
 import { useMonitoriaData } from './hooks/useMonitoriaData';
 import { supabase } from './lib/supabase';
 import { fetchAIGuidelines } from './lib/aiGuidelines';
+import { releaseQueueTicketAssignment } from './lib/queueDistribution';
 import type { AdminSubTab } from './components/AdminPanel';
 
 import { lazyWithRetry } from './utils/lazyWithRetry';
@@ -415,6 +416,7 @@ function MainApp({
       aiEvaluation: prefill.aiEvaluation,
       childAiEvaluation: prefill.child_evaluation || prefill.childAiEvaluation,
       dialogue: prefill.dialogue || prefill.aiEvaluation?.dialogue,
+      queue_assignment: prefill.queue_assignment,
       ...(prefill.aiEvaluation ? {
         answers: prefill.aiEvaluation.suggested_answers,
         question_observations: prefill.aiEvaluation.suggested_observations,
@@ -423,6 +425,18 @@ function MainApp({
       } : {})
     });
     setIsFormOpen(true);
+  };
+
+  const handleCancelMonitoriaForm = () => {
+    const assignment = formPrefillData?.queue_assignment;
+    setIsFormOpen(false);
+    setFormPrefillData(undefined);
+    if (assignment?.ticket_id && assignment?.queue_type) {
+      void releaseQueueTicketAssignment(assignment.ticket_id, assignment.queue_type).catch(error => {
+        console.error('[App] Falha ao liberar ticket após cancelar a avaliação:', error);
+        toast.error('A avaliação foi fechada, mas não foi possível liberar o ticket. Atualize a fila.');
+      });
+    }
   };
 
   const {
@@ -877,7 +891,7 @@ function MainApp({
           <MonitoriaForm
             user={userData}
             initialData={formPrefillData}
-            onCancel={() => { setIsFormOpen(false); setFormPrefillData(undefined); }}
+            onCancel={handleCancelMonitoriaForm}
             // O id da monitoria salva não é usado aqui; a lista recarrega ao trocar de aba.
             onSaved={() => { setIsFormOpen(false); setFormPrefillData(undefined); setActiveTab('monitorias'); }}
           />

@@ -57,19 +57,26 @@ import {
   CheckSquare,
   Eye,
   Copy,
-  MessageSquare
+  MessageSquare,
+  UserCog
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import TicketMessageBubble from './TicketMessageBubble';
 import QueueMonitorPresencePanel from './QueueMonitorPresencePanel';
+import QueueMonitorAssignmentModal from './QueueMonitorAssignmentModal';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import {
   isDistributedQueue,
+  canManageQueueAssignments,
   fetchMonitorEligibility,
   fetchQueueAssignments,
+  QueueAssignment,
+  reassignQueueTicket,
+  releaseQueueTicketAssignment,
+  startQueueTicketAssignment,
   syncQueueAssignments,
 } from '../lib/queueDistribution';
 import { usePresence } from '../providers/PresenceProvider';
@@ -102,6 +109,7 @@ interface AuditingQueueViewProps {
     customerType?: string;
     specializedTeamLabel?: string;
     dialogue?: TicketCommentMessage[];
+    queue_assignment?: { ticket_id: string; queue_type: 'negativas' | 'filhos' };
   }) => void;
   onModalStateChange?: (isOpen: boolean) => void;
 }
@@ -128,17 +136,20 @@ export default function AuditingQueueView({
   onModalStateChange,
 }: AuditingQueueViewProps) {
   const [activeQueue, setActiveQueue] = useState<AuditingQueueType>('negativas');
-  const isSupervisorView = currentUserRole === 'gestor_qualidade' || currentUserRole === 'admin';
+  const isSupervisorView = canManageQueueAssignments(currentUserRole);
   const { onlineUsers } = usePresence();
   const onlineUserIds = useMemo(() => new Set(onlineUsers.map(user => user.id)), [onlineUsers]);
   const onlineMonitorKey = useMemo(
     () => qualityMonitors.filter(monitor => onlineUserIds.has(monitor.id)).map(monitor => monitor.id).sort().join(','),
     [qualityMonitors, onlineUserIds]
   );
-
   // Distribuição 1-para-1: a habilitação manual do monitor é independente
   // da presença de login compartilhada; o banco exige as duas condições.
   const [monitorEligibility, setMonitorEligibility] = useState<Record<string, boolean>>({});
+  const eligibleOnlineMonitors = useMemo(
+    () => qualityMonitors.filter(monitor => monitorEligibility[monitor.id] && onlineUserIds.has(monitor.id)),
+    [qualityMonitors, monitorEligibility, onlineUserIds]
+  );
   const [assignmentsReady, setAssignmentsReady] = useState<Record<AuditingQueueType, boolean>>({
     negativas: false,
     proativas: true,
@@ -146,13 +157,14 @@ export default function AuditingQueueView({
     filhos: false,
     filhos_invalidos: true,
   });
-  const [queueAssignments, setQueueAssignments] = useState<Record<AuditingQueueType, Record<string, string>>>({
+  const [queueAssignments, setQueueAssignments] = useState<Record<AuditingQueueType, Record<string, QueueAssignment>>>({
     negativas: {},
     proativas: {},
     positivas: {},
     filhos: {},
     filhos_invalidos: {},
   });
+  const [assignmentModalTicket, setAssignmentModalTicket] = useState<AuditingQueueTicket | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -165,14 +177,14 @@ export default function AuditingQueueView({
         fetchMonitorEligibility().then(map => { if (!cancelled) setMonitorEligibility(map); });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_ticket_assignments' }, (payload: any) => {
-        const row = payload.new || payload.old;
+        const row = (payload.new || payload.old) as QueueAssignment | undefined;
         if (!row?.queue_type) return;
         setQueueAssignments(prev => {
           const forQueue = { ...prev[row.queue_type as AuditingQueueType] };
           if (payload.eventType === 'DELETE') {
             delete forQueue[row.ticket_id];
           } else {
-            forQueue[row.ticket_id] = row.assigned_to;
+            forQueue[row.ticket_id] = row;
           }
           return { ...prev, [row.queue_type as AuditingQueueType]: forQueue };
         });
@@ -380,9 +392,9 @@ ${checksSummary}${recs}`;
   // Notifica o container pai (App.tsx) se algum modal de prévia está aberto,
   // para que a barra lateral se recolha automaticamente liberando espaço total da tela.
   useEffect(() => {
-    const isAnyModalOpen = Boolean(childPreviewTicket || guidelinePickerTicket || childGuidelineModalTicket);
+    const isAnyModalOpen = Boolean(childPreviewTicket || guidelinePickerTicket || childGuidelineModalTicket || assignmentModalTicket);
     onModalStateChange?.(isAnyModalOpen);
-  }, [childPreviewTicket, guidelinePickerTicket, childGuidelineModalTicket, onModalStateChange]);
+  }, [childPreviewTicket, guidelinePickerTicket, childGuidelineModalTicket, assignmentModalTicket, onModalStateChange]);
 
   // Paginação: 25 tickets por página (definido no backend). Views grandes
   // (Proativas chega a ter centenas de CSAT vazio) não cabem numa carga só
@@ -556,8 +568,8 @@ ${checksSummary}${recs}`;
       // atribuídos a ele nas filas de Negativas/Filhos. Supervisor e Admin
       // continuam vendo a fila inteira (com o selo de quem é o dono).
       if (isDistributedQueue(activeQueue) && currentUserRole === 'qualidade' && currentUserId) {
-        const assignedTo = queueAssignments[activeQueue][t.ticket_id];
-        if (!assignmentsReady[activeQueue] || assignedTo !== currentUserId) return false;
+        const assignment = queueAssignments[activeQueue][t.ticket_id];
+        if (!assignmentsReady[activeQueue] || assignment?.assigned_to !== currentUserId) return false;
       }
 
       return matchesSearch && matchesAgent;
@@ -611,6 +623,38 @@ ${checksSummary}${recs}`;
     });
   };
 
+  const beginAssignedWork = async (ticket: AuditingQueueTicket) => {
+    if (!isDistributedQueue(activeQueue)) return undefined;
+    const queueType = activeQueue;
+    const assignment = queueAssignments[queueType][ticket.ticket_id];
+    if (!assignment || !currentUserId || assignment.assigned_to !== currentUserId || currentUserRole !== 'qualidade') {
+      throw new Error('Somente o monitor responsável pode iniciar a avaliação deste ticket.');
+    }
+    const started = await startQueueTicketAssignment(ticket.ticket_id, queueType);
+    setQueueAssignments(prev => ({
+      ...prev,
+      [queueType]: { ...prev[queueType], [ticket.ticket_id]: started },
+    }));
+    return { ticket_id: ticket.ticket_id, queue_type: queueType };
+  };
+
+  const releaseAssignedWork = async (ticket: AuditingQueueTicket) => {
+    if (!isDistributedQueue(activeQueue)) return;
+    const queueType = activeQueue;
+    await releaseQueueTicketAssignment(ticket.ticket_id, queueType);
+    setQueueAssignments(prev => {
+      const current = prev[queueType][ticket.ticket_id];
+      if (!current || current.assigned_to !== currentUserId) return prev;
+      return {
+        ...prev,
+        [queueType]: {
+          ...prev[queueType],
+          [ticket.ticket_id]: { ...current, status: 'pending', started_at: null, started_by: null },
+        },
+      };
+    });
+  };
+
 
   // Abre o popup de confirmação da avaliação da IA com a seleção automática
   // de ficha e manual baseada no tipo de cliente (organização no Zendesk).
@@ -641,6 +685,14 @@ ${checksSummary}${recs}`;
     // quando chamado pelo lote, o toast de progresso não é criado aqui
     silent = false
   ) => {
+    try {
+      await beginAssignedWork(ticket);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não foi possível iniciar esta avaliação.';
+      if (!silent) toast.error(message);
+      throw error;
+    }
+
     // Encontra o agente correspondente pelo e-mail (chave universal) ou nome
     const matchedAgent = agents.find(a =>
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
@@ -730,6 +782,9 @@ ${checksSummary}${recs}`;
       );
     } catch (err: any) {
       console.error('Erro na avaliação com IA:', err);
+      await releaseAssignedWork(ticket).catch(releaseError => {
+        console.error('[AuditingQueue] Falha ao liberar avaliação interrompida:', releaseError);
+      });
       if (toastId) {
         toast.error(`❌ Falha no ticket #${ticket.ticket_id}: ${err?.message || 'Erro desconhecido'}`, { id: toastId, duration: 6000 });
       }
@@ -847,6 +902,12 @@ ${checksSummary}${recs}`;
 
   // Avaliação de conformidade com IA para tickets filhos
   const handleEvaluateChildTicket = async (ticket: AuditingQueueTicket) => {
+    try {
+      await beginAssignedWork(ticket);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível iniciar esta avaliação.');
+      return;
+    }
     setEvaluatingChildTicketId(ticket.ticket_id);
     setChildPreviewTicket(ticket);
     setLoadingChildAi(true);
@@ -872,6 +933,9 @@ ${checksSummary}${recs}`;
       toast.success(`Parecer de conformidade gerado para o chamado filho #${ticket.ticket_id}!`);
     } catch (err: any) {
       console.error('Erro ao auditar chamado filho:', err);
+      await releaseAssignedWork(ticket).catch(releaseError => {
+        console.error('[AuditingQueue] Falha ao liberar avaliação interrompida:', releaseError);
+      });
       toast.error(err?.message || 'Falha ao auditar chamado filho');
     } finally {
       setLoadingChildAi(false);
@@ -881,9 +945,17 @@ ${checksSummary}${recs}`;
 
   // Abre a ficha de monitoria com o rascunho da IA já salvo pra esse
   // ticket — com o form_id bloqueado para alteração manual.
-  const handleLaunchMonitoria = (ticket: AuditingQueueTicket) => {
+  const handleLaunchMonitoria = async (ticket: AuditingQueueTicket) => {
     const draft = drafts[ticket.ticket_id];
     if (!draft) return;
+
+    let queueAssignment;
+    try {
+      queueAssignment = await beginAssignedWork(ticket);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível abrir esta avaliação.');
+      return;
+    }
 
     const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
 
@@ -906,11 +978,19 @@ ${checksSummary}${recs}`;
       specializedTeamLabel: specInfo.label || undefined,
       child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
       dialogue: draft.result?.dialogue || ticket.dialogue,
+      queue_assignment: queueAssignment,
     });
   };
 
   // Inicia auditoria manual direta (sem IA prévia) abrindo o fluxo oficial 1-2-3-4
-  const handleStartManualAudit = (ticket: AuditingQueueTicket) => {
+  const handleStartManualAudit = async (ticket: AuditingQueueTicket) => {
+    let queueAssignment;
+    try {
+      queueAssignment = await beginAssignedWork(ticket);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível abrir esta avaliação.');
+      return;
+    }
     const specInfo = getSpecializedTeamInfo(ticket);
     const matchedAgent = agents.find(a =>
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
@@ -936,6 +1016,7 @@ ${checksSummary}${recs}`;
       customerType,
       specializedTeamLabel: specInfo.label || undefined,
       dialogue: ticket.dialogue,
+      queue_assignment: queueAssignment,
     });
   };
 
@@ -1043,19 +1124,31 @@ ${checksSummary}${recs}`;
   // de Qualidade e Admin (o monitor comum já só enxerga os seus na lista).
   const renderAssignedMonitorBadge = (ticket: AuditingQueueTicket) => {
     if (!isSupervisorView || !isDistributedQueue(activeQueue)) return null;
-    const assignedId = queueAssignments[activeQueue][ticket.ticket_id];
-    if (!assignedId) return null;
-    const monitor = qualityMonitors.find(m => m.id === assignedId);
+    const assignment = queueAssignments[activeQueue][ticket.ticket_id];
+    if (!assignment) return null;
+    const monitor = qualityMonitors.find(m => m.id === assignment.assigned_to);
     return (
-      <Badge
-        variant="info"
-        size="xs"
-        className="text-[9px] font-black uppercase tracking-wider bg-brand-accent/10 text-brand-accent border border-brand-accent/25 inline-flex items-center gap-1 shadow-2xs"
-        title="Monitor responsável por auditar este chamado (distribuição 1-para-1)"
-      >
-        <UserIcon className="w-2.5 h-2.5 shrink-0" />
-        <span>{monitor?.name || 'Monitor'}</span>
-      </Badge>
+      <span className="inline-flex items-center gap-1.5">
+        <Badge
+          variant="info"
+          size="xs"
+          className="text-[9px] font-black uppercase tracking-wider bg-brand-accent/10 text-brand-accent border border-brand-accent/25 inline-flex items-center gap-1 shadow-2xs"
+          title={`${assignment.assignment_source === 'manual' ? 'Atribuição manual' : 'Distribuição automática'}${assignment.status === 'in_progress' ? ' · Em avaliação' : ''}`}
+        >
+          <UserIcon className="w-2.5 h-2.5 shrink-0" />
+          <span>{monitor?.name || 'Monitor'}</span>
+          {assignment.status === 'in_progress' && <span aria-label="Em avaliação" className="h-1.5 w-1.5 rounded-full bg-functional-warning" />}
+        </Badge>
+        <button
+          type="button"
+          onClick={() => setAssignmentModalTicket(ticket)}
+          className="inline-flex items-center gap-1 rounded-lg border border-surface-border bg-surface-card px-2 py-1 text-[9px] font-black uppercase tracking-wider text-brand-muted transition-colors hover:border-brand-accent/40 hover:bg-surface-subtle hover:text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
+          title="Alterar o monitor responsável"
+        >
+          <UserCog className="h-3 w-3" />
+          <span>Alterar monitor</span>
+        </button>
+      </span>
     );
   };
 
@@ -1182,7 +1275,14 @@ ${checksSummary}${recs}`;
     }
   };
 
-  const handleStartChildAudit = (ticket: AuditingQueueTicket) => {
+  const handleStartChildAudit = async (ticket: AuditingQueueTicket) => {
+    let queueAssignment;
+    try {
+      queueAssignment = await beginAssignedWork(ticket);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível abrir esta avaliação.');
+      return;
+    }
     const matchedAgent = agents.find(a =>
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
       (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
@@ -1203,6 +1303,7 @@ ${checksSummary}${recs}`;
       ticket_fields: ticket.ticket_fields,
       child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
       dialogue: ticket.dialogue,
+      queue_assignment: queueAssignment,
     });
   };
 
@@ -3227,6 +3328,30 @@ ${checksSummary}${recs}`;
           </div>
         </div>,
         document.body
+      )}
+
+      {assignmentModalTicket && isDistributedQueue(activeQueue) && queueAssignments[activeQueue][assignmentModalTicket.ticket_id] && (
+        <QueueMonitorAssignmentModal
+          ticketId={assignmentModalTicket.ticket_id}
+          assignment={queueAssignments[activeQueue][assignmentModalTicket.ticket_id]}
+          monitors={eligibleOnlineMonitors}
+          onClose={() => setAssignmentModalTicket(null)}
+          onTransfer={async (monitorId, confirmInProgress) => {
+            const queueType = activeQueue;
+            const updated = await reassignQueueTicket(
+              assignmentModalTicket.ticket_id,
+              queueType,
+              monitorId,
+              confirmInProgress
+            );
+            setQueueAssignments(prev => ({
+              ...prev,
+              [queueType]: { ...prev[queueType], [assignmentModalTicket.ticket_id]: updated },
+            }));
+            setAssignmentModalTicket(null);
+            toast.success('Monitor responsável alterado com sucesso.');
+          }}
+        />
       )}
     </div>
   );
