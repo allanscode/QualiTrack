@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { TicketCommentMessage } from '../types';
 import { Terminal, Copy, Check, Quote, User, Headphones, Lock, Bot, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
+import { getDialogueCategory } from '../lib/zendeskChatParser';
+import { formatTicketDateTime } from '../lib/ticketDateTime';
 
 interface TicketMessageBubbleProps {
   msg: TicketCommentMessage;
@@ -22,10 +24,10 @@ export default function TicketMessageBubble({
   const [copied, setCopied] = useState(false);
   const [copiedLog, setCopiedLog] = useState(false);
 
-  const isEndUser = msg.author_role === 'end_user';
-  const isAgent = msg.author_role === 'agent' || msg.author_role === 'admin';
-  const isInternal = !msg.is_public;
-  const isSystemBot = msg.author_role === 'system' && msg.is_public;
+  const category = getDialogueCategory(msg);
+  const isEndUser = category === 'end_user';
+  const isInternal = category === 'internal';
+  const isSystemBot = category === 'system';
   const body = msg.body || '';
 
   const hasLogSnippet = /(?:\[FireDAC\]|ERROR:|Script nao executado:|relation ".*?" already exists|Exception:|Traceback|ALTER TABLE|CREATE TABLE|SELECT\s+|UPDATE\s+|INSERT\s+INTO\s+)/i.test(body);
@@ -53,27 +55,31 @@ export default function TicketMessageBubble({
   let avatarBg = 'bg-surface-subtle text-brand-muted';
   let roleLabel = 'Mensagem';
 
-  if (isEndUser) {
-    containerStyles += 'bg-sky-500/5 dark:bg-sky-500/10 border-sky-500/20 rounded-tl-sm mr-2 sm:mr-8 shadow-sm';
-    badgeStyles += 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30';
-    avatarBg = 'bg-sky-500/20 text-sky-600 dark:text-sky-400';
-    roleLabel = 'Cliente';
-  } else if (isInternal) {
+  if (isInternal) {
     containerStyles += 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/25 mx-1 shadow-sm';
     badgeStyles += 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30';
     avatarBg = 'bg-amber-500/20 text-amber-600 dark:text-amber-400';
     roleLabel = 'Nota Interna';
+  } else if (isEndUser) {
+    containerStyles += 'bg-sky-500/5 dark:bg-sky-500/10 border-sky-500/20 rounded-tl-sm mr-2 sm:mr-8 shadow-sm';
+    badgeStyles += 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30';
+    avatarBg = 'bg-sky-500/20 text-sky-600 dark:text-sky-400';
+    roleLabel = 'Cliente';
   } else if (isSystemBot) {
     containerStyles += 'bg-purple-500/5 dark:bg-purple-500/10 border-purple-500/20 mx-1 shadow-sm';
     badgeStyles += 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30';
     avatarBg = 'bg-purple-500/20 text-purple-600 dark:text-purple-400';
     roleLabel = 'Bot / Sistema';
-  } else {
+  } else if (category === 'agent') {
     // Atendente
     containerStyles += 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20 rounded-tr-sm ml-2 sm:ml-8 shadow-sm';
     badgeStyles += 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
     avatarBg = 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400';
     roleLabel = 'Atendente';
+  } else {
+    containerStyles += 'bg-surface-subtle border-surface-border mx-1 shadow-sm';
+    badgeStyles += 'bg-surface-card text-brand-muted border-surface-border';
+    roleLabel = 'Participante';
   }
 
   return (
@@ -88,8 +94,10 @@ export default function TicketMessageBubble({
               <Lock className="w-3 h-3" />
             ) : isSystemBot ? (
               <Bot className="w-3.5 h-3.5" />
-            ) : (
+            ) : category === 'agent' ? (
               <Headphones className="w-3.5 h-3.5" />
+            ) : (
+              <User className="w-3.5 h-3.5" />
             )}
           </div>
           <span className="font-bold text-brand-primary truncate max-w-[200px] sm:max-w-[320px]">
@@ -100,7 +108,7 @@ export default function TicketMessageBubble({
           </span>
         </div>
         <span className="text-[10px] font-mono text-brand-muted tabular-nums">
-          {msg.created_at ? new Date(msg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+          {msg.created_at ? formatTicketDateTime(msg.created_at) : ''}
         </span>
       </div>
 

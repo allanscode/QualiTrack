@@ -3,7 +3,10 @@ import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-import { sanitizeDialogue, isChatTranscript, parseZendeskChatTranscript } from './sanitizer.ts';
+import {
+  sanitizeDialogue, sanitizeMessageBody, isChatTranscript, parseZendeskChatTranscript,
+  buildZendeskParticipantRoles, normalizeTranscriptSpeakerName, zendeskParticipantRole, classifyTranscriptMessage,
+} from './sanitizer.ts';
 import {
   AIModelError,
   httpAIError,
@@ -602,7 +605,7 @@ serve(async (req) => {
           channel: t.via?.channel || 'chat',
           csat_status: csatStatus,
           csat_comment: t.satisfaction_rating?.comment || undefined,
-          ticket_date: t.created_at || new Date().toISOString(),
+          ticket_date: t.created_at || null,
           status: t.status || 'solved',
           url: `https://${subdomain}.zendesk.com/agent/tickets/${t.id}`,
           agent_name: assignee?.name,
@@ -628,7 +631,12 @@ serve(async (req) => {
       }
 
       const commentsUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}/comments.json?include=users`;
-      const response = await fetch(commentsUrl, { headers: zendeskHeaders });
+      // Snapshot transitório: dados originais do ticket + autores dos comentários.
+      // Não é gravado nem enviado à IA; só os campos necessários seguem adiante.
+      const [response, ticketResp] = await Promise.all([
+        fetch(commentsUrl, { headers: zendeskHeaders }),
+        fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json?include=users,groups,organizations,ticket_forms`, { headers: zendeskHeaders }),
+      ]);
 
       if (!response.ok) {
         const errText = await response.text().catch(() => '');
@@ -637,28 +645,79 @@ serve(async (req) => {
 
       const commentsData = await response.json();
       const comments = commentsData.comments || [];
+      const ticketJson = ticketResp.ok ? await ticketResp.json() : null;
+      const ticketSnapshot = ticketJson?.ticket || null;
 
-      // Mapeia usuários para resolução precisa de autor e papel (end_user vs agent)
+      // Autor de comentário comum: role ligado ao author_id, nunca deduzido
+      // pelo nome ou pelo fato de o comentário ser público.
       const sideloadedUsers = new Map<number, { name: string; role: string }>();
-      if (Array.isArray(commentsData.users)) {
-        for (const u of commentsData.users) {
+      for (const source of [commentsData.users, ticketJson?.users]) {
+        if (!Array.isArray(source)) continue;
+        for (const u of source) {
           sideloadedUsers.set(u.id, {
             name: u.name || '',
-            role: u.role === 'end-user' ? 'end_user' : (u.role === 'admin' ? 'admin' : 'agent'),
+            role: zendeskParticipantRole(u.role) || 'unknown',
           });
         }
       }
+
+      const transcriptComments = comments.filter((comment: any) => isChatTranscript(comment.body || comment.html_body || ''));
+      const participantRecords: Array<{ name: string; role: string }> = [...sideloadedUsers.values()];
+      if (transcriptComments.length > 0) {
+        // A Conversation Log traz o tipo do autor em mensagens nativas de
+        // Messaging; em transcrições legadas, complementamos com Users Search.
+        try {
+          const logResp = await fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}/conversation_log`, {
+            headers: zendeskHeaders, signal: AbortSignal.timeout(8000),
+          });
+          if (logResp.ok) {
+            const log = await logResp.json();
+            for (const event of log.events || []) {
+              if (event.author?.display_name && event.author?.type) {
+                participantRecords.push({ name: event.author.display_name, role: event.author.type });
+              }
+            }
+          }
+        } catch {
+          console.warn('[helpdesk-queue] Conversation Log indisponível para identificação dos participantes.');
+        }
+
+        const foundSpeakers = new Set<string>();
+        for (const comment of transcriptComments) {
+          const parsed = parseZendeskChatTranscript(comment.body || comment.html_body || '', {
+            parentDate: comment.created_at, parentId: comment.id, isPublic: comment.public !== false,
+          });
+          for (const message of parsed) {
+            const normalized = normalizeTranscriptSpeakerName(message.author_name);
+            if (normalized && message.author_role !== 'system') foundSpeakers.add(normalized);
+          }
+        }
+        const knownRoles = buildZendeskParticipantRoles(participantRecords);
+        await Promise.all([...foundSpeakers].filter(name => !knownRoles.get(name)).map(async name => {
+          try {
+            const searchResp = await fetch(
+              `https://${subdomain}.zendesk.com/api/v2/users/search.json?query=${encodeURIComponent(name)}&per_page=100`,
+              { headers: zendeskHeaders, signal: AbortSignal.timeout(8000) },
+            );
+            if (!searchResp.ok) return;
+            const search = await searchResp.json();
+            for (const candidate of search.users || []) {
+              if (normalizeTranscriptSpeakerName(candidate.name || '') === name && zendeskParticipantRole(candidate.role)) {
+                participantRecords.push({ name: candidate.name, role: candidate.role });
+              }
+            }
+          } catch {
+            console.warn('[helpdesk-queue] Falha ao consultar role de participante no Zendesk.');
+          }
+        }));
+      }
+      const participantRoles = buildZendeskParticipantRoles(participantRecords);
 
       const mappedComments: any[] = [];
       for (const c of comments) {
         const userInfo = sideloadedUsers.get(c.author_id);
         const authorName = (userInfo?.name || '').trim();
-        const isBotAuthor = authorName.toLowerCase().includes('ia webposto');
-        let role = isBotAuthor ? 'system' : (userInfo?.role || (c.public ? 'agent' : 'system'));
-        // Se o autor é agente/admin mas fez nota interna (c.public === false), mantém como agent
-        if (!c.public && (userInfo?.role === 'agent' || userInfo?.role === 'admin')) {
-          role = 'agent';
-        }
+        const role = userInfo?.role || (c.author_id == null ? 'system' : 'unknown');
 
         const body = c.body || c.html_body || '';
 
@@ -670,14 +729,14 @@ serve(async (req) => {
             isPublic: c.public !== false,
           });
           if (chatMsgs.length > 0) {
-            mappedComments.push(...chatMsgs);
+            mappedComments.push(...chatMsgs.map(message => classifyTranscriptMessage(message, participantRoles)));
             continue;
           }
         }
 
         mappedComments.push({
           id: c.id,
-          author_name: authorName || (role === 'end_user' ? 'Cliente' : role === 'system' ? 'Sistema' : 'Atendente'),
+          author_name: authorName || (role === 'end_user' ? 'Cliente' : role === 'system' ? 'Sistema' : role === 'agent' ? 'Atendente' : 'Autor não identificado'),
           author_role: role,
           created_at: c.created_at,
           body,
@@ -700,15 +759,11 @@ serve(async (req) => {
       let orgName: string | undefined;
       let orgTags: string[] = [];
       try {
-        const [ticketResp, fieldsResp] = await Promise.all([
-          fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json?include=users,groups,organizations,ticket_forms`, { headers: zendeskHeaders }),
-          fetch(`https://${subdomain}.zendesk.com/api/v2/ticket_fields.json`, { headers: zendeskHeaders }),
-        ]);
+        const fieldsResp = await fetch(`https://${subdomain}.zendesk.com/api/v2/ticket_fields.json`, { headers: zendeskHeaders });
 
-        if (ticketResp.ok && fieldsResp.ok) {
-          const ticketJson = await ticketResp.json();
+        if (ticketSnapshot && fieldsResp.ok) {
           const fieldsJson = await fieldsResp.json();
-          const ticket = ticketJson.ticket;
+          const ticket = ticketSnapshot;
           ticketTags = Array.isArray(ticket?.tags) ? ticket.tags : [];
           
           if (ticket?.organization_id && Array.isArray(ticketJson.organizations)) {
@@ -1153,8 +1208,12 @@ async function executeAndPersistAIJob(
     const result = body?.result;
     if (!result || typeof result !== 'object') throw new Error('A avaliação não retornou um resultado válido.');
     if (payload.action === 'evaluate_ai') {
-      result.ticket_fields = payload.ticket_fields || [];
-      result.dialogue = payload.dialogue || [];
+      result.ticket_fields = (payload.ticket_fields || []).map((field: { title?: string; value?: string }) => ({
+        title: sanitizeMessageBody(field.title || ''),
+        value: sanitizeMessageBody(field.value || ''),
+      }));
+      // O diálogo bruto fica no Zendesk; o formulário o busca novamente
+      // quando necessário, sem duplicar dados pessoais no rascunho/job.
     }
     const { error } = await supabase.rpc('complete_ai_evaluation_execution', {
       p_job_id: jobId,
@@ -1258,7 +1317,7 @@ async function handleEvaluateAI(
   };
 
   // Sanitização anti-ruído: remove assinaturas, disclaimers legais e decompõe transcrições de chat
-  const dialogueText = sanitizeDialogue(dialogue || [], agent_info?.name);
+  const dialogueText = sanitizeDialogue(dialogue || []);
 
   const criteriaText = form_criteria.sections
     .map((s: any) => `Seção "${s.title}":\n${(s.questions || []).map((q: any) => `- [${q.id}] ${q.text}${q.is_critical ? ' (ERRO CRÍTICO)' : ''}`).join('\n')}`)
@@ -1299,15 +1358,14 @@ async function handleEvaluateAI(
   }
 
   const ticketFieldsText = (ticket_fields || [])
-    .map(f => `- ${f.title}: ${f.value}`)
+    .map(f => `- ${sanitizeMessageBody(f.title)}: ${sanitizeMessageBody(f.value)}`)
     .join('\n');
 
   const prompt = `Você é um analista sênior de qualidade de atendimento ao cliente da WebPosto.
 Avalie o atendimento abaixo com base na ficha de critérios fornecida${guidelinesText ? ' e no manual de padrões de atendimento abaixo (formatado em Markdown)' : ''}.
 ${guidelinesText ? `\nMANUAL DE PADRÕES DE ATENDIMENTO (referência normativa da empresa — formato Markdown, interprete títulos, listas e destaques como estrutura semântica):\n${guidelinesText}\n` : ''}
 DADOS DO ATENDIMENTO:
-- Atendente: ${agent_info?.name || 'não informado'}
-- E-mail: ${agent_info?.email || 'não informado'}
+- Atendente: profissional responsável pelo atendimento
 - Equipe: ${agent_info?.team_name || 'não informada'}
 - Canal: ${agent_info?.channel || 'não informado'}
 - Ticket: #${ticket_id}
@@ -1468,8 +1526,8 @@ async function handleEvaluateChildTicket(
   }
 
   const dialogueText = sanitizeDialogue(dialogue || []);
-  const ticketFieldsText = (ticket_fields || []).map((f: any) => `- ${f.title}: ${f.value}`).join('\n');
-  const tagsText = (tags || []).join(', ');
+  const ticketFieldsText = (ticket_fields || []).map((f: any) => `- ${sanitizeMessageBody(f.title)}: ${sanitizeMessageBody(f.value)}`).join('\n');
+  const tagsText = (tags || []).map((tag: string) => sanitizeMessageBody(tag)).join(', ');
 
   const responseSchema = {
     type: 'object',
@@ -1571,7 +1629,7 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
 
 DADOS DO CHAMADO FILHO SOB AUDITORIA:
 - Ticket: #${ticket_id}
-- Assunto Registrado: ${ticket_subject || 'Não informado'}
+- Assunto Registrado: ${sanitizeMessageBody(ticket_subject || 'Não informado')}
 - Tipo Sugerido/Macro: ${macro_type || 'Detectar automaticamente'}
 - Tags do Chamado: ${tagsText || '(sem tags)'}
 - Campos do Ticket:

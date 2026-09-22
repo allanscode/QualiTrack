@@ -18,6 +18,7 @@ async function adminRequest<T>(path: string, init: RequestInit): Promise<T> {
 
 test('cabeçalho dos cards não sobrepõe controles em desktop e viewport menor', async ({ browser, baseURL }) => {
   test.skip(!runLive, 'Exige credenciais E2E e frontend local para validar o card real.');
+  test.setTimeout(120_000);
   const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `queue-layout-${unique}@example.invalid`;
   const ticketId = '999999001';
@@ -50,8 +51,24 @@ test('cabeçalho dos cards não sobrepõe controles em desktop e viewport menor'
     const page = await context.newPage();
     await page.route('**/functions/v1/helpdesk-queue', async route => {
       const body = route.request().postDataJSON() as { action?: string; queue_type?: string };
+      if (body.action === 'fetch_dialogue') {
+        // A origem local não está na allowlist de produção. O teste usa a
+        // sessão do browser contra a função real e devolve a resposta sem
+        // enfraquecer o CORS do ambiente publicado.
+        const upstream = await fetch(`${supabaseUrl}/functions/v1/helpdesk-queue`, {
+          method: 'POST',
+          headers: {
+            apikey: publishableKey,
+            Authorization: route.request().headers()['authorization'],
+            'Content-Type': 'application/json',
+          },
+          body: route.request().postData(),
+        });
+        return route.fulfill({ status: upstream.status, contentType: 'application/json', body: await upstream.text() });
+      }
       if (body.action !== 'fetch_queue') return route.continue();
       const isNegative = body.queue_type === 'negativas';
+      const isChild = body.queue_type === 'filhos';
       return route.fulfill({
         status: 200, contentType: 'application/json',
         body: JSON.stringify({
@@ -60,6 +77,15 @@ test('cabeçalho dos cards não sobrepõe controles em desktop e viewport menor'
             subject: 'Atendimento de qualidade com assunto extenso para testar a largura do cabeçalho',
             agent_name: 'Atendente de Suporte', csat_status: 'bad', status: 'solved',
             ticket_date: '2026-09-22T12:00:00Z', tags: ['tef'],
+          }] : isChild ? [{
+            ticket_id: '170790', parent_ticket_id: '170718',
+            subject: 'Ticket Nova Demanda do #170718',
+            agent_name: 'Raphaela Serpa', status: 'solved',
+            ticket_date: '2026-09-15T10:25:00Z', tags: ['nova_demanda'],
+            child_evaluation: {
+              status: 'conforme', detected_type: 'nova_demanda',
+              summary: 'Parecer disponível para inspeção do diálogo.', checks: [], recommendations: [],
+            },
           }] : [],
           next_cursor: null, has_more: false,
         }),
@@ -134,6 +160,49 @@ test('cabeçalho dos cards não sobrepõe controles em desktop e viewport menor'
       }),
     });
     await expect(card.getByRole('button', { name: /verificar avaliação/i })).toBeVisible({ timeout: 15_000 });
+
+    // O card mostra o instante em São Paulo; a conversa usa o Zendesk real.
+    await page.getByRole('button', { name: /chamados filhos/i }).click();
+    await expect(page.getByText('#170790', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('15/09/2026, 07:25', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Ver Parecer IA' }).click();
+    const isParentDialogueRequest = (request: { url(): string; postDataJSON(): unknown }) => {
+      if (!request.url().includes('/functions/v1/helpdesk-queue')) return false;
+      const body = request.postDataJSON() as { action?: string; ticket_id?: string };
+      return body.action === 'fetch_dialogue' && String(body.ticket_id) === '170718';
+    };
+    const dialogueResponse = page.waitForResponse(response => {
+      if (!response.url().includes('/functions/v1/helpdesk-queue')) return false;
+      const body = response.request().postDataJSON() as { action?: string; ticket_id?: string };
+      return body.action === 'fetch_dialogue' && String(body.ticket_id) === '170718';
+    }, { timeout: 45_000 });
+    const dialogueFailure = page.waitForEvent('requestfailed', {
+      predicate: request => isParentDialogueRequest(request), timeout: 45_000,
+    }).then(request => { throw new Error(`fetch_dialogue failed: ${request.failure()?.errorText}`); });
+    await page.getByRole('button', { name: /conversa do pai/i }).click();
+    const zendeskResponse = await Promise.race([dialogueResponse, dialogueFailure]);
+    expect(zendeskResponse.status()).toBe(200);
+    const data = await zendeskResponse.json() as {
+      comments: Array<{ author_name: string; author_role: string; is_public: boolean; created_at: string }>;
+    };
+    const agentCount = data.comments.filter(comment => comment.is_public && comment.author_role === 'agent').length;
+    const clientCount = data.comments.filter(comment => comment.is_public && comment.author_role === 'end_user').length;
+    const internalCount = data.comments.filter(comment => !comment.is_public).length;
+    expect(data.comments.filter(comment => comment.author_name === 'Raphaela Serpa')).not.toHaveLength(0);
+    expect(data.comments.filter(comment => comment.author_name === 'Raphaela Serpa')
+      .every(comment => comment.author_role === 'agent')).toBe(true);
+    expect(clientCount).toBeGreaterThan(0);
+    expect(internalCount).toBeGreaterThan(0);
+    await expect(page.getByRole('button', { name: `Todas (${data.comments.length})` })).toBeVisible();
+    await expect(page.getByRole('button', { name: `Cliente (${clientCount})` })).toBeVisible();
+    await expect(page.getByRole('button', { name: `Atendente (${agentCount})` })).toBeVisible();
+    await expect(page.getByRole('button', { name: `Internas (${internalCount})` })).toBeVisible();
+    const drawer = page.getByTestId('ticket-dialogue-drawer');
+    await page.getByRole('button', { name: `Atendente (${agentCount})` }).click();
+    await expect(drawer.getByText('Raphaela Serpa', { exact: true }).first()).toBeVisible();
+    await page.screenshot({ path: 'test-results/queue-conversation-parent.png', fullPage: false });
+    await page.getByRole('button', { name: `Cliente (${clientCount})` }).click();
+    await expect(drawer.getByText('Raphaela Serpa', { exact: true })).toHaveCount(0);
   } finally {
     await context.close();
     for (const table of ['ai_evaluation_drafts', 'ai_evaluation_jobs']) {

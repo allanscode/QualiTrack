@@ -25,7 +25,8 @@ import {
   resolveCustomerType,
   resolveFormAndGuidelineForCustomerType,
 } from '../lib/helpdeskQueue';
-import { normalizeTicketDialogue } from '../lib/zendeskChatParser';
+import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChatParser';
+import { formatTicketDateTime } from '../lib/ticketDateTime';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
 import { fetchAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import { claimAIJob, completeAIJob, failAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
@@ -357,9 +358,7 @@ ${checksSummary}${recs}`;
   const currentChildDialogueList = activeChildDialogueTab === 'child' ? childDialogue : parentDialogue;
   const filteredChildDialogue = useMemo(() => {
     return currentChildDialogueList.filter(msg => {
-      if (childDialogueFilter === 'end_user' && msg.author_role !== 'end_user') return false;
-      if (childDialogueFilter === 'agent' && msg.author_role !== 'agent' && msg.author_role !== 'admin') return false;
-      if (childDialogueFilter === 'internal' && msg.is_public) return false;
+      if (childDialogueFilter !== 'all' && getDialogueCategory(msg) !== childDialogueFilter) return false;
       if (childDialogueSearch.trim()) {
         const q = childDialogueSearch.toLowerCase();
         return (msg.body || '').toLowerCase().includes(q) || (msg.author_name || '').toLowerCase().includes(q);
@@ -1812,7 +1811,7 @@ ${checksSummary}${recs}`;
                     {renderAgentInfo(ticket)}
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 opacity-60" />
-                      {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
+                      {formatTicketDateTime(ticket.ticket_date)}
                     </span>
                   </div>
 
@@ -1907,7 +1906,7 @@ ${checksSummary}${recs}`;
                           {renderAgentInfo(ticket)}
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3 opacity-60" />
-                            {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
+                            {formatTicketDateTime(ticket.ticket_date)}
                           </span>
                         </div>
 
@@ -2002,7 +2001,7 @@ ${checksSummary}${recs}`;
                         {renderAgentInfo(ticket)}
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 opacity-60" />
-                          {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
+                          {formatTicketDateTime(ticket.ticket_date)}
                         </span>
                       </div>
 
@@ -2097,7 +2096,7 @@ ${checksSummary}${recs}`;
                           {renderAgentInfo(ticket)}
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3 opacity-60" />
-                            {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
+                            {formatTicketDateTime(ticket.ticket_date)}
                           </span>
                         </div>
 
@@ -2231,7 +2230,7 @@ ${checksSummary}${recs}`;
                           {renderAgentInfo(ticket)}
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3 opacity-60" />
-                            {new Date(ticket.ticket_date).toLocaleDateString('pt-BR')}
+                            {formatTicketDateTime(ticket.ticket_date)}
                           </span>
                         </div>
 
@@ -2872,6 +2871,7 @@ ${checksSummary}${recs}`;
 
           {/* Drawer Lateral Direito */}
           <div
+            data-testid="ticket-dialogue-drawer"
             className="relative w-full sm:w-[500px] md:w-[580px] bg-surface-card border-l border-surface-border shadow-2xl z-10 flex flex-col h-full overflow-hidden animate-slide-in-right"
             onClick={(e: React.MouseEvent) => e.stopPropagation()}
           >
@@ -2967,9 +2967,9 @@ ${checksSummary}${recs}`;
                 {(() => {
                   const filterList = [
                     { id: 'all', label: `Todas (${currentChildDialogueList.length})` },
-                    { id: 'end_user', label: `Cliente (${currentChildDialogueList.filter(d => d.author_role === 'end_user').length})` },
-                    { id: 'agent', label: `Atendente (${currentChildDialogueList.filter(d => d.author_role === 'agent' || d.author_role === 'admin').length})` },
-                    { id: 'internal', label: `Internas (${currentChildDialogueList.filter(d => !d.is_public).length})` },
+                    { id: 'end_user', label: `Cliente (${currentChildDialogueList.filter(d => getDialogueCategory(d) === 'end_user').length})` },
+                    { id: 'agent', label: `Atendente (${currentChildDialogueList.filter(d => getDialogueCategory(d) === 'agent').length})` },
+                    { id: 'internal', label: `Internas (${currentChildDialogueList.filter(d => getDialogueCategory(d) === 'internal').length})` },
                   ];
                   return filterList.map(f => (
                     <button
@@ -3301,7 +3301,7 @@ ${checksSummary}${recs}`;
                 <div className="flex items-center gap-3 text-[10px] text-brand-muted">
                   <span>Atendente: <strong className="text-brand-primary">{childGuidelineModalTicket.agent_name || 'Não atribuído (Apenas Grupo)'}</strong></span>
                   <span>•</span>
-                  <span>Data: {new Date(childGuidelineModalTicket.ticket_date).toLocaleDateString('pt-BR')}</span>
+                  <span>Data: {formatTicketDateTime(childGuidelineModalTicket.ticket_date)}</span>
                 </div>
               </div>
 

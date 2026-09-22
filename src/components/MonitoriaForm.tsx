@@ -40,7 +40,7 @@ import { useQualityConfig } from '../lib/useQualityConfig';
 import { toast } from 'sonner';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
 import { resolveManualAgent, lookupTicketAgent, TicketAgentLookup, fetchTicketDialogue } from '../lib/helpdeskQueue';
-import { normalizeTicketDialogue } from '../lib/zendeskChatParser';
+import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChatParser';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import Card from './ui/Card';
@@ -237,10 +237,7 @@ export default function MonitoriaForm({
 
   const filteredDialogue = useMemo(() => {
     return dialogue.filter(msg => {
-      if (dialogueFilter === 'end_user' && msg.author_role !== 'end_user') return false;
-      if (dialogueFilter === 'agent' && msg.author_role !== 'agent' && msg.author_role !== 'admin') return false;
-      if (dialogueFilter === 'system' && (msg.author_role !== 'system' || !msg.is_public)) return false;
-      if (dialogueFilter === 'internal' && msg.is_public) return false;
+      if (dialogueFilter !== 'all' && getDialogueCategory(msg) !== dialogueFilter) return false;
       if (dialogueSearch.trim()) {
         const query = dialogueSearch.toLowerCase();
         const inBody = (msg.body || '').toLowerCase().includes(query);
@@ -1774,13 +1771,13 @@ export default function MonitoriaForm({
 
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-[10px]">
                     {(() => {
-                      const systemCount = dialogue.filter(d => d.author_role === 'system' && d.is_public).length;
+                      const systemCount = dialogue.filter(d => getDialogueCategory(d) === 'system').length;
                       const filterList = [
                         { id: 'all', label: `Todas (${dialogue.length})` },
-                        { id: 'end_user', label: `Cliente (${dialogue.filter(d => d.author_role === 'end_user').length})` },
-                        { id: 'agent', label: `Atendente (${dialogue.filter(d => d.author_role === 'agent' || d.author_role === 'admin').length})` },
+                        { id: 'end_user', label: `Cliente (${dialogue.filter(d => getDialogueCategory(d) === 'end_user').length})` },
+                        { id: 'agent', label: `Atendente (${dialogue.filter(d => getDialogueCategory(d) === 'agent').length})` },
                         ...(systemCount > 0 ? [{ id: 'system', label: `Bot / IA (${systemCount})` }] : []),
-                        { id: 'internal', label: `Internas (${dialogue.filter(d => !d.is_public).length})` }
+                        { id: 'internal', label: `Internas (${dialogue.filter(d => getDialogueCategory(d) === 'internal').length})` }
                       ];
                       return filterList.map(f => (
                         <button

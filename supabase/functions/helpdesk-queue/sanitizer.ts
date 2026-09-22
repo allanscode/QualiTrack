@@ -20,80 +20,55 @@ export function isChatTranscript(text?: string): boolean {
   return matches !== null && matches.length >= 2;
 }
 
-export function determineParticipantRole(
-  authorName: string,
-  agentName?: string,
-  customerName?: string
-): 'agent' | 'end_user' | 'system' {
-  const lower = (authorName || '').toLowerCase().trim();
+export type ZendeskParticipantRole = 'agent' | 'end_user' | 'system';
 
-  // 1. Robô de autoatendimento da WebPosto: estritamente "IA webPosto"
-  if (
-    lower === 'ia webposto' ||
-    lower.startsWith('ia webposto') ||
-    lower.includes('ia webposto') ||
-    lower === 'workflow' ||
-    lower === 'sistema' ||
-    lower === 'system'
-  ) {
-    return 'system';
+function displayTranscriptSpeakerName(name: string): string {
+  return name.trim().replace(/\s+carregou\s*$/iu, '').replace(/\s+/g, ' ');
+}
+
+export function normalizeTranscriptSpeakerName(name: string): string {
+  // Zendesk Chat appends an upload action to the speaker on attachment lines.
+  return displayTranscriptSpeakerName(name).toLocaleLowerCase('pt-BR');
+}
+
+export function zendeskParticipantRole(role: unknown): ZendeskParticipantRole | null {
+  if (role === 'agent' || role === 'admin') return 'agent';
+  if (role === 'end-user' || role === 'end_user' || role === 'user') return 'end_user';
+  if (role === 'bot' || role === 'system') return 'system';
+  return null;
+}
+
+export function buildZendeskParticipantRoles(
+  users: Array<{ name?: string; role?: string }>,
+): Map<string, ZendeskParticipantRole | null> {
+  const roles = new Map<string, ZendeskParticipantRole | null>();
+  for (const user of users) {
+    const name = normalizeTranscriptSpeakerName(user.name || '');
+    const role = zendeskParticipantRole(user.role);
+    if (!name || !role) continue;
+    if (roles.has(name) && roles.get(name) !== role) roles.set(name, null);
+    else if (!roles.has(name)) roles.set(name, role);
   }
-
-  // 2. Se temos o nome do atendente real (atribuído ao ticket no Zendesk),
-  // confirma se é ele — checagem de identidade, tem prioridade sobre
-  // palavras-chave genéricas (abaixo), que podem coincidir com o nome da
-  // própria equipe do cliente (ex.: um cliente que assina o chat como
-  // "Suporte <Empresa>" não é o nosso atendente).
-  if (agentName) {
-    const lowerAgent = agentName.toLowerCase().trim();
-    const agentParts = lowerAgent.split(/\s+/).filter(Boolean);
-
-    // Bate com nome completo ou primeiro + último nome
-    if (
-      lower.includes(lowerAgent) ||
-      (agentParts.length >= 2 && lower.includes(agentParts[0]) && lower.includes(agentParts[agentParts.length - 1]))
-    ) {
-      return 'agent';
-    }
-  }
-
-  // 3. Se temos o nome do cliente / solicitante identificado, confirma se é o cliente
-  if (customerName) {
-    const lowerCust = customerName.toLowerCase().trim();
-    if (lower && (lower.includes(lowerCust) || lowerCust.includes(lower))) {
-      return 'end_user';
-    }
-  }
-
-  // 4. Se o nome contém termos específicos da equipe interna da WebPosto.
-  // "suporte" e "atendimento" foram removidos daqui: são termos genéricos
-  // demais — o time de suporte de um cliente/revenda também costuma se
-  // identificar no chat como "Suporte <Nome da Empresa>", o que fazia o
-  // cliente ser rotulado como atendente da WebPosto por engano.
-  if (
-    lower.includes('webposto') ||
-    lower.includes('atendente') ||
-    lower.includes('analista') ||
-    lower.includes('técnico') ||
-    lower.includes('tecnico') ||
-    lower.includes('especialista') ||
-    lower.includes('moderador') ||
-    lower.includes('qualidade')
-  ) {
-    return 'agent';
-  }
-
-  // 5. Caso padrão para clientes / solicitantes
-  return 'end_user';
+  return roles;
 }
 
 export interface ParsedChatMessage {
   id: string | number;
   author_name: string;
-  author_role: 'agent' | 'end_user' | 'system';
+  author_role: 'unknown';
   created_at: string;
   body: string;
   is_public: boolean;
+}
+
+export function classifyTranscriptMessage(
+  message: ParsedChatMessage,
+  roles: Map<string, ZendeskParticipantRole | null>,
+): Omit<ParsedChatMessage, 'author_role'> & { author_role: ZendeskParticipantRole | 'unknown' } {
+  return {
+    ...message,
+    author_role: roles.get(normalizeTranscriptSpeakerName(message.author_name)) || 'unknown',
+  };
 }
 
 export function parseZendeskChatTranscript(
@@ -101,18 +76,14 @@ export function parseZendeskChatTranscript(
   options: {
     parentDate?: string;
     parentId?: string | number;
-    agentName?: string;
-    customerName?: string;
     isPublic?: boolean;
   } = {}
 ): ParsedChatMessage[] {
   if (!rawBody || typeof rawBody !== 'string') return [];
 
   const {
-    parentDate = new Date().toISOString(),
+    parentDate = '',
     parentId = 'chat',
-    agentName = '',
-    customerName = '',
     isPublic = true
   } = options;
 
@@ -132,15 +103,13 @@ export function parseZendeskChatTranscript(
     if (!currentMsg) return;
     const body = currentMsg.bodyLines.join('\n').trim();
     if (body) {
-      const role = determineParticipantRole(currentMsg.author, agentName, customerName);
-
       let isoTime = parentDate;
       if (currentMsg.time) {
         let timeStr = currentMsg.time.trim();
         if (/^\d{1,2}:\d{2}$/.test(timeStr)) {
           timeStr += ':00';
         }
-        if (/^\d{1,2}:\d{2}:\d{2}$/.test(timeStr)) {
+        if (baseDate && /^\d{1,2}:\d{2}:\d{2}$/.test(timeStr)) {
           isoTime = `${baseDate}T${timeStr.padStart(8, '0')}Z`;
         }
       }
@@ -148,7 +117,7 @@ export function parseZendeskChatTranscript(
       messages.push({
         id: `${parentId}_${messages.length + 1}`,
         author_name: currentMsg.author,
-        author_role: role,
+        author_role: 'unknown',
         created_at: isoTime,
         body,
         is_public: isPublic
@@ -162,7 +131,7 @@ export function parseZendeskChatTranscript(
     if (match) {
       finalizeCurrent();
       const time = match[1] || match[4] || '';
-      const author = (match[2] || match[3] || '').trim();
+      const author = displayTranscriptSpeakerName(match[2] || match[3] || '');
       const initialText = match[5] || '';
       currentMsg = {
         time,
@@ -187,6 +156,16 @@ export function sanitizeMessageBody(rawBody: string): string {
 
   // Normaliza quebras de linha primeiro
   text = text.replace(/\r\n/g, '\n');
+
+  // Redige identificadores e segredos que não são necessários para avaliar
+  // qualidade. O texto original continua apenas no Zendesk.
+  text = text.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[E-MAIL]');
+  text = text.replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, '[CPF]');
+  text = text.replace(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, '[CNPJ]');
+  text = text.replace(/\b(?:\+?55\s*)?\(?\d{2}\)?[\s.-]*9?\d{4}[\s.-]*\d{4}\b/g, '[TELEFONE]');
+  text = text.replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[IP]');
+  text = text.replace(/\b(senha|password|token|api[_ -]?key|chave de acesso)\s*[:=]\s*\S+/gi, '$1: [SEGREDO]');
+  text = text.replace(/([?&](?:token|api[_-]?key|password|senha|secret)=)[^&#\s]+/gi, '$1[SEGREDO]');
 
   // 1. Remove cabeçalhos de resposta de e-mail (threads encadeadas)
   text = text.replace(/^[>\s]*Em\s+[a-z]{3}\.?,?\s+\d+.*?escreveu:.*$/gmi, '');
@@ -243,21 +222,17 @@ export function sanitizeMessageBody(rawBody: string): string {
 
 export function sanitizeDialogue(
   messages: Array<{ author_role?: string; author_name?: string; body?: string; created_at?: string; is_public?: boolean }>,
-  agentName?: string,
-  customerName?: string
 ): string {
   if (!messages || !Array.isArray(messages)) return '';
 
   // Expande comentários de chat se houver algum bloco não decomposto
-  const expandedMessages: Array<{ author_role?: string; author_name?: string; body?: string }> = [];
+  const expandedMessages: Array<{ author_role?: string; author_name?: string; body?: string; is_public?: boolean }> = [];
 
   for (const m of messages) {
     const body = m.body || '';
     if (isChatTranscript(body)) {
       const parsed = parseZendeskChatTranscript(body, {
         parentDate: m.created_at,
-        agentName,
-        customerName,
         isPublic: m.is_public !== false
       });
       if (parsed.length > 0) {
@@ -268,21 +243,22 @@ export function sanitizeDialogue(
     expandedMessages.push(m);
   }
 
+  const participantAliases = new Map<string, string>();
+  const participantCounts = new Map<string, number>();
   return expandedMessages
     .map(m => {
       const author = (m.author_name || '').trim();
-      const isBot = m.author_role === 'system' || author.toLowerCase().includes('ia webposto');
-      const isAgent = m.author_role === 'agent' && !isBot;
-      const isClient = m.author_role === 'end_user' && !isBot;
-
-      let roleLabel = 'SISTEMA';
-      if (isBot) {
-        roleLabel = 'BOT - IA webPosto';
-      } else if (isAgent) {
-        roleLabel = author ? `ATENDENTE: ${author}` : 'ATENDENTE';
-      } else if (isClient) {
-        roleLabel = author ? `CLIENTE: ${author}` : 'CLIENTE';
+      const role = m.is_public === false ? 'NOTA INTERNA'
+        : m.author_role === 'agent' || m.author_role === 'admin' ? 'ATENDENTE'
+        : m.author_role === 'end_user' ? 'CLIENTE'
+        : m.author_role === 'system' ? 'SISTEMA' : 'PARTICIPANTE';
+      const aliasKey = `${role}:${normalizeTranscriptSpeakerName(author)}`;
+      if (!participantAliases.has(aliasKey)) {
+        const next = (participantCounts.get(role) || 0) + 1;
+        participantCounts.set(role, next);
+        participantAliases.set(aliasKey, `${role} ${next}`);
       }
+      const roleLabel = role === 'SISTEMA' ? 'SISTEMA' : participantAliases.get(aliasKey)!;
 
       const cleanBody = sanitizeMessageBody(m.body || '');
       if (!cleanBody) return null;
