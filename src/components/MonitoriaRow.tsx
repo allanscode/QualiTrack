@@ -270,21 +270,32 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
                       </div>
                     )}
 
-                    {/* Aprovação direta pelo Gestor de Qualidade, mesmo sem contestação —
-                        antes só o Gestor de Atendimento podia aprovar uma monitoria "limpa"
-                        em pendente_revisao; a Qualidade só entrava depois de uma contestação
-                        ou escalonamento. Isso deixava o Gestor de Qualidade sem como agilizar
-                        a conclusão quando quisesse, mesmo tendo visibilidade completa. */}
-                    {user?.role === 'gestor_qualidade' && m.status === 'pendente_revisao' && (
+                    {/* Aprovar/Contestar direto pelo Gestor de Qualidade ou Admin, mesmo
+                        sem contestação — cobre o caso do Gestor de Atendimento ainda não
+                        estar usando o sistema (ex.: piloto restrito à equipe de Qualidade),
+                        sem deixar a monitoria travada em pendente_revisao esperando alguém
+                        que não vai entrar. O nome de quem agiu fica registrado no histórico
+                        (by_name), então não se perde rastreabilidade de que foi a Qualidade
+                        substituindo a decisão do Gestor de Atendimento. */}
+                    {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'pendente_revisao' && (
                       <div className="flex gap-3 items-center flex-wrap justify-end">
                         <Button
                           variant="secondary"
                           size="sm"
                           onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
                           icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                          className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                          className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
                         >
                           Aprovar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
+                          icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                          className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                        >
+                          Contestar
                         </Button>
                       </div>
                     )}
