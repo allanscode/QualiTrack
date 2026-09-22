@@ -701,10 +701,10 @@ export default function AdminDashboardView({
         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
       </span>
       <span className="text-brand-muted text-xs font-semibold lowercase tracking-wider">
-        {isCustomizing ? '8 conectados agora' : (onlineUsers.length === 1 ? '1 conectado agora' : `${onlineUsers.length} conectados agora`)}
+        {onlineUsers.length === 1 ? '1 conectado agora' : `${onlineUsers.length} conectados agora`}
       </span>
     </div>
-  ), [isCustomizing, onlineUsers]);
+  ), [onlineUsers]);
 
   const scoreDiff = avgScore - config.targetScore;
   const diffSign = scoreDiff >= 0 ? '↑' : '↓';
@@ -918,7 +918,7 @@ export default function AdminDashboardView({
         />
         <StatCard
           title="Usuários Online"
-          value={isCustomizing ? 8 : onlineUsers.length}
+          value={onlineUsers.length}
           sub={onlineSub}
           good={true}
           icon={<Activity className="w-5 h-5" />}

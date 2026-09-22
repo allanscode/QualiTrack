@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import { Monitoria, User, Team, EvaluationForm, DissatisfactionField } from '../../types';
-import { supabase, mockDb, isMockMode } from '../../lib/supabase';
+import { supabase, mockDb, isMockMode, requireAccessToken } from '../../lib/supabase';
 import { useStaticData } from '../../lib/StaticDataContext';
 import { toast } from 'sonner';
 import { useQualityConfig } from '../../lib/useQualityConfig';
@@ -53,12 +53,25 @@ export const DashboardDispatchContext = createContext<DashboardDispatch | undefi
 
 export interface PresenceContextType {
   onlineUsers: User[];
+  terminateSession: (userId: string) => Promise<void>;
 }
 
 export const PresenceContext = createContext<PresenceContextType | undefined>(undefined);
 
 export function PresenceProvider({ user, children }: { user: User | null; children: ReactNode }) {
   const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
+
+  const terminateSession = useCallback(async (userId: string) => {
+    if (!supabase || !userId) throw new Error('Encerramento de sessão indisponível offline.');
+    const accessToken = await requireAccessToken();
+    const { data, error } = await supabase.functions.invoke('admin-end-user-session', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: { user_id: userId },
+    });
+    if (error || data?.success === false) {
+      throw new Error(data?.error || error?.message || 'Não foi possível encerrar a sessão.');
+    }
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -114,6 +127,7 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
     let localSessions = performLocalHeartbeat();
     let presenceSessions: User[] = [];
     let channel: any = null;
+    let logoutChannel: any = null;
 
     const updateCombinedOnlineUsers = (local: User[], remote: User[]) => {
       const userMap = new Map<string, User>();
@@ -126,6 +140,7 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
     updateCombinedOnlineUsers(localSessions, presenceSessions);
 
     if (supabase) {
+      const realtimeClient = supabase;
       const existingChannel = supabase.getChannels().find(
         (c: any) => c.name === 'online-presence' || c.topic === 'realtime:online-presence'
       );
@@ -133,7 +148,7 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
         supabase.removeChannel(existingChannel);
       }
 
-      channel = supabase.channel('online-presence', {
+      channel = realtimeClient.channel('online-presence', {
         config: {
           presence: {
             key: user.id,
@@ -178,6 +193,20 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
             }
           }
         });
+
+      // O comando é criado somente por uma Edge Function autorizada. Ao
+      // chegar ao usuário alvo, o logout global limpa esta sessão e revoga os
+      // refresh tokens das demais sessões desse usuário.
+      logoutChannel = realtimeClient
+        .channel(`session-control-${user.id}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'session_control_commands',
+          filter: `target_user_id=eq.${user.id}`,
+        }, async () => {
+          toast.info('Sua sessão foi encerrada por um administrador.');
+          await realtimeClient.auth.signOut({ scope: 'global' });
+        })
+        .subscribe();
     }
 
     const timer = setInterval(() => {
@@ -215,11 +244,14 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
       if (channel && supabase) {
         supabase.removeChannel(channel);
       }
+      if (supabase && logoutChannel) {
+        supabase.removeChannel(logoutChannel);
+      }
     };
   }, [user]);
 
   return (
-    <PresenceContext value={{ onlineUsers }}>
+    <PresenceContext value={{ onlineUsers, terminateSession }}>
       {children}
     </PresenceContext>
   );

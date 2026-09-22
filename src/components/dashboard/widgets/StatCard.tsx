@@ -4,6 +4,7 @@ import { m, AnimatePresence } from 'motion/react';
 import { useDashboard, usePresence, useEditing } from '../DashboardContext';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { toast } from 'sonner';
+import { User } from '../../../types';
 
 interface StatCardProps {
   title: string;
@@ -82,6 +83,7 @@ export default function StatCard({
   }
   const user = dashboardContext?.user;
   const onlineUsers = onlineUsersOverride || presenceContext?.onlineUsers || [];
+  const terminateSession = presenceContext?.terminateSession;
 
   const iconBg = getIconBg(accent);
   const [isHovered, setIsHovered] = useState(false);
@@ -89,19 +91,11 @@ export default function StatCard({
   const [showOnlineModal, setShowOnlineModal] = useState(false);
 
   const isOnlineUsersCard = title === 'Usuários Online' || title === 'Usuários online';
+  const canTerminateSessions = ['admin', 'gestor_qualidade'].includes(user?.role || '');
 
-  const displayedOnlineUsers = isCustomizing
-    ? [
-        { id: user?.id || 'mock-admin', name: user?.name || 'Marcos Freitas', role: user?.role || 'admin' },
-        { id: 'mock-2', name: 'Ana Silva', role: 'gestor_qualidade' },
-        { id: 'mock-3', name: 'Bruno Costa', role: 'suporte' },
-        { id: 'mock-4', name: 'Clara Santos', role: 'qualidade' },
-        { id: 'mock-5', name: 'Diego Oliveira', role: 'gestor_suporte' },
-        { id: 'mock-6', name: 'Elena Souza', role: 'suporte' },
-        { id: 'mock-7', name: 'Felipe Rocha', role: 'suporte' },
-        { id: 'mock-8', name: 'Gabriela Lima', role: 'suporte' }
-      ]
-    : onlineUsers;
+  // Presença nunca usa dados ilustrativos, nem durante a personalização do
+  // dashboard: este card é um indicador operacional, não decorativo.
+  const displayedOnlineUsers = onlineUsers;
   const canEdit = isCustomizing && !isOnlineUsersCard;
   const isEditable = (typeof sub === 'string' || sub === undefined || sub === null) && !isOnlineUsersCard;
   
@@ -158,6 +152,16 @@ export default function StatCard({
       setActiveEditingId(null);
     } else {
       editingContext?.setActiveEditingId(null);
+    }
+  };
+
+  const handleTerminateSession = async (target: User) => {
+    if (!terminateSession) return;
+    try {
+      await terminateSession(target.id);
+      toast.success(`Sessão de ${target.name} encerrada.`);
+    } catch (error: any) {
+      toast.error(error?.message || 'Não foi possível encerrar a sessão.');
     }
   };
 
@@ -331,6 +335,16 @@ export default function StatCard({
                             {label}
                           </span>
                         </div>
+                        {canTerminateSessions && user?.id !== u.id && !isCustomizing && (
+                          <button
+                            type="button"
+                            onClick={() => handleTerminateSession(u)}
+                            className="shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide text-functional-error border border-functional-error/30 hover:bg-functional-error/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-functional-error/50 transition-colors"
+                            title={`Encerrar a sessão de ${u.name}`}
+                          >
+                            Encerrar
+                          </button>
+                        )}
                       </div>
                     );
                   })

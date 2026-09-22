@@ -90,6 +90,7 @@ interface AuditingQueueViewProps {
     evaluated_id?: string;
     team_id?: string;
     channel?: string;
+    ticket_date?: string;
     satisfaction_result?: string;
     satisfaction_has_record?: boolean;
     satisfaction_record_text?: string;
@@ -132,6 +133,13 @@ export default function AuditingQueueView({
   // está online) e atribuições (ticket -> monitor) das filas de Negativas e
   // Filhos. Carregadas uma vez e mantidas em tempo real via Realtime.
   const [monitorPresence, setMonitorPresence] = useState<Record<string, boolean>>({});
+  const [assignmentsReady, setAssignmentsReady] = useState<Record<AuditingQueueType, boolean>>({
+    negativas: false,
+    proativas: true,
+    positivas: true,
+    filhos: false,
+    filhos_invalidos: true,
+  });
   const [queueAssignments, setQueueAssignments] = useState<Record<AuditingQueueType, Record<string, string>>>({
     negativas: {},
     proativas: {},
@@ -503,16 +511,27 @@ ${checksSummary}${recs}`;
     let cancelled = false;
     const queueType = activeQueue;
     const ticketIds = tickets.map(t => t.ticket_id);
+    setAssignmentsReady(prev => ({ ...prev, [queueType]: false }));
 
     fetchQueueAssignments(queueType, ticketIds).then(existing => {
       if (cancelled) return;
       setQueueAssignments(prev => ({ ...prev, [queueType]: { ...prev[queueType], ...existing } }));
 
       const unassigned = ticketIds.filter(id => !existing[id]);
-      if (unassigned.length === 0) return;
+      if (unassigned.length === 0) {
+        setAssignmentsReady(prev => ({ ...prev, [queueType]: true }));
+        return;
+      }
       syncQueueAssignments(queueType, unassigned).then(newlyAssigned => {
-        if (cancelled || Object.keys(newlyAssigned).length === 0) return;
-        setQueueAssignments(prev => ({ ...prev, [queueType]: { ...prev[queueType], ...newlyAssigned } }));
+        if (cancelled) return;
+        if (Object.keys(newlyAssigned).length > 0) {
+          setQueueAssignments(prev => ({ ...prev, [queueType]: { ...prev[queueType], ...newlyAssigned } }));
+        }
+        // Um monitor nunca pode ver o lote antes da distribuição terminar.
+        // Se não havia ninguém online, o lote permanece invisível para ele.
+        setAssignmentsReady(prev => ({ ...prev, [queueType]: true }));
+      }).catch(() => {
+        if (!cancelled) setAssignmentsReady(prev => ({ ...prev, [queueType]: true }));
       });
     });
 
@@ -539,12 +558,12 @@ ${checksSummary}${recs}`;
       // continuam vendo a fila inteira (com o selo de quem é o dono).
       if (isDistributedQueue(activeQueue) && currentUserRole === 'qualidade' && currentUserId) {
         const assignedTo = queueAssignments[activeQueue][t.ticket_id];
-        if (assignedTo && assignedTo !== currentUserId) return false;
+        if (!assignmentsReady[activeQueue] || assignedTo !== currentUserId) return false;
       }
 
       return matchesSearch && matchesAgent;
     });
-  }, [tickets, searchTerm, selectedAgentFilter, drafts, activeQueue, validatedChildTickets, aiDraftFilter, queueAssignments, currentUserRole, currentUserId]);
+  }, [tickets, searchTerm, selectedAgentFilter, drafts, activeQueue, validatedChildTickets, aiDraftFilter, queueAssignments, assignmentsReady, currentUserRole, currentUserId]);
 
   // Paginação configurável por página (5, 10, 15, 20) com padrão 5
   const [pageSize, setPageSize] = useState<number>(5);
@@ -908,6 +927,9 @@ ${checksSummary}${recs}`;
       evaluated_id: ticket.agent_id || matchedAgent?.id,
       team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
       channel: normalizeChannel(ticket.channel),
+      // O Zendesk devolve o timestamp de criação. O datepicker recebe apenas
+      // yyyy-MM-dd para não reinterpretar o dia pela timezone do navegador.
+      ticket_date: ticket.ticket_date?.slice(0, 10),
       satisfaction_result: csatStatusToSatisfactionResult(ticket.csat_status),
       satisfaction_has_record: !!ticket.csat_comment,
       satisfaction_record_text: ticket.csat_comment,

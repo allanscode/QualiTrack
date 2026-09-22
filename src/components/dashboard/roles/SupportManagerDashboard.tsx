@@ -352,10 +352,10 @@ export default function SupportManagerDashboard({
         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
       </span>
       <span className="text-brand-muted text-xs font-semibold lowercase tracking-wider">
-        {isCustomizing ? '8 conectados' : (teamOnlineUsers.length === 1 ? '1 conectado' : `${teamOnlineUsers.length} conectados`)}
+        {teamOnlineUsers.length === 1 ? '1 conectado' : `${teamOnlineUsers.length} conectados`}
       </span>
     </div>
-  ), [isCustomizing, teamOnlineUsers]);
+  ), [teamOnlineUsers]);
 
   // Reevaluations
   const contestedMonitorias = useMemo(() => {
@@ -774,7 +774,7 @@ export default function SupportManagerDashboard({
           />
         <StatCard
           title="Usuários Online"
-          value={isCustomizing ? 8 : teamOnlineUsers.length}
+          value={teamOnlineUsers.length}
           sub={onlineSub}
           good={true}
           icon={<Activity className="w-5 h-5" />}

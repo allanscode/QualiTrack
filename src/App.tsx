@@ -402,6 +402,7 @@ function MainApp({
       evaluated_id: prefill.evaluated_id,
       team_id: prefill.team_id,
       channel: prefill.channel,
+      ticket_date: prefill.ticket_date,
       satisfaction_result: prefill.satisfaction_result,
       satisfaction_has_record: prefill.satisfaction_has_record,
       satisfaction_record_text: prefill.satisfaction_record_text,
@@ -1001,7 +1002,7 @@ function MainApp({
             title={`${isReconnecting ? 'Reconectando...' : isSystemOnline ? 'Sistema Online' : 'Sistema Offline'} — ${formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}`}
           >
             <div className="w-9 h-9 rounded-lg bg-black/10 flex items-center justify-center flex-shrink-0 relative">
-              <div className={`w-2.5 h-2.5 rounded-full ${isSystemOnline ? 'bg-success animate-pulse' : 'bg-error'} ${isReconnecting ? 'animate-bounce' : ''}`} />
+              <div className={`w-2.5 h-2.5 rounded-full ${isSystemOnline ? 'bg-success animate-pulse' : 'bg-error'} ${isReconnecting ? 'animate-pulse' : ''}`} />
             </div>
 
             <div
@@ -1111,7 +1112,7 @@ function MainApp({
                 )}
 
                 {unreadNotificationsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-functional-error text-white text-[9px] font-black flex items-center justify-center px-1 border-2 border-surface-bg shadow-sm">
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-600 !text-white text-[9px] font-black flex items-center justify-center px-1 border-2 border-white shadow-sm">
                     {unreadNotificationsCount}
                   </span>
                 )}
