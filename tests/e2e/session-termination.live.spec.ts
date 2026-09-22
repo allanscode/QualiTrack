@@ -151,6 +151,11 @@ test.describe('encerramento remoto de sessão em produção', () => {
       });
       expect(refreshResponse.ok).toBe(false);
 
+      const targetUserResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: { apikey: publishableKey, Authorization: `Bearer ${targetSession.access_token}` },
+      });
+      expect(targetUserResponse.ok).toBe(false);
+
       const adminUserResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
         headers: { apikey: publishableKey, Authorization: `Bearer ${adminSession.access_token}` },
       });
@@ -168,6 +173,7 @@ test.describe('encerramento remoto de sessão em produção', () => {
         status: functionResponse.status(),
         response: responseBody,
         targetRefreshRevokedStatus: refreshResponse.status,
+        targetSessionStatus: targetUserResponse.status,
         adminSessionStatus: adminUserResponse.status,
       }));
     } finally {
