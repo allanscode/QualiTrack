@@ -69,6 +69,7 @@ import TicketMessageBubble from './TicketMessageBubble';
 import QueueMonitorPresencePanel from './QueueMonitorPresencePanel';
 import QueueMonitorFilter from './QueueMonitorFilter';
 import QueueMonitorAssignmentModal from './QueueMonitorAssignmentModal';
+import QueueAIProgress from './QueueAIProgress';
 import { toast } from 'sonner';
 import { isMockMode, supabase } from '../lib/supabase';
 import {
@@ -235,12 +236,6 @@ export default function AuditingQueueView({
     delete next[ticketId];
     return next;
   });
-  const progressLabel = (ticketId: string) => {
-    const step = aiProgress[ticketId] || 2;
-    return step === 1 ? 'Etapa 1/3 · Buscando conversa'
-      : step === 2 ? 'Etapa 2/3 · Analisando com IA...'
-      : 'Etapa 3/3 · Finalizando';
-  };
 
   // Escuta mudanças nas avaliações globais que continuam rodando ao trocar de aba
   const [, setGlobalEvalTick] = useState(0);
@@ -1286,8 +1281,7 @@ ${checksSummary}${recs}`;
             disabled={true}
             className="flex min-w-0 items-center justify-center gap-1.5 bg-indigo-600/80 text-white font-semibold shadow-xs cursor-not-allowed"
           >
-            <Bot className="w-3.5 h-3.5 animate-spin" />
-            <span className="text-left leading-tight">{progressLabel(ticket.ticket_id)}</span>
+            <QueueAIProgress step={aiProgress[ticket.ticket_id] || 2} />
           </Button>
         </div>
       );
@@ -2176,14 +2170,11 @@ ${checksSummary}${recs}`;
                             }}
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
-                            <Bot className={`w-3.5 h-3.5 ${isEvaluatingTicket(ticket.ticket_id) ? 'animate-spin' : ''}`} />
-                            <span>
-                              {isEvaluatingTicket(ticket.ticket_id)
-                                ? progressLabel(ticket.ticket_id)
-                                : evaluation
-                                ? 'Ver Parecer IA'
-                                : 'Conferir com IA'}
-                            </span>
+                            {isEvaluatingTicket(ticket.ticket_id) ? (
+                              <QueueAIProgress step={aiProgress[ticket.ticket_id] || 2} />
+                            ) : (
+                              <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
+                            )}
                           </Button>
                           {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
                         </div>
@@ -2311,14 +2302,11 @@ ${checksSummary}${recs}`;
                             }}
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
-                            <Bot className={`w-3.5 h-3.5 ${isEvaluatingTicket(ticket.ticket_id) ? 'animate-spin' : ''}`} />
-                            <span>
-                              {isEvaluatingTicket(ticket.ticket_id)
-                                ? progressLabel(ticket.ticket_id)
-                                : evaluation
-                                ? 'Ver Parecer IA'
-                                : 'Conferir com IA'}
-                            </span>
+                            {isEvaluatingTicket(ticket.ticket_id) ? (
+                              <QueueAIProgress step={aiProgress[ticket.ticket_id] || 2} />
+                            ) : (
+                              <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
+                            )}
                           </Button>
                           {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
                         </div>
