@@ -562,8 +562,9 @@ export default function TeamsManagement({ teams, users, loadData, currentUser }:
         })}
       </div>
 
-      <AnimatePresence>
-        {isModalOpen && createPortal(
+      {createPortal(
+        <AnimatePresence>
+        {isModalOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
             <Card className="max-w-md w-full max-h-[92vh] flex flex-col shadow-2xl overflow-y-auto no-scrollbar border border-surface-border relative">
               <header className="flex items-center justify-between mb-6">
@@ -702,11 +703,15 @@ export default function TeamsManagement({ teams, users, loadData, currentUser }:
                 </Button>
               </div>
             </Card>
-          </div>,
-          document.body
+          </div>
         )}
+        </AnimatePresence>,
+        document.body
+      )}
 
-        {activeDrawerTeam && createPortal(
+      {createPortal(
+        <AnimatePresence>
+        {activeDrawerTeam && (
           <div className="fixed inset-0 z-[9999] overflow-hidden">
             {/* Backdrop with transition */}
             <m.div
@@ -836,10 +841,11 @@ export default function TeamsManagement({ teams, users, loadData, currentUser }:
                 )}
               </m.div>
             </div>
-          </div>,
-          document.body
+          </div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }

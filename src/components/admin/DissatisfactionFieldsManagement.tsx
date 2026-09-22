@@ -345,8 +345,9 @@ export default function DissatisfactionFieldsManagement({ forms }: Dissatisfacti
         </table>
       </Card>
 
-      <AnimatePresence>
-        {isModalOpen && createPortal(
+      {createPortal(
+        <AnimatePresence>
+        {isModalOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
             <Card className="max-w-md w-full max-h-[92vh] flex flex-col shadow-2xl overflow-y-auto no-scrollbar border border-surface-border" padding="lg">
               <header className="flex items-center justify-between mb-6">
@@ -459,10 +460,11 @@ export default function DissatisfactionFieldsManagement({ forms }: Dissatisfacti
                 </Button>
               </div>
             </Card>
-          </div>,
-          document.body
+          </div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }

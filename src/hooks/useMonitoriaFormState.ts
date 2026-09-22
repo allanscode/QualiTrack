@@ -18,6 +18,7 @@ const DEFAULT_HEADER = (initialData?: Monitoria) => {
     evaluator_note: initialData?.evaluator_note || '',
     client_contact_log: initialData?.client_contact_log || '',
     client_contact_success: initialData?.client_contact_success || false,
+    client_contact_channel: initialData?.client_contact_channel || [],
     reevaluation_justification: '',
   };
 };

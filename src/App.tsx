@@ -636,7 +636,13 @@ function MainApp({
         const timeStr = itemDate
           ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
           : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
-        const notifId = `guideline-pending-${g.id}-${new Date(itemDate || Date.now()).getTime()}`;
+        // Sem fallback para Date.now(): um id baseado no relógio local mudaria a
+        // cada re-render (recomputa o useMemo), fazendo a mesma proposta pendente
+        // — já lida — voltar a aparecer como não lida a qualquer atualização de
+        // estado (troca de aba, nova monitoria chegando, etc.), não só de um dia
+        // para o outro. O id só deve mudar quando pending_modified_at realmente
+        // muda (nova proposta submetida).
+        const notifId = `guideline-pending-${g.id}-${g.pending_modified_at || g.updated_at || 'v' + (g.version || 1)}`;
 
         list.push({
           id: notifId,
@@ -1380,6 +1386,8 @@ function MainApp({
                   forms={forms}
                   monitorias={monitorias}
                   currentUserId={userData?.id}
+                  currentUserRole={userData?.role}
+                  qualityMonitors={users.filter(u => u.role === 'qualidade' && u.active !== false)}
                   onStartAudit={handleStartAuditFromQueue}
                   onModalStateChange={setIsQueueModalOpen}
                 />

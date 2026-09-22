@@ -211,7 +211,7 @@ export async function saveAIGuideline(params: {
  */
 export async function updateAIGuideline(
   id: string,
-  params: { title: string; content: string },
+  params: { title: string; content: string; file?: File },
   guideline?: AIEvaluationGuideline,
   user?: { id?: string; name?: string; role?: string }
 ): Promise<void> {
@@ -233,11 +233,31 @@ export async function updateAIGuideline(
     status: 'approved' as const
   }, ...currentHistory] : currentHistory;
 
+  // Ao editar com um arquivo novo, o anexo tem que ser reenviado ao Storage
+  // e o file_path/file_name atualizados — senão o botão "Baixar arquivo
+  // original" continua apontando pro arquivo antigo (ou nem existe mais),
+  // e o download falha com "Object not found".
+  let filePatch: { file_path?: string; file_name?: string } = {};
+  if (params.file) {
+    const ext = params.file.name.split('.').pop() || 'pdf';
+    const path = `${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from(AI_GUIDELINES_BUCKET)
+      .upload(path, params.file, { contentType: params.file.type || 'text/plain' });
+    if (uploadError) throw new Error(`Falha ao enviar o novo arquivo: ${uploadError.message}`);
+
+    filePatch = { file_path: path, file_name: params.file.name };
+    if (guideline?.file_path) {
+      await supabase.storage.from(AI_GUIDELINES_BUCKET).remove([guideline.file_path]);
+    }
+  }
+
   const { error } = await supabase
     .from('ai_evaluation_guidelines')
     .update({
       title: params.title,
       content: params.content,
+      ...filePatch,
       version: currentVersion + 1,
       status: 'approved',
       history: newHistoryEntry,

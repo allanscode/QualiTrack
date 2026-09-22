@@ -384,16 +384,17 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
             <div onClick={() => { setEditingForm(f); setIsModalOpen(true); }} className="cursor-pointer">
               <p className="text-xs text-brand-muted line-clamp-2 mb-4">{f.description}</p>
               <div className="flex items-center gap-4">
-                <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-300">{f.sections.length} Pilares</span>
-                <span className="text-[10px] font-black uppercase text-slate-500 dark:text-emerald-400">Peso Total: {f.sections.reduce((acc, s) => acc + (s.weight || 0), 0)}%</span>
+                <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-300">{(f.sections || []).length} Pilares</span>
+                <span className="text-[10px] font-black uppercase text-slate-500 dark:text-emerald-400">Peso Total: {(f.sections || []).reduce((acc, s) => acc + (s.weight || 0), 0)}%</span>
               </div>
             </div>
           </Card>
         ))}
       </div>
 
-      <AnimatePresence>
-        {isModalOpen && createPortal(
+      {createPortal(
+        <AnimatePresence>
+        {isModalOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
             <m.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-3xl w-full min-h-[600px] h-[92vh] max-h-[92vh] overflow-hidden flex flex-col bg-surface-card border border-surface-border rounded-2xl shadow-2xl">
               <header className="flex items-center justify-between p-6 border-b border-surface-border bg-surface-card sticky top-0 z-10">
@@ -738,10 +739,11 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                 </div>
               </footer>
             </m.div>
-          </div>,
-          document.body
+          </div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }

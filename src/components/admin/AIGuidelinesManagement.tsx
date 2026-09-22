@@ -217,7 +217,7 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
           // Administrador edita direto com arquivamento da versão anterior
           await updateAIGuideline(
             editingGuideline.id,
-            { title: title.trim(), content: contentToSave },
+            { title: title.trim(), content: contentToSave, file: file || undefined },
             editingGuideline,
             currentUser || undefined
           );
@@ -306,7 +306,17 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
       const url = await downloadAIGuidelineFile(g.file_path);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (e: any) {
-      toast.error(e?.message || 'Falha ao gerar link do arquivo.');
+      // "Object not found" é o erro cru do Supabase Storage quando o
+      // file_path do manual não corresponde a nenhum arquivo no bucket —
+      // acontece com manuais antigos editados antes desta correção, cujo
+      // anexo nunca foi reenviado ao Storage. Trocamos por uma mensagem que
+      // explica a causa em vez de repassar o erro técnico.
+      const isMissingObject = /object not found/i.test(e?.message || '');
+      toast.error(
+        isMissingObject
+          ? 'O arquivo original deste manual não está mais disponível no armazenamento. Reenvie um novo arquivo editando o manual.'
+          : (e?.message || 'Falha ao gerar link do arquivo.')
+      );
     }
   };
 

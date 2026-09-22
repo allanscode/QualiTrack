@@ -39,31 +39,11 @@ export function determineParticipantRole(
     return 'system';
   }
 
-  // 2. Se temos o nome do cliente / solicitante identificado, confirma se é o cliente
-  if (customerName) {
-    const lowerCust = customerName.toLowerCase().trim();
-    if (lower && (lower.includes(lowerCust) || lowerCust.includes(lower))) {
-      return 'end_user';
-    }
-  }
-
-  // 3. Se o nome contém termos de equipe técnica/suporte da WebPosto
-  if (
-    lower.includes('suporte') ||
-    lower.includes('webposto') ||
-    lower.includes('atendente') ||
-    lower.includes('analista') ||
-    lower.includes('técnico') ||
-    lower.includes('tecnico') ||
-    lower.includes('especialista') ||
-    lower.includes('moderador') ||
-    lower.includes('qualidade') ||
-    lower.includes('atendimento')
-  ) {
-    return 'agent';
-  }
-
-  // 4. Se temos o nome do atendente principal atribuído ao ticket
+  // 2. Se temos o nome do atendente real (atribuído ao ticket no Zendesk),
+  // confirma se é ele — checagem de identidade, tem prioridade sobre
+  // palavras-chave genéricas (abaixo), que podem coincidir com o nome da
+  // própria equipe do cliente (ex.: um cliente que assina o chat como
+  // "Suporte <Empresa>" não é o nosso atendente).
   if (agentName) {
     const lowerAgent = agentName.toLowerCase().trim();
     const agentParts = lowerAgent.split(/\s+/).filter(Boolean);
@@ -75,6 +55,32 @@ export function determineParticipantRole(
     ) {
       return 'agent';
     }
+  }
+
+  // 3. Se temos o nome do cliente / solicitante identificado, confirma se é o cliente
+  if (customerName) {
+    const lowerCust = customerName.toLowerCase().trim();
+    if (lower && (lower.includes(lowerCust) || lowerCust.includes(lower))) {
+      return 'end_user';
+    }
+  }
+
+  // 4. Se o nome contém termos específicos da equipe interna da WebPosto.
+  // "suporte" e "atendimento" foram removidos daqui: são termos genéricos
+  // demais — o time de suporte de um cliente/revenda também costuma se
+  // identificar no chat como "Suporte <Nome da Empresa>", o que fazia o
+  // cliente ser rotulado como atendente da WebPosto por engano.
+  if (
+    lower.includes('webposto') ||
+    lower.includes('atendente') ||
+    lower.includes('analista') ||
+    lower.includes('técnico') ||
+    lower.includes('tecnico') ||
+    lower.includes('especialista') ||
+    lower.includes('moderador') ||
+    lower.includes('qualidade')
+  ) {
+    return 'agent';
   }
 
   // 5. Caso padrão para clientes / solicitantes
@@ -96,6 +102,7 @@ export function parseZendeskChatTranscript(
     parentDate?: string;
     parentId?: string | number;
     agentName?: string;
+    customerName?: string;
     isPublic?: boolean;
   } = {}
 ): ParsedChatMessage[] {
@@ -105,6 +112,7 @@ export function parseZendeskChatTranscript(
     parentDate = new Date().toISOString(),
     parentId = 'chat',
     agentName = '',
+    customerName = '',
     isPublic = true
   } = options;
 
@@ -124,7 +132,7 @@ export function parseZendeskChatTranscript(
     if (!currentMsg) return;
     const body = currentMsg.bodyLines.join('\n').trim();
     if (body) {
-      const role = determineParticipantRole(currentMsg.author, agentName);
+      const role = determineParticipantRole(currentMsg.author, agentName, customerName);
 
       let isoTime = parentDate;
       if (currentMsg.time) {
@@ -235,7 +243,8 @@ export function sanitizeMessageBody(rawBody: string): string {
 
 export function sanitizeDialogue(
   messages: Array<{ author_role?: string; author_name?: string; body?: string; created_at?: string; is_public?: boolean }>,
-  agentName?: string
+  agentName?: string,
+  customerName?: string
 ): string {
   if (!messages || !Array.isArray(messages)) return '';
 
@@ -248,6 +257,7 @@ export function sanitizeDialogue(
       const parsed = parseZendeskChatTranscript(body, {
         parentDate: m.created_at,
         agentName,
+        customerName,
         isPublic: m.is_public !== false
       });
       if (parsed.length > 0) {

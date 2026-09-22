@@ -614,7 +614,7 @@ export default function MonitoriaForm({
             ].map(s => {
               const isCurrent = step === s.n;
               const isPast = step > s.n;
-              const canClick = isViewOnly || s.n < step || (s.n === step + 1 && validateStep(step));
+              const canClick = isViewOnly || s.n < step || (s.n === step + 1 && validateStep(step, true));
               return (
                 <button
                   key={s.n}
@@ -1248,37 +1248,55 @@ export default function MonitoriaForm({
 
                   {header.satisfaction_result === 'Negativa' && (
                     <Card className="bg-error/5 border-error/20 p-5 space-y-4 rounded-xl">
-                      <div className="flex items-center justify-between gap-4">
-                        <p className="text-xs font-black text-error uppercase tracking-wider">Conseguimos contato com o cliente?</p>
-                        <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
-                          {[true, false].map(v => (
-                            <button
-                              key={v ? 'y' : 'n'}
-                              onClick={() => !isViewOnly && setHeader({...header, client_contact_success: v})}
-                              className={`px-3.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${header.client_contact_success === v ? 'bg-error text-white shadow-sm' : 'text-brand-muted hover:bg-surface-card'}`}
-                              disabled={isViewOnly}
-                            >
-                              {v ? 'SIM' : 'NÃO'}
-                            </button>
-                          ))}
+                      <div className="space-y-2.5">
+                        <p className="text-xs font-black text-error uppercase tracking-wider">Contato com o Cliente</p>
+                        <p className="text-[10px] font-medium text-brand-muted">Selecione o(s) canal(is) utilizado(s) para o contato. Caso não consiga falar por telefone, envie uma mensagem via WhatsApp pelo Zendesk.</p>
+                        <div className="grid grid-cols-2 gap-2.5">
+                          {(['Zendesk', 'Telefone'] as const).map(opt => {
+                            const isChecked = (header.client_contact_channel || []).includes(opt);
+                            return (
+                              <label
+                                key={opt}
+                                className={`flex items-center gap-2.5 py-2.5 px-3.5 rounded-lg border transition-all cursor-pointer ${
+                                  isChecked
+                                    ? 'bg-surface-card border-error/40 text-error'
+                                    : 'bg-surface-card border-surface-border text-brand-muted hover:border-error/30 hover:text-error'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={e => {
+                                    if (isViewOnly) return;
+                                    const current = header.client_contact_channel || [];
+                                    const next = e.target.checked
+                                      ? [...current, opt]
+                                      : current.filter((c: string) => c !== opt);
+                                    setHeader({...header, client_contact_channel: next});
+                                  }}
+                                  disabled={isViewOnly}
+                                  className="w-4.5 h-4.5 rounded text-error border-surface-border focus:ring-error"
+                                />
+                                <span className="text-[11px] font-black uppercase tracking-wider">{opt}</span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
-                      {header.client_contact_success && (
-                        <div className="space-y-2 animate-fade-in">
-                          <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">Registro de Contato/Tentativa</label>
-                          <textarea
-                            value={header.client_contact_log}
-                            onChange={e => setHeader({...header, client_contact_log: e.target.value})}
-                            disabled={isViewOnly}
-                            className="w-full bg-surface-bg border border-surface-border rounded-xl p-4 text-xs font-medium min-h-[100px] focus:border-brand-accent focus:outline-none placeholder:text-brand-muted/40 text-brand-primary"
-                            placeholder="Descreva como foi o contato ou o motivo do insucesso..."
-                          />
-                        </div>
-                      )}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-1">Registro de Contato/Tentativa</label>
+                        <textarea
+                          value={header.client_contact_log}
+                          onChange={e => setHeader({...header, client_contact_log: e.target.value})}
+                          disabled={isViewOnly}
+                          className="w-full bg-surface-bg border border-surface-border rounded-xl p-4 text-xs font-medium min-h-[100px] focus:border-brand-accent focus:outline-none placeholder:text-brand-muted/40 text-brand-primary"
+                          placeholder="Descreva como foi o contato ou o motivo do insucesso..."
+                        />
+                      </div>
                     </Card>
                   )}
 
-                  {header.satisfaction_result === 'Negativa' && (header.satisfaction_has_record || header.client_contact_success) && clientFieldsToShow.length > 0 && (
+                  {header.satisfaction_result === 'Negativa' && clientFieldsToShow.length > 0 && (
                     <div className="space-y-6 pt-4 animate-fade-in">
                       <p className="text-[10px] font-black uppercase text-brand-muted tracking-[0.2em] ml-1 text-center">Campos Extras do Cliente</p>
                       {clientFieldsToShow.map(field => (

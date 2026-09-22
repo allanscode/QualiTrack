@@ -63,7 +63,15 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import TicketMessageBubble from './TicketMessageBubble';
+import QueueMonitorPresencePanel from './QueueMonitorPresencePanel';
 import { toast } from 'sonner';
+import { supabase } from '../lib/supabase';
+import {
+  isDistributedQueue,
+  fetchMonitorPresence,
+  fetchQueueAssignments,
+  syncQueueAssignments,
+} from '../lib/queueDistribution';
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -71,6 +79,10 @@ interface AuditingQueueViewProps {
   forms: EvaluationForm[];
   monitorias: Monitoria[];
   currentUserId?: string;
+  /** Papel do usuário logado — controla o filtro "só meus chamados" e o painel de presença. */
+  currentUserRole?: string;
+  /** Monitores de qualidade (role 'qualidade'), usados na distribuição 1-para-1 e no painel de presença do supervisor. */
+  qualityMonitors?: User[];
   onStartAudit: (prefill: {
     ticket_id: string;
     ticket_subject?: string;
@@ -108,10 +120,57 @@ export default function AuditingQueueView({
   forms,
   monitorias,
   currentUserId,
+  currentUserRole,
+  qualityMonitors = [],
   onStartAudit,
   onModalStateChange,
 }: AuditingQueueViewProps) {
   const [activeQueue, setActiveQueue] = useState<AuditingQueueType>('negativas');
+  const isSupervisorView = currentUserRole === 'gestor_qualidade' || currentUserRole === 'admin';
+
+  // Distribuição 1-para-1 da fila entre monitores online: presença (quem
+  // está online) e atribuições (ticket -> monitor) das filas de Negativas e
+  // Filhos. Carregadas uma vez e mantidas em tempo real via Realtime.
+  const [monitorPresence, setMonitorPresence] = useState<Record<string, boolean>>({});
+  const [queueAssignments, setQueueAssignments] = useState<Record<AuditingQueueType, Record<string, string>>>({
+    negativas: {},
+    proativas: {},
+    positivas: {},
+    filhos: {},
+    filhos_invalidos: {},
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMonitorPresence().then(map => { if (!cancelled) setMonitorPresence(map); });
+
+    if (!supabase) return;
+    const channel = supabase
+      .channel(`queue-distribution-${Math.random().toString(36).slice(2, 9)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quality_monitor_presence' }, () => {
+        fetchMonitorPresence().then(map => { if (!cancelled) setMonitorPresence(map); });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_ticket_assignments' }, (payload: any) => {
+        const row = payload.new || payload.old;
+        if (!row?.queue_type) return;
+        setQueueAssignments(prev => {
+          const forQueue = { ...prev[row.queue_type as AuditingQueueType] };
+          if (payload.eventType === 'DELETE') {
+            delete forQueue[row.ticket_id];
+          } else {
+            forQueue[row.ticket_id] = row.assigned_to;
+          }
+          return { ...prev, [row.queue_type as AuditingQueueType]: forQueue };
+        });
+      })
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase?.removeChannel(channel);
+    };
+  }, []);
+
   const [loading, setLoading] = useState(false);
   const [tickets, setTickets] = useState<AuditingQueueTicket[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -223,7 +282,7 @@ ${checksSummary}${recs}`;
       setLoadingChildDialogue(true);
       try {
         const res = await fetchTicketDialogue(childPreviewTicket.ticket_id);
-        const normalized = normalizeTicketDialogue(res.comments || [], childPreviewTicket.agent_name);
+        const normalized = normalizeTicketDialogue(res.comments || [], childPreviewTicket.agent_name, childPreviewTicket.requester_name);
         childPreviewTicket.dialogue = normalized;
         setChildDialogue(normalized);
       } catch (e) {
@@ -435,6 +494,30 @@ ${checksSummary}${recs}`;
     return 0;
   }, [tickets, activeQueue]);
 
+  // Distribuição 1-para-1: sempre que a fila de Negativas ou Filhos carrega
+  // tickets novos, sincroniza as atribuições já existentes e distribui os
+  // que ainda não têm dono entre os monitores online.
+  useEffect(() => {
+    if (!isDistributedQueue(activeQueue) || tickets.length === 0) return;
+    let cancelled = false;
+    const queueType = activeQueue;
+    const ticketIds = tickets.map(t => t.ticket_id);
+
+    fetchQueueAssignments(queueType, ticketIds).then(existing => {
+      if (cancelled) return;
+      setQueueAssignments(prev => ({ ...prev, [queueType]: { ...prev[queueType], ...existing } }));
+
+      const unassigned = ticketIds.filter(id => !existing[id]);
+      if (unassigned.length === 0) return;
+      syncQueueAssignments(queueType, unassigned).then(newlyAssigned => {
+        if (cancelled || Object.keys(newlyAssigned).length === 0) return;
+        setQueueAssignments(prev => ({ ...prev, [queueType]: { ...prev[queueType], ...newlyAssigned } }));
+      });
+    });
+
+    return () => { cancelled = true; };
+  }, [tickets, activeQueue]);
+
   // Filtro de busca na lista de tickets com suporte a filtro de rascunhos da IA
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
@@ -450,9 +533,17 @@ ${checksSummary}${recs}`;
       if (aiDraftFilter === 'with_draft' && !hasDraft) return false;
       if (aiDraftFilter === 'without_draft' && hasDraft) return false;
 
+      // Distribuição 1-para-1: monitor de qualidade só vê os chamados
+      // atribuídos a ele nas filas de Negativas/Filhos. Supervisor e Admin
+      // continuam vendo a fila inteira (com o selo de quem é o dono).
+      if (isDistributedQueue(activeQueue) && currentUserRole === 'qualidade' && currentUserId) {
+        const assignedTo = queueAssignments[activeQueue][t.ticket_id];
+        if (assignedTo && assignedTo !== currentUserId) return false;
+      }
+
       return matchesSearch && matchesAgent;
     });
-  }, [tickets, searchTerm, selectedAgentFilter, drafts, activeQueue, validatedChildTickets, aiDraftFilter]);
+  }, [tickets, searchTerm, selectedAgentFilter, drafts, activeQueue, validatedChildTickets, aiDraftFilter, queueAssignments, currentUserRole, currentUserId]);
 
   // Paginação configurável por página (5, 10, 15, 20) com padrão 5
   const [pageSize, setPageSize] = useState<number>(5);
@@ -741,7 +832,7 @@ ${checksSummary}${recs}`;
 
     try {
       const { comments, ticketFields, tags } = await fetchTicketDialogue(ticket.ticket_id);
-      const normalizedComments = normalizeTicketDialogue(comments || [], ticket.agent_name);
+      const normalizedComments = normalizeTicketDialogue(comments || [], ticket.agent_name, ticket.requester_name);
       ticket.dialogue = normalizedComments;
       setChildDialogue(normalizedComments);
 
@@ -920,6 +1011,26 @@ ${checksSummary}${recs}`;
         <UserIcon className="w-3 h-3 text-brand-highlight shrink-0" />
         <span>{ticket.agent_name}</span>
       </span>
+    );
+  };
+
+  // Selo "Atribuído a" da distribuição 1-para-1, visível só para Supervisor
+  // de Qualidade e Admin (o monitor comum já só enxerga os seus na lista).
+  const renderAssignedMonitorBadge = (ticket: AuditingQueueTicket) => {
+    if (!isSupervisorView || !isDistributedQueue(activeQueue)) return null;
+    const assignedId = queueAssignments[activeQueue][ticket.ticket_id];
+    if (!assignedId) return null;
+    const monitor = qualityMonitors.find(m => m.id === assignedId);
+    return (
+      <Badge
+        variant="info"
+        size="xs"
+        className="text-[9px] font-black uppercase tracking-wider bg-brand-accent/10 text-brand-accent border border-brand-accent/25 inline-flex items-center gap-1 shadow-2xs"
+        title="Monitor responsável por auditar este chamado (distribuição 1-para-1)"
+      >
+        <UserIcon className="w-2.5 h-2.5 shrink-0" />
+        <span>{monitor?.name || 'Monitor'}</span>
+      </Badge>
     );
   };
 
@@ -1182,6 +1293,15 @@ ${checksSummary}${recs}`;
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Painel de presença: só Supervisor de Qualidade e Admin ligam/desligam monitores da distribuição 1-para-1 */}
+      {isSupervisorView && (
+        <QueueMonitorPresencePanel
+          monitors={qualityMonitors}
+          presence={monitorPresence}
+          onPresenceChange={(userId, online) => setMonitorPresence(prev => ({ ...prev, [userId]: online }))}
+        />
+      )}
+
       {/* 1. Barra de Abas das Filas: Grid responsivo de 5 colunas com cores refinadas e harmônicas */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-1.5 bg-surface-subtle/40 rounded-2xl border border-surface-border">
         {/* Aba 1: CSAT Negativas - Destaque máximo em Vermelho (WebPosto Red/Rose) */}
@@ -1467,6 +1587,7 @@ ${checksSummary}${recs}`;
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {renderAssignedMonitorBadge(ticket)}
                     {renderScoreBadge(ticket)}
                     <Badge variant="error" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
                       CSAT Ruim
@@ -1761,6 +1882,7 @@ ${checksSummary}${recs}`;
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {renderAssignedMonitorBadge(ticket)}
                           {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
                           {evaluation && getChildStatusBadge(evaluation.status)}
                         </div>
@@ -1896,6 +2018,7 @@ ${checksSummary}${recs}`;
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {renderAssignedMonitorBadge(ticket)}
                           {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
                           {evaluation && getChildStatusBadge(evaluation.status)}
                         </div>

@@ -120,6 +120,8 @@ export interface Monitoria {
   evaluator_note?: string;
   client_contact_log?: string;
   client_contact_success?: boolean;
+  /** Canal(is) usado(s) pelo monitor para tentar contato com o cliente em pesquisas negativas. */
+  client_contact_channel?: ('Zendesk' | 'Telefone')[];
   question_observations?: Record<string, string>;
   critical_error_observations?: Record<string, string>;
   team_id?: string;

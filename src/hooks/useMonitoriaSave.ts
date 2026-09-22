@@ -41,39 +41,45 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
     );
   };
 
-  const validateStep = (s: number) => {
+  // `silent` evita o toast.error de efeito colateral — necessário para checar
+  // "essa etapa pode ser clicada?" durante a renderização (ex.: habilitar/
+  // desabilitar a aba do stepper), onde chamar a versão com toast reexibia o
+  // aviso a cada re-render (inclusive causados por scroll), empilhando toasts
+  // repetidos sem o usuário ter feito nada de novo.
+  const validateStep = (s: number, silent = false) => {
+    const fail = (message: string) => {
+      if (!silent) toast.error(message);
+      return false;
+    };
     if (s === 1) {
       if (!deps.header.form_id || !deps.header.evaluated_id || !deps.header.team_id || !deps.header.ticket_id || !deps.header.ticket_date || !deps.header.channel) {
-        toast.error('Preencha todos os campos obrigatórios da Identificação.');
-        return false;
+        return fail('Preencha todos os campos obrigatórios da Identificação.');
       }
     }
     if (s === 2) {
       if (!isAllAnswered()) {
-        toast.error('Responda todos os itens da avaliação antes de prosseguir.');
-        return false;
+        return fail('Responda todos os itens da avaliação antes de prosseguir.');
       }
     }
     if (s === 3) {
       if (!deps.header.satisfaction_result) {
-        toast.error('Selecione o resultado da pesquisa de satisfação.');
-        return false;
+        return fail('Selecione o resultado da pesquisa de satisfação.');
       }
       if (deps.header.satisfaction_result !== 'Sem pesquisa') {
         if (deps.header.satisfaction_has_record && !deps.header.satisfaction_record_text.trim()) {
-          toast.error('Informe o registro deixado pelo cliente.');
-          return false;
+          return fail('Informe o registro deixado pelo cliente.');
         }
-        if (deps.header.satisfaction_result === 'Negativa' && deps.header.client_contact_success && !deps.header.client_contact_log.trim()) {
-          toast.error('Informe o registro de contato para a pesquisa negativa.');
-          return false;
+        if (deps.header.satisfaction_result === 'Negativa' && !(deps.header.client_contact_channel || []).length) {
+          return fail('Selecione ao menos um canal de contato utilizado (Zendesk ou Telefone).');
         }
-        if (deps.header.satisfaction_result === 'Negativa' && (deps.header.satisfaction_has_record || deps.header.client_contact_success)) {
+        if (deps.header.satisfaction_result === 'Negativa' && !deps.header.client_contact_log.trim()) {
+          return fail('Informe o registro de contato para a pesquisa negativa.');
+        }
+        if (deps.header.satisfaction_result === 'Negativa') {
           for (const field of deps.clientFieldsToShow) {
             const answers = deps.dissatisfactionAnswers[field.id] || [];
             if (answers.length === 0) {
-              toast.error(`Por favor, preencha o campo extra obrigatório: "${field.title}".`);
-              return false;
+              return fail(`Por favor, preencha o campo extra obrigatório: "${field.title}".`);
             }
           }
         }
@@ -125,7 +131,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
         };
 
         const filteredDissatisfactionAnswers = { ...deps.dissatisfactionAnswers };
-        if (deps.header.satisfaction_result !== 'Negativa' || !(deps.header.satisfaction_has_record || deps.header.client_contact_success)) {
+        if (deps.header.satisfaction_result !== 'Negativa') {
           deps.dissatisfactionFields.forEach(f => {
             if (f.type === 'cliente') {
               delete filteredDissatisfactionAnswers[f.id];
@@ -156,8 +162,8 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           score: deps.score,
           status: deps.isAdminEdit ? (deps.initialData?.status || 'pendente_revisao') : (deps.isReevaluating ? 'pendente_revisao' : (deps.initialData?.status || 'pendente_revisao')),
           evaluator_note: deps.header.evaluator_note,
-          client_contact_log: deps.header.client_contact_success ? deps.header.client_contact_log : '',
-          client_contact_success: deps.header.client_contact_success,
+          client_contact_log: deps.header.satisfaction_result === 'Negativa' ? deps.header.client_contact_log : '',
+          client_contact_channel: deps.header.satisfaction_result === 'Negativa' ? (deps.header.client_contact_channel || []) : [],
           active: true,
           form_snapshot: {
             ...(deps.selectedForm as any),

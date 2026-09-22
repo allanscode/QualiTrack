@@ -253,8 +253,9 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
         )}
       </div>
 
-      <AnimatePresence>
-        {isApproveModalOpen && createPortal(
+      {createPortal(
+        <AnimatePresence>
+        {isApproveModalOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
             <Card className="max-w-md w-full max-h-[92vh] flex flex-col shadow-2xl overflow-y-auto no-scrollbar border border-surface-border">
               <header className="flex items-center justify-between mb-6">
@@ -329,11 +330,15 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                 <Button className="w-full mt-4 transition-all duration-200 cursor-pointer hover:bg-opacity-90 dark:hover:bg-neutral-200" onClick={handleApprove} disabled={saving} icon={<Check className="w-4 h-4" />}>{saving ? 'Processando...' : 'Confirmar Aprovação'}</Button>
               </div>
             </Card>
-          </div>,
-          document.body
+          </div>
         )}
+        </AnimatePresence>,
+        document.body
+      )}
 
-        {isRejectModalOpen && createPortal(
+      {createPortal(
+        <AnimatePresence>
+        {isRejectModalOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
             <Card className="max-w-md w-full max-h-[92vh] flex flex-col shadow-2xl overflow-y-auto no-scrollbar border border-surface-border">
               <header className="flex items-center justify-between mb-6">
@@ -370,10 +375,11 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
                 </div>
               </div>
             </Card>
-          </div>,
-          document.body
+          </div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }
