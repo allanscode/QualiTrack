@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
+import { diffWordsWithSpace } from 'diff';
+import TextDiff from '../ui/TextDiff';
 import { AIEvaluationGuideline, GuidelineVersion, User } from '../../types';
 import {
   fetchAIGuidelines,
@@ -78,6 +80,7 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editingGuideline, setEditingGuideline] = useState<AIEvaluationGuideline | null>(null);
   const [reviewGuideline, setReviewGuideline] = useState<AIEvaluationGuideline | null>(null);
+  const [reviewViewMode, setReviewViewMode] = useState<'diff' | 'preview'>('diff');
   const [historyGuideline, setHistoryGuideline] = useState<AIEvaluationGuideline | null>(null);
   const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<GuidelineVersion | null>(null);
   const [approving, setApproving] = useState(false);
@@ -373,7 +376,14 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
                         <span>Alteração Proposta (Aguardando Verificação)</span>
                       </span>
                     )}
-                    <span className="text-[10px] font-bold text-brand-muted bg-surface-subtle border border-surface-border rounded px-1">.md</span>
+                    {(() => {
+                      const ext = g.file_name?.includes('.') ? `.${g.file_name.split('.').pop()!.toLowerCase()}` : '.md';
+                      return (
+                        <span className="text-[10px] font-bold text-brand-muted bg-surface-subtle border border-surface-border rounded px-1" title="Formato do arquivo original enviado">
+                          {ext}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {/* Alerta e Detalhes da Proposta Pendente */}
@@ -644,28 +654,87 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
                 💡 <strong className="text-brand-primary">Avaliação de Impacto:</strong> Ao aprovar, o novo conteúdo entrará em produção imediatamente e será consultado pela IA em todas as próximas avaliações. A versão anterior (v{reviewGuideline.version || 1}) será arquivada no histórico.
               </div>
 
-              {/* Comparativo Lado a Lado */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black uppercase tracking-wider text-brand-primary">Versão Oficial Ativa (v{reviewGuideline.version || 1})</span>
-                    <Badge variant="success" size="xs">Ativo na IA</Badge>
-                  </div>
-                  <div className="p-3 rounded-xl border border-surface-border bg-surface-subtle max-h-[340px] overflow-y-auto text-xs text-brand-muted">
-                    <ReactMarkdown>{reviewGuideline.content}</ReactMarkdown>
-                  </div>
-                </div>
+              {(() => {
+                const oldContent = reviewGuideline.content || '';
+                const newContent = reviewGuideline.pending_content || '';
+                const parts = diffWordsWithSpace(oldContent, newContent);
+                const added = parts.filter(p => p.added).reduce((n, p) => n + p.value.trim().split(/\s+/).filter(Boolean).length, 0);
+                const removed = parts.filter(p => p.removed).reduce((n, p) => n + p.value.trim().split(/\s+/).filter(Boolean).length, 0);
+                const hasChanges = added > 0 || removed > 0;
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Nova Proposta (v{(reviewGuideline.version || 1) + 1})</span>
-                    <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full">Aguardando Aprovação</span>
+                return (
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 text-[11px] font-bold">
+                      {hasChanges ? (
+                        <>
+                          <span className="text-emerald-600 dark:text-emerald-400">+{added} palavra(s) adicionada(s)</span>
+                          <span className="text-brand-muted opacity-40">•</span>
+                          <span className="text-rose-600 dark:text-rose-400">-{removed} palavra(s) removida(s)</span>
+                        </>
+                      ) : (
+                        <span className="text-brand-muted">Nenhuma alteração de texto detectada.</span>
+                      )}
+                    </div>
+                    <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border">
+                      {(['diff', 'preview'] as const).map(mode => (
+                        <button
+                          key={mode}
+                          onClick={() => setReviewViewMode(mode)}
+                          className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${reviewViewMode === mode ? 'bg-brand-primary text-brand-on-primary shadow-sm' : 'text-brand-muted hover:bg-surface-card'}`}
+                        >
+                          {mode === 'diff' ? 'Ver o que mudou' : 'Formatação (Markdown)'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 max-h-[340px] overflow-y-auto text-xs text-brand-primary">
-                    <ReactMarkdown>{reviewGuideline.pending_content || ''}</ReactMarkdown>
+                );
+              })()}
+
+              {reviewViewMode === 'diff' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-brand-primary">Versão Oficial Ativa (v{reviewGuideline.version || 1})</span>
+                      <Badge variant="success" size="xs">Ativo na IA</Badge>
+                    </div>
+                    <div className="p-3 rounded-xl border border-surface-border bg-surface-subtle max-h-[340px] overflow-y-auto text-xs text-brand-muted">
+                      <TextDiff oldText={reviewGuideline.content || ''} newText={reviewGuideline.pending_content || ''} side="old" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Nova Proposta (v{(reviewGuideline.version || 1) + 1})</span>
+                      <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full">Aguardando Aprovação</span>
+                    </div>
+                    <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 max-h-[340px] overflow-y-auto text-xs text-brand-primary">
+                      <TextDiff oldText={reviewGuideline.content || ''} newText={reviewGuideline.pending_content || ''} side="new" />
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-brand-primary">Versão Oficial Ativa (v{reviewGuideline.version || 1})</span>
+                      <Badge variant="success" size="xs">Ativo na IA</Badge>
+                    </div>
+                    <div className="p-3 rounded-xl border border-surface-border bg-surface-subtle max-h-[340px] overflow-y-auto text-xs text-brand-muted">
+                      <ReactMarkdown>{reviewGuideline.content}</ReactMarkdown>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Nova Proposta (v{(reviewGuideline.version || 1) + 1})</span>
+                      <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full">Aguardando Aprovação</span>
+                    </div>
+                    <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 max-h-[340px] overflow-y-auto text-xs text-brand-primary">
+                      <ReactMarkdown>{reviewGuideline.pending_content || ''}</ReactMarkdown>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Ações do Administrador */}
               <div className="flex items-center justify-between pt-3 border-t border-surface-border">
