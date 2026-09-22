@@ -655,6 +655,23 @@ ${checksSummary}${recs}`;
     });
   };
 
+  const handleRedistributePending = async () => {
+    if (!isDistributedQueue(activeQueue)) {
+      toast.info('Selecione CSAT Negativas ou Chamados Filhos para redistribuir.');
+      return;
+    }
+    const queueType = activeQueue;
+    const ticketIds = tickets.map(ticket => ticket.ticket_id);
+    if (ticketIds.length === 0) {
+      toast.info('Não há chamados pendentes nesta fila.');
+      return;
+    }
+    await syncQueueAssignments(queueType, ticketIds);
+    const assignments = await fetchQueueAssignments(queueType, ticketIds);
+    setQueueAssignments(previous => ({ ...previous, [queueType]: assignments }));
+    toast.success('Chamados pendentes redistribuídos entre os monitores online.');
+  };
+
 
   // Abre o popup de confirmação da avaliação da IA com a seleção automática
   // de ficha e manual baseada no tipo de cliente (organização no Zendesk).
@@ -685,6 +702,12 @@ ${checksSummary}${recs}`;
     // quando chamado pelo lote, o toast de progresso não é criado aqui
     silent = false
   ) => {
+    if (globalEvaluatingTickets.has(ticket.ticket_id)) {
+      const duplicateError = new Error(`O ticket #${ticket.ticket_id} já está sendo avaliado com IA.`);
+      if (!silent) toast.info(duplicateError.message);
+      throw duplicateError;
+    }
+
     try {
       await beginAssignedWork(ticket);
     } catch (error) {
@@ -1426,6 +1449,7 @@ ${checksSummary}${recs}`;
           eligibility={monitorEligibility}
           onlineUserIds={onlineUserIds}
           onEligibilityChange={(userId, enabled) => setMonitorEligibility(prev => ({ ...prev, [userId]: enabled }))}
+          onRedistribute={isDistributedQueue(activeQueue) ? handleRedistributePending : undefined}
         />
       )}
 

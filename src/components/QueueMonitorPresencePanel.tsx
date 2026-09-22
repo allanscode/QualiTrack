@@ -1,7 +1,7 @@
 import React from 'react';
 import { User } from '../types';
 import { setMonitorEligibility } from '../lib/queueDistribution';
-import { ChevronDown, Power, Users } from 'lucide-react';
+import { ChevronDown, Power, RefreshCw, Users } from 'lucide-react';
 import Card from './ui/Card';
 import { toast } from 'sonner';
 
@@ -10,11 +10,13 @@ interface QueueMonitorPresencePanelProps {
   eligibility: Record<string, boolean>;
   onlineUserIds: Set<string>;
   onEligibilityChange: (userId: string, enabled: boolean) => void;
+  onRedistribute?: () => Promise<void>;
 }
 
-export default function QueueMonitorPresencePanel({ monitors, eligibility, onlineUserIds, onEligibilityChange }: QueueMonitorPresencePanelProps) {
+export default function QueueMonitorPresencePanel({ monitors, eligibility, onlineUserIds, onEligibilityChange, onRedistribute }: QueueMonitorPresencePanelProps) {
   const [togglingId, setTogglingId] = React.useState<string | null>(null);
   const [isExpanded, setIsExpanded] = React.useState(true);
+  const [isRedistributing, setIsRedistributing] = React.useState(false);
 
   const handleToggle = async (userId: string, current: boolean) => {
     setTogglingId(userId);
@@ -51,8 +53,9 @@ export default function QueueMonitorPresencePanel({ monitors, eligibility, onlin
           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
         </span>
       </button>
-      <div id="queue-monitors-list" hidden={!isExpanded} className="flex flex-wrap gap-2">
-        {monitors.map(monitor => {
+      <div id="queue-monitors-list" hidden={!isExpanded} className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {monitors.map(monitor => {
           const enabled = Boolean(eligibility[monitor.id]);
           const online = onlineUserIds.has(monitor.id);
           return (
@@ -75,7 +78,26 @@ export default function QueueMonitorPresencePanel({ monitors, eligibility, onlin
               <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-emerald-500 animate-pulse' : 'bg-brand-muted/40'}`} />
             </button>
           );
-        })}
+          })}
+        </div>
+        {onRedistribute && (
+          <button
+            type="button"
+            disabled={isRedistributing || eligibleOnlineCount === 0}
+            onClick={async () => {
+              setIsRedistributing(true);
+              try {
+                await onRedistribute();
+              } finally {
+                setIsRedistributing(false);
+              }
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-brand-accent/25 bg-brand-accent/8 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-brand-accent transition-colors hover:bg-brand-accent/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRedistributing ? 'animate-spin' : ''}`} />
+            {isRedistributing ? 'Redistribuindo...' : 'Redistribuir pendentes'}
+          </button>
+        )}
       </div>
     </Card>
   );

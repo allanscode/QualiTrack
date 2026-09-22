@@ -71,6 +71,13 @@ async function contextWithSession(browser: Browser, session: AuthSession): Promi
 
 async function removeUser(user: AuthUser | undefined): Promise<void> {
   if (!user) return;
+  const profileResponse = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${user.id}`, {
+    method: 'DELETE',
+    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+  });
+  if (!profileResponse.ok) {
+    throw new Error(`Falha ao remover perfil de teste ${user.id}: ${profileResponse.status} ${await profileResponse.text()}`);
+  }
   const response = await fetch(`${supabaseUrl}/auth/v1/admin/users/${user.id}`, {
     method: 'DELETE',
     headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },

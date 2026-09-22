@@ -2,8 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: 'session-termination.live.spec.ts',
-  timeout: 90_000,
+  testMatch: ['session-termination.live.spec.ts', 'ai-fallback.live.spec.ts', 'queue-rebalance.live.spec.ts'],
+  timeout: 210_000,
   fullyParallel: false,
   reporter: 'line',
   use: {

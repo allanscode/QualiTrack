@@ -11,6 +11,10 @@ const manualAssignmentMigration = readFile(
   new URL('../supabase/migrations/20260922000006_manual_queue_assignment.sql', import.meta.url),
   'utf8',
 );
+const rebalanceMigration = readFile(
+  new URL('../supabase/migrations/20260922000009_rebalance_pending_queue.sql', import.meta.url),
+  'utf8',
+);
 const id = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const session = n => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -81,6 +85,7 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
     `);
     await db.exec(await migration);
     await db.exec(await manualAssignmentMigration);
+    await db.exec(await rebalanceMigration);
 
     const asSession = async (userId, sessionId, run) => {
       await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [userId]);
@@ -231,6 +236,20 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
         )),
         /transferido para outro monitor/
       );
+    });
+
+    await t.test('redistribui pendentes automáticos quando um segundo monitor entra online', async () => {
+      await db.exec('DELETE FROM queue_ticket_assignments');
+      await endSession(id(3), session(8));
+      const payload = Array.from({ length: 6 }, (_, index) => ({ ticket_id: `late-${index + 1}`, queue_type: 'filhos' }));
+      await asSession(id(1), session(1), () => db.query('SELECT * FROM assign_queue_tickets($1::jsonb)', [JSON.stringify(payload)]));
+      let counts = (await db.query('SELECT assigned_to, count(*)::int AS n FROM queue_ticket_assignments GROUP BY assigned_to')).rows;
+      assert.deepEqual(counts, [{ assigned_to: id(2), n: 6 }]);
+
+      await heartbeat(id(3), session(9));
+      await asSession(id(1), session(1), () => db.query('SELECT * FROM assign_queue_tickets($1::jsonb)', [JSON.stringify(payload)]));
+      counts = (await db.query('SELECT assigned_to, count(*)::int AS n FROM queue_ticket_assignments GROUP BY assigned_to')).rows;
+      assert.deepEqual(counts.map(row => row.n).sort(), [3, 3]);
     });
   } finally {
     await db.close();

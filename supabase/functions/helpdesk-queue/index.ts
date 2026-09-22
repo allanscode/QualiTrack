@@ -4,6 +4,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { sanitizeDialogue, isChatTranscript, parseZendeskChatTranscript } from './sanitizer.ts';
+import {
+  AIModelError,
+  httpAIError,
+  incompleteResponse,
+  parseModelJSON,
+  normalizeAIError,
+  runAIModelChain,
+  type AIAttemptRecord,
+  type AIModelTarget,
+} from './ai-fallback.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 
@@ -906,6 +916,195 @@ function stripAdditionalProperties(schema: any): any {
   return schema;
 }
 
+function configuredAIModels(
+  geminiApiKey: string | undefined,
+  geminiModel: string,
+  openRouterApiKey: string | undefined,
+  openRouterModels: string[],
+): AIModelTarget[] {
+  const openRouterChain = Array.from(new Set([...openRouterModels, 'openrouter/free']));
+  return [
+    ...(geminiApiKey ? [{ provider: 'gemini' as const, model: geminiModel, maxAttempts: 3 }] : []),
+    ...(openRouterApiKey
+      ? openRouterChain.map(model => ({
+          provider: 'openrouter' as const,
+          model,
+          // O roteador gratuito escolhe dinamicamente um modelo disponível.
+          // Uma segunda tentativa ajuda quando o primeiro provedor gratuito
+          // escolhido está momentaneamente saturado, sem duplicar avaliações.
+          maxAttempts: model === 'openrouter/free' ? 2 : 1,
+        }))
+      : []),
+  ];
+}
+
+function logAIAttempt(
+  evaluationType: 'atendimento' | 'chamado_filho',
+  ticketId: string,
+  record: AIAttemptRecord,
+  nextTarget?: AIModelTarget,
+): void {
+  const details = {
+    event: record.status === 'success' ? 'model_succeeded' : 'model_failed',
+    evaluation_type: evaluationType,
+    ticket_id: ticketId,
+    provider: record.provider,
+    model: record.model,
+    attempt: record.attempt,
+    reason: record.reason || null,
+    http_status: record.httpStatus || null,
+    duration_ms: record.durationMs,
+    next_provider: nextTarget?.provider || null,
+    next_model: nextTarget?.model || null,
+    message: record.message || null,
+  };
+  const output = `[ai-fallback] ${JSON.stringify(details)}`;
+  if (record.status === 'failed') console.warn(output);
+  else console.info(output);
+}
+
+function attemptsFromError(error: unknown): AIAttemptRecord[] {
+  const attempts = (error as { attempts?: unknown } | null)?.attempts;
+  return Array.isArray(attempts) ? attempts as AIAttemptRecord[] : [];
+}
+
+async function readProviderJSON(response: Response, provider: string, model: string): Promise<any> {
+  try {
+    return await response.json();
+  } catch (error) {
+    const normalized = normalizeAIError(error);
+    if (normalized.reason === 'timeout' || normalized.reason === 'network_error') throw normalized;
+    throw new AIModelError(
+      `${provider}/${model} retornou um envelope JSON inválido: ${error instanceof Error ? error.message : String(error)}`,
+      'response_parse_error',
+      true,
+    );
+  }
+}
+
+async function callConfiguredAIModel(options: {
+  target: AIModelTarget;
+  prompt: string;
+  responseSchema: any;
+  temperature: number;
+  geminiApiKey?: string;
+  openRouterApiKey?: string;
+}): Promise<{ text: string; actualModel?: string }> {
+  const { target, prompt, responseSchema, temperature, geminiApiKey, openRouterApiKey } = options;
+  if (target.provider === 'gemini') {
+    if (!geminiApiKey) {
+      throw new AIModelError('GEMINI_API_KEY não configurada.', 'credentials_error', false, 'provider');
+    }
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${target.model}:generateContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature,
+            responseMimeType: 'application/json',
+            responseSchema: stripAdditionalProperties(responseSchema),
+          },
+        }),
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    if (!response.ok) throw await httpAIError('gemini', target.model, response);
+    const data = await readProviderJSON(response, 'gemini', target.model);
+    const text = (data.candidates?.[0]?.content?.parts || []).map((part: any) => part.text || '').join('');
+    if (!text.trim()) throw new AIModelError('Gemini retornou resposta vazia.', 'empty_response', true);
+    return { text, actualModel: target.model };
+  }
+
+  if (!openRouterApiKey) {
+    throw new AIModelError('OPENROUTER_API_KEY não configurada.', 'credentials_error', false, 'provider');
+  }
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    signal: AbortSignal.timeout(target.model === 'openrouter/free' ? 60000 : 20000),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${openRouterApiKey}`,
+      'HTTP-Referer': Deno.env.get('FRONTEND_URL') || 'https://qualitrack.app',
+      'X-Title': 'QualidadeWP',
+    },
+    body: JSON.stringify({
+      model: target.model,
+      temperature,
+      messages: [{ role: 'user', content: `${prompt}\n\nIMPORTANTE: Responda exclusivamente em formato JSON válido.` }],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'qualitrack_evaluation',
+          strict: true,
+          schema: responseSchema,
+        },
+      },
+      // No modelo dinâmico, limita o roteamento aos provedores que realmente
+      // suportam o schema solicitado. Assim uma resposta JSON parcial não é
+      // confundida com avaliação válida.
+      provider: { require_parameters: true },
+    }),
+  });
+  if (!response.ok) throw await httpAIError('openrouter', target.model, response);
+  const data = await readProviderJSON(response, 'openrouter', target.model);
+  const text = data.choices?.[0]?.message?.content;
+  if (typeof text !== 'string' || !text.trim()) {
+    throw new AIModelError('OpenRouter retornou resposta vazia.', 'empty_response', true);
+  }
+  return { text, actualModel: data.model || target.model };
+}
+
+function validateEvaluationResponse(value: unknown, questionRequired: string[], criticalQuestions: Set<string>): any {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) incompleteResponse('A resposta não é um objeto JSON.');
+  const parsed = value as Record<string, any>;
+  if (!parsed.answers || typeof parsed.answers !== 'object' || Array.isArray(parsed.answers)) {
+    incompleteResponse('A resposta não contém o objeto answers.');
+  }
+  for (const questionId of questionRequired) {
+    const answer = parsed.answers[questionId];
+    if (!answer || !['SIM', 'NAO', 'NA'].includes(answer.answer)) {
+      incompleteResponse(`O critério ${questionId} não contém uma resposta válida.`);
+    }
+    if (typeof answer.justification !== 'string' || !answer.justification.trim()) {
+      incompleteResponse(`O critério ${questionId} não contém justificativa.`);
+    }
+    if (criticalQuestions.has(questionId) && typeof answer.critical_error !== 'boolean') {
+      incompleteResponse(`O critério crítico ${questionId} não contém critical_error.`);
+    }
+  }
+  if (!Number.isFinite(parsed.score) || parsed.score < 0 || parsed.score > 100) incompleteResponse('A resposta não contém score válido.');
+  if (typeof parsed.summary !== 'string' || !parsed.summary.trim()) incompleteResponse('A resposta não contém summary válido.');
+  if (!Array.isArray(parsed.strengths) || !parsed.strengths.every((item: unknown) => typeof item === 'string')) {
+    incompleteResponse('A resposta não contém strengths válido.');
+  }
+  if (!Array.isArray(parsed.improvements) || !parsed.improvements.every((item: unknown) => typeof item === 'string')) {
+    incompleteResponse('A resposta não contém improvements válido.');
+  }
+  return parsed;
+}
+
+function validateChildEvaluationResponse(value: unknown): any {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) incompleteResponse('O parecer do chamado filho não é um objeto JSON.');
+  const parsed = value as Record<string, any>;
+  if (!['nova_demanda', 'analise_tecnica', 'apoio_tecnico', 'produtividade', 'desconhecido'].includes(parsed.detected_type)) {
+    incompleteResponse('O parecer não contém detected_type válido.');
+  }
+  if (!['conforme', 'nao_conforme', 'atencao'].includes(parsed.status)) incompleteResponse('O parecer não contém status válido.');
+  if (!Number.isFinite(parsed.score) || parsed.score < 0 || parsed.score > 100) incompleteResponse('O parecer não contém score válido.');
+  if (typeof parsed.summary !== 'string' || !parsed.summary.trim()) incompleteResponse('O parecer não contém summary válido.');
+  if (!Array.isArray(parsed.checks) || parsed.checks.length < 4 || !parsed.checks.every((check: any) =>
+    check && typeof check.rule === 'string' && typeof check.passed === 'boolean' && typeof check.details === 'string')) {
+    incompleteResponse('O parecer não contém os quatro checks obrigatórios completos.');
+  }
+  if (!Array.isArray(parsed.recommendations) || !parsed.recommendations.every((item: unknown) => typeof item === 'string')) {
+    incompleteResponse('O parecer não contém recommendations válido.');
+  }
+  return parsed;
+}
+
 async function handleEvaluateAI(
   payload: z.infer<typeof RequestSchema>,
   supabase: SupabaseClient,
@@ -947,6 +1146,7 @@ async function handleEvaluateAI(
   // garantindo que a IA responda nota/justificativa para cada critério.
   const questionProperties: Record<string, any> = {};
   const questionRequired: string[] = [];
+  const criticalQuestions = new Set<string>();
 
   for (const section of form_criteria.sections) {
     for (const q of section.questions || []) {
@@ -956,6 +1156,7 @@ async function handleEvaluateAI(
       };
       const required = ['answer', 'justification'];
       if (q.is_critical) {
+        criticalQuestions.add(q.id);
         props.critical_error = { type: 'boolean', description: 'true se o erro crítico ocorreu.' };
         required.push('critical_error');
       }
@@ -1058,183 +1259,39 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
    já respondeu nos passos 1 e 2. NUNCA deixe "score" ou "summary" vazios/zerados: eles resumem o que você
    acabou de avaliar.`;
 
-  let usedProvider: 'gemini' | 'openrouter' = 'gemini';
-  let usedModel = geminiModel;
-
-  // Faz a chamada num provedor específico e devolve o JSON já parseado e
-  // validado contra o schema — ou lança erro (rede, HTTP, ou resposta fora
-  // do formato esperado) pra quem chamou decidir se tenta o próximo provedor.
-  async function callAndValidate(provider: 'openrouter' | 'gemini'): Promise<any> {
-    let text: string | undefined;
-
-    if (provider === 'openrouter') {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        signal: AbortSignal.timeout(25000),
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openRouterApiKey}`,
-          // Cabeçalhos recomendados pelo OpenRouter para identificar a app
-          // (não obrigatórios, mas ajudam a evitar throttling nos modelos :free).
-          'HTTP-Referer': Deno.env.get('FRONTEND_URL') || 'https://qualitrack.app',
-          'X-Title': 'QualidadeWP',
-        },
-        body: JSON.stringify({
-          models: openRouterModels,
-          temperature: 0.2,
-          messages: [{ role: 'user', content: prompt + '\n\nIMPORTANTE: Responda exclusivamente em formato JSON válido com as chaves solicitadas.' }],
-          response_format: { type: 'json_object' },
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        throw new Error(`OpenRouter API falhou (${response.status}): ${errText}`);
-      }
-
-      const data = await response.json();
-      text = data.choices?.[0]?.message?.content;
-      if (!text) {
-        throw new Error('Resposta vazia da IA no OpenRouter');
-      }
-      usedProvider = 'openrouter';
-      usedModel = data.model || openRouterModels[0] || 'openrouter';
-    } else {
-      // API nativa do Gemini (Google AI Studio) com prioridade para gemini-3.5-flash-lite (rápido 4-8s)
-      const candidateModels = [
-        'gemini-3.5-flash-lite',
-        geminiModel || 'gemini-3.6-flash',
-        'gemini-2.5-flash',
-        'gemini-2.0-flash',
-      ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
-
-      let lastGeminiErr = '';
-      for (const modelToTry of candidateModels) {
-        try {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${geminiApiKey}`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-goog-api-key': geminiApiKey!,
-              },
-              body: JSON.stringify({
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: {
-                  temperature: 0.2,
-                  responseMimeType: 'application/json',
-                  responseSchema: stripAdditionalProperties(responseSchema),
-                },
-              }),
-              signal: AbortSignal.timeout(20000),
-            }
-          );
-
-          if (response.ok) {
-            const data = await response.json();
-            text = (data.candidates?.[0]?.content?.parts || [])
-              .map((p: any) => p.text || '')
-              .join('');
-            if (text) {
-              usedModel = modelToTry;
-              break;
-            }
-          } else {
-            const errText = await response.text().catch(() => '');
-            lastGeminiErr = `(${response.status} ${modelToTry}): ${errText}`;
-          }
-        } catch (fetchErr: any) {
-          lastGeminiErr = `${modelToTry}: ${fetchErr.message}`;
-          if (fetchErr.name === 'TimeoutError' || fetchErr.message?.includes('timed out')) {
-            // Se o modelo excedeu o tempo, tenta o próximo candidato imediatamente
-            continue;
-          }
-        }
-      }
-
-      if (!text) {
-        throw new Error(`Gemini API falhou em todos os modelos candidatos. Último erro: ${lastGeminiErr}`);
-      }
-    }
-
-    // Extrai o bloco JSON com regex tolerante a texto antes/depois
-    text = text.trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      text = jsonMatch[0];
-    } else {
-      text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-    }
-
-    const parsed = JSON.parse(text);
-
-    // Normalização defensiva: se o modelo omitiu ou renomeou algum critério,
-    // preenche com padrão em vez de descartar a avaliação inteira.
-    if (!parsed.answers || typeof parsed.answers !== 'object') {
-      parsed.answers = {};
-    }
-
-    for (const qId of questionRequired) {
-      if (!parsed.answers[qId] || !parsed.answers[qId].answer) {
-        parsed.answers[qId] = {
-          answer: 'NA',
-          justification: 'Critério não avaliado explicitamente ou não aplicável ao atendimento.'
-        };
-      }
-    }
-
-    // Se o score não for número válido, calcula a nota proporcional aos SIM/NAO
-    if (typeof parsed.score !== 'number' || isNaN(parsed.score)) {
-      let totalCount = 0;
-      let yesCount = 0;
-      for (const qId of questionRequired) {
-        const a = parsed.answers[qId]?.answer;
-        if (a === 'SIM') { totalCount++; yesCount++; }
-        else if (a === 'NAO') { totalCount++; }
-      }
-      parsed.score = totalCount > 0 ? Math.round((yesCount / totalCount) * 100) : 100;
-    }
-
-    // Garante que summary, strengths e improvements existam
-    if (typeof parsed.summary !== 'string' || !parsed.summary.trim()) {
-      parsed.summary = `Atendimento avaliado automaticamente com ${parsed.score}% de conformidade.`;
-    }
-    if (!Array.isArray(parsed.strengths)) {
-      parsed.strengths = ['Atendimento conduzido dentro dos parâmetros operacionais.'];
-    }
-    if (!Array.isArray(parsed.improvements)) {
-      parsed.improvements = [];
-    }
-
-    return parsed;
-  }
+  const aiTargets = configuredAIModels(geminiApiKey, geminiModel, openRouterApiKey, openRouterModels);
+  let pipelineAttempts: AIAttemptRecord[] = [];
+  console.info(`[ai-fallback] ${JSON.stringify({
+    event: 'pipeline_started', evaluation_type: 'atendimento', ticket_id: String(ticket_id),
+    chain: aiTargets.map(target => ({ provider: target.provider, model: target.model, max_attempts: target.maxAttempts })),
+  })}`);
 
   try {
-    let parsed: any;
-    let lastError: any;
-
-    if (geminiApiKey) {
-      try {
-        parsed = await callAndValidate('gemini');
-      } catch (e: any) {
-        lastError = e;
-        console.warn('[helpdesk-queue] Gemini falhou ou respondeu fora do schema, tentando fallback OpenRouter:', e.message);
-      }
-    }
-
-    if (!parsed && openRouterApiKey) {
-      try {
-        parsed = await callAndValidate('openrouter');
-      } catch (e: any) {
-        lastError = e;
-        console.error('[helpdesk-queue] Fallback OpenRouter também falhou:', e.message);
-      }
-    }
-
-    if (!parsed) {
-      throw lastError || new Error('Nenhum provedor de IA disponível');
-    }
+    const chain = await runAIModelChain({
+      targets: aiTargets,
+      execute: async target => {
+        const response = await callConfiguredAIModel({
+          target,
+          prompt,
+          responseSchema,
+          temperature: 0.2,
+          geminiApiKey,
+          openRouterApiKey,
+        });
+        return {
+          value: validateEvaluationResponse(parseModelJSON(response.text), questionRequired, criticalQuestions),
+          actualModel: response.actualModel,
+        };
+      },
+      onAttempt: (record, nextTarget) => logAIAttempt('atendimento', String(ticket_id), record, nextTarget),
+    });
+    const parsed = chain.value;
+    pipelineAttempts = chain.attempts;
+    console.info(`[ai-fallback] ${JSON.stringify({
+      event: 'pipeline_completed', evaluation_type: 'atendimento', ticket_id: String(ticket_id),
+      provider: chain.provider, model: chain.model, fallback_used: chain.fallbackUsed,
+      attempts: chain.attempts.length,
+    })}`);
 
     const durationMs = Date.now() - startTime;
 
@@ -1244,13 +1301,15 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
         ticket_id: String(ticket_id),
         ticket_subject: agent_info?.team_name ? `Atendimento (${agent_info.team_name})` : `Ticket #${ticket_id}`,
         evaluation_type: 'atendimento',
-        provider: usedProvider,
-        model: usedModel,
+        provider: chain.provider,
+        model: chain.model,
         duration_ms: durationMs,
         prompt_text: prompt,
         sanitized_dialogue: dialogueText,
         response_json: parsed,
         status: 'success',
+        attempts: chain.attempts,
+        fallback_used: chain.fallbackUsed,
         created_by: callerId || null,
       });
     } catch (logErr) {
@@ -1282,7 +1341,13 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
       },
     }, 200);
   } catch (error: any) {
+    pipelineAttempts = attemptsFromError(error);
     console.error('[helpdesk-queue] Erro na avaliação com IA (todos os provedores falharam):', error);
+    console.error(`[ai-fallback] ${JSON.stringify({
+      event: 'pipeline_failed', evaluation_type: 'atendimento', ticket_id: String(ticket_id),
+      reason: error?.reason || 'unknown_error', message: error?.message || String(error),
+      attempts: pipelineAttempts.length,
+    })}`);
 
     try {
       await supabase.from('ai_evaluation_logs').insert({
@@ -1296,6 +1361,8 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
         sanitized_dialogue: dialogueText,
         status: 'error',
         error_message: error?.message || 'Falha ao avaliar com IA',
+        attempts: pipelineAttempts,
+        fallback_used: pipelineAttempts.some(attempt => attempt.provider === 'openrouter'),
         created_by: callerId || null,
       });
     } catch (_) {}
@@ -1450,103 +1517,39 @@ CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
 
 Analise os dados reais do ticket contra essas regras operacionais e gere o parecer estritamente no JSON do schema.`;
 
-  async function callChildModel(provider: 'gemini' | 'openrouter'): Promise<any> {
-    let text: string | undefined;
-    if (provider === 'openrouter') {
-      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        signal: AbortSignal.timeout(25000),
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openRouterApiKey}`,
-          'HTTP-Referer': Deno.env.get('FRONTEND_URL') || 'https://qualitrack.app',
-          'X-Title': 'QualidadeWP',
-        },
-        body: JSON.stringify({
-          models: openRouterModels,
-          temperature: 0.1,
-          messages: [{ role: 'user', content: prompt + '\n\nIMPORTANTE: Responda exclusivamente em formato JSON válido.' }],
-          response_format: { type: 'json_object' }
-        })
-      });
-      if (!resp.ok) throw new Error(`OpenRouter falhou: ${resp.status}`);
-      const data = await resp.json();
-      text = data.choices?.[0]?.message?.content;
-    } else {
-      const candidateModels = [
-        'gemini-3.5-flash-lite',
-        geminiModel || 'gemini-3.6-flash',
-        'gemini-2.5-flash',
-        'gemini-2.0-flash',
-      ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
-
-      let lastError: Error | null = null;
-      for (const modelToTry of candidateModels) {
-        try {
-          const resp = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${geminiApiKey}`,
-            {
-              method: 'POST',
-              signal: AbortSignal.timeout(20000),
-              headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey! },
-              body: JSON.stringify({
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: {
-                  temperature: 0.1,
-                  responseMimeType: 'application/json',
-                  responseSchema: stripAdditionalProperties(responseSchema),
-                }
-              })
-            }
-          );
-          if (!resp.ok) {
-            const errText = await resp.text().catch(() => '');
-            throw new Error(`Gemini (${modelToTry}) falhou (${resp.status}): ${errText}`);
-          }
-          const data = await resp.json();
-          text = (data.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || '').join('');
-          if (text) {
-            usedModel = modelToTry;
-            break;
-          }
-        } catch (mErr: any) {
-          console.warn(`[helpdesk-queue] Tentativa Gemini com ${modelToTry} falhou:`, mErr.message);
-          lastError = mErr;
-          if (mErr.name === 'TimeoutError' || mErr.message?.includes('timed out')) {
-            continue;
-          }
-        }
-      }
-      if (!text && lastError) throw lastError;
-    }
-
-    if (!text) throw new Error('Resposta vazia da IA');
-    text = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-    return JSON.parse(text);
-  }
+  const aiTargets = configuredAIModels(geminiApiKey, geminiModel, openRouterApiKey, openRouterModels);
+  let pipelineAttempts: AIAttemptRecord[] = [];
+  console.info(`[ai-fallback] ${JSON.stringify({
+    event: 'pipeline_started', evaluation_type: 'chamado_filho', ticket_id: String(ticket_id),
+    chain: aiTargets.map(target => ({ provider: target.provider, model: target.model, max_attempts: target.maxAttempts })),
+  })}`);
 
   try {
-    let parsed: any;
-    let usedProvider: 'gemini' | 'openrouter' = 'gemini';
-    let usedModel = geminiModel;
-
-    if (geminiApiKey) {
-      try {
-        parsed = await callChildModel('gemini');
-      } catch (e: any) {
-        console.warn('[helpdesk-queue] Gemini falhou para chamado filho, tentando OpenRouter:', e.message);
-      }
-    }
-
-    if (!parsed && openRouterApiKey) {
-      parsed = await callChildModel('openrouter');
-      usedProvider = 'openrouter';
-      usedModel = openRouterModels[0];
-    }
-
-    if (!parsed) {
-      throw new Error('Nenhum provedor de IA conseguiu avaliar o chamado filho.');
-    }
+    const chain = await runAIModelChain({
+      targets: aiTargets,
+      execute: async target => {
+        const response = await callConfiguredAIModel({
+          target,
+          prompt,
+          responseSchema,
+          temperature: 0.1,
+          geminiApiKey,
+          openRouterApiKey,
+        });
+        return {
+          value: validateChildEvaluationResponse(parseModelJSON(response.text)),
+          actualModel: response.actualModel,
+        };
+      },
+      onAttempt: (record, nextTarget) => logAIAttempt('chamado_filho', String(ticket_id), record, nextTarget),
+    });
+    const parsed = chain.value;
+    pipelineAttempts = chain.attempts;
+    console.info(`[ai-fallback] ${JSON.stringify({
+      event: 'pipeline_completed', evaluation_type: 'chamado_filho', ticket_id: String(ticket_id),
+      provider: chain.provider, model: chain.model, fallback_used: chain.fallbackUsed,
+      attempts: chain.attempts.length,
+    })}`);
 
     const durationMs = Date.now() - startTime;
     try {
@@ -1554,13 +1557,15 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
         ticket_id: String(ticket_id),
         ticket_subject: ticket_subject || `Chamado Filho #${ticket_id}`,
         evaluation_type: 'chamado_filho',
-        provider: usedProvider,
-        model: usedModel,
+        provider: chain.provider,
+        model: chain.model,
         duration_ms: durationMs,
         prompt_text: prompt,
         sanitized_dialogue: dialogueText,
         response_json: parsed,
         status: 'success',
+        attempts: chain.attempts,
+        fallback_used: chain.fallbackUsed,
         created_by: callerId || null,
       });
     } catch (logErr) {
@@ -1569,7 +1574,13 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
 
     return jsonResponse({ success: true, result: parsed }, 200);
   } catch (err: any) {
+    pipelineAttempts = attemptsFromError(err);
     console.error('[helpdesk-queue] Erro ao avaliar chamado filho:', err);
+    console.error(`[ai-fallback] ${JSON.stringify({
+      event: 'pipeline_failed', evaluation_type: 'chamado_filho', ticket_id: String(ticket_id),
+      reason: err?.reason || 'unknown_error', message: err?.message || String(err),
+      attempts: pipelineAttempts.length,
+    })}`);
     try {
       await supabase.from('ai_evaluation_logs').insert({
         ticket_id: String(ticket_id),
@@ -1582,6 +1593,8 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
         sanitized_dialogue: dialogueText,
         status: 'error',
         error_message: err.message,
+        attempts: pipelineAttempts,
+        fallback_used: pipelineAttempts.some(attempt => attempt.provider === 'openrouter'),
         created_by: callerId || null,
       });
     } catch (_) {}
