@@ -157,10 +157,10 @@ function AppContent() {
           >
             <div className="auth-content max-w-md w-full text-center space-y-8">
               <h1 className="inline-flex items-center gap-1 bg-[#0A1F44] px-3 py-1.5 rounded-xl text-5xl font-bold tracking-tight">
-                <span className="text-white">Qualidade</span>
                 <span className="inline-flex items-center bg-white px-1.5 py-0.5 rounded-md leading-none">
                   <span className="text-[#B3141B]">W</span><span className="text-[#0A1F44]">P</span>
                 </span>
+                <span className="text-white">Qualidade</span>
               </h1>
               <div className="auth-card bg-surface-card p-8 rounded-[40px] border border-surface-border shadow-premium min-h-[400px] flex flex-col justify-center">
                 <AnimatePresence mode="wait">
@@ -903,16 +903,19 @@ function MainApp({
         </div>
         <div className="h-20 flex items-center px-6 overflow-hidden">
           <div className="flex items-center gap-3 whitespace-nowrap">
-            <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
-              <div className="w-4 h-4 border-2 border-white rounded-[2px]" />
-            </div>
-            {sidebarTextVisible && (
+            {sidebarTextVisible ? (
               <h2 className="inline-flex items-center gap-0.5 bg-[#0A1F44] px-2 py-1 rounded-lg font-bold text-lg tracking-tight">
-                <span className="text-white">Qualidade</span>
                 <span className="inline-flex items-center bg-white px-1 py-px rounded leading-none">
                   <span className="text-[#B3141B]">W</span><span className="text-[#0A1F44]">P</span>
                 </span>
+                <span className="text-white">Qualidade</span>
               </h2>
+            ) : (
+              <div className="inline-flex items-center justify-center bg-[#0A1F44] w-8 h-8 rounded-lg flex-shrink-0">
+                <span className="inline-flex items-center bg-white px-1 py-px rounded leading-none text-xs font-bold">
+                  <span className="text-[#B3141B]">W</span><span className="text-[#0A1F44]">P</span>
+                </span>
+              </div>
             )}
           </div>
         </div>

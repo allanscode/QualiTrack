@@ -354,6 +354,7 @@ ${checksSummary}${recs}`;
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     done: number;
+    errors: number;
     total: number;
     currentTicketId: string;
     currentSubject?: string;
@@ -755,6 +756,7 @@ ${checksSummary}${recs}`;
     batchCancelRef.current = false;
     setBatchProgress({
       done: 0,
+      errors: 0,
       total: pending.length,
       currentTicketId: pending[0]?.ticket_id || '',
       currentSubject: pending[0]?.subject,
@@ -778,7 +780,7 @@ ${checksSummary}${recs}`;
       if (!autoForm) {
         errors++;
         initialItems[i].status = 'error';
-        setBatchProgress(prev => prev ? { ...prev, items: [...initialItems] } : null);
+        setBatchProgress(prev => prev ? { ...prev, errors, items: [...initialItems] } : null);
         continue;
       }
       const guidelineIds = autoGuideline ? [autoGuideline.id] : activeGuidelineIds;
@@ -786,6 +788,7 @@ ${checksSummary}${recs}`;
       initialItems[i].status = 'processing';
       setBatchProgress({
         done,
+        errors,
         total: pending.length,
         currentTicketId: ticket.ticket_id,
         currentSubject: ticket.subject,
@@ -805,6 +808,7 @@ ${checksSummary}${recs}`;
       setBatchProgress(prev => prev ? {
         ...prev,
         done,
+        errors,
         items: [...initialItems],
       } : null);
     }
@@ -2147,7 +2151,7 @@ ${checksSummary}${recs}`;
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-2 pt-1">
+              <div className="grid grid-cols-4 gap-2 pt-1">
                 <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
                   <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Avaliados</div>
                   <div className="text-sm font-black text-functional-success font-mono flex items-center justify-center gap-1 mt-0.5">
@@ -2156,10 +2160,17 @@ ${checksSummary}${recs}`;
                   </div>
                 </div>
                 <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Falhas</div>
+                  <div className="text-sm font-black text-functional-error font-mono flex items-center justify-center gap-1 mt-0.5">
+                    <XCircle className="w-3.5 h-3.5" />
+                    {batchProgress.errors}
+                  </div>
+                </div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
                   <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Restantes</div>
                   <div className="text-sm font-black text-brand-primary font-mono flex items-center justify-center gap-1 mt-0.5">
                     <Clock className="w-3.5 h-3.5 text-brand-muted" />
-                    {Math.max(0, batchProgress.total - batchProgress.done)}
+                    {Math.max(0, batchProgress.total - batchProgress.done - batchProgress.errors)}
                   </div>
                 </div>
                 <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
