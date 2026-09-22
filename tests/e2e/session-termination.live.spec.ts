@@ -50,10 +50,14 @@ async function createUser(email: string, password: string, name: string, role: s
   return created;
 }
 
-async function signIn(email: string, password: string): Promise<AuthSession> {
-  return await supabaseRequest<AuthSession>('/auth/v1/token?grant_type=password', {
+async function createSession(email: string): Promise<AuthSession> {
+  const link = await supabaseRequest<{ hashed_token: string }>('/auth/v1/admin/generate_link', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ type: 'magiclink', email }),
+  });
+  return await supabaseRequest<AuthSession>('/auth/v1/verify', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'magiclink', token_hash: link.hashed_token }),
   }, publishableKey);
 }
 
@@ -96,8 +100,8 @@ test.describe('encerramento remoto de sessão em produção', () => {
     try {
       adminUser = await createUser(`admin-${unique}@example.invalid`, password, adminName, 'admin');
       targetUser = await createUser(`monitor-${unique}@example.invalid`, password, targetName, 'qualidade');
-      const adminSession = await signIn(adminUser.email, password);
-      const targetSession = await signIn(targetUser.email, password);
+      const adminSession = await createSession(adminUser.email);
+      const targetSession = await createSession(targetUser.email);
 
       targetContext = await contextWithSession(browser, targetSession);
       const targetPage = await targetContext.newPage();
