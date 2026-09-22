@@ -465,8 +465,7 @@ serve(async (req) => {
 
       const groupsResp = await fetch(`https://${subdomain}.zendesk.com/api/v2/groups.json`, { headers: zendeskHeaders });
       if (!groupsResp.ok) {
-        const errText = await groupsResp.text().catch(() => '');
-        throw new Error(`Zendesk Groups API falhou (${groupsResp.status}): ${errText}`);
+        throw new Error(`Zendesk Groups API falhou (${groupsResp.status}).`);
       }
       const groupsData = await groupsResp.json();
       const zendeskGroups: { id: number; name: string }[] = groupsData.groups || [];
@@ -520,14 +519,16 @@ serve(async (req) => {
         : '';
 
       if (viewId) {
-        const url = trustedZendeskCursor(parseResult.data.cursor, subdomain,
-          `/api/v2/views/${viewId}/tickets.json`)
+        let trustedCursor: string | null;
+        try { trustedCursor = trustedZendeskCursor(parseResult.data.cursor, subdomain,
+          `/api/v2/views/${viewId}/tickets.json`); }
+        catch { return jsonResponse({ error: 'Cursor de paginação inválido.' }, 400); }
+        const url = trustedCursor
           || `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
 
         const response = await fetch(url, { headers: zendeskHeaders });
         if (!response.ok) {
-          const errText = await response.text().catch(() => '');
-          throw new Error(`Zendesk Views API falhou (${response.status}): ${errText}`);
+          throw new Error(`Zendesk Views API falhou (${response.status}).`);
         }
 
         const viewData = await response.json();
@@ -562,14 +563,16 @@ serve(async (req) => {
 
         // Sideload de usuários, grupos e organizações para resolver o atendente (nome/e-mail),
         // a equipe de origem e o tipo de cliente (organização/tags) de cada chamado.
-        const url = trustedZendeskCursor(parseResult.data.cursor, subdomain,
-          '/api/v2/search.json', searchQuery)
+        let trustedCursor: string | null;
+        try { trustedCursor = trustedZendeskCursor(parseResult.data.cursor, subdomain,
+          '/api/v2/search.json', searchQuery); }
+        catch { return jsonResponse({ error: 'Cursor de paginação inválido.' }, 400); }
+        const url = trustedCursor
           || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
         const response = await fetch(url, { headers: zendeskHeaders });
 
         if (!response.ok) {
-          const errText = await response.text().catch(() => '');
-          throw new Error(`Zendesk Search API falhou (${response.status}): ${errText}`);
+          throw new Error(`Zendesk Search API falhou (${response.status}).`);
         }
 
         const searchData = await response.json();
@@ -721,8 +724,7 @@ serve(async (req) => {
       ]);
 
       if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        throw new Error(`Zendesk Comments API falhou (${response.status}): ${errText}`);
+        throw new Error(`Zendesk Comments API falhou (${response.status}).`);
       }
 
       const commentsData = await response.json();
@@ -975,8 +977,7 @@ serve(async (req) => {
         return jsonResponse({ success: true, agent: null }, 200);
       }
       if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        throw new Error(`Zendesk Ticket API falhou (${response.status}): ${errText}`);
+        throw new Error(`Zendesk Ticket API falhou (${response.status}).`);
       }
 
       const ticketData = await response.json();
@@ -1009,8 +1010,8 @@ serve(async (req) => {
 
     return jsonResponse({ error: 'Ação não suportada' }, 400);
   } catch (error: any) {
-    console.error('[helpdesk-queue] Erro:', error);
-    return jsonResponse({ error: error.message || 'Erro interno do servidor' }, 500);
+    console.error('[helpdesk-queue] Erro técnico:', error instanceof Error ? error.message : String(error));
+    return jsonResponse({ error: 'Falha ao processar a solicitação. Consulte os logs do serviço.' }, 500);
   }
 });
 

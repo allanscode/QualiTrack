@@ -156,8 +156,7 @@ export async function fetchQueueTickets(
       });
 
       if (error || !data?.tickets) {
-        console.warn(`[HelpdeskQueue] Falha ao consultar Edge Function helpdesk-queue (${error?.message}). Usando fallback.`);
-        tickets = getMockQueueTickets(type, auditedTicketIds);
+        throw new Error(data?.error || await extractFunctionErrorMessage(error, 'Falha ao consultar a fila do Zendesk.'));
       } else {
         tickets = (data.tickets as AuditingQueueTicket[]).map(t => ({
           ...t,
@@ -168,7 +167,7 @@ export async function fetchQueueTickets(
       }
     } catch (err) {
       console.error('[HelpdeskQueue] Erro na requisição:', err);
-      tickets = getMockQueueTickets(type, auditedTicketIds);
+      throw err;
     }
   }
 
