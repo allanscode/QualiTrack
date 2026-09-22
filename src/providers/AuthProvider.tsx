@@ -5,6 +5,7 @@ import { User, UserRole, ROLE_LABELS, UserPreferences } from '../types';
 import { useTheme, resolveSystemTheme, applyThemeToDOM } from './ThemeProvider';
 import { useSessionManager, lastDbThemeRef, ABSOLUTE_TIMEOUT_MS, IDLE_TIMEOUT_MS, MOCK_SESSION_KEY, LAST_ACTIVITY_KEY } from '../hooks/useSessionManager';
 import { toast } from 'sonner';
+import { endCurrentPresenceSession } from '../lib/presence';
 
 export type AuthView = 'login' | 'request-access' | 'pending' | 'change-password' | 'forgot-password' | 'setup-password';
 
@@ -613,6 +614,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // --- handleLogout ---
   const handleLogout = useCallback(async (options?: { silent?: boolean; message?: string }) => {
+    if (!isMockMode) {
+      try {
+        await endCurrentPresenceSession();
+      } catch (error) {
+        console.warn('[Auth] Não foi possível encerrar o heartbeat antes do logout:', error);
+      }
+      await (supabase ?? assertSupabase()).auth.signOut({ scope: 'local' }).catch(console.error);
+    }
     setAppReady(false);
     setCurrentUser(null);
     setUserData(null);
@@ -627,9 +636,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(MOCK_SESSION_KEY);
     // Don't reset qualitrack_theme - keep user's preference
     lastDbThemeRef.current = null;
-    if (!isMockMode) {
-      (supabase ?? assertSupabase()).auth.signOut().catch(console.error);
-    }
     if (!options?.silent) {
       toast.success(options?.message || 'Você saiu do sistema com sucesso.');
     }

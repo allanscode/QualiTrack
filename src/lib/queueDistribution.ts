@@ -10,27 +10,27 @@ export function isDistributedQueue(queueType: AuditingQueueType): queueType is D
 
 export interface MonitorPresence {
   user_id: string;
-  is_online: boolean;
+  is_enabled: boolean;
 }
 
-/** Carrega o status online/offline de todos os monitores de qualidade com presença registrada. */
-export async function fetchMonitorPresence(): Promise<Record<string, boolean>> {
+/** Carrega quais monitores estão habilitados para receber a fila. */
+export async function fetchMonitorEligibility(): Promise<Record<string, boolean>> {
   if (isMockMode || !supabase) return {};
-  const { data, error } = await supabase.from('quality_monitor_presence').select('user_id, is_online');
+  const { data, error } = await supabase.from('quality_monitor_presence').select('user_id, is_enabled');
   if (error) {
-    console.warn('[queueDistribution] Falha ao carregar presença dos monitores:', error);
+    console.warn('[queueDistribution] Falha ao carregar elegibilidade dos monitores:', error);
     return {};
   }
   const map: Record<string, boolean> = {};
-  (data || []).forEach((row: MonitorPresence) => { map[row.user_id] = row.is_online; });
+  (data || []).forEach((row: MonitorPresence) => { map[row.user_id] = row.is_enabled; });
   return map;
 }
 
-/** Liga/desliga um monitor na triagem. Só Admin/Supervisor de Qualidade podem chamar (RLS via RPC). */
-export async function setMonitorPresence(userId: string, online: boolean): Promise<void> {
+/** Habilita/desabilita um monitor na triagem. Presença online é automática. */
+export async function setMonitorEligibility(userId: string, enabled: boolean): Promise<void> {
   if (isMockMode || !supabase) throw new Error('Indisponível em modo mock/offline.');
-  const { error } = await supabase.rpc('set_monitor_presence', { p_user_id: userId, p_online: online });
-  if (error) throw new Error(error.message || 'Falha ao atualizar presença do monitor.');
+  const { error } = await supabase.rpc('set_monitor_eligibility', { p_user_id: userId, p_enabled: enabled });
+  if (error) throw new Error(error.message || 'Falha ao atualizar elegibilidade do monitor.');
 }
 
 /** Busca as atribuições já existentes para um conjunto de tickets de uma fila distribuída. */
@@ -46,7 +46,7 @@ export async function fetchQueueAssignments(
     .in('ticket_id', ticketIds);
   if (error) {
     console.warn('[queueDistribution] Falha ao carregar atribuições da fila:', error);
-    return {};
+    throw new Error(error.message || 'Falha ao carregar atribuições da fila.');
   }
   const map: Record<string, string> = {};
   (data || []).forEach((row: { ticket_id: string; assigned_to: string }) => { map[row.ticket_id] = row.assigned_to; });
@@ -69,7 +69,7 @@ export async function syncQueueAssignments(
   const { data, error } = await supabase.rpc('assign_queue_tickets', { p_tickets: payload });
   if (error) {
     console.warn('[queueDistribution] Falha ao distribuir chamados da fila:', error);
-    return {};
+    throw new Error(error.message || 'Falha ao distribuir chamados da fila.');
   }
   const map: Record<string, string> = {};
   (data || []).forEach((row: { ticket_id: string; assigned_to: string }) => { map[row.ticket_id] = row.assigned_to; });

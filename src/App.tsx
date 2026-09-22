@@ -17,6 +17,7 @@ import { QualityConfigProvider } from './lib/useQualityConfig';
 import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
 import { ThemeProvider, useTheme, resolveSystemTheme, applyThemeToDOM, type Theme } from './providers/ThemeProvider';
 import { AuthProvider, useAuth } from './providers/AuthProvider';
+import { PresenceProvider } from './providers/PresenceProvider';
 import { useSidebarManager } from './hooks/useSidebarManager';
 import { useMonitoriaData } from './hooks/useMonitoriaData';
 import { supabase } from './lib/supabase';
@@ -345,19 +346,21 @@ function AppContent() {
           >
             <QualityConfigProvider>
               <StaticDataProvider>
-                <MainApp
-                  isSidebarOpen={isSidebarOpen}
-                  setIsSidebarOpen={setIsSidebarOpen}
-                  currentUser={currentUser}
-                  activeTab={activeTab}
-                  setActiveTab={setActiveTab}
-                  userData={userData}
-                  handleLogout={handleLogout}
-                  isFormOpen={isFormOpen}
-                  setIsFormOpen={setIsFormOpen}
-                  isSystemOnline={isSystemOnline}
-                  isReconnecting={isReconnecting}
-                />
+                <PresenceProvider user={userData}>
+                  <MainApp
+                    isSidebarOpen={isSidebarOpen}
+                    setIsSidebarOpen={setIsSidebarOpen}
+                    currentUser={currentUser}
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                    userData={userData}
+                    handleLogout={handleLogout}
+                    isFormOpen={isFormOpen}
+                    setIsFormOpen={setIsFormOpen}
+                    isSystemOnline={isSystemOnline}
+                    isReconnecting={isReconnecting}
+                  />
+                </PresenceProvider>
               </StaticDataProvider>
             </QualityConfigProvider>
           </m.div>

@@ -68,10 +68,11 @@ import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import {
   isDistributedQueue,
-  fetchMonitorPresence,
+  fetchMonitorEligibility,
   fetchQueueAssignments,
   syncQueueAssignments,
 } from '../lib/queueDistribution';
+import { usePresence } from '../providers/PresenceProvider';
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -128,11 +129,16 @@ export default function AuditingQueueView({
 }: AuditingQueueViewProps) {
   const [activeQueue, setActiveQueue] = useState<AuditingQueueType>('negativas');
   const isSupervisorView = currentUserRole === 'gestor_qualidade' || currentUserRole === 'admin';
+  const { onlineUsers } = usePresence();
+  const onlineUserIds = useMemo(() => new Set(onlineUsers.map(user => user.id)), [onlineUsers]);
+  const onlineMonitorKey = useMemo(
+    () => qualityMonitors.filter(monitor => onlineUserIds.has(monitor.id)).map(monitor => monitor.id).sort().join(','),
+    [qualityMonitors, onlineUserIds]
+  );
 
-  // Distribuição 1-para-1 da fila entre monitores online: presença (quem
-  // está online) e atribuições (ticket -> monitor) das filas de Negativas e
-  // Filhos. Carregadas uma vez e mantidas em tempo real via Realtime.
-  const [monitorPresence, setMonitorPresence] = useState<Record<string, boolean>>({});
+  // Distribuição 1-para-1: a habilitação manual do monitor é independente
+  // da presença de login compartilhada; o banco exige as duas condições.
+  const [monitorEligibility, setMonitorEligibility] = useState<Record<string, boolean>>({});
   const [assignmentsReady, setAssignmentsReady] = useState<Record<AuditingQueueType, boolean>>({
     negativas: false,
     proativas: true,
@@ -150,13 +156,13 @@ export default function AuditingQueueView({
 
   useEffect(() => {
     let cancelled = false;
-    fetchMonitorPresence().then(map => { if (!cancelled) setMonitorPresence(map); });
+    fetchMonitorEligibility().then(map => { if (!cancelled) setMonitorEligibility(map); });
 
     if (!supabase) return;
     const channel = supabase
       .channel(`queue-distribution-${Math.random().toString(36).slice(2, 9)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quality_monitor_presence' }, () => {
-        fetchMonitorPresence().then(map => { if (!cancelled) setMonitorPresence(map); });
+        fetchMonitorEligibility().then(map => { if (!cancelled) setMonitorEligibility(map); });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_ticket_assignments' }, (payload: any) => {
         const row = payload.new || payload.old;
@@ -513,30 +519,23 @@ ${checksSummary}${recs}`;
     const ticketIds = tickets.map(t => t.ticket_id);
     setAssignmentsReady(prev => ({ ...prev, [queueType]: false }));
 
-    fetchQueueAssignments(queueType, ticketIds).then(existing => {
-      if (cancelled) return;
-      setQueueAssignments(prev => ({ ...prev, [queueType]: { ...prev[queueType], ...existing } }));
-
-      const unassigned = ticketIds.filter(id => !existing[id]);
-      if (unassigned.length === 0) {
-        setAssignmentsReady(prev => ({ ...prev, [queueType]: true }));
-        return;
-      }
-      syncQueueAssignments(queueType, unassigned).then(newlyAssigned => {
+    syncQueueAssignments(queueType, ticketIds)
+      .then(() => fetchQueueAssignments(queueType, ticketIds))
+      .then(assignments => {
         if (cancelled) return;
-        if (Object.keys(newlyAssigned).length > 0) {
-          setQueueAssignments(prev => ({ ...prev, [queueType]: { ...prev[queueType], ...newlyAssigned } }));
-        }
-        // Um monitor nunca pode ver o lote antes da distribuição terminar.
-        // Se não havia ninguém online, o lote permanece invisível para ele.
-        setAssignmentsReady(prev => ({ ...prev, [queueType]: true }));
-      }).catch(() => {
+        setQueueAssignments(prev => ({ ...prev, [queueType]: assignments }));
+      })
+      .catch(error => {
+        if (cancelled) return;
+        console.error('[AuditingQueue] Falha ao sincronizar distribuição:', error);
+        toast.error('Não foi possível sincronizar a distribuição da fila. Atualize e tente novamente.');
+      })
+      .finally(() => {
         if (!cancelled) setAssignmentsReady(prev => ({ ...prev, [queueType]: true }));
       });
-    });
 
     return () => { cancelled = true; };
-  }, [tickets, activeQueue]);
+  }, [tickets, activeQueue, onlineMonitorKey]);
 
   // Filtro de busca na lista de tickets com suporte a filtro de rascunhos da IA
   const filteredTickets = useMemo(() => {
@@ -1319,12 +1318,13 @@ ${checksSummary}${recs}`;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Painel de presença: só Supervisor de Qualidade e Admin ligam/desligam monitores da distribuição 1-para-1 */}
+      {/* Supervisores habilitam monitores; o status online é automático. */}
       {isSupervisorView && (
         <QueueMonitorPresencePanel
           monitors={qualityMonitors}
-          presence={monitorPresence}
-          onPresenceChange={(userId, online) => setMonitorPresence(prev => ({ ...prev, [userId]: online }))}
+          eligibility={monitorEligibility}
+          onlineUserIds={onlineUserIds}
+          onEligibilityChange={(userId, enabled) => setMonitorEligibility(prev => ({ ...prev, [userId]: enabled }))}
         />
       )}
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase, isMockMode } from '../lib/supabase';
 import { useTheme, resolveSystemTheme, applyThemeToDOM } from '../providers/ThemeProvider';
 import { toast } from 'sonner';
+import { endCurrentPresenceSession } from '../lib/presence';
 
 export const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
 const IDLE_WARNING_MS = 5 * 60 * 1000;
@@ -193,7 +194,12 @@ export function useSessionManager(opts: SessionManagerOptions) {
       prevUserIdRef.current = null;
       if (!isMockMode && supabase) {
         isCleaningSessionRef.current = true;
-        await supabase.auth.signOut();
+        try {
+          await endCurrentPresenceSession();
+        } catch (error) {
+          console.warn('[Session] Falha ao encerrar presença expirada:', error);
+        }
+        await supabase.auth.signOut({ scope: 'local' });
       }
       setCurrentUser(null);
       setUserData(null);

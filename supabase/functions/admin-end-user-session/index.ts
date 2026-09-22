@@ -37,6 +37,15 @@ serve(async (req) => {
       return json({ success: false, error: 'Apenas administradores podem encerrar a sessão de outro administrador.' }, 403)
     }
 
+    // Retira o usuário da fonte de presença imediatamente. O comando abaixo
+    // continua responsável por limpar a sessão nos navegadores conectados.
+    const { error: presenceError } = await admin
+      .from('user_presence_sessions')
+      .update({ offline_at: new Date().toISOString() })
+      .eq('user_id', targetId)
+      .is('offline_at', null)
+    if (presenceError) throw presenceError
+
     const { error: commandError } = await admin.from('session_control_commands').insert({
       target_user_id: targetId,
       requested_by: caller.id,

@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { useDashboard, usePresence } from '../DashboardContext';
+import { useDashboard } from '../DashboardContext';
+import { usePresence } from '../../../providers/PresenceProvider';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import RankingWidget from '../widgets/RankingWidget';

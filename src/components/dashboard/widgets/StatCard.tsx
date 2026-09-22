@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import Card from '../../ui/Card';
 import { m, AnimatePresence } from 'motion/react';
-import { useDashboard, usePresence, useEditing } from '../DashboardContext';
+import { useDashboard, useEditing } from '../DashboardContext';
+import { usePresence } from '../../../providers/PresenceProvider';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { toast } from 'sonner';
 import { User } from '../../../types';
