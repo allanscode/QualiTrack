@@ -11,6 +11,24 @@ export interface PresenceContextType {
 
 const PresenceContext = createContext<PresenceContextType | undefined>(undefined);
 
+async function functionErrorMessage(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown } | null)?.context;
+  if (context instanceof Response) {
+    try {
+      const payload = await context.clone().json() as { error?: unknown; message?: unknown };
+      if (typeof payload.error === 'string' && payload.error) return payload.error;
+      if (typeof payload.message === 'string' && payload.message) return payload.message;
+    } catch {
+      const body = await context.clone().text().catch(() => '');
+      if (body) return body;
+    }
+    return `Edge Function retornou HTTP ${context.status}.`;
+  }
+  return error instanceof Error && error.message
+    ? error.message
+    : 'Não foi possível encerrar a sessão.';
+}
+
 export function PresenceProvider({ user, children }: { user: User | null; children: ReactNode }) {
   const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
 
@@ -22,8 +40,9 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
       body: { user_id: userId },
     });
     if (error || data?.success === false) {
-      throw new Error(data?.error || error?.message || 'Não foi possível encerrar a sessão.');
+      throw new Error(data?.error || await functionErrorMessage(error));
     }
+    setOnlineUsers(current => current.filter(onlineUser => onlineUser.id !== userId));
   }, []);
 
   useEffect(() => {

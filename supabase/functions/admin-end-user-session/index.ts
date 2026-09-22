@@ -4,7 +4,7 @@ import { publicApiKey, secretApiKey } from '../_shared/keys.ts'
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'))
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const rejected = rejectRequest(req, corsHeaders)
   if (rejected) return rejected
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -37,22 +37,19 @@ serve(async (req) => {
       return json({ success: false, error: 'Apenas administradores podem encerrar a sessão de outro administrador.' }, 403)
     }
 
-    // Retira o usuário da fonte de presença imediatamente. O comando abaixo
-    // continua responsável por limpar a sessão nos navegadores conectados.
-    const { error: presenceError } = await admin
-      .from('user_presence_sessions')
-      .update({ offline_at: new Date().toISOString() })
-      .eq('user_id', targetId)
-      .is('offline_at', null)
-    if (presenceError) throw presenceError
+    const { data: termination, error: terminationError } = await admin
+      .rpc('admin_terminate_user_sessions', {
+        p_caller_id: caller.id,
+        p_target_user_id: targetId,
+      })
+      .single()
+    if (terminationError) throw terminationError
 
-    const { error: commandError } = await admin.from('session_control_commands').insert({
-      target_user_id: targetId,
-      requested_by: caller.id,
-      command: 'logout',
+    return json({
+      success: true,
+      revoked_sessions: termination?.revoked_sessions ?? 0,
+      command_id: termination?.command_id ?? null,
     })
-    if (commandError) throw commandError
-    return json({ success: true })
   } catch (error) {
     console.error('[admin-end-user-session]', error)
     return json({ success: false, error: 'Não foi possível encerrar a sessão.' }, 500)
