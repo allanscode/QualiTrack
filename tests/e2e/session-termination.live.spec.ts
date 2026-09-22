@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext } from '@playwright/test';
+import { assertSafeLiveE2E, cleanupLiveE2EFixture, cleanupStaleLiveE2E } from './live-safety';
 
 const runLive = process.env.RUN_LIVE_SESSION_TEST === '1';
 const supabaseUrl = process.env.E2E_SUPABASE_URL || '';
@@ -40,7 +41,7 @@ async function supabaseRequest<T>(path: string, init: RequestInit, key = service
 async function createUser(email: string, password: string, name: string, role: string): Promise<AuthUser> {
   const created = await supabaseRequest<{ id: string; email: string }>('/auth/v1/admin/users', {
     method: 'POST',
-    body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { name } }),
+    body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { name, e2e_run_id: email, e2e_source: 'qualitrack-e2e' } }),
   });
   await supabaseRequest<unknown>(`/rest/v1/users?id=eq.${created.id}`, {
     method: 'PATCH',
@@ -69,28 +70,12 @@ async function contextWithSession(browser: Browser, session: AuthSession): Promi
   return context;
 }
 
-async function removeUser(user: AuthUser | undefined): Promise<void> {
-  if (!user) return;
-  const profileResponse = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${user.id}`, {
-    method: 'DELETE',
-    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
-  });
-  if (!profileResponse.ok) {
-    throw new Error(`Falha ao remover perfil de teste ${user.id}: ${profileResponse.status} ${await profileResponse.text()}`);
-  }
-  const response = await fetch(`${supabaseUrl}/auth/v1/admin/users/${user.id}`, {
-    method: 'DELETE',
-    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
-  });
-  if (!response.ok && response.status !== 404) {
-    throw new Error(`Falha ao remover usuário de teste ${user.id}: ${response.status} ${await response.text()}`);
-  }
-}
-
 test.describe('encerramento remoto de sessão em produção', () => {
   test.skip(!runLive, 'Defina RUN_LIVE_SESSION_TEST=1 e as credenciais E2E para executar contra o Supabase real.');
 
   test('revoga o alvo no backend, preserva o admin e atualiza a presença', async ({ browser, baseURL }) => {
+    assertSafeLiveE2E(supabaseUrl);
+    await cleanupStaleLiveE2E(supabaseUrl, serviceRoleKey);
     expect(supabaseUrl).toMatch(/^https:\/\/[a-z0-9]+\.supabase\.co$/);
     expect(publishableKey).not.toBe('');
     expect(serviceRoleKey).not.toBe('');
@@ -173,7 +158,7 @@ test.describe('encerramento remoto de sessão em produção', () => {
 
       const request = functionResponse.request();
       expect(request.postDataJSON()).toEqual({ user_id: targetUser.id });
-      expect(request.headers().authorization).toBe(`Bearer ${adminSession.access_token}`);
+      expect(request.headers().authorization === `Bearer ${adminSession.access_token}`).toBe(true);
       console.log(JSON.stringify({
         request: request.url(),
         method: request.method(),
@@ -186,8 +171,12 @@ test.describe('encerramento remoto de sessão em produção', () => {
     } finally {
       await targetContext?.close();
       await adminContext?.close();
-      await removeUser(targetUser);
-      await removeUser(adminUser);
+      const cleanup = await Promise.allSettled([
+        cleanupLiveE2EFixture(supabaseUrl, serviceRoleKey, targetUser?.id),
+        cleanupLiveE2EFixture(supabaseUrl, serviceRoleKey, adminUser?.id),
+      ]);
+      const failed = cleanup.filter(result => result.status === 'rejected');
+      if (failed.length) throw new Error(`Cleanup E2E incompleto em ${failed.length} usuário(s).`);
     }
   });
 });

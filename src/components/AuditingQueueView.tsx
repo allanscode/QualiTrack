@@ -29,7 +29,7 @@ import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChat
 import { formatTicketDateTime } from '../lib/ticketDateTime';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
 import { fetchAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
-import { claimAIJob, completeAIJob, failAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
+import { claimAIJob, completeAIJob, failAIJob, cancelAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
 import {
   AlertTriangle,
   Sparkles,
@@ -120,6 +120,7 @@ interface AuditingQueueViewProps {
 
 // Gerenciador global de tickets atualmente em avaliação pela IA (persiste mesmo ao alternar abas/telas)
 const globalEvaluatingTickets = new Set<string>();
+const cancelledAIJobIds = new Set<string>();
 const globalEvaluatingListeners = new Set<() => void>();
 
 function notifyGlobalEvaluating() {
@@ -249,6 +250,42 @@ export default function AuditingQueueView({
 
   const isEvaluatingTicket = (ticketId: string) =>
     globalEvaluatingTickets.has(ticketId) || evaluatingTicketId === ticketId || aiJobs[ticketId]?.status === 'running';
+
+  const ticketProgressStep = (ticketId: string): 1 | 2 | 3 =>
+    aiProgress[ticketId] || (aiJobs[ticketId]?.phase === 'pending' ? 1 : 2);
+
+  const canCancelAIJob = (ticketId: string) => {
+    const job = aiJobs[ticketId];
+    return job?.status === 'running' && (job.started_by === currentUserId || isSupervisorView);
+  };
+
+  const handleCancelAIJob = async (ticketId: string) => {
+    const job = aiJobs[ticketId];
+    if (!job || !canCancelAIJob(ticketId)) return;
+    try {
+      const cancelled = await cancelAIJob(ticketId, job.job_id);
+      if (!cancelled) {
+        setAiFeedback(previous => ({ ...previous, [ticketId]: 'A análise já foi concluída.' }));
+        return;
+      }
+      cancelledAIJobIds.add(job.job_id);
+      globalEvaluatingTickets.delete(ticketId);
+      notifyGlobalEvaluating();
+      setEvaluatingTicketId(previous => previous === ticketId ? null : previous);
+      clearTicketProgress(ticketId);
+      setAIJobs(previous => ({ ...previous, [ticketId]: { ...job, status: 'cancelled', phase: 'cancelled' } }));
+      setAiFeedback(previous => ({ ...previous, [ticketId]: 'Análise interrompida.' }));
+    } catch {
+      setAiFeedback(previous => ({ ...previous, [ticketId]: 'Não foi possível interromper a análise.' }));
+    }
+  };
+
+  const renderCancelAIAction = (ticketId: string) => canCancelAIJob(ticketId) ? (
+    <button type="button" onClick={() => handleCancelAIJob(ticketId)}
+      className="rounded-lg px-2 py-1.5 text-[11px] font-medium text-brand-muted transition-colors hover:bg-surface-subtle hover:text-brand-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60">
+      Interromper análise
+    </button>
+  ) : null;
 
   // Estado para auditoria de conformidade de chamados filhos
   const [childPreviewTicket, setChildPreviewTicket] = useState<AuditingQueueTicket | null>(null);
@@ -782,6 +819,7 @@ ${checksSummary}${recs}`;
 
     try {
       const { comments: dialogue, ticketFields, tags, organizationName, organizationTags } = await fetchTicketDialogue(ticket.ticket_id);
+      if (cancelledAIJobIds.has(jobId)) return 'cancelled' as const;
 
       // Atualiza tags e organização caso venham enriquecidos da busca individual
       if ((tags && tags.length > 0) || organizationName || (organizationTags && organizationTags.length > 0)) {
@@ -800,6 +838,7 @@ ${checksSummary}${recs}`;
         team_name: teamId ? teamsMap[teamId] : undefined,
         channel: ticket.channel,
       }, guidelineIds, ticketFields, jobId, draftMeta);
+      if (cancelledAIJobIds.has(jobId)) return 'cancelled' as const;
 
       if ('queued' in aiResult) {
         setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'Pendente · Nova tentativa automática agendada.' }));
@@ -850,6 +889,7 @@ ${checksSummary}${recs}`;
 
       setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: '' }));
     } catch (err: any) {
+      if (cancelledAIJobIds.has(jobId)) return 'cancelled' as const;
       console.error('Erro na avaliação com IA:', err);
       await failAIJob(ticket.ticket_id, jobId, err?.message || 'Falha na análise').catch(jobError => {
         console.error('[AuditingQueue] Falha ao registrar erro do job de IA:', jobError);
@@ -950,6 +990,9 @@ ${checksSummary}${recs}`;
         if (outcome === 'queued') {
           queued++;
           initialItems[i].status = 'queued';
+        } else if (outcome === 'cancelled') {
+          initialItems[i].status = 'error';
+          errors++;
         } else {
           done++;
           initialItems[i].status = 'done';
@@ -1010,6 +1053,7 @@ ${checksSummary}${recs}`;
 
     try {
       const { comments, ticketFields, tags } = await fetchTicketDialogue(ticket.ticket_id);
+      if (cancelledAIJobIds.has(jobId)) return;
       const normalizedComments = normalizeTicketDialogue(comments || [], ticket.agent_name, ticket.requester_name);
       ticket.dialogue = normalizedComments;
       setChildDialogue(normalizedComments);
@@ -1024,6 +1068,7 @@ ${checksSummary}${recs}`;
         ticket.child_macro_type,
         jobId
       );
+      if (cancelledAIJobIds.has(jobId)) return;
 
       if ('queued' in result) {
         setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'Pendente · Nova tentativa automática agendada.' }));
@@ -1040,6 +1085,7 @@ ${checksSummary}${recs}`;
       ticket.child_evaluation = result;
       setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: '' }));
     } catch (err: any) {
+      if (cancelledAIJobIds.has(jobId)) return;
       console.error('Erro ao auditar chamado filho:', err);
       await failAIJob(ticket.ticket_id, jobId, err?.message || 'Falha na análise').catch(jobError => {
         console.error('[AuditingQueue] Falha ao registrar erro do job de IA:', jobError);
@@ -1281,8 +1327,9 @@ ${checksSummary}${recs}`;
             disabled={true}
             className="flex min-w-0 items-center justify-center gap-1.5 bg-indigo-600/80 text-white font-semibold shadow-xs cursor-not-allowed"
           >
-            <QueueAIProgress step={aiProgress[ticket.ticket_id] || 2} />
+            <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} />
           </Button>
+          {renderCancelAIAction(ticket.ticket_id)}
         </div>
       );
     }
@@ -2171,11 +2218,12 @@ ${checksSummary}${recs}`;
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
                             {isEvaluatingTicket(ticket.ticket_id) ? (
-                              <QueueAIProgress step={aiProgress[ticket.ticket_id] || 2} />
+                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} />
                             ) : (
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}
                           </Button>
+                          {renderCancelAIAction(ticket.ticket_id)}
                           {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
                         </div>
                       </div>
@@ -2303,11 +2351,12 @@ ${checksSummary}${recs}`;
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
                             {isEvaluatingTicket(ticket.ticket_id) ? (
-                              <QueueAIProgress step={aiProgress[ticket.ticket_id] || 2} />
+                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} />
                             ) : (
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}
                           </Button>
+                          {renderCancelAIAction(ticket.ticket_id)}
                           {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
                         </div>
                       </div>

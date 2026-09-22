@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
+import { assertSafeLiveE2E, cleanupLiveE2EFixture, cleanupStaleLiveE2E } from './live-safety';
 
 const runLive = process.env.RUN_LIVE_AI_FALLBACK_TEST === '1';
 const supabaseUrl = process.env.E2E_SUPABASE_URL || '';
 const publishableKey = process.env.E2E_SUPABASE_PUBLISHABLE_KEY || '';
 const serviceRoleKey = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY || '';
-const expectFallback = process.env.EXPECT_AI_FALLBACK !== '0';
 
 interface AuthUser { id: string; email: string }
 interface AuthSession { access_token: string }
@@ -24,10 +24,13 @@ async function request<T>(path: string, init: RequestInit, key = serviceRoleKey)
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
-test.describe('fallback real da avaliação com IA', () => {
-  test.skip(!runLive, 'Defina RUN_LIVE_AI_FALLBACK_TEST=1 e force um GEMINI_MODEL inválido antes da execução.');
+test.describe('avaliação real paga via OpenRouter em projeto E2E isolado', () => {
+  test.skip(!runLive, 'Exige projeto Supabase E2E dedicado e opt-in explícito.');
 
-  test('uma falha do Gemini chama o próximo modelo e salva um único resultado válido', async () => {
+  test('GLM pago conclui e salva um único resultado válido', async () => {
+    test.setTimeout(120_000);
+    assertSafeLiveE2E(supabaseUrl);
+    await cleanupStaleLiveE2E(supabaseUrl, serviceRoleKey);
     const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const email = `ai-fallback-${unique}@example.invalid`;
     const ticketId = String(Date.now());
@@ -36,7 +39,7 @@ test.describe('fallback real da avaliação com IA', () => {
     try {
       user = await request<AuthUser>('/auth/v1/admin/users', {
         method: 'POST',
-        body: JSON.stringify({ email, email_confirm: true, user_metadata: { name: 'Admin AI Fallback E2E' } }),
+        body: JSON.stringify({ email, email_confirm: true, user_metadata: { name: 'Admin AI Fallback E2E', e2e_run_id: unique, e2e_ticket_id: ticketId, e2e_source: 'qualitrack-e2e' } }),
       });
       await request<unknown>(`/rest/v1/users?id=eq.${user.id}`, {
         method: 'PATCH',
@@ -124,34 +127,10 @@ test.describe('fallback real da avaliação com IA', () => {
 
       expect(logs).toHaveLength(1);
       console.log(JSON.stringify({ ticketId, finalProvider: logs[0].provider, finalModel: logs[0].model, attempts: logs[0].attempts }));
-      if (expectFallback) {
-        expect(logs[0]).toMatchObject({ provider: 'openrouter', status: 'success', fallback_used: true });
-        expect(logs[0].attempts[0]).toMatchObject({ provider: 'gemini', status: 'failed' });
-        expect(logs[0].attempts.at(-1)).toMatchObject({ provider: 'openrouter', status: 'success' });
-      } else {
-        expect(logs[0]).toMatchObject({ provider: 'gemini', status: 'success', fallback_used: false });
-        expect(logs[0].attempts).toHaveLength(1);
-        expect(logs[0].attempts[0]).toMatchObject({ provider: 'gemini', status: 'success', attempt: 1 });
-      }
+      expect(logs[0]).toMatchObject({ provider: 'openrouter', model: 'z-ai/glm-5.3-flash', status: 'success', fallback_used: false });
+      expect(logs[0].attempts[0]).toMatchObject({ model: 'z-ai/glm-5.3-flash', status: 'success' });
     } finally {
-      await fetch(`${supabaseUrl}/rest/v1/ai_evaluation_drafts?ticket_id=eq.${encodeURIComponent(ticketId)}`, {
-        method: 'DELETE',
-        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
-      });
-      await fetch(`${supabaseUrl}/rest/v1/ai_evaluation_jobs?ticket_id=eq.${encodeURIComponent(ticketId)}`, {
-        method: 'DELETE',
-        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
-      });
-      await fetch(`${supabaseUrl}/rest/v1/ai_evaluation_logs?ticket_id=eq.${encodeURIComponent(ticketId)}`, {
-        method: 'DELETE',
-        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
-      });
-      if (user) {
-        await fetch(`${supabaseUrl}/auth/v1/admin/users/${user.id}`, {
-          method: 'DELETE',
-          headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
-        });
-      }
+      await cleanupLiveE2EFixture(supabaseUrl, serviceRoleKey, user?.id, ticketId);
     }
   });
 });

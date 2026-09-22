@@ -15,7 +15,7 @@ for (const width of [1440, 390]) {
     await expect(first.getByRole('status')).toContainText('Etapa 3/3');
     await expect(page.getByText(/GLM|OpenRouter/)).toHaveCount(0);
     await expect(page.locator('[data-sonner-toaster]')).toHaveCount(0);
-    const button = await first.getByRole('button').boundingBox();
+    const button = await first.locator('button').first().boundingBox();
     const card = await first.boundingBox();
     expect(button && card).toBeTruthy();
     expect(button!.x).toBeGreaterThanOrEqual(card!.x);
@@ -23,3 +23,16 @@ for (const width of [1440, 390]) {
     await page.screenshot({ path: `test-results/ai-progress-${width}.png`, fullPage: true });
   });
 }
+
+test('espera e cancelamento ficam no card e permitem reiniciar', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto('/tests/e2e/fixtures/ai-progress.html');
+  const first = page.getByTestId('ticket-170882');
+  await first.getByRole('button', { name: 'Conferir com IA' }).click();
+  await page.getByTestId('waiting').evaluate((button: HTMLButtonElement) => button.click());
+  await expect(first.getByRole('status')).toContainText('Nova tentativa agendada');
+  await first.getByRole('button', { name: 'Interromper análise' }).click();
+  await expect(first.getByRole('status')).toHaveCount(0);
+  await first.getByRole('button', { name: 'Conferir com IA' }).click();
+  await expect(first.getByRole('status')).toContainText('Etapa 1/3');
+});

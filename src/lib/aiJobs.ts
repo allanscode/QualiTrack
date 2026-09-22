@@ -5,7 +5,8 @@ export interface AIEvaluationJob {
   ticket_id: string;
   job_id: string;
   evaluation_type: 'atendimento' | 'chamado_filho';
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  phase?: 'pending' | 'running_glm' | 'fallback_gemini' | 'retry_pending' | 'completed' | 'cancelled' | 'failed';
   started_by: string;
   result: AIEvaluationResult | ChildTicketAiEvaluation | null;
 }
@@ -18,7 +19,7 @@ export async function fetchAIJobs(ticketIds: string[]): Promise<Record<string, A
     return Object.fromEntries(ticketIds.flatMap(id => mockJobs.has(id) ? [[id, mockJobs.get(id)!]] : []));
   }
   const { data, error } = await supabase.from('ai_evaluation_jobs')
-    .select('ticket_id, job_id, evaluation_type, status, started_by, result')
+    .select('ticket_id, job_id, evaluation_type, status, phase, started_by, result')
     .in('ticket_id', ticketIds);
   if (error) throw new Error(error.message);
   return Object.fromEntries((data as AIEvaluationJob[] || []).map(job => [job.ticket_id, job]));
@@ -68,4 +69,16 @@ export async function failAIJob(ticketId: string, jobId: string, message: string
     p_job_id: jobId, p_error: message,
   });
   if (error) throw new Error(error.message);
+}
+
+export async function cancelAIJob(ticketId: string, jobId: string): Promise<boolean> {
+  if (isMockMode || !supabase) {
+    const job = mockJobs.get(ticketId);
+    if (!job || job.job_id !== jobId || job.status !== 'running') return false;
+    mockJobs.set(ticketId, { ...job, status: 'cancelled', phase: 'cancelled' });
+    return true;
+  }
+  const { data, error } = await supabase.rpc('cancel_ai_evaluation_job', { p_job_id: jobId });
+  if (error) throw new Error(error.message);
+  return Boolean(data);
 }

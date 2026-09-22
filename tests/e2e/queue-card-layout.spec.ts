@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { assertSafeLiveE2E, cleanupLiveE2EFixture, cleanupStaleLiveE2E } from './live-safety';
 
 const runLive = process.env.RUN_LIVE_QUEUE_UI_TEST === '1';
 const supabaseUrl = process.env.E2E_SUPABASE_URL || '';
@@ -18,12 +19,14 @@ async function adminRequest<T>(path: string, init: RequestInit): Promise<T> {
 
 test('cabeçalho dos cards não sobrepõe controles em desktop e viewport menor', async ({ browser, baseURL }) => {
   test.skip(!runLive, 'Exige credenciais E2E e frontend local para validar o card real.');
+  assertSafeLiveE2E(supabaseUrl);
+  await cleanupStaleLiveE2E(supabaseUrl, serviceRoleKey);
   test.setTimeout(120_000);
   const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `queue-layout-${unique}@example.invalid`;
-  const ticketId = '999999001';
+  const ticketId = String(Date.now());
   const admin = await adminRequest<{ id: string }>('/auth/v1/admin/users', {
-    method: 'POST', body: JSON.stringify({ email, email_confirm: true, user_metadata: { name: 'Admin Layout E2E' } }),
+    method: 'POST', body: JSON.stringify({ email, email_confirm: true, user_metadata: { name: 'Admin Layout E2E', e2e_run_id: unique, e2e_ticket_id: ticketId, e2e_source: 'qualitrack-e2e' } }),
   });
   const context = await browser.newContext();
 
@@ -205,12 +208,6 @@ test('cabeçalho dos cards não sobrepõe controles em desktop e viewport menor'
     await expect(drawer.getByText('Raphaela Serpa', { exact: true })).toHaveCount(0);
   } finally {
     await context.close();
-    for (const table of ['ai_evaluation_drafts', 'ai_evaluation_jobs']) {
-      await adminRequest(`/rest/v1/${table}?ticket_id=eq.${ticketId}`, { method: 'DELETE' });
-    }
-    await adminRequest(`/rest/v1/users?id=eq.${admin.id}`, { method: 'DELETE' });
-    await fetch(`${supabaseUrl}/auth/v1/admin/users/${admin.id}`, {
-      method: 'DELETE', headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
-    });
+    await cleanupLiveE2EFixture(supabaseUrl, serviceRoleKey, admin.id, ticketId);
   }
 });

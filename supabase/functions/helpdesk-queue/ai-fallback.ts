@@ -12,12 +12,14 @@ export type AIFailureReason =
   | 'model_not_found'
   | 'request_configuration_error'
   | 'network_error'
+  | 'cancelled'
   | 'unknown_error';
 
 export interface AIModelTarget {
   provider: AIProvider;
   model: string;
   maxAttempts: number;
+  timeoutMs?: number;
 }
 
 export interface AIAttemptRecord {
@@ -31,6 +33,12 @@ export interface AIAttemptRecord {
   durationMs: number;
   routedProvider?: string;
   routerAttempt?: number;
+  startedAt?: string;
+  finishedAt?: string;
+  requestId?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  cost?: number;
 }
 
 export interface AIChainResult<T> {
@@ -100,8 +108,8 @@ export function parseModelJSON(text: string): unknown {
     : trimmed.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
   try {
     return JSON.parse(candidate);
-  } catch (error) {
-    throw new AIModelError(`JSON inválido: ${errorMessage(error)}`, 'invalid_json', true);
+  } catch {
+    throw new AIModelError('JSON inválido na resposta do modelo.', 'invalid_json', true);
   }
 }
 
@@ -111,33 +119,66 @@ export function incompleteResponse(message: string): never {
 
 export interface RunAIModelChainOptions<T> {
   targets: AIModelTarget[];
-  execute: (target: AIModelTarget, attempt: number) => Promise<{ value: T; actualModel?: string; routedProvider?: string; routerAttempt?: number }>;
+  execute: (target: AIModelTarget, attempt: number, signal: AbortSignal) => Promise<{ value: T; actualModel?: string; routedProvider?: string; routerAttempt?: number; requestId?: string; promptTokens?: number; completionTokens?: number; cost?: number }>;
   onAttempt?: (record: AIAttemptRecord) => void;
+  onTargetStart?: (target: AIModelTarget) => Promise<void>;
+  signal?: AbortSignal;
   sleep?: (milliseconds: number) => Promise<void>;
 }
 
 export async function runAIModelChain<T>(options: RunAIModelChainOptions<T>): Promise<AIChainResult<T>> {
-  if (options.targets.length !== 1 || options.targets[0].provider !== 'openrouter'
-    || options.targets[0].model !== 'z-ai/glm-5.3-flash') {
-    throw new AIModelError('A avaliação exige somente o GLM 5.3 Flash via OpenRouter.', 'request_configuration_error', false, 'global');
+  if (options.targets.length !== 2 || options.targets.some(target => target.provider !== 'openrouter')
+    || options.targets[0].model !== 'z-ai/glm-5.3-flash'
+    || options.targets[1].model !== 'google/gemini-3.8-flash') {
+    throw new AIModelError('Cadeia de IA inválida.', 'request_configuration_error', false, 'global');
   }
 
   const attempts: AIAttemptRecord[] = [];
   const sleep = options.sleep || ((milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds)));
   let lastError: AIModelError | undefined;
-  const target = options.targets[0];
-  for (let attempt = 1; attempt <= target.maxAttempts; attempt++) {
-    const startedAt = Date.now();
-    try {
-        const result = await options.execute(target, attempt);
+  for (const [targetIndex, target] of options.targets.entries()) {
+    if (options.signal?.aborted) throw new AIModelError('Análise interrompida.', 'cancelled', false, 'global');
+    await options.onTargetStart?.(target);
+    const deadline = target.timeoutMs ? Date.now() + target.timeoutMs : Infinity;
+    for (let attempt = 1; attempt <= target.maxAttempts; attempt++) {
+      if (options.signal?.aborted) throw new AIModelError('Análise interrompida.', 'cancelled', false, 'global');
+      const startedAt = Date.now();
+      const startedAtIso = new Date(startedAt).toISOString();
+      const controller = new AbortController();
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        lastError = new AIModelError('Tempo limite do modelo excedido.', 'timeout', true);
+        break;
+      }
+      const timer = Number.isFinite(remaining) ? setTimeout(() => controller.abort(), remaining) : undefined;
+      const onCancel = () => controller.abort();
+      options.signal?.addEventListener('abort', onCancel, { once: true });
+      try {
+        const execution = options.execute(target, attempt, controller.signal);
+        const result = await Promise.race([
+          execution,
+          new Promise<never>((_resolve, reject) => {
+            if (controller.signal.aborted) reject(new AIModelError('Tempo limite ou interrupção.', 'timeout', true));
+            else controller.signal.addEventListener('abort', () => reject(new AIModelError('Tempo limite ou interrupção.', 'timeout', true)), { once: true });
+          }),
+        ]);
+        if (options.signal?.aborted) throw new AIModelError('Análise interrompida.', 'cancelled', false, 'global');
+        if (controller.signal.aborted) throw new AIModelError('Resposta recebida após o timeout.', 'timeout', true);
         const record: AIAttemptRecord = {
           provider: target.provider,
           model: result.actualModel || target.model,
           attempt,
           status: 'success',
+          httpStatus: 200,
           durationMs: Date.now() - startedAt,
+          startedAt: startedAtIso,
+          finishedAt: new Date().toISOString(),
           routedProvider: result.routedProvider,
           routerAttempt: result.routerAttempt,
+          requestId: result.requestId,
+          promptTokens: result.promptTokens,
+          completionTokens: result.completionTokens,
+          cost: result.cost,
         };
         attempts.push(record);
         options.onAttempt?.(record);
@@ -146,14 +187,17 @@ export async function runAIModelChain<T>(options: RunAIModelChainOptions<T>): Pr
           provider: target.provider,
           model: result.actualModel || target.model,
           attempts,
-          fallbackUsed: (result.routerAttempt || 1) > 1,
+          fallbackUsed: targetIndex > 0,
           routedProvider: result.routedProvider,
           routerAttempt: result.routerAttempt,
         };
-    } catch (error) {
-        const normalized = normalizeAIError(error);
+      } catch (error) {
+        const normalized = options.signal?.aborted
+          ? new AIModelError('Análise interrompida.', 'cancelled', false, 'global')
+          : normalizeAIError(error);
         lastError = normalized;
-        const shouldRetry = normalized.retryable && attempt < target.maxAttempts;
+        if (normalized.reason === 'cancelled') throw normalized;
+        const shouldRetry = normalized.retryable && attempt < target.maxAttempts && Date.now() < deadline;
         const record: AIAttemptRecord = {
           provider: target.provider,
           model: target.model,
@@ -163,12 +207,20 @@ export async function runAIModelChain<T>(options: RunAIModelChainOptions<T>): Pr
           message: normalized.message,
           httpStatus: normalized.httpStatus,
           durationMs: Date.now() - startedAt,
+          startedAt: startedAtIso,
+          finishedAt: new Date().toISOString(),
         };
         attempts.push(record);
         options.onAttempt?.(record);
         if (!shouldRetry) break;
-        await sleep(Math.min(500 * 2 ** (attempt - 1), 4000));
+        await sleep(Math.min(500 * 2 ** (attempt - 1), 4000, Math.max(0, deadline - Date.now())));
+        if (options.signal?.aborted) throw new AIModelError('Análise interrompida.', 'cancelled', false, 'global');
+      } finally {
+        if (timer) clearTimeout(timer);
+        options.signal?.removeEventListener('abort', onCancel);
+      }
     }
+    if (lastError?.scope === 'global' || lastError?.scope === 'provider') break;
   }
 
   throw Object.assign(

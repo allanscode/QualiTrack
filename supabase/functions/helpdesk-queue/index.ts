@@ -15,12 +15,16 @@ import {
   type AIAttemptRecord,
   type AIModelTarget,
 } from './ai-fallback.ts';
-import { callOpenRouter, OPENROUTER_MODEL } from './openrouter-client.ts';
+import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODEL } from './openrouter-client.ts';
 import { retryAt } from './ai-retry.ts';
 import { canReadQueueTicket, trustedZendeskCursor, type QueueType } from './access.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
-const OPENROUTER_TARGET: AIModelTarget = { provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4 };
+const AI_PRIMARY_TIMEOUT_MS = Math.min(120_000, Math.max(1_000, Number(Deno.env.get('AI_PRIMARY_TIMEOUT_MS') || '30000') || 30000));
+const AI_TARGETS: AIModelTarget[] = [
+  { provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4, timeoutMs: AI_PRIMARY_TIMEOUT_MS },
+  { provider: 'openrouter', model: OPENROUTER_FALLBACK_MODEL, maxAttempts: 3, timeoutMs: 45_000 },
+];
 
 
 const MAX_REQUEST_BYTES = 1_000_000;
@@ -59,6 +63,7 @@ const RequestSchema = z.object({
     'fetch_dialogue',
     'evaluate_ai',
     'evaluate_child_ticket',
+    'cancel_ai_evaluation',
     'resolve_agent',
     'lookup_ticket_agent',
     'sync_zendesk_groups',
@@ -344,6 +349,13 @@ serve(async (req) => {
       return jsonResponse({ error: 'ticket_id deve ser numérico.' }, 400);
     }
 
+    if (action === 'cancel_ai_evaluation') {
+      if (!parseResult.data.job_id) return jsonResponse({ error: 'Job de IA obrigatório.' }, 400);
+      const { data: cancelled, error } = await supabase.rpc('cancel_ai_evaluation_job', { p_job_id: parseResult.data.job_id });
+      if (error) return jsonResponse({ error: 'Cancelamento não autorizado ou indisponível.' }, 403);
+      return jsonResponse({ cancelled: Boolean(cancelled), job_id: parseResult.data.job_id }, 200);
+    }
+
     if (action === 'evaluate_ai' || action === 'evaluate_child_ticket') {
       if (!parseResult.data.job_id) return jsonResponse({ error: 'Job de IA obrigatório.' }, 400);
       if (action === 'evaluate_ai' && !parseResult.data.draft_meta) {
@@ -357,15 +369,15 @@ serve(async (req) => {
       if (!started) return jsonResponse({ error: 'Este job de IA já está em execução ou não pertence ao usuário.' }, 409);
     }
 
-    // 3. Avaliação com IA (somente GLM 5.3 Flash, com retry) — não depende do Zendesk
+    // 3. Avaliação com IA: GLM pago primeiro, Gemini pago somente após esgotar GLM.
     if (action === 'evaluate_ai') {
       return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
-        () => handleEvaluateAI(parseResult.data, supabase, user.id));
+        signal => handleEvaluateAI(parseResult.data, supabase, user.id, signal));
     }
 
     if (action === 'evaluate_child_ticket') {
       return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
-        () => handleEvaluateChildTicket(parseResult.data, supabase, user.id));
+        signal => handleEvaluateChildTicket(parseResult.data, supabase, user.id, signal));
     }
 
     // 4. Cadastro manual de agente ainda não existente no QualiTrack, feito
@@ -1057,12 +1069,14 @@ async function handleResolveAgent(
 function logAIAttempt(
   evaluationType: 'atendimento' | 'chamado_filho',
   ticketId: string,
+  jobId: string,
   record: AIAttemptRecord,
 ): void {
   const details = {
     event: record.status === 'success' ? 'model_succeeded' : 'model_failed',
     evaluation_type: evaluationType,
     ticket_id: ticketId,
+    job_id: jobId,
     provider: record.provider,
     routed_provider: record.routedProvider || null,
     router_attempt: record.routerAttempt || null,
@@ -1071,6 +1085,12 @@ function logAIAttempt(
     reason: record.reason || null,
     http_status: record.httpStatus || null,
     duration_ms: record.durationMs,
+    started_at: record.startedAt || null,
+    finished_at: record.finishedAt || null,
+    request_id: record.requestId || null,
+    prompt_tokens: record.promptTokens ?? null,
+    completion_tokens: record.completionTokens ?? null,
+    cost: record.cost ?? null,
     message: record.message || null,
   };
   const output = `[ai-retry] ${JSON.stringify(details)}`;
@@ -1081,6 +1101,27 @@ function logAIAttempt(
 function attemptsFromError(error: unknown): AIAttemptRecord[] {
   const attempts = (error as { attempts?: unknown } | null)?.attempts;
   return Array.isArray(attempts) ? attempts as AIAttemptRecord[] : [];
+}
+
+async function enrichGenerationMetadata(record: AIAttemptRecord | undefined): Promise<void> {
+  const apiKey = Deno.env.get('OPENROUTER_API_KEY');
+  if (!record?.requestId || !apiKey) return;
+  try {
+    const response = await fetch(`https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(record.requestId)}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) return;
+    const body = await response.json() as { data?: {
+      provider_name?: string; total_cost?: number; tokens_prompt?: number; tokens_completion?: number;
+    } };
+    record.routedProvider ||= body.data?.provider_name;
+    record.cost ??= body.data?.total_cost;
+    record.promptTokens ??= body.data?.tokens_prompt;
+    record.completionTokens ??= body.data?.tokens_completion;
+  } catch {
+    // Generation metadata may arrive later; the immutable request ID remains in the log.
+  }
 }
 
 function validateEvaluationResponse(value: unknown, questionRequired: string[], criticalQuestions: Set<string>): any {
@@ -1149,15 +1190,34 @@ function payloadForRetry(payload: z.infer<typeof RequestSchema>): Record<string,
 
 interface RetryContext { retryCount: number; leaseId: string }
 
+async function cancelledAIJob(supabase: SupabaseClient, jobId: string): Promise<boolean> {
+  const { data } = await supabase.from('ai_evaluation_jobs').select('status').eq('job_id', jobId).maybeSingle();
+  return data?.status === 'cancelled';
+}
+
+async function setAIPhase(supabase: SupabaseClient, jobId: string, phase: 'running_glm' | 'fallback_gemini' | 'retry_pending'): Promise<void> {
+  const { data, error } = await supabase.rpc('set_ai_evaluation_phase', { p_job_id: jobId, p_phase: phase });
+  if (error) throw new Error('Falha ao atualizar etapa do job de IA.');
+  if (!data) throw new AIModelError('Análise interrompida.', 'cancelled', false, 'global');
+}
+
 async function executeAndPersistAIJob(
   payload: z.infer<typeof RequestSchema>,
   supabase: SupabaseClient,
   callerId: string,
-  evaluate: () => Promise<Response>,
+  evaluate: (signal: AbortSignal) => Promise<Response>,
   retryContext?: RetryContext,
 ): Promise<Response> {
   const jobId = payload.job_id!;
   let queuePrepared = Boolean(retryContext);
+  const controller = new AbortController();
+  let checking = false;
+  const cancellationPoll = setInterval(async () => {
+    if (checking) return;
+    checking = true;
+    try { if (await cancelledAIJob(supabase, jobId)) controller.abort(); }
+    finally { checking = false; }
+  }, 1000);
   try {
     if (!retryContext) {
       // Registra antes da chamada externa: se a Edge Function cair, o job
@@ -1174,9 +1234,12 @@ async function executeAndPersistAIJob(
       if (queueError) throw new Error(`Falha ao preparar reprocessamento: ${queueError.message}`);
       queuePrepared = true;
     }
-    const response = await evaluate();
+    if (await cancelledAIJob(supabase, jobId)) return jsonResponse({ cancelled: true }, 409);
+    const response = await evaluate(controller.signal);
+    if (controller.signal.aborted || await cancelledAIJob(supabase, jobId)) return jsonResponse({ cancelled: true }, 409);
     if (!response.ok) {
       const details = await response.clone().json().catch(() => ({}));
+      if (details.cancelled) return jsonResponse({ cancelled: true }, 409);
       if (details.retryable === true) {
         const retryCount = (retryContext?.retryCount || 0) + 1;
         let query = supabase.from('ai_evaluation_retry_queue').update({
@@ -1190,11 +1253,12 @@ async function executeAndPersistAIJob(
         if (retryContext) query = query.eq('lease_id', retryContext.leaseId);
         const { data: queued, error: queueError } = await query.select('job_id').maybeSingle();
         if (queueError || !queued) throw new Error('Falha ao agendar reprocessamento da avaliação.');
+        await setAIPhase(supabase, jobId, 'retry_pending');
         console.warn(`[ai-job] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, status: 'pending_retry', retry_count: retryCount })}`);
         return jsonResponse({ queued: true, job_id: jobId, message: 'Avaliação pendente; reprocessamento automático agendado.' }, 202);
       }
       const { error } = await supabase.from('ai_evaluation_jobs')
-        .update({ status: 'failed', finished_at: new Date().toISOString(), error_message: String(details.error || `HTTP ${response.status}`).slice(0, 500) })
+        .update({ status: 'failed', phase: 'failed', finished_at: new Date().toISOString(), error_message: String(details.error || `HTTP ${response.status}`).slice(0, 500) })
         .eq('job_id', jobId).eq('status', 'running');
       if (error) console.error('[ai-job] Falha ao registrar erro:', error);
       await supabase.from('ai_evaluation_retry_queue').delete().eq('job_id', jobId);
@@ -1212,6 +1276,7 @@ async function executeAndPersistAIJob(
       // O diálogo bruto fica no Zendesk; o formulário o busca novamente
       // quando necessário, sem duplicar dados pessoais no rascunho/job.
     }
+    const persistStarted = Date.now();
     const { error } = await supabase.rpc('complete_ai_evaluation_execution', {
       p_job_id: jobId,
       p_caller_id: callerId,
@@ -1219,11 +1284,34 @@ async function executeAndPersistAIJob(
       p_draft: payload.action === 'evaluate_ai' ? payload.draft_meta : null,
     });
     if (error) throw new Error(`Falha ao persistir avaliação: ${error.message}`);
+    console.info(`[ai-timing] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, stage: 'database_write', duration_ms: Date.now() - persistStarted })}`);
+    const technical = body.technical as {
+      model?: string; attempts?: AIAttemptRecord[]; fallbackUsed?: boolean; durationMs?: number;
+      evaluationType?: string;
+    } | undefined;
+    if (technical) {
+      await enrichGenerationMetadata(technical.attempts?.at(-1));
+      const { error: logError } = await supabase.from('ai_evaluation_logs').insert({
+        job_id: jobId,
+        ticket_id: payload.ticket_id,
+        ticket_subject: `Ticket #${payload.ticket_id}`,
+        evaluation_type: technical.evaluationType,
+        provider: 'openrouter',
+        model: technical.model,
+        duration_ms: technical.durationMs,
+        status: 'success',
+        attempts: technical.attempts || [],
+        fallback_used: technical.fallbackUsed || false,
+        created_by: callerId,
+      });
+      if (logError) console.warn('[ai-job] Falha ao registrar metadados técnicos:', logError.message);
+    }
     await supabase.from('ai_evaluation_retry_queue').delete().eq('job_id', jobId);
     console.info(`[ai-job] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, status: 'completed' })}`);
-    return jsonResponse({ ...body, result }, 200);
+    return jsonResponse({ success: true, result }, 200);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (controller.signal.aborted || await cancelledAIJob(supabase, jobId)) return jsonResponse({ cancelled: true }, 409);
     if (queuePrepared) {
       // Uma falha de persistência/worker não pode descartar o payload durável.
       // A lease expira e o cron recupera o mesmo job sem criar outro.
@@ -1231,11 +1319,17 @@ async function executeAndPersistAIJob(
       return jsonResponse({ queued: true, job_id: jobId, message: 'Avaliação pendente; reprocessamento automático agendado.' }, 202);
     }
     const { error: updateError } = await supabase.from('ai_evaluation_jobs')
-      .update({ status: 'failed', finished_at: new Date().toISOString(), error_message: message.slice(0, 500) })
+      .update({ status: 'failed', phase: 'failed', finished_at: new Date().toISOString(), error_message: message.slice(0, 500) })
       .eq('job_id', jobId).eq('status', 'running');
     if (updateError) console.error('[ai-job] Falha ao registrar erro:', updateError);
     console.error(`[ai-job] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, status: 'failed', reason: message })}`);
     return jsonResponse({ error: message }, 500);
+  } finally {
+    clearInterval(cancellationPoll);
+    if (controller.signal.aborted || await cancelledAIJob(supabase, jobId)) {
+      const { error } = await supabase.rpc('acknowledge_ai_evaluation_cancellation', { p_job_id: jobId });
+      if (error) console.error('[ai-job] Falha ao confirmar interrupção:', error.message);
+    }
   }
 }
 
@@ -1251,7 +1345,7 @@ async function processAIRetries(supabase: SupabaseClient): Promise<Response> {
   const payload = parsed.success ? parsed.data : null;
   if (!payload || !['evaluate_ai', 'evaluate_child_ticket'].includes(payload.action)
     || payload.job_id !== item.job_id || payload.ticket_id !== item.ticket_id) {
-    await supabase.from('ai_evaluation_jobs').update({ status: 'failed', finished_at: new Date().toISOString(), error_message: 'Payload de retry inválido.' })
+    await supabase.from('ai_evaluation_jobs').update({ status: 'failed', phase: 'failed', finished_at: new Date().toISOString(), error_message: 'Payload de retry inválido.' })
       .eq('job_id', item.job_id).eq('status', 'running');
     await supabase.from('ai_evaluation_retry_queue').delete().eq('job_id', item.job_id);
     return jsonResponse({ processed: 1, status: 'invalid_payload' }, 200);
@@ -1263,8 +1357,8 @@ async function processAIRetries(supabase: SupabaseClient): Promise<Response> {
     return jsonResponse({ processed: 0 }, 200);
   }
   const evaluate = payload.action === 'evaluate_ai'
-    ? () => handleEvaluateAI(payload, supabase, job.started_by)
-    : () => handleEvaluateChildTicket(payload, supabase, job.started_by);
+    ? (signal: AbortSignal) => handleEvaluateAI(payload, supabase, job.started_by, signal)
+    : (signal: AbortSignal) => handleEvaluateChildTicket(payload, supabase, job.started_by, signal);
   const result = await executeAndPersistAIJob(payload, supabase, job.started_by, evaluate, {
     retryCount: item.retry_count,
     leaseId: item.lease_id,
@@ -1275,7 +1369,8 @@ async function processAIRetries(supabase: SupabaseClient): Promise<Response> {
 async function handleEvaluateAI(
   payload: z.infer<typeof RequestSchema>,
   supabase: SupabaseClient,
-  callerId?: string
+  callerId?: string,
+  signal?: AbortSignal,
 ): Promise<Response> {
   const { ticket_id, form_criteria, dialogue, agent_info, guideline_ids, ticket_fields } = payload;
 
@@ -1406,30 +1501,45 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
    já respondeu nos passos 1 e 2. NUNCA deixe "score" ou "summary" vazios/zerados: eles resumem o que você
    acabou de avaliar.`;
 
-  const aiTargets = [OPENROUTER_TARGET];
+  const aiTargets = AI_TARGETS;
+  const preparationMs = Date.now() - startTime;
   let pipelineAttempts: AIAttemptRecord[] = [];
   console.info(`[ai-retry] ${JSON.stringify({
-    event: 'pipeline_started', evaluation_type: 'atendimento', ticket_id: String(ticket_id),
+    event: 'pipeline_started', evaluation_type: 'atendimento', ticket_id: String(ticket_id), job_id: payload.job_id,
+    preparation_ms: preparationMs,
     chain: aiTargets.map(target => ({ provider: target.provider, model: target.model, max_attempts: target.maxAttempts })),
   })}`);
 
   try {
     const chain = await runAIModelChain({
       targets: aiTargets,
-      execute: async target => {
+      signal,
+      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, target.model === OPENROUTER_MODEL ? 'running_glm' : 'fallback_gemini'),
+      execute: async (target, _attempt, attemptSignal) => {
+        const modelStarted = Date.now();
         const response = await callOpenRouter({
           prompt,
           responseSchema,
           apiKey: openRouterApiKey,
+          model: target.model,
+          signal: attemptSignal,
         });
+        const providerMs = Date.now() - modelStarted;
+        const parsingStarted = Date.now();
+        const value = validateEvaluationResponse(parseModelJSON(response.text), questionRequired, criticalQuestions);
+        console.info(`[ai-timing] ${JSON.stringify({ job_id: payload.job_id, ticket_id, model: target.model, stage: 'provider_response_and_parse', provider_ms: providerMs, parsing_ms: Date.now() - parsingStarted })}`);
         return {
-          value: validateEvaluationResponse(parseModelJSON(response.text), questionRequired, criticalQuestions),
+          value,
           actualModel: target.model,
           routedProvider: response.routedProvider,
           routerAttempt: response.routerAttempt,
+          requestId: response.requestId,
+          promptTokens: response.promptTokens,
+          completionTokens: response.completionTokens,
+          cost: response.cost,
         };
       },
-      onAttempt: record => logAIAttempt('atendimento', String(ticket_id), record),
+      onAttempt: record => logAIAttempt('atendimento', String(ticket_id), payload.job_id!, record),
     });
     const parsed = chain.value;
     pipelineAttempts = chain.attempts;
@@ -1442,25 +1552,6 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     })}`);
 
     const durationMs = Date.now() - startTime;
-
-    // Registra log para auditoria de administradores
-    try {
-      await supabase.from('ai_evaluation_logs').insert({
-        ticket_id: String(ticket_id),
-        ticket_subject: agent_info?.team_name ? `Atendimento (${agent_info.team_name})` : `Ticket #${ticket_id}`,
-        evaluation_type: 'atendimento',
-        provider: chain.provider,
-        model: chain.model,
-        duration_ms: durationMs,
-        response_json: parsed,
-        status: 'success',
-        attempts: chain.attempts,
-        fallback_used: chain.fallbackUsed,
-        created_by: callerId || null,
-      });
-    } catch (logErr) {
-      console.warn('[helpdesk-queue] Falha ao registrar log de IA:', logErr);
-    }
 
     const suggested_answers: Record<string, string> = {};
     const suggested_observations: Record<string, string> = {};
@@ -1476,6 +1567,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
 
     return jsonResponse({
       success: true,
+      technical: { model: chain.model, attempts: chain.attempts, fallbackUsed: chain.fallbackUsed, durationMs, evaluationType: 'atendimento', callerId },
       result: {
         score: parsed.score,
         summary: parsed.summary,
@@ -1488,6 +1580,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     }, 200);
   } catch (error: any) {
     pipelineAttempts = attemptsFromError(error);
+    if (error instanceof AIModelError && error.reason === 'cancelled') return jsonResponse({ cancelled: true }, 409);
     console.error(`[ai-retry] ${JSON.stringify({
       event: 'pipeline_failed', evaluation_type: 'atendimento', ticket_id: String(ticket_id),
       reason: error?.reason || 'unknown_error', message: error?.message || String(error),
@@ -1497,10 +1590,11 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     try {
       await supabase.from('ai_evaluation_logs').insert({
         ticket_id: String(ticket_id),
+        job_id: payload.job_id,
         ticket_subject: `Ticket #${ticket_id}`,
         evaluation_type: 'atendimento',
         provider: 'openrouter',
-        model: OPENROUTER_MODEL,
+        model: pipelineAttempts.at(-1)?.model || OPENROUTER_MODEL,
         duration_ms: Date.now() - startTime,
         status: 'error',
         error_message: error?.message || 'Falha ao avaliar com IA',
@@ -1520,7 +1614,8 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
 async function handleEvaluateChildTicket(
   payload: z.infer<typeof RequestSchema>,
   supabase: SupabaseClient,
-  callerId?: string
+  callerId?: string,
+  signal?: AbortSignal,
 ): Promise<Response> {
   const { ticket_id, ticket_subject, dialogue, ticket_fields, tags, macro_type } = payload;
 
@@ -1655,30 +1750,45 @@ CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
 
 Analise os dados reais do ticket contra essas regras operacionais e gere o parecer estritamente no JSON do schema.`;
 
-  const aiTargets = [OPENROUTER_TARGET];
+  const aiTargets = AI_TARGETS;
+  const preparationMs = Date.now() - startTime;
   let pipelineAttempts: AIAttemptRecord[] = [];
   console.info(`[ai-retry] ${JSON.stringify({
-    event: 'pipeline_started', evaluation_type: 'chamado_filho', ticket_id: String(ticket_id),
+    event: 'pipeline_started', evaluation_type: 'chamado_filho', ticket_id: String(ticket_id), job_id: payload.job_id,
+    preparation_ms: preparationMs,
     chain: aiTargets.map(target => ({ provider: target.provider, model: target.model, max_attempts: target.maxAttempts })),
   })}`);
 
   try {
     const chain = await runAIModelChain({
       targets: aiTargets,
-      execute: async target => {
+      signal,
+      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, target.model === OPENROUTER_MODEL ? 'running_glm' : 'fallback_gemini'),
+      execute: async (target, _attempt, attemptSignal) => {
+        const modelStarted = Date.now();
         const response = await callOpenRouter({
           prompt,
           responseSchema,
           apiKey: openRouterApiKey,
+          model: target.model,
+          signal: attemptSignal,
         });
+        const providerMs = Date.now() - modelStarted;
+        const parsingStarted = Date.now();
+        const value = validateChildEvaluationResponse(parseModelJSON(response.text));
+        console.info(`[ai-timing] ${JSON.stringify({ job_id: payload.job_id, ticket_id, model: target.model, stage: 'provider_response_and_parse', provider_ms: providerMs, parsing_ms: Date.now() - parsingStarted })}`);
         return {
-          value: validateChildEvaluationResponse(parseModelJSON(response.text)),
+          value,
           actualModel: target.model,
           routedProvider: response.routedProvider,
           routerAttempt: response.routerAttempt,
+          requestId: response.requestId,
+          promptTokens: response.promptTokens,
+          completionTokens: response.completionTokens,
+          cost: response.cost,
         };
       },
-      onAttempt: record => logAIAttempt('chamado_filho', String(ticket_id), record),
+      onAttempt: record => logAIAttempt('chamado_filho', String(ticket_id), payload.job_id!, record),
     });
     const parsed = chain.value;
     pipelineAttempts = chain.attempts;
@@ -1691,27 +1801,10 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     })}`);
 
     const durationMs = Date.now() - startTime;
-    try {
-      await supabase.from('ai_evaluation_logs').insert({
-        ticket_id: String(ticket_id),
-        ticket_subject: `Chamado Filho #${ticket_id}`,
-        evaluation_type: 'chamado_filho',
-        provider: chain.provider,
-        model: chain.model,
-        duration_ms: durationMs,
-        response_json: parsed,
-        status: 'success',
-        attempts: chain.attempts,
-        fallback_used: chain.fallbackUsed,
-        created_by: callerId || null,
-      });
-    } catch (logErr) {
-      console.warn('[helpdesk-queue] Falha ao registrar log de chamado filho:', logErr);
-    }
-
-    return jsonResponse({ success: true, result: parsed }, 200);
+    return jsonResponse({ success: true, technical: { model: chain.model, attempts: chain.attempts, fallbackUsed: chain.fallbackUsed, durationMs, evaluationType: 'chamado_filho', callerId }, result: parsed }, 200);
   } catch (err: any) {
     pipelineAttempts = attemptsFromError(err);
+    if (err instanceof AIModelError && err.reason === 'cancelled') return jsonResponse({ cancelled: true }, 409);
     console.error(`[ai-retry] ${JSON.stringify({
       event: 'pipeline_failed', evaluation_type: 'chamado_filho', ticket_id: String(ticket_id),
       reason: err?.reason || 'unknown_error', message: err?.message || String(err),
@@ -1720,10 +1813,11 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     try {
       await supabase.from('ai_evaluation_logs').insert({
         ticket_id: String(ticket_id),
+        job_id: payload.job_id,
         ticket_subject: `Chamado Filho #${ticket_id}`,
         evaluation_type: 'chamado_filho',
         provider: 'openrouter',
-        model: OPENROUTER_MODEL,
+        model: pipelineAttempts.at(-1)?.model || OPENROUTER_MODEL,
         duration_ms: Date.now() - startTime,
         status: 'error',
         error_message: err.message,

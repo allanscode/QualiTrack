@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { callOpenRouter, OPENROUTER_MODEL } from './openrouter-client';
+import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODEL } from './openrouter-client';
 import { runAIModelChain } from './ai-fallback';
 
 const testKey = 'test-key-not-real';
@@ -16,7 +16,7 @@ describe('requisição OpenRouter', () => {
   it('usa apenas GLM 5.3 Flash, JSON Schema e provider failover; chave somente no header', async () => {
     const fetcher = vi.fn(async () => success());
     const result = await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, fetcher });
-    expect(result).toEqual({ text: '{"score":90}', routedProvider: 'DeepInfra', routerAttempt: 2 });
+    expect(result).toMatchObject({ text: '{"score":90}', routedProvider: 'DeepInfra', routerAttempt: 2 });
     const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
     expect(url).not.toContain(testKey);
@@ -32,7 +32,7 @@ describe('requisição OpenRouter', () => {
   it.each([429, 500, 503])('repete HTTP %i e conclui no mesmo modelo', async status => {
     const fetcher = vi.fn().mockResolvedValueOnce(new Response('erro privado', { status })).mockResolvedValueOnce(success('Fireworks'));
     const result = await runAIModelChain({
-      targets: [{ provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4 }],
+      targets: [{ provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4 }, { provider: 'openrouter', model: OPENROUTER_FALLBACK_MODEL, maxAttempts: 3 }],
       execute: async () => {
         const response = await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, fetcher });
         return { value: response.text, routedProvider: response.routedProvider, routerAttempt: response.routerAttempt };
@@ -42,13 +42,13 @@ describe('requisição OpenRouter', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(result.attempts[0].httpStatus).toBe(status);
     expect(result.attempts[1]).toMatchObject({ routedProvider: 'Fireworks', routerAttempt: 2 });
-    expect(result.fallbackUsed).toBe(true);
+    expect(result.fallbackUsed).toBe(false);
   });
 
   it('não repete 401 nem expõe detalhes do provedor', async () => {
     const fetcher = vi.fn(async () => new Response('informação privada', { status: 401 }));
     await expect(runAIModelChain({
-      targets: [{ provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4 }],
+      targets: [{ provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4 }, { provider: 'openrouter', model: OPENROUTER_FALLBACK_MODEL, maxAttempts: 3 }],
       execute: async () => ({ value: await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, fetcher }) }),
       sleep: async () => undefined,
     })).rejects.toMatchObject({ reason: 'credentials_error' });
@@ -59,5 +59,19 @@ describe('requisição OpenRouter', () => {
     const fetcher = vi.fn(async () => Response.json({ model: 'outro/modelo', choices: [{ message: { content: '{}' } }] }));
     await expect(callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, fetcher }))
       .rejects.toMatchObject({ reason: 'request_configuration_error' });
+  });
+
+  it('envia Gemini pago pela mesma API e captura metadados de consumo', async () => {
+    const fetcher = vi.fn(async () => Response.json({
+      id: 'gen-test', model: OPENROUTER_FALLBACK_MODEL,
+      choices: [{ message: { content: '{"score":90}' } }],
+      usage: { prompt_tokens: 100, completion_tokens: 20, cost: 0.001 },
+    }));
+    const result = await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, model: OPENROUTER_FALLBACK_MODEL, fetcher });
+    expect(result).toMatchObject({ requestId: 'gen-test', promptTokens: 100, completionTokens: 20, cost: 0.001 });
+    const body = JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.model).toBe(OPENROUTER_FALLBACK_MODEL);
+    expect(body.model).not.toContain(':free');
+    expect(body.provider.allow_fallbacks).toBe(true);
   });
 });

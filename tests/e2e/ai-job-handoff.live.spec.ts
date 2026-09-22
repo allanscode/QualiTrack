@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { assertSafeLiveE2E, cleanupLiveE2EFixture, cleanupStaleLiveE2E } from './live-safety';
 
 const supabaseUrl = process.env.E2E_SUPABASE_URL || '';
 const anonKey = process.env.E2E_SUPABASE_PUBLISHABLE_KEY || '';
@@ -17,12 +18,14 @@ async function api<T>(path: string, token: string, body?: unknown): Promise<T> {
 
 test('Edge worker persiste uma única avaliação após o navegador iniciar o job', async () => {
   test.skip(process.env.RUN_LIVE_AI_JOB_TEST !== '1', 'Exige credenciais E2E do projeto Supabase.');
+  assertSafeLiveE2E(supabaseUrl);
+  await cleanupStaleLiveE2E(supabaseUrl, serviceKey);
   const ticketId = String(Date.now());
   const email = `ai-job-${ticketId}@example.invalid`;
   let userId: string | undefined;
   try {
     const user = await api<{ id: string }>('/auth/v1/admin/users', serviceKey, {
-      email, email_confirm: true, user_metadata: { name: 'Admin AI Job E2E' },
+      email, email_confirm: true, user_metadata: { name: 'Admin AI Job E2E', e2e_run_id: ticketId, e2e_ticket_id: ticketId, e2e_source: 'qualitrack-e2e' },
     });
     userId = user.id;
     const patch = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
@@ -63,13 +66,6 @@ test('Edge worker persiste uma única avaliação após o navegador iniciar o jo
       `/rest/v1/ai_evaluation_drafts?ticket_id=eq.${ticketId}&select=ticket_id`, serviceKey);
     expect(drafts).toHaveLength(1);
   } finally {
-    for (const table of ['ai_evaluation_drafts', 'ai_evaluation_jobs']) {
-      await fetch(`${supabaseUrl}/rest/v1/${table}?ticket_id=eq.${ticketId}`, {
-        method: 'DELETE', headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-      });
-    }
-    if (userId) await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
-      method: 'DELETE', headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-    });
+    await cleanupLiveE2EFixture(supabaseUrl, serviceKey, userId, ticketId);
   }
 });

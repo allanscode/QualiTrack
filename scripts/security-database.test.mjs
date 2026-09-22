@@ -30,6 +30,14 @@ test('PostgreSQL: restrictive RLS, rate limits and safe Auth identity migration'
     const hardening = await migration('20260915000001_security_report_hardening');
     await db.exec(hardening);
     await db.exec(hardening); // Repeatability against already-hardened policies.
+    // The synthetic "legacy_all" fixture is absent on production users;
+    // remove it before exercising the current role-write boundary.
+    await db.exec('DROP POLICY IF EXISTS legacy_all ON public.users');
+    await db.exec(`CREATE POLICY users_select ON public.users FOR SELECT TO authenticated USING (
+      id = auth.uid() OR _private.current_active_role() IN ('admin','gestor_qualidade','qualidade')
+    );
+    CREATE POLICY users_admin_write ON public.users FOR ALL TO authenticated
+      USING (_private.is_admin()) WITH CHECK (_private.is_admin());`);
     const auditSql = await migration('20260609000001_security_audit_rls');
     for (const policy of auditSql.matchAll(/CREATE POLICY "monitorias_[\s\S]*?\n  \);/g)) await db.exec(policy[0]);
     await db.exec(await migration('20260821000001_helpdesk_submissions'));
@@ -54,6 +62,17 @@ test('PostgreSQL: restrictive RLS, rate limits and safe Auth identity migration'
     await t.test('support manager cannot grant membership despite permissive legacy policy', async () => {
       await assert.rejects(asUser(3, () => db.exec(`INSERT INTO user_teams(user_id,team_id) VALUES ('${id(3)}','${id(102)}')`)), /row-level security/);
       await asUser(4, () => db.exec(`INSERT INTO user_teams(user_id,team_id) VALUES ('${id(4)}','${id(102)}')`));
+    });
+    await t.test('quality monitor and supervisor cannot promote themselves through direct requests', async () => {
+      for (const n of [3, 5]) {
+        const changed = await asUser(n, () => db.query('UPDATE public.users SET role=$1 WHERE id=$2 RETURNING id', ['admin', id(n)]));
+        assert.equal(changed.rows.length, 0);
+        const actual = await db.query('SELECT role FROM public.users WHERE id=$1', [id(n)]);
+        assert.notEqual(actual.rows[0].role, 'admin');
+        await assert.rejects(asUser(n, () => db.query(
+          'INSERT INTO public.users(id,email,name,role,active) VALUES($1,$2,$3,$4,true)',
+          [id(90 + n), `forged-${n}@example.invalid`, 'Forged', 'admin'])), /row-level security/);
+      }
     });
     await t.test('users, evaluations and helpdesk receipts are isolated by identity/team', async () => {
       await db.exec(`INSERT INTO monitorias(id,evaluated_id,evaluator_id,team_id) VALUES ('${id(301)}','${id(1)}','${id(5)}','${id(101)}'),('${id(302)}','${id(2)}','${id(5)}','${id(102)}');

@@ -37,6 +37,10 @@ const aiOwnerMigration = readFile(
   new URL('../supabase/migrations/20260922000020_ai_owner_rls.sql', import.meta.url), 'utf8');
 const verifiedClaimMigration = readFile(
   new URL('../supabase/migrations/20260922000021_verified_ai_claim.sql', import.meta.url), 'utf8');
+const aiCancellationMigration = readFile(
+  new URL('../supabase/migrations/20260922000023_ai_cancellation_and_phase.sql', import.meta.url), 'utf8');
+const aiCancellationAckMigration = readFile(
+  new URL('../supabase/migrations/20260922000024_ai_cancellation_ack.sql', import.meta.url), 'utf8');
 const id = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const session = n => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -416,11 +420,44 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
       const stranger = owner === id(2) ? id(3) : id(2);
       await assert.rejects(asSession(stranger, session(8), () => db.query(
         "SELECT * FROM claim_ai_evaluation_job('987654','chamado_filho')")), /outro monitor/);
-      await asSession(owner, session(7), () => db.query(
-        "SELECT * FROM claim_ai_evaluation_job('987654','chamado_filho')"));
+      const oldJob = (await asSession(owner, session(7), () => db.query(
+        "SELECT * FROM claim_ai_evaluation_job('987654','chamado_filho')"))).rows[0].job_id;
       const foreignJobs = await asSession(stranger, session(8), () => db.query(
         "SELECT ticket_id FROM ai_evaluation_jobs WHERE ticket_id='987654'"));
       assert.equal(foreignJobs.rows.length, 0);
+      await db.exec('CREATE TABLE public.ai_evaluation_logs(id uuid PRIMARY KEY DEFAULT gen_random_uuid())');
+      await db.exec(await aiCancellationMigration);
+      await db.exec(await aiCancellationAckMigration);
+      await assert.rejects(asSession(stranger, session(8), () => db.query(
+        'SELECT cancel_ai_evaluation_job($1)', [oldJob])), /não autorizado/);
+      await db.exec('SET ROLE service_role');
+      try {
+        const started = await db.query('SELECT begin_ai_evaluation_execution($1,$2) AS started', [oldJob, owner]);
+        assert.equal(started.rows[0].started, true);
+      } finally { await db.exec('RESET ROLE'); }
+      const cancelled = await asSession(owner, session(7), () => db.query(
+        'SELECT cancel_ai_evaluation_job($1) AS cancelled', [oldJob]));
+      assert.equal(cancelled.rows[0].cancelled, true);
+      const blocked = (await asSession(owner, session(7), () => db.query(
+        "SELECT * FROM claim_ai_evaluation_job('987654','chamado_filho')"))).rows[0];
+      assert.equal(blocked.claimed, false);
+      assert.equal(blocked.job_id, oldJob);
+      await assert.rejects(asSession(owner, session(7), () => db.query(
+        'SELECT acknowledge_ai_evaluation_cancellation($1)', [oldJob])), /permission denied|não autorizada/);
+      await db.exec('SET ROLE service_role');
+      try {
+        const stopped = await db.query('SELECT acknowledge_ai_evaluation_cancellation($1) AS acknowledged', [oldJob]);
+        assert.equal(stopped.rows[0].acknowledged, true);
+      } finally { await db.exec('RESET ROLE'); }
+      const replacement = (await asSession(owner, session(7), () => db.query(
+        "SELECT * FROM claim_ai_evaluation_job('987654','chamado_filho')"))).rows[0];
+      assert.equal(replacement.claimed, true);
+      assert.notEqual(replacement.job_id, oldJob);
+      await db.exec('SET ROLE service_role');
+      try {
+        const late = await db.query('SELECT set_ai_evaluation_phase($1,$2) AS changed', [oldJob, 'fallback_gemini']);
+        assert.equal(late.rows[0].changed, false);
+      } finally { await db.exec('RESET ROLE'); }
     });
   } finally {
     await db.close();
