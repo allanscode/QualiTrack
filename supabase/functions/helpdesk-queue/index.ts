@@ -9,16 +9,17 @@ import {
 } from './sanitizer.ts';
 import {
   AIModelError,
-  httpAIError,
   incompleteResponse,
   parseModelJSON,
-  normalizeAIError,
   runAIModelChain,
   type AIAttemptRecord,
   type AIModelTarget,
 } from './ai-fallback.ts';
+import { callOpenRouter, OPENROUTER_MODEL } from './openrouter-client.ts';
+import { retryAt } from './ai-retry.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
+const OPENROUTER_TARGET: AIModelTarget = { provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4 };
 
 
 // Rate limiting em memória (reseta a cada cold start) — mesmo padrão já usado
@@ -103,6 +104,7 @@ const RequestSchema = z.object({
   cursor: z.string().nullable().optional(),
   form_criteria: z.any().optional(),
   dialogue: z.array(z.any()).optional(),
+  dialogue_text: z.string().optional(),
   agent_info: z.object({
     name: z.string().optional(),
     email: z.string().optional(),
@@ -268,6 +270,14 @@ serve(async (req) => {
   }
 
   try {
+    const workerBody = await req.clone().json().catch(() => null);
+    if (workerBody?.action === 'process_ai_retries') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
+      return await processAIRetries(workerClient);
+    }
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return jsonResponse({ error: 'Token de autenticação não fornecido' }, 401);
@@ -353,7 +363,7 @@ serve(async (req) => {
       if (!started) return jsonResponse({ error: 'Este job de IA já está em execução ou não pertence ao usuário.' }, 409);
     }
 
-    // 3. Avaliação com IA (Gemini com fallback OpenRouter) — não depende do Zendesk
+    // 3. Avaliação com IA (somente GLM 5.3 Flash, com retry) — não depende do Zendesk
     if (action === 'evaluate_ai') {
       return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
         () => handleEvaluateAI(parseResult.data, supabase, user.id));
@@ -689,7 +699,7 @@ serve(async (req) => {
           });
           for (const message of parsed) {
             const normalized = normalizeTranscriptSpeakerName(message.author_name);
-            if (normalized && message.author_role !== 'system') foundSpeakers.add(normalized);
+            if (normalized) foundSpeakers.add(normalized);
           }
         }
         const knownRoles = buildZendeskParticipantRoles(participantRecords);
@@ -931,12 +941,6 @@ serve(async (req) => {
 });
 
 /**
- * Avalia um atendimento com um modelo gratuito via OpenRouter (API
- * compatível com o formato OpenAI Chat Completions), usando
- * response_format: json_schema para forçar retorno em JSON estrito,
- * alinhado aos critérios da ficha de monitoria enviada pelo front-end.
- */
-/**
  * Cadastro manual de um agente do helpdesk que ainda não tem conta no
  * QualiTrack, disparado direto da ficha de monitoria (não só da triagem
  * automática). Mesma lógica de conta provisória por e-mail — restrito a
@@ -975,71 +979,26 @@ async function handleResolveAgent(
   return jsonResponse({ success: true, agent }, 200);
 }
 
-/**
- * O responseSchema do Gemini aceita só um subconjunto do OpenAPI 3.0 Schema
- * (type, properties, required, items, enum, description, etc.) — não aceita
- * "additionalProperties", que o schema usado no OpenRouter tem em todo
- * objeto (pra reforçar o strict mode lá). Remove recursivamente antes de
- * mandar pro Gemini; o schema original (com additionalProperties) continua
- * sendo usado pra validar a resposta depois do parse, então a garantia de
- * formato não é perdida, só não é reforçada do lado do provedor.
- */
-function stripAdditionalProperties(schema: any): any {
-  if (Array.isArray(schema)) return schema.map(stripAdditionalProperties);
-  if (schema && typeof schema === 'object') {
-    const { additionalProperties: _omit, ...rest } = schema;
-    const out: Record<string, any> = {};
-    for (const [key, value] of Object.entries(rest)) {
-      out[key] = stripAdditionalProperties(value);
-    }
-    return out;
-  }
-  return schema;
-}
-
-function configuredAIModels(
-  geminiApiKey: string | undefined,
-  geminiModel: string,
-  openRouterApiKey: string | undefined,
-  openRouterModels: string[],
-): AIModelTarget[] {
-  const openRouterChain = Array.from(new Set([...openRouterModels, 'openrouter/free']));
-  return [
-    ...(geminiApiKey ? [{ provider: 'gemini' as const, model: geminiModel, maxAttempts: 3 }] : []),
-    ...(openRouterApiKey
-      ? openRouterChain.map(model => ({
-          provider: 'openrouter' as const,
-          model,
-          // O roteador gratuito escolhe dinamicamente um modelo disponível.
-          // Uma segunda tentativa ajuda quando o primeiro provedor gratuito
-          // escolhido está momentaneamente saturado, sem duplicar avaliações.
-          maxAttempts: model === 'openrouter/free' ? 2 : 1,
-        }))
-      : []),
-  ];
-}
-
 function logAIAttempt(
   evaluationType: 'atendimento' | 'chamado_filho',
   ticketId: string,
   record: AIAttemptRecord,
-  nextTarget?: AIModelTarget,
 ): void {
   const details = {
     event: record.status === 'success' ? 'model_succeeded' : 'model_failed',
     evaluation_type: evaluationType,
     ticket_id: ticketId,
     provider: record.provider,
+    routed_provider: record.routedProvider || null,
+    router_attempt: record.routerAttempt || null,
     model: record.model,
     attempt: record.attempt,
     reason: record.reason || null,
     http_status: record.httpStatus || null,
     duration_ms: record.durationMs,
-    next_provider: nextTarget?.provider || null,
-    next_model: nextTarget?.model || null,
     message: record.message || null,
   };
-  const output = `[ai-fallback] ${JSON.stringify(details)}`;
+  const output = `[ai-retry] ${JSON.stringify(details)}`;
   if (record.status === 'failed') console.warn(output);
   else console.info(output);
 }
@@ -1047,95 +1006,6 @@ function logAIAttempt(
 function attemptsFromError(error: unknown): AIAttemptRecord[] {
   const attempts = (error as { attempts?: unknown } | null)?.attempts;
   return Array.isArray(attempts) ? attempts as AIAttemptRecord[] : [];
-}
-
-async function readProviderJSON(response: Response, provider: string, model: string): Promise<any> {
-  try {
-    return await response.json();
-  } catch (error) {
-    const normalized = normalizeAIError(error);
-    if (normalized.reason === 'timeout' || normalized.reason === 'network_error') throw normalized;
-    throw new AIModelError(
-      `${provider}/${model} retornou um envelope JSON inválido: ${error instanceof Error ? error.message : String(error)}`,
-      'response_parse_error',
-      true,
-    );
-  }
-}
-
-async function callConfiguredAIModel(options: {
-  target: AIModelTarget;
-  prompt: string;
-  responseSchema: any;
-  temperature: number;
-  geminiApiKey?: string;
-  openRouterApiKey?: string;
-}): Promise<{ text: string; actualModel?: string }> {
-  const { target, prompt, responseSchema, temperature, geminiApiKey, openRouterApiKey } = options;
-  if (target.provider === 'gemini') {
-    if (!geminiApiKey) {
-      throw new AIModelError('GEMINI_API_KEY não configurada.', 'credentials_error', false, 'provider');
-    }
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${target.model}:generateContent?key=${geminiApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature,
-            responseMimeType: 'application/json',
-            responseSchema: stripAdditionalProperties(responseSchema),
-          },
-        }),
-        signal: AbortSignal.timeout(15000),
-      },
-    );
-    if (!response.ok) throw await httpAIError('gemini', target.model, response);
-    const data = await readProviderJSON(response, 'gemini', target.model);
-    const text = (data.candidates?.[0]?.content?.parts || []).map((part: any) => part.text || '').join('');
-    if (!text.trim()) throw new AIModelError('Gemini retornou resposta vazia.', 'empty_response', true);
-    return { text, actualModel: target.model };
-  }
-
-  if (!openRouterApiKey) {
-    throw new AIModelError('OPENROUTER_API_KEY não configurada.', 'credentials_error', false, 'provider');
-  }
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    signal: AbortSignal.timeout(target.model === 'openrouter/free' ? 60000 : 20000),
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${openRouterApiKey}`,
-      'HTTP-Referer': Deno.env.get('FRONTEND_URL') || 'https://qualitrack.app',
-      'X-Title': 'QualidadeWP',
-    },
-    body: JSON.stringify({
-      model: target.model,
-      temperature,
-      messages: [{ role: 'user', content: `${prompt}\n\nIMPORTANTE: Responda exclusivamente em formato JSON válido.` }],
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'qualitrack_evaluation',
-          strict: true,
-          schema: responseSchema,
-        },
-      },
-      // No modelo dinâmico, limita o roteamento aos provedores que realmente
-      // suportam o schema solicitado. Assim uma resposta JSON parcial não é
-      // confundida com avaliação válida.
-      provider: { require_parameters: true },
-    }),
-  });
-  if (!response.ok) throw await httpAIError('openrouter', target.model, response);
-  const data = await readProviderJSON(response, 'openrouter', target.model);
-  const text = data.choices?.[0]?.message?.content;
-  if (typeof text !== 'string' || !text.trim()) {
-    throw new AIModelError('OpenRouter retornou resposta vazia.', 'empty_response', true);
-  }
-  return { text, actualModel: data.model || target.model };
 }
 
 function validateEvaluationResponse(value: unknown, questionRequired: string[], criticalQuestions: Set<string>): any {
@@ -1186,21 +1056,73 @@ function validateChildEvaluationResponse(value: unknown): any {
   return parsed;
 }
 
+function payloadForRetry(payload: z.infer<typeof RequestSchema>): Record<string, unknown> {
+  const { dialogue, ...rest } = payload;
+  return {
+    ...rest,
+    dialogue_text: payload.dialogue_text || sanitizeDialogue(dialogue || []),
+    ticket_fields: (payload.ticket_fields || []).map((field: { title?: string; value?: string }) => ({
+      title: sanitizeMessageBody(field.title || ''),
+      value: sanitizeMessageBody(field.value || ''),
+    })),
+    agent_info: payload.agent_info ? {
+      team_name: payload.agent_info.team_name,
+      channel: payload.agent_info.channel,
+    } : undefined,
+  };
+}
+
+interface RetryContext { retryCount: number; leaseId: string }
+
 async function executeAndPersistAIJob(
   payload: z.infer<typeof RequestSchema>,
   supabase: SupabaseClient,
   callerId: string,
   evaluate: () => Promise<Response>,
+  retryContext?: RetryContext,
 ): Promise<Response> {
   const jobId = payload.job_id!;
+  let queuePrepared = Boolean(retryContext);
   try {
+    if (!retryContext) {
+      // Registra antes da chamada externa: se a Edge Function cair, o job
+      // permanece recuperável após a janela de segurança de cinco minutos.
+      const { error: queueError } = await supabase.from('ai_evaluation_retry_queue').upsert({
+        ticket_id: payload.ticket_id,
+        job_id: jobId,
+        payload: payloadForRetry(payload),
+        next_retry_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+        retry_count: 0,
+        lease_id: null,
+        lease_until: null,
+      }, { onConflict: 'ticket_id' });
+      if (queueError) throw new Error(`Falha ao preparar reprocessamento: ${queueError.message}`);
+      queuePrepared = true;
+    }
     const response = await evaluate();
     if (!response.ok) {
       const details = await response.clone().json().catch(() => ({}));
+      if (details.retryable === true) {
+        const retryCount = (retryContext?.retryCount || 0) + 1;
+        let query = supabase.from('ai_evaluation_retry_queue').update({
+          retry_count: retryCount,
+          next_retry_at: retryAt(retryContext?.retryCount || 0),
+          lease_id: null,
+          lease_until: null,
+          last_error: String(details.error || `HTTP ${response.status}`).slice(0, 500),
+          updated_at: new Date().toISOString(),
+        }).eq('job_id', jobId);
+        if (retryContext) query = query.eq('lease_id', retryContext.leaseId);
+        const { data: queued, error: queueError } = await query.select('job_id').maybeSingle();
+        if (queueError || !queued) throw new Error('Falha ao agendar reprocessamento da avaliação.');
+        console.warn(`[ai-job] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, status: 'pending_retry', retry_count: retryCount })}`);
+        return jsonResponse({ queued: true, job_id: jobId, message: 'Avaliação pendente; reprocessamento automático agendado.' }, 202);
+      }
       const { error } = await supabase.from('ai_evaluation_jobs')
         .update({ status: 'failed', finished_at: new Date().toISOString(), error_message: String(details.error || `HTTP ${response.status}`).slice(0, 500) })
         .eq('job_id', jobId).eq('status', 'running');
       if (error) console.error('[ai-job] Falha ao registrar erro:', error);
+      await supabase.from('ai_evaluation_retry_queue').delete().eq('job_id', jobId);
       return response;
     }
 
@@ -1222,10 +1144,17 @@ async function executeAndPersistAIJob(
       p_draft: payload.action === 'evaluate_ai' ? payload.draft_meta : null,
     });
     if (error) throw new Error(`Falha ao persistir avaliação: ${error.message}`);
+    await supabase.from('ai_evaluation_retry_queue').delete().eq('job_id', jobId);
     console.info(`[ai-job] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, status: 'completed' })}`);
     return jsonResponse({ ...body, result }, 200);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (queuePrepared) {
+      // Uma falha de persistência/worker não pode descartar o payload durável.
+      // A lease expira e o cron recupera o mesmo job sem criar outro.
+      console.error(`[ai-job] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, status: 'pending_retry', reason: message })}`);
+      return jsonResponse({ queued: true, job_id: jobId, message: 'Avaliação pendente; reprocessamento automático agendado.' }, 202);
+    }
     const { error: updateError } = await supabase.from('ai_evaluation_jobs')
       .update({ status: 'failed', finished_at: new Date().toISOString(), error_message: message.slice(0, 500) })
       .eq('job_id', jobId).eq('status', 'running');
@@ -1233,6 +1162,39 @@ async function executeAndPersistAIJob(
     console.error(`[ai-job] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, status: 'failed', reason: message })}`);
     return jsonResponse({ error: message }, 500);
   }
+}
+
+async function processAIRetries(supabase: SupabaseClient): Promise<Response> {
+  const { data: due, error: claimError } = await supabase.rpc('claim_due_ai_evaluation_retries', { p_limit: 1 });
+  if (claimError) return jsonResponse({ error: 'Falha ao obter a fila de reprocessamento.' }, 500);
+  const item = (due || [])[0] as {
+    ticket_id: string; job_id: string; payload: unknown; retry_count: number; lease_id: string;
+  } | undefined;
+  if (!item) return jsonResponse({ processed: 0 }, 200);
+
+  const parsed = RequestSchema.safeParse(item.payload);
+  const payload = parsed.success ? parsed.data : null;
+  if (!payload || !['evaluate_ai', 'evaluate_child_ticket'].includes(payload.action)
+    || payload.job_id !== item.job_id || payload.ticket_id !== item.ticket_id) {
+    await supabase.from('ai_evaluation_jobs').update({ status: 'failed', finished_at: new Date().toISOString(), error_message: 'Payload de retry inválido.' })
+      .eq('job_id', item.job_id).eq('status', 'running');
+    await supabase.from('ai_evaluation_retry_queue').delete().eq('job_id', item.job_id);
+    return jsonResponse({ processed: 1, status: 'invalid_payload' }, 200);
+  }
+  const { data: job, error: jobError } = await supabase.from('ai_evaluation_jobs')
+    .select('started_by, status').eq('job_id', item.job_id).maybeSingle();
+  if (jobError || !job || job.status !== 'running') {
+    await supabase.from('ai_evaluation_retry_queue').delete().eq('job_id', item.job_id);
+    return jsonResponse({ processed: 0 }, 200);
+  }
+  const evaluate = payload.action === 'evaluate_ai'
+    ? () => handleEvaluateAI(payload, supabase, job.started_by)
+    : () => handleEvaluateChildTicket(payload, supabase, job.started_by);
+  const result = await executeAndPersistAIJob(payload, supabase, job.started_by, evaluate, {
+    retryCount: item.retry_count,
+    leaseId: item.lease_id,
+  });
+  return jsonResponse({ processed: 1, queued: result.status === 202, status: result.status }, 200);
 }
 
 async function handleEvaluateAI(
@@ -1248,28 +1210,9 @@ async function handleEvaluateAI(
 
   const startTime = Date.now();
 
-  // Provedor principal: API nativa do Gemini (Google AI Studio) — mais
-  // confiável por chamada que o pool gratuito do OpenRouter (ver abaixo),
-  // porque não compete com o tráfego de todo mundo que usa modelos :free
-  // no OpenRouter ao mesmo tempo. gemini-3.6-flash é o sucessor recomendado
-  // pelo próprio Google para o antigo gemini-2.5-flash (descontinuado para
-  // novas chaves) — testado manualmente e confirmado respeitando
-  // responseSchema estrito. Tem cota própria por minuto/dia (bem menor que
-  // o pool do OpenRouter), por isso o OpenRouter continua como fallback:
-  // se a cota do dia estourar ou a chamada falhar por qualquer motivo, cai
-  // pra cadeia de modelos gratuitos abaixo antes de desistir de vez.
-  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
-
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'deepseek/deepseek-v4-flash-0731:free,qwen/qwen3.8-27b:free,google/gemma-4-26b-a4b-it:free')
-    .split(',')
-    .map(m => m.trim())
-    .filter(Boolean)
-    .slice(0, 3); // máximo 3 — limite hard da API OpenRouter
-
-  if (!openRouterApiKey && !geminiApiKey) {
-    return jsonResponse({ error: 'Nenhum provedor de IA configurado (OPENROUTER_API_KEY ou GEMINI_API_KEY) no Supabase Secrets' }, 500);
+  if (!openRouterApiKey) {
+    return jsonResponse({ error: 'OPENROUTER_API_KEY não configurada no Supabase Secrets' }, 500);
   }
 
   // Monta o JSON Schema dinamicamente a partir das perguntas da ficha,
@@ -1317,7 +1260,7 @@ async function handleEvaluateAI(
   };
 
   // Sanitização anti-ruído: remove assinaturas, disclaimers legais e decompõe transcrições de chat
-  const dialogueText = sanitizeDialogue(dialogue || []);
+  const dialogueText = payload.dialogue_text || sanitizeDialogue(dialogue || []);
 
   const criteriaText = form_criteria.sections
     .map((s: any) => `Seção "${s.title}":\n${(s.questions || []).map((q: any) => `- [${q.id}] ${q.text}${q.is_critical ? ' (ERRO CRÍTICO)' : ''}`).join('\n')}`)
@@ -1388,9 +1331,9 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
    já respondeu nos passos 1 e 2. NUNCA deixe "score" ou "summary" vazios/zerados: eles resumem o que você
    acabou de avaliar.`;
 
-  const aiTargets = configuredAIModels(geminiApiKey, geminiModel, openRouterApiKey, openRouterModels);
+  const aiTargets = [OPENROUTER_TARGET];
   let pipelineAttempts: AIAttemptRecord[] = [];
-  console.info(`[ai-fallback] ${JSON.stringify({
+  console.info(`[ai-retry] ${JSON.stringify({
     event: 'pipeline_started', evaluation_type: 'atendimento', ticket_id: String(ticket_id),
     chain: aiTargets.map(target => ({ provider: target.provider, model: target.model, max_attempts: target.maxAttempts })),
   })}`);
@@ -1399,26 +1342,27 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     const chain = await runAIModelChain({
       targets: aiTargets,
       execute: async target => {
-        const response = await callConfiguredAIModel({
-          target,
+        const response = await callOpenRouter({
           prompt,
           responseSchema,
-          temperature: 0.2,
-          geminiApiKey,
-          openRouterApiKey,
+          apiKey: openRouterApiKey,
         });
         return {
           value: validateEvaluationResponse(parseModelJSON(response.text), questionRequired, criticalQuestions),
-          actualModel: response.actualModel,
+          actualModel: target.model,
+          routedProvider: response.routedProvider,
+          routerAttempt: response.routerAttempt,
         };
       },
-      onAttempt: (record, nextTarget) => logAIAttempt('atendimento', String(ticket_id), record, nextTarget),
+      onAttempt: record => logAIAttempt('atendimento', String(ticket_id), record),
     });
     const parsed = chain.value;
     pipelineAttempts = chain.attempts;
-    console.info(`[ai-fallback] ${JSON.stringify({
+    console.info(`[ai-retry] ${JSON.stringify({
       event: 'pipeline_completed', evaluation_type: 'atendimento', ticket_id: String(ticket_id),
       provider: chain.provider, model: chain.model, fallback_used: chain.fallbackUsed,
+      routed_provider: chain.routedProvider || null,
+      provider_failover_used: (chain.routerAttempt || 1) > 1,
       attempts: chain.attempts.length,
     })}`);
 
@@ -1471,8 +1415,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     }, 200);
   } catch (error: any) {
     pipelineAttempts = attemptsFromError(error);
-    console.error('[helpdesk-queue] Erro na avaliação com IA (todos os provedores falharam):', error);
-    console.error(`[ai-fallback] ${JSON.stringify({
+    console.error(`[ai-retry] ${JSON.stringify({
       event: 'pipeline_failed', evaluation_type: 'atendimento', ticket_id: String(ticket_id),
       reason: error?.reason || 'unknown_error', message: error?.message || String(error),
       attempts: pipelineAttempts.length,
@@ -1483,20 +1426,23 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
         ticket_id: String(ticket_id),
         ticket_subject: `Ticket #${ticket_id}`,
         evaluation_type: 'atendimento',
-        provider: geminiApiKey ? 'gemini' : 'openrouter',
-        model: geminiApiKey ? geminiModel : (openRouterModels[0] || 'unknown'),
+        provider: 'openrouter',
+        model: OPENROUTER_MODEL,
         duration_ms: Date.now() - startTime,
         prompt_text: prompt,
         sanitized_dialogue: dialogueText,
         status: 'error',
         error_message: error?.message || 'Falha ao avaliar com IA',
         attempts: pipelineAttempts,
-        fallback_used: pipelineAttempts.some(attempt => attempt.provider === 'openrouter'),
+        fallback_used: false,
         created_by: callerId || null,
       });
     } catch (_) {}
 
-    return jsonResponse({ error: error.message || 'Falha ao avaliar com IA' }, 502);
+    return jsonResponse({
+      error: error.message || 'Falha ao avaliar com IA',
+      retryable: error instanceof AIModelError && error.retryable,
+    }, 502);
   }
 }
 
@@ -1512,20 +1458,12 @@ async function handleEvaluateChildTicket(
   }
 
   const startTime = Date.now();
-  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash';
   const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
-  const openRouterModels = (Deno.env.get('OPENROUTER_MODEL') || 'deepseek/deepseek-v4-flash-0731:free,qwen/qwen3.8-27b:free,google/gemma-4-26b-a4b-it:free')
-    .split(',')
-    .map(m => m.trim())
-    .filter(Boolean)
-    .slice(0, 3); // máximo 3 — limite hard da API OpenRouter
-
-  if (!openRouterApiKey && !geminiApiKey) {
-    return jsonResponse({ error: 'Nenhum provedor de IA configurado no Supabase Secrets' }, 500);
+  if (!openRouterApiKey) {
+    return jsonResponse({ error: 'OPENROUTER_API_KEY não configurada no Supabase Secrets' }, 500);
   }
 
-  const dialogueText = sanitizeDialogue(dialogue || []);
+  const dialogueText = payload.dialogue_text || sanitizeDialogue(dialogue || []);
   const ticketFieldsText = (ticket_fields || []).map((f: any) => `- ${sanitizeMessageBody(f.title)}: ${sanitizeMessageBody(f.value)}`).join('\n');
   const tagsText = (tags || []).map((tag: string) => sanitizeMessageBody(tag)).join(', ');
 
@@ -1646,9 +1584,9 @@ CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
 
 Analise os dados reais do ticket contra essas regras operacionais e gere o parecer estritamente no JSON do schema.`;
 
-  const aiTargets = configuredAIModels(geminiApiKey, geminiModel, openRouterApiKey, openRouterModels);
+  const aiTargets = [OPENROUTER_TARGET];
   let pipelineAttempts: AIAttemptRecord[] = [];
-  console.info(`[ai-fallback] ${JSON.stringify({
+  console.info(`[ai-retry] ${JSON.stringify({
     event: 'pipeline_started', evaluation_type: 'chamado_filho', ticket_id: String(ticket_id),
     chain: aiTargets.map(target => ({ provider: target.provider, model: target.model, max_attempts: target.maxAttempts })),
   })}`);
@@ -1657,26 +1595,27 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     const chain = await runAIModelChain({
       targets: aiTargets,
       execute: async target => {
-        const response = await callConfiguredAIModel({
-          target,
+        const response = await callOpenRouter({
           prompt,
           responseSchema,
-          temperature: 0.1,
-          geminiApiKey,
-          openRouterApiKey,
+          apiKey: openRouterApiKey,
         });
         return {
           value: validateChildEvaluationResponse(parseModelJSON(response.text)),
-          actualModel: response.actualModel,
+          actualModel: target.model,
+          routedProvider: response.routedProvider,
+          routerAttempt: response.routerAttempt,
         };
       },
-      onAttempt: (record, nextTarget) => logAIAttempt('chamado_filho', String(ticket_id), record, nextTarget),
+      onAttempt: record => logAIAttempt('chamado_filho', String(ticket_id), record),
     });
     const parsed = chain.value;
     pipelineAttempts = chain.attempts;
-    console.info(`[ai-fallback] ${JSON.stringify({
+    console.info(`[ai-retry] ${JSON.stringify({
       event: 'pipeline_completed', evaluation_type: 'chamado_filho', ticket_id: String(ticket_id),
       provider: chain.provider, model: chain.model, fallback_used: chain.fallbackUsed,
+      routed_provider: chain.routedProvider || null,
+      provider_failover_used: (chain.routerAttempt || 1) > 1,
       attempts: chain.attempts.length,
     })}`);
 
@@ -1704,8 +1643,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     return jsonResponse({ success: true, result: parsed }, 200);
   } catch (err: any) {
     pipelineAttempts = attemptsFromError(err);
-    console.error('[helpdesk-queue] Erro ao avaliar chamado filho:', err);
-    console.error(`[ai-fallback] ${JSON.stringify({
+    console.error(`[ai-retry] ${JSON.stringify({
       event: 'pipeline_failed', evaluation_type: 'chamado_filho', ticket_id: String(ticket_id),
       reason: err?.reason || 'unknown_error', message: err?.message || String(err),
       attempts: pipelineAttempts.length,
@@ -1715,18 +1653,21 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
         ticket_id: String(ticket_id),
         ticket_subject: ticket_subject || `Chamado Filho #${ticket_id}`,
         evaluation_type: 'chamado_filho',
-        provider: geminiApiKey ? 'gemini' : 'openrouter',
-        model: geminiApiKey ? geminiModel : 'unknown',
+        provider: 'openrouter',
+        model: OPENROUTER_MODEL,
         duration_ms: Date.now() - startTime,
         prompt_text: prompt,
         sanitized_dialogue: dialogueText,
         status: 'error',
         error_message: err.message,
         attempts: pipelineAttempts,
-        fallback_used: pipelineAttempts.some(attempt => attempt.provider === 'openrouter'),
+        fallback_used: false,
         created_by: callerId || null,
       });
     } catch (_) {}
-    return jsonResponse({ error: err.message || 'Falha ao avaliar chamado filho' }, 502);
+    return jsonResponse({
+      error: err.message || 'Falha ao avaliar chamado filho',
+      retryable: err instanceof AIModelError && err.retryable,
+    }, 502);
   }
 }

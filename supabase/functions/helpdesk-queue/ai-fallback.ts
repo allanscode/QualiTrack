@@ -1,4 +1,4 @@
-export type AIProvider = 'gemini' | 'openrouter';
+export type AIProvider = 'openrouter';
 
 export type AIFailureReason =
   | 'timeout'
@@ -29,6 +29,8 @@ export interface AIAttemptRecord {
   message?: string;
   httpStatus?: number;
   durationMs: number;
+  routedProvider?: string;
+  routerAttempt?: number;
 }
 
 export interface AIChainResult<T> {
@@ -37,6 +39,8 @@ export interface AIChainResult<T> {
   model: string;
   attempts: AIAttemptRecord[];
   fallbackUsed: boolean;
+  routedProvider?: string;
+  routerAttempt?: number;
 }
 
 export class AIModelError extends Error {
@@ -61,18 +65,19 @@ export function normalizeAIError(error: unknown): AIModelError {
   const message = errorMessage(error);
   const name = error instanceof Error ? error.name : '';
   if (name === 'TimeoutError' || name === 'AbortError' || /timed?\s*out|timeout/i.test(message)) {
-    return new AIModelError(message, 'timeout', true);
+    return new AIModelError('Tempo limite excedido ao chamar OpenRouter.', 'timeout', true);
   }
   if (/fetch|network|connection|socket|dns/i.test(message)) {
-    return new AIModelError(message, 'network_error', true);
+    return new AIModelError('Falha de rede ao chamar OpenRouter.', 'network_error', true);
   }
-  return new AIModelError(message, 'unknown_error', true);
+  return new AIModelError('Falha inesperada ao chamar OpenRouter.', 'unknown_error', true);
 }
 
 export async function httpAIError(provider: AIProvider, model: string, response: Response): Promise<AIModelError> {
-  const body = (await response.text().catch(() => '')).slice(0, 1200);
-  const detail = `${provider}/${model} retornou HTTP ${response.status}${body ? `: ${body}` : ''}`;
+  // Nunca incluir o corpo do provedor: ele pode ecoar dados da requisição.
+  const detail = `${provider}/${model} retornou HTTP ${response.status}`;
   if (response.status === 429) return new AIModelError(detail, 'rate_limit', true, 'attempt', 429);
+  if (response.status === 408) return new AIModelError(detail, 'timeout', true, 'attempt', 408);
   if (response.status >= 500) return new AIModelError(detail, 'server_error', true, 'attempt', response.status);
   if (response.status === 401 || response.status === 403) {
     return new AIModelError(detail, 'credentials_error', false, 'provider', response.status);
@@ -106,25 +111,24 @@ export function incompleteResponse(message: string): never {
 
 export interface RunAIModelChainOptions<T> {
   targets: AIModelTarget[];
-  execute: (target: AIModelTarget, attempt: number) => Promise<{ value: T; actualModel?: string }>;
-  onAttempt?: (record: AIAttemptRecord, nextTarget?: AIModelTarget) => void;
+  execute: (target: AIModelTarget, attempt: number) => Promise<{ value: T; actualModel?: string; routedProvider?: string; routerAttempt?: number }>;
+  onAttempt?: (record: AIAttemptRecord) => void;
   sleep?: (milliseconds: number) => Promise<void>;
 }
 
 export async function runAIModelChain<T>(options: RunAIModelChainOptions<T>): Promise<AIChainResult<T>> {
-  if (options.targets.length === 0) {
-    throw new AIModelError('Nenhum modelo de IA configurado.', 'request_configuration_error', false, 'global');
+  if (options.targets.length !== 1 || options.targets[0].provider !== 'openrouter'
+    || options.targets[0].model !== 'z-ai/glm-5.3-flash') {
+    throw new AIModelError('A avaliação exige somente o GLM 5.3 Flash via OpenRouter.', 'request_configuration_error', false, 'global');
   }
 
   const attempts: AIAttemptRecord[] = [];
   const sleep = options.sleep || ((milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds)));
   let lastError: AIModelError | undefined;
-
-  for (let targetIndex = 0; targetIndex < options.targets.length; targetIndex++) {
-    const target = options.targets[targetIndex];
-    for (let attempt = 1; attempt <= target.maxAttempts; attempt++) {
-      const startedAt = Date.now();
-      try {
+  const target = options.targets[0];
+  for (let attempt = 1; attempt <= target.maxAttempts; attempt++) {
+    const startedAt = Date.now();
+    try {
         const result = await options.execute(target, attempt);
         const record: AIAttemptRecord = {
           provider: target.provider,
@@ -132,6 +136,8 @@ export async function runAIModelChain<T>(options: RunAIModelChainOptions<T>): Pr
           attempt,
           status: 'success',
           durationMs: Date.now() - startedAt,
+          routedProvider: result.routedProvider,
+          routerAttempt: result.routerAttempt,
         };
         attempts.push(record);
         options.onAttempt?.(record);
@@ -140,13 +146,14 @@ export async function runAIModelChain<T>(options: RunAIModelChainOptions<T>): Pr
           provider: target.provider,
           model: result.actualModel || target.model,
           attempts,
-          fallbackUsed: targetIndex > 0,
+          fallbackUsed: (result.routerAttempt || 1) > 1,
+          routedProvider: result.routedProvider,
+          routerAttempt: result.routerAttempt,
         };
-      } catch (error) {
+    } catch (error) {
         const normalized = normalizeAIError(error);
         lastError = normalized;
         const shouldRetry = normalized.retryable && attempt < target.maxAttempts;
-        const nextTarget = shouldRetry ? target : options.targets[targetIndex + 1];
         const record: AIAttemptRecord = {
           provider: target.provider,
           model: target.model,
@@ -158,26 +165,14 @@ export async function runAIModelChain<T>(options: RunAIModelChainOptions<T>): Pr
           durationMs: Date.now() - startedAt,
         };
         attempts.push(record);
-        options.onAttempt?.(record, nextTarget);
-
-        if (normalized.scope === 'global') {
-          throw Object.assign(normalized, { attempts });
-        }
-        if (normalized.scope === 'provider') {
-          while (targetIndex + 1 < options.targets.length
-            && options.targets[targetIndex + 1].provider === target.provider) {
-            targetIndex++;
-          }
-          break;
-        }
+        options.onAttempt?.(record);
         if (!shouldRetry) break;
-        await sleep(attempt === 1 ? 400 : 1200);
-      }
+        await sleep(Math.min(500 * 2 ** (attempt - 1), 4000));
     }
   }
 
   throw Object.assign(
-    lastError || new AIModelError('Todos os modelos de IA falharam.', 'unknown_error', true),
+    lastError || new AIModelError('Todas as tentativas com OpenRouter falharam.', 'unknown_error', true),
     { attempts },
   );
 }

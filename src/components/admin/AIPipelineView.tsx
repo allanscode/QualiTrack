@@ -62,7 +62,7 @@ export default function AIPipelineView() {
           </div>
           <h4 className="font-bold text-brand-primary">Execução & Validação</h4>
           <p className="text-brand-muted text-[11px] leading-relaxed">
-            Executa no Google Gemini com JSON Schema estrito (e fallback automático OpenRouter se necessário).
+            Executa o GLM 5.3 Flash pelo OpenRouter com JSON Schema estrito e failover entre providers do mesmo modelo.
           </p>
         </Card>
       </div>
@@ -117,19 +117,19 @@ export default function AIPipelineView() {
         </div>
       </Card>
 
-      {/* Provedores & Resiliência */}
+      {/* Modelo & Resiliência */}
       <Card className="p-5 space-y-4 bg-surface-card">
         <div className="flex items-center gap-2">
           <Zap className="w-4 h-4 text-amber-500" />
-          <h4 className="text-sm font-bold text-brand-primary">Arquitetura de Modelos & Fallback em Camadas</h4>
+          <h4 className="text-sm font-bold text-brand-primary">Modelo de Avaliação & Tentativas</h4>
         </div>
 
         <div className="space-y-2 text-[11px] text-brand-muted">
           <p>
-            • <strong>Provedor 1 (Principal):</strong> Google AI Studio (<code className="font-mono text-brand-primary font-bold">gemini-3.6-flash</code> padrão gratuito, com cascata imediata para <code className="font-mono text-brand-primary font-bold">gemini-3.5-flash-lite</code> em caso de pico de demanda). Alta velocidade, suporte nativo a JSON Schema estrito e ampla janela de contexto.
+            • <strong>Modelo único:</strong> GLM 5.3 Flash (<code className="font-mono text-brand-primary font-bold">z-ai/glm-5.3-flash</code>) pelo OpenRouter, acessado exclusivamente pela Edge Function com chave armazenada em secret.
           </p>
           <p>
-            • <strong>Provedor 2 (Fallback Externo):</strong> OpenRouter (<code className="font-mono text-brand-primary font-bold">deepseek/deepseek-v4-flash-0731:free, qwen/qwen3.8-27b:free</code>). Ativado de forma invisível caso a API do Google atinja cota por minuto ou oscilação de rede, garantindo que a triagem nunca trave.
+            • <strong>Resiliência:</strong> failover automático entre providers do mesmo modelo, até três novas tentativas com espera progressiva e reprocessamento posterior em falhas transitórias.
           </p>
         </div>
       </Card>

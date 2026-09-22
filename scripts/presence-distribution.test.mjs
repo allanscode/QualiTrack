@@ -27,6 +27,10 @@ const workerOwnedMigration = readFile(
   new URL('../supabase/migrations/20260922000012_ai_worker_owns_running_jobs.sql', import.meta.url),
   'utf8',
 );
+const aiRetryMigration = readFile(
+  new URL('../supabase/migrations/20260922000013_ai_retry_queue.sql', import.meta.url),
+  'utf8',
+);
 const id = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const session = n => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -112,6 +116,7 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
     await db.exec(await stableMigration);
     await db.exec(await serverOwnedMigration);
     await db.exec(await workerOwnedMigration);
+    await db.exec(await aiRetryMigration);
 
     const asSession = async (userId, sessionId, run) => {
       await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [userId]);
@@ -348,6 +353,33 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
       } finally {
         await db.exec('RESET ROLE');
       }
+    });
+
+    await t.test('fila de retry é privada, usa lease e não reprocessa job concluído', async () => {
+      const claim = await asSession(id(2), session(7), () => db.query(
+        "SELECT * FROM claim_ai_evaluation_job('retry-1','atendimento')"));
+      const jobId = claim.rows[0].job_id;
+      await db.exec('SET ROLE service_role');
+      try {
+        await db.query(`INSERT INTO ai_evaluation_retry_queue(ticket_id,job_id,payload,next_retry_at)
+          VALUES ('retry-1',$1,'{"action":"evaluate_ai"}'::jsonb,now()-interval '1 minute')`, [jobId]);
+      } finally { await db.exec('RESET ROLE'); }
+      await assert.rejects(asSession(id(2), session(7), () => db.query(
+        'SELECT * FROM ai_evaluation_retry_queue')), /permission denied/);
+      await db.exec('SET ROLE service_role');
+      try {
+        const first = await db.query('SELECT * FROM claim_due_ai_evaluation_retries(1)');
+        assert.equal(first.rows.length, 1);
+        assert.equal(first.rows[0].job_id, jobId);
+        assert.equal((await db.query('SELECT * FROM claim_due_ai_evaluation_retries(1)')).rows.length, 0);
+        await db.query("UPDATE ai_evaluation_retry_queue SET lease_until=now()-interval '1 second' WHERE job_id=$1", [jobId]);
+        assert.equal((await db.query('SELECT * FROM claim_due_ai_evaluation_retries(1)')).rows.length, 1);
+        await db.exec('RESET ROLE');
+        await db.query("UPDATE ai_evaluation_jobs SET status='completed' WHERE job_id=$1", [jobId]);
+        await db.exec('SET ROLE service_role');
+        await db.query("UPDATE ai_evaluation_retry_queue SET lease_until=NULL WHERE job_id=$1", [jobId]);
+        assert.equal((await db.query('SELECT * FROM claim_due_ai_evaluation_retries(1)')).rows.length, 0);
+      } finally { await db.exec('RESET ROLE'); }
     });
 
     await t.test('dois tickets dão 1/1 e cinco tickets dão 3/2', async () => {

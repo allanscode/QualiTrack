@@ -393,12 +393,13 @@ ${checksSummary}${recs}`;
     ticket_id: string;
     subject?: string;
     agent_name?: string;
-    status: 'pending' | 'processing' | 'done' | 'error';
+    status: 'pending' | 'processing' | 'done' | 'queued' | 'error';
   }
 
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     done: number;
+    queued: number;
     errors: number;
     total: number;
     currentTicketId: string;
@@ -782,7 +783,7 @@ ${checksSummary}${recs}`;
       ticket.dialogue = dialogue;
 
       if (toastId) toast.loading(
-        `🤖 Etapa 2/3 · Analisando com IA (Gemini → OpenRouter como fallback)...`,
+        `🤖 Etapa 2/3 · Analisando com IA (GLM 5.3 Flash via OpenRouter)...`,
         { id: toastId, duration: Infinity }
       );
 
@@ -792,6 +793,11 @@ ${checksSummary}${recs}`;
         team_name: teamId ? teamsMap[teamId] : undefined,
         channel: ticket.channel,
       }, guidelineIds, ticketFields, jobId, draftMeta);
+
+      if ('queued' in aiResult) {
+        if (toastId) toast.info(`Ticket #${ticket.ticket_id} pendente: a IA tentará novamente automaticamente.`, { id: toastId, duration: 6000 });
+        return 'queued' as const;
+      }
 
       aiResult.ticket_fields = ticketFields;
       aiResult.dialogue = dialogue;
@@ -893,6 +899,7 @@ ${checksSummary}${recs}`;
     batchCancelRef.current = false;
     setBatchProgress({
       done: 0,
+      queued: 0,
       errors: 0,
       total: pending.length,
       currentTicketId: pending[0]?.ticket_id || '',
@@ -902,6 +909,7 @@ ${checksSummary}${recs}`;
     });
 
     let done = 0;
+    let queued = 0;
     let errors = 0;
 
     for (let i = 0; i < pending.length; i++) {
@@ -925,6 +933,7 @@ ${checksSummary}${recs}`;
       initialItems[i].status = 'processing';
       setBatchProgress({
         done,
+        queued,
         errors,
         total: pending.length,
         currentTicketId: ticket.ticket_id,
@@ -934,9 +943,14 @@ ${checksSummary}${recs}`;
       });
 
       try {
-        await handleEvaluateWithAI(ticket, autoForm, guidelineIds, true);
-        done++;
-        initialItems[i].status = 'done';
+        const outcome = await handleEvaluateWithAI(ticket, autoForm, guidelineIds, true);
+        if (outcome === 'queued') {
+          queued++;
+          initialItems[i].status = 'queued';
+        } else {
+          done++;
+          initialItems[i].status = 'done';
+        }
       } catch {
         errors++;
         initialItems[i].status = 'error';
@@ -945,6 +959,7 @@ ${checksSummary}${recs}`;
       setBatchProgress(prev => prev ? {
         ...prev,
         done,
+        queued,
         errors,
         items: [...initialItems],
       } : null);
@@ -958,7 +973,9 @@ ${checksSummary}${recs}`;
     if (cancelled) {
       toast.warning(`⏸ Lote interrompido — ${done}/${pending.length} tickets avaliados.`, { duration: 5000 });
     } else if (errors > 0) {
-      toast.warning(`✅ Lote concluído — ${done} avaliados, ${errors} falharam. Verifique os tickets com erro.`, { duration: 8000 });
+      toast.warning(`Lote concluído — ${done} avaliados, ${queued} pendentes de reprocessamento, ${errors} falharam.`, { duration: 8000 });
+    } else if (queued > 0) {
+      toast.info(`Lote concluído — ${done} avaliados, ${queued} pendentes de reprocessamento automático.`, { duration: 8000 });
     } else {
       toast.success(`✅ Lote concluído — ${done}/${pending.length} tickets avaliados com sucesso!`, { duration: 6000 });
     }
@@ -1001,6 +1018,11 @@ ${checksSummary}${recs}`;
         ticket.child_macro_type,
         jobId
       );
+
+      if ('queued' in result) {
+        toast.info(`Chamado filho #${ticket.ticket_id} pendente: reprocessamento automático agendado.`);
+        return;
+      }
 
       if (isMockMode) await completeAIJob(ticket.ticket_id, jobId, result);
       setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
@@ -2293,7 +2315,7 @@ ${checksSummary}${recs}`;
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-black text-brand-primary tracking-tight">Avaliação em Lote com IA</h3>
                     <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-brand-highlight/10 text-brand-highlight border border-brand-highlight/20">
-                      {Math.min(batchProgress.total, batchProgress.done + 1)} de {batchProgress.total}
+                      {Math.min(batchProgress.total, batchProgress.done + batchProgress.queued + batchProgress.errors + 1)} de {batchProgress.total}
                     </span>
                   </div>
                   <p className="text-xs text-brand-muted truncate">Auditoria automatizada de conformidade e critérios operacionais</p>
@@ -2337,24 +2359,28 @@ ${checksSummary}${recs}`;
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-brand-muted font-semibold">Progresso Geral</span>
                 <span className="text-brand-highlight font-mono font-black text-sm">
-                  {batchProgress.total > 0 ? Math.round((batchProgress.done / batchProgress.total) * 100) : 0}%
+                  {batchProgress.total > 0 ? Math.round(((batchProgress.done + batchProgress.queued + batchProgress.errors) / batchProgress.total) * 100) : 0}%
                 </span>
               </div>
 
               <div className="w-full h-3 bg-surface-border/60 rounded-full overflow-hidden p-0.5 border border-surface-border">
                 <div
                   className="h-full bg-gradient-to-r from-[#0A1F44] via-[#B3141B] to-brand-highlight rounded-full transition-all duration-500 shadow-sm"
-                  style={{ width: `${batchProgress.total > 0 ? Math.max(4, Math.round((batchProgress.done / batchProgress.total) * 100)) : 0}%` }}
+                  style={{ width: `${batchProgress.total > 0 ? Math.max(4, Math.round(((batchProgress.done + batchProgress.queued + batchProgress.errors) / batchProgress.total) * 100)) : 0}%` }}
                 />
               </div>
 
-              <div className="grid grid-cols-4 gap-2 pt-1">
+              <div className="grid grid-cols-5 gap-2 pt-1">
                 <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
                   <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Avaliados</div>
                   <div className="text-sm font-black text-functional-success font-mono flex items-center justify-center gap-1 mt-0.5">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     {batchProgress.done}
                   </div>
+                </div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Reprocessamento</div>
+                  <div className="text-sm font-black text-brand-highlight font-mono mt-0.5">{batchProgress.queued}</div>
                 </div>
                 <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
                   <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Falhas</div>
@@ -2367,7 +2393,7 @@ ${checksSummary}${recs}`;
                   <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Restantes</div>
                   <div className="text-sm font-black text-brand-primary font-mono flex items-center justify-center gap-1 mt-0.5">
                     <Clock className="w-3.5 h-3.5 text-brand-muted" />
-                    {Math.max(0, batchProgress.total - batchProgress.done - batchProgress.errors)}
+                    {Math.max(0, batchProgress.total - batchProgress.done - batchProgress.queued - batchProgress.errors)}
                   </div>
                 </div>
                 <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
@@ -2395,6 +2421,8 @@ ${checksSummary}${recs}`;
                           ? 'bg-brand-highlight/10 border border-brand-highlight/30 text-brand-primary font-bold'
                           : it.status === 'done'
                           ? 'bg-functional-success/5 text-slate-700 dark:text-slate-300'
+                          : it.status === 'queued'
+                          ? 'bg-brand-highlight/5 text-brand-primary'
                           : it.status === 'error'
                           ? 'bg-functional-error/5 text-functional-error'
                           : 'text-brand-muted'
@@ -2403,6 +2431,7 @@ ${checksSummary}${recs}`;
                       <div className="flex items-center gap-2 min-w-0">
                         {it.status === 'processing' && <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-highlight shrink-0" />}
                         {it.status === 'done' && <CheckCircle2 className="w-3.5 h-3.5 text-functional-success shrink-0" />}
+                        {it.status === 'queued' && <Clock className="w-3.5 h-3.5 text-brand-highlight shrink-0" />}
                         {it.status === 'error' && <XCircle className="w-3.5 h-3.5 text-functional-error shrink-0" />}
                         {it.status === 'pending' && <Clock className="w-3.5 h-3.5 text-brand-muted shrink-0" />}
                         <span className="font-mono text-[11px] shrink-0 font-bold">#{it.ticket_id}</span>
@@ -2411,6 +2440,7 @@ ${checksSummary}${recs}`;
                       <span className="text-[10px] font-semibold shrink-0 ml-2">
                         {it.status === 'processing' && <span className="text-brand-highlight font-bold">Auditando</span>}
                         {it.status === 'done' && <span className="text-functional-success font-bold">Concluído</span>}
+                        {it.status === 'queued' && <span className="text-brand-highlight font-bold">Reprocessar</span>}
                         {it.status === 'error' && <span className="text-functional-error font-bold">Falhou</span>}
                         {it.status === 'pending' && <span className="text-brand-muted">Aguardando</span>}
                       </span>

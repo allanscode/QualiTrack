@@ -739,7 +739,7 @@ function MainApp({
       list.push({
         id: 'system-status-ok',
         title: 'Sistema QualidadeWP Conectado',
-        message: 'Integração Zendesk API e IA Gemini sincronizadas em tempo real.',
+        message: 'Integração Zendesk API e IA OpenRouter sincronizadas em tempo real.',
         time: `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`,
         type: 'sistema',
         iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',

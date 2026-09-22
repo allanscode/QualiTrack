@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AIModelError,
+  httpAIError,
   incompleteResponse,
   parseModelJSON,
   runAIModelChain,
@@ -8,19 +9,17 @@ import {
 } from './ai-fallback';
 
 const targets: AIModelTarget[] = [
-  { provider: 'gemini', model: 'gemini-primary', maxAttempts: 3 },
-  { provider: 'openrouter', model: 'fallback-one', maxAttempts: 1 },
-  { provider: 'openrouter', model: 'fallback-two', maxAttempts: 1 },
+  { provider: 'openrouter', model: 'z-ai/glm-5.3-flash', maxAttempts: 4 },
 ];
-
 const noSleep = async () => undefined;
 
-describe('AI fallback pipeline', () => {
-  it('retorna imediatamente quando o Gemini funciona', async () => {
+describe('GLM 5.3 Flash exclusivo com retry', () => {
+  it('conclui na primeira tentativa quando o OpenRouter responde corretamente', async () => {
     const execute = vi.fn(async target => ({ value: { model: target.model } }));
     const result = await runAIModelChain({ targets, execute, sleep: noSleep });
-    expect(result.model).toBe('gemini-primary');
+    expect(result.model).toBe('z-ai/glm-5.3-flash');
     expect(result.fallbackUsed).toBe(false);
+    expect(result.attempts).toHaveLength(1);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
@@ -28,63 +27,47 @@ describe('AI fallback pipeline', () => {
     ['HTTP 500', new AIModelError('500', 'server_error', true, 'attempt', 500)],
     ['timeout', new AIModelError('timeout', 'timeout', true)],
     ['HTTP 429', new AIModelError('429', 'rate_limit', true, 'attempt', 429)],
+    ['resposta vazia', () => parseModelJSON('')],
     ['JSON inválido', () => parseModelJSON('{invalido')],
+    ['erro de parsing', new AIModelError('envelope inválido', 'response_parse_error', true)],
     ['resposta incompleta', () => incompleteResponse('answers ausente')],
-  ])('tenta o Gemini três vezes e chama o próximo modelo em %s', async (_label, failure) => {
-    const calls: string[] = [];
-    const execute = vi.fn(async (target: AIModelTarget) => {
-      calls.push(target.model);
-      if (target.provider === 'gemini') {
+  ])('tenta novamente e conclui após %s', async (_label, failure) => {
+    const execute = vi.fn(async (_target: AIModelTarget, attempt: number) => {
+      if (attempt < 3) {
         if (typeof failure === 'function') failure();
         throw failure;
       }
-      return { value: { model: target.model } };
+      return { value: 'avaliação válida' };
     });
-    const result = await runAIModelChain({ targets, execute, sleep: noSleep });
-    expect(calls).toEqual(['gemini-primary', 'gemini-primary', 'gemini-primary', 'fallback-one']);
-    expect(result.model).toBe('fallback-one');
-    expect(result.fallbackUsed).toBe(true);
-    expect(result.attempts).toHaveLength(4);
+    const sleeps: number[] = [];
+    const result = await runAIModelChain({ targets, execute, sleep: async ms => { sleeps.push(ms); } });
+    expect(execute).toHaveBeenCalledTimes(3);
+    expect(result.value).toBe('avaliação válida');
+    expect(result.attempts.map(record => record.status)).toEqual(['failed', 'failed', 'success']);
+    expect(sleeps).toEqual([500, 1000]);
   });
 
-  it('avança por todos os fallbacks quando o Gemini falha em todas as tentativas', async () => {
-    const calls: string[] = [];
-    const execute = async (target: AIModelTarget) => {
-      calls.push(target.model);
-      if (target.model !== 'fallback-two') throw new AIModelError('falha simulada', 'server_error', true);
-      return { value: 'resultado final' };
-    };
-    const result = await runAIModelChain({ targets, execute, sleep: noSleep });
-    expect(calls).toEqual([
-      'gemini-primary', 'gemini-primary', 'gemini-primary', 'fallback-one', 'fallback-two',
-    ]);
-    expect(result.value).toBe('resultado final');
+  it('falha somente após quatro tentativas e três backoffs progressivos', async () => {
+    const execute = vi.fn(async () => { throw new AIModelError('indisponível', 'server_error', true); });
+    const sleeps: number[] = [];
+    await expect(runAIModelChain({ targets, execute, sleep: async ms => { sleeps.push(ms); } }))
+      .rejects.toMatchObject({ reason: 'server_error', attempts: expect.arrayContaining([expect.objectContaining({ attempt: 4 })]) });
+    expect(execute).toHaveBeenCalledTimes(4);
+    expect(sleeps).toEqual([500, 1000, 2000]);
   });
 
-  it('não insiste em credencial inválida e identifica a causa antes do próximo provedor', async () => {
-    const calls: string[] = [];
-    const result = await runAIModelChain({
-      targets,
-      sleep: noSleep,
-      execute: async target => {
-        calls.push(target.model);
-        if (target.provider === 'gemini') {
-          throw new AIModelError('API key inválida', 'credentials_error', false, 'provider', 401);
-        }
-        return { value: 'fallback válido' };
-      },
-    });
-    expect(calls).toEqual(['gemini-primary', 'fallback-one']);
-    expect(result.attempts[0]).toMatchObject({ reason: 'credentials_error', httpStatus: 401 });
-  });
-
-  it('interrompe toda a cadeia quando a configuração da requisição é globalmente inválida', async () => {
-    const execute = vi.fn(async () => {
-      throw new AIModelError('schema inválido', 'request_configuration_error', false, 'global', 400);
-    });
-    await expect(runAIModelChain({ targets, execute, sleep: noSleep })).rejects.toMatchObject({
-      reason: 'request_configuration_error',
-    });
+  it.each([401, 403, 400, 404])('não repete erro definitivo HTTP %i', async status => {
+    const error = await httpAIError('openrouter', 'z-ai/glm-5.3-flash', new Response('detalhes privados', { status }));
+    const execute = vi.fn(async () => { throw error; });
+    await expect(runAIModelChain({ targets, execute, sleep: noSleep })).rejects.toMatchObject({ httpStatus: status });
     expect(execute).toHaveBeenCalledTimes(1);
+    expect(error.message).not.toContain('detalhes privados');
+  });
+
+  it('recusa qualquer cadeia com outro modelo', async () => {
+    const execute = vi.fn();
+    await expect(runAIModelChain({ targets: [...targets, ...targets], execute, sleep: noSleep }))
+      .rejects.toMatchObject({ reason: 'request_configuration_error' });
+    expect(execute).not.toHaveBeenCalled();
   });
 });

@@ -366,11 +366,13 @@ export async function fetchTicketDialogue(ticketId: string): Promise<TicketDialo
 }
 
 /**
- * Avalia o atendimento usando IA (Google Gemini 2.5 Flash) baseado na ficha
+ * Avalia o atendimento usando GLM 5.3 Flash via OpenRouter, baseado na ficha
  * de critérios, transcrição completa do ticket e dados do atendente/canal.
  * Em modo mock (offline) ou em caso de falha na API, cai no fallback local
  * para não travar o fluxo de triagem.
  */
+export interface AIQueuedResult { queued: true; job_id: string }
+
 export async function evaluateTicketWithAI(
   ticketId: string,
   form: EvaluationForm,
@@ -385,7 +387,7 @@ export async function evaluateTicketWithAI(
   ticketFields?: { title: string; value: string }[],
   jobId?: string,
   draftMeta?: Record<string, unknown>,
-): Promise<AIEvaluationResult> {
+): Promise<AIEvaluationResult | AIQueuedResult> {
   if (isMockMode || !supabase) {
     return getFallbackAIEvaluation(ticketId, form);
   }
@@ -409,6 +411,7 @@ export async function evaluateTicketWithAI(
       throw new Error(error.message || 'Erro de comunicação com a IA');
     }
 
+    if (data?.queued === true && typeof data.job_id === 'string') return { queued: true, job_id: data.job_id };
     if (!data?.result) {
       throw new Error(data?.error || 'A IA não retornou resultado para este ticket');
     }
@@ -422,7 +425,7 @@ export async function evaluateTicketWithAI(
 
 /**
  * Fallback local (sem chamada externa) usado em modo mock ou quando a
- * integração com o Gemini falha/está indisponível — nunca bloqueia a
+ * integração externa está indisponível no modo mock — nunca bloqueia a
  * triagem, mas deixa claro que não é uma avaliação real da IA.
  */
 function getFallbackAIEvaluation(ticketId: string, form: EvaluationForm): AIEvaluationResult {
@@ -463,7 +466,7 @@ export async function evaluateChildTicketWithAI(
   ticketFields?: { title: string; value: string }[],
   macroType?: ChildTicketMacroType,
   jobId?: string,
-): Promise<ChildTicketAiEvaluation> {
+): Promise<ChildTicketAiEvaluation | AIQueuedResult> {
   if (isMockMode || !supabase) {
     return getFallbackChildTicketEvaluation(ticketId, macroType);
   }
@@ -482,7 +485,9 @@ export async function evaluateChildTicketWithAI(
       }
     });
 
-    if (error || !data?.result) throw new Error(data?.error || error?.message || 'A IA não retornou resultado.');
+    if (error) throw new Error(data?.error || error.message || 'Falha de comunicação com a IA.');
+    if (data?.queued === true && typeof data.job_id === 'string') return { queued: true, job_id: data.job_id };
+    if (!data?.result) throw new Error(data?.error || 'A IA não retornou resultado.');
 
     return data.result as ChildTicketAiEvaluation;
   } catch (err) {

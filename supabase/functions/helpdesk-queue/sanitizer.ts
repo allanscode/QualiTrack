@@ -6,7 +6,7 @@
  *    Cliente, Atendente e Sistema/Bot.
  * 2. Remove ruídos repetitivos (assinaturas corporativas, disclaimers legais,
  *    cabeçalhos de resposta em cascata de e-mail e artefatos de imagem) antes
- *    do envio para os modelos de IA (Gemini / OpenRouter).
+ *    do envio ao GLM 5.3 Flash via OpenRouter.
  * 3. Rotula adequadamente quem falou o quê ([CLIENTE], [ATENDENTE], [SISTEMA]),
  *    prevenindo que a IA confunda mensagens de erro coladas pelo cliente como falhas do analista.
  */
