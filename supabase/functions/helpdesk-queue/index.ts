@@ -17,34 +17,13 @@ import {
 } from './ai-fallback.ts';
 import { callOpenRouter, OPENROUTER_MODEL } from './openrouter-client.ts';
 import { retryAt } from './ai-retry.ts';
+import { canReadQueueTicket, trustedZendeskCursor, type QueueType } from './access.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 const OPENROUTER_TARGET: AIModelTarget = { provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4 };
 
 
-// Rate limiting em memória (reseta a cada cold start) — mesmo padrão já usado
-// em admin-invite-user. Por usuário autenticado (não por IP: esta função
-// sempre exige um JWT válido, então o id do usuário é uma chave melhor).
-// Dois níveis: um geral (evita loop/script acidental esgotando qualquer
-// action) e um mais apertado só pra evaluate_ai, que custa de verdade
-// (chamada à IA) e consome a cota diária do token do Zendesk indiretamente.
-interface RateLimitEntry { count: number; resetTime: number; }
-const rateLimitStore = new Map<string, RateLimitEntry>();
-
-function checkRateLimit(identifier: string, maxRequests: number, windowMs: number): { allowed: boolean; resetTime: number } {
-  const now = Date.now();
-  const entry = rateLimitStore.get(identifier);
-
-  if (!entry || now > entry.resetTime) {
-    rateLimitStore.set(identifier, { count: 1, resetTime: now + windowMs });
-    return { allowed: true, resetTime: now + windowMs };
-  }
-  if (entry.count >= maxRequests) {
-    return { allowed: false, resetTime: entry.resetTime };
-  }
-  entry.count++;
-  return { allowed: true, resetTime: entry.resetTime };
-}
+const MAX_REQUEST_BYTES = 1_000_000;
 
 // Tag aplicada (via macro do Zendesk) quando um chamado negativo já foi
 // apurado/validado pela qualidade. Chamados com essa tag saem da fila.
@@ -98,22 +77,27 @@ const RequestSchema = z.object({
     satisfaction_comment: z.string().nullable().optional(),
     guideline_ids: z.array(z.string().uuid()).optional(),
   }).optional(),
-  ticket_subject: z.string().optional(),
+  ticket_subject: z.string().max(500).optional(),
   // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
   // de fetch_queue. Ausente/null = primeira página.
-  cursor: z.string().nullable().optional(),
-  form_criteria: z.any().optional(),
-  dialogue: z.array(z.any()).optional(),
-  dialogue_text: z.string().optional(),
+  cursor: z.string().max(2000).nullable().optional(),
+  form_criteria: z.object({ sections: z.array(z.object({
+    title: z.string().max(300),
+    questions: z.array(z.object({
+      id: z.string().max(100), text: z.string().max(2000), is_critical: z.boolean().optional(),
+    }).passthrough()).max(200),
+  }).passthrough()).max(50) }).passthrough().optional(),
+  dialogue: z.array(z.record(z.unknown())).max(500).optional(),
+  dialogue_text: z.string().max(250_000).optional(),
   agent_info: z.object({
     name: z.string().optional(),
     email: z.string().optional(),
     team_name: z.string().optional(),
     channel: z.string().optional(),
   }).optional(),
-  guideline_ids: z.array(z.string()).optional(),
-  ticket_fields: z.array(z.any()).optional(),
-  tags: z.array(z.string()).optional(),
+  guideline_ids: z.array(z.string().uuid()).max(50).optional(),
+  ticket_fields: z.array(z.object({ title: z.string().max(300), value: z.string().max(4000) })).max(100).optional(),
+  tags: z.array(z.string().max(150)).max(100).optional(),
   macro_type: z.string().optional(),
   // action: 'resolve_agent' — cadastro manual de um agente do helpdesk que
   // ainda não tem conta no QualiTrack, direto na ficha de monitoria.
@@ -270,7 +254,12 @@ serve(async (req) => {
   }
 
   try {
-    const workerBody = await req.clone().json().catch(() => null);
+    if (Number(req.headers.get('content-length') || 0) > MAX_REQUEST_BYTES)
+      return jsonResponse({ error: 'Payload muito grande.' }, 413);
+    const rawText = await req.text();
+    if (new TextEncoder().encode(rawText).length > MAX_REQUEST_BYTES)
+      return jsonResponse({ error: 'Payload muito grande.' }, 413);
+    const workerBody = (() => { try { return JSON.parse(rawText); } catch { return null; } })();
     if (workerBody?.action === 'process_ai_retries') {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
@@ -314,8 +303,7 @@ serve(async (req) => {
       return jsonResponse({ error: 'Sem permissão para acessar a Central de Filas.' }, 403);
     }
 
-    const body = await req.json().catch(() => ({}));
-    const parseResult = RequestSchema.safeParse(body);
+    const parseResult = RequestSchema.safeParse(workerBody || {});
 
     if (!parseResult.success) {
       return jsonResponse({ error: 'Payload inválido', details: parseResult.error.flatten() }, 400);
@@ -324,8 +312,11 @@ serve(async (req) => {
     const { action, queue_type, ticket_id } = parseResult.data;
 
     // Rate limit geral: 60 requisições/minuto por usuário, cobre toda action.
-    const general = checkRateLimit(`general:${user.id}`, 60, 60_000);
-    if (!general.allowed) {
+    const general = await supabase.rpc('consume_security_rate_limit', {
+      bucket_key: `helpdesk-queue:general:${user.id}`, max_requests: 60, window_seconds: 60,
+    });
+    if (general.error) return jsonResponse({ error: 'Limite de requisições indisponível.' }, 503);
+    if (!general.data) {
       return jsonResponse({ error: 'Muitas requisições em pouco tempo. Aguarde um momento e tente de novo.' }, 429);
     }
 
@@ -333,9 +324,12 @@ serve(async (req) => {
     // indiretamente consome a cota diária do token do Zendesk (via
     // fetch_dialogue, chamado antes pelo frontend). 10 avaliações a cada 5
     // minutos é folgado para revisão manual normal, mas barra um loop/script.
-    if (action === 'evaluate_ai') {
-      const ai = checkRateLimit(`evaluate_ai:${user.id}`, 10, 5 * 60_000);
-      if (!ai.allowed) {
+    if (action === 'evaluate_ai' || action === 'evaluate_child_ticket') {
+      const ai = await supabase.rpc('consume_security_rate_limit', {
+        bucket_key: `helpdesk-queue:ai:${user.id}`, max_requests: 10, window_seconds: 300,
+      });
+      if (ai.error) return jsonResponse({ error: 'Limite de avaliações indisponível.' }, 503);
+      if (!ai.data) {
         return jsonResponse({ error: 'Limite de avaliações com IA atingido (10 a cada 5 min). Aguarde um pouco antes de avaliar mais tickets.' }, 429);
       }
     }
@@ -391,14 +385,25 @@ serve(async (req) => {
       if (!evaluated_id || !backfillTeamId) {
         return jsonResponse({ error: 'evaluated_id e team_id são obrigatórios para backfill_agent_team' }, 400);
       }
+      if (caller.role === 'qualidade') {
+        const { data: evidence, error: evidenceError } = await supabase.from('monitorias')
+          .select('id').eq('evaluator_id', user.id).eq('evaluated_id', evaluated_id)
+          .eq('team_id', backfillTeamId).eq('active', true).limit(1);
+        if (evidenceError || !evidence?.length) {
+          return jsonResponse({ error: 'Vínculo de equipe não confirmado por monitoria salva.' }, 403);
+        }
+      } else if (caller.role !== 'admin' && caller.role !== 'gestor_qualidade') {
+        return jsonResponse({ error: 'Sem permissão para alterar vínculo de equipe.' }, 403);
+      }
       const { data: agent, error: agentError } = await supabase
         .from('users')
-        .select('id, primary_team_id')
+        .select('id, role, primary_team_id')
         .eq('id', evaluated_id)
         .maybeSingle();
       if (agentError || !agent) {
         return jsonResponse({ error: 'Agente não encontrado' }, 404);
       }
+      if (agent.role !== 'suporte') return jsonResponse({ error: 'Vínculo permitido somente para atendente.' }, 403);
       const resolvedTeamId = await backfillAgentTeamIfMissing(
         supabase,
         agent.id as string,
@@ -423,6 +428,29 @@ serve(async (req) => {
       Authorization: `Basic ${zendeskAuth}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
+    };
+
+    const hasVerifiedTicketAccess = async (requestedId: string): Promise<boolean> => {
+      if (caller.role === 'admin' || caller.role === 'gestor_qualidade') return true;
+      const cutoff = new Date(Date.now() - 15 * 60_000).toISOString();
+      const [{ data: direct, error: directError }, { data: children, error: childrenError }] = await Promise.all([
+        supabase.from('queue_ticket_catalog').select('ticket_id,queue_type')
+          .eq('ticket_id', requestedId).gte('verified_at', cutoff),
+        supabase.from('queue_ticket_catalog').select('ticket_id,queue_type')
+          .eq('parent_ticket_id', requestedId).eq('queue_type', 'filhos').gte('verified_at', cutoff),
+      ]);
+      if (directError || childrenError) throw new Error('Falha ao verificar o catálogo da fila.');
+      const candidates = [...(direct || []), ...(children || [])];
+      const distributed = candidates.filter(c => c.queue_type === 'negativas' || c.queue_type === 'filhos');
+      const { data: assignments, error: assignmentsError } = distributed.length > 0
+        ? await supabase.from('queue_ticket_assignments').select('ticket_id,queue_type,assigned_to')
+          .in('ticket_id', [...new Set(distributed.map(c => c.ticket_id))])
+        : { data: [], error: null };
+      if (assignmentsError) throw new Error('Falha ao verificar responsável pelo ticket.');
+      return candidates.some(c => {
+        const owner = (assignments || []).find(a => a.ticket_id === c.ticket_id && a.queue_type === c.queue_type)?.assigned_to || null;
+        return canReadQueueTicket(caller.role as string, user.id, c.queue_type as QueueType, owner);
+      });
     };
 
     // 6. Importa os grupos (equipes) do Zendesk como Teams do QualiTrack —
@@ -473,6 +501,7 @@ serve(async (req) => {
     // cabem numa carga só sem estourar o rate limit do Zendesk; o front pede
     // a próxima página sob demanda, passando o `cursor` da resposta anterior.
     if (action === 'fetch_queue') {
+      if (!queue_type) return jsonResponse({ error: 'Fila obrigatória.' }, 400);
       let results: any[];
       let sideloadedUsers: Map<number, any>;
       let sideloadedGroups: Map<number, any>;
@@ -491,7 +520,8 @@ serve(async (req) => {
         : '';
 
       if (viewId) {
-        const url = parseResult.data.cursor
+        const url = trustedZendeskCursor(parseResult.data.cursor, subdomain,
+          `/api/v2/views/${viewId}/tickets.json`)
           || `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
 
         const response = await fetch(url, { headers: zendeskHeaders });
@@ -532,7 +562,8 @@ serve(async (req) => {
 
         // Sideload de usuários, grupos e organizações para resolver o atendente (nome/e-mail),
         // a equipe de origem e o tipo de cliente (organização/tags) de cada chamado.
-        const url = parseResult.data.cursor
+        const url = trustedZendeskCursor(parseResult.data.cursor, subdomain,
+          '/api/v2/search.json', searchQuery)
           || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
         const response = await fetch(url, { headers: zendeskHeaders });
 
@@ -631,7 +662,43 @@ serve(async (req) => {
         };
       }));
 
-      return jsonResponse({ success: true, tickets: mappedTickets, next_cursor: nextCursor, has_more: hasMore }, 200);
+      const { data: auditedRows, error: auditedError } = mappedTickets.length > 0
+        ? await supabase.from('monitorias').select('ticket_id')
+          .in('ticket_id', mappedTickets.map(t => t.ticket_id))
+        : { data: [], error: null };
+      if (auditedError) throw new Error('Falha ao verificar tickets já avaliados.');
+      const auditedIds = new Set((auditedRows || []).map(row => row.ticket_id));
+      const queueTickets = mappedTickets.filter(t => !auditedIds.has(t.ticket_id));
+
+      if (queueTickets.length > 0) {
+        const { error: catalogError } = await supabase.from('queue_ticket_catalog').upsert(
+          queueTickets.map(t => ({
+            ticket_id: t.ticket_id,
+            queue_type,
+            parent_ticket_id: t.parent_ticket_id || null,
+            verified_at: new Date().toISOString(),
+          })), { onConflict: 'ticket_id,queue_type' },
+        );
+        if (catalogError) throw new Error(`Falha no catálogo da fila: ${catalogError.message}`);
+      }
+
+      let visibleTickets = queueTickets;
+      if ((queue_type === 'negativas' || queue_type === 'filhos') && queueTickets.length > 0) {
+        const { error: assignmentError } = await supabase.rpc('assign_queue_tickets', {
+          p_tickets: queueTickets.map(t => ({ ticket_id: t.ticket_id, queue_type })),
+        });
+        if (assignmentError) throw new Error(`Falha na distribuição: ${assignmentError.message}`);
+        if (caller.role === 'qualidade') {
+          const { data: owned, error: ownedError } = await supabase.from('queue_ticket_assignments')
+            .select('ticket_id').eq('queue_type', queue_type).eq('assigned_to', user.id)
+            .in('ticket_id', queueTickets.map(t => t.ticket_id));
+          if (ownedError) throw new Error(`Falha na autorização da fila: ${ownedError.message}`);
+          const ownedIds = new Set((owned || []).map(row => row.ticket_id));
+          visibleTickets = queueTickets.filter(t => ownedIds.has(t.ticket_id));
+        }
+      }
+
+      return jsonResponse({ success: true, tickets: visibleTickets, next_cursor: nextCursor, has_more: hasMore }, 200);
     }
 
     // 2. Busca de Histórico / Diálogo do Chamado
@@ -639,6 +706,11 @@ serve(async (req) => {
       if (!ticket_id) {
         return jsonResponse({ error: 'ticket_id é obrigatório para fetch_dialogue' }, 400);
       }
+
+      // Recheck ownership at read time, so a transfer immediately revokes
+      // access to both the child and its server-verified parent conversation.
+      if (!await hasVerifiedTicketAccess(ticket_id))
+        return jsonResponse({ error: 'Ticket não atribuído ou fora da fila autorizada.' }, 403);
 
       const commentsUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}/comments.json?include=users`;
       // Snapshot transitório: dados originais do ticket + autores dos comentários.
@@ -893,6 +965,8 @@ serve(async (req) => {
       if (!ticket_id || !/^\d+$/.test(ticket_id)) {
         return jsonResponse({ error: 'ticket_id numérico é obrigatório para lookup_ticket_agent' }, 400);
       }
+      if (!await hasVerifiedTicketAccess(ticket_id))
+        return jsonResponse({ error: 'Ticket não atribuído ou fora da fila autorizada.' }, 403);
 
       const ticketUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json?include=users,groups`;
       const response = await fetch(ticketUrl, { headers: zendeskHeaders });

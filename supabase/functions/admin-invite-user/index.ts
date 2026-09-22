@@ -109,7 +109,7 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace(/^Bearer\s+/i, ''))
 
     if (userError || !user) {
-      return new Response(JSON.stringify({ success: false, error: 'Unauthorized', details: userError }), {
+      return new Response(JSON.stringify({ success: false, error: 'Sessão inválida ou expirada.' }), {
         status: 401,
         headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
       })
@@ -121,7 +121,7 @@ serve(async (req) => {
     // conta com role 'admin', escalando privilegio.
     const { data: adminUser } = await supabaseClient.from('users').select('role, active').eq('id', user.id).single()
     if (!adminUser || !adminUser.active || !['admin', 'gestor_qualidade'].includes(adminUser.role)) {
-      return new Response(JSON.stringify({ success: false, error: 'Forbidden: Admins only. User role is: ' + (adminUser?.role || 'none') }), {
+      return new Response(JSON.stringify({ success: false, error: 'Sem permissão para convidar usuários.' }), {
         status: 403,
         headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
       })
@@ -196,7 +196,7 @@ serve(async (req) => {
 
       if (dbError) {
         console.error('DB Update Error for existing user:', dbError)
-        return new Response(JSON.stringify({ success: false, error: 'Failed to update existing user in public users table', details: dbError }), {
+        return new Response(JSON.stringify({ success: false, error: 'Não foi possível atualizar o cadastro.' }), {
           status: 500,
           headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
         })
@@ -211,7 +211,7 @@ serve(async (req) => {
 
       if (resetError) {
         console.error('Reset Password Error:', resetError)
-        return new Response(JSON.stringify({ success: false, error: 'Failed to send password reset email to existing user', details: resetError }), {
+        return new Response(JSON.stringify({ success: false, error: 'Não foi possível enviar o e-mail de recuperação.' }), {
           status: 500,
           headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
         })
@@ -250,7 +250,7 @@ serve(async (req) => {
 
           if (dbError) {
             console.error('DB Upsert Fallback Error:', dbError)
-            return new Response(JSON.stringify({ success: false, error: 'Failed to save to public users table in fallback', details: dbError }), {
+            return new Response(JSON.stringify({ success: false, error: 'Não foi possível salvar o cadastro.' }), {
               status: 500,
               headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
             })
@@ -265,7 +265,7 @@ serve(async (req) => {
 
           if (resetError) {
             console.error('Reset Password Fallback Error:', resetError)
-            return new Response(JSON.stringify({ success: false, error: 'Failed to send password reset email in fallback', details: resetError }), {
+            return new Response(JSON.stringify({ success: false, error: 'Não foi possível enviar o e-mail de recuperação.' }), {
               status: 500,
               headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
             })
@@ -278,7 +278,7 @@ serve(async (req) => {
       }
 
       console.error('Invite Error:', inviteError)
-      return new Response(JSON.stringify({ success: false, error: 'Failed to invite user via Auth', details: inviteError }), {
+      return new Response(JSON.stringify({ success: false, error: 'Não foi possível enviar o convite.' }), {
         status: 500,
         headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
       })
@@ -293,7 +293,7 @@ serve(async (req) => {
 
     if (dbError) {
       console.error('DB Insert Error:', dbError)
-      return new Response(JSON.stringify({ success: false, error: 'Failed to save to public users table', details: dbError }), {
+      return new Response(JSON.stringify({ success: false, error: 'Não foi possível salvar o cadastro.' }), {
         status: 500,
         headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
       })

@@ -31,6 +31,12 @@ const aiRetryMigration = readFile(
   new URL('../supabase/migrations/20260922000013_ai_retry_queue.sql', import.meta.url),
   'utf8',
 );
+const verifiedCatalogMigration = readFile(
+  new URL('../supabase/migrations/20260922000018_verified_queue_catalog.sql', import.meta.url), 'utf8');
+const aiOwnerMigration = readFile(
+  new URL('../supabase/migrations/20260922000020_ai_owner_rls.sql', import.meta.url), 'utf8');
+const verifiedClaimMigration = readFile(
+  new URL('../supabase/migrations/20260922000021_verified_ai_claim.sql', import.meta.url), 'utf8');
 const id = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const session = n => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -391,6 +397,30 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
         assert.deepEqual(counts, total === 2 ? [1, 1] : [2, 3]);
         await db.exec('DELETE FROM queue_ticket_assignments');
       }
+    });
+
+    await t.test('somente serviço distribui IDs verificados; monitor não lê job alheio', async () => {
+      await db.exec(await verifiedCatalogMigration);
+      await db.exec('ALTER TABLE public.ai_evaluation_drafts ENABLE ROW LEVEL SECURITY');
+      await db.exec(await aiOwnerMigration);
+      await db.exec(await verifiedClaimMigration);
+      await assert.rejects(asSession(id(2), session(7), () => db.query(
+        `SELECT * FROM assign_queue_tickets('[{"ticket_id":"987654","queue_type":"filhos"}]'::jsonb)`
+      )), /permission denied|distribuição é exclusiva/);
+      await db.exec('SET ROLE service_role');
+      try {
+        await db.query(`INSERT INTO queue_ticket_catalog(ticket_id,queue_type) VALUES ('987654','filhos')`);
+        await db.query(`SELECT * FROM assign_queue_tickets('[{"ticket_id":"987654","queue_type":"filhos"}]'::jsonb)`);
+      } finally { await db.exec('RESET ROLE'); }
+      const owner = (await db.query("SELECT assigned_to FROM queue_ticket_assignments WHERE ticket_id='987654'")).rows[0].assigned_to;
+      const stranger = owner === id(2) ? id(3) : id(2);
+      await assert.rejects(asSession(stranger, session(8), () => db.query(
+        "SELECT * FROM claim_ai_evaluation_job('987654','chamado_filho')")), /outro monitor/);
+      await asSession(owner, session(7), () => db.query(
+        "SELECT * FROM claim_ai_evaluation_job('987654','chamado_filho')"));
+      const foreignJobs = await asSession(stranger, session(8), () => db.query(
+        "SELECT ticket_id FROM ai_evaluation_jobs WHERE ticket_id='987654'"));
+      assert.equal(foreignJobs.rows.length, 0);
     });
   } finally {
     await db.close();

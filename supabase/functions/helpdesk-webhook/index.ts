@@ -35,16 +35,9 @@ const WebhookPayloadSchema = z.object({
 });
 
 serve(async (req: Request) => {
-  // CORS preflight
+  // Server-to-server endpoint; browsers have no reason to invoke this webhook.
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-qualitrack-webhook-token',
-      },
-    });
+    return new Response(null, { status: 405, headers: { Allow: 'POST' } });
   }
 
   if (req.method !== 'POST') {
@@ -86,51 +79,6 @@ serve(async (req: Request) => {
     if (!rawBody) {
       return new Response(JSON.stringify({ error: 'Payload JSON inválido ou vazio' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (rawBody.event === 'check_zendesk_triggers') {
-      const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
-      const email = Deno.env.get('ZENDESK_EMAIL');
-      const apiToken = Deno.env.get('ZENDESK_API_TOKEN');
-
-      if (!subdomain || !email || !apiToken) {
-        return new Response(JSON.stringify({ error: 'Credenciais do Zendesk ausentes nos secrets' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      const zendeskAuth = btoa(`${email}/token:${apiToken}`);
-      const zHeaders = {
-        Authorization: `Basic ${zendeskAuth}`,
-        'Content-Type': 'application/json',
-      };
-
-      const resp = await fetch(`https://${subdomain}.zendesk.com/api/v2/triggers.json?active=true`, { headers: zHeaders });
-      if (!resp.ok) {
-        return new Response(JSON.stringify({ error: `Zendesk API erro: ${resp.status}` }), {
-          status: 502,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      const data = await resp.json();
-      const triggers = (data.triggers || []).map((t: any) => ({
-        id: t.id,
-        title: t.title,
-        active: t.active,
-        actions: t.actions,
-        conditions: t.conditions,
-      }));
-
-      return new Response(JSON.stringify({
-        success: true,
-        subdomain,
-        total_triggers: triggers.length,
-        triggers,
-      }), {
-        status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     }

@@ -70,29 +70,6 @@ export async function fetchQueueAssignments(
   return map;
 }
 
-/**
- * Distribui os tickets ainda sem dono entre os monitores online (1 para 1,
- * balanceado pela contagem acumulada do dia). Retorna só as novas
- * atribuições feitas nesta chamada — tickets já atribuídos são ignorados
- * pela função no banco, e tickets sem monitor online ficam sem dono até a
- * próxima sincronização.
- */
-export async function syncQueueAssignments(
-  queueType: DistributedQueueType,
-  ticketIds: string[]
-): Promise<Record<string, string>> {
-  if (isMockMode || !supabase || ticketIds.length === 0) return {};
-  const payload = ticketIds.map(ticket_id => ({ ticket_id, queue_type: queueType }));
-  const { data, error } = await supabase.rpc('assign_queue_tickets', { p_tickets: payload });
-  if (error) {
-    console.warn('[queueDistribution] Falha ao distribuir chamados da fila:', error);
-    throw new Error(error.message || 'Falha ao distribuir chamados da fila.');
-  }
-  const map: Record<string, string> = {};
-  (data || []).forEach((row: { ticket_id: string; assigned_to: string }) => { map[row.ticket_id] = row.assigned_to; });
-  return map;
-}
-
 function normalizeAssignment(row: QueueAssignment): QueueAssignment {
   return {
     ...row,

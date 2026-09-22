@@ -94,7 +94,7 @@ serve(async (req) => {
         || authError.message?.toLowerCase().includes('duplicate');
       return jsonResponse({
         success: false,
-        error: isDuplicate ? 'Já existe uma conta com esse e-mail.' : `Falha ao atualizar e-mail no Auth: ${authError.message}`
+        error: isDuplicate ? 'Já existe uma conta com esse e-mail.' : 'Falha ao atualizar o e-mail de login.'
       }, isDuplicate ? 409 : 500)
     }
 
@@ -104,12 +104,12 @@ serve(async (req) => {
       // um estado inconsistente silencioso (login novo, tela mostrando o
       // e-mail antigo até o próximo refresh manual).
       console.error('[admin-update-user-email] Auth atualizado mas public.users falhou:', dbError.message)
-      return jsonResponse({ success: false, error: `E-mail de login trocado, mas falhou ao atualizar o cadastro: ${dbError.message}` }, 500)
+      return jsonResponse({ success: false, error: 'E-mail de login alterado, mas o cadastro não sincronizou. Contate o administrador.' }, 500)
     }
 
     return jsonResponse({ success: true }, 200)
   } catch (error: any) {
     console.error('[admin-update-user-email] Erro:', error)
-    return jsonResponse({ success: false, error: error.message || 'Erro interno do servidor' }, 500)
+    return jsonResponse({ success: false, error: 'Erro interno ao atualizar o e-mail.' }, 500)
   }
 })

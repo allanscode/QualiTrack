@@ -90,6 +90,12 @@ export function useMonitoriaActions(
     try {
       if (!supabase) {
         await mockDb.update('monitorias', id, update);
+      } else if (user.role === 'suporte' && type === 'recusar_agente') {
+        const { error } = await supabase.rpc('appeal_monitoria', {
+          p_monitoria_id: id,
+          p_note: actionNote || '',
+        });
+        if (error) throw error;
       } else {
         const { error } = await supabase.from('monitorias').update(update).eq('id', id);
         if (error) throw error;

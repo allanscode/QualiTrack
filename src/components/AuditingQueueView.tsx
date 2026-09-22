@@ -80,7 +80,6 @@ import {
   reassignQueueTicket,
   releaseQueueTicketAssignment,
   startQueueTicketAssignment,
-  syncQueueAssignments,
 } from '../lib/queueDistribution';
 import { usePresence } from '../providers/PresenceProvider';
 import { matchesAssignedMonitor } from '../lib/queueMonitorFilter';
@@ -227,6 +226,21 @@ export default function AuditingQueueView({
 
   // Estado para modal/visualização rápida de IA
   const [evaluatingTicketId, setEvaluatingTicketId] = useState<string | null>(null);
+  const [aiProgress, setAiProgress] = useState<Record<string, 1 | 2 | 3>>({});
+  const [aiFeedback, setAiFeedback] = useState<Record<string, string>>({});
+  const setTicketProgress = (ticketId: string, step: 1 | 2 | 3) =>
+    setAiProgress(previous => ({ ...previous, [ticketId]: step }));
+  const clearTicketProgress = (ticketId: string) => setAiProgress(previous => {
+    const next = { ...previous };
+    delete next[ticketId];
+    return next;
+  });
+  const progressLabel = (ticketId: string) => {
+    const step = aiProgress[ticketId] || 2;
+    return step === 1 ? 'Etapa 1/3 · Buscando conversa'
+      : step === 2 ? 'Etapa 2/3 · Analisando com IA...'
+      : 'Etapa 3/3 · Finalizando';
+  };
 
   // Escuta mudanças nas avaliações globais que continuam rodando ao trocar de aba
   const [, setGlobalEvalTick] = useState(0);
@@ -571,8 +585,7 @@ ${checksSummary}${recs}`;
     const ticketIds = tickets.map(t => t.ticket_id);
     setAssignmentsReady(prev => ({ ...prev, [queueType]: false }));
 
-    syncQueueAssignments(queueType, ticketIds)
-      .then(() => fetchQueueAssignments(queueType, ticketIds))
+    fetchQueueAssignments(queueType, ticketIds)
       .then(assignments => {
         if (cancelled) return;
         setQueueAssignments(prev => ({ ...prev, [queueType]: assignments }));
@@ -725,12 +738,12 @@ ${checksSummary}${recs}`;
     ticket: AuditingQueueTicket,
     formToUse: EvaluationForm,
     guidelineIds: string[],
-    // quando chamado pelo lote, o toast de progresso não é criado aqui
+    // Lotes mantêm as mesmas etapas contextuais em cada card.
     silent = false
   ) => {
     if (globalEvaluatingTickets.has(ticket.ticket_id)) {
       const duplicateError = new Error(`O ticket #${ticket.ticket_id} já está sendo avaliado com IA.`);
-      if (!silent) toast.info(duplicateError.message);
+      if (!silent) setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'Este ticket já está em análise.' }));
       throw duplicateError;
     }
 
@@ -744,7 +757,7 @@ ${checksSummary}${recs}`;
         status: 'running', started_by: currentUserId || '', result: null,
       } }));
     } catch (error) {
-      if (!silent) toast.error(error instanceof Error ? error.message : 'Não foi possível iniciar a análise.');
+      if (!silent) setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'Não foi possível iniciar a análise.' }));
       throw error;
     }
 
@@ -769,12 +782,8 @@ ${checksSummary}${recs}`;
     globalEvaluatingTickets.add(ticket.ticket_id);
     notifyGlobalEvaluating();
     setEvaluatingTicketId(ticket.ticket_id);
-
-    // Toast de progresso por etapas (apenas quando não está em modo silencioso/lote)
-    const toastId = silent ? null : toast.loading(
-      `⏳ Etapa 1/3 · Buscando diálogo do ticket #${ticket.ticket_id}...`,
-      { duration: Infinity }
-    );
+    setTicketProgress(ticket.ticket_id, 1);
+    setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: '' }));
 
     try {
       const { comments: dialogue, ticketFields, tags, organizationName, organizationTags } = await fetchTicketDialogue(ticket.ticket_id);
@@ -788,10 +797,7 @@ ${checksSummary}${recs}`;
       ticket.ticket_fields = ticketFields;
       ticket.dialogue = dialogue;
 
-      if (toastId) toast.loading(
-        `🤖 Etapa 2/3 · Analisando com IA (GLM 5.3 Flash via OpenRouter)...`,
-        { id: toastId, duration: Infinity }
-      );
+      setTicketProgress(ticket.ticket_id, 2);
 
       const aiResult = await evaluateTicketWithAI(ticket.ticket_id, formToUse, dialogue, {
         name: matchedAgent?.name || ticket.agent_name,
@@ -801,17 +807,14 @@ ${checksSummary}${recs}`;
       }, guidelineIds, ticketFields, jobId, draftMeta);
 
       if ('queued' in aiResult) {
-        if (toastId) toast.info(`Ticket #${ticket.ticket_id} pendente: a IA tentará novamente automaticamente.`, { id: toastId, duration: 6000 });
+        setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'Pendente · Nova tentativa automática agendada.' }));
         return 'queued' as const;
       }
 
       aiResult.ticket_fields = ticketFields;
       aiResult.dialogue = dialogue;
 
-      if (toastId) toast.loading(
-        `💾 Etapa 3/3 · Salvando rascunho...`,
-        { id: toastId, duration: Infinity }
-      );
+      setTicketProgress(ticket.ticket_id, 3);
 
       // Em produção, a Edge Function salva o rascunho e conclui o job de
       // forma atômica; o navegador pode sair sem perder o resultado.
@@ -847,10 +850,7 @@ ${checksSummary}${recs}`;
         }
       }));
 
-      if (toastId) toast.success(
-        `✅ Ticket #${ticket.ticket_id} avaliado (${formToUse.title}) — clique em "Lançar Monitoria".`,
-        { id: toastId, duration: 5000 }
-      );
+      setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: '' }));
     } catch (err: any) {
       console.error('Erro na avaliação com IA:', err);
       await failAIJob(ticket.ticket_id, jobId, err?.message || 'Falha na análise').catch(jobError => {
@@ -861,14 +861,13 @@ ${checksSummary}${recs}`;
       if (isMockMode) setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
         ...previous[ticket.ticket_id], status: 'failed',
       } }));
-      if (toastId) {
-        toast.error(`❌ Falha no ticket #${ticket.ticket_id}: ${err?.message || 'Erro desconhecido'}`, { id: toastId, duration: 6000 });
-      }
+      setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'A análise falhou. Tente novamente neste ticket.' }));
       throw err; // relança para o batch capturar individualmente
     } finally {
       globalEvaluatingTickets.delete(ticket.ticket_id);
       notifyGlobalEvaluating();
       setEvaluatingTicketId(null);
+      clearTicketProgress(ticket.ticket_id);
     }
   };
 
@@ -1002,18 +1001,21 @@ ${checksSummary}${recs}`;
         status: 'running', started_by: currentUserId || '', result: null,
       } }));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Não foi possível iniciar esta avaliação.');
+      setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'Não foi possível iniciar esta análise.' }));
       return;
     }
     setChildPreviewTicket(ticket);
     setLoadingChildAi(true);
     setChildAiEvaluation(ticket.child_evaluation || null);
+    setTicketProgress(ticket.ticket_id, 1);
+    setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: '' }));
 
     try {
       const { comments, ticketFields, tags } = await fetchTicketDialogue(ticket.ticket_id);
       const normalizedComments = normalizeTicketDialogue(comments || [], ticket.agent_name, ticket.requester_name);
       ticket.dialogue = normalizedComments;
       setChildDialogue(normalizedComments);
+      setTicketProgress(ticket.ticket_id, 2);
 
       const result = await evaluateChildTicketWithAI(
         ticket.ticket_id,
@@ -1026,17 +1028,18 @@ ${checksSummary}${recs}`;
       );
 
       if ('queued' in result) {
-        toast.info(`Chamado filho #${ticket.ticket_id} pendente: reprocessamento automático agendado.`);
+        setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'Pendente · Nova tentativa automática agendada.' }));
         return;
       }
 
+      setTicketProgress(ticket.ticket_id, 3);
       if (isMockMode) await completeAIJob(ticket.ticket_id, jobId, result);
       setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
         ...previous[ticket.ticket_id], status: 'completed', result,
       } }));
       setChildAiEvaluation(result);
       ticket.child_evaluation = result;
-      toast.success(`Parecer de conformidade gerado para o chamado filho #${ticket.ticket_id}!`);
+      setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: '' }));
     } catch (err: any) {
       console.error('Erro ao auditar chamado filho:', err);
       await failAIJob(ticket.ticket_id, jobId, err?.message || 'Falha na análise').catch(jobError => {
@@ -1045,9 +1048,10 @@ ${checksSummary}${recs}`;
       if (isMockMode) setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
         ...previous[ticket.ticket_id], status: 'failed',
       } }));
-      toast.error(err?.message || 'Falha ao auditar chamado filho');
+      setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'A análise falhou. Tente novamente neste ticket.' }));
     } finally {
       setLoadingChildAi(false);
+      clearTicketProgress(ticket.ticket_id);
     }
   };
 
@@ -1271,15 +1275,15 @@ ${checksSummary}${recs}`;
     // mantém o botão em loading ativo até concluir!
     if (isEvaluating) {
       return (
-        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5" role="status" aria-live="polite">
           <Button
             size="sm"
             variant="primary"
             disabled={true}
-            className="flex items-center gap-1.5 bg-indigo-600/80 text-white font-semibold shadow-xs justify-center min-w-[145px] cursor-not-allowed"
+            className="flex min-w-0 items-center justify-center gap-1.5 bg-indigo-600/80 text-white font-semibold shadow-xs cursor-not-allowed"
           >
             <Bot className="w-3.5 h-3.5 animate-spin" />
-            <span>Analisando com IA...</span>
+            <span className="text-left leading-tight">{progressLabel(ticket.ticket_id)}</span>
           </Button>
         </div>
       );
@@ -1329,7 +1333,12 @@ ${checksSummary}${recs}`;
 
 
     return (
-      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+        {aiFeedback[ticket.ticket_id] && (
+          <span role="status" className="basis-full text-right text-[10px] text-brand-muted">
+            {aiFeedback[ticket.ticket_id]}
+          </span>
+        )}
         <Button
           size="sm"
           variant="outline"
@@ -2148,7 +2157,7 @@ ${checksSummary}${recs}`;
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 flex-col items-end gap-1.5" role="status" aria-live="polite">
                           <Button
                             size="sm"
                             variant={isValidated ? "outline" : "primary"}
@@ -2166,12 +2175,13 @@ ${checksSummary}${recs}`;
                             <Bot className={`w-3.5 h-3.5 ${isEvaluatingTicket(ticket.ticket_id) ? 'animate-spin' : ''}`} />
                             <span>
                               {isEvaluatingTicket(ticket.ticket_id)
-                                ? 'Auditando com IA...'
+                                ? progressLabel(ticket.ticket_id)
                                 : evaluation
                                 ? 'Ver Parecer IA'
                                 : 'Conferir com IA'}
                             </span>
                           </Button>
+                          {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
                         </div>
                       </div>
                     </Card>
@@ -2282,7 +2292,7 @@ ${checksSummary}${recs}`;
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 flex-col items-end gap-1.5" role="status" aria-live="polite">
                           <Button
                             size="sm"
                             variant="outline"
@@ -2300,12 +2310,13 @@ ${checksSummary}${recs}`;
                             <Bot className={`w-3.5 h-3.5 ${isEvaluatingTicket(ticket.ticket_id) ? 'animate-spin' : ''}`} />
                             <span>
                               {isEvaluatingTicket(ticket.ticket_id)
-                                ? 'Auditando com IA...'
+                                ? progressLabel(ticket.ticket_id)
                                 : evaluation
                                 ? 'Ver Parecer IA'
                                 : 'Conferir com IA'}
                             </span>
                           </Button>
+                          {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
                         </div>
                       </div>
                     </Card>
