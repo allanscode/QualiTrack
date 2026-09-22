@@ -143,200 +143,178 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
         <AnimatePresence>
           {isExpanded && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-t border-surface-border/50">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-2">
-                <div className="space-y-4">
-                  <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1">Observações da Qualidade</p>
-                  <div className="relative text-sm text-brand-primary font-medium bg-surface-bg/50 p-4 pl-9 rounded-3xl border border-surface-border/40 leading-relaxed italic">
-                    <span className="absolute left-3 top-2 text-3xl font-black text-brand-muted/20 leading-none select-none">"</span>
-                    {m.evaluator_note || 'Nenhuma observação registrada.'}
-                  </div>
-
-                  <div className="pt-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setViewingMonitoria(m)}
-                      icon={<Eye className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
-                      className="w-full md:w-auto shadow-sm border border-surface-border/50"
-                    >
-                      Visualizar Avaliação Completa
-                    </Button>
-                  </div>
+              <div className="space-y-4 pb-2">
+                <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1">Observações da Qualidade</p>
+                <div className="relative text-sm text-brand-primary font-medium bg-surface-bg/50 py-3 pl-9 pr-5 rounded-2xl border border-surface-border/40 leading-relaxed italic">
+                  <span className="absolute left-3 top-1.5 text-3xl font-black text-brand-muted/20 leading-none select-none">"</span>
+                  {m.evaluator_note || 'Nenhuma observação registrada.'}
                 </div>
 
-                <div className="flex flex-col justify-start items-end space-y-6">
-                  <div className="flex flex-wrap gap-3 justify-end items-start w-full">
-                    {/* Aprovar/Contestar a tratativa passou a ser exclusivo do
-                        gestor_suporte — o agente individual não decide mais
-                        sozinho sobre a própria avaliação. Ver bloco
-                        gestor_suporte + aguardando_gestor_suporte abaixo. */}
-                    {user?.role === 'suporte' && m.status === 'contestacao_negada' && (
-                      <div className="flex gap-3 items-center flex-wrap justify-end">
-                        {m.status === 'contestacao_negada' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setActionModal({ id: m.id, type: 'recusar_agente' })}
-                            icon={<XCircle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                            className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
-                          >
-                            Apelar
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                <div className="flex flex-wrap gap-2 items-center pt-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setViewingMonitoria(m)}
+                    icon={<Eye className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                    className="border border-surface-border/50"
+                  >
+                    Visualizar Avaliação Completa
+                  </Button>
 
-                    {user?.role === 'gestor_suporte' && m.status === 'pendente_revisao' && (
-                      <div className="flex gap-3 items-center flex-wrap justify-end">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setActionModal({ id: m.id, type: 'aceitar' })}
-                          icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                          className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
-                        >
-                          Aprovar
-                        </Button>
+                  {/* Aprovar/Contestar a tratativa passou a ser exclusivo do
+                      gestor_suporte — o agente individual não decide mais
+                      sozinho sobre a própria avaliação. Ver bloco
+                      gestor_suporte + aguardando_gestor_suporte abaixo. */}
+                  {user?.role === 'suporte' && m.status === 'contestacao_negada' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActionModal({ id: m.id, type: 'recusar_agente' })}
+                      icon={<XCircle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                    >
+                      Apelar
+                    </Button>
+                  )}
+
+                  {user?.role === 'gestor_suporte' && m.status === 'pendente_revisao' && (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'aceitar' })}
+                        icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                      >
+                        Aprovar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
+                        icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                      >
+                        Contestar
+                      </Button>
+                    </>
+                  )}
+
+                  {/* Aprovar/Contestar direto pelo Gestor de Qualidade ou Admin, mesmo
+                      sem contestação — cobre o caso do Gestor de Atendimento ainda não
+                      estar usando o sistema (ex.: piloto restrito à equipe de Qualidade),
+                      sem deixar a monitoria travada em pendente_revisao esperando alguém
+                      que não vai entrar. O nome de quem agiu fica registrado no histórico
+                      (by_name), então não se perde rastreabilidade de que foi a Qualidade
+                      substituindo a decisão do Gestor de Atendimento. */}
+                  {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'pendente_revisao' && (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
+                        icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                      >
+                        Aprovar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
+                        icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                      >
+                        Contestar
+                      </Button>
+                    </>
+                  )}
+
+                  {user?.role === 'gestor_suporte' && m.status === 'aguardando_gestor_suporte' && (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
+                        icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                      >
+                        Aprovar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'escalar' })}
+                        icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-y-0.5" />}
+                      >
+                        Escalar
+                      </Button>
+                    </>
+                  )}
+
+                  {(user?.role === 'qualidade' || user?.role === 'gestor_qualidade') && (m.status === 'em_contestacao' || m.status === 'reavaliacao_solicitada') && (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setViewingMonitoria({ ...m, _reevaluate: true } as any)}
+                        icon={<Pencil className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />}
+                      >
+                        Reavaliar
+                      </Button>
+                      {m.status === 'em_contestacao' && (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
-                          icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                          className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
+                          onClick={() => setActionModal({ id: m.id, type: 'manter' })}
+                          icon={<XCircle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                         >
-                          Contestar
+                          Recusar
                         </Button>
-                      </div>
-                    )}
+                      )}
+                    </>
+                  )}
 
-                    {/* Aprovar/Contestar direto pelo Gestor de Qualidade ou Admin, mesmo
-                        sem contestação — cobre o caso do Gestor de Atendimento ainda não
-                        estar usando o sistema (ex.: piloto restrito à equipe de Qualidade),
-                        sem deixar a monitoria travada em pendente_revisao esperando alguém
-                        que não vai entrar. O nome de quem agiu fica registrado no histórico
-                        (by_name), então não se perde rastreabilidade de que foi a Qualidade
-                        substituindo a decisão do Gestor de Atendimento. */}
-                    {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'pendente_revisao' && (
-                      <div className="flex gap-3 items-center flex-wrap justify-end">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
-                          icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                          className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
-                        >
-                          Aprovar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
-                          icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                          className="w-[130px] h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
-                        >
-                          Contestar
-                        </Button>
-                      </div>
-                    )}
+                  {user?.role === 'gestor_qualidade' && m.status === 'aguardando_gestor_qualidade' && (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
+                        icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                      >
+                        Aprovar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'solicitar_reavaliacao' })}
+                        icon={<Pencil className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />}
+                      >
+                        Solicitar
+                      </Button>
+                    </>
+                  )}
 
-                    {user?.role === 'gestor_suporte' && m.status === 'aguardando_gestor_suporte' && (
-                      <div className="flex gap-3 items-center flex-wrap justify-end">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
-                          icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                          className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
-                        >
-                          Aprovar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setActionModal({ id: m.id, type: 'escalar' })}
-                          icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-y-0.5" />}
-                          className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
-                        >
-                          Escalar
-                        </Button>
-                      </div>
-                    )}
-
-                    {(user?.role === 'qualidade' || user?.role === 'gestor_qualidade') && (m.status === 'em_contestacao' || m.status === 'reavaliacao_solicitada') && (
-                      <div className="flex flex-wrap gap-3 justify-end items-start w-full">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setViewingMonitoria({ ...m, _reevaluate: true } as any)}
-                          icon={<Pencil className="w-4 h-4 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />}
-                          className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm border border-brand-primary/10"
-                        >
-                          Reavaliar
-                        </Button>
-                        {m.status === 'em_contestacao' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setActionModal({ id: m.id, type: 'manter' })}
-                            icon={<XCircle className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
-                            className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
-                          >
-                            Recusar
-                          </Button>
-                        )}
-                      </div>
-                    )}
-
-                    {user?.role === 'gestor_qualidade' && m.status === 'aguardando_gestor_qualidade' && (
-                      <div className="flex gap-3 items-center flex-wrap justify-end">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
-                          icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                          className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
-                        >
-                          Aprovar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setActionModal({ id: m.id, type: 'solicitar_reavaliacao' })}
-                          icon={<Pencil className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />}
-                          className="w-full md:w-auto px-4 h-10 font-black uppercase text-[10px] tracking-widest shadow-sm"
-                        >
-                          Solicitar
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Excluir é soft-delete (active=false via UPDATE, não DELETE
-                        real) — governado por monitorias_update_policy, que já
-                        autoriza admin e gestor_qualidade. Alinhando a UI ao que
-                        o banco já permitia. */}
-                    {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
-                      <div className="w-full mt-auto flex justify-end gap-3 flex-wrap">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setActionModal({ id: m.id, type: 'reabrir' })}
-                          className="w-full md:w-auto font-black uppercase text-[10px] tracking-widest h-10"
-                          icon={<RotateCcw className="w-4 h-4 transition-transform duration-200 group-hover:rotate-[-45deg]" />}
-                        >
-                          Reabrir
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setActionModal({ id: m.id, type: 'excluir' })}
-                          className="text-functional-error hover:bg-functional-error/10 dark:hover:bg-functional-error/20 w-full md:w-auto font-black uppercase text-[10px] tracking-widest h-10"
-                          icon={<Trash2 className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}
-                        >
-                          Excluir
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  {/* Excluir é soft-delete (active=false via UPDATE, não DELETE
+                      real) — governado por monitorias_update_policy, que já
+                      autoriza admin e gestor_qualidade. Alinhando a UI ao que
+                      o banco já permitia. */}
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'reabrir' })}
+                        icon={<RotateCcw className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-[-45deg]" />}
+                      >
+                        Reabrir
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'excluir' })}
+                        className="text-functional-error hover:bg-functional-error/10 dark:hover:bg-functional-error/20"
+                        icon={<Trash2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                      >
+                        Excluir
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 
