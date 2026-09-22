@@ -67,6 +67,7 @@ import Button from './ui/Button';
 import Badge from './ui/Badge';
 import TicketMessageBubble from './TicketMessageBubble';
 import QueueMonitorPresencePanel from './QueueMonitorPresencePanel';
+import QueueMonitorFilter from './QueueMonitorFilter';
 import QueueMonitorAssignmentModal from './QueueMonitorAssignmentModal';
 import { toast } from 'sonner';
 import { isMockMode, supabase } from '../lib/supabase';
@@ -82,6 +83,7 @@ import {
   syncQueueAssignments,
 } from '../lib/queueDistribution';
 import { usePresence } from '../providers/PresenceProvider';
+import { matchesAssignedMonitor } from '../lib/queueMonitorFilter';
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -221,6 +223,7 @@ export default function AuditingQueueView({
   const [tickets, setTickets] = useState<AuditingQueueTicket[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgentFilter, setSelectedAgentFilter] = useState('');
+  const [selectedMonitorFilter, setSelectedMonitorFilter] = useState('');
 
   // Estado para modal/visualização rápida de IA
   const [evaluatingTicketId, setEvaluatingTicketId] = useState<string | null>(null);
@@ -609,9 +612,12 @@ ${checksSummary}${recs}`;
         if (!assignmentsReady[activeQueue] || assignment?.assigned_to !== currentUserId) return false;
       }
 
+      if (!matchesAssignedMonitor(activeQueue, currentUserRole, selectedMonitorFilter, t.ticket_id,
+        isDistributedQueue(activeQueue) ? queueAssignments[activeQueue] : {}, assignmentsReady[activeQueue])) return false;
+
       return matchesSearch && matchesAgent;
     });
-  }, [tickets, searchTerm, selectedAgentFilter, drafts, activeQueue, validatedChildTickets, aiDraftFilter, queueAssignments, assignmentsReady, currentUserRole, currentUserId]);
+  }, [tickets, searchTerm, selectedAgentFilter, selectedMonitorFilter, drafts, activeQueue, validatedChildTickets, aiDraftFilter, queueAssignments, assignmentsReady, currentUserRole, currentUserId, isSupervisorView]);
 
   // Paginação configurável por página (5, 10, 15, 20) com padrão 5
   const [pageSize, setPageSize] = useState<number>(5);
@@ -621,7 +627,7 @@ ${checksSummary}${recs}`;
   useEffect(() => {
     setCurrentPage(1);
     setSelectedTicketIds(new Set());
-  }, [searchTerm, selectedAgentFilter, activeQueue, pageSize, aiDraftFilter]);
+  }, [searchTerm, selectedAgentFilter, selectedMonitorFilter, activeQueue, pageSize, aiDraftFilter]);
 
   const totalItems = filteredTickets.length;
   const totalLocalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -1411,7 +1417,7 @@ ${checksSummary}${recs}`;
 
   // Controles de paginação com seletor de itens por página (5, 10, 15, 20) — padrão 10
   const renderPagination = () => {
-    if (totalItems === 0) return null;
+    if (totalItems === 0 && !(selectedMonitorFilter && isDistributedQueue(activeQueue) && (hasMore || prevCursors.length > 0))) return null;
 
     const canGoPrev = validCurrentPage > 1 || prevCursors.length > 0;
     const canGoNext = validCurrentPage < totalLocalPages || hasMore;
@@ -1452,7 +1458,7 @@ ${checksSummary}${recs}`;
             </select>
           </div>
           <span className="text-[11px] text-brand-muted">
-            Mostrando <strong className="text-brand-primary font-bold">{startIndex + 1}–{endIndex}</strong> de <strong className="text-brand-primary font-bold">{totalItems}</strong> chamados
+            {totalItems === 0 ? '0 chamados nesta página' : <>Mostrando <strong className="text-brand-primary font-bold">{startIndex + 1}–{endIndex}</strong> de <strong className="text-brand-primary font-bold">{totalItems}</strong> chamados</>}
           </span>
         </div>
 
@@ -1629,6 +1635,16 @@ ${checksSummary}${recs}`;
             )}
           </div>
 
+          {isSupervisorView && isDistributedQueue(activeQueue) && (
+            <QueueMonitorFilter
+                monitors={qualityMonitors}
+                value={selectedMonitorFilter}
+                onChange={setSelectedMonitorFilter}
+                found={totalItems}
+                assignmentsReady={assignmentsReady[activeQueue]}
+            />
+          )}
+
           {/* Filtro de Rascunhos da IA */}
           <div className="flex items-center gap-1 bg-surface-subtle/60 p-1 rounded-xl border border-surface-border text-[10px] font-bold">
             <button
@@ -1763,10 +1779,15 @@ ${checksSummary}${recs}`;
           {loading && paginatedTickets.length === 0 ? (
             renderSkeletonGrid()
           ) : paginatedTickets.length === 0 ? (
-            <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
-              <AlertTriangle className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
-              <p className="text-xs font-bold text-brand-muted">Nenhum chamado com CSAT Ruim pendente nesta fila.</p>
-            </div>
+            <>
+              <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
+                <AlertTriangle className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
+                <p className="text-xs font-bold text-brand-muted">
+                  {selectedMonitorFilter ? 'Nenhum ticket deste monitor nesta página da fila.' : 'Nenhum chamado com CSAT Ruim pendente nesta fila.'}
+                </p>
+              </div>
+              {renderPagination()}
+            </>
           ) : (
             <>
               {/* Lista de Tickets Negativos */}
@@ -2047,10 +2068,15 @@ ${checksSummary}${recs}`;
           {loading && paginatedTickets.length === 0 ? (
             renderSkeletonGrid()
           ) : filteredTickets.length === 0 ? (
-            <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
-              <GitFork className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
-              <p className="text-xs font-bold text-brand-muted">Nenhum chamado filho pendente nesta fila.</p>
-            </div>
+            <>
+              <div className="p-8 text-center bg-surface-subtle/30 rounded-2xl border border-dashed border-surface-border">
+                <GitFork className="w-8 h-8 mx-auto text-brand-muted/50 mb-2" />
+                <p className="text-xs font-bold text-brand-muted">
+                  {selectedMonitorFilter ? 'Nenhum ticket deste monitor nesta página da fila.' : 'Nenhum chamado filho pendente nesta fila.'}
+                </p>
+              </div>
+              {renderPagination()}
+            </>
           ) : (
             <>
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>

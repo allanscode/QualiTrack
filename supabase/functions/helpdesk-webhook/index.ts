@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.108.2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { secretApiKey } from '../_shared/keys.ts';
 
 /**
  * Edge Function: helpdesk-webhook
@@ -109,8 +110,7 @@ serve(async (req: Request) => {
 
       const resp = await fetch(`https://${subdomain}.zendesk.com/api/v2/triggers.json?active=true`, { headers: zHeaders });
       if (!resp.ok) {
-        const errText = await resp.text().catch(() => '');
-        return new Response(JSON.stringify({ error: `Zendesk API erro: ${resp.status}`, details: errText }), {
+        return new Response(JSON.stringify({ error: `Zendesk API erro: ${resp.status}` }), {
           status: 502,
           headers: { 'Content-Type': 'application/json' },
         });
@@ -160,23 +160,23 @@ serve(async (req: Request) => {
     const payload = parseResult.data;
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseServiceKey = secretApiKey();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Registra log para auditoria de administradores
     try {
-      await supabase.from('ai_evaluation_logs').insert({
+      const { error: logError } = await supabase.from('ai_evaluation_logs').insert({
         ticket_id: payload.ticket_id,
-        ticket_subject: payload.subject || `Webhook Event: ${payload.event}`,
+        ticket_subject: `Webhook Event: ${payload.event}`,
         evaluation_type: payload.event === 'child_ticket_created' ? 'chamado_filho' : 'atendimento',
-        provider: 'gemini',
+        provider: 'zendesk_webhook',
         model: 'webhook-trigger',
-        prompt_text: `Evento recebido via Webhook Zendesk: ${payload.event}`,
-        response_json: payload,
+        response_json: { event: payload.event, ticket_id: payload.ticket_id },
         status: 'success',
       });
-    } catch (logErr) {
-      console.warn('[helpdesk-webhook] Aviso ao registrar log de webhook:', logErr);
+      if (logError) console.warn('[helpdesk-webhook] Falha ao registrar metadados do evento.');
+    } catch {
+      console.warn('[helpdesk-webhook] Falha ao registrar metadados do evento.');
     }
 
     return new Response(JSON.stringify({
@@ -187,11 +187,10 @@ serve(async (req: Request) => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-  } catch (error: any) {
-    console.error('[helpdesk-webhook] Erro interno:', error);
+  } catch {
+    console.error('[helpdesk-webhook] Erro interno ao processar evento.');
     return new Response(JSON.stringify({
       error: 'Erro interno ao processar webhook',
-      message: error?.message,
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
