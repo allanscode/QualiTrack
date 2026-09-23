@@ -60,7 +60,8 @@ import {
   Eye,
   Copy,
   MessageSquare,
-  UserCog
+  UserCog,
+  Hash
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -299,6 +300,10 @@ export default function AuditingQueueView({
   const [guidelineOptions, setGuidelineOptions] = useState<AIEvaluationGuideline[]>([]);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [guidelinePickerTicket, setGuidelinePickerTicket] = useState<AuditingQueueTicket | null>(null);
+  const [selectionOverrideEnabled, setSelectionOverrideEnabled] = useState(false);
+  const [selectedOverrideFormId, setSelectedOverrideFormId] = useState('');
+  const [selectedOverrideGuidelineIds, setSelectedOverrideGuidelineIds] = useState<string[]>([]);
+  const [selectionOverrideReason, setSelectionOverrideReason] = useState('');
   const [childGuidelineModalTicket, setChildGuidelineModalTicket] = useState<AuditingQueueTicket | null>(null);
   const [showFullChildManual, setShowFullChildManual] = useState(false);
 
@@ -557,6 +562,20 @@ ${checksSummary}${recs}`;
     }
   }, [activeQueue, monitorias.length]);
 
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible' && pageNumber === 1 && !batchRunning) loadQueueData(null);
+    };
+    const interval = window.setInterval(refreshIfVisible, 60_000);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('focus', refreshIfVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('focus', refreshIfVisible);
+    };
+  }, [activeQueue, pageNumber, batchRunning, monitorias.length]);
+
   // Carrega os rascunhos de IA já prontos para os tickets da página atual —
   // agora ativo nas filas de Negativas, Positivas e Proativas.
   useEffect(() => {
@@ -752,6 +771,10 @@ ${checksSummary}${recs}`;
       return;
     }
     setGuidelinePickerTicket(ticket);
+    setSelectionOverrideEnabled(false);
+    setSelectedOverrideFormId('');
+    setSelectedOverrideGuidelineIds([]);
+    setSelectionOverrideReason('');
     setLoadingGuidelines(true);
     try {
       const all = await fetchAIGuidelines();
@@ -771,7 +794,8 @@ ${checksSummary}${recs}`;
     formToUse: EvaluationForm,
     guidelineIds: string[],
     // Lotes mantêm as mesmas etapas contextuais em cada card.
-    silent = false
+    silent = false,
+    selectionContext?: Record<string, unknown>
   ) => {
     if (globalEvaluatingTickets.has(ticket.ticket_id)) {
       const duplicateError = new Error(`O ticket #${ticket.ticket_id} já está sendo avaliado com IA.`);
@@ -809,6 +833,7 @@ ${checksSummary}${recs}`;
       channel: ticket.channel,
       satisfaction_comment: ticket.csat_comment,
       guideline_ids: guidelineIds,
+      selection_context: selectionContext,
     };
 
     globalEvaluatingTickets.add(ticket.ticket_id);
@@ -972,6 +997,20 @@ ${checksSummary}${recs}`;
         continue;
       }
       const guidelineIds = autoGuideline ? [autoGuideline.id] : activeGuidelineIds;
+      const batchSelectionContext = {
+        detected_customer_type: customerType,
+        suggested_form_id: autoForm.id,
+        suggested_form_title: autoForm.title,
+        suggested_guideline_ids: guidelineIds,
+        suggested_guideline_titles: allGuidelines.filter(guideline => guidelineIds.includes(guideline.id)).map(guideline => guideline.title),
+        selected_form_id: autoForm.id,
+        selected_form_title: autoForm.title,
+        selected_guideline_ids: guidelineIds,
+        selected_guideline_titles: allGuidelines.filter(guideline => guidelineIds.includes(guideline.id)).map(guideline => guideline.title),
+        overridden: false,
+        override_reason: null,
+        source: 'automatic',
+      };
 
       initialItems[i].status = 'processing';
       setBatchProgress({
@@ -986,7 +1025,7 @@ ${checksSummary}${recs}`;
       });
 
       try {
-        const outcome = await handleEvaluateWithAI(ticket, autoForm, guidelineIds, true);
+        const outcome = await handleEvaluateWithAI(ticket, autoForm, guidelineIds, true, batchSelectionContext);
         if (outcome === 'queued') {
           queued++;
           initialItems[i].status = 'queued';
@@ -1299,11 +1338,11 @@ ${checksSummary}${recs}`;
         <button
           type="button"
           onClick={() => setAssignmentModalTicket(ticket)}
-          className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-surface-border bg-surface-card px-2 py-1 text-[9px] font-black uppercase tracking-wider text-brand-muted transition-colors hover:border-brand-accent/40 hover:bg-surface-subtle hover:text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-surface-border bg-surface-card text-brand-muted transition-colors hover:border-brand-accent/40 hover:bg-surface-subtle hover:text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
           title="Alterar o monitor responsável"
+          aria-label="Alterar o monitor responsável"
         >
           <UserCog className="h-3 w-3" />
-          <span className="min-w-0 whitespace-normal text-left leading-tight">Alterar monitor</span>
         </button>
       </span>
     );
@@ -1859,9 +1898,7 @@ ${checksSummary}${recs}`;
                     />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs font-black text-brand-primary">
-                          #{ticket.ticket_id}
-                        </span>
+                        <QueueTicketNumber ticketId={ticket.ticket_id} />
                         {getSpecializedTeamInfo(ticket).label && (
                           <Badge variant="warning" size="xs" className="text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shadow-2xs" title={`Atendimento da equipe ${getSpecializedTeamInfo(ticket).label} — avaliado com as fichas ativas`}>
                             <AlertTriangle className="w-2.5 h-2.5 text-amber-500 shrink-0" />
@@ -1955,9 +1992,7 @@ ${checksSummary}${recs}`;
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-mono text-xs font-black text-brand-primary">
-                                #{ticket.ticket_id}
-                              </span>
+                              <QueueTicketNumber ticketId={ticket.ticket_id} />
                               {getSpecializedTeamInfo(ticket).label && (
                                 <Badge variant="warning" size="xs" className="text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shadow-2xs" title={`Atendimento da equipe ${getSpecializedTeamInfo(ticket).label} — avaliado com as fichas ativas`}>
                                   <AlertTriangle className="w-2.5 h-2.5 text-amber-500 shrink-0" />
@@ -2049,9 +2084,7 @@ ${checksSummary}${recs}`;
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-xs font-black text-brand-primary">
-                              #{ticket.ticket_id}
-                            </span>
+                            <QueueTicketNumber ticketId={ticket.ticket_id} />
                             {getSpecializedTeamInfo(ticket).label && (
                               <Badge variant="warning" size="xs" className="text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shadow-2xs" title={`Atendimento da equipe ${getSpecializedTeamInfo(ticket).label} — avaliado com as fichas ativas`}>
                                 <AlertTriangle className="w-2.5 h-2.5 text-amber-500 shrink-0" />
@@ -2151,9 +2184,7 @@ ${checksSummary}${recs}`;
                           />
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-mono text-xs font-black text-brand-primary">
-                                #{ticket.ticket_id}
-                              </span>
+                              <QueueTicketNumber ticketId={ticket.ticket_id} />
                               {ticket.parent_ticket_id && (
                                 <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
                                   Pai: #{ticket.parent_ticket_id}
@@ -2286,9 +2317,7 @@ ${checksSummary}${recs}`;
                           />
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-mono text-xs font-black text-brand-primary">
-                                #{ticket.ticket_id}
-                              </span>
+                              <QueueTicketNumber ticketId={ticket.ticket_id} />
                               {ticket.parent_ticket_id && (
                                 <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-subtle border border-surface-border text-brand-muted" title="Chamado Pai">
                                   Pai: #{ticket.parent_ticket_id}
@@ -3258,15 +3287,15 @@ ${checksSummary}${recs}`;
                   );
                 })()}
 
-                {/* Opções selecionadas pela IA (Travadas / Read-Only) */}
+                {/* Sugestão automática preservada para comparação com eventual correção. */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between ml-0.5">
                     <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
-                      Critérios e Manual Vinculados (Bloqueados)
+                      Critérios e Manual Vinculados
                     </span>
                     <span className="flex items-center gap-1 text-[9px] font-bold text-brand-highlight">
-                      <Lock className="w-2.5 h-2.5" />
-                      <span>Seleção Automática</span>
+                      {selectionOverrideEnabled ? <AlertTriangle className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                      <span>{selectionOverrideEnabled ? 'Correção manual' : 'Seleção automática'}</span>
                     </span>
                   </div>
 
@@ -3280,9 +3309,7 @@ ${checksSummary}${recs}`;
                         <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
                           Ficha de Monitoria
                         </span>
-                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">
-                          Somente Leitura
-                        </Badge>
+                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">Sugestão</Badge>
                       </div>
                       <div className="text-xs font-black text-brand-primary mt-0.5">
                         {autoForm?.title || 'Ficha de Atendimento Geral'}
@@ -3303,9 +3330,7 @@ ${checksSummary}${recs}`;
                         <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
                           Manual de Atendimento
                         </span>
-                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">
-                          Somente Leitura
-                        </Badge>
+                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">Sugestão</Badge>
                       </div>
                       <div className="text-xs font-black text-brand-primary mt-0.5">
                         {autoGuideline?.title || 'Critérios padrão da ficha'}
@@ -3318,10 +3343,54 @@ ${checksSummary}${recs}`;
                 </div>
 
                 {/* Mensagem de trava */}
+                <div className="space-y-3 rounded-xl border border-surface-border bg-surface-subtle/60 p-3">
+                  <label className="flex cursor-pointer items-start gap-2.5 text-xs font-semibold text-brand-primary">
+                    <input
+                      type="checkbox"
+                      checked={selectionOverrideEnabled}
+                      onChange={event => {
+                        const enabled = event.target.checked;
+                        setSelectionOverrideEnabled(enabled);
+                        setSelectedOverrideFormId(autoForm?.id || '');
+                        setSelectedOverrideGuidelineIds(autoGuideline ? [autoGuideline.id] : []);
+                        if (!enabled) setSelectionOverrideReason('');
+                      }}
+                      className="mt-0.5 h-4 w-4 rounded border-surface-border text-brand-highlight focus:ring-brand-highlight"
+                    />
+                    <span>
+                      A ficha ou o manual sugerido está incorreto
+                      <span className="mt-0.5 block text-[10px] font-normal text-brand-muted">Marque para liberar a troca e registrar esta falha de seleção.</span>
+                    </span>
+                  </label>
+                  {selectionOverrideEnabled && (
+                    <div className="grid gap-3 border-t border-surface-border pt-3">
+                      <label className="grid gap-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+                        Ficha correta
+                        <select value={selectedOverrideFormId} onChange={event => setSelectedOverrideFormId(event.target.value)} className="rounded-lg border border-surface-border bg-surface-card px-3 py-2 text-xs font-semibold normal-case tracking-normal text-brand-primary">
+                          {forms.filter(form => form.active !== false).map(form => <option key={form.id} value={form.id}>{form.title}</option>)}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+                        Manual correto
+                        <select value={selectedOverrideGuidelineIds[0] || ''} onChange={event => setSelectedOverrideGuidelineIds(event.target.value ? [event.target.value] : [])} className="rounded-lg border border-surface-border bg-surface-card px-3 py-2 text-xs font-semibold normal-case tracking-normal text-brand-primary">
+                          <option value="">Sem manual</option>
+                          {guidelineOptions.map(guideline => <option key={guideline.id} value={guideline.id}>{guideline.title}</option>)}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+                        O que veio errado?
+                        <textarea value={selectionOverrideReason} onChange={event => setSelectionOverrideReason(event.target.value)} maxLength={500} rows={2} placeholder="Ex.: cliente revenda recebeu ficha de cliente final" className="resize-none rounded-lg border border-surface-border bg-surface-card px-3 py-2 text-xs font-medium normal-case tracking-normal text-brand-primary placeholder:text-brand-muted" />
+                      </label>
+                    </div>
+                  )}
+                </div>
+
                 <div className="p-3 rounded-xl bg-brand-highlight/5 border border-brand-highlight/15 text-[11px] font-medium text-brand-primary/80 flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-brand-highlight flex-shrink-0" />
+                  {selectionOverrideEnabled ? <AlertTriangle className="w-4 h-4 text-functional-warning flex-shrink-0" /> : <Lock className="w-4 h-4 text-brand-highlight flex-shrink-0" />}
                   <span>
-                    A ficha e o manual são definidos automaticamente pelo tipo de cliente ({detectedCustomerType === 'cliente_final' ? 'Cliente Final' : 'Revenda'}) e não podem ser alterados manualmente.
+                    {selectionOverrideEnabled
+                      ? 'A correção será registrada junto ao resultado para análise dos erros de seleção.'
+                      : `A ficha e o manual foram sugeridos pelo tipo de cliente (${detectedCustomerType === 'cliente_final' ? 'Cliente Final' : 'Revenda'}). Se estiverem errados, marque a opção acima.`}
                   </span>
                 </div>
 
@@ -3337,13 +3406,31 @@ ${checksSummary}${recs}`;
                     variant="primary"
                     size="sm"
                     className="flex items-center gap-1.5"
-                    disabled={!autoForm || evaluatingTicketId === guidelinePickerTicket.ticket_id}
+                    disabled={!autoForm || evaluatingTicketId === guidelinePickerTicket.ticket_id || (selectionOverrideEnabled && (!selectedOverrideFormId || !selectionOverrideReason.trim()))}
                     onClick={() => {
                       const ticket = guidelinePickerTicket;
-                      const formToUse = autoForm!;
-                      const guidelineIds = autoGuideline ? [autoGuideline.id] : [];
+                      const formToUse = selectionOverrideEnabled
+                        ? forms.find(form => form.id === selectedOverrideFormId) || autoForm!
+                        : autoForm!;
+                      const guidelineIds = selectionOverrideEnabled
+                        ? selectedOverrideGuidelineIds
+                        : (autoGuideline ? [autoGuideline.id] : []);
+                      const selectionContext = {
+                        detected_customer_type: detectedCustomerType,
+                        suggested_form_id: autoForm?.id || null,
+                        suggested_form_title: autoForm?.title || null,
+                        suggested_guideline_ids: autoGuideline ? [autoGuideline.id] : [],
+                        suggested_guideline_titles: autoGuideline ? [autoGuideline.title] : [],
+                        selected_form_id: formToUse.id,
+                        selected_form_title: formToUse.title,
+                        selected_guideline_ids: guidelineIds,
+                        selected_guideline_titles: guidelineOptions.filter(guideline => guidelineIds.includes(guideline.id)).map(guideline => guideline.title),
+                        overridden: selectionOverrideEnabled,
+                        override_reason: selectionOverrideEnabled ? selectionOverrideReason.trim() : null,
+                        source: selectionOverrideEnabled ? 'manual_override' : (autoForm ? 'automatic' : 'manual_no_suggestion'),
+                      };
                       setGuidelinePickerTicket(null);
-                      handleEvaluateWithAI(ticket, formToUse, guidelineIds);
+                      handleEvaluateWithAI(ticket, formToUse, guidelineIds, false, selectionContext);
                     }}
                   >
                     <Bot className="w-3.5 h-3.5" />
@@ -3537,5 +3624,14 @@ ${checksSummary}${recs}`;
         />
       )}
     </div>
+  );
+}
+
+function QueueTicketNumber({ ticketId }: { ticketId: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface-card px-2.5 py-1 font-mono text-sm font-black tabular-nums text-brand-primary shadow-2xs">
+      <Hash className="h-3.5 w-3.5 text-brand-highlight" aria-hidden="true" />
+      <span>{ticketId}</span>
+    </span>
   );
 }

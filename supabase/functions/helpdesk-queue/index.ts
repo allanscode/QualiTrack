@@ -81,6 +81,20 @@ const RequestSchema = z.object({
     channel: z.string().nullable().optional(),
     satisfaction_comment: z.string().nullable().optional(),
     guideline_ids: z.array(z.string().uuid()).optional(),
+    selection_context: z.object({
+      detected_customer_type: z.enum(['cliente_final', 'revenda', 'outro']),
+      suggested_form_id: z.string().uuid().nullable(),
+      suggested_form_title: z.string().max(300).nullable(),
+      suggested_guideline_ids: z.array(z.string().uuid()).max(50),
+      suggested_guideline_titles: z.array(z.string().max(300)).max(50),
+      selected_form_id: z.string().uuid().nullable(),
+      selected_form_title: z.string().max(300).nullable(),
+      selected_guideline_ids: z.array(z.string().uuid()).max(50),
+      selected_guideline_titles: z.array(z.string().max(300)).max(50),
+      overridden: z.boolean(),
+      override_reason: z.string().max(500).nullable(),
+      source: z.enum(['automatic', 'manual_override', 'manual_no_suggestion']),
+    }).optional(),
   }).optional(),
   ticket_subject: z.string().max(500).optional(),
   // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
@@ -691,6 +705,7 @@ serve(async (req) => {
             ticket_id: t.ticket_id,
             queue_type,
             parent_ticket_id: t.parent_ticket_id || null,
+            ticket_snapshot: t,
             verified_at: new Date().toISOString(),
           })), { onConflict: 'ticket_id,queue_type' },
         );
@@ -710,6 +725,43 @@ serve(async (req) => {
           if (ownedError) throw new Error(`Falha na autorização da fila: ${ownedError.message}`);
           const ownedIds = new Set((owned || []).map(row => row.ticket_id));
           visibleTickets = queueTickets.filter(t => ownedIds.has(t.ticket_id));
+        }
+      }
+
+      // A mesma janela recente alimenta monitor e supervisao. Assim, um
+      // ticket atribuido em outra pagina/sessao nao desaparece do admin.
+      if ((queue_type === 'negativas' || queue_type === 'filhos') && !cursor) {
+        const recentSince = new Date(Date.now() - 15 * 60_000).toISOString();
+        const { data: catalogRows, error: recentError } = await supabase.from('queue_ticket_catalog')
+          .select('ticket_id, ticket_snapshot').eq('queue_type', queue_type)
+          .gte('verified_at', recentSince).order('verified_at', { ascending: false }).limit(250);
+        if (recentError) throw new Error(`Falha ao ler catalogo da fila: ${recentError.message}`);
+        const recentIds = (catalogRows || []).map(row => row.ticket_id);
+        if (recentIds.length === 0) {
+          if (caller.role === 'qualidade') visibleTickets = [];
+        } else {
+          let assignmentQuery = supabase.from('queue_ticket_assignments')
+            .select('ticket_id, assigned_to').eq('queue_type', queue_type).in('ticket_id', recentIds);
+          if (caller.role === 'qualidade') assignmentQuery = assignmentQuery.eq('assigned_to', user.id);
+          const { data: assignedRows, error: assignedError } = await assignmentQuery;
+          if (assignedError) throw new Error(`Falha ao autorizar leitura da fila: ${assignedError.message}`);
+          const allowedIds = new Set((assignedRows || []).map(row => row.ticket_id));
+          const merged = new Map(visibleTickets.map(ticket => [ticket.ticket_id, ticket]));
+          for (const row of catalogRows || []) {
+            if (allowedIds.has(row.ticket_id) && row.ticket_snapshot && typeof row.ticket_snapshot === 'object') {
+              merged.set(row.ticket_id, row.ticket_snapshot);
+            }
+          }
+          const mergedIds = [...merged.keys()];
+          if (mergedIds.length === 0) {
+            visibleTickets = [];
+          } else {
+            const { data: completedRows, error: completedError } = await supabase.from('monitorias')
+              .select('ticket_id').in('ticket_id', mergedIds);
+            if (completedError) throw new Error('Falha ao validar o estado atual da fila.');
+            const completedIds = new Set((completedRows || []).map(row => row.ticket_id));
+            visibleTickets = [...merged.values()].filter(ticket => !completedIds.has(ticket.ticket_id));
+          }
         }
       }
 
@@ -1287,10 +1339,29 @@ async function executeAndPersistAIJob(
     console.info(`[ai-timing] ${JSON.stringify({ job_id: jobId, ticket_id: payload.ticket_id, stage: 'database_write', duration_ms: Date.now() - persistStarted })}`);
     const technical = body.technical as {
       model?: string; attempts?: AIAttemptRecord[]; fallbackUsed?: boolean; durationMs?: number;
-      evaluationType?: string;
+      evaluationType?: string; promptText?: string; sanitizedDialogue?: string;
     } | undefined;
     if (technical) {
       await enrichGenerationMetadata(technical.attempts?.at(-1));
+      const clientSelection = payload.draft_meta?.selection_context;
+      const actualFormId = payload.draft_meta?.form_id || null;
+      const actualGuidelineIds = payload.guideline_ids || payload.draft_meta?.guideline_ids || [];
+      const sameGuidelines = clientSelection
+        ? [...clientSelection.selected_guideline_ids].sort().join(',') === [...actualGuidelineIds].sort().join(',')
+        : false;
+      const normalizedSelection = clientSelection ? {
+        ...clientSelection,
+        selected_form_id: actualFormId,
+        selected_form_title: clientSelection.selected_form_id === actualFormId ? clientSelection.selected_form_title : null,
+        selected_guideline_ids: actualGuidelineIds,
+        selected_guideline_titles: sameGuidelines ? clientSelection.selected_guideline_titles : [],
+        overridden: clientSelection.suggested_form_id !== actualFormId ||
+          [...clientSelection.suggested_guideline_ids].sort().join(',') !== [...actualGuidelineIds].sort().join(','),
+        source: clientSelection.suggested_form_id !== actualFormId ||
+          [...clientSelection.suggested_guideline_ids].sort().join(',') !== [...actualGuidelineIds].sort().join(',')
+          ? 'manual_override' : 'automatic',
+        integrity: 'server_normalized',
+      } : null;
       const { error: logError } = await supabase.from('ai_evaluation_logs').insert({
         job_id: jobId,
         ticket_id: payload.ticket_id,
@@ -1302,6 +1373,10 @@ async function executeAndPersistAIJob(
         status: 'success',
         attempts: technical.attempts || [],
         fallback_used: technical.fallbackUsed || false,
+        prompt_text: technical.promptText,
+        sanitized_dialogue: technical.sanitizedDialogue,
+        response_json: result,
+        selection_context: normalizedSelection,
         created_by: callerId,
       });
       if (logError) console.warn('[ai-job] Falha ao registrar metadados técnicos:', logError.message);
@@ -1567,7 +1642,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
 
     return jsonResponse({
       success: true,
-      technical: { model: chain.model, attempts: chain.attempts, fallbackUsed: chain.fallbackUsed, durationMs, evaluationType: 'atendimento', callerId },
+      technical: { model: chain.model, attempts: chain.attempts, fallbackUsed: chain.fallbackUsed, durationMs, evaluationType: 'atendimento', callerId, promptText: prompt, sanitizedDialogue: dialogueText },
       result: {
         score: parsed.score,
         summary: parsed.summary,
@@ -1600,6 +1675,15 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
         error_message: error?.message || 'Falha ao avaliar com IA',
         attempts: pipelineAttempts,
         fallback_used: false,
+        prompt_text: prompt,
+        sanitized_dialogue: dialogueText,
+        selection_context: payload.draft_meta?.selection_context ? {
+          ...payload.draft_meta.selection_context,
+          selected_form_id: payload.draft_meta.form_id || null,
+          selected_guideline_ids: payload.guideline_ids || payload.draft_meta.guideline_ids || [],
+          integrity: 'server_normalized',
+        } : null,
+        error_stage: 'provider_or_parse',
         created_by: callerId || null,
       });
     } catch (_) {}
@@ -1801,7 +1885,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     })}`);
 
     const durationMs = Date.now() - startTime;
-    return jsonResponse({ success: true, technical: { model: chain.model, attempts: chain.attempts, fallbackUsed: chain.fallbackUsed, durationMs, evaluationType: 'chamado_filho', callerId }, result: parsed }, 200);
+    return jsonResponse({ success: true, technical: { model: chain.model, attempts: chain.attempts, fallbackUsed: chain.fallbackUsed, durationMs, evaluationType: 'chamado_filho', callerId, promptText: prompt, sanitizedDialogue: dialogueText }, result: parsed }, 200);
   } catch (err: any) {
     pipelineAttempts = attemptsFromError(err);
     if (err instanceof AIModelError && err.reason === 'cancelled') return jsonResponse({ cancelled: true }, 409);
@@ -1823,6 +1907,9 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
         error_message: err.message,
         attempts: pipelineAttempts,
         fallback_used: false,
+        prompt_text: prompt,
+        sanitized_dialogue: dialogueText,
+        error_stage: 'provider_or_parse',
         created_by: callerId || null,
       });
     } catch (_) {}

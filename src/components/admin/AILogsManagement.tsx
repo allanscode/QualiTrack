@@ -425,6 +425,34 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                     </Card>
                   </div>
 
+                  {selectedLog.selection_context && (
+                    <Card className="space-y-3 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[11px] font-bold text-brand-muted">Seleção de ficha e manual</span>
+                        <Badge variant={selectedLog.selection_context.overridden ? 'warning' : 'success'} size="xs">
+                          {selectedLog.selection_context.overridden ? 'Corrigida pelo monitor' : 'Automática confirmada'}
+                        </Badge>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">Sistema sugeriu</p>
+                          <p className="mt-1 font-semibold text-brand-primary">{selectedLog.selection_context.suggested_form_title || 'Sem ficha'}</p>
+                          <p className="text-[11px] text-brand-muted">{selectedLog.selection_context.suggested_guideline_titles?.join(', ') || 'Sem manual'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">Seleção utilizada</p>
+                          <p className="mt-1 font-semibold text-brand-primary">{selectedLog.selection_context.selected_form_title || 'Sem ficha'}</p>
+                          <p className="text-[11px] text-brand-muted">{selectedLog.selection_context.selected_guideline_titles?.join(', ') || 'Sem manual'}</p>
+                        </div>
+                      </div>
+                      {selectedLog.selection_context.override_reason && (
+                        <p className="rounded-lg bg-functional-warning/10 p-2 text-[11px] text-brand-primary">
+                          <strong>Motivo informado:</strong> {selectedLog.selection_context.override_reason}
+                        </p>
+                      )}
+                    </Card>
+                  )}
+
                   {selectedLog.error_message && (
                     <div className="p-3 rounded-xl bg-functional-error/10 border border-functional-error/30 text-functional-error space-y-1">
                       <span className="font-bold text-[11px] flex items-center gap-1">
