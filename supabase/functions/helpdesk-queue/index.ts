@@ -633,12 +633,15 @@ serve(async (req) => {
         ticket.satisfaction_rating?.id && ['bad', 'bad_with_comment', 'good', 'good_with_comment'].includes(ticket.satisfaction_rating?.score)
         && !satisfactionRatedAt.has(String(ticket.id))
       );
+      const satisfactionLookupDeadline = Date.now() + 5_000;
       for (let offset = 0; offset < ratedTickets.length; offset += 5) {
+        const remainingMs = satisfactionLookupDeadline - Date.now();
+        if (remainingMs <= 0) break;
         await Promise.all(ratedTickets.slice(offset, offset + 5).map(async (ticket: any) => {
           try {
             const response = await fetch(
               `https://${subdomain}.zendesk.com/api/v2/satisfaction_ratings/${ticket.satisfaction_rating.id}`,
-              { headers: zendeskHeaders, signal: AbortSignal.timeout(5_000) },
+              { headers: zendeskHeaders, signal: AbortSignal.timeout(remainingMs) },
             );
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const timestamp = satisfactionResponseTimestamp(await response.json());
