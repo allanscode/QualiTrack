@@ -272,6 +272,8 @@ export interface AuditingQueueTicket {
   team_id?: string;
   csat_status: 'bad' | 'good' | 'unrated' | 'offered';
   csat_comment?: string;
+  /** Momento em que o cliente enviou a avaliação CSAT no Zendesk. */
+  csat_rated_at?: string;
   channel?: string;
   ticket_date: string;
   status: string;

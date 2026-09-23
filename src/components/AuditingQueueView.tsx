@@ -85,6 +85,7 @@ import {
 } from '../lib/queueDistribution';
 import { usePresence } from '../providers/PresenceProvider';
 import { matchesAssignedMonitor } from '../lib/queueMonitorFilter';
+import { calculateAIEvaluationScore } from '../utils/aiEvaluationScore';
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -1231,12 +1232,15 @@ ${checksSummary}${recs}`;
     const draft = drafts[ticket.ticket_id];
     if (!draft) return null;
 
+    const selectedForm = forms.find(form => form.id === draft.form_id);
+    const calculatedScore = calculateAIEvaluationScore(draft.result, selectedForm);
+
     return (
       <span
-        title="Nota sugerida pela IA"
+        title="Nota calculada pelas respostas da IA usando os pesos da ficha"
         className="inline-flex items-center px-2.5 py-1 rounded-lg bg-functional-success text-functional-success text-xs font-mono font-black flex-shrink-0"
       >
-        {Math.round(draft.result.score)}%
+        {Math.round(calculatedScore)}%
       </span>
     );
   };
@@ -1945,7 +1949,7 @@ ${checksSummary}${recs}`;
                     {renderAgentInfo(ticket)}
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 opacity-60" />
-                      {formatTicketDateTime(ticket.ticket_date)}
+                      {formatTicketDateTime(ticket.csat_rated_at || ticket.ticket_date)}
                     </span>
                   </div>
 
@@ -2038,7 +2042,7 @@ ${checksSummary}${recs}`;
                           {renderAgentInfo(ticket)}
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.ticket_date)}
+                            {formatTicketDateTime(ticket.csat_rated_at || ticket.ticket_date)}
                           </span>
                         </div>
 
@@ -2131,7 +2135,7 @@ ${checksSummary}${recs}`;
                         {renderAgentInfo(ticket)}
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 opacity-60" />
-                          {formatTicketDateTime(ticket.ticket_date)}
+                          {formatTicketDateTime(ticket.csat_rated_at || ticket.ticket_date)}
                         </span>
                       </div>
 
@@ -2229,7 +2233,7 @@ ${checksSummary}${recs}`;
                           {renderAgentInfo(ticket)}
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.ticket_date)}
+                            {formatTicketDateTime(ticket.csat_rated_at || ticket.ticket_date)}
                           </span>
                         </div>
 
@@ -2360,7 +2364,7 @@ ${checksSummary}${recs}`;
                           {renderAgentInfo(ticket)}
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.ticket_date)}
+                            {formatTicketDateTime(ticket.csat_rated_at || ticket.ticket_date)}
                           </span>
                         </div>
 

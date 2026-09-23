@@ -17,7 +17,9 @@ import {
 } from './ai-fallback.ts';
 import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODEL } from './openrouter-client.ts';
 import { retryAt } from './ai-retry.ts';
-import { canReadQueueTicket, trustedZendeskCursor, type QueueType } from './access.ts';
+import { canReadQueueTicket, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
+import { calculateCanonicalQualityScore } from './quality-score.ts';
+import { satisfactionResponseTimestamp } from './satisfaction.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 const AI_PRIMARY_TIMEOUT_MS = Math.min(120_000, Math.max(1_000, Number(Deno.env.get('AI_PRIMARY_TIMEOUT_MS') || '30000') || 30000));
@@ -610,6 +612,29 @@ serve(async (req) => {
         nextCursor = hasMore ? (searchData.links?.next || null) : null;
       }
 
+      // O ticket embute score/comentário, mas não o instante da resposta.
+      // Busca o rating exato em lotes pequenos para exibir a hora em que o
+      // cliente avaliou, sem confundir com a abertura do chamado.
+      const satisfactionRatedAt = new Map<string, string>();
+      const ratedTickets = results.filter((ticket: any) =>
+        ticket.satisfaction_rating?.id && ['bad', 'bad_with_comment', 'good', 'good_with_comment'].includes(ticket.satisfaction_rating?.score)
+      );
+      for (let offset = 0; offset < ratedTickets.length; offset += 5) {
+        await Promise.all(ratedTickets.slice(offset, offset + 5).map(async (ticket: any) => {
+          try {
+            const response = await fetch(
+              `https://${subdomain}.zendesk.com/api/v2/satisfaction_ratings/${ticket.satisfaction_rating.id}`,
+              { headers: zendeskHeaders },
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const timestamp = satisfactionResponseTimestamp(await response.json());
+            if (timestamp) satisfactionRatedAt.set(String(ticket.id), timestamp);
+          } catch (error) {
+            console.warn(`[helpdesk-queue] Não foi possível obter o horário CSAT do ticket ${ticket.id}:`, error);
+          }
+        }));
+      }
+
       // Resolve/garante o vínculo do agente no QualiTrack pelo e-mail (chave
       // universal), criando conta provisória quando necessário. Só roda
       // pros ~25 tickets desta página, não pra view inteira.
@@ -675,6 +700,7 @@ serve(async (req) => {
           channel: t.via?.channel || 'chat',
           csat_status: csatStatus,
           csat_comment: t.satisfaction_rating?.comment || undefined,
+          csat_rated_at: satisfactionRatedAt.get(String(t.id)) || undefined,
           ticket_date: t.created_at || null,
           status: t.status || 'solved',
           url: `https://${subdomain}.zendesk.com/agent/tickets/${t.id}`,
@@ -730,7 +756,7 @@ serve(async (req) => {
 
       // A mesma janela recente alimenta monitor e supervisao. Assim, um
       // ticket atribuido em outra pagina/sessao nao desaparece do admin.
-      if ((queue_type === 'negativas' || queue_type === 'filhos') && !cursor) {
+      if (shouldMergeRecentQueueSnapshot(queue_type, parseResult.data.cursor)) {
         const recentSince = new Date(Date.now() - 15 * 60_000).toISOString();
         const { data: catalogRows, error: recentError } = await supabase.from('queue_ticket_catalog')
           .select('ticket_id, ticket_snapshot').eq('queue_type', queue_type)
@@ -1640,11 +1666,26 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
       }
     }
 
+    const canonicalScore = calculateCanonicalQualityScore(
+      form_criteria.sections,
+      suggested_answers as Record<string, 'SIM' | 'NAO' | 'NA'>,
+      suggested_critical_errors,
+    );
+    const scoreDelta = Number((canonicalScore - parsed.score).toFixed(2));
+    console.info(`[ai-score] ${JSON.stringify({
+      event: 'score_reconciled',
+      ticket_id: String(ticket_id),
+      job_id: payload.job_id,
+      model_reported_score: parsed.score,
+      calculated_score: canonicalScore,
+      score_delta: scoreDelta,
+    })}`);
+
     return jsonResponse({
       success: true,
-      technical: { model: chain.model, attempts: chain.attempts, fallbackUsed: chain.fallbackUsed, durationMs, evaluationType: 'atendimento', callerId, promptText: prompt, sanitizedDialogue: dialogueText },
+      technical: { model: chain.model, attempts: chain.attempts, fallbackUsed: chain.fallbackUsed, durationMs, evaluationType: 'atendimento', callerId, promptText: prompt, sanitizedDialogue: dialogueText, modelReportedScore: parsed.score, calculatedScore: canonicalScore, scoreDelta },
       result: {
-        score: parsed.score,
+        score: canonicalScore,
         summary: parsed.summary,
         strengths: parsed.strengths || [],
         improvements: parsed.improvements || [],

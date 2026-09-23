@@ -1,5 +1,12 @@
 export type QueueType = 'negativas' | 'positivas' | 'proativas' | 'filhos' | 'filhos_invalidos';
 
+export function shouldMergeRecentQueueSnapshot(
+  queueType: QueueType,
+  cursor: string | null | undefined,
+): boolean {
+  return (queueType === 'negativas' || queueType === 'filhos') && !cursor;
+}
+
 export function trustedZendeskCursor(
   cursor: string | null | undefined,
   subdomain: string,
