@@ -21,4 +21,8 @@ describe('calculateCanonicalQualityScore', () => {
       { critical: 'NAO' },
     )).toBe(0);
   });
+
+  it('matches the official frontend behavior for an empty form', () => {
+    expect(calculateCanonicalQualityScore([], {})).toBe(0);
+  });
 });

@@ -613,18 +613,32 @@ serve(async (req) => {
       }
 
       // O ticket embute score/comentário, mas não o instante da resposta.
-      // Busca o rating exato em lotes pequenos para exibir a hora em que o
-      // cliente avaliou, sem confundir com a abertura do chamado.
+      // Reaproveita primeiro o snapshot recente e só busca ratings ainda sem
+      // horário, em lotes pequenos e com timeout, para preservar a cota da API.
       const satisfactionRatedAt = new Map<string, string>();
+      const resultTicketIds = results.map((ticket: any) => String(ticket.id));
+      if (resultTicketIds.length > 0) {
+        const { data: cachedTickets, error: cachedTicketsError } = await supabase
+          .from('queue_ticket_catalog')
+          .select('ticket_id, ticket_snapshot')
+          .eq('queue_type', queue_type)
+          .in('ticket_id', resultTicketIds);
+        if (cachedTicketsError) throw new Error(`Falha ao ler cache de horário CSAT: ${cachedTicketsError.message}`);
+        for (const cached of cachedTickets || []) {
+          const timestamp = cached.ticket_snapshot?.csat_rated_at;
+          if (typeof timestamp === 'string' && timestamp) satisfactionRatedAt.set(cached.ticket_id, timestamp);
+        }
+      }
       const ratedTickets = results.filter((ticket: any) =>
         ticket.satisfaction_rating?.id && ['bad', 'bad_with_comment', 'good', 'good_with_comment'].includes(ticket.satisfaction_rating?.score)
+        && !satisfactionRatedAt.has(String(ticket.id))
       );
       for (let offset = 0; offset < ratedTickets.length; offset += 5) {
         await Promise.all(ratedTickets.slice(offset, offset + 5).map(async (ticket: any) => {
           try {
             const response = await fetch(
               `https://${subdomain}.zendesk.com/api/v2/satisfaction_ratings/${ticket.satisfaction_rating.id}`,
-              { headers: zendeskHeaders },
+              { headers: zendeskHeaders, signal: AbortSignal.timeout(5_000) },
             );
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const timestamp = satisfactionResponseTimestamp(await response.json());

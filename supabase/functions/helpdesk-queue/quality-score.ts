@@ -15,6 +15,8 @@ export function calculateCanonicalQualityScore(
   answers: Record<string, AnswerValue>,
   criticalErrors: Record<string, boolean> = {},
 ): number {
+  if (sections.length === 0) return 0;
+
   const criticalAnswerFailed = sections.some(section =>
     (section.questions || []).some(question => question.is_critical && answers[question.id] === 'NAO')
   );
