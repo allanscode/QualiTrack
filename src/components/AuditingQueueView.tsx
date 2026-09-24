@@ -735,7 +735,9 @@ ${checksSummary}${recs}`;
     if (!isDistributedQueue(activeQueue)) return undefined;
     const queueType = activeQueue;
     const assignment = queueAssignments[queueType][ticket.ticket_id];
-    if (!assignment || !currentUserId || assignment.assigned_to !== currentUserId || currentUserRole !== 'qualidade') {
+    const canOverrideAssignment = canManageQueueAssignments(currentUserRole);
+    const isResponsibleMonitor = currentUserRole === 'qualidade' && assignment?.assigned_to === currentUserId;
+    if (!assignment || !currentUserId || (!canOverrideAssignment && !isResponsibleMonitor)) {
       throw new Error('Somente o monitor responsável pode iniciar a avaliação deste ticket.');
     }
     const started = await startQueueTicketAssignment(ticket.ticket_id, queueType);
@@ -752,7 +754,7 @@ ${checksSummary}${recs}`;
     await releaseQueueTicketAssignment(ticket.ticket_id, queueType);
     setQueueAssignments(prev => {
       const current = prev[queueType][ticket.ticket_id];
-      if (!current || current.assigned_to !== currentUserId) return prev;
+      if (!current || current.started_by !== currentUserId) return prev;
       return {
         ...prev,
         [queueType]: {

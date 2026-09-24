@@ -41,6 +41,8 @@ const aiCancellationMigration = readFile(
   new URL('../supabase/migrations/20260922000023_ai_cancellation_and_phase.sql', import.meta.url), 'utf8');
 const aiCancellationAckMigration = readFile(
   new URL('../supabase/migrations/20260922000024_ai_cancellation_ack.sql', import.meta.url), 'utf8');
+const privilegedQueueEvaluationMigration = readFile(
+  new URL('../supabase/migrations/20260924000001_privileged_queue_evaluation.sql', import.meta.url), 'utf8');
 const id = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const session = n => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -127,6 +129,7 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
     await db.exec(await serverOwnedMigration);
     await db.exec(await workerOwnedMigration);
     await db.exec(await aiRetryMigration);
+    await db.exec(await privilegedQueueEvaluationMigration);
 
     const asSession = async (userId, sessionId, run) => {
       await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [userId]);
@@ -208,6 +211,57 @@ test('presença compartilhada e distribuição usam usuários elegíveis realmen
         )),
         /Apenas o Supervisor de Qualidade ou o Administrador/
       );
+    });
+
+    await t.test('admin e supervisor abrem qualquer avaliação; monitores comuns mantêm exclusividade', async () => {
+      await db.query(
+        `INSERT INTO queue_ticket_assignments(ticket_id,queue_type,assigned_to,status,assignment_source)
+         VALUES ($1,$2,$3,'pending','automatic')`,
+        ['override-ticket', 'negativas', id(2)],
+      );
+
+      let row = (await asSession(id(1), session(1), () => db.query(
+        'SELECT assigned_to,status,started_by FROM start_queue_ticket_assignment($1,$2)',
+        ['override-ticket', 'negativas'],
+      ))).rows[0];
+      assert.deepEqual(row, { assigned_to: id(2), status: 'in_progress', started_by: id(1) });
+
+      await asSession(id(1), session(1), () => db.query(
+        'SELECT release_queue_ticket_assignment($1,$2)',
+        ['override-ticket', 'negativas'],
+      ));
+
+      await assert.rejects(
+        () => asSession(id(3), session(5), () => db.query(
+          'SELECT * FROM start_queue_ticket_assignment($1,$2)',
+          ['override-ticket', 'negativas'],
+        )),
+        /atribuído a outro monitor/,
+      );
+
+      row = (await asSession(id(4), session(6), () => db.query(
+        'SELECT assigned_to,status,started_by FROM start_queue_ticket_assignment($1,$2)',
+        ['override-ticket', 'negativas'],
+      ))).rows[0];
+      assert.deepEqual(row, { assigned_to: id(2), status: 'in_progress', started_by: id(4) });
+
+      await assert.rejects(
+        () => asSession(id(2), session(4), () => db.query(
+          'INSERT INTO monitorias(ticket_id,evaluator_id) VALUES ($1,$2)',
+          ['override-ticket', id(2)],
+        )),
+        /avaliação por outro usuário/,
+      );
+
+      await asSession(id(4), session(6), () => db.query(
+        'SELECT release_queue_ticket_assignment($1,$2)',
+        ['override-ticket', 'negativas'],
+      ));
+      row = (await asSession(id(2), session(4), () => db.query(
+        'SELECT assigned_to,status,started_by FROM start_queue_ticket_assignment($1,$2)',
+        ['override-ticket', 'negativas'],
+      ))).rows[0];
+      assert.deepEqual(row, { assigned_to: id(2), status: 'in_progress', started_by: id(2) });
     });
 
     await t.test('balanceamento preserva atribuição manual enquanto o responsável está online', async () => {
