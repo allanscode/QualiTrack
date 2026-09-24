@@ -33,7 +33,7 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>('all');
-  const [filterType, setFilterType] = useState<'all' | 'atendimento' | 'chamado_filho'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'atendimento' | 'chamado_filho' | 'registro_auditor'>('all');
   const [selectedLog, setSelectedLog] = useState<AIEvaluationLog | null>(null);
   const [inspectorTab, setInspectorTab] = useState<'prompt' | 'dialogue' | 'response' | 'metrics'>('response');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
@@ -161,6 +161,7 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
             <option value="all">Todos os Tipos</option>
             <option value="atendimento">Atendimento (Ficha)</option>
             <option value="chamado_filho">Chamado Filho</option>
+            <option value="registro_auditor">Registro do Auditor</option>
           </select>
         </div>
       </div>
@@ -211,7 +212,11 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                         size="xs"
                         className="capitalize"
                       >
-                        {log.evaluation_type === 'chamado_filho' ? 'Chamado Filho' : 'Atendimento'}
+                        {log.evaluation_type === 'chamado_filho'
+                          ? 'Chamado Filho'
+                          : log.evaluation_type === 'registro_auditor'
+                            ? 'Registro do Auditor'
+                            : 'Atendimento'}
                       </Badge>
                     </td>
                     <td className="py-3 px-4">

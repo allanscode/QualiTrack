@@ -141,6 +141,7 @@ stateDiagram-v2
 
 ### Step 4 — Confirmação
 - Revisão final antes de salvar
+- O auditor pode gerar sob demanda um novo `Registro do Auditor` por IA; a geração usa somente as respostas, observações e erros críticos atuais da etapa 2 e substitui o texto apenas após uma resposta válida
 - `form_snapshot` e `applied_config` salvos no momento da avaliação
 
 ## Cálculo de Score

@@ -20,6 +20,7 @@ import { retryAt } from './ai-retry.ts';
 import { canReadQueueTicket, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
 import { satisfactionResponseTimestamp } from './satisfaction.ts';
+import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 const AI_PRIMARY_TIMEOUT_MS = Math.min(120_000, Math.max(1_000, Number(Deno.env.get('AI_PRIMARY_TIMEOUT_MS') || '30000') || 30000));
@@ -65,6 +66,7 @@ const RequestSchema = z.object({
     'fetch_dialogue',
     'evaluate_ai',
     'evaluate_child_ticket',
+    'generate_auditor_record',
     'cancel_ai_evaluation',
     'resolve_agent',
     'lookup_ticket_agent',
@@ -102,12 +104,24 @@ const RequestSchema = z.object({
   // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
   // de fetch_queue. Ausente/null = primeira página.
   cursor: z.string().max(2000).nullable().optional(),
-  form_criteria: z.object({ sections: z.array(z.object({
-    title: z.string().max(300),
-    questions: z.array(z.object({
-      id: z.string().max(100), text: z.string().max(2000), is_critical: z.boolean().optional(),
-    }).passthrough()).max(200),
-  }).passthrough()).max(50) }).passthrough().optional(),
+  form_criteria: z.object({
+    sections: z.array(z.object({
+      title: z.string().max(300),
+      questions: z.array(z.object({
+        id: z.string().max(100), text: z.string().max(2000), is_critical: z.boolean().optional(),
+      }).passthrough()).max(200),
+    }).passthrough()).max(50),
+    critical_errors: z.array(z.object({
+      id: z.string().max(100), text: z.string().max(2000),
+    }).passthrough()).max(100).optional(),
+  }).passthrough().optional(),
+  evaluation_context: z.object({
+    score: z.number().min(0).max(100),
+    answers: z.record(z.enum(['SIM', 'NAO', 'NA'])),
+    observations: z.record(z.string().max(5000)),
+    critical_errors: z.record(z.boolean()),
+    critical_error_observations: z.record(z.string().max(5000)),
+  }).optional(),
   dialogue: z.array(z.record(z.unknown())).max(500).optional(),
   dialogue_text: z.string().max(250_000).optional(),
   agent_info: z.object({
@@ -345,7 +359,7 @@ serve(async (req) => {
     // indiretamente consome a cota diária do token do Zendesk (via
     // fetch_dialogue, chamado antes pelo frontend). 10 avaliações a cada 5
     // minutos é folgado para revisão manual normal, mas barra um loop/script.
-    if (action === 'evaluate_ai' || action === 'evaluate_child_ticket') {
+    if (action === 'evaluate_ai' || action === 'evaluate_child_ticket' || action === 'generate_auditor_record') {
       const ai = await supabase.rpc('consume_security_rate_limit', {
         bucket_key: `helpdesk-queue:ai:${user.id}`, max_requests: 10, window_seconds: 300,
       });
@@ -394,6 +408,10 @@ serve(async (req) => {
     if (action === 'evaluate_child_ticket') {
       return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
         signal => handleEvaluateChildTicket(parseResult.data, supabase, user.id, signal));
+    }
+
+    if (action === 'generate_auditor_record') {
+      return await handleGenerateAuditorRecord(parseResult.data, supabase, user.id, req.signal);
     }
 
     // 4. Cadastro manual de agente ainda não existente no QualiTrack, feito
@@ -1162,16 +1180,16 @@ async function handleResolveAgent(
 }
 
 function logAIAttempt(
-  evaluationType: 'atendimento' | 'chamado_filho',
+  evaluationType: 'atendimento' | 'chamado_filho' | 'registro_auditor',
   ticketId: string,
-  jobId: string,
+  jobId: string | undefined,
   record: AIAttemptRecord,
 ): void {
   const details = {
     event: record.status === 'success' ? 'model_succeeded' : 'model_failed',
     evaluation_type: evaluationType,
     ticket_id: ticketId,
-    job_id: jobId,
+    job_id: jobId || null,
     provider: record.provider,
     routed_provider: record.routedProvider || null,
     router_attempt: record.routerAttempt || null,
@@ -1482,6 +1500,141 @@ async function processAIRetries(supabase: SupabaseClient): Promise<Response> {
     leaseId: item.lease_id,
   });
   return jsonResponse({ processed: 1, queued: result.status === 202, status: result.status }, 200);
+}
+
+async function handleGenerateAuditorRecord(
+  payload: z.infer<typeof RequestSchema>,
+  supabase: SupabaseClient,
+  callerId: string,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const { ticket_id, form_criteria, evaluation_context } = payload;
+  if (!ticket_id || !form_criteria?.sections || !evaluation_context) {
+    return jsonResponse({ error: 'Ticket, ficha e contexto da avaliação são obrigatórios.' }, 400);
+  }
+
+  const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
+  if (!openRouterApiKey) {
+    return jsonResponse({ error: 'OPENROUTER_API_KEY não configurada no Supabase Secrets' }, 500);
+  }
+
+  const sanitizedObservations = Object.fromEntries(
+    Object.entries(evaluation_context.observations)
+      .map(([id, value]) => [id, sanitizeMessageBody(value).slice(0, 5000)])
+      .filter(([, value]) => value.trim()),
+  );
+  const sanitizedCriticalObservations = Object.fromEntries(
+    Object.entries(evaluation_context.critical_error_observations)
+      .map(([id, value]) => [id, sanitizeMessageBody(value).slice(0, 5000)])
+      .filter(([, value]) => value.trim()),
+  );
+  const hasSanitizedObservation = Object.keys(sanitizedObservations).length > 0
+    || Object.entries(evaluation_context.critical_errors).some(([id, selected]) =>
+      selected && !!sanitizedCriticalObservations[id]?.trim(),
+    );
+  if (!hasSanitizedObservation) {
+    return jsonResponse({ error: 'Adicione ao menos uma observação válida antes de gerar o registro.' }, 400);
+  }
+  const prompt = buildAuditorRecordPrompt({
+    ticketId: ticket_id,
+    score: evaluation_context.score,
+    sections: form_criteria.sections.map(section => ({
+      title: sanitizeMessageBody(section.title),
+      questions: section.questions.map(question => ({
+        id: question.id,
+        text: sanitizeMessageBody(question.text),
+      })),
+    })),
+    criticalErrorQuestions: (form_criteria.critical_errors || []).map(question => ({
+      id: question.id,
+      text: sanitizeMessageBody(question.text),
+    })),
+    answers: evaluation_context.answers,
+    observations: sanitizedObservations,
+    criticalErrors: evaluation_context.critical_errors,
+    criticalErrorObservations: sanitizedCriticalObservations,
+  });
+  const responseSchema = {
+    type: 'object',
+    properties: {
+      auditor_record: {
+        type: 'string',
+        maxLength: 3000,
+        description: 'Novo Registro do Auditor em um único parágrafo profissional.',
+      },
+    },
+    required: ['auditor_record'],
+    additionalProperties: false,
+  };
+  const startedAt = Date.now();
+  let attempts: AIAttemptRecord[] = [];
+
+  try {
+    const chain = await runAIModelChain({
+      targets: AI_TARGETS,
+      signal,
+      execute: async (target, _attempt, attemptSignal) => {
+        const response = await callOpenRouter({
+          prompt,
+          responseSchema,
+          apiKey: openRouterApiKey,
+          model: target.model,
+          maxTokens: 700,
+          signal: attemptSignal,
+        });
+        return {
+          value: parseAuditorRecordResponse(parseModelJSON(response.text)),
+          actualModel: target.model,
+          routedProvider: response.routedProvider,
+          routerAttempt: response.routerAttempt,
+          requestId: response.requestId,
+          promptTokens: response.promptTokens,
+          completionTokens: response.completionTokens,
+          cost: response.cost,
+        };
+      },
+      onAttempt: record => logAIAttempt('registro_auditor', ticket_id, undefined, record),
+    });
+    attempts = chain.attempts;
+    await enrichGenerationMetadata(attempts.at(-1));
+
+    const result = { auditor_record: chain.value };
+    const { error: logError } = await supabase.from('ai_evaluation_logs').insert({
+      ticket_id,
+      ticket_subject: `Ticket #${ticket_id}`,
+      evaluation_type: 'registro_auditor',
+      provider: 'openrouter',
+      model: chain.model,
+      duration_ms: Date.now() - startedAt,
+      status: 'success',
+      attempts,
+      fallback_used: chain.fallbackUsed,
+      prompt_text: prompt,
+      response_json: result,
+      created_by: callerId,
+    });
+    if (logError) console.warn('[auditor-record] Falha ao registrar metadados:', logError.message);
+
+    return jsonResponse({ success: true, result }, 200);
+  } catch (error) {
+    attempts = attemptsFromError(error);
+    const message = error instanceof Error ? error.message : 'Falha ao gerar o Registro do Auditor.';
+    await supabase.from('ai_evaluation_logs').insert({
+      ticket_id,
+      ticket_subject: `Ticket #${ticket_id}`,
+      evaluation_type: 'registro_auditor',
+      provider: 'openrouter',
+      model: attempts.at(-1)?.model || OPENROUTER_MODEL,
+      duration_ms: Date.now() - startedAt,
+      status: 'error',
+      attempts,
+      fallback_used: false,
+      prompt_text: prompt,
+      error_message: message.slice(0, 500),
+      created_by: callerId,
+    });
+    return jsonResponse({ error: message }, 502);
+  }
 }
 
 async function handleEvaluateAI(

@@ -19,10 +19,11 @@ export async function callOpenRouter(options: {
   responseSchema: unknown;
   apiKey?: string;
   model?: string;
+  maxTokens?: number;
   signal?: AbortSignal;
   fetcher?: typeof fetch;
 }): Promise<{ text: string; routedProvider?: string; routerAttempt?: number; requestId?: string; promptTokens?: number; completionTokens?: number; cost?: number }> {
-  const { prompt, responseSchema, apiKey, model = OPENROUTER_MODEL, signal, fetcher = fetch } = options;
+  const { prompt, responseSchema, apiKey, model = OPENROUTER_MODEL, maxTokens, signal, fetcher = fetch } = options;
   if (!apiKey) throw new AIModelError('OPENROUTER_API_KEY não configurada.', 'credentials_error', false, 'provider');
   if (model !== OPENROUTER_MODEL && model !== OPENROUTER_FALLBACK_MODEL)
     throw new AIModelError('Modelo não permitido.', 'request_configuration_error', false, 'global');
@@ -43,6 +44,7 @@ export async function callOpenRouter(options: {
         type: 'json_schema',
         json_schema: { name: 'wp_quality_evaluation', strict: true, schema: responseSchema },
       },
+      ...(maxTokens ? { max_tokens: maxTokens } : {}),
       provider: { allow_fallbacks: true, require_parameters: true },
     }),
     signal: signal || AbortSignal.timeout(30000),

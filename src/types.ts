@@ -234,7 +234,7 @@ export interface AIEvaluationLog {
   id: string;
   ticket_id: string;
   ticket_subject?: string;
-  evaluation_type: 'atendimento' | 'chamado_filho';
+  evaluation_type: 'atendimento' | 'chamado_filho' | 'registro_auditor';
   provider: 'gemini' | 'openrouter' | 'zendesk_webhook';
   model: string;
   duration_ms?: number;

@@ -39,7 +39,13 @@ import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import { toast } from 'sonner';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
-import { resolveManualAgent, lookupTicketAgent, TicketAgentLookup, fetchTicketDialogue } from '../lib/helpdeskQueue';
+import {
+  resolveManualAgent,
+  lookupTicketAgent,
+  TicketAgentLookup,
+  fetchTicketDialogue,
+  generateAuditorRecordWithAI,
+} from '../lib/helpdeskQueue';
 import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChatParser';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
@@ -423,6 +429,7 @@ export default function MonitoriaForm({
     macroText: string;
   } | null>(null);
   const [copiedSuccessMacro, setCopiedSuccessMacro] = useState(false);
+  const [generatingAuditorRecord, setGeneratingAuditorRecord] = useState(false);
 
   const canSendToHelpdesk = isViewOnly
     && !!initialData?.status
@@ -490,6 +497,43 @@ export default function MonitoriaForm({
       });
     },
   });
+
+  const handleGenerateAuditorRecord = async () => {
+    if (!selectedForm || !header.ticket_id?.trim()) {
+      toast.error('Informe o ticket e a ficha antes de gerar o registro.');
+      return;
+    }
+
+    const hasCurrentObservation = Object.values(observations).some(value => value.trim().length > 0)
+      || Object.entries(criticalErrors).some(([id, selected]) =>
+        selected && !!criticalErrorObservations[id]?.trim(),
+      );
+
+    if (!hasCurrentObservation) {
+      toast.error('Adicione ao menos uma observação na etapa de Avaliação antes de gerar o registro.');
+      return;
+    }
+
+    setGeneratingAuditorRecord(true);
+    try {
+      const record = await generateAuditorRecordWithAI({
+        ticketId: header.ticket_id.trim(),
+        form: selectedForm,
+        score,
+        answers: scores,
+        observations,
+        criticalErrors,
+        criticalErrorObservations,
+      });
+      setHeader(prev => ({ ...prev, evaluator_note: record }));
+      toast.success('Novo Registro do Auditor gerado com as observações atuais.');
+    } catch (error: any) {
+      console.error('[MonitoriaForm] Falha ao gerar Registro do Auditor:', error);
+      toast.error(error?.message || 'Não foi possível gerar o Registro do Auditor.');
+    } finally {
+      setGeneratingAuditorRecord(false);
+    }
+  };
 
   // Cadastro rápido de agente do helpdesk que ainda não tem conta no
   // QualiTrack — cria uma conta provisória por e-mail (mesmo mecanismo da
@@ -1348,7 +1392,23 @@ export default function MonitoriaForm({
                 </div>
               )}
               <div className="space-y-4">
-                <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Registro do Auditor</p>
+                <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                  <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest">Registro do Auditor</p>
+                  {!isViewOnly && !isReevaluating && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      loading={generatingAuditorRecord}
+                      onClick={handleGenerateAuditorRecord}
+                      icon={<RotateCcw className={`w-3.5 h-3.5 ${generatingAuditorRecord ? 'animate-spin' : ''}`} />}
+                      title="Substitui o registro atual por um novo texto baseado nas observações da etapa de Avaliação"
+                      className="shrink-0"
+                    >
+                      {generatingAuditorRecord ? 'Gerando registro...' : 'Gerar novo com IA'}
+                    </Button>
+                  )}
+                </div>
                 <textarea
                   value={header.evaluator_note}
                   onChange={e => setHeader({...header, evaluator_note: e.target.value})}

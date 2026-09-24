@@ -15,7 +15,7 @@ const success = (provider = 'DeepInfra') => Response.json({
 describe('requisição OpenRouter', () => {
   it('usa apenas GLM 5.3 Flash, JSON Schema e provider failover; chave somente no header', async () => {
     const fetcher = vi.fn(async () => success());
-    const result = await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, fetcher });
+    const result = await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, maxTokens: 700, fetcher });
     expect(result).toMatchObject({ text: '{"score":90}', routedProvider: 'DeepInfra', routerAttempt: 2 });
     const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
@@ -25,6 +25,7 @@ describe('requisição OpenRouter', () => {
     const body = JSON.parse(init.body as string);
     expect(body.model).toBe('z-ai/glm-5.3-flash');
     expect(body.models).toBeUndefined();
+    expect(body.max_tokens).toBe(700);
     expect(body.provider).toEqual({ allow_fallbacks: true, require_parameters: true });
     expect(body.response_format).toEqual({ type: 'json_schema', json_schema: { name: 'wp_quality_evaluation', strict: true, schema: responseSchema } });
   });

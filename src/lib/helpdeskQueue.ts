@@ -372,6 +372,53 @@ export async function fetchTicketDialogue(ticketId: string): Promise<TicketDialo
  */
 export interface AIQueuedResult { queued: true; job_id: string }
 
+export interface AuditorRecordGenerationInput {
+  ticketId: string;
+  form: EvaluationForm;
+  score: number;
+  answers: Record<string, 'SIM' | 'NAO' | 'NA'>;
+  observations: Record<string, string>;
+  criticalErrors: Record<string, boolean>;
+  criticalErrorObservations: Record<string, string>;
+}
+
+export async function generateAuditorRecordWithAI(
+  input: AuditorRecordGenerationInput,
+): Promise<string> {
+  if (isMockMode || !supabase) {
+    throw new Error('A geração por IA não está disponível no modo offline.');
+  }
+
+  const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+    body: {
+      action: 'generate_auditor_record',
+      ticket_id: input.ticketId,
+      form_criteria: {
+        sections: input.form.sections,
+        critical_errors: input.form.critical_errors || [],
+      },
+      evaluation_context: {
+        score: input.score,
+        answers: input.answers,
+        observations: input.observations,
+        critical_errors: input.criticalErrors,
+        critical_error_observations: input.criticalErrorObservations,
+      },
+    },
+  });
+
+  if (error) {
+    throw new Error(data?.error || await extractFunctionErrorMessage(error, 'Falha ao gerar o registro do auditor.'));
+  }
+
+  const record = data?.result?.auditor_record;
+  if (typeof record !== 'string' || !record.trim()) {
+    throw new Error(data?.error || 'A IA não retornou um novo registro do auditor.');
+  }
+
+  return record.trim();
+}
+
 export async function evaluateTicketWithAI(
   ticketId: string,
   form: EvaluationForm,

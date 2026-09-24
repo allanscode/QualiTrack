@@ -48,7 +48,7 @@ Formulário em 4 etapas (stepper) no `MonitoriaForm.tsx`:
 | 1 | Dados do Ticket | Ticket ID, Canal, Formulário, Agente, Equipe |
 | 2 | Avaliação | Critérios por pilar (Sim/Não/N.A.) + Erros Críticos |
 | 3 | Resumo | Score calculado, breakdown por pilar, campos de insatisfação |
-| 4 | Confirmação | Salvar monitoria |
+| 4 | Confirmação | Revisar o Registro do Auditor, regenerá-lo por IA a partir das observações atuais quando necessário e salvar a monitoria |
 
 **Regras de Seleção Agente↔Equipe:**
 - Ao selecionar Agente, as opções de Equipe filtram para equipes do agente
