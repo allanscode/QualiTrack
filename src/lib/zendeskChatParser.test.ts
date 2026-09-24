@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TicketCommentMessage } from '../types';
 import { getDialogueCategory, normalizeTicketDialogue } from './zendeskChatParser';
-import { formatTicketDateTime } from './ticketDateTime';
+import { formatTicketDateTime, toTicketDateInput } from './ticketDateTime';
 import {
   buildZendeskParticipantRoles, classifyTranscriptMessage,
   parseZendeskChatTranscript, sanitizeDialogue, sanitizeMessageBody,
@@ -45,6 +45,14 @@ describe('datas e sanitização do ticket', () => {
   it('formata o mesmo instante em horário de São Paulo', () => {
     expect(formatTicketDateTime('2026-09-15T10:25:00Z')).toBe('15/09/2026, 07:25');
     expect(formatTicketDateTime('2026-09-15T07:25:00-03:00')).toBe('15/09/2026, 07:25');
+  });
+
+  it('converte timestamp UTC para YYYY-MM-DD no fuso de São Paulo', () => {
+    // 2026-09-24 01:30 UTC é 23/09/2026 22:30 em SP
+    expect(toTicketDateInput('2026-09-24T01:30:00Z')).toBe('2026-09-23');
+    expect(toTicketDateInput('2026-09-24T15:30:00Z')).toBe('2026-09-24');
+    expect(toTicketDateInput('2026-09-24')).toBe('2026-09-24');
+    expect(toTicketDateInput(null)).toBe('');
   });
 
   it('retira identificadores e segredos antes do prompt e logs', () => {

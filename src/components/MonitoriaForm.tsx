@@ -245,10 +245,19 @@ export default function MonitoriaForm({
     return dialogue.filter(msg => {
       if (dialogueFilter !== 'all' && getDialogueCategory(msg) !== dialogueFilter) return false;
       if (dialogueSearch.trim()) {
-        const query = dialogueSearch.toLowerCase();
-        const inBody = (msg.body || '').toLowerCase().includes(query);
-        const inAuthor = (msg.author_name || '').toLowerCase().includes(query);
-        return inBody || inAuthor;
+        const normalize = (s: string) =>
+          s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const normQuery = normalize(dialogueSearch);
+        const normBody = normalize(msg.body || '');
+        const normAuthor = normalize(msg.author_name || '');
+        const combined = `${normBody} ${normAuthor}`;
+
+        if (combined.includes(normQuery)) return true;
+
+        const words = normQuery.split(/\s+/).filter(w => w.length > 1);
+        if (words.length > 0 && words.every(w => combined.includes(w))) return true;
+
+        return false;
       }
       return true;
     });
@@ -1086,7 +1095,8 @@ export default function MonitoriaForm({
                             value={observations[q.id] || ''}
                             onChange={e => !isViewOnly && setObservations({...observations, [q.id]: e.target.value})}
                             placeholder="Adicionar observação técnica ou justificativa do auditor para este item..."
-                            className="w-full bg-surface-subtle border border-surface-border rounded-lg p-3 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all"
+                            rows={3}
+                            className="w-full bg-surface-subtle border border-surface-border rounded-lg p-3 text-xs font-medium focus:border-brand-accent focus:outline-none transition-all resize-y break-words whitespace-pre-wrap min-h-[60px]"
                             disabled={isViewOnly}
                           />
                         </div>
@@ -1141,8 +1151,11 @@ export default function MonitoriaForm({
                                         type="button"
                                         onClick={() => {
                                           setSelectedQuestionForDialogue(q.id);
-                                          const searchWords = quotedSnippet.split(' ').filter(w => w.length > 3).slice(0, 2).join(' ');
-                                          setDialogueSearch(searchWords);
+                                          setDialogueFilter('all');
+                                          const cleanSnippet = quotedSnippet.replace(/^["'“”\s]+|["'“”\s]+$/g, '').trim();
+                                          const words = cleanSnippet.split(/\s+/).filter(Boolean);
+                                          const searchTerms = words.length <= 6 ? cleanSnippet : words.slice(0, 5).join(' ');
+                                          setDialogueSearch(searchTerms);
                                           setShowDialogueDrawer(true);
                                         }}
                                         className="text-[10px] font-bold text-brand-muted hover:text-brand-highlight underline cursor-pointer"
@@ -1191,9 +1204,12 @@ export default function MonitoriaForm({
                                     type="button"
                                     onClick={() => {
                                       setSelectedQuestionForDialogue(q.id);
+                                      setDialogueFilter('all');
                                       if (quotedSnippet) {
-                                        const searchWords = quotedSnippet.split(' ').filter(w => w.length > 3).slice(0, 2).join(' ');
-                                        setDialogueSearch(searchWords);
+                                        const cleanSnippet = quotedSnippet.replace(/^["'“”\s]+|["'“”\s]+$/g, '').trim();
+                                        const words = cleanSnippet.split(/\s+/).filter(Boolean);
+                                        const searchTerms = words.length <= 6 ? cleanSnippet : words.slice(0, 5).join(' ');
+                                        setDialogueSearch(searchTerms);
                                       } else {
                                         setDialogueSearch('');
                                       }
@@ -1226,7 +1242,7 @@ export default function MonitoriaForm({
                           <span className="text-[11px] font-black text-brand-primary uppercase tracking-wider">{ce.text}</span>
                         </label>
                         {criticalErrors[ce.id] && (
-                          <textarea value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa técnica obrigatória para a aplicação deste erro crítico..." className="w-full border border-error/20 rounded-lg p-3 text-xs font-medium focus:border-error focus:outline-none bg-error/5" disabled={isViewOnly} />
+                          <textarea rows={2} value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa técnica obrigatória para a aplicação deste erro crítico..." className="w-full border border-error/20 rounded-lg p-3 text-xs font-medium focus:border-error focus:outline-none bg-error/5 resize-y break-words whitespace-pre-wrap min-h-[60px]" disabled={isViewOnly} />
                         )}
                       </div>
                     ))}
@@ -1413,7 +1429,7 @@ export default function MonitoriaForm({
                   value={header.evaluator_note}
                   onChange={e => setHeader({...header, evaluator_note: e.target.value})}
                   disabled={isViewOnly || isReevaluating}
-                  className="w-full bg-surface-card border border-surface-border rounded-xl p-5 text-xs font-medium min-h-[150px] focus:border-brand-accent focus:outline-none shadow-premium-sm"
+                  className="w-full bg-surface-card border border-surface-border rounded-xl p-5 text-xs font-medium min-h-[150px] focus:border-brand-accent focus:outline-none shadow-premium-sm resize-y break-words whitespace-pre-wrap"
                   placeholder="Escreva aqui as observações gerais da auditoria..."
                 />
 

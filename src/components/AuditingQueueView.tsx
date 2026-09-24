@@ -26,7 +26,7 @@ import {
   resolveFormAndGuidelineForCustomerType,
 } from '../lib/helpdeskQueue';
 import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChatParser';
-import { formatTicketDateTime } from '../lib/ticketDateTime';
+import { formatTicketDateTime, toTicketDateInput } from '../lib/ticketDateTime';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
 import { fetchAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import { claimAIJob, completeAIJob, failAIJob, cancelAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
@@ -1206,8 +1206,8 @@ ${checksSummary}${recs}`;
       team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
       channel: normalizeChannel(ticket.channel),
       // O Zendesk devolve o timestamp de criação. O datepicker recebe apenas
-      // yyyy-MM-dd para não reinterpretar o dia pela timezone do navegador.
-      ticket_date: ticket.ticket_date?.slice(0, 10),
+      // yyyy-MM-dd no fuso de São Paulo para não reinterpretar o dia pela timezone do navegador.
+      ticket_date: toTicketDateInput(ticket.ticket_date),
       satisfaction_result: csatStatusToSatisfactionResult(ticket.csat_status),
       satisfaction_has_record: !!ticket.csat_comment,
       satisfaction_record_text: ticket.csat_comment,
@@ -1344,11 +1344,11 @@ ${checksSummary}${recs}`;
         <button
           type="button"
           onClick={() => setAssignmentModalTicket(ticket)}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-surface-border bg-surface-card text-brand-muted transition-colors hover:border-brand-accent/40 hover:bg-surface-subtle hover:text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-surface-border bg-surface-card text-brand-muted transition-colors hover:border-brand-accent/40 hover:bg-surface-subtle hover:text-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-accent/30 shadow-2xs"
           title="Alterar o monitor responsável"
           aria-label="Alterar o monitor responsável"
         >
-          <UserCog className="h-3 w-3" />
+          <UserCog className="h-2.5 w-2.5" />
         </button>
       </span>
     );
@@ -1949,9 +1949,12 @@ ${checksSummary}${recs}`;
                 <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                   <div className="flex items-center gap-3">
                     {renderAgentInfo(ticket)}
-                    <span className="flex items-center gap-1">
+                    <span
+                      className="flex items-center gap-1"
+                      title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
+                    >
                       <Clock className="w-3 h-3 opacity-60" />
-                      {formatTicketDateTime(ticket.csat_rated_at || ticket.ticket_date)}
+                      {formatTicketDateTime(ticket.ticket_date)}
                     </span>
                   </div>
 
@@ -2042,9 +2045,12 @@ ${checksSummary}${recs}`;
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                         <div className="flex items-center gap-3">
                           {renderAgentInfo(ticket)}
-                          <span className="flex items-center gap-1">
+                          <span
+                            className="flex items-center gap-1"
+                            title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
+                          >
                             <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.csat_rated_at || ticket.ticket_date)}
+                            {formatTicketDateTime(ticket.ticket_date)}
                           </span>
                         </div>
 
@@ -2135,9 +2141,12 @@ ${checksSummary}${recs}`;
                     <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                       <div className="flex items-center gap-3">
                         {renderAgentInfo(ticket)}
-                        <span className="flex items-center gap-1">
+                        <span
+                          className="flex items-center gap-1"
+                          title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
+                        >
                           <Clock className="w-3 h-3 opacity-60" />
-                          {formatTicketDateTime(ticket.csat_rated_at || ticket.ticket_date)}
+                          {formatTicketDateTime(ticket.ticket_date)}
                         </span>
                       </div>
 
@@ -2233,9 +2242,12 @@ ${checksSummary}${recs}`;
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                         <div className="flex items-center gap-3">
                           {renderAgentInfo(ticket)}
-                          <span className="flex items-center gap-1">
+                          <span
+                            className="flex items-center gap-1"
+                            title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
+                          >
                             <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.csat_rated_at || ticket.ticket_date)}
+                            {formatTicketDateTime(ticket.ticket_date)}
                           </span>
                         </div>
 
@@ -2364,9 +2376,12 @@ ${checksSummary}${recs}`;
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
                         <div className="flex items-center gap-3">
                           {renderAgentInfo(ticket)}
-                          <span className="flex items-center gap-1">
+                          <span
+                            className="flex items-center gap-1"
+                            title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
+                          >
                             <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.csat_rated_at || ticket.ticket_date)}
+                            {formatTicketDateTime(ticket.ticket_date)}
                           </span>
                         </div>
 

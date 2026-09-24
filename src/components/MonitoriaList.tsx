@@ -526,7 +526,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
 
                       <div className="space-y-4 pb-2">
                         <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1">Observações da Qualidade</p>
-                        <div className="relative text-sm text-brand-primary font-medium bg-surface-bg/50 py-3 pl-9 pr-5 rounded-2xl border border-surface-border/40 leading-relaxed italic">
+                        <div className="relative text-sm text-brand-primary font-medium bg-surface-bg/50 py-3 pl-9 pr-5 rounded-2xl border border-surface-border/40 leading-relaxed italic break-words whitespace-pre-wrap">
                           <span className="absolute left-3 top-1.5 text-3xl font-black text-brand-muted/20 leading-none select-none">"</span>
                           {m.evaluator_note || 'Nenhuma observação registrada.'}
                         </div>
