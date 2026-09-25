@@ -23,6 +23,10 @@
 
 ## Diretrizes de Desenvolvimento
 
+### Orquestração DevFlow
+
+Para dúvidas de código, implementação, debugging, revisão, testes ou deploy, use a skill pessoal `$devflow-orchestrator`. Trabalhe diretamente por padrão e adicione subagente, consulta externa via Antigravity ou gates extras somente quando risco, independência ou chance de evitar retrabalho justificar o custo. Aplique apenas as regras e validações deste `AGENTS.md` afetadas pela mudança; aprovação final e produção nunca são implícitas.
+
 1. **Zero dependências de estado global**: Não use Redux, Zustand, Context API global. Estado gerenciado via Context Providers específicos (StaticDataContext, DashboardContext, QualityConfigProvider) e hooks locais.
 2. **Extração de hooks customizados**: Lógica de negócio complexa deve ser extraída para hooks em src/hooks/ (ex: useSessionManager, useSidebarManager, useMonitoriaData, useMonitoriaFilters, useMonitoriaActions, useMonitoriaFormState, useMonitoriaSave).
 3. **Isolamento de responsabilidade**: Cada dashboard (AgentDashboard, QualityDashboard, SupportManagerDashboard, QualityManagerDashboard, AdminDashboard) é independente e consome apenas os contexts necessários.

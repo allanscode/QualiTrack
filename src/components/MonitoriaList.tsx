@@ -1,54 +1,51 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { List } from 'react-window';
-import { Monitoria, MonitoriaStatus, User } from '../types';
+import { Monitoria, Team, User } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
-import { useTheme } from '../providers/ThemeProvider';
 import { useAuth } from '../providers/AuthProvider';
-import { getStatusConfig, getHistoryEventConfig, VARIANT_TEXT_CLASS } from '../lib/statusHelper';
+import { getStatusConfig, VARIANT_TEXT_CLASS, VARIANT_ICON_CONTAINER } from '../lib/statusHelper';
 import {
   Search,
-  Eye,
   ChevronDown,
-  ChevronUp,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  RotateCcw,
-  Trash2,
-  Pencil,
-  Tag,
-  User as UserIcon,
   AlertTriangle,
-  Shield,
   X,
-  History,
   Paperclip,
   Loader2,
   FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadActionAttachment } from '../lib/monitoriaAttachments';
-import ActionAttachmentsViewer from './ActionAttachmentsViewer';
-import { m, m as motionComponent, AnimatePresence } from 'motion/react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { matchesSearch, matchesAnySearch } from '../utils/search';
+import { m, AnimatePresence } from 'motion/react';
+import { matchesAnySearch } from '../utils/search';
 import Card from './ui/Card';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
 import CustomSelect from './ui/CustomSelect';
 import CustomDatepicker from './ui/CustomDatepicker';
-import ActionDeadlineClock from './ui/ActionDeadlineClock';
 import { useQualityConfig } from '../lib/useQualityConfig';
-import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
 import { useMonitoriaData } from '../hooks/useMonitoriaData';
 import { useMonitoriaFilters } from '../hooks/useMonitoriaFilters';
 import { useMonitoriaActions } from '../hooks/useMonitoriaActions';
 import MonitoriaForm from './MonitoriaForm';
 import { MonitoriaRow } from './MonitoriaRow';
+import MonitoriaDetails from './MonitoriaDetails';
+
+type VirtualRowProps = {
+  monitorias: Monitoria[];
+  teams: Team[];
+  getName: (id: string, isEvaluator?: boolean, snapshotName?: string) => string;
+  getLevelForScore: (score: number) => { color: string };
+  onOpen: (id: string) => void;
+};
+
+function VirtualMonitoriaRow({ index, style, monitorias, teams, getName, getLevelForScore, onOpen }: VirtualRowProps & { index: number; style: React.CSSProperties; ariaAttributes?: unknown }) {
+  const m = monitorias[index];
+  if (!m) return null;
+  return <MonitoriaRow monitoria={m} style={style} teams={teams} getName={getName} getLevelForScore={getLevelForScore} onOpen={onOpen} />;
+}
 
 export default function MonitoriaList({ user, onNew, activeTab }: { user: User | null; onNew: () => void; activeTab?: string }) {
-  const { resolvedTheme } = useTheme();
   const { config: qualityConfig, getLevelForScore } = useQualityConfig();
   const staticData = useStaticData();
 
@@ -64,7 +61,9 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
   } = useMonitoriaActions(user, monitorias, qualityConfig, load);
 
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const detailCloseRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
   const [viewingMonitoria, setViewingMonitoria] = useState<Monitoria | null>(null);
 
   // Encolhe a barra lateral ao abrir uma monitoria, para dar mais espaço ao
@@ -95,7 +94,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
       filters.setTeamFilter('');
       filters.setSearch('');
 
-      setExpandedId(targetId);
+      setSelectedId(targetId);
 
       setTimeout(() => {
         const el = document.getElementById(`monitoria-${targetId}`);
@@ -107,7 +106,46 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
 
     window.addEventListener('qualitrack:focus_monitoria', handleFocus);
     return () => window.removeEventListener('qualitrack:focus_monitoria', handleFocus);
-  }, [filters, setExpandedId]);
+  }, [filters]);
+
+  const openDetails = (id: string) => {
+    openerRef.current = document.activeElement as HTMLElement;
+    setSelectedId(id);
+  };
+
+  const closeDetails = () => {
+    setSelectedId(null);
+    requestAnimationFrame(() => openerRef.current?.focus());
+  };
+
+  useEffect(() => {
+    if (!selectedId && !actionModal) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (actionModal) setActionModal(null);
+        else closeDetails();
+      }
+      if (event.key !== 'Tab') return;
+      const dialog = document.querySelector<HTMLElement>(actionModal ? '[data-action-dialog]' : '[data-detail-dialog]');
+      if (!dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], select:not([disabled]), textarea:not([disabled]), input:not([disabled])')).filter(el => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', onKeyDown); };
+  }, [selectedId, actionModal, setActionModal]);
+
+  useEffect(() => { if (selectedId && !actionModal) detailCloseRef.current?.focus(); }, [selectedId, actionModal]);
+
+  useEffect(() => {
+    if (actionModal) document.querySelector<HTMLElement>('[data-action-dialog] select, [data-action-dialog] textarea, [data-action-dialog] button')?.focus();
+  }, [actionModal]);
 
   const getName = (id: string, isEvaluator?: boolean, snapshotName?: string) => {
     if (isEvaluator && (user?.role === 'suporte' || user?.role === 'gestor_suporte')) {
@@ -396,375 +434,18 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
         <div className="divide-y divide-surface-subtle">
           {filtered.length > 0 ? (
             filtered.length > 50 ? (
-              // @ts-ignore - react-window List children type mismatch
-              <List
-                height={600}
-                itemCount={filtered.length}
-                itemSize={180}
-                width="100%"
+              <List<VirtualRowProps>
+                rowComponent={VirtualMonitoriaRow}
+                rowCount={filtered.length}
+                rowHeight={104}
+                rowProps={{ monitorias: filtered, teams: staticData.teams, getName, getLevelForScore, onOpen: openDetails }}
                 overscanCount={5}
-              >
-                {/* @ts-ignore */}
-                {({ index, style }: { index: number; style: React.CSSProperties }): React.ReactNode => (
-                  <MonitoriaRow
-                    index={index}
-                    style={style}
-                    data={{
-                      monitorias: filtered,
-                      expandedId,
-                      setExpandedId,
-                      setViewingMonitoria,
-                      setActionModal,
-                      user,
-                      staticData,
-                      qualityConfig,
-                      getLevelForScore,
-                      getStatusConfig,
-                      getName,
-                      format,
-                      ptBR,
-                    }}
-                  />
-                )}
-              </List>
-            ) : (
-              filtered.map(m => {
-                const config = getStatusConfig(m.status);
-                const isExpanded = expandedId === m.id;
-                const level = getLevelForScore(m.score || 0);
-                const scoreColor = m.score !== undefined ? level.color : 'text-brand-muted';
-
-                return (
-                  <div key={m.id} id={`monitoria-${m.id}`} className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
-                    <div className="flex items-center gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : m.id)}>
-                  {/* Left: Status Icon */}
-                  <div className={`w-11 h-11 rounded-[1.25rem] flex items-center justify-center flex-shrink-0 bg-surface-bg text-brand-muted shadow-sm`}>
-                    <config.icon className="w-5 h-5" />
-                  </div>
-
-                  {/* Center: Info Block with fixed widths */}
-                  <div className="flex-1 min-w-0 flex items-center gap-4">
-                    {/* ID + Ticket + Names */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[10px] font-black text-brand-muted/70 uppercase tracking-widest">#{m.display_id || m.id.slice(0,4)}</span>
-                        <span className="text-brand-muted/30">•</span>
-                        <span className="font-mono text-xs font-black text-brand-primary tracking-tight">{m.ticket_id}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-brand-muted uppercase tracking-tight flex-wrap">
-                        <span className="flex items-center gap-1"><UserIcon className="w-3 h-3 text-brand-highlight" />{getName(m.evaluated_id, false, m.evaluated_name)}</span>
-                        <span className="text-brand-muted/20">•</span>
-                        <span className="flex items-center gap-1"><Tag className="w-3 h-3 text-brand-highlight" />{m.team_name || staticData.teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
-                        <span className="text-brand-muted/20">•</span>
-                        <span className="flex items-center gap-1"><Shield className="w-3 h-3 text-brand-highlight" />{getName(m.evaluator_id, true, m.evaluator_name)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3-column fixed layout: Deadline | Status | Score */}
-                  <div className="flex items-center gap-4 flex-shrink-0">
-                    {/* Col 1: Deadline — center, fixed width */}
-                    <div className="min-w-[140px] flex justify-center">
-                      {m.active !== false && <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status} />}
-                    </div>
-
-                    {/* Col 2: Status badge — center, fixed width */}
-                    <div className="min-w-[120px] flex justify-center">
-                      {(() => {
-                        const isDeadlineExpired = m.status === 'concluida' && m.resolution_type === 'automatic';
-                        return (
-                          <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2">
-                            {isDeadlineExpired ? 'Concluída Sist.' : config.shortLabel}
-                          </Badge>
-                        );
-                      })()}
-                    </div>
-
-                    {/* Col 3: Score + Date — right-aligned, fixed width */}
-                    <div className="min-w-[70px] text-right">
-                      <p className={`text-xl font-black ${scoreColor} tracking-tighter`}>{m.score !== undefined ? `${m.score}%` : '—'}</p>
-                      <p className="text-[9px] font-black text-brand-muted uppercase tracking-widest opacity-60 mt-0.5">{format(new Date(m.created_at), 'dd MMM yyyy', { locale: ptBR })}</p>
-                    </div>
-
-                    {/* Expand Chevron */}
-                    <div className={`p-2 rounded-xl transition-colors ${isExpanded ? 'bg-brand-primary/5 text-brand-primary' : 'text-brand-highlight'}`}>
-                      {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                    </div>
-                  </div>
-                </div>
-
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motionComponent.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mt-4 pt-4 border-t border-surface-border/50">
-                      {m.history?.length > 0 && (
-                        <div className="pb-4">
-                          <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] mb-3 ml-1 flex items-center gap-2">
-                            <History className="w-3 h-3" /> Linha do Tempo
-                          </p>
-                          <div className="overflow-x-auto -mx-1 px-1 pb-1">
-                            <div className="flex items-start min-w-max">
-                              {m.history.map((h, i) => {
-                                const ev = getHistoryEventConfig(h.action);
-                                const EvIcon = ev.icon;
-                                const evColor = VARIANT_TEXT_CLASS[ev.variant];
-                                const actorName = resolveTimelineActor(h.by_id, h.by_name, staticData.users, user?.role);
-                                const eventDate = formatTimelineDateTime(h.at, m.created_at);
-                                return (
-                                  <React.Fragment key={i}>
-                                    {i > 0 && <div className="w-8 md:w-12 h-0.5 bg-surface-border/60 mt-[9px] flex-shrink-0" />}
-                                    <div className="flex flex-col items-center text-center w-[150px] flex-shrink-0 px-1">
-                                      <div className={`w-3 h-3 rounded-full bg-current border-2 border-surface-bg shadow-sm flex-shrink-0 ${evColor}`} />
-                                      <span className="mt-2 text-[11px] font-bold text-brand-primary leading-tight flex items-center gap-1.5">
-                                        <EvIcon className={`w-3 h-3 shrink-0 ${evColor}`} /> {h.action}
-                                      </span>
-                                      <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70 leading-tight">
-                                        {actorName}
-                                      </span>
-                                      <span className="text-[9px] font-medium text-brand-muted/80 mt-0.5 leading-tight">
-                                        {eventDate}
-                                      </span>
-                                      {h.note && (
-                                        <div className="mt-2 text-[10px] text-brand-muted/80 bg-surface-subtle/50 p-2 rounded-xl border border-surface-border/30 leading-snug">
-                                          {h.note}
-                                        </div>
-                                      )}
-                                      {h.attachments && h.attachments.length > 0 && (
-                                        <div className="mt-2 w-full">
-                                          <ActionAttachmentsViewer attachments={h.attachments} compact />
-                                        </div>
-                                      )}
-                                    </div>
-                                  </React.Fragment>
-                                );
-                              })}
-
-                              {/* Etapa atual: fecha a linha do tempo mostrando de quem a
-                                  monitoria está esperando. Rótulo vem do STATUS_CONFIGS, o
-                                  mesmo usado nos badges e filtros — muda num lugar só. */}
-                              {!['concluida', 'finalizada_alterada'].includes(m.status) && (() => {
-                                const cfg = getStatusConfig(m.status);
-                                const StepIcon = cfg.icon;
-                                const colorClass = VARIANT_TEXT_CLASS[cfg.variant];
-                                const currentStepDate = formatTimelineDateTime(m.updated_at, m.created_at);
-                                return (
-                                  <React.Fragment>
-                                    {m.history.length > 0 && <div className="w-8 md:w-12 h-0.5 bg-surface-border/60 mt-[9px] flex-shrink-0" />}
-                                    <div className={`flex flex-col items-center text-center w-[150px] flex-shrink-0 px-1 ${colorClass}`}>
-                                      <div className="w-3 h-3 rounded-full bg-surface-bg border-2 border-current animate-pulse flex-shrink-0" />
-                                      <span className="mt-2 text-[11px] font-black leading-tight flex items-center gap-1.5">
-                                        <StepIcon className="w-3 h-3 shrink-0" /> {cfg.label}
-                                      </span>
-                                      <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1">
-                                        Etapa atual
-                                      </span>
-                                      <span className="text-[9px] font-medium text-brand-muted/80 mt-0.5 leading-tight">
-                                        {currentStepDate}
-                                      </span>
-                                    </div>
-                                  </React.Fragment>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-4 pb-2">
-                        <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1">Observações da Qualidade</p>
-                        <div className="relative text-sm text-brand-primary font-medium bg-surface-bg/50 py-3 pl-9 pr-5 rounded-2xl border border-surface-border/40 leading-relaxed italic break-words whitespace-pre-wrap">
-                          <span className="absolute left-3 top-1.5 text-3xl font-black text-brand-muted/20 leading-none select-none">"</span>
-                          {m.evaluator_note || 'Nenhuma observação registrada.'}
-                        </div>
-
-                        {m.corrective_action && (
-                          <div className="space-y-1.5">
-                            <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1">Ação Corretiva do Gestor</p>
-                            <div className="text-xs text-brand-primary font-medium bg-surface-subtle/60 p-3 rounded-xl border border-surface-border/40 whitespace-pre-wrap leading-relaxed">
-                              {m.corrective_action}
-                            </div>
-                          </div>
-                        )}
-
-                        {m.action_attachments && m.action_attachments.length > 0 && (
-                          <div className="space-y-1.5">
-                            <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1 flex items-center gap-1.5">
-                              <Paperclip className="w-3 h-3 text-brand-muted" /> Anexos e Evidências ({m.action_attachments.length})
-                            </p>
-                            <ActionAttachmentsViewer attachments={m.action_attachments} />
-                          </div>
-                        )}
-
-                        <div className="flex flex-wrap gap-2 items-center pt-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setViewingMonitoria(m)}
-                            icon={<Eye className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                            className="border border-surface-border/50"
-                          >
-                            Visualizar Avaliação Completa
-                          </Button>
-
-                          {/* Suporte Actions */}
-                          {/* Aprovar/Contestar a tratativa passou a ser exclusivo
-                              do gestor_suporte — ver bloco "Gestor Suporte Actions"
-                              logo abaixo. O agente individual mantém apenas Apelar
-                              após negativa da Qualidade. */}
-                          {user?.role === 'suporte' && m.status === 'contestacao_negada' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setActionModal({ id: m.id, type: 'recusar_agente' })}
-                              icon={<XCircle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                            >
-                              Apelar
-                            </Button>
-                          )}
-
-                          {/* Gestor Suporte Actions */}
-                          {user?.role === 'gestor_suporte' && m.status === 'pendente_revisao' && (
-                            <>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setActionModal({ id: m.id, type: 'aceitar' })}
-                                icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                              >
-                                Aprovar
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
-                                icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                              >
-                                Contestar
-                              </Button>
-                            </>
-                          )}
-
-                          {/* Admin / Supervisor de Qualidade cobrindo a etapa do Gestor
-                              de Atendimento — ver mesma justificativa em MonitoriaRow.tsx. */}
-                          {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'pendente_revisao' && (
-                            <>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
-                                icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                              >
-                                Aprovar
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
-                                icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                              >
-                                Contestar
-                              </Button>
-                            </>
-                          )}
-
-                          {user?.role === 'gestor_suporte' && m.status === 'aguardando_gestor_suporte' && (
-                            <>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
-                                icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                              >
-                                Aprovar
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setActionModal({ id: m.id, type: 'escalar' })}
-                                icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-y-0.5" />}
-                              >
-                                Escalar
-                              </Button>
-                            </>
-                          )}
-
-                          {/* Qualidade / Auditor Actions */}
-                          {(user?.role === 'qualidade' || user?.role === 'gestor_qualidade') && (m.status === 'em_contestacao' || m.status === 'reavaliacao_solicitada') && (
-                            <>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setViewingMonitoria({ ...m, _reevaluate: true } as any)}
-                                icon={<Pencil className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />}
-                              >
-                                Reavaliar
-                              </Button>
-                              {m.status === 'em_contestacao' && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setActionModal({ id: m.id, type: 'manter' })}
-                                  icon={<XCircle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                                >
-                                  Recusar
-                                </Button>
-                              )}
-                            </>
-                          )}
-
-                          {/* Gestor Qualidade Final Actions */}
-                          {user?.role === 'gestor_qualidade' && m.status === 'aguardando_gestor_qualidade' && (
-                            <>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
-                                icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                              >
-                                Aprovar
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setActionModal({ id: m.id, type: 'solicitar_reavaliacao' })}
-                                icon={<Pencil className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />}
-                              >
-                                Solicitar
-                              </Button>
-                            </>
-                          )}
-
-                          {/* Excluir é soft-delete (active=false via UPDATE, não
-                              DELETE real) — governado por monitorias_update_policy,
-                              que já autoriza admin e gestor_qualidade. */}
-                          {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setActionModal({ id: m.id, type: 'reabrir' })}
-                                icon={<RotateCcw className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-[-45deg]" />}
-                              >
-                                Reabrir
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setActionModal({ id: m.id, type: 'excluir' })}
-                                className="text-functional-error hover:bg-functional-error/10 dark:hover:bg-functional-error/20"
-                                icon={<Trash2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                              >
-                                Excluir
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </motionComponent.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            );
-          }))) : (
+                style={{ height: 600, width: '100%' }}
+              />
+            ) : filtered.map(m => (
+              <MonitoriaRow key={m.id} monitoria={m} teams={staticData.teams} getName={getName} getLevelForScore={getLevelForScore} onOpen={openDetails} />
+            ))
+          ) : (
             <div className="py-24 text-center bg-surface-bg/10">
               <div className="w-16 h-16 rounded-3xl bg-surface-subtle flex items-center justify-center mx-auto mb-4 opacity-50">
                 <Search className="w-8 h-8 text-brand-muted" />
@@ -776,17 +457,47 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
         </div>
       </Card>
 
+      {selectedId && !viewingMonitoria && createPortal(
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-brand-primary/60 p-3 backdrop-blur-md sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) closeDetails(); }}>
+          <section data-detail-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-detail-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-surface-border bg-surface-card shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
+            {(() => {
+              const m = monitorias.find(item => item.id === selectedId);
+              if (!m) return <div className="p-6 text-brand-primary">Monitoria não encontrada.</div>;
+              const cfg = getStatusConfig(m.status);
+              return <>
+                <header className="flex items-start gap-3 border-b border-surface-border p-4 sm:items-center sm:p-6">
+                  <span className={`flex size-10 shrink-0 items-center justify-center rounded-2xl ${VARIANT_ICON_CONTAINER[cfg.variant]}`}><cfg.icon className="size-5" /></span>
+                  <div className="min-w-0 flex-1">
+                    <h2 id="monitoria-detail-title" className="text-base font-black text-brand-primary">Monitoria #{m.display_id || m.id.slice(0, 4)} · Ticket {m.ticket_id || 'S/N'}</h2>
+                    <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-brand-primary/80">
+                      <span>Agente: {getName(m.evaluated_id, false, m.evaluated_name)}</span>
+                      <span>Equipe: {m.team_name || staticData.teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
+                      <span>Auditor: {getName(m.evaluator_id, true, m.evaluator_name)}</span>
+                    </p>
+                  </div>
+                  <Badge variant={cfg.variant} size="xs" className="hidden shrink-0 sm:inline-flex">{cfg.shortLabel}</Badge>
+                  <button ref={detailCloseRef} type="button" onClick={closeDetails} aria-label="Fechar detalhes" className="shrink-0 rounded-xl p-2 text-brand-primary hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-brand-accent"><X className="size-5" /></button>
+                </header>
+                <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
+                  <MonitoriaDetails monitoria={m} user={user} users={staticData.users} onView={item => { closeDetails(); setViewingMonitoria(item); }} onAction={modal => setActionModal(modal)} />
+                </div>
+              </>;
+            })()}
+          </section>
+        </div>, document.body
+      )}
+
       <AnimatePresence>
-        {actionModal && (
-          <div className="fixed inset-0 bg-brand-primary/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
-            <m.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-              <Card className="max-w-md w-full shadow-2xl border-none">
+        {actionModal && createPortal(
+          <div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-brand-primary/60 p-3 backdrop-blur-md sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) setActionModal(null); }}>
+            <m.div data-action-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-action-title" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-3xl sm:max-h-[calc(100dvh-3rem)]">
+              <Card className="w-full shadow-2xl border border-surface-border bg-surface-card">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-12 h-12 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
                     <AlertTriangle className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-brand-primary uppercase tracking-tight">Confirmar Ação</h3>
+                    <h3 id="monitoria-action-title" className="text-lg font-black text-brand-primary uppercase tracking-tight">Confirmar Ação</h3>
                     <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Protocolo #{monitorias.find(m => m.id === actionModal.id)?.display_id || '---'}</p>
                   </div>
                 </div>
@@ -953,7 +664,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                 </div>
               </Card>
             </m.div>
-          </div>
+          </div>, document.body
         )}
       </AnimatePresence>
     </div>
