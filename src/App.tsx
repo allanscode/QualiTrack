@@ -993,7 +993,7 @@ function MainApp({
         >
           {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </div>
-        <div className="h-20 flex items-center px-6 overflow-hidden">
+        <div className="h-20 flex-shrink-0 flex items-center px-6 overflow-hidden">
           <div
             className="flex items-center gap-3 whitespace-nowrap cursor-pointer interactive-sidebar-item"
             onClick={(e) => {
@@ -1020,7 +1020,7 @@ function MainApp({
           </div>
         </div>
 
-        <nav className="flex-1 px-3 space-y-1 py-4">
+        <nav className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 space-y-1 py-4">
           <NavItem isDark={sidebarIsDark} icon={AnimatedDashboardIcon} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
           <NavItem isDark={sidebarIsDark} icon={AnimatedMonitoriasIcon} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
           {userData?.role !== 'suporte' && (
@@ -1069,6 +1069,16 @@ function MainApp({
                     transition={{ duration: 0.2, ease: "easeInOut" }}
                     className="overflow-hidden pl-1 space-y-1"
                   >
+                    {canManageQueueAssignments(userData?.role) && (
+                      <QueueSubNavItem
+                        label="Monitores na Triagem"
+                        active={activeTab === 'filas' && activeQueueSubTab === 'monitores'}
+                        onClick={() => handleQueueSubTabClick('monitores')}
+                        isOpen={sidebarTextVisible}
+                        isDark={sidebarIsDark}
+                        colorType="monitores"
+                      />
+                    )}
                     <QueueSubNavItem
                       label="CSAT Negativas"
                       active={activeTab === 'filas' && activeQueueSubTab === 'negativas'}
@@ -1110,16 +1120,6 @@ function MainApp({
                       isDark={sidebarIsDark}
                       colorType="filhos_invalidos"
                     />
-                    {canManageQueueAssignments(userData?.role) && (
-                      <QueueSubNavItem
-                        label="Monitores na Triagem"
-                        active={activeTab === 'filas' && activeQueueSubTab === 'monitores'}
-                        onClick={() => handleQueueSubTabClick('monitores')}
-                        isOpen={sidebarTextVisible}
-                        isDark={sidebarIsDark}
-                        colorType="monitores"
-                      />
-                    )}
                   </m.div>
                 )}
               </AnimatePresence>
@@ -1194,7 +1194,7 @@ function MainApp({
           ) : null}
         </nav>
 
-        <div className="p-3 border-t border-white/5 interactive-sidebar-item">
+        <div className="p-3 flex-shrink-0 border-t border-white/5 interactive-sidebar-item">
           <div
             className="flex items-center gap-3 p-2 rounded-xl bg-black/10 overflow-hidden"
             title={`${isReconnecting ? 'Reconectando...' : isSystemOnline ? 'Sistema Online' : 'Sistema Offline'} — ${formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}`}

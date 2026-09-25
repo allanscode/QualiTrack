@@ -56,6 +56,19 @@ function NavigationHarness() {
 
         {isQueueMenuOpen && (
           <div className="space-y-1 pl-4" data-testid="queue-subitems-container">
+            {isSupervisor && (
+              <button
+                onClick={() => setActiveQueueSubTab('monitores')}
+                data-testid="subitem-monitores"
+                className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
+                  activeQueueSubTab === 'monitores' ? 'bg-blue-600/15 text-blue-600 font-bold' : 'text-brand-muted hover:text-brand-primary'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
+                <span>Monitores na Triagem</span>
+              </button>
+            )}
+
             <button
               onClick={() => setActiveQueueSubTab('negativas')}
               data-testid="subitem-negativas"
@@ -110,19 +123,6 @@ function NavigationHarness() {
               <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
               <span>Filhos Inválidos</span>
             </button>
-
-            {isSupervisor && (
-              <button
-                onClick={() => setActiveQueueSubTab('monitores')}
-                data-testid="subitem-monitores"
-                className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
-                  activeQueueSubTab === 'monitores' ? 'bg-blue-600/15 text-blue-600 font-bold' : 'text-brand-muted hover:text-brand-primary'
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
-                <span>Monitores na Triagem</span>
-              </button>
-            )}
           </div>
         )}
       </aside>
