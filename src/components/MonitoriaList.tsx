@@ -74,6 +74,33 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewingMonitoria]);
 
+  useEffect(() => {
+    const handleFocus = (e: Event) => {
+      const customEvent = e as CustomEvent<{ monitoriaId?: string; ticketId?: string }>;
+      const targetId = customEvent.detail?.monitoriaId;
+      if (!targetId) return;
+
+      filters.setTab('todas');
+      filters.setStatusFilter('active');
+      filters.setAuditorFilter('');
+      filters.setSuporteFilter('');
+      filters.setTeamFilter('');
+      filters.setSearch('');
+
+      setExpandedId(targetId);
+
+      setTimeout(() => {
+        const el = document.getElementById(`monitoria-${targetId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+    };
+
+    window.addEventListener('qualitrack:focus_monitoria', handleFocus);
+    return () => window.removeEventListener('qualitrack:focus_monitoria', handleFocus);
+  }, [filters, setExpandedId]);
+
   const getName = (id: string, isEvaluator?: boolean, snapshotName?: string) => {
     if (isEvaluator && (user?.role === 'suporte' || user?.role === 'gestor_suporte')) {
       return 'Equipe de Qualidade';
@@ -400,7 +427,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                 const scoreColor = m.score !== undefined ? level.color : 'text-brand-muted';
 
                 return (
-                  <div key={m.id} className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
+                  <div key={m.id} id={`monitoria-${m.id}`} className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
                     <div className="flex items-center gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : m.id)}>
                   {/* Left: Status Icon */}
                   <div className={`w-11 h-11 rounded-[1.25rem] flex items-center justify-center flex-shrink-0 bg-surface-bg text-brand-muted shadow-sm`}>

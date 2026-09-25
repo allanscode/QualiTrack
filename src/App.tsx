@@ -23,6 +23,7 @@ import { useMonitoriaData } from './hooks/useMonitoriaData';
 import { supabase } from './lib/supabase';
 import { fetchAIGuidelines } from './lib/aiGuidelines';
 import { releaseQueueTicketAssignment, canManageQueueAssignments } from './lib/queueDistribution';
+import { getContestationNotifications } from './lib/contestationNotifications';
 import type { AdminSubTab } from './components/AdminPanel';
 
 export const QUEUE_TITLES: Record<QueueSubTab, string> = {
@@ -617,30 +618,32 @@ function MainApp({
       targetSubTab?: AdminSubTab;
       guidelineId?: string;
       actionType?: 'review';
+      monitoriaId?: string;
+      ticketId?: string;
       read: boolean;
     }> = [];
 
-    // Notificações para Suporte
+    // Notificações de Contestação (WQ-25: status 'em_contestacao', estável por evento/monitoria, auditor + gestores de qualidade)
+    const contestationNotifs = getContestationNotifications(userData, monitorias, readNotificationIds);
+    for (const cn of contestationNotifs) {
+      list.push({
+        id: cn.id,
+        title: cn.title,
+        message: cn.message,
+        time: cn.time,
+        type: 'contestacao',
+        iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+        icon: <AlertTriangle className="w-3.5 h-3.5" />,
+        targetTab: 'monitorias',
+        monitoriaId: cn.monitoriaId,
+        ticketId: cn.ticketId,
+        read: cn.read,
+      });
+    }
+
+    // Notificações para Suporte (Nova Avaliação Disponível)
     if (userData?.role === 'suporte') {
       const myMonitorias = monitorias.filter((m: any) => m.evaluated_id === userData.id);
-      const contested = myMonitorias.filter((m: any) => m.status === 'contestado');
-      if (contested.length > 0) {
-        const itemDate = contested[0].updated_at || contested[0].created_at;
-        const timeStr = itemDate
-          ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
-          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
-        list.push({
-          id: `contested-${contested[0].id}`,
-          title: 'Contestação em Análise',
-          message: `Sua contestação da monitoria #${contested[0].ticket_id || contested[0].id.slice(0, 6)} está sendo reavaliada pela Qualidade.`,
-          time: timeStr,
-          type: 'contestacao',
-          iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-          icon: <AlertTriangle className="w-3.5 h-3.5" />,
-          targetTab: 'monitorias',
-          read: readNotificationIds.has(`contested-${contested[0].id}`)
-        });
-      }
       if (myMonitorias.length > 0) {
         const latest = myMonitorias[0];
         const timeStr = latest.created_at
@@ -655,32 +658,15 @@ function MainApp({
           iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
           icon: <ClipboardCheck className="w-3.5 h-3.5" />,
           targetTab: 'monitorias',
+          monitoriaId: latest.id,
+          ticketId: latest.ticket_id,
           read: readNotificationIds.has(`eval-${latest.id}`)
         });
       }
     }
 
-    // Notificações para Qualidade / Gestores / Admin
+    // Notificações de Filas para Qualidade / Gestores / Admin
     if (userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') {
-      const pendingContestations = monitorias.filter((m: any) => m.status === 'contestado');
-      if (pendingContestations.length > 0) {
-        const itemDate = pendingContestations[0]?.updated_at || pendingContestations[0]?.created_at;
-        const timeStr = itemDate
-          ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
-          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
-        list.push({
-          id: `admin-contest-${pendingContestations.length}`,
-          title: `${pendingContestations.length} Contestação(ões) Pendente(s)`,
-          message: 'Monitorias contestadas por analistas aguardando reanálise e parecer da equipe de Qualidade.',
-          time: timeStr,
-          type: 'contestacao',
-          iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-          icon: <AlertTriangle className="w-3.5 h-3.5" />,
-          targetTab: 'monitorias',
-          read: readNotificationIds.has(`admin-contest-${pendingContestations.length}`)
-        });
-      }
-
       list.push({
         id: 'queue-csat-negativas',
         title: 'Fila de Triagem Atualizada',
@@ -823,6 +809,15 @@ function MainApp({
 
     if (item.targetTab) {
       setActiveTab(item.targetTab);
+    }
+    if (item.monitoriaId) {
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent('qualitrack:focus_monitoria', {
+            detail: { monitoriaId: item.monitoriaId, ticketId: item.ticketId }
+          })
+        );
+      }, 100);
     }
     if (item.targetSubTab) {
       setAdminSubTab(item.targetSubTab);

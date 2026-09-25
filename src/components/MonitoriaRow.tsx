@@ -77,7 +77,7 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
 
   return (
     <div style={style} className="divide-y divide-surface-subtle">
-      <div className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
+      <div id={`monitoria-${m.id}`} className={`p-4 hover:bg-surface-bg/30 transition-all ${isExpanded ? 'bg-surface-bg/20' : ''}`}>
         <div className="flex items-center gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : m.id)}>
           <div className={`w-11 h-11 rounded-[1.25rem] flex items-center justify-center flex-shrink-0 bg-surface-bg text-brand-muted shadow-sm`}>
             <config.icon className="w-5 h-5" />
