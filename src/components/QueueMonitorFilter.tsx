@@ -10,15 +10,16 @@ interface QueueMonitorFilterProps {
 
 export default function QueueMonitorFilter({ monitors, value, onChange, found, assignmentsReady }: QueueMonitorFilterProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2 min-w-0 w-full sm:w-auto">
-      <label htmlFor="queue-monitor-filter" className="text-[10px] font-black uppercase tracking-wider text-brand-muted whitespace-nowrap">
+    <div className="flex items-center gap-1.5 min-w-0 shrink-0">
+      <label htmlFor="queue-monitor-filter" className="sr-only">
         Monitor de Qualidade
       </label>
       <select
         id="queue-monitor-filter"
+        aria-label="Monitor de Qualidade"
         value={value}
         onChange={event => onChange(event.target.value)}
-        className="min-w-0 w-full sm:w-48 max-w-full bg-surface-card border border-surface-border rounded-xl px-2.5 py-1.5 text-xs font-bold text-brand-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 cursor-pointer"
+        className="h-9 min-w-0 w-full sm:w-44 max-w-full bg-surface-subtle/50 hover:bg-surface-subtle/70 focus:bg-surface-subtle border border-surface-border rounded-lg px-2.5 py-1 text-xs font-medium text-brand-primary focus:outline-none focus:border-brand-highlight/60 transition-all cursor-pointer"
       >
         <option value="">Todos os monitores</option>
         {[...monitors].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(monitor => (
@@ -26,7 +27,7 @@ export default function QueueMonitorFilter({ monitors, value, onChange, found, a
         ))}
       </select>
       {value && (
-        <span role="status" className="text-[10px] text-brand-muted whitespace-nowrap">
+        <span role="status" className="text-[11px] font-medium text-brand-muted whitespace-nowrap shrink-0">
           {assignmentsReady ? `${found} encontrado${found === 1 ? '' : 's'} nesta página` : 'Carregando atribuições…'}
         </span>
       )}

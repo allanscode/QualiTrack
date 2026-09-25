@@ -13,3 +13,4 @@ supabase/.temp/
 .vercel
 backups/
 .supabase-fresh/
+.playwright-mcp/

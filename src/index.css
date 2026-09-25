@@ -85,39 +85,40 @@ color-scheme: light;
 
 .dark {
 color-scheme: dark;
-/* Dark Theme Overrides */
-  /* Keep text tokens readable on dark surfaces; red is softened for text contrast. */
-  --brand-primary: #E8EEF7;
+/* Dark Theme Overrides — SaaS Dark Moderno (Profundo Grafite/Azul-Marinho) */
+  --brand-primary: #F8FAFC;
   --brand-highlight: #F43F5E;
   --brand-accent: #F43F5E;
   --action-primary-bg: #E11D48;
   --action-primary-fg: #FFFFFF;
   --brand-muted: #94A3B8;
-  --brand-subtle: #22314A;
-  --brand-on-primary: #0A1F44; /* Dark text on light primary (Dark Mode) */
+  --brand-subtle: #1E283D;
+  --brand-on-primary: #0B0F17;
 
-  --surface-bg: #111C2F;
-  --surface-card: #18263D;
-  --surface-subtle: #22314A;
-  --surface-border: #34445E;
+  /* Superfícies refinadas com profundidade harmônica */
+  --surface-bg: #0B0F17;
+  --surface-card: #131A29;
+  --surface-subtle: #192236;
+  --surface-hover: #1F2B44;
+  --surface-border: #232F48;
 
-  --shadow-premium: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
-  --shadow-premium-sm: 0 4px 20px -5px rgba(0, 0, 0, 0.3);
+  --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.45);
+  --shadow-premium-sm: 0 4px 16px -4px rgba(0, 0, 0, 0.25);
 
-  /* Role Sidebar Colors (Dark Mode — neutral gray) */
-  --sidebar-bg-admin: #172338;
-  --sidebar-bg-qualidade: #172338;
-  --sidebar-bg-gestor-qualidade: #172338;
-  --sidebar-bg-gestor-suporte: #172338;
-  --sidebar-bg-suporte: #172338;
+  /* Role Sidebar Colors (Dark Mode — deep slate-navy coeso) */
+  --sidebar-bg-admin: #0F1523;
+  --sidebar-bg-qualidade: #0F1523;
+  --sidebar-bg-gestor-qualidade: #0F1523;
+  --sidebar-bg-gestor-suporte: #0F1523;
+  --sidebar-bg-suporte: #0F1523;
 
-  /* Functional color tokens (dark mode — pastel/soft) */
+  /* Functional color tokens (dark mode — pastel/soft de significado direto) */
   --error-pastel: #FCA5A5;
-  --error-pastel-bg: #3B1C1C;
-  --warning-pastel: #FBBF24;
-  --warning-pastel-bg: rgba(69, 26, 3, 0.4);
+  --error-pastel-bg: rgba(239, 68, 68, 0.12);
+  --warning-pastel: #FCD34D;
+  --warning-pastel-bg: rgba(245, 158, 11, 0.12);
   --success-pastel: #6EE7B7;
-  --success-pastel-bg: #1A3A2A;
+  --success-pastel-bg: rgba(16, 185, 129, 0.12);
 
   --error-color: var(--error-pastel);
   --error-bg: var(--error-pastel-bg);
@@ -278,8 +279,8 @@ option {
 html.dark select,
 html.dark option {
   color-scheme: dark;
-  background-color: var(--surface-card, #172338);
-  color: var(--brand-primary, #E8EEF7);
+  background-color: var(--surface-card, #131A29);
+  color: var(--brand-primary, #F8FAFC);
 }
 
 html:not(.dark) select,
@@ -491,9 +492,9 @@ textarea::placeholder {
 .dark input[type="time"],
 .dark input[type="date"],
 .dark textarea {
-  background-color: #1A1C16 !important; /* dark:bg-surface-bg */
-  border: 1px solid #3D4136 !important; /* dark:border-surface-border */
-  color: #F9F9F6 !important; /* text-brand-primary */
+  background-color: var(--surface-subtle) !important;
+  border: 1px solid var(--surface-border) !important;
+  color: var(--brand-primary) !important;
 }
 
 .dark input[type="text"]::placeholder,
@@ -504,7 +505,7 @@ textarea::placeholder {
 .dark input[type="time"]::placeholder,
 .dark input[type="date"]::placeholder,
 .dark textarea::placeholder {
-  color: rgba(163, 166, 154, 0.5) !important; /* dark:placeholder-brand-muted/50 */
+  color: #64748B !important; /* text-slate-500 */
 }
 
 /* Focus States */
@@ -529,8 +530,8 @@ textarea:focus {
 .dark input[type="time"]:focus,
 .dark input[type="date"]:focus,
 .dark textarea:focus {
-  border-color: #475569 !important; /* focus:border-slate-600 */
-  box-shadow: 0 0 0 1px #475569 !important; /* focus:ring-slate-600 */
+  border-color: #38BDF8 !important; /* focus:border-sky-400 */
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4) !important; /* focus:ring-sky-400/40 */
 }
 
 /* Specific exceptions to keep transparent bg and border-none working despite the global override */

@@ -54,6 +54,8 @@ import {
   Rocket,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  SlidersHorizontal,
   Lock,
   FileText,
   GitFork,
@@ -342,6 +344,29 @@ export default function AuditingQueueView({
 
   // Filtro de rascunhos feitos pela IA (Todos | Com Rascunho IA | Sem Rascunho IA)
   const [aiDraftFilter, setAiDraftFilter] = useState<'all' | 'with_draft' | 'without_draft'>('all');
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setIsFilterDropdownOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsFilterDropdownOpen(false);
+      }
+    }
+    if (isFilterDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFilterDropdownOpen]);
 
   // Seleção de tickets individuais para avaliação em lote customizada
   const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
@@ -738,6 +763,10 @@ ${checksSummary}${recs}`;
   const paginatedTickets = useMemo(() => {
     return filteredTickets.slice(startIndex, endIndex);
   }, [filteredTickets, startIndex, endIndex]);
+
+  const evaluableTicketsCount = useMemo(() => {
+    return paginatedTickets.filter(t => !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached).length;
+  }, [paginatedTickets, drafts]);
 
   const toggleTicketSelection = (ticketId: string) => {
     setSelectedTicketIds(prev => {
@@ -1861,85 +1890,139 @@ ${checksSummary}${recs}`;
       ) : (
         <>
 
-      {/* 2. Barra de Busca e Ações (Filtros, Busca, Seleção e Atualização) */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-1">
-        {/* Campo de Busca e Filtro de Rascunho IA */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-          <div className="relative w-full sm:w-72">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
-            <input
-              type="text"
-              placeholder="Buscar por ID, assunto ou agente..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl bg-surface-subtle/50 border border-surface-border text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-highlight transition-all"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-primary cursor-pointer"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-
-          {isSupervisorView && isDistributedQueue(activeQueue) && (
-            <QueueMonitorFilter
-                monitors={qualityMonitors}
-                value={selectedMonitorFilter}
-                onChange={setSelectedMonitorFilter}
-                found={totalItems}
-                assignmentsReady={assignmentsReady[activeQueue]}
-            />
+      {/* 2. Barra Superior da Fila — Toolbar Compacta e Coesa */}
+      <div className="relative flex flex-wrap md:flex-nowrap items-center gap-2 p-2 rounded-xl bg-surface-card/60 backdrop-blur-sm border border-surface-border/60 transition-all">
+        {/* Campo de Busca (elemento de maior largura) */}
+        <div className="relative flex-1 min-w-[200px] max-w-none sm:max-w-md">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
+          <input
+            type="text"
+            aria-label="Buscar"
+            placeholder="Buscar por ID, assunto ou agente..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full h-9 pl-8 pr-7 text-xs rounded-lg bg-surface-subtle/50 hover:bg-surface-subtle/70 focus:bg-surface-subtle border border-surface-border text-brand-primary placeholder:text-brand-muted/70 focus:outline-none focus:border-brand-highlight/60 transition-all"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              aria-label="Limpar busca"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-primary cursor-pointer p-0.5"
+            >
+              <X className="w-3 h-3" />
+            </button>
           )}
-
-          {/* Filtro de Rascunhos da IA */}
-          <div className="flex items-center gap-1 bg-surface-subtle/60 p-1 rounded-xl border border-surface-border text-[10px] font-bold">
-            <button
-              type="button"
-              onClick={() => setAiDraftFilter('all')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                aiDraftFilter === 'all'
-                  ? 'bg-surface-card text-brand-primary shadow-xs font-black'
-                  : 'text-brand-muted hover:text-brand-primary'
-              }`}
-            >
-              Todos
-            </button>
-            <button
-              type="button"
-              onClick={() => setAiDraftFilter('with_draft')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                aiDraftFilter === 'with_draft'
-                  ? 'bg-brand-highlight/15 text-brand-highlight shadow-xs font-black'
-                  : 'text-brand-muted hover:text-brand-primary'
-              }`}
-              title="Exibir apenas chamados que já possuem rascunho ou parecer da IA"
-            >
-              <Bot className="w-3 h-3" />
-              <span>Com Rascunho IA</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAiDraftFilter('without_draft')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                aiDraftFilter === 'without_draft'
-                  ? 'bg-surface-card text-brand-primary shadow-xs font-black'
-                  : 'text-brand-muted hover:text-brand-primary'
-              }`}
-              title="Exibir chamados pendentes de análise pela IA"
-            >
-              Sem Rascunho
-            </button>
-          </div>
         </div>
 
-        {/* Botões de Ação mantidos à direita */}
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-          {/* Botão de Selecionar Todos da Página Atual */}
+        {/* Seletor de Monitor (imediatamente ao lado da busca) */}
+        {isSupervisorView && isDistributedQueue(activeQueue) && (
+          <QueueMonitorFilter
+            monitors={qualityMonitors}
+            value={selectedMonitorFilter}
+            onChange={setSelectedMonitorFilter}
+            found={totalItems}
+            assignmentsReady={assignmentsReady[activeQueue]}
+          />
+        )}
+
+        {/* Dropdown Compacto de Filtros (Todos, Com Rascunho IA, Sem Rascunho) */}
+        <div className="relative shrink-0" ref={filterDropdownRef}>
+          <button
+            type="button"
+            onClick={() => setIsFilterDropdownOpen(prev => !prev)}
+            aria-expanded={isFilterDropdownOpen}
+            aria-haspopup="true"
+            className={`h-9 px-3 rounded-lg border text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+              aiDraftFilter !== 'all'
+                ? 'bg-brand-highlight/10 border-brand-highlight/30 text-brand-primary font-semibold'
+                : 'bg-surface-subtle/50 hover:bg-surface-subtle/70 border-surface-border text-brand-muted hover:text-brand-primary'
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span>{aiDraftFilter === 'all' ? 'Filtros' : 'Filtros · 1'}</span>
+            <ChevronDown className={`w-3 h-3 text-brand-muted transition-transform duration-200 ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isFilterDropdownOpen && (
+            <div
+              role="menu"
+              className="absolute top-full left-0 mt-1.5 z-30 min-w-[190px] p-1.5 rounded-xl bg-surface-card border border-surface-border shadow-xl backdrop-blur-md animate-fade-in"
+            >
+              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+                Status de Rascunho
+              </div>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setAiDraftFilter('all');
+                  setIsFilterDropdownOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                  aiDraftFilter === 'all'
+                    ? 'bg-surface-subtle text-brand-primary font-semibold'
+                    : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle/50'
+                }`}
+              >
+                <span>Todos</span>
+                {aiDraftFilter === 'all' && <Check className="w-3.5 h-3.5 text-brand-highlight" />}
+              </button>
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setAiDraftFilter('with_draft');
+                  setIsFilterDropdownOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                  aiDraftFilter === 'with_draft'
+                    ? 'bg-surface-subtle text-brand-primary font-semibold'
+                    : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle/50'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Bot className="w-3.5 h-3.5 text-brand-highlight" />
+                  <span>Com Rascunho IA</span>
+                </span>
+                {aiDraftFilter === 'with_draft' && <Check className="w-3.5 h-3.5 text-brand-highlight" />}
+              </button>
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setAiDraftFilter('without_draft');
+                  setIsFilterDropdownOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                  aiDraftFilter === 'without_draft'
+                    ? 'bg-surface-subtle text-brand-primary font-semibold'
+                    : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle/50'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-brand-muted" />
+                  <span>Sem Rascunho</span>
+                </span>
+                {aiDraftFilter === 'without_draft' && <Check className="w-3.5 h-3.5 text-brand-highlight" />}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Espaço flexível para empurrar ações para a direita */}
+        <div className="flex-1 hidden md:block" />
+
+        {/* Ações da Toolbar */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto md:ml-0">
+          {/* Seleção de tickets da página atual */}
           {paginatedTickets.length > 0 && (
-            <label className="flex items-center gap-1.5 text-[11px] font-bold text-brand-muted hover:text-brand-primary cursor-pointer px-2.5 py-1.5 rounded-xl border border-surface-border bg-surface-subtle/40 transition-colors">
+            <label
+              className="h-9 inline-flex items-center gap-1.5 px-2.5 rounded-lg border border-surface-border bg-surface-subtle/40 hover:bg-surface-subtle text-xs font-medium text-brand-muted hover:text-brand-primary cursor-pointer transition-colors shrink-0 select-none"
+              title={paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar todos os chamados da página' : 'Selecionar todos os chamados da página'}
+            >
               <input
                 type="checkbox"
                 checked={paginatedTickets.length > 0 && paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id))}
@@ -1947,80 +2030,76 @@ ${checksSummary}${recs}`;
                 disabled={batchRunning}
                 className="w-3.5 h-3.5 rounded text-brand-highlight focus:ring-brand-highlight border-surface-border cursor-pointer"
               />
-              <span>
-                {paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar Todos' : 'Selecionar Página'}
+              <span className="hidden sm:inline">
+                {paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar' : 'Selecionar'}
               </span>
               {selectedTicketIds.size > 0 && (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-brand-highlight text-white text-[9px] font-black">
+                <span className="px-1.5 py-0.2 rounded-full bg-brand-highlight text-white text-[10px] font-bold">
                   {selectedTicketIds.size}
                 </span>
               )}
             </label>
           )}
 
-          {/* Botão Avaliar em Lote — nas filas com IA */}
+          {/* Botão Avaliar Página / Selecionados */}
           {(activeQueue === 'positivas' || activeQueue === 'proativas' || activeQueue === 'negativas') && (
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={handleBatchEvaluate}
-              disabled={loading || paginatedTickets.length === 0 || batchRunning}
-              className={`flex items-center gap-1.5 flex-shrink-0 font-bold transition-all ${
-                activeQueue === 'negativas'
-                  ? 'text-functional-error hover:text-functional-error hover:bg-functional-error/10 border border-functional-error/30'
-                  : 'text-brand-highlight hover:text-brand-highlight border border-brand-highlight/30'
+              disabled={loading || (paginatedTickets.length === 0 && selectedTicketIds.size === 0) || (evaluableTicketsCount === 0 && selectedTicketIds.size === 0) || batchRunning}
+              className={`h-9 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${
+                loading || (paginatedTickets.length === 0 && selectedTicketIds.size === 0) || (evaluableTicketsCount === 0 && selectedTicketIds.size === 0) || batchRunning
+                  ? 'opacity-40 cursor-not-allowed bg-surface-subtle/40 border border-surface-border text-brand-muted shadow-none'
+                  : activeQueue === 'negativas'
+                  ? 'bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/25'
+                  : activeQueue === 'proativas'
+                  ? 'bg-violet-500/15 border border-violet-500/30 text-violet-600 dark:text-violet-400 hover:bg-violet-500/25'
+                  : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25'
               }`}
-              title="Avaliar tickets selecionados com IA"
+              title={
+                evaluableTicketsCount === 0 && selectedTicketIds.size === 0
+                  ? 'Nenhum chamado pendente de avaliação nesta página'
+                  : 'Avaliar chamados com IA'
+              }
             >
               <Zap className="w-3.5 h-3.5" />
               <span>
                 {selectedTicketIds.size > 0
                   ? `Avaliar Selecionados (${selectedTicketIds.size})`
-                  : `Avaliar Página (${paginatedTickets.filter(t => !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached).length})`}
+                  : `Avaliar Página (${evaluableTicketsCount})`}
               </span>
-            </Button>
+            </button>
           )}
 
-          {loading && (
-            <div className="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full bg-brand-highlight/10 border border-brand-highlight/25 text-brand-highlight text-[11px] font-bold animate-pulse">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-highlight opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-highlight" />
-              </span>
-              <span>
-                {activeQueue === 'negativas' && 'Sincronizando CSAT Ruim no Zendesk...'}
-                {activeQueue === 'proativas' && 'Sincronizando Fila Proativa no Zendesk...'}
-                {activeQueue === 'positivas' && 'Sincronizando CSAT Positivas no Zendesk...'}
-                {activeQueue === 'filhos' && 'Varrendo Chamados Filhos no Zendesk...'}
-                {activeQueue === 'filhos_invalidos' && 'Consultando Filhos Inválidos no Zendesk...'}
-              </span>
-            </div>
-          )}
-
-          <Button
-            variant="ghost"
-            size="sm"
+          {/* Botão Atualizar (ação secundária discreta com tooltip) */}
+          <button
+            type="button"
             onClick={() => {
+              if (loading) return;
               setPrevCursors([]);
               setPageNumber(1);
               loadQueueData(null);
             }}
             disabled={loading}
-            className="flex items-center gap-1.5 flex-shrink-0 cursor-pointer"
-            title="Recarregar fila do Zendesk"
+            aria-label="Atualizar"
+            title={loading ? 'Sincronizando com Zendesk...' : 'Atualizar fila'}
+            className={`h-9 w-9 p-0 inline-flex items-center justify-center shrink-0 rounded-lg border border-surface-border bg-surface-subtle/50 hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-colors cursor-pointer ${
+              loading ? 'cursor-not-allowed opacity-80' : ''
+            }`}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-brand-highlight' : ''}`} />
-            <span className="hidden sm:inline">{loading ? 'Sincronizando...' : 'Atualizar'}</span>
-          </Button>
+            <RefreshCw className={`w-3.5 h-3.5 transition-transform ${loading ? 'animate-spin text-brand-highlight' : ''}`} />
+          </button>
+        </div>
+
+        {/* Linha de Pulso de Sincronização integrada à borda inferior (Zero Layout Shift) */}
+        <div
+          className={`absolute bottom-0 left-0 right-0 h-0.5 overflow-hidden rounded-b-xl transition-opacity duration-300 pointer-events-none ${
+            loading ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <div className="w-full h-full bg-gradient-to-r from-transparent via-brand-highlight to-transparent animate-shimmer" />
         </div>
       </div>
-
-      {/* Barra de Pulso de Sincronização com Zendesk */}
-      {loading && (
-        <div className="relative w-full h-1 overflow-hidden rounded-full bg-surface-subtle">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-brand-highlight to-transparent animate-shimmer" />
-        </div>
-      )}
 
       {/* Conteúdo da Fila: NEGATIVAS */}
       {activeQueue === 'negativas' && (

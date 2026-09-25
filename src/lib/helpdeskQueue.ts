@@ -148,6 +148,9 @@ export async function fetchQueueTickets(
   let hasMore = false;
 
   if (isMockMode || !supabase) {
+    if (typeof window !== 'undefined' && (window as any).__MOCK_QUEUE_DELAY_MS__) {
+      await new Promise(r => setTimeout(r, (window as any).__MOCK_QUEUE_DELAY_MS__));
+    }
     tickets = getMockQueueTickets(type, auditedTicketIds);
   } else {
     try {

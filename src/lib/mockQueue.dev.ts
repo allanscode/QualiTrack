@@ -1,5 +1,8 @@
 import type { AuditingQueueType, AuditingQueueTicket } from '../types';
 export function getMockQueueTickets(type: AuditingQueueType, auditedIds: Set<string>): AuditingQueueTicket[] {
+  if (typeof window !== 'undefined' && (window as any).__MOCK_QUEUE_TICKETS__?.[type]) {
+    return (window as any).__MOCK_QUEUE_TICKETS__[type];
+  }
   const now = new Date();
 
   if (type === 'negativas') {
