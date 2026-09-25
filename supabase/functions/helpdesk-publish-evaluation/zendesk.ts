@@ -5,11 +5,10 @@
 
 import type { HelpdeskProvider, PublishEvaluationInput } from './types.ts';
 
-// Campos customizados do ticket (levantados por leitura, confirmados —
-// ver SPEC-integracao-helpdesk.md). O campo "CSAT vazio" (47850817758484)
-// não é tocado por decisão do dono do processo.
-const FIELD_AVALIACAO_ATENDIMENTO = 47141676348180;
-const FIELD_ANALISADO = 47422901459476;
+// Campos customizados do ticket levantados e confirmados diretamente da API de macros do Zendesk:
+const FIELD_AVALIACAO_ATENDIMENTO = 47141676348180; // "Avaliação do Atendimento" (positiva / negativa)
+const FIELD_ANALISADO = 47422901459476;             // "Analisado" (checkbox: true)
+const FIELD_CSAT_VAZIO = 47850817758484;            // "CSAT vazio" (na macro Ticket Invalidado: "critico")
 
 export interface ZendeskConfig {
   subdomain: string;
@@ -26,16 +25,23 @@ export class ZendeskProvider implements HelpdeskProvider {
     const url = `https://${this.config.subdomain}.zendesk.com/api/v2/tickets/${input.ticketId}.json`;
     const auth = btoa(`${this.config.email}/token:${this.config.apiToken}`);
 
+    const customFields: { id: number; value: any }[] = [
+      { id: FIELD_AVALIACAO_ATENDIMENTO, value: input.outcome },
+      { id: FIELD_ANALISADO, value: true },
+    ];
+
+    // Espelha exatamente a ação da macro oficial "❌ QA | Ticket Invalidado" (ID 47142387357076)
+    if (input.outcome === 'negativa') {
+      customFields.push({ id: FIELD_CSAT_VAZIO, value: 'critico' });
+    }
+
     const payload = {
       ticket: {
         comment: {
           html_body: input.htmlBody,
           public: false,
         },
-        custom_fields: [
-          { id: FIELD_AVALIACAO_ATENDIMENTO, value: input.outcome },
-          { id: FIELD_ANALISADO, value: true },
-        ],
+        custom_fields: customFields,
       },
     };
 
