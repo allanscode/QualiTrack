@@ -5,6 +5,7 @@ import CustomSelect from '../ui/CustomSelect';
 import CustomDatepicker from '../ui/CustomDatepicker';
 import { useTheme } from '../../providers/ThemeProvider';
 import { m, AnimatePresence } from 'motion/react';
+import { getPresetDateRange, detectActivePreset } from '../../lib/dashboardDatePresets';
 
 export default function FilterBar() {
   const { resolvedTheme } = useTheme();
@@ -36,6 +37,19 @@ export default function FilterBar() {
       agentId: '',
       auditorId: '',
       status: '',
+    }));
+  };
+
+  const activePreset = useMemo(() => {
+    return detectActivePreset(filters.startDate, filters.endDate);
+  }, [filters.startDate, filters.endDate]);
+
+  const handleApplyPreset = (preset: 'dia' | 'mes' | 'ano') => {
+    const range = getPresetDateRange(preset);
+    setFilters(prev => ({
+      ...prev,
+      startDate: range.startDate,
+      endDate: range.endDate,
     }));
   };
 
@@ -86,6 +100,43 @@ export default function FilterBar() {
 
       <div className="bg-surface-card rounded-3xl border border-surface-border shadow-premium p-6">
         <div className="flex flex-wrap items-center gap-2">
+
+          {/* Quick Period Presets (Dia | Mês | Ano) (WQ-21) */}
+          <div className="inline-flex items-center rounded-2xl bg-surface-subtle p-0.5 border border-surface-border shrink-0">
+            <button
+              type="button"
+              onClick={() => handleApplyPreset('dia')}
+              className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                activePreset === 'dia'
+                  ? 'bg-brand-accent text-white shadow-sm'
+                  : 'text-brand-muted hover:text-brand-primary'
+              }`}
+            >
+              Dia
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyPreset('mes')}
+              className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                activePreset === 'mes'
+                  ? 'bg-brand-accent text-white shadow-sm'
+                  : 'text-brand-muted hover:text-brand-primary'
+              }`}
+            >
+              Mês
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyPreset('ano')}
+              className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                activePreset === 'ano'
+                  ? 'bg-brand-accent text-white shadow-sm'
+                  : 'text-brand-muted hover:text-brand-primary'
+              }`}
+            >
+              Ano
+            </button>
+          </div>
 
           {/* Date Range Group (Always First) */}
           <div className="flex items-center gap-x-2 flex-[1.8] min-w-[260px]">

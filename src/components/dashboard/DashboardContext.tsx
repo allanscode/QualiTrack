@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
-import { Monitoria, User, Team, EvaluationForm, DissatisfactionField } from '../../types';
+import { Monitoria, User, Team, EvaluationForm, DissatisfactionField, HelpdeskSubmission } from '../../types';
 import { supabase, mockDb, isMockMode } from '../../lib/supabase';
 import { useStaticData } from '../../lib/StaticDataContext';
 import { toast } from 'sonner';
@@ -25,6 +25,7 @@ export interface DashboardState {
   filters: DashboardFilters;
   monitorias: Monitoria[];
   allMonitorias: Monitoria[];
+  helpdeskSubmissions: HelpdeskSubmission[];
   users: User[];
   teams: Team[];
   forms: EvaluationForm[];
@@ -103,6 +104,7 @@ export function DashboardProvider({
 
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
   const [allMonitorias, setAllMonitorias] = useState<Monitoria[]>([]);
+  const [helpdeskSubmissions, setHelpdeskSubmissions] = useState<HelpdeskSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalAvg, setGlobalAvg] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -140,6 +142,8 @@ export function DashboardProvider({
         const { data } = await mockDb.get('monitorias');
         docs = data || [];
         scoreDocs = docs;
+        const { data: subData } = await mockDb.get('helpdesk_submissions');
+        setHelpdeskSubmissions((subData as HelpdeskSubmission[]) || []);
       } else {
         const sb = supabase!; // TypeScript narrowing after guard
         const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
@@ -205,6 +209,19 @@ export function DashboardProvider({
           docs = mRes.data as Monitoria[];
           // CORRECTION 4: Derive scoreDocs from the full query result (same data, just filtered)
           scoreDocs = mRes.data as any[];
+
+          if (docs.length > 0) {
+            const docIds = docs.map(d => d.id);
+            const { data: subData } = await sb
+              .from('helpdesk_submissions')
+              .select('*')
+              .in('monitoria_id', docIds)
+              .eq('status', 'sent')
+              .order('created_at', { ascending: false });
+            setHelpdeskSubmissions((subData as HelpdeskSubmission[]) || []);
+          } else {
+            setHelpdeskSubmissions([]);
+          }
         }
 
       } // Close try block for loadData
@@ -458,6 +475,7 @@ export function DashboardProvider({
     filters,
     monitorias,
     allMonitorias,
+    helpdeskSubmissions,
     users: staticData.users,
     teams: staticData.teams,
     forms: staticData.forms,
@@ -474,6 +492,7 @@ export function DashboardProvider({
     filters,
     monitorias,
     allMonitorias,
+    helpdeskSubmissions,
     staticData.users,
     staticData.teams,
     staticData.forms,

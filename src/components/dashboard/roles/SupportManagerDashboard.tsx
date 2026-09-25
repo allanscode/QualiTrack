@@ -18,6 +18,8 @@ import { isApprovalAction, isRejectionAction, isContestationAction } from '../..
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
 import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
 import NegativeCallsTrainingAlert from '../widgets/NegativeCallsTrainingAlert';
+import { computeSupportManagerIndicators } from '../../../lib/supportManagerIndicators';
+import SupportDrillDownModal from '../widgets/SupportDrillDownModal';
 
 // High-fidelity mock datasets for customization mode
 const mockTrendData = [
@@ -251,11 +253,33 @@ export default function SupportManagerDashboard({
     // safe fallback
   }
 
-  const { user, monitorias, allMonitorias, users, teams, forms, dissatisfactionFields, globalAvg } = dashboardData;
+  const { user, monitorias, allMonitorias, helpdeskSubmissions = [], users, teams, forms, dissatisfactionFields, globalAvg } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
 
   // Scoped Team IDs
   const myTeamIds = user?.team_ids || [];
+
+  const [drillDown, setDrillDown] = useState<{
+    title: string;
+    subtitle?: string;
+    monitorias: any[];
+  } | null>(null);
+
+  const indicators = useMemo(() => {
+    if (isCustomizing) {
+      return {
+        totalAvaliado: 15,
+        totalPositivo: 12,
+        totalNegativo: 3,
+        totalInvalidados: 2,
+        avaliadosList: [],
+        positivosList: [],
+        negativosList: [],
+        invalidadosList: [],
+      };
+    }
+    return computeSupportManagerIndicators(monitorias, myTeamIds, helpdeskSubmissions);
+  }, [isCustomizing, monitorias, myTeamIds, helpdeskSubmissions]);
 
   // Restrict everything to this manager's teams
   const myMonitorias = useMemo(() => {
@@ -788,6 +812,62 @@ export default function SupportManagerDashboard({
         />
       </div>
 
+      {/* LINHA: Indicadores de Avaliação e Desfecho (WQ-21) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Total Avaliado"
+          value={indicators.totalAvaliado}
+          sub="Monitorias avaliadas no período"
+          good={true}
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          accent="text-brand-accent"
+          onClick={() => setDrillDown({
+            title: 'Total Avaliado',
+            subtitle: 'Todas as monitorias avaliadas das suas equipes no período selecionado',
+            monitorias: indicators.avaliadosList,
+          })}
+        />
+        <StatCard
+          title="Total Positivo"
+          value={indicators.totalPositivo}
+          sub="Tickets válidos (nota ≥ 75%)"
+          good={true}
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          accent="text-functional-success"
+          onClick={() => setDrillDown({
+            title: 'Total Positivo (Nota ≥ 75%)',
+            subtitle: 'Atendimentos que atingiram o limiar de conformidade da qualidade',
+            monitorias: indicators.positivosList,
+          })}
+        />
+        <StatCard
+          title="Total Negativo"
+          value={indicators.totalNegativo}
+          sub="Tickets com desvio (nota < 75%)"
+          good={indicators.totalNegativo === 0}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          accent={indicators.totalNegativo === 0 ? 'text-functional-success' : 'text-functional-warning'}
+          onClick={() => setDrillDown({
+            title: 'Total Negativo (Nota < 75%)',
+            subtitle: 'Atendimentos abaixo do limiar de conformidade da qualidade',
+            monitorias: indicators.negativosList,
+          })}
+        />
+        <StatCard
+          title="Tickets Invalidados"
+          value={indicators.totalInvalidados}
+          sub="Publicados no Zendesk como negativos"
+          good={indicators.totalInvalidados === 0}
+          icon={<XCircle className="w-5 h-5" />}
+          accent={indicators.totalInvalidados === 0 ? 'text-functional-success' : 'text-functional-error'}
+          onClick={() => setDrillDown({
+            title: 'Tickets Invalidados no Zendesk',
+            subtitle: 'Chamados cujo último envio publicado ao Zendesk teve desfecho negativo',
+            monitorias: indicators.invalidadosList,
+          })}
+        />
+      </div>
+
       <NegativeCallsTrainingAlert
         monitorias={isCustomizing ? [] : allMonitorias}
         users={users}
@@ -1137,6 +1217,15 @@ export default function SupportManagerDashboard({
         monitorias={isCustomizing ? mockRecentMonitorias : myMonitorias}
         users={users}
       />
+
+      {drillDown && (
+        <SupportDrillDownModal
+          title={drillDown.title}
+          subtitle={drillDown.subtitle}
+          monitorias={drillDown.monitorias}
+          onClose={() => setDrillDown(null)}
+        />
+      )}
     </div>
   );
 }
