@@ -3,6 +3,7 @@ import { Monitoria, User, Team } from '../types';
 import { ActionType } from '../hooks/useMonitoriaActions';
 // getStatusConfig chega por prop (data), não importado — evita sombra.
 import { getHistoryEventConfig, VARIANT_TEXT_CLASS, type StatusConfig } from '../lib/statusHelper';
+import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
 import {
   CheckCircle2,
   XCircle,
@@ -154,21 +155,21 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
                         const ev = getHistoryEventConfig(h.action);
                         const EvIcon = ev.icon;
                         const evColor = VARIANT_TEXT_CLASS[ev.variant];
+                        const actorName = resolveTimelineActor(h.by_id, h.by_name, staticData.users, user?.role);
+                        const eventDate = formatTimelineDateTime(h.at, m.created_at);
                         return (
                           <React.Fragment key={i}>
                             {i > 0 && <div className="w-8 md:w-12 h-0.5 bg-surface-border/60 mt-[9px] flex-shrink-0" />}
-                            <div className="flex flex-col items-center text-center w-[140px] flex-shrink-0 px-1">
+                            <div className="flex flex-col items-center text-center w-[150px] flex-shrink-0 px-1">
                               <div className={`w-3 h-3 rounded-full bg-current border-2 border-surface-bg shadow-sm flex-shrink-0 ${evColor}`} />
                               <span className="mt-2 text-[11px] font-bold text-brand-primary leading-tight flex items-center gap-1.5">
                                 <EvIcon className={`w-3 h-3 shrink-0 ${evColor}`} /> {h.action}
                               </span>
                               <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1 opacity-70 leading-tight">
-                                {(() => {
-                                  const actor = staticData.users.find((u: User) => u.id === h.by_id);
-                                  const isSupportView = user?.role === 'suporte' || user?.role === 'gestor_suporte';
-                                  const isQualityActor = actor && ['qualidade', 'gestor_qualidade'].includes(actor.role);
-                                  return (isSupportView && isQualityActor) ? 'Equipe de Qualidade' : h.by_name;
-                                })()} <span className="mx-1">•</span> {format(new Date(h.at), 'HH:mm')}
+                                {actorName}
+                              </span>
+                              <span className="text-[9px] font-medium text-brand-muted/80 mt-0.5 leading-tight">
+                                {eventDate}
                               </span>
                               {h.note && (
                                 <div className="mt-2 text-[10px] text-brand-muted/80 bg-surface-subtle/50 p-2 rounded-xl border border-surface-border/30 leading-snug">
@@ -185,16 +186,20 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
                         const cfg = getStatusConfig(m.status);
                         const StepIcon = cfg.icon;
                         const colorClass = VARIANT_TEXT_CLASS[cfg.variant];
+                        const currentStepDate = formatTimelineDateTime(m.updated_at, m.created_at);
                         return (
                           <React.Fragment>
                             {m.history.length > 0 && <div className="w-8 md:w-12 h-0.5 bg-surface-border/60 mt-[9px] flex-shrink-0" />}
-                            <div className={`flex flex-col items-center text-center w-[140px] flex-shrink-0 px-1 ${colorClass}`}>
+                            <div className={`flex flex-col items-center text-center w-[150px] flex-shrink-0 px-1 ${colorClass}`}>
                               <div className="w-3 h-3 rounded-full bg-surface-bg border-2 border-current animate-pulse flex-shrink-0" />
                               <span className="mt-2 text-[11px] font-black leading-tight flex items-center gap-1.5">
                                 <StepIcon className="w-3 h-3 shrink-0" /> {cfg.label}
                               </span>
                               <span className="text-[9px] font-bold text-brand-muted uppercase tracking-widest mt-1">
                                 Etapa atual
+                              </span>
+                              <span className="text-[9px] font-medium text-brand-muted/80 mt-0.5 leading-tight">
+                                {currentStepDate}
                               </span>
                             </div>
                           </React.Fragment>
