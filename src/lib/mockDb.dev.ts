@@ -222,6 +222,41 @@ const INITIAL_DATA: {
       ],
       created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
       updated_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()
+    },
+    {
+      id: 'mon-3-wq22-test',
+      form_id: FORM_ID,
+      evaluator_id: EVALUATOR_ID,
+      evaluated_id: AGENT_ID,
+      ticket_id: '99022',
+      channel: 'Chat',
+      ticket_date: new Date().toISOString().split('T')[0],
+      analysis_date: new Date().toISOString().split('T')[0],
+      satisfaction_result: 'Negativa',
+      satisfaction_has_record: true,
+      satisfaction_record_text: 'Cliente relatou demora na solução do ticket.',
+      answers: {
+        'q-postura-1': 'SIM',
+        'q-postura-2': 'NAO',
+        'q-processo-1': 'SIM',
+        'q-processo-2': 'NAO',
+        'q-resolucao-1': 'NAO',
+        'q-resolucao-2': 'SIM'
+      },
+      score: 50.0,
+      status: 'pendente_revisao',
+      team_id: 'team-alpha',
+      evaluator_name: 'Maria Auditora',
+      evaluated_name: 'João Suporte (Auditado)',
+      form_name: 'Ficha de Atendimento Geral - Suporte',
+      team_name: 'Equipe Alpha',
+      evaluator_note: 'Monitoria de teste WQ-22 para validação ponta a ponta do fluxo negativo (< 75%). Requer Ação Corretiva do Gestor de Suporte.',
+      action_deadline_at: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
+      history: [
+        { action: 'Monitoria Criada', by_id: EVALUATOR_ID, by_name: 'Maria Auditora', at: new Date().toISOString(), note: 'Avaliação inicial com nota abaixo de 75%' }
+      ],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
   ],
   access_requests: [],
