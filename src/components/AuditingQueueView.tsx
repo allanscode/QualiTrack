@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AuditingQueueType,
+  QueueSubTab,
   AuditingQueueTicket,
   AgentQueueSummary,
   TicketCommentMessage,
@@ -36,6 +37,8 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  Activity,
+  Users,
   User as UserIcon,
   Tag,
   ExternalLink,
@@ -77,6 +80,7 @@ import {
   isDistributedQueue,
   canManageQueueAssignments,
   fetchMonitorEligibility,
+  setMonitorEligibility as saveMonitorEligibility,
   fetchQueueAssignments,
   QueueAssignment,
   reassignQueueTicket,
@@ -118,6 +122,9 @@ interface AuditingQueueViewProps {
     queue_assignment?: { ticket_id: string; queue_type: 'negativas' | 'filhos' };
   }) => void;
   onModalStateChange?: (isOpen: boolean) => void;
+  activeSubTab?: QueueSubTab;
+  onSubTabChange?: (tab: QueueSubTab) => void;
+  onPendingNegativesCountChange?: (count: number) => void;
 }
 
 // Gerenciador global de tickets atualmente em avaliação pela IA (persiste mesmo ao alternar abas/telas)
@@ -141,9 +148,29 @@ export default function AuditingQueueView({
   qualityMonitors = [],
   onStartAudit,
   onModalStateChange,
+  activeSubTab = 'negativas',
+  onSubTabChange,
+  onPendingNegativesCountChange,
 }: AuditingQueueViewProps) {
-  const [activeQueue, setActiveQueue] = useState<AuditingQueueType>('negativas');
+  const currentSubTab: QueueSubTab = activeSubTab || 'negativas';
+  const [activeQueue, setActiveQueue] = useState<AuditingQueueType>(() => (
+    activeSubTab && activeSubTab !== 'monitores' ? activeSubTab : 'negativas'
+  ));
   const isSupervisorView = canManageQueueAssignments(currentUserRole);
+
+  // Redireciona monitores comuns para fora da sub-aba de supervisão
+  useEffect(() => {
+    if (activeSubTab === 'monitores' && !isSupervisorView) {
+      onSubTabChange?.('negativas');
+    }
+  }, [activeSubTab, isSupervisorView, onSubTabChange]);
+
+  // Sincroniza activeQueue quando activeSubTab muda a partir da sidebar
+  useEffect(() => {
+    if (activeSubTab && activeSubTab !== 'monitores' && activeSubTab !== activeQueue) {
+      setActiveQueue(activeSubTab);
+    }
+  }, [activeSubTab, activeQueue]);
   const { onlineUsers } = usePresence();
   const onlineUserIds = useMemo(() => new Set(onlineUsers.map(user => user.id)), [onlineUsers]);
   const onlineMonitorKey = useMemo(
@@ -549,6 +576,7 @@ ${checksSummary}${recs}`;
   // piscar a tela à toa.
   const prevQueueRef = useRef(activeQueue);
   useEffect(() => {
+    if (currentSubTab === 'monitores') return;
     if (prevQueueRef.current !== activeQueue) {
       setTickets([]);
       setCursor(null);
@@ -561,9 +589,10 @@ ${checksSummary}${recs}`;
     } else {
       loadQueueData(null);
     }
-  }, [activeQueue, monitorias.length]);
+  }, [activeQueue, monitorias.length, currentSubTab]);
 
   useEffect(() => {
+    if (currentSubTab === 'monitores') return;
     const refreshIfVisible = () => {
       if (document.visibilityState === 'visible' && pageNumber === 1 && !batchRunning) loadQueueData(null);
     };
@@ -575,7 +604,7 @@ ${checksSummary}${recs}`;
       document.removeEventListener('visibilitychange', refreshIfVisible);
       window.removeEventListener('focus', refreshIfVisible);
     };
-  }, [activeQueue, pageNumber, batchRunning, monitorias.length]);
+  }, [activeQueue, pageNumber, batchRunning, monitorias.length, currentSubTab]);
 
   // Carrega os rascunhos de IA já prontos para os tickets da página atual —
   // agora ativo nas filas de Negativas, Positivas e Proativas.
@@ -626,6 +655,12 @@ ${checksSummary}${recs}`;
     }
     return 0;
   }, [tickets, activeQueue]);
+
+  useEffect(() => {
+    if (activeQueue === 'negativas') {
+      onPendingNegativesCountChange?.(pendingNegativesCount);
+    }
+  }, [pendingNegativesCount, activeQueue, onPendingNegativesCountChange]);
 
   // Distribuição 1-para-1: sempre que a fila de Negativas ou Filhos carrega
   // tickets novos, sincroniza as atribuições já existentes e distribui os
@@ -1167,6 +1202,7 @@ ${checksSummary}${recs}`;
       evaluated_id: draft.agent_id,
       team_id: draft.team_id,
       channel: normalizeChannel(draft.channel),
+      ticket_date: toTicketDateInput(ticket.ticket_date),
       satisfaction_result: csatStatusToSatisfactionResult(ticket.csat_status),
       satisfaction_has_record: !!draft.satisfaction_comment,
       satisfaction_record_text: draft.satisfaction_comment,
@@ -1504,6 +1540,7 @@ ${checksSummary}${recs}`;
       evaluated_id: ticket.agent_id || matchedAgent?.id,
       team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
       channel: normalizeChannel(ticket.channel),
+      ticket_date: toTicketDateInput(ticket.ticket_date),
       satisfaction_result: 'Sem pesquisa',
       isAiLocked: true,
       customerType,
@@ -1626,90 +1663,203 @@ ${checksSummary}${recs}`;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Supervisores habilitam monitores; o status online é automático. */}
-      {isSupervisorView && (
-        <QueueMonitorPresencePanel
-          monitors={qualityMonitors}
-          eligibility={monitorEligibility}
-          onlineUserIds={onlineUserIds}
-          onEligibilityChange={(userId, enabled) => setMonitorEligibility(prev => ({ ...prev, [userId]: enabled }))}
-        />
-      )}
+      {currentSubTab === 'monitores' ? (
+        !isSupervisorView ? (
+          <Card className="p-8 text-center border-amber-500/20 bg-amber-500/5 rounded-2xl">
+            <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+            <h3 className="text-base font-bold text-brand-primary">Acesso Restrito</h3>
+            <p className="text-xs text-brand-muted mt-1 max-w-md mx-auto">
+              A visualização de Monitores na Triagem é exclusiva para Administradores e Supervisores de Qualidade.
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {/* Card de Boas-vindas / Contexto da Supervisão */}
+            <div className="p-6 rounded-2xl bg-surface-card border border-surface-border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center shrink-0">
+                  <Users className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-brand-primary">Painel de Supervisão e Presença dos Monitores</h3>
+                  <p className="text-xs text-brand-muted max-w-2xl leading-relaxed">
+                    Gerencie a presença em tempo real e a elegibilidade da equipe para a distribuição 1-para-1 de chamados. Apenas monitores marcados como <strong className="text-brand-primary">Aptos</strong> e que estejam <strong className="text-emerald-500">Online</strong> recebem chamados em rodízio das filas <strong className="text-brand-primary">CSAT Negativas</strong> e <strong className="text-brand-primary">Chamados Filhos</strong>.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-subtle border border-surface-border text-xs font-bold text-brand-primary">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  {eligibleOnlineMonitors.length} de {qualityMonitors.length} aptos online
+                </span>
+              </div>
+            </div>
 
-      {/* 1. Barra de Abas das Filas: Grid responsivo de 5 colunas com cores refinadas e harmônicas */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-1.5 bg-surface-subtle/40 rounded-2xl border border-surface-border">
-        {/* Aba 1: CSAT Negativas - Destaque máximo em Vermelho (WebPosto Red/Rose) */}
-        <button
-          onClick={() => setActiveQueue('negativas')}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
-            activeQueue === 'negativas'
-              ? 'bg-brand-highlight/20 text-brand-highlight border border-brand-highlight/40 shadow-sm font-black ring-1 ring-brand-highlight/20'
-              : 'bg-brand-highlight/8 text-brand-highlight/90 border border-brand-highlight/20 hover:bg-brand-highlight/15 hover:text-brand-highlight'
-          }`}
-        >
-          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">CSAT Negativas</span>
-          {pendingNegativesCount > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-black bg-brand-highlight text-white rounded-full flex-shrink-0">
-              {pendingNegativesCount}
-            </span>
-          )}
-        </button>
+            {/* Grid de Métricas Principais (4 Bento Cards) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="p-4 rounded-xl border-surface-border/70 flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-brand-muted uppercase tracking-wider">Total de Monitores</p>
+                  <p className="text-xl font-black text-brand-primary mt-0.5">{qualityMonitors.length}</p>
+                  <p className="text-[10px] text-brand-muted">Equipe de Qualidade cadastrada</p>
+                </div>
+              </Card>
 
-        {/* Aba 2: Fila Proativa - Azul / Índigo */}
-        <button
-          onClick={() => setActiveQueue('proativas')}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
-            activeQueue === 'proativas'
-              ? 'bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 border border-indigo-500/40 shadow-sm font-black ring-1 ring-indigo-500/20'
-              : 'bg-indigo-500/8 text-indigo-600 dark:text-indigo-400/90 border border-indigo-500/20 hover:bg-indigo-500/15 hover:text-indigo-500 dark:hover:text-indigo-300'
-          }`}
-        >
-          <Zap className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">Fila Proativa</span>
-        </button>
+              <Card className="p-4 rounded-xl border-surface-border/70 flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-brand-muted uppercase tracking-wider">Monitores Online</p>
+                  <p className="text-xl font-black text-brand-primary mt-0.5">
+                    {qualityMonitors.filter(m => onlineUserIds.has(m.id)).length}
+                  </p>
+                  <p className="text-[10px] text-brand-muted">Conectados agora no sistema</p>
+                </div>
+              </Card>
 
-        {/* Aba 3: CSAT Positivas - Toda Verde em destaque */}
-        <button
-          onClick={() => setActiveQueue('positivas')}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
-            activeQueue === 'positivas'
-              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 shadow-sm font-black ring-1 ring-emerald-500/20'
-              : 'bg-emerald-500/8 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/15 hover:text-emerald-700 dark:hover:text-emerald-300'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">CSAT Positivas</span>
-        </button>
+              <Card className="p-4 rounded-xl border-surface-border/70 flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-brand-muted uppercase tracking-wider">Aptos na Distribuição</p>
+                  <p className="text-xl font-black text-brand-primary mt-0.5">
+                    {eligibleOnlineMonitors.length}
+                  </p>
+                  <p className="text-[10px] text-brand-muted">Habilitados e online no rodízio</p>
+                </div>
+              </Card>
 
-        {/* Aba 4: Chamados Filhos - Estilo clean e nítido (borda demarcada e fundo neutro elegante) */}
-        <button
-          onClick={() => setActiveQueue('filhos')}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
-            activeQueue === 'filhos'
-              ? 'bg-surface-subtle/80 text-brand-primary border border-surface-border shadow-sm font-black ring-1 ring-surface-border dark:border-slate-300/80 dark:text-white dark:bg-slate-800/60'
-              : 'bg-surface-subtle/40 text-brand-muted border border-surface-border/50 hover:bg-surface-subtle/80 hover:text-brand-primary dark:text-slate-300 dark:border-slate-700/60'
-          }`}
-          title="Filtro Zendesk: 47405806430228"
-        >
-          <GitFork className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">Chamados Filhos</span>
-        </button>
+              <Card className="p-4 rounded-xl border-surface-border/70 flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                  <GitFork className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-brand-muted uppercase tracking-wider">Filas Automatizadas</p>
+                  <p className="text-xl font-black text-brand-primary mt-0.5">2 Filas</p>
+                  <p className="text-[10px] text-brand-muted">CSAT Negativas & Chamados Filhos</p>
+                </div>
+              </Card>
+            </div>
 
-        {/* Aba 5: Filhos Inválidos - Âmbar */}
-        <button
-          onClick={() => setActiveQueue('filhos_invalidos')}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
-            activeQueue === 'filhos_invalidos'
-              ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/40 shadow-sm font-black ring-1 ring-amber-500/20'
-              : 'bg-amber-500/8 text-amber-700/90 dark:text-amber-400/90 border border-amber-500/20 hover:bg-amber-500/15 hover:text-amber-600 dark:hover:text-amber-400'
-          }`}
-          title="Filtro Zendesk: 47656856998292"
-        >
-          <AlertOctagon className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">Filhos Inválidos</span>
-        </button>
-      </div>
+            {/* Tabela Interativa de Monitores */}
+            <Card className="rounded-2xl border-surface-border overflow-hidden shadow-sm">
+              <div className="p-4 sm:p-5 border-b border-surface-border bg-surface-subtle/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-brand-primary flex items-center gap-2">
+                    <UserCog className="w-4 h-4 text-brand-highlight" />
+                    Elegibilidade e Distribuição Individual
+                  </h4>
+                  <p className="text-xs text-brand-muted mt-0.5">
+                    Clique no botão de status para habilitar ou pausar a atribuição de novos tickets para cada monitor.
+                  </p>
+                </div>
+              </div>
+
+              <div className="divide-y divide-surface-border">
+                {qualityMonitors.length === 0 ? (
+                  <div className="p-8 text-center text-brand-muted text-xs">
+                    Nenhum monitor de qualidade cadastrado no sistema.
+                  </div>
+                ) : (
+                  qualityMonitors.map(monitor => {
+                    const isOnline = onlineUserIds.has(monitor.id);
+                    const isEnabled = Boolean(monitorEligibility[monitor.id]);
+                    const assignedNegativas = Object.values(queueAssignments.negativas).filter(a => a.assigned_to === monitor.id).length;
+                    const assignedFilhos = Object.values(queueAssignments.filhos).filter(a => a.assigned_to === monitor.id).length;
+                    const totalAssigned = assignedNegativas + assignedFilhos;
+
+                    return (
+                      <div
+                        key={monitor.id}
+                        className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-surface-subtle/20 transition-colors"
+                      >
+                        {/* Avatar & Identificação */}
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-brand-highlight/10 text-brand-highlight flex items-center justify-center font-bold text-sm shrink-0">
+                            {monitor.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-brand-primary truncate">{monitor.name}</p>
+                            <p className="text-[11px] text-brand-muted truncate">{monitor.email}</p>
+                          </div>
+                        </div>
+
+                        {/* Status de Presença Realtime */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {isOnline ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                              Online
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-surface-subtle text-brand-muted border border-surface-border">
+                              <span className="w-2 h-2 rounded-full bg-brand-muted/40" />
+                              Offline
+                            </span>
+                          )}
+
+                          {/* Carga Atribuída */}
+                          <div className="flex items-center gap-1.5 text-[11px] text-brand-muted bg-surface-subtle/60 px-2.5 py-1 rounded-lg border border-surface-border">
+                            <span>Carga:</span>
+                            <span className="font-bold text-brand-primary">{totalAssigned} tickets</span>
+                            {totalAssigned > 0 && (
+                              <span className="text-[10px] text-brand-muted">
+                                ({assignedNegativas} neg. / {assignedFilhos} fil.)
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Botão de Toggle de Elegibilidade */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const next = !isEnabled;
+                              setMonitorEligibility(prev => ({ ...prev, [monitor.id]: next }));
+                              try {
+                                await saveMonitorEligibility(monitor.id, next);
+                                toast.success(`Monitor ${monitor.name} ${next ? 'habilitado para' : 'pausado na'} distribuição.`);
+                              } catch (e: any) {
+                                setMonitorEligibility(prev => ({ ...prev, [monitor.id]: isEnabled }));
+                                toast.error('Erro ao atualizar status do monitor.');
+                              }
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                              isEnabled
+                                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/25'
+                                : 'bg-surface-subtle border-surface-border text-brand-muted hover:text-brand-primary hover:bg-surface-card'
+                            }`}
+                          >
+                            {isEnabled ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                <span>Apto na Distribuição</span>
+                              </>
+                            ) : (
+                              <>
+                                <X className="w-3.5 h-3.5 text-brand-muted" />
+                                <span>Pausado na Fila</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </Card>
+          </div>
+        )
+      ) : (
+        <>
 
       {/* 2. Barra de Busca e Ações (Filtros, Busca, Seleção e Atualização) */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-1">
@@ -2418,6 +2568,8 @@ ${checksSummary}${recs}`;
             </>
           )}
         </div>
+      )}
+      </>
       )}
 
       {/* Modal Central de Processamento em Lote com IA */}

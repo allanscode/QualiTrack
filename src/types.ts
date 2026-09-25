@@ -212,6 +212,7 @@ export interface HelpdeskSubmission {
 // ---------------------------------------------------------------------
 
 export type AuditingQueueType = 'negativas' | 'proativas' | 'positivas' | 'filhos' | 'filhos_invalidos';
+export type QueueSubTab = AuditingQueueType | 'monitores';
 
 export type ChildTicketMacroType = 'nova_demanda' | 'analise_tecnica' | 'apoio_tecnico' | 'produtividade';
 

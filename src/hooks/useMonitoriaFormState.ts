@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { EvaluationForm, Monitoria, DissatisfactionField } from '../types';
 import { calculateQualityScore } from '../utils/qualityMath';
+import { toTicketDateInput } from '../lib/ticketDateTime';
 
 const DEFAULT_HEADER = (initialData?: Monitoria) => {
   const today = new Date().toISOString().split('T')[0];
@@ -10,8 +11,8 @@ const DEFAULT_HEADER = (initialData?: Monitoria) => {
     team_id: initialData?.team_id || '',
     ticket_id: initialData?.ticket_id || '',
     channel: (initialData?.channel as any) || 'Chat',
-    ticket_date: initialData?.ticket_date || today,
-    analysis_date: initialData?.analysis_date || today,
+    ticket_date: toTicketDateInput(initialData?.ticket_date) || today,
+    analysis_date: toTicketDateInput(initialData?.analysis_date) || today,
     satisfaction_result: (initialData?.satisfaction_result as any) || '',
     satisfaction_has_record: initialData?.satisfaction_has_record || false,
     satisfaction_record_text: initialData?.satisfaction_record_text || '',

@@ -12,7 +12,7 @@ import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
-import { User, ROLE_LABELS, UserRole, AIEvaluationGuideline } from './types';
+import { User, ROLE_LABELS, UserRole, AIEvaluationGuideline, QueueSubTab } from './types';
 import { QualityConfigProvider } from './lib/useQualityConfig';
 import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
 import { ThemeProvider, useTheme, resolveSystemTheme, applyThemeToDOM, type Theme } from './providers/ThemeProvider';
@@ -22,8 +22,26 @@ import { useSidebarManager } from './hooks/useSidebarManager';
 import { useMonitoriaData } from './hooks/useMonitoriaData';
 import { supabase } from './lib/supabase';
 import { fetchAIGuidelines } from './lib/aiGuidelines';
-import { releaseQueueTicketAssignment } from './lib/queueDistribution';
+import { releaseQueueTicketAssignment, canManageQueueAssignments } from './lib/queueDistribution';
 import type { AdminSubTab } from './components/AdminPanel';
+
+export const QUEUE_TITLES: Record<QueueSubTab, string> = {
+  negativas: 'CSAT Negativas',
+  proativas: 'Fila Proativa',
+  positivas: 'CSAT Positivas',
+  filhos: 'Chamados Filhos',
+  filhos_invalidos: 'Filhos Inválidos',
+  monitores: 'Monitores na Triagem',
+};
+
+export const QUEUE_SUBTITLES: Record<QueueSubTab, string> = {
+  negativas: 'Triagem inteligente de atendimentos com CSAT Ruim ou Insatisfeito',
+  proativas: 'Identificação e auditoria antecipada de casos de risco operacional',
+  positivas: 'Reconhecimento e análise de atendimentos com CSAT Bom ou Excelente',
+  filhos: 'Auditoria de tickets vinculados e demandas de apoio entre equipes',
+  filhos_invalidos: 'Validação e saneamento de chamados filhos fora do padrão',
+  monitores: 'Gestão de presença, elegibilidade e distribuição de chamados da equipe',
+};
 
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
@@ -48,6 +66,7 @@ export default function App() {
 }
 
 function AppContent() {
+  const { resolvedTheme } = useTheme();
   const {
     currentUser,
     userData,
@@ -158,12 +177,13 @@ function AppContent() {
             className="auth-screen h-screen w-screen flex flex-col items-center justify-center bg-surface-bg p-6 text-brand-primary"
           >
             <div className="auth-content max-w-md w-full text-center space-y-8">
-              <h1 className="inline-flex items-center gap-1 bg-[#0A1F44] px-3 py-1.5 rounded-xl text-5xl font-bold tracking-tight">
-                <span className="inline-flex items-center bg-white px-1.5 py-0.5 rounded-md leading-none">
-                  <span className="text-[#B3141B]">W</span><span className="text-[#0A1F44]">P</span>
-                </span>
-                <span className="text-white">Qualidade</span>
-              </h1>
+              <div className="flex justify-center items-center">
+                <img
+                  src={resolvedTheme === 'light' ? '/logo-light.png' : '/logo-login.png'}
+                  alt="Qualidade WP"
+                  className="h-12 md:h-14 w-auto max-w-[280px] sm:max-w-[340px] object-contain drop-shadow-md select-none"
+                />
+              </div>
               <div className="auth-card bg-surface-card p-8 rounded-[40px] border border-surface-border shadow-premium min-h-[400px] flex flex-col justify-center">
                 <AnimatePresence mode="wait">
                   {authView === 'login' && (
@@ -464,6 +484,37 @@ function MainApp({
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(activeTab === 'admin' || activeTab === 'custom_dashboard');
   const [isQueueModalOpen, setIsQueueModalOpen] = React.useState(false);
+
+  const [activeQueueSubTab, setActiveQueueSubTab] = React.useState<QueueSubTab>(() => {
+    try {
+      const saved = sessionStorage.getItem('qualitrack_queue_subtab');
+      if (saved && ['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos', 'monitores'].includes(saved)) {
+        return saved as QueueSubTab;
+      }
+    } catch {}
+    return 'negativas';
+  });
+  const [isQueueMenuOpen, setIsQueueMenuOpen] = React.useState(activeTab === 'filas');
+  const [isQueueHovered, setIsQueueHovered] = React.useState(false);
+  const [pendingNegativesCount, setPendingNegativesCount] = React.useState(0);
+
+  React.useEffect(() => {
+    try {
+      sessionStorage.setItem('qualitrack_queue_subtab', activeQueueSubTab);
+    } catch {}
+  }, [activeQueueSubTab]);
+
+  React.useEffect(() => {
+    if (activeQueueSubTab === 'monitores' && !canManageQueueAssignments(userData?.role)) {
+      setActiveQueueSubTab('negativas');
+    }
+  }, [activeQueueSubTab, userData?.role]);
+
+  React.useEffect(() => {
+    if (activeTab === 'filas') {
+      setIsQueueMenuOpen(true);
+    }
+  }, [activeTab]);
 
   const [sessionStartTime] = React.useState(() => new Date());
   const [guidelines, setGuidelines] = React.useState<AIEvaluationGuideline[]>([]);
@@ -839,6 +890,29 @@ function MainApp({
     }
   };
 
+  const handleQueueMenuClick = () => {
+    if (!isSidebarOpen) {
+      toggleSidebar();
+      setIsQueueMenuOpen(true);
+      setActiveTab('filas');
+    } else {
+      if (activeTab !== 'filas') {
+        setActiveTab('filas');
+        setIsQueueMenuOpen(true);
+      } else {
+        setIsQueueMenuOpen(!isQueueMenuOpen);
+      }
+    }
+  };
+
+  const handleQueueSubTabClick = (subTab: QueueSubTab) => {
+    if (subTab === 'monitores' && !canManageQueueAssignments(userData?.role)) {
+      return;
+    }
+    setActiveQueueSubTab(subTab);
+    setActiveTab('filas');
+  };
+
   React.useEffect(() => {
     const allowedAdminRoles = ['admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte'];
     if (userData && !allowedAdminRoles.includes(userData.role) && activeTab === 'admin') {
@@ -920,19 +994,27 @@ function MainApp({
           {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </div>
         <div className="h-20 flex items-center px-6 overflow-hidden">
-          <div className="flex items-center gap-3 whitespace-nowrap">
+          <div
+            className="flex items-center gap-3 whitespace-nowrap cursor-pointer interactive-sidebar-item"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveTab('dashboard');
+            }}
+            title="Ir para o Dashboard"
+          >
             {sidebarTextVisible ? (
-              <h2 className="inline-flex items-center gap-0.5 bg-[#0A1F44] px-2 py-1 rounded-lg font-bold text-lg tracking-tight">
-                <span className="inline-flex items-center bg-white px-1 py-px rounded leading-none">
-                  <span className="text-[#B3141B]">W</span><span className="text-[#0A1F44]">P</span>
-                </span>
-                <span className="text-white">Qualidade</span>
-              </h2>
+              <img
+                src={sidebarIsDark ? '/logo-dark.png' : '/logo-light.png'}
+                alt="Qualidade WP"
+                className="h-8 w-auto max-w-[170px] object-contain select-none transition-opacity duration-200"
+              />
             ) : (
-              <div className="inline-flex items-center justify-center bg-[#0A1F44] w-8 h-8 rounded-lg flex-shrink-0">
-                <span className="inline-flex items-center bg-white px-1 py-px rounded leading-none text-xs font-bold">
-                  <span className="text-[#B3141B]">W</span><span className="text-[#0A1F44]">P</span>
-                </span>
+              <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+                <img
+                  src={sidebarIsDark ? '/logo-icon-dark.png' : '/logo-icon-light.png'}
+                  alt="Qualidade WP"
+                  className="h-7 w-auto max-w-[42px] object-contain select-none transition-opacity duration-200"
+                />
               </div>
             )}
           </div>
@@ -942,7 +1024,106 @@ function MainApp({
           <NavItem isDark={sidebarIsDark} icon={AnimatedDashboardIcon} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
           <NavItem isDark={sidebarIsDark} icon={AnimatedMonitoriasIcon} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
           {userData?.role !== 'suporte' && (
-            <NavItem isDark={sidebarIsDark} icon={AnimatedLayersIcon} label="Filas de Triagem" active={activeTab === 'filas'} onClick={() => setActiveTab('filas')} isOpen={sidebarTextVisible} />
+            <div className="space-y-1">
+              <button
+                onClick={handleQueueMenuClick}
+                onMouseEnter={() => setIsQueueHovered(true)}
+                onMouseLeave={() => setIsQueueHovered(false)}
+                className={`
+                  w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
+                  ${(activeTab === 'filas' && !isQueueMenuOpen)
+                    ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black font-extrabold')
+                    : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5 font-bold')}
+                `}
+              >
+                {(activeTab === 'filas' && !isQueueMenuOpen) && (
+                  <m.div
+                    layoutId="active-bar"
+                    className={`absolute left-0 w-1 h-6 rounded-full ${sidebarIsDark ? 'bg-white' : 'bg-black'}`}
+                  />
+                )}
+                <div className={`${(activeTab === 'filas' && !isQueueMenuOpen) ? 'text-current' : (sidebarIsDark ? 'text-white/30 group-hover:text-white' : 'text-slate-700 group-hover:text-black')}`}>
+                  <AnimatedLayersIcon isHovered={isQueueHovered} active={activeTab === 'filas' || isQueueMenuOpen} className="w-5 h-5" />
+                </div>
+                <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${sidebarTextVisible ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
+                  <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
+                    Filas de Triagem
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {pendingNegativesCount > 0 && !isQueueMenuOpen && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-black bg-rose-500 text-white rounded-full">
+                        {pendingNegativesCount}
+                      </span>
+                    )}
+                    <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isQueueMenuOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                </div>
+              </button>
+
+              <AnimatePresence initial={false}>
+                {isQueueMenuOpen && sidebarTextVisible && (
+                  <m.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                    className="overflow-hidden pl-1 space-y-1"
+                  >
+                    <QueueSubNavItem
+                      label="CSAT Negativas"
+                      active={activeTab === 'filas' && activeQueueSubTab === 'negativas'}
+                      onClick={() => handleQueueSubTabClick('negativas')}
+                      isOpen={sidebarTextVisible}
+                      isDark={sidebarIsDark}
+                      colorType="negativas"
+                      badge={pendingNegativesCount > 0 ? pendingNegativesCount : undefined}
+                    />
+                    <QueueSubNavItem
+                      label="Fila Proativa"
+                      active={activeTab === 'filas' && activeQueueSubTab === 'proativas'}
+                      onClick={() => handleQueueSubTabClick('proativas')}
+                      isOpen={sidebarTextVisible}
+                      isDark={sidebarIsDark}
+                      colorType="proativas"
+                    />
+                    <QueueSubNavItem
+                      label="CSAT Positivas"
+                      active={activeTab === 'filas' && activeQueueSubTab === 'positivas'}
+                      onClick={() => handleQueueSubTabClick('positivas')}
+                      isOpen={sidebarTextVisible}
+                      isDark={sidebarIsDark}
+                      colorType="positivas"
+                    />
+                    <QueueSubNavItem
+                      label="Chamados Filhos"
+                      active={activeTab === 'filas' && activeQueueSubTab === 'filhos'}
+                      onClick={() => handleQueueSubTabClick('filhos')}
+                      isOpen={sidebarTextVisible}
+                      isDark={sidebarIsDark}
+                      colorType="filhos"
+                    />
+                    <QueueSubNavItem
+                      label="Filhos Inválidos"
+                      active={activeTab === 'filas' && activeQueueSubTab === 'filhos_invalidos'}
+                      onClick={() => handleQueueSubTabClick('filhos_invalidos')}
+                      isOpen={sidebarTextVisible}
+                      isDark={sidebarIsDark}
+                      colorType="filhos_invalidos"
+                    />
+                    {canManageQueueAssignments(userData?.role) && (
+                      <QueueSubNavItem
+                        label="Monitores na Triagem"
+                        active={activeTab === 'filas' && activeQueueSubTab === 'monitores'}
+                        onClick={() => handleQueueSubTabClick('monitores')}
+                        isOpen={sidebarTextVisible}
+                        isDark={sidebarIsDark}
+                        colorType="monitores"
+                      />
+                    )}
+                  </m.div>
+                )}
+              </AnimatePresence>
+            </div>
           )}
           {userData?.role === 'admin' ? (
             <div className="space-y-1">
@@ -1066,7 +1247,7 @@ function MainApp({
                   : activeTab === 'monitorias'
                   ? 'Gestão de Monitorias'
                   : activeTab === 'filas'
-                  ? 'Central de Filas & Triagem'
+                  ? (QUEUE_TITLES[activeQueueSubTab] || 'Filas de Triagem')
                   : 'Configurações do Sistema'}
               </h2>
               <p className="text-xs font-semibold text-brand-muted tracking-wide mt-1 leading-relaxed">
@@ -1079,7 +1260,7 @@ function MainApp({
                   : activeTab === 'monitorias'
                   ? 'Fluxo de auditoria, contestações e reavaliações'
                   : activeTab === 'filas'
-                  ? 'Triagem inteligente de chamados do Zendesk por CSAT e tickets filhos'
+                  ? (QUEUE_SUBTITLES[activeQueueSubTab] || 'Triagem inteligente de chamados do Zendesk')
                   : 'Parâmetros de qualidade, usuários, equipes e inteligência artificial'}
               </p>
             </div>
@@ -1411,6 +1592,9 @@ function MainApp({
                   qualityMonitors={users.filter(u => u.role === 'qualidade' && u.active !== false)}
                   onStartAudit={handleStartAuditFromQueue}
                   onModalStateChange={setIsQueueModalOpen}
+                  activeSubTab={activeQueueSubTab}
+                  onSubTabChange={setActiveQueueSubTab}
+                  onPendingNegativesCountChange={setPendingNegativesCount}
                 />
               </div>
             )}
@@ -1613,6 +1797,121 @@ function SubNavItem({ label, active, onClick, isOpen, isDark, badge }: any) {
       </span>
       {badge && (
         <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full border border-dashed ml-2 leading-none whitespace-nowrap ${isDark ? 'border-white/10 text-white/40 bg-white/5' : 'border-slate-300/60 text-slate-500/80 bg-slate-50'}`}>
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
+const QUEUE_COLOR_MAP: Record<QueueSubTab, {
+  dot: string;
+  bar: string;
+  activeTextLight: string;
+  activeTextDark: string;
+  activeBgLight: string;
+  activeBgDark: string;
+  badgeBg: string;
+}> = {
+  negativas: {
+    dot: 'bg-rose-500 shadow-sm shadow-rose-500/40',
+    bar: 'bg-rose-500',
+    activeTextLight: 'text-rose-950 font-bold',
+    activeTextDark: 'text-rose-200 font-bold',
+    activeBgLight: 'bg-rose-500/10',
+    activeBgDark: 'bg-rose-500/15',
+    badgeBg: 'bg-rose-500 text-white',
+  },
+  proativas: {
+    dot: 'bg-indigo-500 shadow-sm shadow-indigo-500/40',
+    bar: 'bg-indigo-500',
+    activeTextLight: 'text-indigo-950 font-bold',
+    activeTextDark: 'text-indigo-200 font-bold',
+    activeBgLight: 'bg-indigo-500/10',
+    activeBgDark: 'bg-indigo-500/15',
+    badgeBg: 'bg-indigo-500 text-white',
+  },
+  positivas: {
+    dot: 'bg-emerald-500 shadow-sm shadow-emerald-500/40',
+    bar: 'bg-emerald-500',
+    activeTextLight: 'text-emerald-950 font-bold',
+    activeTextDark: 'text-emerald-200 font-bold',
+    activeBgLight: 'bg-emerald-500/10',
+    activeBgDark: 'bg-emerald-500/15',
+    badgeBg: 'bg-emerald-500 text-white',
+  },
+  filhos: {
+    dot: 'bg-sky-500 shadow-sm shadow-sky-500/40',
+    bar: 'bg-sky-500',
+    activeTextLight: 'text-sky-950 font-bold',
+    activeTextDark: 'text-sky-200 font-bold',
+    activeBgLight: 'bg-sky-500/10',
+    activeBgDark: 'bg-sky-500/15',
+    badgeBg: 'bg-sky-500 text-white',
+  },
+  filhos_invalidos: {
+    dot: 'bg-amber-500 shadow-sm shadow-amber-500/40',
+    bar: 'bg-amber-500',
+    activeTextLight: 'text-amber-950 font-bold',
+    activeTextDark: 'text-amber-200 font-bold',
+    activeBgLight: 'bg-amber-500/10',
+    activeBgDark: 'bg-amber-500/15',
+    badgeBg: 'bg-amber-500 text-white',
+  },
+  monitores: {
+    dot: 'bg-blue-600 shadow-sm shadow-blue-500/40',
+    bar: 'bg-blue-600',
+    activeTextLight: 'text-blue-950 font-bold',
+    activeTextDark: 'text-blue-200 font-bold',
+    activeBgLight: 'bg-blue-600/10',
+    activeBgDark: 'bg-blue-600/15',
+    badgeBg: 'bg-blue-600 text-white',
+  },
+};
+
+function QueueSubNavItem({
+  label,
+  active,
+  onClick,
+  isDark,
+  colorType,
+  badge,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  isOpen?: boolean;
+  isDark: boolean;
+  colorType: QueueSubTab;
+  badge?: number | string;
+}) {
+  const color = QUEUE_COLOR_MAP[colorType] || QUEUE_COLOR_MAP.negativas;
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        w-full flex items-center justify-between pl-8 pr-3 h-9 rounded-xl transition-all text-xs group relative cursor-pointer
+        ${active
+          ? (isDark ? `${color.activeBgDark} ${color.activeTextDark}` : `${color.activeBgLight} ${color.activeTextLight}`)
+          : (isDark ? 'text-white/60 hover:text-white hover:bg-white/5 font-medium' : 'text-slate-700 hover:text-black hover:bg-black/5 font-medium')}
+      `}
+    >
+      {active && (
+        <m.div
+          layoutId="queue-active-indicator"
+          className={`absolute left-3 w-1 h-4 rounded-full ${color.bar}`}
+        />
+      )}
+      <div className="flex items-center min-w-0 gap-2">
+        <span
+          className={`w-2 h-2 rounded-full shrink-0 ${color.dot} transition-transform group-hover:scale-125 ${active ? 'ring-2 ring-current/25 scale-110' : 'opacity-85'}`}
+        />
+        <span className="tracking-tight truncate block">
+          {label}
+        </span>
+      </div>
+      {Boolean(badge) && (
+        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none ml-2 shrink-0 ${color.badgeBg}`}>
           {badge}
         </span>
       )}
