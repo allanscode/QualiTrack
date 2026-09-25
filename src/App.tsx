@@ -1262,7 +1262,7 @@ function MainApp({
           </div>
 
           <div className="flex items-center gap-4">
-            {userData?.role === 'qualidade' && (
+            {(userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') && (
               <button
                 onClick={() => setIsFormOpen(true)}
                 className="action-primary h-10 px-5 rounded-xl text-sm font-semibold shadow-premium transition-all flex items-center gap-2"
