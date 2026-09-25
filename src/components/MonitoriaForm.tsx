@@ -49,6 +49,7 @@ import {
 import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChatParser';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
+import { getEvaluationOutcome } from '../lib/domainRules';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -437,12 +438,10 @@ export default function MonitoriaForm({
     && !!initialData?.status
     && HELPDESK_ELIGIBLE_STATUSES.includes(initialData.status)
     && !!header.ticket_id?.trim();
-  // Sugestão inicial do preview: Invalidado quando há erro crítico marcado,
-  // Válido caso contrário. O auditor pode trocar livremente no modal.
-  const hasCriticalSelected = isViewOnly
-    ? (initialData?.selected_critical_errors?.length ?? 0) > 0
-    : Object.values(criticalErrors).some(Boolean);
-  const suggestedOutcome: EvaluationOutcome = hasCriticalSelected ? 'negativa' : 'positiva';
+  // Sugestão de desfecho do preview baseada na regra de domínio estrita (WQ-22):
+  // score >= 75% -> Válido (positiva), score < 75% -> Invalidado (negativa)
+  const targetScore = isViewOnly ? (initialData?.score ?? 0) : score;
+  const suggestedOutcome: EvaluationOutcome = getEvaluationOutcome(targetScore);
 
   const handleHelpdeskModalClose = () => {
     const wasFromConclusion = helpdeskModal?.fromConclusion;

@@ -203,33 +203,41 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Resultado da avaliação">
-            {OUTCOME_OPTIONS.map(opt => {
-              const Icon = opt.icon;
-              const checked = outcome === opt.value;
-              return (
-                <label
-                  key={opt.value}
-                  className={`flex items-center gap-2.5 py-3 px-4 rounded-xl border transition-all cursor-pointer ${
-                    checked
-                      ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-premium-sm'
-                      : 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent hover:text-brand-primary'
-                  } ${radiosDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="helpdesk-outcome"
-                    value={opt.value}
-                    checked={checked}
-                    disabled={radiosDisabled}
-                    onChange={() => setOutcome(opt.value)}
-                    className="sr-only"
-                  />
-                  <Icon className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-[11px] font-black uppercase tracking-wider">{opt.label}</span>
-                </label>
-              );
-            })}
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Resultado da avaliação">
+              {OUTCOME_OPTIONS.map(opt => {
+                const Icon = opt.icon;
+                const checked = outcome === opt.value;
+                const isLockedByDomain = opt.value !== suggestedOutcome;
+                return (
+                  <label
+                    key={opt.value}
+                    className={`flex items-center gap-2.5 py-3 px-4 rounded-xl border transition-all ${
+                      isLockedByDomain ? 'opacity-40 cursor-not-allowed bg-surface-card border-surface-border text-brand-muted/50' : 'cursor-pointer'
+                    } ${
+                      checked
+                        ? 'bg-brand-primary border-brand-primary text-brand-on-primary shadow-premium-sm'
+                        : (!isLockedByDomain ? 'bg-surface-card border-surface-border text-brand-muted hover:border-brand-accent hover:text-brand-primary' : '')
+                    } ${radiosDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="helpdesk-outcome"
+                      value={opt.value}
+                      checked={checked}
+                      disabled={radiosDisabled || isLockedByDomain}
+                      onChange={() => setOutcome(opt.value)}
+                      className="sr-only"
+                    />
+                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-[11px] font-black uppercase tracking-wider">{opt.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-brand-muted/70 ml-1">
+              Classificação fixada pelas regras de qualidade: <span className="font-semibold text-brand-primary">{suggestedOutcome === 'positiva' ? 'Ticket Válido (Score ≥ 75%)' : 'Ticket Invalidado (Score < 75%)'}</span>.
+            </p>
           </div>
 
           <div className="space-y-2">

@@ -1,7 +1,8 @@
 import { useTransition } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
-import { User, Monitoria, MonitoriaHistoryEntry, EvaluationForm, Team, DissatisfactionField } from '../types';
+import { User, Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, EvaluationForm, Team, DissatisfactionField } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
+import { isEvaluationValid } from '../lib/domainRules';
 import { backfillAgentTeam } from '../lib/helpdeskQueue';
 import { toast } from 'sonner';
 
@@ -114,8 +115,22 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           historyNote = changes.length > 0 ? changes.join(' | ') : 'Edição administrativa';
         }
 
+        const isPositive = isEvaluationValid(deps.score);
+        let nextStatus: MonitoriaStatus;
+        if (deps.isAdminEdit) {
+          nextStatus = deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao');
+        } else {
+          nextStatus = isPositive ? 'concluida' : 'pendente_revisao';
+        }
+
+        const historyAction = deps.isAdminEdit
+          ? 'Edição pelo Administrador'
+          : deps.isReevaluating
+            ? (isPositive ? 'Monitoria Reavaliada (Concluída)' : 'Monitoria Reavaliada (Procedente)')
+            : (isPositive ? 'Monitoria Criada e Concluída' : 'Monitoria Criada');
+
         const historyEntry: MonitoriaHistoryEntry = {
-          action: deps.isAdminEdit ? 'Edição pelo Administrador' : (deps.isReevaluating ? 'Monitoria Reavaliada (Procedente)' : 'Monitoria Criada'),
+          action: historyAction,
           by_id: currentUser.id,
           by_name: currentUser.name,
           at: nowTs,
@@ -160,7 +175,9 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           critical_error_observations: deps.criticalErrorObservations,
           selected_critical_errors: Object.keys(deps.criticalErrors).filter(id => deps.criticalErrors[id]),
           score: deps.score,
-          status: deps.isAdminEdit ? (deps.initialData?.status || 'pendente_revisao') : (deps.isReevaluating ? 'pendente_revisao' : (deps.initialData?.status || 'pendente_revisao')),
+          status: nextStatus,
+          resolution_type: nextStatus === 'concluida' ? 'human' : (deps.initialData?.resolution_type || null),
+          concluded_at: nextStatus === 'concluida' ? (deps.initialData?.concluded_at || nowTs) : null,
           evaluator_note: deps.header.evaluator_note,
           client_contact_log: deps.header.satisfaction_result === 'Negativa' ? deps.header.client_contact_log : '',
           client_contact_channel: deps.header.satisfaction_result === 'Negativa' ? (deps.header.client_contact_channel || []) : [],
@@ -171,7 +188,9 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
             child_ai_evaluation: (deps.initialData as any)?.childAiEvaluation || (deps.initialData as any)?.form_snapshot?.child_ai_evaluation,
           },
           history: [...(deps.initialData?.history || []), historyEntry],
-          action_deadline_at: (deps.initialData?.action_deadline_at && !deps.isReevaluating && !deps.isAdminEdit) ? deps.initialData.action_deadline_at : getDeadline(),
+          action_deadline_at: nextStatus === 'concluida'
+            ? null
+            : ((deps.initialData?.action_deadline_at && !deps.isReevaluating && !deps.isAdminEdit) ? deps.initialData.action_deadline_at : getDeadline()),
           evaluator_name: currentUser.name,
           evaluated_name: evaluatedUser?.name || '',
           form_name: selectedFormObj?.title || '',

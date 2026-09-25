@@ -115,7 +115,7 @@ serve(async (req: Request) => {
     // 2. Buscar a monitoria por monitoria_id. 404 se não existir.
     const { data: monitoria, error: monitoriaError } = await supabaseAdmin
       .from('monitorias')
-      .select('id, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status')
+      .select('id, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score')
       .eq('id', monitoria_id)
       .maybeSingle();
 
@@ -181,9 +181,20 @@ serve(async (req: Request) => {
     }
     const normalizedTicketId = ticketId.trim();
 
-    // 3b. Determinar desfecho (outcome) automaticamente caso não seja passado
-    const resolvedOutcome: 'positiva' | 'negativa' =
-      outcome ?? ((monitoria.selected_critical_errors?.length ?? 0) > 0 ? 'negativa' : 'positiva');
+    // 3b. Determinar desfecho (outcome) com base nas regras de domínio estritas (WQ-22)
+    // score >= 75: positiva (Ticket Válido), score < 75: negativa (Ticket Invalidado)
+    const rawScore = monitoria.score !== null && monitoria.score !== undefined ? Number(monitoria.score) : NaN;
+    const domainOutcome: 'positiva' | 'negativa' = (!isNaN(rawScore) && rawScore >= 75) ? 'positiva' : 'negativa';
+
+    if (outcome && outcome !== domainOutcome) {
+      return failure(
+        `Desfecho '${outcome}' incompatível com a nota da avaliação (${monitoria.score}%). Regra de domínio: notas >= 75% devem ser 'positiva' e notas < 75% devem ser 'negativa'.`,
+        'validation',
+        400,
+      );
+    }
+
+    const resolvedOutcome: 'positiva' | 'negativa' = domainOutcome;
 
     // 3c. Proteção contra duplicidade de postagem no Zendesk (se já enviado e não forçado)
     if (!dry_run && !force) {

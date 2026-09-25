@@ -21,8 +21,14 @@ import {
   AlertTriangle,
   Shield,
   X,
-  History
+  History,
+  Paperclip,
+  Loader2,
+  FileText
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { uploadActionAttachment } from '../lib/monitoriaAttachments';
+import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 import { m, m as motionComponent, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -51,11 +57,13 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
   const {
     actionModal, setActionModal,
     actionNote, setActionNote,
+    actionAttachments, setActionAttachments,
     reopenStatus, setReopenStatus,
     submitting,
     handleAction,
   } = useMonitoriaActions(user, monitorias, qualityConfig, load);
 
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [viewingMonitoria, setViewingMonitoria] = useState<Monitoria | null>(null);
 
@@ -520,6 +528,11 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                                           {h.note}
                                         </div>
                                       )}
+                                      {h.attachments && h.attachments.length > 0 && (
+                                        <div className="mt-2 w-full">
+                                          <ActionAttachmentsViewer attachments={h.attachments} compact />
+                                        </div>
+                                      )}
                                     </div>
                                   </React.Fragment>
                                 );
@@ -562,6 +575,24 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                           <span className="absolute left-3 top-1.5 text-3xl font-black text-brand-muted/20 leading-none select-none">"</span>
                           {m.evaluator_note || 'Nenhuma observação registrada.'}
                         </div>
+
+                        {m.corrective_action && (
+                          <div className="space-y-1.5">
+                            <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1">Ação Corretiva do Gestor</p>
+                            <div className="text-xs text-brand-primary font-medium bg-surface-subtle/60 p-3 rounded-xl border border-surface-border/40 whitespace-pre-wrap leading-relaxed">
+                              {m.corrective_action}
+                            </div>
+                          </div>
+                        )}
+
+                        {m.action_attachments && m.action_attachments.length > 0 && (
+                          <div className="space-y-1.5">
+                            <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1 flex items-center gap-1.5">
+                              <Paperclip className="w-3 h-3 text-brand-muted" /> Anexos e Evidências ({m.action_attachments.length})
+                            </p>
+                            <ActionAttachmentsViewer attachments={m.action_attachments} />
+                          </div>
+                        )}
 
                         <div className="flex flex-wrap gap-2 items-center pt-1">
                           <Button
@@ -800,17 +831,119 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
                   </div>
                 )}
 
-                {(actionModal.type === 'aprovar' || actionModal.type === 'aceitar' || actionModal.type === 'reabrir' || actionModal.type === 'contestar' || actionModal.type === 'escalar' || actionModal.type === 'excluir' || actionModal.type === 'solicitar_reavaliacao' || actionModal.type === 'manter' || actionModal.type === 'recusar_agente') && (
-                  <div className="mb-6">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 block">Justificativa / Motivo</label>
-                    <textarea
-                      className="w-full bg-surface-bg border border-surface-border rounded-lg p-5 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all min-h-[120px]"
-                      placeholder="Descreva detalhadamente o motivo desta ação..."
-                      value={actionNote}
-                      onChange={e => setActionNote(e.target.value)}
-                    />
-                  </div>
-                )}
+                {(() => {
+                  const isSupportManager = user?.role === 'gestor_suporte';
+                  const isApproval = actionModal.type === 'aprovar' || actionModal.type === 'aceitar';
+                  const isContestation = actionModal.type === 'contestar';
+
+                  let noteLabel = 'Justificativa / Motivo';
+                  let notePlaceholder = 'Descreva detalhadamente o motivo desta ação...';
+                  let noteRequired = false;
+
+                  if (isSupportManager && isApproval) {
+                    noteLabel = 'Ação Corretiva';
+                    notePlaceholder = 'Descreva detalhadamente a ação corretiva aplicada para esta monitoria (obrigatório)...';
+                    noteRequired = true;
+                  } else if (isSupportManager && isContestation) {
+                    noteLabel = 'Justificativa da Contestação';
+                    notePlaceholder = 'Descreva detalhadamente a justificativa para contestar a avaliação (obrigatório)...';
+                    noteRequired = true;
+                  }
+
+                  const showNoteField = (
+                    actionModal.type === 'aprovar' ||
+                    actionModal.type === 'aceitar' ||
+                    actionModal.type === 'reabrir' ||
+                    actionModal.type === 'contestar' ||
+                    actionModal.type === 'escalar' ||
+                    actionModal.type === 'excluir' ||
+                    actionModal.type === 'solicitar_reavaliacao' ||
+                    actionModal.type === 'manter' ||
+                    actionModal.type === 'recusar_agente'
+                  );
+
+                  return (
+                    <>
+                      {showNoteField && (
+                        <div className="mb-4">
+                          <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 flex items-center justify-between">
+                            <span>{noteLabel}</span>
+                            {noteRequired && <span className="text-[9px] text-danger font-semibold tracking-normal">Obrigatório</span>}
+                          </label>
+                          <textarea
+                            className="w-full bg-surface-bg border border-surface-border rounded-lg p-4 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all min-h-[100px]"
+                            placeholder={notePlaceholder}
+                            value={actionNote}
+                            onChange={e => setActionNote(e.target.value)}
+                          />
+                        </div>
+                      )}
+
+                      {/* Suporte a Anexos (WQ-22) */}
+                      <div className="mb-6">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">
+                            Anexos (opcional)
+                          </label>
+                          <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-brand-highlight hover:underline cursor-pointer">
+                            <Paperclip className="w-3.5 h-3.5" />
+                            <span>Adicionar anexo</span>
+                            <input
+                              type="file"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file || !actionModal) return;
+                                setUploadingAttachment(true);
+                                try {
+                                  const att = await uploadActionAttachment(file, actionModal.id);
+                                  setActionAttachments([...actionAttachments, att]);
+                                  toast.success(`Anexo "${file.name}" adicionado!`);
+                                } catch (err: any) {
+                                  toast.error(err.message || 'Falha ao anexar arquivo.');
+                                } finally {
+                                  setUploadingAttachment(false);
+                                  e.target.value = '';
+                                }
+                              }}
+                              disabled={uploadingAttachment}
+                              accept="image/*,application/pdf,text/plain,.docx,audio/*"
+                            />
+                          </label>
+                        </div>
+
+                        {uploadingAttachment && (
+                          <div className="flex items-center gap-2 text-xs text-brand-muted py-1.5">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-highlight" />
+                            <span>Enviando anexo...</span>
+                          </div>
+                        )}
+
+                        {actionAttachments.length > 0 && (
+                          <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                            {actionAttachments.map((att, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-surface-subtle/60 border border-surface-border/50 text-xs">
+                                <div className="flex items-center gap-2 truncate">
+                                  <FileText className="w-3.5 h-3.5 text-brand-muted shrink-0" />
+                                  <span className="font-medium text-brand-primary truncate">{att.name}</span>
+                                  <span className="text-[10px] text-brand-muted shrink-0">({(att.size / 1024).toFixed(0)} KB)</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setActionAttachments(actionAttachments.filter((_, i) => i !== idx))}
+                                  className="text-brand-muted hover:text-danger p-1 transition-colors"
+                                  title="Remover anexo"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
 
                 <div className="flex gap-3">
                   <Button variant="outline" className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest" onClick={() => setActionModal(null)}>Cancelar</Button>

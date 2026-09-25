@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
-import { Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, User } from '../types';
+import { Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, User, ActionAttachment } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
 import { resolveContestationResult } from '../lib/contestation';
 import { toast } from 'sonner';
@@ -44,17 +44,45 @@ export function useMonitoriaActions(
   qualityConfig: any,
   load: () => void
 ) {
-  const [actionModal, setActionModal] = useState<{ id: string; type: ActionType } | null>(null);
+  const [actionModal, setActionModalState] = useState<{ id: string; type: ActionType } | null>(null);
   const [actionNote, setActionNote] = useState('');
+  const [actionAttachments, setActionAttachments] = useState<ActionAttachment[]>([]);
   const [reopenStatus, setReopenStatus] = useState<MonitoriaStatus>('pendente_revisao');
   const [submitting, setSubmitting] = useState(false);
+
+  const setActionModal = (modal: { id: string; type: ActionType } | null) => {
+    setActionModalState(modal);
+    if (!modal) {
+      setActionNote('');
+      setActionAttachments([]);
+    }
+  };
 
   const handleAction = async () => {
     if (!actionModal || !user) return;
     setSubmitting(true);
     const { id, type } = actionModal;
     const monitoria = monitorias.find(m => m.id === id);
-    if (!monitoria) return;
+    if (!monitoria) {
+      setSubmitting(false);
+      return;
+    }
+
+    const trimmedNote = actionNote.trim();
+
+    // Validações obrigatórias para o gestor de suporte (WQ-22)
+    if (user.role === 'gestor_suporte') {
+      if ((type === 'aprovar' || type === 'aceitar') && !trimmedNote) {
+        toast.error('Ação Corretiva é obrigatória para aprovação pelo gestor de suporte.');
+        setSubmitting(false);
+        return;
+      }
+      if (type === 'contestar' && !trimmedNote) {
+        toast.error('Justificativa da Contestação é obrigatória para contestar.');
+        setSubmitting(false);
+        return;
+      }
+    }
 
     const now = new Date().toISOString();
 
@@ -63,7 +91,8 @@ export function useMonitoriaActions(
       by_id: user.id,
       by_name: user.name,
       at: now,
-      note: actionNote || undefined
+      note: actionNote || undefined,
+      attachments: actionAttachments.length > 0 ? actionAttachments : undefined,
     };
 
     let nextStatus: MonitoriaStatus = monitoria.status;
@@ -75,15 +104,22 @@ export function useMonitoriaActions(
     else if (type === 'solicitar_reavaliacao') nextStatus = 'reavaliacao_solicitada';
     else if (type === 'reabrir') nextStatus = reopenStatus;
 
+    const existingAttachments = monitoria.action_attachments || [];
+    const combinedAttachments = actionAttachments.length > 0
+      ? [...existingAttachments, ...actionAttachments]
+      : existingAttachments;
+
     const update: any = type === 'excluir'
       ? { active: false, history: [...(monitoria.history || []), historyEntry], updated_at: now }
       : {
         status: nextStatus,
         updated_at: now,
         history: [...(monitoria.history || []), historyEntry],
-        ...(nextStatus !== 'concluida' ? { action_deadline_at: addBusinessHours(new Date(), getDeadlineHours(nextStatus, qualityConfig.action_deadline), qualityConfig.businessHours).toISOString() } : {}),
+        ...(nextStatus !== 'concluida' ? { action_deadline_at: addBusinessHours(new Date(), getDeadlineHours(nextStatus, qualityConfig.action_deadline), qualityConfig.businessHours).toISOString() } : { action_deadline_at: null }),
         ...(nextStatus === 'concluida' ? { resolution_type: 'human' } : {}),
+        ...(type === 'aprovar' || type === 'aceitar' ? { corrective_action: actionNote } : {}),
         ...(type === 'contestar' || type === 'solicitar_reavaliacao' ? { contestation_reason: actionNote } : {}),
+        ...(combinedAttachments.length > 0 ? { action_attachments: combinedAttachments } : {}),
         ...(resolveContestationResult(actionDescriptions[type] || '') ? { contestation_result: resolveContestationResult(actionDescriptions[type] || '') } : {}),
       };
 
@@ -101,6 +137,7 @@ export function useMonitoriaActions(
           p_monitoria_id: id,
           p_action: type,
           p_note: actionNote || '',
+          p_attachments: actionAttachments,
         });
         if (error) throw error;
       } else {
@@ -109,7 +146,6 @@ export function useMonitoriaActions(
       }
       toast.success('Ação registrada com sucesso!');
       setActionModal(null);
-      setActionNote('');
       load();
     } catch (e: any) {
       toast.error('Erro: ' + e.message);
@@ -119,6 +155,7 @@ export function useMonitoriaActions(
   return {
     actionModal, setActionModal,
     actionNote, setActionNote,
+    actionAttachments, setActionAttachments,
     reopenStatus, setReopenStatus,
     submitting,
     handleAction,

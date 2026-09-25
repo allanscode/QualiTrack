@@ -21,8 +21,10 @@ import {
   ChevronUp,
   ChevronDown,
   Search,
-  ExternalLink
+  ExternalLink,
+  Paperclip
 } from 'lucide-react';
+import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 import { m, AnimatePresence } from 'motion/react';
 import { motion } from 'motion/react';
 import { format } from 'date-fns';
@@ -176,6 +178,11 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
                                   {h.note}
                                 </div>
                               )}
+                              {h.attachments && h.attachments.length > 0 && (
+                                <div className="mt-2 w-full">
+                                  <ActionAttachmentsViewer attachments={h.attachments} compact />
+                                </div>
+                              )}
                             </div>
                           </React.Fragment>
                         );
@@ -216,6 +223,24 @@ export function MonitoriaRow({ index, style, data }: MonitoriaRowProps) {
                   <span className="absolute left-3 top-1.5 text-3xl font-black text-brand-muted/20 leading-none select-none">"</span>
                   {m.evaluator_note || 'Nenhuma observação registrada.'}
                 </div>
+
+                {m.corrective_action && (
+                  <div className="space-y-1.5">
+                    <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1">Ação Corretiva do Gestor</p>
+                    <div className="text-xs text-brand-primary font-medium bg-surface-subtle/60 p-3 rounded-xl border border-surface-border/40 whitespace-pre-wrap leading-relaxed">
+                      {m.corrective_action}
+                    </div>
+                  </div>
+                )}
+
+                {m.action_attachments && m.action_attachments.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[9px] font-black uppercase text-brand-muted/60 tracking-[0.2em] ml-1 flex items-center gap-1.5">
+                      <Paperclip className="w-3 h-3 text-brand-muted" /> Anexos e Evidências ({m.action_attachments.length})
+                    </p>
+                    <ActionAttachmentsViewer attachments={m.action_attachments} />
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-2 items-center pt-1">
                   <Button

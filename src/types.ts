@@ -93,12 +93,22 @@ export type MonitoriaStatus =
   | 'finalizada_alterada'
   | 'reavaliacao_solicitada';
 
+export interface ActionAttachment {
+  name: string;
+  path: string;
+  size: number;
+  mime_type: string;
+  uploaded_at: string;
+  url?: string;
+}
+
 export interface MonitoriaHistoryEntry {
   action: string;
   by_id: string;
   by_name: string;
   at: string;
   note?: string;
+  attachments?: ActionAttachment[];
 }
 
 export interface Monitoria {
@@ -116,6 +126,8 @@ export interface Monitoria {
   score: number;
   status: MonitoriaStatus;
   contestation_reason?: string;
+  corrective_action?: string;
+  action_attachments?: ActionAttachment[];
   action_deadline_at?: string;
   evaluator_note?: string;
   client_contact_log?: string;
