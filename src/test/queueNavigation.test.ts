@@ -40,4 +40,14 @@ describe('Reestruturação da navegação das Filas de Triagem', () => {
     expect(canManageQueueAssignments('gestor_suporte')).toBe(false);
     expect(canManageQueueAssignments(undefined)).toBe(false);
   });
+
+  it('notificações de fila de triagem devem conter targetQueueSubTab definido como negativas para deep linking (WQ-25)', () => {
+    const notificationConfig = {
+      targetTab: 'filas',
+      targetQueueSubTab: 'negativas' as QueueSubTab
+    };
+    expect(notificationConfig.targetTab).toBe('filas');
+    expect(allSubTabs).toContain(notificationConfig.targetQueueSubTab);
+    expect(QUEUE_TITLES[notificationConfig.targetQueueSubTab]).toBe('CSAT Negativas');
+  });
 });

@@ -616,6 +616,7 @@ function MainApp({
       icon: React.ReactNode;
       targetTab?: string;
       targetSubTab?: AdminSubTab;
+      targetQueueSubTab?: QueueSubTab;
       guidelineId?: string;
       actionType?: 'review';
       monitoriaId?: string;
@@ -665,17 +666,21 @@ function MainApp({
       }
     }
 
-    // Notificações de Filas para Qualidade / Gestores / Admin
+    // Notificações de Filas para Qualidade / Gestores / Admin (WQ-25)
     if (userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') {
+      const negativeMsg = pendingNegativesCount > 0
+        ? `${pendingNegativesCount} chamado(s) com CSAT Ruim aguardando triagem na Fila CSAT Negativas.`
+        : 'Chamados com CSAT Ruim e avaliações pendentes disponíveis para auditoria com IA.';
       list.push({
         id: 'queue-csat-negativas',
-        title: 'Fila de Triagem Atualizada',
-        message: 'Chamados com CSAT Ruim e Chamados Filhos disponíveis para auditoria com IA.',
+        title: 'Fila CSAT Negativas',
+        message: negativeMsg,
         time: `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`,
         type: 'fila',
-        iconBg: 'bg-brand-highlight/10 text-brand-highlight',
+        iconBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
         icon: <Layers className="w-3.5 h-3.5" />,
         targetTab: 'filas',
+        targetQueueSubTab: 'negativas',
         read: readNotificationIds.has('queue-csat-negativas')
       });
     }
@@ -809,6 +814,10 @@ function MainApp({
 
     if (item.targetTab) {
       setActiveTab(item.targetTab);
+    }
+    if (item.targetQueueSubTab) {
+      setActiveQueueSubTab(item.targetQueueSubTab);
+      setIsQueueMenuOpen(true);
     }
     if (item.monitoriaId) {
       setTimeout(() => {
