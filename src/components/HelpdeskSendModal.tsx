@@ -6,7 +6,8 @@ import {
   Loader2,
   AlertTriangle,
   RotateCcw,
-  Send
+  Send,
+  Copy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, isMockMode, requireAccessToken } from '../lib/supabase';
@@ -49,6 +50,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
   const [outcome, setOutcome] = useState<EvaluationOutcome>(suggestedOutcome);
   const [preview, setPreview] = useState<PreviewState>({ status: 'loading' });
   const [sendState, setSendState] = useState<SendState>({ status: 'idle' });
+  const [copiedMacro, setCopiedMacro] = useState(false);
 
   // Histórico de envios já bem-sucedidos para esta monitoria. Um segundo
   // envio posta um SEGUNDO comentário no ticket real do cliente, então
@@ -56,6 +58,17 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
   const [previousSubmission, setPreviousSubmission] = useState<HelpdeskSubmission | null>(null);
   const [checkingHistory, setCheckingHistory] = useState(true);
   const [acknowledgedResend, setAcknowledgedResend] = useState(false);
+
+  const handleCopyText = () => {
+    if (preview.status !== 'ready') return;
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = preview.html;
+    const text = tempDiv.innerText || tempDiv.textContent || '';
+    navigator.clipboard.writeText(text.trim());
+    setCopiedMacro(true);
+    toast.success('Texto da macro copiado para a área de transferência!');
+    setTimeout(() => setCopiedMacro(false), 2500);
+  };
 
   // Evita que uma resposta de preview atrasada (troca rápida de radio)
   // sobrescreva o preview de uma seleção mais recente.
@@ -125,7 +138,8 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
       return;
     }
     if (isMockMode || !supabase) {
-      toast.error('Envio ao Zendesk indisponível no modo de demonstração.');
+      setSendState({ status: 'sent', externalCommentId: 'demo-comment-simulado' });
+      toast.success('Comentário simulado com sucesso (Modo Demonstração).');
       return;
     }
 
@@ -219,7 +233,29 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
           </div>
 
           <div className="space-y-2">
-            <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Preview do comentário</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Preview do comentário</p>
+              {preview.status === 'ready' && (
+                <button
+                  type="button"
+                  onClick={handleCopyText}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-brand-highlight hover:underline cursor-pointer"
+                  title="Copiar texto da macro para a área de transferência"
+                >
+                  {copiedMacro ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                      <span className="text-success">Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar Texto</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
 
             {preview.status === 'loading' && (
               <div className="flex items-center justify-center gap-2 py-10 border border-surface-border rounded-xl bg-surface-subtle">
