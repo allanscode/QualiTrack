@@ -6,6 +6,8 @@ import { useTheme } from '../providers/ThemeProvider';
 import {
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   Save,
   X,
   AlertOctagon,
@@ -145,6 +147,11 @@ export default function MonitoriaForm({
 
   const toggleDialogueMsgExpand = (id: string | number) => {
     setExpandedDialogueMsgIds(prev => ({ ...prev, [String(id)]: !prev[String(id)] }));
+  };
+
+  const [expandedAiQuestions, setExpandedAiQuestions] = useState<Record<string, boolean>>({});
+  const toggleAiExpansion = (questionId: string) => {
+    setExpandedAiQuestions(prev => ({ ...prev, [questionId]: !prev[questionId] }));
   };
 
   const forms = useMemo(() =>
@@ -1036,16 +1043,36 @@ export default function MonitoriaForm({
                             </div>
                           </div>
                           <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
-                            {(['SIM', 'NAO', 'NA'] as const).map(opt => (
-                              <button
-                                key={opt}
-                                onClick={() => !isViewOnly && setScores({...scores, [q.id]: opt})}
-                                className={`px-3.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${scores[q.id] === opt ? (opt === 'NAO' && q.is_critical ? 'bg-error text-white shadow-sm' : 'bg-brand-primary text-brand-on-primary shadow-sm') : 'text-brand-muted hover:bg-surface-card'}`}
-                                disabled={isViewOnly}
-                              >
-                                {opt}
-                              </button>
-                            ))}
+                            {(['SIM', 'NAO', 'NA'] as const).map(opt => {
+                              const isSelected = scores[q.id] === opt;
+                              let selectedStyle = 'bg-brand-primary text-brand-on-primary shadow-xs';
+                              if (isSelected) {
+                                if (opt === 'SIM') {
+                                  selectedStyle = 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 shadow-xs font-black';
+                                } else if (opt === 'NAO') {
+                                  selectedStyle = q.is_critical
+                                    ? 'bg-rose-600 text-white shadow-xs font-black'
+                                    : 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40 shadow-xs font-black';
+                                } else {
+                                  selectedStyle = 'bg-slate-500/20 text-slate-700 dark:text-slate-300 border border-slate-500/40 shadow-xs font-black';
+                                }
+                              }
+                              return (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => !isViewOnly && setScores({...scores, [q.id]: opt})}
+                                  className={`px-3.5 py-1 rounded-md text-[10px] uppercase tracking-wider transition-all cursor-pointer ${
+                                    isSelected
+                                      ? selectedStyle
+                                      : 'text-brand-muted hover:bg-surface-card hover:text-brand-primary'
+                                  }`}
+                                  disabled={isViewOnly}
+                                >
+                                  {opt}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
 
@@ -1086,11 +1113,12 @@ export default function MonitoriaForm({
                           const aiCrit = aiEval?.suggested_critical_errors?.[q.id];
                           if (!aiAnswer && !aiObs && aiCrit === undefined) return null;
 
+                          const isAiExpanded = Boolean(expandedAiQuestions[q.id]);
                           const quoteMatch = aiObs ? aiObs.match(/["“]([^"”]{4,})["”]/) : null;
                           const quotedSnippet = quoteMatch ? quoteMatch[1] : null;
 
                           return (
-                            <div className="mt-3 p-3.5 rounded-xl bg-surface-subtle/70 border border-brand-highlight/20 space-y-2.5">
+                            <div className="mt-3 p-3 rounded-xl bg-surface-subtle/70 border border-brand-highlight/20 space-y-2">
                               <div className="flex items-center justify-between gap-2 flex-wrap">
                                 <div className="flex items-center gap-1.5 text-xs font-black text-brand-highlight">
                                   <Bot className="w-3.5 h-3.5" />
@@ -1098,15 +1126,25 @@ export default function MonitoriaForm({
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {aiAnswer && (
-                                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                                      aiAnswer === 'SIM'
-                                        ? 'bg-functional-success/10 text-functional-success border-functional-success/25'
-                                        : aiAnswer === 'NAO'
-                                        ? 'bg-functional-error/10 text-functional-error border-functional-error/25'
-                                        : 'bg-surface-subtle text-brand-muted border-surface-border'
-                                    }`}>
-                                      Sugestão IA: {aiAnswer}
-                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleAiExpansion(q.id)}
+                                      className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md border flex items-center gap-1 transition-all cursor-pointer ${
+                                        aiAnswer === 'SIM'
+                                          ? 'bg-functional-success/10 text-functional-success border-functional-success/25 hover:bg-functional-success/20'
+                                          : aiAnswer === 'NAO'
+                                          ? 'bg-functional-error/10 text-functional-error border-functional-error/25 hover:bg-functional-error/20'
+                                          : 'bg-surface-subtle text-brand-muted border-surface-border hover:bg-surface-subtle/80'
+                                      }`}
+                                      title={isAiExpanded ? "Recolher análise detalhada da IA" : "Expandir análise e justificativa da IA"}
+                                    >
+                                      <span>Sugestão IA: {aiAnswer}</span>
+                                      {isAiExpanded ? (
+                                        <ChevronUp className="w-3 h-3 opacity-70" />
+                                      ) : (
+                                        <ChevronDown className="w-3 h-3 opacity-70" />
+                                      )}
+                                    </button>
                                   )}
                                   {aiCrit && (
                                     <Badge variant="error" size="sm" className="text-[9px] font-black">
@@ -1116,88 +1154,93 @@ export default function MonitoriaForm({
                                 </div>
                               </div>
 
-                              {/* Evidência Textual Extraída do Atendimento */}
-                              {quotedSnippet && (
-                                <div className="p-2.5 rounded-lg bg-surface-card border border-brand-highlight/30 space-y-1">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-brand-highlight flex items-center gap-1.5">
-                                      <Quote className="w-3 h-3" />
-                                      <span>Citação Extraída do Atendimento:</span>
-                                    </span>
-                                    {dialogue.length > 0 && (
+                              {/* Conteúdo analítico e evidências recolhíveis */}
+                              {isAiExpanded && (
+                                <div className="space-y-2.5 pt-1 animate-fade-in">
+                                  {/* Evidência Textual Extraída do Atendimento */}
+                                  {quotedSnippet && (
+                                    <div className="p-2.5 rounded-lg bg-surface-card border border-brand-highlight/30 space-y-1">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-brand-highlight flex items-center gap-1.5">
+                                          <Quote className="w-3 h-3" />
+                                          <span>Citação Extraída do Atendimento:</span>
+                                        </span>
+                                        {dialogue.length > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedQuestionForDialogue(q.id);
+                                              setDialogueFilter('all');
+                                              const cleanSnippet = quotedSnippet.replace(/^["'“”\s]+|["'“”\s]+$/g, '').trim();
+                                              const words = cleanSnippet.split(/\s+/).filter(Boolean);
+                                              const searchTerms = words.length <= 6 ? cleanSnippet : words.slice(0, 5).join(' ');
+                                              setDialogueSearch(searchTerms);
+                                              setShowDialogueDrawer(true);
+                                            }}
+                                            className="text-[10px] font-bold text-brand-muted hover:text-brand-highlight underline cursor-pointer"
+                                          >
+                                            Localizar no diálogo
+                                          </button>
+                                        )}
+                                      </div>
+                                      <p className="font-mono text-[11px] text-brand-primary italic select-text bg-surface-subtle/60 p-2 rounded border border-surface-border/50">
+                                        "{quotedSnippet}"
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Parecer Analítico da IA */}
+                                  {aiObs ? (
+                                    <div className="text-[11px] text-brand-muted bg-surface-card p-3 rounded-lg border border-surface-border leading-relaxed select-text space-y-1.5">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="font-bold text-brand-primary text-[10px] uppercase tracking-wider">
+                                          Análise e Motivo da IA:
+                                        </span>
+                                        {!isViewOnly && observations[q.id] !== aiObs && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setObservations(prev => ({ ...prev, [q.id]: aiObs }))}
+                                            className="text-[10px] font-bold text-brand-highlight hover:underline flex items-center gap-1 cursor-pointer transition-colors"
+                                            title="Copiar texto da IA para a observação deste critério"
+                                          >
+                                            <RotateCcw className="w-2.5 h-2.5" />
+                                            Copiar para observação do auditor
+                                          </button>
+                                        )}
+                                      </div>
+                                      <p className="text-[11px] text-brand-primary/90 leading-relaxed font-sans">
+                                        {aiObs}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <p className="text-[10px] text-brand-muted italic">Critério validado automaticamente sem observação adicional.</p>
+                                  )}
+
+                                  {/* Atalho para confrontar com o diálogo real */}
+                                  {dialogue.length > 0 && (
+                                    <div className="pt-1 flex items-center justify-between text-[10px]">
                                       <button
                                         type="button"
                                         onClick={() => {
                                           setSelectedQuestionForDialogue(q.id);
                                           setDialogueFilter('all');
-                                          const cleanSnippet = quotedSnippet.replace(/^["'“”\s]+|["'“”\s]+$/g, '').trim();
-                                          const words = cleanSnippet.split(/\s+/).filter(Boolean);
-                                          const searchTerms = words.length <= 6 ? cleanSnippet : words.slice(0, 5).join(' ');
-                                          setDialogueSearch(searchTerms);
+                                          if (quotedSnippet) {
+                                            const cleanSnippet = quotedSnippet.replace(/^["'“”\s]+|["'“”\s]+$/g, '').trim();
+                                            const words = cleanSnippet.split(/\s+/).filter(Boolean);
+                                            const searchTerms = words.length <= 6 ? cleanSnippet : words.slice(0, 5).join(' ');
+                                            setDialogueSearch(searchTerms);
+                                          } else {
+                                            setDialogueSearch('');
+                                          }
                                           setShowDialogueDrawer(true);
                                         }}
-                                        className="text-[10px] font-bold text-brand-muted hover:text-brand-highlight underline cursor-pointer"
+                                        className="text-brand-muted hover:text-brand-primary font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
                                       >
-                                        Localizar no diálogo
+                                        <MessageSquare className="w-3.5 h-3.5 text-brand-highlight" />
+                                        <span>Confrontar no Diálogo do Atendimento ({dialogue.length} mensagens gravadas)</span>
                                       </button>
-                                    )}
-                                  </div>
-                                  <p className="font-mono text-[11px] text-brand-primary italic select-text bg-surface-subtle/60 p-2 rounded border border-surface-border/50">
-                                    "{quotedSnippet}"
-                                  </p>
-                                </div>
-                              )}
-
-                              {/* Parecer Analítico da IA */}
-                              {aiObs ? (
-                                <div className="text-[11px] text-brand-muted bg-surface-card p-3 rounded-lg border border-surface-border leading-relaxed select-text space-y-1.5">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-bold text-brand-primary text-[10px] uppercase tracking-wider">
-                                      Análise e Motivo da IA:
-                                    </span>
-                                    {!isViewOnly && observations[q.id] !== aiObs && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setObservations(prev => ({ ...prev, [q.id]: aiObs }))}
-                                        className="text-[10px] font-bold text-brand-highlight hover:underline flex items-center gap-1 cursor-pointer transition-colors"
-                                        title="Copiar texto da IA para a observação deste critério"
-                                      >
-                                        <RotateCcw className="w-2.5 h-2.5" />
-                                        Copiar para observação do auditor
-                                      </button>
-                                    )}
-                                  </div>
-                                  <p className="text-[11px] text-brand-primary/90 leading-relaxed font-sans">
-                                    {aiObs}
-                                  </p>
-                                </div>
-                              ) : (
-                                <p className="text-[10px] text-brand-muted italic">Critério validado automaticamente sem observação adicional.</p>
-                              )}
-
-                              {/* Atalho para confrontar com o diálogo real */}
-                              {dialogue.length > 0 && (
-                                <div className="pt-1 flex items-center justify-between text-[10px]">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedQuestionForDialogue(q.id);
-                                      setDialogueFilter('all');
-                                      if (quotedSnippet) {
-                                        const cleanSnippet = quotedSnippet.replace(/^["'“”\s]+|["'“”\s]+$/g, '').trim();
-                                        const words = cleanSnippet.split(/\s+/).filter(Boolean);
-                                        const searchTerms = words.length <= 6 ? cleanSnippet : words.slice(0, 5).join(' ');
-                                        setDialogueSearch(searchTerms);
-                                      } else {
-                                        setDialogueSearch('');
-                                      }
-                                      setShowDialogueDrawer(true);
-                                    }}
-                                    className="text-brand-muted hover:text-brand-primary font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
-                                  >
-                                    <MessageSquare className="w-3.5 h-3.5 text-brand-highlight" />
-                                    <span>Confrontar no Diálogo do Atendimento ({dialogue.length} mensagens gravadas)</span>
-                                  </button>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>

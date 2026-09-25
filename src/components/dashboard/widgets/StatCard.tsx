@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Info } from 'lucide-react';
 import Card from '../../ui/Card';
 import { m, AnimatePresence } from 'motion/react';
 import { useDashboard, useEditing } from '../DashboardContext';
@@ -22,7 +23,18 @@ interface StatCardProps {
   setActiveEditingId?: (id: string | null) => void;
   valueColorClass?: string;
   onlineUsersOverride?: any[];
+  methodology?: string;
 }
+
+const DEFAULT_METHODOLOGIES: Record<string, string> = {
+  'Média Geral': 'Média aritmética simples das notas de todas as monitorias avaliadas no período selecionado.',
+  'Nota Média Geral': 'Média acumulada de todas as monitorias concluídas de todas as equipes no período.',
+  'Nota Média Individual': 'Média aritmética das notas obtidas pelo avaliado nas monitorias do período.',
+  'Índice de Excelência': 'Percentual de avaliações que atingiram nota na faixa Excelente em relação ao total.',
+  'Taxa de Reversão': 'Percentual de contestações com parecer Deferido sobre o total de contestações analisadas.',
+  'Taxa de Contestação': 'Percentual de monitorias que foram contestadas em relação ao total de monitorias.',
+  'Taxa de Conformidade': 'Percentual de monitorias que atingiram pontuação igual ou superior à meta de qualidade.',
+};
 
 const BG_MAP: Record<string, string> = {
   'text-functional-error': 'bg-functional-error',
@@ -68,8 +80,10 @@ export default function StatCard({
   activeEditingId,
   setActiveEditingId,
   valueColorClass,
-  onlineUsersOverride
+  onlineUsersOverride,
+  methodology
 }: StatCardProps) {
+  const resolvedMethodology = methodology || DEFAULT_METHODOLOGIES[title];
   const { config, saveConfig } = useQualityConfig();
   
   let dashboardContext = null;
@@ -232,7 +246,7 @@ export default function StatCard({
         >
           {clonedIcon}
           <AnimatePresence>
-            {isHovered && tooltipText && (
+            {isHovered && (tooltipText || resolvedMethodology) && (
               <m.div
                 id={`tooltip-${myUniqueId}`}
                 role="tooltip"
@@ -240,18 +254,31 @@ export default function StatCard({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.95 }}
                 transition={{ duration: 0.12, ease: 'easeOut' }}
-                className="absolute top-full left-0 mt-2 z-50 whitespace-nowrap bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
+                className="absolute top-full left-0 mt-2 z-50 min-w-[200px] max-w-xs bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg shadow-xl shadow-slate-900/10 border border-slate-800/10 dark:border-slate-200/10 pointer-events-none"
               >
-                {tooltipText}{canEdit ? " (Clique para editar)" : ""}
+                {tooltipText && <div>{tooltipText}{canEdit ? " (Clique para editar)" : ""}</div>}
+                {resolvedMethodology && (
+                  <div className="text-[9px] text-slate-300 dark:text-slate-600 font-normal mt-1 pt-1 border-t border-white/10 dark:border-black/10">
+                    <span className="font-semibold text-brand-accent">Cálculo:</span> {resolvedMethodology}
+                  </div>
+                )}
                 <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 dark:bg-slate-50 rotate-45" />
               </m.div>
             )}
           </AnimatePresence>
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 flex items-center justify-between gap-1.5">
             <span className="text-sm font-bold text-brand-primary tracking-normal whitespace-normal leading-snug block">
               {title}
             </span>
+            {resolvedMethodology && !onClick && (
+              <span 
+                className="text-brand-muted hover:text-brand-primary opacity-60 hover:opacity-100 transition-opacity flex-shrink-0 cursor-help"
+                title={`Cálculo: ${resolvedMethodology}`}
+              >
+                <Info className="w-3.5 h-3.5" />
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 mt-auto">

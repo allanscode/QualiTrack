@@ -260,24 +260,50 @@ export default function DistributionChart({
           </div>
         )}
         {data.length > 0 ? (
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1 min-h-[150px] print:h-[180px]" style={{ minWidth: 0, minHeight: 150 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                {renderChart()}
-              </ResponsiveContainer>
+          view === 'pie' ? (
+            <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-4 min-h-[160px]">
+              <div className="w-full sm:w-[55%] h-[160px] relative" style={{ minWidth: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  {renderChart()}
+                </ResponsiveContainer>
+              </div>
+              <div className="w-full sm:w-[45%] flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40 max-h-[160px] overflow-y-auto no-scrollbar">
+                {data.map((entry, index) => {
+                  const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
+                  return (
+                    <div key={index} className="flex items-center justify-between gap-2 text-[10px] text-brand-muted font-black uppercase tracking-tight print:text-slate-800">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                        <span className="truncate">{entry.name}</span>
+                      </div>
+                      <span className="text-brand-primary whitespace-nowrap font-bold">
+                        {entry.value} ({percent}%)
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-3 pt-3 border-t border-surface-border/40 print:border-slate-300 print:mt-1 print:pt-1">
-              {data.map((entry, index) => {
-                const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
-                return (
-                  <div key={index} className="flex items-center gap-1.5 text-[10px] text-brand-muted font-black uppercase tracking-tight print:text-slate-800">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                    {entry.name}: {entry.value} ({percent}%)
-                  </div>
-                );
-              })}
+          ) : (
+            <div className="flex-1 flex flex-col">
+              <div className="flex-1 min-h-[150px] print:h-[180px]" style={{ minWidth: 0, minHeight: 150 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  {renderChart()}
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-3 pt-3 border-t border-surface-border/40 print:border-slate-300 print:mt-1 print:pt-1">
+                {data.map((entry, index) => {
+                  const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
+                  return (
+                    <div key={index} className="flex items-center gap-1.5 text-[10px] text-brand-muted font-black uppercase tracking-tight print:text-slate-800">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                      {entry.name}: {entry.value} ({percent}%)
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )
         ) : (
           <div className="flex-1 flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-brand-muted opacity-40 print:text-slate-500">
             Nenhum dado
