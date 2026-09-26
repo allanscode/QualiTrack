@@ -862,6 +862,14 @@ function MainApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFormOpen, isQueueModalOpen]);
 
+  React.useEffect(() => {
+    const handleFocus = () => {
+      setActiveTab('monitorias');
+    };
+    window.addEventListener('qualitrack:focus_monitoria', handleFocus);
+    return () => window.removeEventListener('qualitrack:focus_monitoria', handleFocus);
+  }, []);
+
   // Listener universal para qualquer modal aberto via qualitrack:modal
   React.useEffect(() => {
     const handleGlobalModal = (e: any) => {

@@ -464,19 +464,21 @@ export default function SupportManagerDashboard({
   // Rankings
   const agentRanking = useMemo(() => {
     if (isCustomizing) return [];
-    const map: Record<string, { total: number; count: number }> = {};
+    const map: Record<string, { total: number; count: number; monitorias: any[] }> = {};
     scoredMonitorias.forEach((m: any) => {
       const id = m.evaluated_id;
-      if (!map[id]) map[id] = { total: 0, count: 0 };
+      if (!map[id]) map[id] = { total: 0, count: 0, monitorias: [] };
       map[id].total += m.score || 0;
       map[id].count++;
+      map[id].monitorias.push(m);
     });
     return Object.entries(map)
       .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || id,
         score: Math.round((s.total / s.count) * 100) / 100,
-        count: s.count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.score - a.score);
   }, [isCustomizing, scoredMonitorias, users]);
@@ -536,21 +538,24 @@ export default function SupportManagerDashboard({
   // Reavaliações rankings
   const topApprovedAgents = useMemo(() => {
     if (isCustomizing) return mockContestationsApproved;
-    const map: Record<string, number> = {};
+    const map: Record<string, { count: number; monitorias: any[] }> = {};
     myMonitorias.forEach((m: any) => {
       const isAccepted = m.status === 'contestacao_aceita' || 
                         m.status === 'finalizada_alterada' ||
                         m.history?.some((h: any) => h.action.toLowerCase().includes('aceita') || h.action.toLowerCase().includes('procedente') || h.action.toLowerCase().includes('alterada'));
       
       if (isAccepted && m.evaluated_id) {
-        map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
+        if (!map[m.evaluated_id]) map[m.evaluated_id] = { count: 0, monitorias: [] };
+        map[m.evaluated_id].count++;
+        map[m.evaluated_id].monitorias.push(m);
       }
     });
     return Object.entries(map)
-      .map(([id, count]) => ({
+      .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || 'Agente Externo',
-        count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
@@ -558,20 +563,23 @@ export default function SupportManagerDashboard({
 
   const topRejectedAgents = useMemo(() => {
     if (isCustomizing) return mockContestationsRejected;
-    const map: Record<string, number> = {};
+    const map: Record<string, { count: number; monitorias: any[] }> = {};
     myMonitorias.forEach((m: any) => {
       const isRejected = m.status === 'contestacao_negada' || 
                         m.history?.some((h: any) => h.action.toLowerCase().includes('negada') || h.action.toLowerCase().includes('recusada') || h.action.includes('Improcedente') || h.action.includes('Mantida'));
       
       if (isRejected && m.evaluated_id) {
-        map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
+        if (!map[m.evaluated_id]) map[m.evaluated_id] = { count: 0, monitorias: [] };
+        map[m.evaluated_id].count++;
+        map[m.evaluated_id].monitorias.push(m);
       }
     });
     return Object.entries(map)
-      .map(([id, count]) => ({
+      .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || 'Agente Externo',
-        count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
@@ -1124,6 +1132,11 @@ export default function SupportManagerDashboard({
             profile="gestor_suporte"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Melhores Suporte · ${item.name}`,
+              subtitle: `Monitorias avaliadas do atendente no período selecionado (Média: ${(item.score ?? 0).toFixed(1)}%)`,
+              monitorias: item.monitorias || myMonitorias.filter((m: any) => m.evaluated_id === item.id),
+            })}
           />
         </div>
         <div className="h-[380px]">
@@ -1137,6 +1150,11 @@ export default function SupportManagerDashboard({
             profile="gestor_suporte"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Maiores Ofensores · ${item.name}`,
+              subtitle: `Monitorias com oportunidades de melhoria do atendente no período (Média: ${(item.score ?? 0).toFixed(1)}%)`,
+              monitorias: item.monitorias || myMonitorias.filter((m: any) => m.evaluated_id === item.id),
+            })}
           />
         </div>
         <div className="h-[380px]">
@@ -1149,6 +1167,11 @@ export default function SupportManagerDashboard({
             profile="gestor_suporte"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Reavaliações Aceitas · ${item.name}`,
+              subtitle: `Monitorias do atendente com reavaliação deferida/aceita no período (${item.count} procedentes)`,
+              monitorias: item.monitorias || [],
+            })}
           />
         </div>
         <div className="h-[380px]">
@@ -1163,6 +1186,11 @@ export default function SupportManagerDashboard({
             profile="gestor_suporte"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Reavaliações Recusadas · ${item.name}`,
+              subtitle: `Monitorias do atendente com reavaliação indeferida ou mantida no período (${item.count} improcedentes)`,
+              monitorias: item.monitorias || [],
+            })}
           />
         </div>
       </div>

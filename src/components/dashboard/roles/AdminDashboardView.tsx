@@ -4,6 +4,7 @@ import { usePresence } from '../../../providers/PresenceProvider';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import RankingWidget from '../widgets/RankingWidget';
+import SupportDrillDownModal from '../widgets/SupportDrillDownModal';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import DistributionChart from '../widgets/DistributionChart';
@@ -310,6 +311,12 @@ export default function AdminDashboardView({
     // safe fallback when outside DashboardProvider (e.g. customization preview)
   }
 
+  const [drillDown, setDrillDown] = useState<{
+    title: string;
+    subtitle?: string;
+    monitorias: any[];
+  } | null>(null);
+
   const { monitorias, users, teams, forms, dissatisfactionFields } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
 
@@ -479,20 +486,22 @@ export default function AdminDashboardView({
 
   const auditorRanking = useMemo(() => {
     if (isCustomizing) return mockAuditorRanking;
-    const map: Record<string, { total: number; count: number }> = {};
+    const map: Record<string, { total: number; count: number; monitorias: any[] }> = {};
     monitorias.forEach((m: any) => {
       const id = m.evaluator_id;
       if (!id) return;
-      if (!map[id]) map[id] = { total: 0, count: 0 };
+      if (!map[id]) map[id] = { total: 0, count: 0, monitorias: [] };
       map[id].total += m.score || 0;
       map[id].count++;
+      map[id].monitorias.push(m);
     });
     return Object.entries(map)
       .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || id,
         score: Math.round((s.total / s.count) * 100) / 100,
-        count: s.count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
@@ -500,19 +509,21 @@ export default function AdminDashboardView({
 
   const agentRanking = useMemo(() => {
     if (isCustomizing) return [];
-    const map: Record<string, { total: number; count: number }> = {};
+    const map: Record<string, { total: number; count: number; monitorias: any[] }> = {};
     scoredMonitorias.forEach((m: any) => {
       const id = m.evaluated_id;
-      if (!map[id]) map[id] = { total: 0, count: 0 };
+      if (!map[id]) map[id] = { total: 0, count: 0, monitorias: [] };
       map[id].total += m.score || 0;
       map[id].count++;
+      map[id].monitorias.push(m);
     });
     return Object.entries(map)
       .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || id,
         score: Math.round((s.total / s.count) * 100) / 100,
-        count: s.count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.score - a.score);
   }, [isCustomizing, scoredMonitorias, users]);
@@ -533,7 +544,7 @@ export default function AdminDashboardView({
   // --- Rankings de Contestações (Top 5 Agentes - Global)
   const topApprovedAgents = useMemo(() => {
     if (isCustomizing) return mockContestationsApproved;
-    const map: Record<string, number> = {};
+    const map: Record<string, { count: number; monitorias: any[] }> = {};
     monitorias.forEach((m: any) => {
       const isAccepted = m.status === 'contestacao_aceita' || 
                         m.status === 'finalizada_alterada' ||
@@ -546,14 +557,17 @@ export default function AdminDashboardView({
                         );
       
       if (isAccepted && m.evaluated_id) {
-        map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
+        if (!map[m.evaluated_id]) map[m.evaluated_id] = { count: 0, monitorias: [] };
+        map[m.evaluated_id].count++;
+        map[m.evaluated_id].monitorias.push(m);
       }
     });
     return Object.entries(map)
-      .map(([id, count]) => ({
+      .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || 'Agente Externo',
-        count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
@@ -561,20 +575,23 @@ export default function AdminDashboardView({
 
   const topRejectedAgents = useMemo(() => {
     if (isCustomizing) return mockContestationsRejected;
-    const map: Record<string, number> = {};
+    const map: Record<string, { count: number; monitorias: any[] }> = {};
     monitorias.forEach((m: any) => {
       const isRejected = m.status === 'contestacao_negada' || 
                         m.history?.some((h: any) => h.action.toLowerCase().includes('negada') || h.action.toLowerCase().includes('recusada') || h.action.includes('Improcedente') || h.action.includes('Mantida'));
       
       if (isRejected && m.evaluated_id) {
-        map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
+        if (!map[m.evaluated_id]) map[m.evaluated_id] = { count: 0, monitorias: [] };
+        map[m.evaluated_id].count++;
+        map[m.evaluated_id].monitorias.push(m);
       }
     });
     return Object.entries(map)
-      .map(([id, count]) => ({
+      .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || 'Agente Externo',
-        count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
@@ -1353,6 +1370,11 @@ export default function AdminDashboardView({
             profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Melhores Suporte · ${item.name}`,
+              subtitle: `Monitorias avaliadas do atendente no período selecionado (Média: ${(item.score ?? 0).toFixed(1)}%)`,
+              monitorias: item.monitorias || monitorias.filter((m: any) => m.evaluated_id === item.id),
+            })}
           />
         </div>
         <div className="h-[420px] py-1.5">
@@ -1367,6 +1389,11 @@ export default function AdminDashboardView({
             profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Maiores Ofensores · ${item.name}`,
+              subtitle: `Monitorias com oportunidades de melhoria ou desvios do atendente no período (Média: ${(item.score ?? 0).toFixed(1)}%)`,
+              monitorias: item.monitorias || monitorias.filter((m: any) => m.evaluated_id === item.id),
+            })}
           />
         </div>
         <div className="h-[420px] py-1.5">
@@ -1379,6 +1406,11 @@ export default function AdminDashboardView({
             profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Volume de Auditorias · ${item.name}`,
+              subtitle: `Monitorias avaliadas pelo auditor no período selecionado (${item.count} avaliações)`,
+              monitorias: item.monitorias || monitorias.filter((m: any) => m.evaluator_id === item.id),
+            })}
           />
         </div>
         <div className="h-[420px] py-1.5">
@@ -1391,6 +1423,11 @@ export default function AdminDashboardView({
             profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Reavaliações Aceitas · ${item.name}`,
+              subtitle: `Monitorias com reavaliação deferida/aceita no período (${item.count} procedentes)`,
+              monitorias: item.monitorias || [],
+            })}
           />
         </div>
         <div className="h-[420px] py-1.5">
@@ -1405,6 +1442,11 @@ export default function AdminDashboardView({
             profile="admin"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Reavaliações Recusadas · ${item.name}`,
+              subtitle: `Monitorias com reavaliação indeferida ou mantida no período (${item.count} improcedentes)`,
+              monitorias: item.monitorias || [],
+            })}
           />
         </div>
       </div>
@@ -1429,6 +1471,15 @@ export default function AdminDashboardView({
         users={isCustomizing ? mockUsersList : users}
         title="Últimas Auditorias do Sistema"
       />
+
+      {drillDown && (
+        <SupportDrillDownModal
+          title={drillDown.title}
+          subtitle={drillDown.subtitle}
+          monitorias={drillDown.monitorias}
+          onClose={() => setDrillDown(null)}
+        />
+      )}
     </div>
   );
 }

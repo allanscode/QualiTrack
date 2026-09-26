@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
-import { User, Award } from 'lucide-react';
+import { User, Award, ChevronRight } from 'lucide-react';
 import Card from '../../ui/Card';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
 import { m, AnimatePresence } from 'motion/react';
 
-interface RankingItem {
+export interface RankingItem {
   id: string;
   name: string;
   score?: number;
   count: number;
+  monitorias?: any[];
 }
 
-interface RankingWidgetProps {
+export interface RankingWidgetProps {
   title: string;
   subtitle?: string;
   data: RankingItem[];
@@ -24,6 +25,7 @@ interface RankingWidgetProps {
   profile?: string;
   activeEditingId?: string | null;
   setActiveEditingId?: (id: string | null) => void;
+  onItemClick?: (item: RankingItem) => void;
 }
 
 const RANKING_BG_MAP: Record<string, string> = {
@@ -57,7 +59,8 @@ export default function RankingWidget({
   isCustomizing = false,
   profile,
   activeEditingId,
-  setActiveEditingId
+  setActiveEditingId,
+  onItemClick
 }: RankingWidgetProps) {
   const { getLevelForScore, config, saveConfig } = useQualityConfig();
   const [isHovered, setIsHovered] = useState(false);
@@ -230,8 +233,14 @@ export default function RankingWidget({
           return (
         <div
           key={item.id}
-          className="group relative flex items-center gap-2 py-1 px-2 rounded-2xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle/50 hover:z-[10000] transition-all duration-200"
+          onClick={onItemClick ? () => onItemClick(item) : undefined}
+          onKeyDown={onItemClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onItemClick(item); } } : undefined}
+          className={`group relative flex items-center gap-2 py-1.5 px-2.5 rounded-2xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle/50 hover:z-[10000] transition-all duration-200 ${
+            onItemClick ? 'cursor-pointer hover:border-brand-accent/50 hover:bg-surface-subtle/80 hover:shadow-sm active:scale-[0.99]' : ''
+          }`}
           tabIndex={0}
+          role={onItemClick ? 'button' : undefined}
+          aria-label={onItemClick ? `Ver monitorias de ${item.name}` : undefined}
           aria-describedby={`tooltip-${myUniqueId}-row-${index}`}
         >
           <div
@@ -286,10 +295,15 @@ export default function RankingWidget({
               </div>
 
               {/* Score / Volume */}
-              <div className="text-right flex-shrink-0">
-                <div className={`text-xs font-bold ${isCount ? 'text-brand-primary' : level.color}`}>
-                  {isCount ? `${item.count} Vol.` : `${(item.score ?? 0).toFixed(1)}%`}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <div className="text-right">
+                  <div className={`text-xs font-bold ${isCount ? 'text-brand-primary' : level.color}`}>
+                    {isCount ? `${item.count} Vol.` : `${(item.score ?? 0).toFixed(1)}%`}
+                  </div>
                 </div>
+                {onItemClick && (
+                  <ChevronRight className="w-3.5 h-3.5 text-brand-muted opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:text-brand-accent transition-all flex-shrink-0" />
+                )}
               </div>
             </div>
           );

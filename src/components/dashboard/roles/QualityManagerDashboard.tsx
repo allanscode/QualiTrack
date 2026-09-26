@@ -4,6 +4,7 @@ import { usePresence } from '../../../providers/PresenceProvider';
 import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import RankingWidget from '../widgets/RankingWidget';
+import SupportDrillDownModal from '../widgets/SupportDrillDownModal';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import DistributionChart from '../widgets/DistributionChart';
@@ -308,6 +309,12 @@ export default function QualityManagerDashboard({
     // safe fallback when outside DashboardProvider (e.g. customization preview)
   }
 
+  const [drillDown, setDrillDown] = useState<{
+    title: string;
+    subtitle?: string;
+    monitorias: any[];
+  } | null>(null);
+
   const { monitorias, users, teams, forms, dissatisfactionFields } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
 
@@ -329,11 +336,21 @@ export default function QualityManagerDashboard({
       : 0;
   }, [isCustomizing, scoredMonitorias]);
 
-  const pendingActions = isCustomizing ? 4 : monitorias.filter((m: any) =>
-    ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
-  ).length;
+  const pendingActionsList = useMemo(() => {
+    if (isCustomizing) return [];
+    return monitorias.filter((m: any) =>
+      ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
+    );
+  }, [isCustomizing, monitorias]);
 
-  const pendingMyActions = isCustomizing ? 1 : monitorias.filter((m: any) => m.status === 'aguardando_gestor_qualidade').length;
+  const pendingActions = isCustomizing ? 4 : pendingActionsList.length;
+
+  const pendingMyActionsList = useMemo(() => {
+    if (isCustomizing) return [];
+    return monitorias.filter((m: any) => m.status === 'aguardando_gestor_qualidade');
+  }, [isCustomizing, monitorias]);
+
+  const pendingMyActions = isCustomizing ? 1 : pendingMyActionsList.length;
 
   const totalMonitorias = isCustomizing ? 85 : monitorias.length;
 
@@ -348,27 +365,31 @@ export default function QualityManagerDashboard({
   const totalContestations = isCustomizing ? 12 : contestedMonitorias.length;
 
   // Conta apenas pelo ÚLTIMO desfecho — evita dupla contagem em múltiplas rodadas
-  const reavAccepted = useMemo(() => {
-    if (isCustomizing) return 1;
+  const reavAcceptedList = useMemo(() => {
+    if (isCustomizing) return [];
     return contestedMonitorias.filter((m: any) => {
       const resolutions = (m.history || []).filter((h: any) =>
         isApprovalAction(h.action) || isRejectionAction(h.action)
       );
       if (resolutions.length === 0) return false;
       return isApprovalAction(resolutions[resolutions.length - 1].action);
-    }).length;
+    });
   }, [isCustomizing, contestedMonitorias]);
 
-  const reavRejected = useMemo(() => {
-    if (isCustomizing) return 11;
+  const reavAccepted = isCustomizing ? 1 : reavAcceptedList.length;
+
+  const reavRejectedList = useMemo(() => {
+    if (isCustomizing) return [];
     return contestedMonitorias.filter((m: any) => {
       const resolutions = (m.history || []).filter((h: any) =>
         isApprovalAction(h.action) || isRejectionAction(h.action)
       );
       if (resolutions.length === 0) return false;
       return isRejectionAction(resolutions[resolutions.length - 1].action);
-    }).length;
+    });
   }, [isCustomizing, contestedMonitorias]);
+
+  const reavRejected = isCustomizing ? 11 : reavRejectedList.length;
 
   const reversalRate = useMemo(() => {
     if (isCustomizing) return 8.33;
@@ -416,13 +437,18 @@ export default function QualityManagerDashboard({
       .filter(d => d.value > 0);
   }, [isCustomizing, config.levels, scoredMonitorias, colorMap]);
 
-  const excellentCount = useMemo(() => {
-    if (isCustomizing) return 35;
+  const excellentMonitorias = useMemo(() => {
+    if (isCustomizing) return [];
     return scoredMonitorias.filter((m: any) => {
       const lvl = getLevelForScore(m.score || 0);
       return lvl?.color.includes('excelente');
-    }).length;
+    });
   }, [isCustomizing, scoredMonitorias, getLevelForScore]);
+
+  const excellentCount = useMemo(() => {
+    if (isCustomizing) return 35;
+    return excellentMonitorias.length;
+  }, [isCustomizing, excellentMonitorias]);
 
   const excellentPercent = useMemo(() => {
     if (isCustomizing) return 64.81;
@@ -476,20 +502,22 @@ export default function QualityManagerDashboard({
 
   const auditorRanking = useMemo(() => {
     if (isCustomizing) return mockAuditorRanking;
-    const map: Record<string, { total: number; count: number }> = {};
+    const map: Record<string, { total: number; count: number; monitorias: any[] }> = {};
     monitorias.forEach((m: any) => {
       const id = m.evaluator_id;
       if (!id) return;
-      if (!map[id]) map[id] = { total: 0, count: 0 };
+      if (!map[id]) map[id] = { total: 0, count: 0, monitorias: [] };
       map[id].total += m.score || 0;
       map[id].count++;
+      map[id].monitorias.push(m);
     });
     return Object.entries(map)
       .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || id,
         score: Math.round((s.total / s.count) * 100) / 100,
-        count: s.count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
@@ -497,19 +525,21 @@ export default function QualityManagerDashboard({
 
   const agentRanking = useMemo(() => {
     if (isCustomizing) return [];
-    const map: Record<string, { total: number; count: number }> = {};
+    const map: Record<string, { total: number; count: number; monitorias: any[] }> = {};
     scoredMonitorias.forEach((m: any) => {
       const id = m.evaluated_id;
-      if (!map[id]) map[id] = { total: 0, count: 0 };
+      if (!map[id]) map[id] = { total: 0, count: 0, monitorias: [] };
       map[id].total += m.score || 0;
       map[id].count++;
+      map[id].monitorias.push(m);
     });
     return Object.entries(map)
       .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || id,
         score: Math.round((s.total / s.count) * 100) / 100,
-        count: s.count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.score - a.score);
   }, [isCustomizing, scoredMonitorias, users]);
@@ -530,7 +560,7 @@ export default function QualityManagerDashboard({
   // --- Rankings de Contestações (Top 5 Agentes - Global)
   const topApprovedAgents = useMemo(() => {
     if (isCustomizing) return mockContestationsApproved;
-    const map: Record<string, number> = {};
+    const map: Record<string, { count: number; monitorias: any[] }> = {};
     monitorias.forEach((m: any) => {
       const isAccepted = m.status === 'contestacao_aceita' ||
                         m.status === 'finalizada_alterada' ||
@@ -543,14 +573,17 @@ export default function QualityManagerDashboard({
                         );
 
       if (isAccepted && m.evaluated_id) {
-        map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
+        if (!map[m.evaluated_id]) map[m.evaluated_id] = { count: 0, monitorias: [] };
+        map[m.evaluated_id].count++;
+        map[m.evaluated_id].monitorias.push(m);
       }
     });
     return Object.entries(map)
-      .map(([id, count]) => ({
+      .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || 'Agente Externo',
-        count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
@@ -558,20 +591,23 @@ export default function QualityManagerDashboard({
 
   const topRejectedAgents = useMemo(() => {
     if (isCustomizing) return mockContestationsRejected;
-    const map: Record<string, number> = {};
+    const map: Record<string, { count: number; monitorias: any[] }> = {};
     monitorias.forEach((m: any) => {
       const isRejected = m.status === 'contestacao_negada' ||
                         m.history?.some((h: any) => h.action.toLowerCase().includes('negada') || h.action.toLowerCase().includes('recusada') || h.action.includes('Improcedente') || h.action.includes('Mantida'));
 
       if (isRejected && m.evaluated_id) {
-        map[m.evaluated_id] = (map[m.evaluated_id] || 0) + 1;
+        if (!map[m.evaluated_id]) map[m.evaluated_id] = { count: 0, monitorias: [] };
+        map[m.evaluated_id].count++;
+        map[m.evaluated_id].monitorias.push(m);
       }
     });
     return Object.entries(map)
-      .map(([id, count]) => ({
+      .map(([id, s]) => ({
         id,
         name: users.find((u: any) => u.id === id)?.name || 'Agente Externo',
-        count
+        count: s.count,
+        monitorias: s.monitorias
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
@@ -845,6 +881,11 @@ export default function QualityManagerDashboard({
             good={pendingMyActions === 0}
             icon={pendingMyActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
             accent={pendingMyActions === 0 ? 'text-functional-success' : 'text-functional-error'}
+            onClick={() => setDrillDown({
+              title: 'Minhas Ações Pendentes',
+              subtitle: 'Monitorias aguardando sua decisão como Gestor de Qualidade',
+              monitorias: pendingMyActionsList,
+            })}
             badge={
               pendingMyActions > 0 ? (
                 <span className="relative flex h-2 w-2 self-center">
@@ -867,6 +908,11 @@ export default function QualityManagerDashboard({
             good={avgScore >= config.targetScore}
             icon={<Target className="w-5 h-5" />}
             accent="text-brand-accent"
+            onClick={() => setDrillDown({
+              title: 'Média Geral',
+              subtitle: 'Monitorias contabilizadas no cálculo da pontuação média',
+              monitorias: scoredMonitorias,
+            })}
             badge={
               isCustomizing ? (
                 <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : diffColorClass}`}>
@@ -890,6 +936,11 @@ export default function QualityManagerDashboard({
             good={excellentPercent >= 50}
             icon={<Award className="w-5 h-5" />}
             accent="text-brand-accent"
+            onClick={() => setDrillDown({
+              title: 'Índice de Excelência',
+              subtitle: 'Monitorias que atingiram pontuação na faixa Excelente',
+              monitorias: excellentMonitorias,
+            })}
             badge={
               <div className="flex items-center gap-1.5">
                 <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-md ${
@@ -921,6 +972,11 @@ export default function QualityManagerDashboard({
           good={true}
           icon={<ClipboardCheck className="w-5 h-5" />}
           accent="text-brand-accent"
+          onClick={() => setDrillDown({
+            title: 'Total de Monitorias',
+            subtitle: 'Todas as monitorias concluídas no período selecionado',
+            monitorias: scoredMonitorias,
+          })}
           isCustomizing={isCustomizing}
           profile="gestor_qualidade"
           activeEditingId={activeEditingId}
@@ -933,6 +989,11 @@ export default function QualityManagerDashboard({
           good={pendingActions === 0}
           icon={pendingActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
           accent={pendingActions === 0 ? 'text-functional-success' : 'text-functional-error'}
+          onClick={() => setDrillDown({
+            title: 'Ações Pendentes no Sistema',
+            subtitle: 'Monitorias pendentes de revisão ou contestação',
+            monitorias: pendingActionsList,
+          })}
           isCustomizing={isCustomizing}
           profile="gestor_qualidade"
           activeEditingId={activeEditingId}
@@ -973,6 +1034,11 @@ export default function QualityManagerDashboard({
           good={true}
           icon={<History className="w-5 h-5" />}
           accent="text-slate-500"
+          onClick={() => setDrillDown({
+            title: 'Total de Reavaliações / Contestações',
+            subtitle: 'Monitorias com histórico de contestação no período',
+            monitorias: contestedMonitorias,
+          })}
           isCustomizing={isCustomizing}
           profile="gestor_qualidade"
           activeEditingId={activeEditingId}
@@ -985,6 +1051,11 @@ export default function QualityManagerDashboard({
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
           accent="text-functional-success"
+          onClick={() => setDrillDown({
+            title: 'Reavaliações Aprovadas (Procedentes)',
+            subtitle: 'Contestações deferidas no período',
+            monitorias: reavAcceptedList,
+          })}
           isCustomizing={isCustomizing}
           profile="gestor_qualidade"
           activeEditingId={activeEditingId}
@@ -997,6 +1068,11 @@ export default function QualityManagerDashboard({
           good={true}
           icon={<XCircle className="w-5 h-5" />}
           accent="text-functional-error"
+          onClick={() => setDrillDown({
+            title: 'Reavaliações Recusadas (Improcedentes)',
+            subtitle: 'Contestações indeferidas no período',
+            monitorias: reavRejectedList,
+          })}
           isCustomizing={isCustomizing}
           profile="gestor_qualidade"
           activeEditingId={activeEditingId}
@@ -1009,6 +1085,11 @@ export default function QualityManagerDashboard({
           good={reversalRate <= config.targetReversalRate}
           icon={<Target className="w-5 h-5" />}
           accent={reversalRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
+          onClick={() => setDrillDown({
+            title: 'Monitorias Contestadas (Taxa de Reversão)',
+            subtitle: 'Base de cálculo da taxa de reversão no período',
+            monitorias: contestedMonitorias,
+          })}
           badge={
             isCustomizing ? (
               <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : revColorClass}`}>
@@ -1384,6 +1465,11 @@ export default function QualityManagerDashboard({
             profile="gestor_qualidade"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Melhores Suporte · ${item.name}`,
+              subtitle: `Monitorias avaliadas do atendente no período selecionado (Média: ${(item.score ?? 0).toFixed(1)}%)`,
+              monitorias: item.monitorias || monitorias.filter((m: any) => m.evaluated_id === item.id),
+            })}
           />
         </div>
         <div className="h-[420px] py-1.5">
@@ -1398,6 +1484,11 @@ export default function QualityManagerDashboard({
             profile="gestor_qualidade"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Maiores Ofensores · ${item.name}`,
+              subtitle: `Monitorias com oportunidades de melhoria ou desvios do atendente no período (Média: ${(item.score ?? 0).toFixed(1)}%)`,
+              monitorias: item.monitorias || monitorias.filter((m: any) => m.evaluated_id === item.id),
+            })}
           />
         </div>
         <div className="h-[420px] py-1.5">
@@ -1410,6 +1501,11 @@ export default function QualityManagerDashboard({
             profile="gestor_qualidade"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Volume de Auditorias · ${item.name}`,
+              subtitle: `Monitorias avaliadas pelo auditor no período selecionado (${item.count} avaliações)`,
+              monitorias: item.monitorias || monitorias.filter((m: any) => m.evaluator_id === item.id),
+            })}
           />
         </div>
         <div className="h-[420px] py-1.5">
@@ -1422,6 +1518,11 @@ export default function QualityManagerDashboard({
             profile="gestor_qualidade"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Reavaliações Aceitas · ${item.name}`,
+              subtitle: `Monitorias com reavaliação deferida/aceita no período (${item.count} procedentes)`,
+              monitorias: item.monitorias || [],
+            })}
           />
         </div>
         <div className="h-[420px] py-1.5">
@@ -1436,6 +1537,11 @@ export default function QualityManagerDashboard({
             profile="gestor_qualidade"
             activeEditingId={activeEditingId}
             setActiveEditingId={setActiveEditingId}
+            onItemClick={(item) => setDrillDown({
+              title: `Reavaliações Recusadas · ${item.name}`,
+              subtitle: `Monitorias com reavaliação indeferida ou mantida no período (${item.count} improcedentes)`,
+              monitorias: item.monitorias || [],
+            })}
           />
         </div>
       </div>
@@ -1460,6 +1566,15 @@ export default function QualityManagerDashboard({
         users={isCustomizing ? mockUsersList : users}
         title="Últimas Auditorias do Sistema"
       />
+
+      {drillDown && (
+        <SupportDrillDownModal
+          title={drillDown.title}
+          subtitle={drillDown.subtitle}
+          monitorias={drillDown.monitorias}
+          onClose={() => setDrillDown(null)}
+        />
+      )}
     </div>
   );
 }
