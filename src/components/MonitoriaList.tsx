@@ -484,8 +484,8 @@ export default function MonitoriaList({
       </Card>
 
       {selectedId && !viewingMonitoria && createPortal(
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/25 dark:bg-black/40 p-3 backdrop-blur-md sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) closeDetails(); }}>
-          <section data-detail-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-detail-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-surface-border bg-surface-card shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/25 dark:bg-black/40 p-0 sm:p-6 backdrop-blur-md" onMouseDown={event => { if (event.target === event.currentTarget) closeDetails(); }}>
+          <section data-detail-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-detail-title" className="flex h-[92vh] sm:h-auto sm:max-h-[calc(100dvh-3rem)] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl border-t sm:border border-surface-border bg-surface-card shadow-2xl">
             {(() => {
               const m = monitorias.find(item => item.id === selectedId);
               if (!m) return <div className="p-6 text-brand-primary">Monitoria não encontrada.</div>;
@@ -504,7 +504,7 @@ export default function MonitoriaList({
                   <Badge variant={cfg.variant} size="xs" className="hidden shrink-0 sm:inline-flex">{cfg.shortLabel}</Badge>
                   <button ref={detailCloseRef} type="button" onClick={closeDetails} aria-label="Fechar detalhes" className="shrink-0 rounded-xl p-2 text-brand-primary hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-brand-accent"><X className="size-5" /></button>
                 </header>
-                <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
+                <div className="min-h-0 overflow-y-auto p-4 sm:p-6 pb-safe">
                   <MonitoriaDetails monitoria={m} user={user} users={staticData.users} onView={item => { closeDetails(); setViewingMonitoria(item); }} onAction={modal => setActionModal(modal)} />
                 </div>
               </>;
@@ -515,9 +515,9 @@ export default function MonitoriaList({
 
       <AnimatePresence>
         {actionModal && createPortal(
-          <div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-black/25 dark:bg-black/40 p-3 backdrop-blur-md sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) setActionModal(null); }}>
-            <m.div data-action-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-action-title" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-3xl sm:max-h-[calc(100dvh-3rem)]">
-              <Card className="w-full shadow-2xl border border-surface-border bg-surface-card">
+          <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center overflow-y-auto bg-black/25 dark:bg-black/40 p-0 sm:p-6 backdrop-blur-md" onMouseDown={event => { if (event.target === event.currentTarget) setActionModal(null); }}>
+            <m.div data-action-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-action-title" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="w-full max-w-md overflow-y-auto rounded-t-3xl sm:rounded-3xl max-h-[92dvh] sm:max-h-[calc(100dvh-3rem)]">
+              <Card className="w-full shadow-2xl border-t sm:border border-surface-border bg-surface-card rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 pb-safe">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-12 h-12 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
                     <AlertTriangle className="w-6 h-6" />

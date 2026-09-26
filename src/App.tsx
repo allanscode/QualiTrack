@@ -7,7 +7,7 @@ import { ProtectedAuthForm } from './components/ui/ProtectedAuthForm';
 import React, { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck, Mail, MailOpen, BookOpen, Sparkles, Brain } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck, Mail, MailOpen, BookOpen, Sparkles, Brain, Menu } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -499,6 +499,11 @@ function MainApp({
   const [isQueueMenuOpen, setIsQueueMenuOpen] = React.useState(activeTab === 'filas');
   const [isQueueHovered, setIsQueueHovered] = React.useState(false);
   const [pendingNegativesCount, setPendingNegativesCount] = React.useState(0);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [activeTab, isFormOpen]);
 
   React.useEffect(() => {
     try {
@@ -988,6 +993,264 @@ function MainApp({
         )}
       </AnimatePresence>
 
+      {/* Mobile Navigation Drawer Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <m.div
+              key="mobile-drawer-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 md:hidden"
+            />
+            <m.aside
+              key="mobile-drawer"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 26, stiffness: 280 }}
+              style={sidebarStyle}
+              className={`${sidebarContrastClass} fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] flex flex-col border-r ${sidebarBorderClass} shadow-2xl md:hidden`}
+            >
+              {/* Drawer Header with Logo & Close button */}
+              <div className="h-16 flex items-center justify-between px-5 border-b border-white/10">
+                <img
+                  src={sidebarIsDark ? '/logo-dark.png' : '/logo-light.png'}
+                  alt="Qualidade WP"
+                  className="h-7 w-auto max-w-[150px] object-contain select-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2 rounded-xl bg-black/10 hover:bg-black/20 text-current transition-colors cursor-pointer"
+                  title="Fechar menu"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Drawer Navigation List */}
+              <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 py-4 space-y-1">
+                <NavItem
+                  isDark={sidebarIsDark}
+                  icon={AnimatedDashboardIcon}
+                  label="Dashboard"
+                  active={activeTab === 'dashboard'}
+                  onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
+                  isOpen={true}
+                />
+                <NavItem
+                  isDark={sidebarIsDark}
+                  icon={AnimatedMonitoriasIcon}
+                  label="Monitorias"
+                  active={activeTab === 'monitorias'}
+                  onClick={() => { setActiveTab('monitorias'); setIsMobileMenuOpen(false); }}
+                  isOpen={true}
+                />
+                {userData?.role !== 'suporte' && (
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => setIsQueueMenuOpen(!isQueueMenuOpen)}
+                      className={`
+                        w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
+                        ${(activeTab === 'filas' && !isQueueMenuOpen)
+                          ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black font-extrabold')
+                          : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5 font-bold')}
+                      `}
+                    >
+                      <div className="text-current">
+                        <AnimatedLayersIcon active={activeTab === 'filas' || isQueueMenuOpen} className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 flex items-center justify-between">
+                        <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
+                          Filas de Triagem
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {pendingNegativesCount > 0 && !isQueueMenuOpen && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-black bg-rose-500 text-white rounded-full">
+                              {pendingNegativesCount}
+                            </span>
+                          )}
+                          <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isQueueMenuOpen ? 'rotate-180' : ''}`} />
+                        </div>
+                      </div>
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {isQueueMenuOpen && (
+                        <m.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2, ease: "easeInOut" }}
+                          className="overflow-hidden pl-1 space-y-1"
+                        >
+                          {canManageQueueAssignments(userData?.role) && (
+                            <QueueSubNavItem
+                              label="Monitores na Triagem"
+                              active={activeTab === 'filas' && activeQueueSubTab === 'monitores'}
+                              onClick={() => { handleQueueSubTabClick('monitores'); setIsMobileMenuOpen(false); }}
+                              isOpen={true}
+                              isDark={sidebarIsDark}
+                              colorType="monitores"
+                            />
+                          )}
+                          <QueueSubNavItem
+                            label="CSAT Negativas"
+                            active={activeTab === 'filas' && activeQueueSubTab === 'negativas'}
+                            onClick={() => { handleQueueSubTabClick('negativas'); setIsMobileMenuOpen(false); }}
+                            isOpen={true}
+                            isDark={sidebarIsDark}
+                            colorType="negativas"
+                            badge={pendingNegativesCount > 0 ? pendingNegativesCount : undefined}
+                          />
+                          <QueueSubNavItem
+                            label="Fila Proativa"
+                            active={activeTab === 'filas' && activeQueueSubTab === 'proativas'}
+                            onClick={() => { handleQueueSubTabClick('proativas'); setIsMobileMenuOpen(false); }}
+                            isOpen={true}
+                            isDark={sidebarIsDark}
+                            colorType="proativas"
+                          />
+                          <QueueSubNavItem
+                            label="CSAT Positivas"
+                            active={activeTab === 'filas' && activeQueueSubTab === 'positivas'}
+                            onClick={() => { handleQueueSubTabClick('positivas'); setIsMobileMenuOpen(false); }}
+                            isOpen={true}
+                            isDark={sidebarIsDark}
+                            colorType="positivas"
+                          />
+                          <QueueSubNavItem
+                            label="Chamados Filhos"
+                            active={activeTab === 'filas' && activeQueueSubTab === 'filhos'}
+                            onClick={() => { handleQueueSubTabClick('filhos'); setIsMobileMenuOpen(false); }}
+                            isOpen={true}
+                            isDark={sidebarIsDark}
+                            colorType="filhos"
+                          />
+                          <QueueSubNavItem
+                            label="Filhos Inválidos"
+                            active={activeTab === 'filas' && activeQueueSubTab === 'filhos_invalidos'}
+                            onClick={() => { handleQueueSubTabClick('filhos_invalidos'); setIsMobileMenuOpen(false); }}
+                            isOpen={true}
+                            isDark={sidebarIsDark}
+                            colorType="filhos_invalidos"
+                          />
+                        </m.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+
+                {/* Configurações (Admin / Gestores) */}
+                {userData?.role === 'admin' ? (
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                      className={`
+                        w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
+                        ${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen)
+                          ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black')
+                          : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5')}
+                      `}
+                    >
+                      <div className="text-current">
+                        <AnimatedSettingsIcon active={(activeTab === 'admin' || activeTab === 'custom_dashboard') || isSettingsOpen} className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 flex items-center justify-between">
+                        <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
+                          Configurações
+                        </span>
+                        <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isSettingsOpen ? 'rotate-180' : ''}`} />
+                      </div>
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {isSettingsOpen && (
+                        <m.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2, ease: "easeInOut" }}
+                          className="overflow-hidden pl-1 space-y-1"
+                        >
+                          <SubNavItem
+                            label="Geral"
+                            active={activeTab === 'admin'}
+                            onClick={() => { setActiveTab('admin'); setIsMobileMenuOpen(false); }}
+                            isOpen={true}
+                            isDark={sidebarIsDark}
+                          />
+                          <SubNavItem
+                            label="Customizar Dashboards"
+                            active={activeTab === 'custom_dashboard'}
+                            onClick={() => { setActiveTab('custom_dashboard'); setIsMobileMenuOpen(false); }}
+                            isOpen={true}
+                            isDark={sidebarIsDark}
+                          />
+                        </m.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ) : ['gestor_qualidade', 'qualidade', 'gestor_suporte'].includes(userData?.role || '') ? (
+                  <NavItem
+                    isDark={sidebarIsDark}
+                    icon={AnimatedSettingsIcon}
+                    label="Configurações"
+                    active={activeTab === 'admin'}
+                    onClick={() => { setActiveTab('admin'); setIsMobileMenuOpen(false); }}
+                    isOpen={true}
+                  />
+                ) : null}
+              </nav>
+
+              {/* Drawer Bottom Actions: User, Theme & Logout */}
+              <div className="p-3 border-t border-white/10 space-y-2">
+                <div className="p-2.5 rounded-xl bg-black/10 flex items-center justify-between">
+                  <div className="min-w-0 pr-2">
+                    <p className="text-xs font-bold truncate">{userData?.name}</p>
+                    <p className="text-[10px] text-brand-muted truncate opacity-80">{userData ? ROLE_LABELS[userData.role as UserRole] : ''}</p>
+                  </div>
+                  <button
+                    onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }}
+                    className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 cursor-pointer"
+                    title="Sair"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+                {/* Theme Selector */}
+                <div className="grid grid-cols-3 gap-1 bg-black/10 p-1 rounded-xl">
+                  {[
+                    { value: 'light', label: 'Claro', icon: Sun },
+                    { value: 'dark', label: 'Escuro', icon: Moon },
+                    { value: 'system', label: 'Auto', icon: Monitor }
+                  ].map(opt => {
+                    const Icon = opt.icon;
+                    const isActive = theme === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleThemeChange(opt.value as Theme)}
+                        className={`flex items-center justify-center gap-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                          isActive ? 'bg-white/20 text-current shadow-xs' : 'text-current/60 hover:text-current'
+                        }`}
+                      >
+                        <Icon className="w-3 h-3" />
+                        <span>{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </m.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Desktop Sidebar */}
       <m.aside
         initial={false}
         animate={{ width: isSidebarOpen ? 260 : 80 }}
@@ -1001,7 +1264,7 @@ function MainApp({
           }
           toggleSidebar();
         }}
-        className={`${sidebarContrastClass} flex flex-col relative z-20 transition-all transition-colors duration-300 border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
+        className={`${sidebarContrastClass} hidden md:flex flex-col relative z-20 transition-all transition-colors duration-300 border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
       >
         <div
           onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
@@ -1241,23 +1504,34 @@ function MainApp({
       </m.aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-surface-bg">
-        <header className="px-8 h-20 flex items-center gap-4 border-b border-surface-border/60 bg-surface-bg/85 backdrop-blur-md sticky top-0 z-20 transition-colors">
+        <header className="px-3.5 sm:px-6 md:px-8 h-16 md:h-20 flex items-center gap-2.5 sm:gap-4 border-b border-surface-border/60 bg-surface-bg/85 backdrop-blur-md sticky top-0 z-20 transition-colors">
           <button
-            onClick={() => toggleSidebar()}
-            className="sidebar-toggle-btn p-2 hover:bg-surface-subtle border border-surface-border/40 rounded-xl transition-all text-brand-muted hover:text-brand-primary shadow-sm flex-shrink-0 flex items-center justify-center w-10 h-10 cursor-pointer"
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                setIsMobileMenuOpen(prev => !prev);
+              } else {
+                toggleSidebar();
+              }
+            }}
+            className="sidebar-toggle-btn p-2 hover:bg-surface-subtle border border-surface-border/40 rounded-xl transition-all text-brand-muted hover:text-brand-primary shadow-xs flex-shrink-0 flex items-center justify-center w-10 h-10 cursor-pointer"
             title={isSidebarOpen ? "Recolher Menu" : "Expandir Menu"}
           >
-            <Layout className="w-4 h-4 layout-icon" />
-            {isSidebarOpen ? (
-              <ChevronLeft className="w-4 h-4 arrow-icon" />
-            ) : (
-              <ChevronRight className="w-4 h-4 arrow-icon" />
-            )}
+            <div className="md:hidden">
+              <Menu className="w-5 h-5" />
+            </div>
+            <div className="hidden md:flex items-center">
+              <Layout className="w-4 h-4 layout-icon" />
+              {isSidebarOpen ? (
+                <ChevronLeft className="w-4 h-4 arrow-icon" />
+              ) : (
+                <ChevronRight className="w-4 h-4 arrow-icon" />
+              )}
+            </div>
           </button>
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-col">
-              <h2 className="text-xl font-bold text-brand-primary tracking-tight leading-snug">
+              <h2 className="text-base sm:text-xl font-bold text-brand-primary tracking-tight leading-snug truncate">
                 {activeTab === 'dashboard'
                   ? `Olá, ${userData?.name.split(' ')[0]}! 👋`
                   : activeTab === 'monitorias'
@@ -1266,7 +1540,7 @@ function MainApp({
                   ? (QUEUE_TITLES[activeQueueSubTab] || 'Filas de Triagem')
                   : 'Configurações do Sistema'}
               </h2>
-              <p className="text-xs font-semibold text-brand-muted tracking-wide mt-1 leading-relaxed">
+              <p className="hidden sm:block text-xs font-semibold text-brand-muted tracking-wide mt-1 leading-relaxed truncate">
                 {activeTab === 'dashboard'
                   ? (userData?.role === 'suporte'
                     ? 'Acompanhe seu desempenho e evolução individual'
@@ -1282,11 +1556,11 @@ function MainApp({
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             {(userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') && (
               <button
                 onClick={() => setIsFormOpen(true)}
-                className="action-primary h-10 px-5 rounded-xl text-sm font-semibold shadow-premium transition-all flex items-center gap-2"
+                className="hidden sm:flex action-primary h-10 px-5 rounded-xl text-sm font-semibold shadow-premium transition-all items-center gap-2"
               >
                 <Plus className="w-4 h-4" /> Nova Monitoria
               </button>
@@ -1339,7 +1613,7 @@ function MainApp({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-surface-card border border-surface-border rounded-2xl shadow-premium z-50 text-brand-primary notifications-popover overflow-hidden"
+                    className="absolute -right-12 sm:right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-surface-card border border-surface-border rounded-2xl shadow-premium z-50 text-brand-primary notifications-popover overflow-hidden"
                   >
                     {/* Header do Menu */}
                     <div className="p-3.5 border-b border-surface-border bg-surface-subtle/40 flex items-center justify-between">
@@ -1584,7 +1858,7 @@ function MainApp({
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto px-8 pb-8 pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
+        <div className="flex-1 overflow-auto px-3.5 sm:px-6 md:px-8 pb-24 md:pb-8 pt-4 md:pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
           <React.Suspense fallback={<div className="flex justify-center items-center h-full"><div className="w-8 h-8 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div></div>}>
             {activeTab === 'dashboard' && (
               <div className="animate-fade-in">
@@ -1632,6 +1906,94 @@ function MainApp({
             )}
           </React.Suspense>
         </div>
+
+        {/* Mobile Bottom Navigation Bar */}
+        <nav
+          aria-label="Navegação Principal Mobile"
+          className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-surface-card/95 backdrop-blur-lg border-t border-surface-border/80 px-2 pt-1 pb-safe flex items-center justify-around shadow-premium select-none"
+        >
+          {/* Dashboard */}
+          <button
+            type="button"
+            onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
+            className={`flex flex-col items-center justify-center min-w-[56px] py-1 transition-all cursor-pointer ${
+              activeTab === 'dashboard' ? 'text-brand-accent' : 'text-brand-muted hover:text-brand-primary'
+            }`}
+          >
+            <AnimatedDashboardIcon active={activeTab === 'dashboard'} className="w-5 h-5" />
+            <span className={`text-[10px] tracking-tight mt-1 ${activeTab === 'dashboard' ? 'font-black' : 'font-medium'}`}>
+              Dashboard
+            </span>
+          </button>
+
+          {/* Monitorias */}
+          <button
+            type="button"
+            onClick={() => { setActiveTab('monitorias'); setIsMobileMenuOpen(false); }}
+            className={`flex flex-col items-center justify-center min-w-[56px] py-1 transition-all cursor-pointer ${
+              activeTab === 'monitorias' ? 'text-brand-accent' : 'text-brand-muted hover:text-brand-primary'
+            }`}
+          >
+            <AnimatedMonitoriasIcon active={activeTab === 'monitorias'} className="w-5 h-5" />
+            <span className={`text-[10px] tracking-tight mt-1 ${activeTab === 'monitorias' ? 'font-black' : 'font-medium'}`}>
+              Monitorias
+            </span>
+          </button>
+
+          {/* Botão Central de Nova Monitoria (para perfis autorizados) */}
+          {(userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') && (
+            <button
+              type="button"
+              onClick={() => setIsFormOpen(true)}
+              className="relative -top-3 w-12 h-12 rounded-2xl bg-brand-accent text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform cursor-pointer"
+              title="Nova Monitoria"
+              aria-label="Nova Monitoria"
+            >
+              <Plus className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Filas de Triagem (se não for suporte) */}
+          {userData?.role !== 'suporte' && (
+            <button
+              type="button"
+              onClick={() => { setActiveTab('filas'); setIsMobileMenuOpen(false); }}
+              className={`relative flex flex-col items-center justify-center min-w-[56px] py-1 transition-all cursor-pointer ${
+                activeTab === 'filas' ? 'text-brand-accent' : 'text-brand-muted hover:text-brand-primary'
+              }`}
+            >
+              <AnimatedLayersIcon active={activeTab === 'filas'} className="w-5 h-5" />
+              {pendingNegativesCount > 0 && (
+                <span className="absolute top-0 right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">
+                  {pendingNegativesCount}
+                </span>
+              )}
+              <span className={`text-[10px] tracking-tight mt-1 ${activeTab === 'filas' ? 'font-black' : 'font-medium'}`}>
+                Filas
+              </span>
+            </button>
+          )}
+
+          {/* Menu / Mais */}
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen(true)}
+            className={`relative flex flex-col items-center justify-center min-w-[56px] py-1 transition-all cursor-pointer ${
+              isMobileMenuOpen ? 'text-brand-accent' : 'text-brand-muted hover:text-brand-primary'
+            }`}
+            title="Abrir menu"
+          >
+            <div className="w-5 h-5 flex items-center justify-center">
+              <Layout className="w-5 h-5" />
+            </div>
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute top-0 right-2 w-2 h-2 rounded-full bg-red-600 ring-2 ring-surface-card" />
+            )}
+            <span className="text-[10px] tracking-tight mt-1 font-medium">
+              Menu
+            </span>
+          </button>
+        </nav>
       </main>
     </div>
   );

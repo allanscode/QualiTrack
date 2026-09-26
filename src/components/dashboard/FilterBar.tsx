@@ -98,15 +98,15 @@ export default function FilterBar() {
         </button>
       </div>
 
-      <div className="bg-surface-card rounded-3xl border border-surface-border shadow-premium p-6">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="bg-surface-card rounded-2xl sm:rounded-3xl border border-surface-border shadow-premium p-3.5 sm:p-6">
+        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-2">
 
           {/* Quick Period Presets (Dia | Mês | Ano) (WQ-21) */}
-          <div className="inline-flex items-center rounded-2xl bg-surface-subtle p-0.5 border border-surface-border shrink-0">
+          <div className="inline-flex items-center justify-center sm:justify-start rounded-2xl bg-surface-subtle p-0.5 border border-surface-border shrink-0">
             <button
               type="button"
               onClick={() => handleApplyPreset('dia')}
-              className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-3 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer text-center ${
                 activePreset === 'dia'
                   ? 'bg-brand-accent text-white shadow-sm'
                   : 'text-brand-muted hover:text-brand-primary'
@@ -117,7 +117,7 @@ export default function FilterBar() {
             <button
               type="button"
               onClick={() => handleApplyPreset('mes')}
-              className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-3 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer text-center ${
                 activePreset === 'mes'
                   ? 'bg-brand-accent text-white shadow-sm'
                   : 'text-brand-muted hover:text-brand-primary'
@@ -128,7 +128,7 @@ export default function FilterBar() {
             <button
               type="button"
               onClick={() => handleApplyPreset('ano')}
-              className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-3 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer text-center ${
                 activePreset === 'ano'
                   ? 'bg-brand-accent text-white shadow-sm'
                   : 'text-brand-muted hover:text-brand-primary'
@@ -139,7 +139,7 @@ export default function FilterBar() {
           </div>
 
           {/* Date Range Group (Always First) */}
-          <div className="flex items-center gap-x-2 flex-[1.8] min-w-[260px]">
+          <div className="flex items-center gap-x-2 flex-1 sm:flex-[1.8] min-w-0 sm:min-w-[260px]">
             <CustomDatepicker
               value={filters.startDate}
               onChange={(val: string) => setFilters({ ...filters, startDate: val })}

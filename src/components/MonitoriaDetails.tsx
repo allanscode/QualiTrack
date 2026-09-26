@@ -119,7 +119,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                   </div>
                 )}
 
-                <div className="flex flex-wrap justify-center gap-2 items-center border-t border-surface-border pt-4">
+                <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-2 items-stretch sm:items-center border-t border-surface-border pt-4">
                   <Button
                     variant="outline"
                     size="sm"

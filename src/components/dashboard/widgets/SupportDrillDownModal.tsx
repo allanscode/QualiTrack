@@ -59,22 +59,22 @@ export default function SupportDrillDownModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 dark:bg-black/40 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/25 dark:bg-black/40 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="max-w-4xl w-full max-h-[85vh] flex flex-col"
+        className="max-w-4xl w-full h-[92vh] sm:h-auto sm:max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         <Card
           padding="none"
-          className="w-full flex-1 flex flex-col bg-surface-card border border-surface-border shadow-2xl overflow-hidden"
+          className="w-full flex-1 flex flex-col bg-surface-card border-t sm:border border-surface-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden"
         >
         {/* Header */}
-        <div className="p-6 border-b border-surface-border flex items-center justify-between gap-4">
+        <div className="p-4 sm:p-6 border-b border-surface-border flex items-center justify-between gap-3 sm:gap-4">
           <div>
-            <div className="flex items-center gap-3">
-              <h3 className="text-lg font-black text-brand-primary uppercase tracking-tight">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <h3 className="text-base sm:text-lg font-black text-brand-primary uppercase tracking-tight">
                 {title}
               </h3>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-brand-accent/10 text-brand-accent border border-brand-accent/20">
@@ -127,7 +127,7 @@ export default function SupportDrillDownModal({
               return (
                 <div
                   key={m.id}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-surface-bg/60 hover:bg-surface-subtle/80 border border-surface-border/50 transition-all gap-4"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl bg-surface-bg/60 hover:bg-surface-subtle/80 border border-surface-border/50 transition-all gap-3 sm:gap-4"
                 >
                   {/* Identificação */}
                   <div className="min-w-0 flex-1">
@@ -165,7 +165,7 @@ export default function SupportDrillDownModal({
                   </div>
 
                   {/* Score & Ação */}
-                  <div className="flex items-center gap-4 flex-shrink-0">
+                  <div className="flex items-center justify-between sm:justify-end gap-4 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-surface-border/40">
                     <div className="text-right">
                       <span
                         className={`text-base font-black ${

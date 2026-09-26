@@ -603,3 +603,15 @@ html.dark body {
   color: #F8FAFC;
 }
 
+/* ── Mobile Safe Area & Touch UX Utilities ── */
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
+}
+.pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top, 0.5rem));
+}
+.touch-callout-none {
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+

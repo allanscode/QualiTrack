@@ -559,45 +559,45 @@ export default function MonitoriaForm({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/25 dark:bg-black/40 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden animate-fade-in">
+    <div className="fixed inset-0 z-[9999] bg-black/25 dark:bg-black/40 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden animate-fade-in">
       <m.div
         initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 10 }}
         animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
-        className="bg-surface-bg rounded-2xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col h-[94vh] max-h-[94vh] overflow-hidden border border-surface-border relative"
+        className="bg-surface-bg rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col h-[100dvh] sm:h-[94vh] max-h-[100dvh] sm:max-h-[94vh] overflow-hidden border-t sm:border border-surface-border relative"
       >
         {/* Top Header */}
-        <div className="px-5 py-3 border-b border-surface-border flex items-center justify-between bg-surface-card flex-shrink-0 gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-brand-subtle flex items-center justify-center text-brand-primary flex-shrink-0">
-              <CheckCircle2 className="w-5 h-5" />
+        <div className="px-3.5 py-2.5 sm:px-5 sm:py-3 border-b border-surface-border flex items-center justify-between bg-surface-card flex-shrink-0 gap-2 sm:gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-brand-subtle flex items-center justify-center text-brand-primary flex-shrink-0">
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-black text-brand-primary tracking-tight uppercase truncate">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-lg font-black text-brand-primary tracking-tight uppercase truncate">
                   {isViewOnly ? 'Visualizar' : isAdminEdit ? 'Editar (Admin)' : isReevaluating ? 'Reavaliar' : 'Nova'} Monitoria
                 </h2>
                 {isViewOnly && (
-                  <Badge variant="warning" className="flex items-center gap-1 flex-shrink-0">
-                    <Lock className="w-3 h-3" /> Somente leitura
+                  <Badge variant="warning" size="xs" className="flex items-center gap-1 flex-shrink-0 text-[9px] px-1.5 py-0.5">
+                    <Lock className="w-2.5 h-2.5" /> Somente leitura
                   </Badge>
                 )}
               </div>
               {isViewOnly && (
-                <p className="text-[11px] text-brand-muted mt-0.5 max-w-md leading-relaxed">
-                  Monitorias salvas não podem ser editadas. Para alterar, use <span className="text-brand-primary font-bold">Reavaliar</span> — disponível quando o suporte contesta.
+                <p className="hidden sm:block text-[11px] text-brand-muted mt-0.5 max-w-md leading-relaxed truncate">
+                  Monitorias salvas não podem ser editadas. Para alterar, use <span className="text-brand-primary font-bold">Reavaliar</span>.
                 </p>
               )}
-              {initialData?.display_id && <Badge variant="info" className="mt-0.5">Mon: {initialData.display_id}</Badge>}
+              {initialData?.display_id && <Badge variant="info" size="xs" className="mt-0.5 text-[9px]">Mon: {initialData.display_id}</Badge>}
               {headerSubtitle && (
-                <p className="text-xs font-bold text-brand-primary mt-0.5 max-w-md truncate" title={headerSubtitle}>
+                <p className="text-[11px] sm:text-xs font-bold text-brand-primary mt-0.5 max-w-md truncate" title={headerSubtitle}>
                   {headerSubtitle}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-3 flex-shrink-0">
-            {/* Docked Score Badge in Top Header (appears on scroll in step 2 - exact area marked by red rectangle in user screenshot) */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {/* Docked Score Badge in Top Header (appears on scroll in step 2) */}
             <AnimatePresence>
               {scoreCompact && step === 2 && selectedForm && (
                 <m.div
@@ -606,26 +606,26 @@ export default function MonitoriaForm({
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.72, y: -4 }}
                   transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                  className="flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 rounded-xl border border-surface-border bg-surface-subtle shadow-premium-sm"
+                  className="flex items-center gap-1.5 sm:gap-2.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl border border-surface-border bg-surface-subtle shadow-premium-sm"
                 >
-                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${scoreBgClass}`}>
-                    <Target className={`w-3.5 h-3.5 ${scoreTextClass}`} />
+                  <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center ${scoreBgClass}`}>
+                    <Target className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${scoreTextClass}`} />
                   </div>
-                  <div className="flex items-baseline gap-1.5">
+                  <div className="flex items-baseline gap-1 sm:gap-1.5">
                     <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted hidden md:inline">Score:</span>
-                    <span className={`text-sm sm:text-base font-black tabular-nums ${scoreTextClass}`}>
+                    <span className={`text-xs sm:text-base font-black tabular-nums ${scoreTextClass}`}>
                       {score.toFixed(2)}%
                     </span>
-                    <span className="text-[9px] sm:text-[10px] font-black uppercase text-brand-muted tracking-wider">
+                    <span className="hidden sm:inline text-[9px] sm:text-[10px] font-black uppercase text-brand-muted tracking-wider">
                       - {scoreLevel.label}
                     </span>
                   </div>
                   <Badge
                     variant={isScoreTarget ? 'success' : 'error'}
-                    size="sm"
-                    className="font-black uppercase tracking-wider text-[9px] px-2 py-0.5 ml-0.5 sm:ml-1"
+                    size="xs"
+                    className="font-black uppercase tracking-wider text-[8px] sm:text-[9px] px-1.5 sm:px-2 py-0.5"
                   >
-                    {isScoreTarget ? 'Meta Atingida' : 'Abaixo da Meta'}
+                    {isScoreTarget ? 'Meta' : 'Abaixo'}
                   </Badge>
                 </m.div>
               )}
@@ -638,9 +638,9 @@ export default function MonitoriaForm({
         </div>
 
         {/* Form Content */}
-        <div ref={contentRef} className="flex-1 overflow-y-auto px-5 py-4 md:px-8 md:py-6 space-y-6 no-scrollbar min-h-0">
+        <div ref={contentRef} className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6 space-y-6 no-scrollbar min-h-0">
           {/* Stepper Progress */}
-          <div className="flex items-center justify-center gap-4 md:gap-8 pb-3 border-b border-surface-border/50">
+          <div className="flex items-center justify-center gap-2 sm:gap-4 md:gap-8 pb-3 border-b border-surface-border/50">
             {[
               { n: 1, label: 'Identificação' },
               { n: 2, label: 'Avaliação' },
@@ -661,12 +661,12 @@ export default function MonitoriaForm({
                       setStep(s.n);
                     }
                   }}
-                  className={`flex flex-col items-center gap-1.5 group transition-all ${
+                  className={`flex flex-col items-center gap-1 group transition-all ${
                     canClick ? 'cursor-pointer hover:opacity-90' : 'cursor-default'
                   }`}
                   title={canClick ? `Ir para etapa ${s.n} (${s.label})` : s.label}
                 >
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black font-mono transition-all ${
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-xs font-black font-mono transition-all ${
                     isCurrent
                       ? 'bg-brand-accent text-white shadow-xs ring-2 ring-brand-accent/30'
                       : isPast
@@ -675,7 +675,7 @@ export default function MonitoriaForm({
                   }`}>
                     {s.n}
                   </div>
-                  <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
+                  <span className={`text-[8.5px] sm:text-[9px] font-black uppercase tracking-[0.1em] sm:tracking-[0.15em] ${step >= s.n ? 'text-brand-primary' : 'text-brand-muted hidden md:block'}`}>{s.label}</span>
                 </button>
               );
             })}
@@ -1743,7 +1743,7 @@ export default function MonitoriaForm({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-3.5 bg-surface-card border-t border-surface-border flex items-center justify-between flex-shrink-0 z-10">
+        <div className="px-4 py-3 sm:px-6 sm:py-3.5 pb-safe bg-surface-card border-t border-surface-border flex items-center justify-between flex-shrink-0 z-10">
           <Button variant="ghost" size="sm" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5" />}>
             {isViewOnly ? 'Anterior' : 'Voltar'}
           </Button>
