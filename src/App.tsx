@@ -870,20 +870,6 @@ function MainApp({
     setShowNotifications(false);
   };
 
-  // Encolhe a barra lateral ao abrir "Nova Monitoria" ou qualquer card/modal
-  // de inspeção/confronto ou configurações, dando foco e todo o espaço para a tela,
-  // e restaura o estado anterior ao fechar.
-  const sidebarWasOpenRef = React.useRef(isSidebarOpen);
-  React.useEffect(() => {
-    if (isFormOpen || isQueueModalOpen) {
-      sidebarWasOpenRef.current = isSidebarOpen;
-      setIsSidebarOpen(false);
-    } else {
-      setIsSidebarOpen(sidebarWasOpenRef.current);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFormOpen, isQueueModalOpen]);
-
   React.useEffect(() => {
     const handleFocus = (e: any) => {
       const detail = e?.detail;
@@ -909,21 +895,6 @@ function MainApp({
     window.addEventListener('qualitrack:focus_monitoria', handleFocus);
     return () => window.removeEventListener('qualitrack:focus_monitoria', handleFocus);
   }, [activeTab, monitorias]);
-
-  // Listener universal para qualquer modal aberto via qualitrack:modal
-  React.useEffect(() => {
-    const handleGlobalModal = (e: any) => {
-      const open = !!e.detail?.open;
-      if (open) {
-        sidebarWasOpenRef.current = isSidebarOpen;
-        setIsSidebarOpen(false);
-      } else {
-        setIsSidebarOpen(sidebarWasOpenRef.current);
-      }
-    };
-    window.addEventListener('qualitrack:modal', handleGlobalModal);
-    return () => window.removeEventListener('qualitrack:modal', handleGlobalModal);
-  }, [isSidebarOpen]);
 
   const toggleSidebar = () => {
     const willBeOpen = !isSidebarOpen;
@@ -1322,7 +1293,7 @@ function MainApp({
           }
           toggleSidebar();
         }}
-        className={`${sidebarContrastClass} hidden md:flex flex-col relative z-20 transition-all transition-colors duration-300 border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
+        className={`${sidebarContrastClass} hidden md:flex flex-col relative z-20 border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
       >
         <div
           onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}

@@ -29,18 +29,17 @@ export default function ActionDeadlineClock({ actionDeadlineAt, status }: Action
         const deadline = new Date(actionDeadlineAt);
 
         const diffMs = deadline.getTime() - now.getTime();
+        const businessSeconds = getRemainingBusinessSeconds(now, deadline, qualityConfig.businessHours);
 
-        if (diffMs <= 0) {
+        if (diffMs <= 0 || businessSeconds <= 0) {
           setIsLate(true);
-          setIsWarning(true);
+          setIsWarning(false);
           setIsPaused(false);
-          setTimeLeft('00:00:00');
+          setTimeLeft('');
         } else {
           setIsLate(false);
           const inBusinessHours = isWithinBusinessHours(now, qualityConfig.businessHours);
           setIsPaused(!inBusinessHours);
-
-          const businessSeconds = getRemainingBusinessSeconds(now, deadline, qualityConfig.businessHours);
           setIsWarning(businessSeconds < 24 * 3600);
 
           const hours = Math.floor(businessSeconds / 3600);
@@ -62,25 +61,27 @@ export default function ActionDeadlineClock({ actionDeadlineAt, status }: Action
   if (isFinalStatus || !actionDeadlineAt) return null;
 
   const tooltipText = actionDeadlineAt
-    ? `Prazo Limite: ${new Date(actionDeadlineAt).toLocaleString('pt-BR')}${isPaused ? ` (Pausado fora do expediente: ${qualityConfig.businessHours?.start || '08:00'} às ${qualityConfig.businessHours?.end || '17:00'})` : ''}`
+    ? `Prazo Limite: ${new Date(actionDeadlineAt).toLocaleString('pt-BR')}${isLate ? ' (Expirado)' : isPaused ? ` (Pausado fora do expediente: ${qualityConfig.businessHours?.start || '08:00'} às ${qualityConfig.businessHours?.end || '17:00'})` : ''}`
     : undefined;
 
   return (
     <div
       title={tooltipText}
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 font-mono text-[10px] font-black tabular-nums transition-all shadow-sm ${
+      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border font-mono text-[9px] font-bold tabular-nums transition-all shadow-xs leading-none ${
       isLate
-        ? 'bg-functional-error/10 border-functional-error/20 text-functional-error animate-pulse'
+        ? 'bg-functional-error/10 border-functional-error/30 text-functional-error'
         : isWarning
-        ? 'bg-functional-warning/10 border-functional-warning/20 text-functional-warning'
-        : 'bg-functional-success/10 border-functional-success/20 text-functional-success'
+        ? 'bg-functional-warning/10 border-functional-warning/30 text-functional-warning'
+        : 'bg-functional-success/10 border-functional-success/30 text-functional-success'
       }`}>
-      {isPaused ? (
-        <PauseCircle className="w-3.5 h-3.5 opacity-80 text-brand-muted shrink-0" />
+      {isLate ? (
+        <Clock className="w-3 h-3 text-functional-error shrink-0" />
+      ) : isPaused ? (
+        <PauseCircle className="w-3 h-3 opacity-80 text-brand-muted shrink-0" />
       ) : (
-        <Clock className={`w-3.5 h-3.5 shrink-0 ${isLate ? 'animate-pulse text-functional-error' : isWarning ? 'text-functional-warning' : 'opacity-70 text-functional-success'}`} />
+        <Clock className={`w-3 h-3 shrink-0 ${isWarning ? 'text-functional-warning' : 'opacity-70 text-functional-success'}`} />
       )}
-      <span>Prazo: {timeLeft || '--:--:--'}{isPaused ? ' (Pausado)' : ''}</span>
+      <span>{isLate ? 'Prazo: Expirado' : `Prazo: ${timeLeft || '--:--:--'}${isPaused ? ' (Pausado)' : ''}`}</span>
     </div>
   );
 }

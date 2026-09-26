@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { List } from 'react-window';
 import { Monitoria, Team, User } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
-import { useAuth } from '../providers/AuthProvider';
 import { getStatusConfig, VARIANT_TEXT_CLASS, VARIANT_ICON_CONTAINER } from '../lib/statusHelper';
 import {
   Search,
@@ -96,21 +95,6 @@ export default function MonitoriaList({
     }, 150);
     return () => clearTimeout(timer);
   }, [searchInput, filters]);
-
-  // Encolhe a barra lateral ao abrir uma monitoria, para dar mais espaço ao
-  // formulário, e restaura o estado anterior ao fechar — sem sobrescrever a
-  // preferência do usuário se ele já tivesse recolhido manualmente.
-  const { isSidebarOpen, setIsSidebarOpen } = useAuth();
-  const sidebarWasOpenRef = useRef(isSidebarOpen);
-  useEffect(() => {
-    if (viewingMonitoria) {
-      sidebarWasOpenRef.current = isSidebarOpen;
-      setIsSidebarOpen(false);
-    } else {
-      setIsSidebarOpen(sidebarWasOpenRef.current);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewingMonitoria]);
 
   const focusOnMonitoria = useCallback((targetId: string) => {
     filters.setTab('todas');
@@ -478,13 +462,13 @@ export default function MonitoriaList({
 
       {/* Block 2: The List */}
       <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card overflow-hidden">
-        <div className="divide-y divide-surface-subtle">
+        <div>
           {filtered.length > 0 ? (
             filtered.length > 50 ? (
               <List<VirtualRowProps>
                 rowComponent={VirtualMonitoriaRow}
                 rowCount={filtered.length}
-                rowHeight={72}
+                rowHeight={48}
                 rowProps={{ monitorias: filtered, teams: staticData.teams, getName, getLevelForScore, onOpen: openDetails }}
                 overscanCount={5}
                 style={{ height: 600, width: '100%' }}
