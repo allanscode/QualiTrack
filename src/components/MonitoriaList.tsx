@@ -458,7 +458,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
       </Card>
 
       {selectedId && !viewingMonitoria && createPortal(
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-brand-primary/60 p-3 backdrop-blur-md sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) closeDetails(); }}>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/25 dark:bg-black/40 p-3 backdrop-blur-md sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) closeDetails(); }}>
           <section data-detail-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-detail-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-surface-border bg-surface-card shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
             {(() => {
               const m = monitorias.find(item => item.id === selectedId);
@@ -489,7 +489,7 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
 
       <AnimatePresence>
         {actionModal && createPortal(
-          <div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-brand-primary/60 p-3 backdrop-blur-md sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) setActionModal(null); }}>
+          <div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-black/25 dark:bg-black/40 p-3 backdrop-blur-md sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) setActionModal(null); }}>
             <m.div data-action-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-action-title" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-3xl sm:max-h-[calc(100dvh-3rem)]">
               <Card className="w-full shadow-2xl border border-surface-border bg-surface-card">
                 <div className="flex items-center gap-4 mb-6">
