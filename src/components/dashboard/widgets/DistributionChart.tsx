@@ -36,10 +36,11 @@ interface DistributionChartProps {
 
 const QUALITY_DISTRIBUTION_TITLE = 'Insatisfação — Visão da Qualidade';
 
-const renderArcLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }: any) => {
-  if (value === 0 || percent < 0.05) return null;
+const renderArcLabel = ({ cx, cy, midAngle, outerRadius, percent, value, fill }: any) => {
+  if (value === 0 || percent < 0.03) return null;
   const RADIAN = Math.PI / 180;
-  const radius = (innerRadius + outerRadius) / 2;
+  // Posiciona do lado de fora da sua respectiva cor no gráfico
+  const radius = outerRadius + 14;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
@@ -47,10 +48,10 @@ const renderArcLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, v
     <text
       x={x}
       y={y}
-      fill="#ffffff"
-      textAnchor="middle"
+      fill={fill || 'currentColor'}
+      textAnchor={Math.abs(Math.cos(-midAngle * RADIAN)) < 0.3 ? 'middle' : x > cx ? 'start' : 'end'}
       dominantBaseline="central"
-      className="text-[10px] font-black pointer-events-none drop-shadow select-none"
+      className="text-[10px] font-black pointer-events-none drop-shadow-xs select-none"
     >
       {`${(percent * 100).toFixed(0)}%`}
     </text>
@@ -144,8 +145,8 @@ export default function DistributionChart({
           data={data}
           cx="50%"
           cy="50%"
-          innerRadius={50}
-          outerRadius={70}
+          innerRadius={44}
+          outerRadius={60}
           paddingAngle={3}
           dataKey="value"
           label={renderArcLabel}
@@ -232,21 +233,21 @@ export default function DistributionChart({
         )}
         {data.length > 0 ? (
           <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-4 min-h-[160px]">
-            <div className="w-full sm:w-[55%] h-[160px] relative" style={{ minWidth: 0 }}>
+            <div className="w-full sm:w-[50%] h-[160px] relative" style={{ minWidth: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 {renderChart()}
               </ResponsiveContainer>
             </div>
-            <div className="w-full sm:w-[45%] flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40 max-h-[160px] overflow-y-auto no-scrollbar">
+            <div className="w-full sm:w-[50%] flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40 max-h-[160px] overflow-y-auto no-scrollbar">
               {data.map((entry, index) => {
                 const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
                 return (
                   <div key={index} className="flex items-center justify-between gap-2 text-[10px] text-brand-muted font-black uppercase tracking-tight print:text-slate-800">
-                    <div className="flex items-center gap-1.5 truncate">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                      <span className="truncate">{entry.name}</span>
+                      <span className="truncate" title={entry.name}>{entry.name}</span>
                     </div>
-                    <span className="text-brand-primary whitespace-nowrap font-bold">
+                    <span className="text-brand-primary whitespace-nowrap font-bold shrink-0">
                       {entry.value} ({percent}%)
                     </span>
                   </div>

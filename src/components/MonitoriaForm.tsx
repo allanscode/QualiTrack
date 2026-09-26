@@ -1744,8 +1744,20 @@ export default function MonitoriaForm({
 
         {/* Footer Actions */}
         <div className="px-4 py-3 sm:px-6 sm:py-3.5 pb-safe bg-surface-card border-t border-surface-border flex items-center justify-between flex-shrink-0 z-10">
-          <Button variant="ghost" size="sm" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1} icon={<ChevronLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5" />}>
-            {isViewOnly ? 'Anterior' : 'Voltar'}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (step > 1) {
+                setStep(s => s - 1);
+              } else {
+                onCancel();
+              }
+            }}
+            disabled={isPending}
+            icon={<ChevronLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5" />}
+          >
+            {step === 1 ? 'Voltar' : isViewOnly ? 'Anterior' : 'Voltar'}
           </Button>
 
           <div className="flex gap-3">

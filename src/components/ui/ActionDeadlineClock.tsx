@@ -75,16 +75,11 @@ export default function ActionDeadlineClock({ actionDeadlineAt, status }: Action
         ? 'bg-functional-warning/10 border-functional-warning/20 text-functional-warning'
         : 'bg-functional-success/10 border-functional-success/20 text-functional-success'
       }`}>
-      <div className={`w-1.5 h-1.5 rounded-full ${
-      isLate
-        ? 'bg-functional-error animate-ping'
-        : isWarning
-        ? 'bg-functional-warning'
-        : isPaused
-        ? 'bg-brand-muted opacity-60'
-        : 'bg-functional-success'
-      }`} />
-      {isPaused ? <PauseCircle className="w-3.5 h-3.5 opacity-80 text-brand-muted" /> : <Clock className="w-3.5 h-3.5 opacity-70" />}
+      {isPaused ? (
+        <PauseCircle className="w-3.5 h-3.5 opacity-80 text-brand-muted shrink-0" />
+      ) : (
+        <Clock className={`w-3.5 h-3.5 shrink-0 ${isLate ? 'animate-pulse text-functional-error' : isWarning ? 'text-functional-warning' : 'opacity-70 text-functional-success'}`} />
+      )}
       <span>Prazo: {timeLeft || '--:--:--'}{isPaused ? ' (Pausado)' : ''}</span>
     </div>
   );

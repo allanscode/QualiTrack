@@ -279,18 +279,6 @@ export default function MonitoriaList({
     </div>
   );
 
-  if (viewingMonitoria) {
-    return (
-      <MonitoriaForm
-        user={user}
-        initialData={viewingMonitoria}
-        onCancel={() => setViewingMonitoria(null)}
-        // O id da monitoria salva não é usado aqui; a lista é recarregada do zero.
-        onSaved={() => { setViewingMonitoria(null); load(); }}
-      />
-    );
-  }
-
   return (
     <div className="space-y-6 animate-fade-in pb-8">
       {/* Block 1: Filters & Status Joined */}
@@ -463,7 +451,7 @@ export default function MonitoriaList({
               <List<VirtualRowProps>
                 rowComponent={VirtualMonitoriaRow}
                 rowCount={filtered.length}
-                rowHeight={104}
+                rowHeight={72}
                 rowProps={{ monitorias: filtered, teams: staticData.teams, getName, getLevelForScore, onOpen: openDetails }}
                 overscanCount={5}
                 style={{ height: 600, width: '100%' }}
@@ -505,7 +493,7 @@ export default function MonitoriaList({
                   <button ref={detailCloseRef} type="button" onClick={closeDetails} aria-label="Fechar detalhes" className="shrink-0 rounded-xl p-2 text-brand-primary hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-brand-accent"><X className="size-5" /></button>
                 </header>
                 <div className="min-h-0 overflow-y-auto p-4 sm:p-6 pb-safe">
-                  <MonitoriaDetails monitoria={m} user={user} users={staticData.users} onView={item => { closeDetails(); setViewingMonitoria(item); }} onAction={modal => setActionModal(modal)} />
+                  <MonitoriaDetails monitoria={m} user={user} users={staticData.users} onView={item => setViewingMonitoria(item)} onAction={modal => setActionModal(modal)} />
                 </div>
               </>;
             })()}
@@ -696,6 +684,15 @@ export default function MonitoriaList({
           </div>, document.body
         )}
       </AnimatePresence>
+
+      {viewingMonitoria && (
+        <MonitoriaForm
+          user={user}
+          initialData={viewingMonitoria}
+          onCancel={() => setViewingMonitoria(null)}
+          onSaved={() => { setViewingMonitoria(null); load(); }}
+        />
+      )}
     </div>
   );
 }

@@ -53,6 +53,7 @@ const MonitoriaForm = lazyWithRetry(() => import('./components/MonitoriaForm'));
 const AdminPanel = lazyWithRetry(() => import('./components/AdminPanel'));
 const CustomDashboardManagement = lazyWithRetry(() => import('./components/CustomDashboardManagement'));
 const AuditingQueueView = lazyWithRetry(() => import('./components/AuditingQueueView'));
+const InPlaceMonitoriaModal = lazyWithRetry(() => import('./components/InPlaceMonitoriaModal'));
 
 export default function App() {
   return (
@@ -411,6 +412,7 @@ function MainApp({
   const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
   const [isSettingsHovered, setIsSettingsHovered] = React.useState(false);
   const [focusMonitoriaTarget, setFocusMonitoriaTarget] = React.useState<{ monitoriaId?: string; ticketId?: string } | null>(null);
+  const [inPlaceMonitoriaId, setInPlaceMonitoriaId] = React.useState<string | null>(null);
 
   const handleStartAuditFromQueue = (prefill: any) => {
     // O agente pode ter sido criado agora mesmo (conta provisória) pela
@@ -870,14 +872,29 @@ function MainApp({
 
   React.useEffect(() => {
     const handleFocus = (e: any) => {
-      if (e?.detail) {
-        setFocusMonitoriaTarget(e.detail);
+      const detail = e?.detail;
+      if (!detail) return;
+
+      // Se a aba ativa não for 'monitorias', abre in-place como popup!
+      // Não migra de aba na sidebar!
+      if (activeTab !== 'monitorias') {
+        if (detail.monitoriaId) {
+          setInPlaceMonitoriaId(detail.monitoriaId);
+        } else if (detail.ticketId) {
+          const found = monitorias.find((m: any) => String(m.ticket_id) === String(detail.ticketId));
+          if (found) {
+            setInPlaceMonitoriaId(found.id);
+          } else {
+            setInPlaceMonitoriaId(detail.ticketId);
+          }
+        }
+      } else {
+        setFocusMonitoriaTarget(detail);
       }
-      setActiveTab('monitorias');
     };
     window.addEventListener('qualitrack:focus_monitoria', handleFocus);
     return () => window.removeEventListener('qualitrack:focus_monitoria', handleFocus);
-  }, []);
+  }, [activeTab, monitorias]);
 
   // Listener universal para qualquer modal aberto via qualitrack:modal
   React.useEffect(() => {
@@ -992,6 +1009,19 @@ function MainApp({
           />
         )}
       </AnimatePresence>
+
+      {/* Inspecionar Monitoria In-Place (abre em popup sobre a tela atual, sem trocar aba na sidebar) */}
+      {inPlaceMonitoriaId && (
+        <React.Suspense fallback={null}>
+          <InPlaceMonitoriaModal
+            monitoriaId={inPlaceMonitoriaId}
+            user={userData}
+            users={users}
+            teams={teams}
+            onClose={() => setInPlaceMonitoriaId(null)}
+          />
+        </React.Suspense>
+      )}
 
       {/* Mobile Navigation Drawer Overlay */}
       <AnimatePresence>

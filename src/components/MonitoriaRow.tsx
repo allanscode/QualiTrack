@@ -23,15 +23,15 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
   const expired = m.status === 'concluida' && m.resolution_type === 'automatic';
   return (
     <div style={style} id={`monitoria-${m.id}`} className="border-b border-surface-border/60 last:border-b-0">
-      <div className="flex min-h-[96px] items-center gap-2.5 p-3 sm:gap-4 sm:p-4 hover:bg-surface-subtle/60 transition-colors">
+      <div className="flex min-h-[64px] sm:min-h-[70px] items-center gap-2.5 p-2.5 sm:gap-4 sm:px-4 sm:py-3 hover:bg-surface-subtle/60 transition-colors">
         <button
           type="button"
           onClick={() => onOpen(m.id)}
           aria-label={`Abrir detalhes da monitoria ${m.display_id || m.ticket_id}`}
           className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3 text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent active:scale-[0.99] transition-transform cursor-pointer"
         >
-          <span className={`flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-2xl ${VARIANT_ICON_CONTAINER[config.variant]}`}>
-            <config.icon className="size-4 sm:size-5" />
+          <span className={`flex size-8 sm:size-9 shrink-0 items-center justify-center rounded-xl ${VARIANT_ICON_CONTAINER[config.variant]}`}>
+            <config.icon className="size-3.5 sm:size-4" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2 text-xs font-black text-brand-primary">

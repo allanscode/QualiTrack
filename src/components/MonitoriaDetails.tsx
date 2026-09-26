@@ -157,7 +157,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                     </Button>
                   )}
 
-                  {user?.role === 'gestor_suporte' && m.status === 'pendente_revisao' && (
+                  {user?.role === 'gestor_suporte' && m.status === 'pendente_revisao' && (m.score === undefined || m.score === null || m.score < 75) && (
                     <>
                       <Button
                         variant="secondary"
@@ -271,12 +271,10 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                     </>
                   )}
 
-                  {/* Excluir é soft-delete (active=false via UPDATE, não DELETE
-                      real) — governado por monitorias_update_policy, que já
-                      autoriza admin e gestor_qualidade. Alinhando a UI ao que
-                      o banco já permitia. */}
-                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
-                    <>
+                  {/* Reabrir só faz sentido para monitorias já finalizadas/concluídas */}
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') &&
+                    m.active !== false &&
+                    ['concluida', 'finalizada_alterada', 'contestacao_aceita', 'contestacao_negada'].includes(m.status) && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -285,16 +283,22 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                       >
                         Reabrir
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setActionModal({ id: m.id, type: 'excluir' })}
-                        className="text-functional-error hover:bg-functional-error/10 dark:hover:bg-functional-error/20"
-                        icon={<Trash2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                      >
-                        Excluir
-                      </Button>
-                    </>
+                  )}
+
+                  {/* Excluir é soft-delete (active=false via UPDATE, não DELETE
+                      real) — governado por monitorias_update_policy, que já
+                      autoriza admin e gestor_qualidade. Alinhando a UI ao que
+                      o banco já permitia. */}
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setActionModal({ id: m.id, type: 'excluir' })}
+                      className="text-functional-error hover:bg-functional-error/10 dark:hover:bg-functional-error/20"
+                      icon={<Trash2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                    >
+                      Excluir
+                    </Button>
                   )}
                 </div>
               </div>
