@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-O banco de dados é **PostgreSQL** gerenciado pelo **Supabase**. O schema utiliza `public` para tabelas de aplicação e `auth` para autenticação (gerenciado pelo Supabase). Total: **11 tabelas** no schema `public`.
+O banco de dados é **PostgreSQL** gerenciado pelo **Supabase**. O schema utiliza `public` para tabelas de aplicação e `auth` para autenticação (gerenciado pelo Supabase). Total: **12 tabelas** no schema `public`.
 
 ## Diagrama ER
 
@@ -14,6 +14,10 @@ erDiagram
     FORMS ||--o{ MONITORIAS : "form_id"
     USERS }o--o{ TEAMS : "user_teams (N:N)"
     USERS ||--o| TEAMS : "primary_team_id"
+    USERS ||--o{ AGENT_FEEDBACKS : "agent_id"
+    USERS ||--o{ AGENT_FEEDBACKS : "manager_id"
+    TEAMS ||--o{ AGENT_FEEDBACKS : "team_id"
+    MONITORIAS ||--o{ AGENT_FEEDBACKS : "monitoria_id"
 
     USERS {
         uuid id PK
@@ -338,6 +342,7 @@ FROM monitorias;
 | `supabase/migrations/20260617000006_cleanup_users_table.sql` | Remove colunas legadas `password`, `reset_token`, `team_id` de `public.users`; adiciona CHECK constraint em `role` |
 | `supabase/migrations/20260617000007_cleanup_orphan_tables_columns.sql` | Remove tabela órfã `critical_criteria` (nunca usada pelo app) |
 | `supabase/migrations/20260617000008_drop_monitorias_satisfaction.sql` | Remove coluna `satisfaction` (solta) de `monitorias` — app usa `satisfaction_result`, `satisfaction_has_record`, `satisfaction_record_text` |
+| `supabase/migrations/20260926000001_create_agent_feedbacks.sql` | Cria tabela `agent_feedbacks` (1:1, PDI, ciência digital) com RLS e triggers |
 
 ## RLS por Tabela
 
@@ -352,3 +357,4 @@ FROM monitorias;
 | `access_requests` | Admin, gestores | Anônimo (com field validation: name/email NOT NULL) | Admin, gestores | Admin |
 | `dissatisfaction_fields` | Todos autenticados | Admin, gestor_qualidade | Admin, gestor_qualidade | Admin, gestor_qualidade |
 | `user_preferences` | Próprio usuário (`user_id = auth.uid()`) | Próprio usuário | Próprio usuário | Próprio usuário |
+| `agent_feedbacks` | RBAC por role (atendente apenas os seus; gestores por equipe; admin/qualidade todos) | Admin, gestores | Admin, gestores (status/conclusão) e atendente (ciência e notas) | Admin, gestores |

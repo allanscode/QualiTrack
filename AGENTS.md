@@ -10,7 +10,8 @@
 | Especificação Dashboard | docs/specs/dashboard.md | Indicadores, Bento Grid, micro-indicadores, CSAT, filtros |
 | Especificação Admin | docs/specs/admin.md | CRUD, Edge Function, syncUserTeams, solicitações |
 | Especificação Quality Config | docs/specs/quality-config.md | Faixas de nota, metas, prazos, Context Provider singleton |
-| Banco de Dados | docs/database/schema.md | 11 tabelas, ER diagram, RLS matrix, view anônima |
+| Especificação Feedbacks & PDI | docs/specs/feedbacks-1-1-pdi.md | Módulo 1:1, Plano de Ação Combinado, ciência digital, ciclo de vida |
+| Banco de Dados | docs/database/schema.md | 12 tabelas, ER diagram, RLS matrix, view anônima |
 | API / Endpoints | docs/api/endpoints.md | Queries Supabase, Edge Functions, auth SDK, utilitários |
 | Fluxo de Autenticação | docs/flows/authentication.md | Login, recovery, invite, sessão, mock, hash race fix |
 | Fluxo de Monitoria | docs/flows/monitoria.md | Criação, contestação, reavaliação, auto-finalização (cron) |

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MessageSquare, Award, AlertCircle, CheckSquare, Calendar, ChevronRight } from 'lucide-react';
+import { X, MessageSquare, Award, AlertCircle, CheckSquare, Calendar, ChevronRight, HelpCircle, ChevronDown, ChevronUp, Sparkles, Lightbulb, Check } from 'lucide-react';
 import { User, Team, Monitoria } from '../../types';
 import Button from '../ui/Button';
 
@@ -23,6 +23,24 @@ interface CreateFeedbackModalProps {
   initialAgentId?: string;
   initialMonitoriaId?: string;
 }
+
+const ACTION_PLAN_EXAMPLES = [
+  {
+    category: 'Procedimento & Triagem Técnica',
+    context: 'Quando há escalonamento para N2 sem testes prévios ou coleta de evidências.',
+    template: 'Em todos os chamados de lentidão ou indisponibilidade dos próximos 15 dias, seguir o checklist padrão anexando prints dos testes de ping e traceroute antes de transferir para o N2.',
+  },
+  {
+    category: 'Comunicação & Postura (CSAT)',
+    context: 'Quando a nota cai por linguagem fria, impaciente ou excessivamente técnica.',
+    template: 'Revisar o Guia de Atendimento Humanizado até sexta-feira e aplicar saudações empáticas e confirmação ativa de resolução antes de encerrar chamados no chat.',
+  },
+  {
+    category: 'Regras de Negócio & Base de Conhecimento',
+    context: 'Quando ocorrem falhas em fluxos operacionais, políticas de estorno ou trocas.',
+    template: 'Revisar o artigo #402 da Base de Conhecimento sobre a nova política de estornos/reembolsos e alinhar dúvidas pendentes com o monitor de qualidade até o final desta semana.',
+  },
+];
 
 export default function CreateFeedbackModal({
   isOpen,
@@ -48,6 +66,8 @@ export default function CreateFeedbackModal({
     return d.toISOString().split('T')[0];
   });
   const [submitting, setSubmitting] = useState(false);
+  const [showActionPlanHelp, setShowActionPlanHelp] = useState(false);
+  const [copiedExampleIndex, setCopiedExampleIndex] = useState<number | null>(null);
 
   // Monitorias do atendente selecionado
   const agentMonitorias = monitorias.filter(m => m.evaluated_id === agentId);
@@ -199,16 +219,98 @@ export default function CreateFeedbackModal({
           </div>
 
           {/* Linha 5: Plano de Ação Combinado */}
-          <div>
-            <label className="block text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1.5 flex items-center gap-1.5">
-              <CheckSquare className="w-3.5 h-3.5" /> Plano de Ação Combinado (PDI) *
-            </label>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                <CheckSquare className="w-3.5 h-3.5" /> Plano de Ação Combinado (PDI) *
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setShowActionPlanHelp(prev => !prev)}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline cursor-pointer transition-colors"
+                title="Clique para ver o que é o Plano de Ação e exemplos práticos"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>O que é o Plano de Ação?</span>
+                {showActionPlanHelp ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+            </div>
+
+            {/* Guia Didático e Exemplos Práticos de Helpdesk */}
+            {showActionPlanHelp && (
+              <div className="p-3.5 sm:p-4 rounded-xl border border-blue-500/30 bg-blue-50/70 dark:bg-blue-950/30 space-y-3 animate-fade-in text-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Lightbulb className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-brand-primary text-xs">
+                      O que é o Plano de Ação Combinado?
+                    </h4>
+                    <p className="text-[11px] text-brand-muted mt-1 leading-relaxed">
+                      É o <strong>compromisso prático de curto prazo</strong> alinhado entre gestor e atendente durante o 1:1. Ele responde: <em>O que fazer</em>, <em>Como fazer</em> e <em>Até quando</em> para que a oportunidade de melhoria seja superada e o erro não se repita.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-surface-card border border-surface-border text-[11px] text-brand-muted">
+                  <span className="font-bold text-brand-primary">💡 Regra de Ouro:</span> Em vez de apenas registrar o erro (&ldquo;você errou nisso&rdquo;), combine uma ação prática e mensurável (&ldquo;vamos seguir este procedimento pelos próximos 15 dias&rdquo;).
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-brand-muted mb-2">
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <span>Exemplos Práticos para Suporte / Helpdesk (clique para usar):</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    {ACTION_PLAN_EXAMPLES.map((ex, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2.5 rounded-lg bg-surface-card border border-surface-border hover:border-blue-500/50 transition-all flex flex-col gap-1.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[11px] text-brand-primary">{ex.category}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActionPlan(ex.template);
+                              setCopiedExampleIndex(idx);
+                              setTimeout(() => setCopiedExampleIndex(null), 2500);
+                            }}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 bg-blue-500/10 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                          >
+                            {copiedExampleIndex === idx ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-500" />
+                                <span className="text-emerald-600 dark:text-emerald-400">Aplicado!</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>Usar modelo</span>
+                                <ChevronRight className="w-3 h-3" />
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-brand-muted italic">{ex.context}</p>
+                        <p className="text-[11px] text-brand-secondary bg-surface-subtle p-1.5 rounded font-mono select-all">
+                          &ldquo;{ex.template}&rdquo;
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <textarea
               required
               rows={3}
               value={actionPlan}
               onChange={e => setActionPlan(e.target.value)}
-              placeholder="Ações práticas e combinadas com o atendente para os próximos atendimentos..."
+              placeholder="Ex.: Em todos os chamados de lentidão dos próximos 15 dias, seguir o checklist padrão anexando prints de testes de ping/tracert antes de escalar ao N2, e revisar o artigo #402 da Base de Conhecimento..."
               className="w-full bg-surface-card border border-surface-border rounded-xl p-3 text-xs text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-blue-500 resize-none font-medium"
             />
           </div>

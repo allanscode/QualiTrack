@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, CheckCircle, Clock, Award, AlertCircle, CheckSquare, Calendar, User as UserIcon, ExternalLink, ShieldCheck } from 'lucide-react';
+import { X, CheckCircle, Clock, Award, AlertCircle, CheckSquare, Calendar, User as UserIcon, ExternalLink, ShieldCheck, Lightbulb } from 'lucide-react';
 import { AgentFeedback, User, Team, Monitoria } from '../../types';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
@@ -185,6 +185,10 @@ export default function FeedbackDetailsModal({
             <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-wrap">
               {feedback.action_plan}
             </p>
+            <div className="mt-2.5 pt-2 border-t border-blue-500/15 flex items-center gap-1.5 text-[10px] text-blue-700/80 dark:text-blue-300/80">
+              <Lightbulb className="w-3 h-3 flex-shrink-0" />
+              <span>Compromisso prático de evolução profissional combinado na sessão de 1:1.</span>
+            </div>
           </div>
 
           {/* Status de Ciência / Assinatura do Atendente */}
