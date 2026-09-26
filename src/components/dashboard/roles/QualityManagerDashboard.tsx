@@ -1059,6 +1059,11 @@ export default function QualityManagerDashboard({
           good={trendPercentage >= 0}
           icon={<TrendingUp className="w-5 h-5" />}
           accent="text-functional-success"
+          onClick={() => setDrillDown({
+            title: 'Monitorias Avaliadas (Tendência)',
+            subtitle: 'Monitorias que compõem a curva de evolução do período',
+            monitorias: scoredMonitorias,
+          })}
           isCustomizing={isCustomizing}
           profile="gestor_qualidade"
           activeEditingId={activeEditingId}

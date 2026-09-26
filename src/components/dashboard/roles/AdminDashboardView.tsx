@@ -451,13 +451,15 @@ export default function AdminDashboardView({
       .filter(d => d.value > 0);
   }, [isCustomizing, config.levels, scoredMonitorias, colorMap]);
 
-  const excellentCount = useMemo(() => {
-    if (isCustomizing) return 35;
+  const excellentList = useMemo(() => {
+    if (isCustomizing) return [];
     return scoredMonitorias.filter((m: any) => {
       const lvl = getLevelForScore(m.score || 0);
       return lvl?.color.includes('excelente');
-    }).length;
+    });
   }, [isCustomizing, scoredMonitorias, getLevelForScore]);
+
+  const excellentCount = isCustomizing ? 35 : excellentList.length;
 
   const excellentPercent = useMemo(() => {
     if (isCustomizing) return 64.81;
@@ -911,6 +913,11 @@ export default function AdminDashboardView({
           good={avgScore >= config.targetScore}
           icon={<Target className="w-5 h-5" />}
           accent="text-brand-accent"
+          onClick={() => setDrillDown({
+            title: 'Monitorias da Média Geral',
+            subtitle: 'Todas as monitorias avaliadas no período que compõem a média geral global',
+            monitorias: scoredMonitorias,
+          })}
           badge={
             isCustomizing ? (
               <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : diffColorClass}`}>
@@ -934,6 +941,11 @@ export default function AdminDashboardView({
           good={excellentPercent >= 50}
           icon={<Award className="w-5 h-5" />}
           accent="text-brand-accent"
+          onClick={() => setDrillDown({
+            title: 'Monitorias no Índice de Excelência',
+            subtitle: 'Monitorias avaliadas que atingiram nota na faixa Excelente',
+            monitorias: excellentList,
+          })}
           badge={
             <div className="flex items-center gap-1.5">
               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-md ${
@@ -1010,6 +1022,11 @@ export default function AdminDashboardView({
           good={trendPercentage >= 0}
           icon={<TrendingUp className="w-5 h-5" />}
           accent="text-functional-success"
+          onClick={() => setDrillDown({
+            title: 'Monitorias Avaliadas (Tendência)',
+            subtitle: 'Monitorias que compõem o histórico de evolução do período',
+            monitorias: scoredMonitorias,
+          })}
           isCustomizing={isCustomizing}
           profile="admin"
           activeEditingId={activeEditingId}
@@ -1077,6 +1094,11 @@ export default function AdminDashboardView({
           good={reversalRate <= config.targetReversalRate}
           icon={<Target className="w-5 h-5" />}
           accent={reversalRate <= config.targetReversalRate ? 'text-functional-success' : 'text-functional-error'}
+          onClick={() => setDrillDown({
+            title: 'Base da Taxa de Reversão',
+            subtitle: 'Contestações concluídas consideradas no cálculo da taxa',
+            monitorias: [...reavAcceptedList, ...reavRejectedList],
+          })}
           badge={
             isCustomizing ? (
               <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : revColorClass}`}>

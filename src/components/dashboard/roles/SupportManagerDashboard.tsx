@@ -328,13 +328,15 @@ export default function SupportManagerDashboard({
     : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   // 2. Índice de Excelência (Scoped excellence index matching Admin)
-  const excellentCount = useMemo(() => {
-    if (isCustomizing) return 35;
+  const excellentList = useMemo(() => {
+    if (isCustomizing) return [];
     return scoredMonitorias.filter((m: any) => {
       const lvl = getLevelForScore(m.score || 0);
       return lvl?.color.includes('excelente');
-    }).length;
+    });
   }, [isCustomizing, scoredMonitorias, getLevelForScore]);
+
+  const excellentCount = isCustomizing ? 35 : excellentList.length;
 
   const excellentPercent = useMemo(() => {
     if (isCustomizing) return 64.81;
@@ -421,27 +423,31 @@ export default function SupportManagerDashboard({
 
   const totalContestations = isCustomizing ? 8 : contestedMonitorias.length;
 
-  const reavAccepted = useMemo(() => {
-    if (isCustomizing) return 1;
+  const reavAcceptedList = useMemo(() => {
+    if (isCustomizing) return [];
     return contestedMonitorias.filter((m: any) => {
       const resolutions = (m.history || []).filter((h: any) =>
         isApprovalAction(h.action) || isRejectionAction(h.action)
       );
       if (resolutions.length === 0) return false;
       return isApprovalAction(resolutions[resolutions.length - 1].action);
-    }).length;
+    });
   }, [isCustomizing, contestedMonitorias]);
 
-  const reavRejected = useMemo(() => {
-    if (isCustomizing) return 7;
+  const reavAccepted = isCustomizing ? 1 : reavAcceptedList.length;
+
+  const reavRejectedList = useMemo(() => {
+    if (isCustomizing) return [];
     return contestedMonitorias.filter((m: any) => {
       const resolutions = (m.history || []).filter((h: any) =>
         isApprovalAction(h.action) || isRejectionAction(h.action)
       );
       if (resolutions.length === 0) return false;
       return isRejectionAction(resolutions[resolutions.length - 1].action);
-    }).length;
+    });
   }, [isCustomizing, contestedMonitorias]);
+
+  const reavRejected = isCustomizing ? 7 : reavRejectedList.length;
 
   const reversalRate = useMemo(() => {
     if (isCustomizing) return 12.50;
@@ -740,6 +746,11 @@ export default function SupportManagerDashboard({
             good={pendingManager === 0}
             icon={pendingManager === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
             accent={pendingManager === 0 ? 'text-functional-success' : 'text-functional-error'}
+            onClick={() => setDrillDown({
+              title: 'Minhas Ações Pendentes',
+              subtitle: 'Monitorias aguardando sua análise e deliberação como gestor',
+              monitorias: pendingManagerList,
+            })}
             badge={
               pendingManager > 0 ? (
                 <span className="relative flex h-2 w-2 self-center">
@@ -762,6 +773,11 @@ export default function SupportManagerDashboard({
             good={avgScore >= config.targetScore}
             icon={<Target className="w-5 h-5" />}
             accent="text-brand-accent"
+            onClick={() => setDrillDown({
+              title: 'Monitorias com Nota da Equipe',
+              subtitle: 'Atendimentos avaliados que compõem a média geral do time',
+              monitorias: scoredMonitorias,
+            })}
             badge={
               isCustomizing ? (
                 <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md self-center ${isCustomizing ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : diffColorClass}`}>
@@ -785,6 +801,11 @@ export default function SupportManagerDashboard({
             good={excellentPercent >= 50}
             icon={<Award className="w-5 h-5" />}
             accent="text-brand-accent"
+            onClick={() => setDrillDown({
+              title: 'Monitorias no Índice de Excelência',
+              subtitle: 'Atendimentos avaliados que atingiram nota na faixa Excelente',
+              monitorias: excellentList,
+            })}
             badge={
               <div className="flex items-center gap-1.5">
                 <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-md ${
@@ -958,6 +979,11 @@ export default function SupportManagerDashboard({
           good={true}
           icon={<History className="w-5 h-5" />}
           accent="text-slate-500"
+          onClick={() => setDrillDown({
+            title: 'Total de Reavaliações Solicitadas',
+            subtitle: 'Todas as contestações abertas pelos agentes da sua equipe',
+            monitorias: contestedMonitorias,
+          })}
           isCustomizing={isCustomizing}
           profile="gestor_suporte"
           activeEditingId={activeEditingId}
@@ -970,6 +996,11 @@ export default function SupportManagerDashboard({
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
           accent="text-functional-success"
+          onClick={() => setDrillDown({
+            title: 'Reavaliações Aprovadas (Procedentes)',
+            subtitle: 'Contestações acolhidas com alteração de nota',
+            monitorias: reavAcceptedList,
+          })}
           isCustomizing={isCustomizing}
           profile="gestor_suporte"
           activeEditingId={activeEditingId}
@@ -982,6 +1013,11 @@ export default function SupportManagerDashboard({
           good={true}
           icon={<XCircle className="w-5 h-5" />}
           accent="text-functional-error"
+          onClick={() => setDrillDown({
+            title: 'Reavaliações Recusadas (Improcedentes)',
+            subtitle: 'Contestações indeferidas mantendo a nota original',
+            monitorias: reavRejectedList,
+          })}
           isCustomizing={isCustomizing}
           profile="gestor_suporte"
           activeEditingId={activeEditingId}
@@ -994,6 +1030,11 @@ export default function SupportManagerDashboard({
           good={trendPercentage >= 0}
           icon={<TrendingUp className="w-5 h-5" />}
           accent="text-functional-success"
+          onClick={() => setDrillDown({
+            title: 'Monitorias Avaliadas (Tendência)',
+            subtitle: 'Atendimentos que compõem a curva de evolução da equipe',
+            monitorias: scoredMonitorias,
+          })}
           isCustomizing={isCustomizing}
           profile="gestor_suporte"
           activeEditingId={activeEditingId}
