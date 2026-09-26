@@ -43,9 +43,9 @@ Sua missão é atuar como um **copiloto consultivo**:
 
 ## REGRAS OPERACIONAIS DO ORCA
 
-1. **Modo Single-Agent Direto por Padrão (Anti-Desperdício)**:
-   - O agente no Orca deve trabalhar de forma direta e cirúrgica (ler, editar, testar e commitar na mesma sessão).
-   - É expressamente **PROIBIDO** disparar subagentes ou workers paralelos (`orca orchestration worker-start`) por iniciativa própria, a menos que o usuário solicite explicitamente.
+1. **Execução Coordenada & Workers Inteligentes**:
+   - O agente no Orca trabalha de forma ágil, segura e cirúrgica.
+   - É permitida a instanciação de workers (`orca orchestration worker-start`) quando a divisão for válida, inteligente e produtiva (separando escopos para evitar conflito de edição, concorrência ou arquivos simultâneos). Tarefas críticas ou atômicas continuam com execução direta focada.
 
 2. **Comandos Nativos do Orca e do Repositório**:
    - Terminais: `orca terminal create --worktree active --command "<agente>"`, `orca terminal send`, `orca terminal list`

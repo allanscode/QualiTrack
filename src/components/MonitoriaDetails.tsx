@@ -130,6 +130,18 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                     Visualizar Avaliação Completa
                   </Button>
 
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setViewingMonitoria({ ...m, _adminEdit: true } as any)}
+                      icon={<Pencil className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />}
+                      className="font-bold text-brand-primary border-surface-border shadow-sm hover:bg-surface-subtle"
+                    >
+                      Editar Avaliação
+                    </Button>
+                  )}
+
                   {/* Aprovar/Contestar a tratativa passou a ser exclusivo do
                       gestor_suporte — o agente individual não decide mais
                       sozinho sobre a própria avaliação. Ver bloco

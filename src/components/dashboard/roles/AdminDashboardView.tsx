@@ -10,7 +10,7 @@ import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import DistributionChart from '../widgets/DistributionChart';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity, PieChart as PieChartIcon, ClipboardCheck, Award, Clock } from 'lucide-react';
+import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity, PieChart as PieChartIcon, ClipboardCheck, Award, Clock, ChevronRight } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
@@ -41,7 +41,7 @@ const mockMonitoriasDeadlines = [
 ] as any[];
 
 // Inline Countdown Row for Ações Expirando
-function SlaCountdownItem({ monitoria, users }: { monitoria: any, users: any[] }) {
+function SlaCountdownItem({ monitoria, users, onClick }: { monitoria: any, users: any[], onClick?: () => void }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const deadline = new Date(monitoria.action_deadline_at);
     return getRemainingBusinessSeconds(new Date(), deadline);
@@ -87,11 +87,29 @@ function SlaCountdownItem({ monitoria, users }: { monitoria: any, users: any[] }
     badgeClass = 'animate-pulse bg-red-500/10 text-red-500 border border-red-500/20 font-black';
   }
 
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else {
+      window.dispatchEvent(
+        new CustomEvent('qualitrack:focus_monitoria', {
+          detail: { monitoriaId: monitoria.id, ticketId: monitoria.ticket_id },
+        })
+      );
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-subtle/30 border border-surface-border/30 hover:border-surface-border transition-all duration-200">
+    <div
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
+      className="flex items-center justify-between p-3 rounded-2xl bg-surface-subtle/30 border border-surface-border/30 hover:border-brand-accent/50 hover:bg-surface-subtle/70 transition-all duration-200 cursor-pointer active:scale-[0.98] group"
+    >
       <div className="flex flex-col min-w-0 flex-1 mr-2">
         <div className="flex items-center gap-1.5 mb-1 min-w-0">
-          <span className="font-mono font-black text-xs text-brand-primary flex-shrink-0">
+          <span className="font-mono font-black text-xs text-brand-primary group-hover:text-brand-accent transition-colors flex-shrink-0">
             #{monitoria.ticket_id}
           </span>
           <span className="text-[10px] text-brand-muted font-bold truncate">
@@ -102,10 +120,11 @@ function SlaCountdownItem({ monitoria, users }: { monitoria: any, users: any[] }
           Etapa: {getStatusLabel(monitoria.status)}
         </span>
       </div>
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 flex items-center gap-2">
         <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${badgeClass}`}>
           {formatTimeLeft(secondsLeft)}
         </span>
+        <ChevronRight className="w-3.5 h-3.5 text-brand-muted group-hover:text-brand-accent group-hover:translate-x-0.5 transition-all" />
       </div>
     </div>
   );
@@ -338,12 +357,14 @@ export default function AdminDashboardView({
       : 0;
   }, [isCustomizing, scoredMonitorias]);
 
-  const pendingActions = useMemo(() => {
-    if (isCustomizing) return 4;
+  const pendingActionsList = useMemo(() => {
+    if (isCustomizing) return [];
     return monitorias.filter((m: any) =>
       ['pendente_revisao', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade'].includes(m.status)
-    ).length;
+    );
   }, [isCustomizing, monitorias]);
+
+  const pendingActions = isCustomizing ? 4 : pendingActionsList.length;
 
   const totalMonitorias = isCustomizing ? 85 : monitorias.length;
 
@@ -358,27 +379,31 @@ export default function AdminDashboardView({
   const totalContestations = isCustomizing ? 12 : contestedMonitorias.length;
 
   // Conta apenas pelo ÚLTIMO desfecho — evita dupla contagem em múltiplas rodadas
-  const reavAccepted = useMemo(() => {
-    if (isCustomizing) return 1;
+  const reavAcceptedList = useMemo(() => {
+    if (isCustomizing) return [];
     return contestedMonitorias.filter((m: any) => {
       const resolutions = (m.history || []).filter((h: any) =>
         isApprovalAction(h.action) || isRejectionAction(h.action)
       );
       if (resolutions.length === 0) return false;
       return isApprovalAction(resolutions[resolutions.length - 1].action);
-    }).length;
+    });
   }, [isCustomizing, contestedMonitorias]);
 
-  const reavRejected = useMemo(() => {
-    if (isCustomizing) return 11;
+  const reavAccepted = isCustomizing ? 1 : reavAcceptedList.length;
+
+  const reavRejectedList = useMemo(() => {
+    if (isCustomizing) return [];
     return contestedMonitorias.filter((m: any) => {
       const resolutions = (m.history || []).filter((h: any) =>
         isApprovalAction(h.action) || isRejectionAction(h.action)
       );
       if (resolutions.length === 0) return false;
       return isRejectionAction(resolutions[resolutions.length - 1].action);
-    }).length;
+    });
   }, [isCustomizing, contestedMonitorias]);
+
+  const reavRejected = isCustomizing ? 11 : reavRejectedList.length;
 
   const reversalRate = useMemo(() => {
     if (isCustomizing) return 8.33;
@@ -766,6 +791,27 @@ export default function AdminDashboardView({
     );
   };
 
+  const renderArcLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }: any) => {
+    if (value === 0 || percent < 0.05) return null;
+    const RADIAN = Math.PI / 180;
+    const radius = (innerRadius + outerRadius) / 2;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#ffffff"
+        textAnchor="middle"
+        dominantBaseline="central"
+        className="text-[10px] font-black pointer-events-none drop-shadow select-none"
+      >
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
   const getExplanation = (key: string, defaultText: string) => {
     const lookupKey = `admin_${key}`;
     return (config?.statCardExplanations?.[lookupKey] !== undefined && config.statCardExplanations[lookupKey] !== '')
@@ -917,6 +963,11 @@ export default function AdminDashboardView({
           good={true}
           icon={<ClipboardCheck className="w-5 h-5" />}
           accent="text-brand-accent"
+          onClick={() => setDrillDown({
+            title: 'Total de Monitorias',
+            subtitle: 'Todas as monitorias concluídas no período selecionado',
+            monitorias: scoredMonitorias,
+          })}
           isCustomizing={isCustomizing}
           profile="admin"
           activeEditingId={activeEditingId}
@@ -929,6 +980,11 @@ export default function AdminDashboardView({
           good={pendingActions === 0}
           icon={pendingActions === 0 ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
           accent={pendingActions === 0 ? 'text-functional-success' : 'text-functional-error'}
+          onClick={() => setDrillDown({
+            title: 'Ações Pendentes no Sistema',
+            subtitle: 'Monitorias pendentes de revisão ou contestação',
+            monitorias: pendingActionsList,
+          })}
           isCustomizing={isCustomizing}
           profile="admin"
           activeEditingId={activeEditingId}
@@ -969,6 +1025,11 @@ export default function AdminDashboardView({
           good={true}
           icon={<History className="w-5 h-5" />}
           accent="text-slate-500"
+          onClick={() => setDrillDown({
+            title: 'Total de Reavaliações / Contestações',
+            subtitle: 'Monitorias com histórico de contestação no período',
+            monitorias: contestedMonitorias,
+          })}
           isCustomizing={isCustomizing}
           profile="admin"
           activeEditingId={activeEditingId}
@@ -981,6 +1042,11 @@ export default function AdminDashboardView({
           good={true}
           icon={<CheckCircle2 className="w-5 h-5" />}
           accent="text-functional-success"
+          onClick={() => setDrillDown({
+            title: 'Reavaliações Aprovadas (Procedentes)',
+            subtitle: 'Contestações deferidas no período',
+            monitorias: reavAcceptedList,
+          })}
           isCustomizing={isCustomizing}
           profile="admin"
           activeEditingId={activeEditingId}
@@ -993,6 +1059,11 @@ export default function AdminDashboardView({
           good={true}
           icon={<XCircle className="w-5 h-5" />}
           accent="text-functional-error"
+          onClick={() => setDrillDown({
+            title: 'Reavaliações Recusadas (Improcedentes)',
+            subtitle: 'Contestações indeferidas no período',
+            monitorias: reavRejectedList,
+          })}
           isCustomizing={isCustomizing}
           profile="admin"
           activeEditingId={activeEditingId}
@@ -1096,8 +1167,8 @@ export default function AdminDashboardView({
               
               <div className="flex-1 flex flex-col min-h-0">
                 {teamMonitoriaDistribution.length > 0 ? (
-                  <div className="flex-1 flex flex-col justify-between min-h-0">
-                    <div className="flex-1 min-h-[140px] relative">
+                  <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-3 min-h-0">
+                    <div className="w-full sm:w-[55%] h-[150px] relative">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Tooltip content={<CustomTooltipMedia />} />
@@ -1105,10 +1176,12 @@ export default function AdminDashboardView({
                             data={teamMonitoriaDistribution}
                             cx="50%"
                             cy="50%"
-                            innerRadius={55}
-                            outerRadius={75}
+                            innerRadius={50}
+                            outerRadius={70}
                             paddingAngle={3}
                             dataKey="value"
+                            label={renderArcLabel}
+                            labelLine={false}
                           >
                             {teamMonitoriaDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1117,15 +1190,20 @@ export default function AdminDashboardView({
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    {/* Compact Legend */}
-                    <div className="max-h-[85px] overflow-y-auto pr-1 no-scrollbar flex flex-wrap justify-center gap-x-3 gap-y-1.5 mt-2 pt-2 border-t border-surface-border/40">
+                    {/* Lateral Legend with % (WQ-28) */}
+                    <div className="w-full sm:w-[45%] max-h-[150px] overflow-y-auto pr-1 no-scrollbar flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40">
                       {teamMonitoriaDistribution.map((entry: any, index: number) => {
                         const totalVal = teamMonitoriaDistribution.reduce((acc: number, item: any) => acc + item.value, 0);
                         const percent = totalVal > 0 ? ((entry.value / totalVal) * 100).toFixed(1) : '0';
                         return (
-                          <div key={index} className="flex items-center gap-1.5 text-[9px] text-brand-muted font-black uppercase tracking-tight">
-                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                            {entry.name}: {entry.value} ({percent}%)
+                          <div key={index} className="flex items-center justify-between gap-1.5 text-[9px] text-brand-muted font-black uppercase tracking-tight">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                              <span className="truncate">{entry.name}</span>
+                            </div>
+                            <span className="text-brand-primary whitespace-nowrap font-bold">
+                              {entry.value} ({percent}%)
+                            </span>
                           </div>
                         );
                       })}
@@ -1212,8 +1290,8 @@ export default function AdminDashboardView({
               
               <div className="flex-1 flex flex-col min-h-0">
                 {gradeDistribution.length > 0 ? (
-                  <div className="flex-1 flex flex-col justify-between min-h-0">
-                    <div className="flex-1 min-h-[140px] relative">
+                  <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-3 min-h-0">
+                    <div className="w-full sm:w-[55%] h-[150px] relative">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Tooltip content={<CustomTooltipCurva />} />
@@ -1221,10 +1299,12 @@ export default function AdminDashboardView({
                             data={gradeDistribution}
                             cx="50%"
                             cy="50%"
-                            innerRadius={55}
-                            outerRadius={75}
+                            innerRadius={50}
+                            outerRadius={70}
                             paddingAngle={3}
                             dataKey="value"
+                            label={renderArcLabel}
+                            labelLine={false}
                           >
                             {gradeDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1233,15 +1313,20 @@ export default function AdminDashboardView({
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    {/* Compact Legend */}
-                    <div className="max-h-[85px] overflow-y-auto pr-1 no-scrollbar flex flex-wrap justify-center gap-x-3 gap-y-1.5 mt-2 pt-2 border-t border-surface-border/40">
+                    {/* Lateral Legend with % (WQ-28) */}
+                    <div className="w-full sm:w-[45%] max-h-[150px] overflow-y-auto pr-1 no-scrollbar flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40">
                       {gradeDistribution.map((entry: any, index: number) => {
                         const totalVal = gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0);
                         const percent = totalVal > 0 ? ((entry.value / totalVal) * 100).toFixed(1) : '0';
                         return (
-                          <div key={index} className="flex items-center gap-1.5 text-[9px] text-brand-muted font-black uppercase tracking-tight">
-                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                            {entry.name.split(' (')[0]}: {entry.value} ({percent}%)
+                          <div key={index} className="flex items-center justify-between gap-1.5 text-[9px] text-brand-muted font-black uppercase tracking-tight">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                              <span className="truncate">{entry.name.split(' (')[0]}</span>
+                            </div>
+                            <span className="text-brand-primary whitespace-nowrap font-bold">
+                              {entry.value} ({percent}%)
+                            </span>
                           </div>
                         );
                       })}

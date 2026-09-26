@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { List } from 'react-window';
 import { Monitoria, Team, User } from '../types';
@@ -45,7 +45,21 @@ function VirtualMonitoriaRow({ index, style, monitorias, teams, getName, getLeve
   return <MonitoriaRow monitoria={m} style={style} teams={teams} getName={getName} getLevelForScore={getLevelForScore} onOpen={onOpen} />;
 }
 
-export default function MonitoriaList({ user, onNew, activeTab }: { user: User | null; onNew: () => void; activeTab?: string }) {
+interface MonitoriaListProps {
+  user: User | null;
+  onNew: () => void;
+  activeTab?: string;
+  initialFocusTarget?: { monitoriaId?: string; ticketId?: string } | null;
+  onClearFocusTarget?: () => void;
+}
+
+export default function MonitoriaList({
+  user,
+  onNew,
+  activeTab,
+  initialFocusTarget,
+  onClearFocusTarget
+}: MonitoriaListProps) {
   const { config: qualityConfig, getLevelForScore } = useQualityConfig();
   const staticData = useStaticData();
 
@@ -81,32 +95,44 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewingMonitoria]);
 
+  const focusOnMonitoria = useCallback((targetId: string) => {
+    filters.setTab('todas');
+    filters.setStatusFilter('active');
+    filters.setAuditorFilter('');
+    filters.setSuporteFilter('');
+    filters.setTeamFilter('');
+    filters.setSearch('');
+    filters.setStartDate('');
+    filters.setEndDate('');
+
+    setSelectedId(targetId);
+
+    setTimeout(() => {
+      const el = document.getElementById(`monitoria-${targetId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 200);
+  }, [filters]);
+
+  useEffect(() => {
+    if (initialFocusTarget?.monitoriaId) {
+      focusOnMonitoria(initialFocusTarget.monitoriaId);
+      onClearFocusTarget?.();
+    }
+  }, [initialFocusTarget, focusOnMonitoria, onClearFocusTarget]);
+
   useEffect(() => {
     const handleFocus = (e: Event) => {
       const customEvent = e as CustomEvent<{ monitoriaId?: string; ticketId?: string }>;
       const targetId = customEvent.detail?.monitoriaId;
       if (!targetId) return;
-
-      filters.setTab('todas');
-      filters.setStatusFilter('active');
-      filters.setAuditorFilter('');
-      filters.setSuporteFilter('');
-      filters.setTeamFilter('');
-      filters.setSearch('');
-
-      setSelectedId(targetId);
-
-      setTimeout(() => {
-        const el = document.getElementById(`monitoria-${targetId}`);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 150);
+      focusOnMonitoria(targetId);
     };
 
     window.addEventListener('qualitrack:focus_monitoria', handleFocus);
     return () => window.removeEventListener('qualitrack:focus_monitoria', handleFocus);
-  }, [filters]);
+  }, [focusOnMonitoria]);
 
   const openDetails = (id: string) => {
     openerRef.current = document.activeElement as HTMLElement;
@@ -658,7 +684,10 @@ export default function MonitoriaList({ user, onNew, activeTab }: { user: User |
 
                 <div className="flex gap-3">
                   <Button variant="outline" className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest" onClick={() => setActionModal(null)}>Cancelar</Button>
-                  <Button variant="primary" className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest" onClick={handleAction} disabled={submitting}>
+                  <Button variant="primary" className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest" onClick={async () => {
+                    await handleAction();
+                    closeDetails();
+                  }} disabled={submitting}>
                     {submitting ? 'Processando...' : 'Confirmar Ação'}
                   </Button>
                 </div>

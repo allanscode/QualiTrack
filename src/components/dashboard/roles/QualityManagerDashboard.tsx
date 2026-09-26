@@ -10,7 +10,7 @@ import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import DistributionChart from '../widgets/DistributionChart';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity, PieChart as PieChartIcon, ClipboardCheck, Award, Clock } from 'lucide-react';
+import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity, PieChart as PieChartIcon, ClipboardCheck, Award, Clock, ChevronRight } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
@@ -41,7 +41,7 @@ const mockMonitoriasDeadlines = [
 ] as any[];
 
 // Inline Countdown Row for Ações Expirando
-function SlaCountdownItem({ monitoria, users }: { monitoria: any, users: any[] }) {
+function SlaCountdownItem({ monitoria, users, onClick }: { monitoria: any, users: any[], onClick?: () => void }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const deadline = new Date(monitoria.action_deadline_at);
     return getRemainingBusinessSeconds(new Date(), deadline);
@@ -87,11 +87,29 @@ function SlaCountdownItem({ monitoria, users }: { monitoria: any, users: any[] }
     badgeClass = 'animate-pulse bg-red-500/10 text-red-500 border border-red-500/20 font-black';
   }
 
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else {
+      window.dispatchEvent(
+        new CustomEvent('qualitrack:focus_monitoria', {
+          detail: { monitoriaId: monitoria.id, ticketId: monitoria.ticket_id },
+        })
+      );
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-subtle/30 border border-surface-border/30 hover:border-surface-border transition-all duration-200">
+    <div
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
+      className="flex items-center justify-between p-3 rounded-2xl bg-surface-subtle/30 border border-surface-border/30 hover:border-brand-accent/50 hover:bg-surface-subtle/70 transition-all duration-200 cursor-pointer active:scale-[0.98] group"
+    >
       <div className="flex flex-col min-w-0 flex-1 mr-2">
         <div className="flex items-center gap-1.5 mb-1 min-w-0">
-          <span className="font-mono font-black text-xs text-brand-primary flex-shrink-0">
+          <span className="font-mono font-black text-xs text-brand-primary group-hover:text-brand-accent transition-colors flex-shrink-0">
             #{monitoria.ticket_id}
           </span>
           <span className="text-[10px] text-brand-muted font-bold truncate">
@@ -102,10 +120,11 @@ function SlaCountdownItem({ monitoria, users }: { monitoria: any, users: any[] }
           Etapa: {getStatusLabel(monitoria.status)}
         </span>
       </div>
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 flex items-center gap-2">
         <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${badgeClass}`}>
           {formatTimeLeft(secondsLeft)}
         </span>
+        <ChevronRight className="w-3.5 h-3.5 text-brand-muted group-hover:text-brand-accent group-hover:translate-x-0.5 transition-all" />
       </div>
     </div>
   );
@@ -767,6 +786,27 @@ export default function QualityManagerDashboard({
     );
   };
 
+  const renderArcLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }: any) => {
+    if (value === 0 || percent < 0.05) return null;
+    const RADIAN = Math.PI / 180;
+    const radius = (innerRadius + outerRadius) / 2;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#ffffff"
+        textAnchor="middle"
+        dominantBaseline="central"
+        className="text-[10px] font-black pointer-events-none drop-shadow select-none"
+      >
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
   const getExplanation = (key: string, defaultText: string) => {
     const lookupKey = `gestor_qualidade_${key}`;
     return (config?.statCardExplanations?.[lookupKey] !== undefined && config.statCardExplanations[lookupKey] !== '')
@@ -1194,6 +1234,8 @@ export default function QualityManagerDashboard({
                             outerRadius={70}
                             paddingAngle={3}
                             dataKey="value"
+                            label={renderArcLabel}
+                            labelLine={false}
                           >
                             {teamMonitoriaDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1315,6 +1357,8 @@ export default function QualityManagerDashboard({
                             outerRadius={70}
                             paddingAngle={3}
                             dataKey="value"
+                            label={renderArcLabel}
+                            labelLine={false}
                           >
                             {gradeDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />

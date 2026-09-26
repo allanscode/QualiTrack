@@ -23,9 +23,9 @@
 
 ## Diretrizes de Desenvolvimento
 
-### Modo de Execução: Agente Único (Single-Agent Direto)
+### Modo de Execução & Orquestração
 
-Trabalhe DIRETAMENTE na sessão atual por padrão (leitura cirúrgica, implementação, validação e testes). É expressamente proibido instanciar workers, subagentes ou processos paralelos autônomos sem ordem explícita do usuário. Não terceirize tarefas de código ou verificação para subagentes; execute-as você mesmo com ferramentas locais determinísticas (`npm.cmd run lint`, `npm.cmd test`). Aplique apenas as regras e validações deste `AGENTS.md` afetadas pela mudança; aprovação final e deploy em produção nunca são implícitos.
+Trabalhe de forma estruturada e cirúrgica. É permitida a instanciação de workers, subagentes ou rotinas de orquestração (via Orca ou CLI) sempre que seu uso for válido, justificado e inteligente, garantindo escopos isolados de arquivos e tarefas para não gerar conflitos de merge, concorrência ou duplicação. Validações determinísticas locais (`npm.cmd run lint`, `npm.cmd test`) continuam mandatórias antes de qualquer consolidação. Aprovação final e deploy em produção nunca são implícitos.
 
 1. **Zero dependências de estado global**: Não use Redux, Zustand, Context API global. Estado gerenciado via Context Providers específicos (StaticDataContext, DashboardContext, QualityConfigProvider) e hooks locais.
 2. **Extração de hooks customizados**: Lógica de negócio complexa deve ser extraída para hooks em src/hooks/ (ex: useSessionManager, useSidebarManager, useMonitoriaData, useMonitoriaFilters, useMonitoriaActions, useMonitoriaFormState, useMonitoriaSave).

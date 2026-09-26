@@ -410,6 +410,7 @@ function MainApp({
   const { monitorias } = useMonitoriaData(userData, activeTab);
   const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
   const [isSettingsHovered, setIsSettingsHovered] = React.useState(false);
+  const [focusMonitoriaTarget, setFocusMonitoriaTarget] = React.useState<{ monitoriaId?: string; ticketId?: string } | null>(null);
 
   const handleStartAuditFromQueue = (prefill: any) => {
     // O agente pode ter sido criado agora mesmo (conta provisória) pela
@@ -863,7 +864,10 @@ function MainApp({
   }, [isFormOpen, isQueueModalOpen]);
 
   React.useEffect(() => {
-    const handleFocus = () => {
+    const handleFocus = (e: any) => {
+      if (e?.detail) {
+        setFocusMonitoriaTarget(e.detail);
+      }
       setActiveTab('monitorias');
     };
     window.addEventListener('qualitrack:focus_monitoria', handleFocus);
@@ -1589,7 +1593,13 @@ function MainApp({
             )}
             {activeTab === 'monitorias' && (
               <div className="animate-fade-in">
-                <MonitoriaList user={userData} onNew={() => setIsFormOpen(true)} activeTab={activeTab} />
+                <MonitoriaList
+                  user={userData}
+                  onNew={() => setIsFormOpen(true)}
+                  activeTab={activeTab}
+                  initialFocusTarget={focusMonitoriaTarget}
+                  onClearFocusTarget={() => setFocusMonitoriaTarget(null)}
+                />
               </div>
             )}
             {activeTab === 'filas' && (

@@ -1,17 +1,10 @@
 import React, { useState } from 'react';
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
   Cell,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
   Tooltip,
-  XAxis,
-  YAxis,
 } from 'recharts';
 import Card from '../../ui/Card';
 import { PieChart as PieChartIcon } from 'lucide-react';
@@ -41,9 +34,28 @@ interface DistributionChartProps {
   setActiveEditingId?: (id: string | null) => void;
 }
 
-type DistributionView = 'pie' | 'bar' | 'line';
-
 const QUALITY_DISTRIBUTION_TITLE = 'Insatisfação — Visão da Qualidade';
+
+const renderArcLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }: any) => {
+  if (value === 0 || percent < 0.05) return null;
+  const RADIAN = Math.PI / 180;
+  const radius = (innerRadius + outerRadius) / 2;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#ffffff"
+      textAnchor="middle"
+      dominantBaseline="central"
+      className="text-[10px] font-black pointer-events-none drop-shadow select-none"
+    >
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
 
 export default function DistributionChart({ 
   title, 
@@ -56,7 +68,6 @@ export default function DistributionChart({
   const { config, saveConfig } = useQualityConfig();
   const [isHovered, setIsHovered] = useState(false);
   const [tempSub, setTempSub] = useState('');
-  const [view, setView] = useState<DistributionView>('pie');
 
   const shouldReduceMotion = useReducedMotion();
 
@@ -124,35 +135,8 @@ export default function DistributionChart({
   };
 
   const total = data.reduce((a, b) => a + b.value, 0);
-  const isQualityDistribution = title === QUALITY_DISTRIBUTION_TITLE;
 
   const renderChart = () => {
-    if (view === 'bar') {
-      return (
-        <BarChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />
-          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} dy={8} />
-          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} allowDecimals={false} />
-          <Tooltip content={<CustomTooltip total={total} />} cursor={{ fill: 'var(--surface-subtle)' }} />
-          <Bar dataKey="value" name="Ocorrências" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-            {data.map((entry, index) => <Cell key={`bar-cell-${index}`} fill={entry.color} />)}
-          </Bar>
-        </BarChart>
-      );
-    }
-
-    if (view === 'line') {
-      return (
-        <LineChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />
-          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} dy={8} />
-          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} allowDecimals={false} />
-          <Tooltip content={<CustomTooltip total={total} />} cursor={{ stroke: 'var(--brand-accent)', strokeWidth: 2, strokeDasharray: '4 4' }} />
-          <Line type="monotone" dataKey="value" name="Ocorrências" stroke="var(--brand-accent)" strokeWidth={2.5} dot={{ r: 4, strokeWidth: 0 }} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} />
-        </LineChart>
-      );
-    }
-
     return (
       <PieChart>
         <Tooltip content={<CustomTooltip total={total} />} />
@@ -160,10 +144,12 @@ export default function DistributionChart({
           data={data}
           cx="50%"
           cy="50%"
-          innerRadius={55}
-          outerRadius={75}
-          paddingAngle={4}
+          innerRadius={50}
+          outerRadius={70}
+          paddingAngle={3}
           dataKey="value"
+          label={renderArcLabel}
+          labelLine={false}
           isAnimationActive={false} // Optimized to save CPU cycles
         >
           {data.map((entry, index) => (
@@ -242,68 +228,32 @@ export default function DistributionChart({
           </AnimatePresence>
         </div>
         <h3 className="text-[13px] font-black text-brand-primary uppercase tracking-wider whitespace-normal flex-1 leading-snug print:text-black">{title}</h3>
-        {isQualityDistribution && (
-          <label className="flex items-center gap-1.5 flex-shrink-0 print:hidden">
-            <span className="sr-only">Tipo de gráfico</span>
-            <select
-              aria-label="Tipo de gráfico"
-              value={view}
-              onChange={(e) => setView(e.target.value as DistributionView)}
-              className="text-[10px] font-black uppercase tracking-wider text-brand-muted bg-surface-bg border border-surface-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-accent cursor-pointer"
-            >
-              <option value="pie">Pizza</option>
-              <option value="bar">Coluna</option>
-              <option value="line">Linha</option>
-            </select>
-          </label>
-        )}
           </div>
         )}
         {data.length > 0 ? (
-          view === 'pie' ? (
-            <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-4 min-h-[160px]">
-              <div className="w-full sm:w-[55%] h-[160px] relative" style={{ minWidth: 0 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  {renderChart()}
-                </ResponsiveContainer>
-              </div>
-              <div className="w-full sm:w-[45%] flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40 max-h-[160px] overflow-y-auto no-scrollbar">
-                {data.map((entry, index) => {
-                  const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
-                  return (
-                    <div key={index} className="flex items-center justify-between gap-2 text-[10px] text-brand-muted font-black uppercase tracking-tight print:text-slate-800">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                        <span className="truncate">{entry.name}</span>
-                      </div>
-                      <span className="text-brand-primary whitespace-nowrap font-bold">
-                        {entry.value} ({percent}%)
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+          <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-4 min-h-[160px]">
+            <div className="w-full sm:w-[55%] h-[160px] relative" style={{ minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                {renderChart()}
+              </ResponsiveContainer>
             </div>
-          ) : (
-            <div className="flex-1 flex flex-col">
-              <div className="flex-1 min-h-[150px] print:h-[180px]" style={{ minWidth: 0, minHeight: 150 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  {renderChart()}
-                </ResponsiveContainer>
-              </div>
-              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-3 pt-3 border-t border-surface-border/40 print:border-slate-300 print:mt-1 print:pt-1">
-                {data.map((entry, index) => {
-                  const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
-                  return (
-                    <div key={index} className="flex items-center gap-1.5 text-[10px] text-brand-muted font-black uppercase tracking-tight print:text-slate-800">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                      {entry.name}: {entry.value} ({percent}%)
+            <div className="w-full sm:w-[45%] flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40 max-h-[160px] overflow-y-auto no-scrollbar">
+              {data.map((entry, index) => {
+                const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
+                return (
+                  <div key={index} className="flex items-center justify-between gap-2 text-[10px] text-brand-muted font-black uppercase tracking-tight print:text-slate-800">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                      <span className="truncate">{entry.name}</span>
                     </div>
-                  );
-                })}
-              </div>
+                    <span className="text-brand-primary whitespace-nowrap font-bold">
+                      {entry.value} ({percent}%)
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          )
+          </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-brand-muted opacity-40 print:text-slate-500">
             Nenhum dado

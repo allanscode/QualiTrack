@@ -1764,16 +1764,26 @@ export default function MonitoriaForm({
                 {isViewOnly ? 'Próximo' : 'Continuar'}
               </Button>
             ) : isViewOnly ? (
-              canSendToHelpdesk && (
-                <button
-                  type="button"
-                  onClick={() => initialData && setHelpdeskModal({ monitoriaId: initialData.id, fromConclusion: false })}
-                  className="action-primary group inline-flex items-center justify-center gap-2 px-6 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 active:scale-[0.98]"
+              <div className="flex items-center gap-2">
+                {canSendToHelpdesk && (
+                  <button
+                    type="button"
+                    onClick={() => initialData && setHelpdeskModal({ monitoriaId: initialData.id, fromConclusion: false })}
+                    className="action-primary group inline-flex items-center justify-center gap-2 px-6 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 active:scale-[0.98]"
+                  >
+                    <Send className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
+                    Enviar ao Zendesk
+                  </button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onCancel}
+                  className="px-6"
                 >
-                  <Send className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
-                  Enviar ao Zendesk
-                </button>
-              )
+                  Fechar Visualização
+                </Button>
+              </div>
             ) : (
               <Button onClick={handleSave} disabled={isPending} variant="primary" size="sm" className="px-8" icon={<Save className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}>
                 {isPending ? 'Processando...' : 'Finalizar Monitoria'}
