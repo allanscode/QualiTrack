@@ -24,6 +24,7 @@ interface StatCardProps {
   valueColorClass?: string;
   onlineUsersOverride?: any[];
   methodology?: string;
+  comparisonDelta?: { value: number; label?: string };
 }
 
 const DEFAULT_METHODOLOGIES: Record<string, string> = {
@@ -81,7 +82,8 @@ export default function StatCard({
   setActiveEditingId,
   valueColorClass,
   onlineUsersOverride,
-  methodology
+  methodology,
+  comparisonDelta,
 }: StatCardProps) {
   const resolvedMethodology = methodology || DEFAULT_METHODOLOGIES[title];
   const { config, saveConfig } = useQualityConfig();
@@ -294,6 +296,21 @@ export default function StatCard({
             {value}
           </p>
           {badge}
+          {comparisonDelta && (
+            <span
+              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${
+                comparisonDelta.value > 0
+                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+                  : comparisonDelta.value < 0
+                  ? 'text-rose-600 dark:text-rose-400 bg-rose-500/10'
+                  : 'text-brand-muted bg-surface-subtle'
+              }`}
+              title={comparisonDelta.label || 'Comparativo em relação ao período anterior'}
+            >
+              {comparisonDelta.value > 0 ? '↑ +' : comparisonDelta.value < 0 ? '↓ ' : '• '}
+              {comparisonDelta.value > 0 ? comparisonDelta.value : Math.abs(comparisonDelta.value)}%
+            </span>
+          )}
         </div>
       </Card>
 

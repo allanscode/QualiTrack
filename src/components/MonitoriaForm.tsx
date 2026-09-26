@@ -51,6 +51,7 @@ import {
 import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChatParser';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
+import { useMonitoriaDraft } from '../hooks/useMonitoriaDraft';
 import { getEvaluationOutcome } from '../lib/domainRules';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -183,6 +184,37 @@ export default function MonitoriaForm({
     qualityFieldsToShow,
     handleCheckboxChange,
   } = useMonitoriaFormState(initialData, forms, dissatisfactionFields);
+
+  const handleRestoreDraft = React.useCallback((draft: any) => {
+    if (draft.header) setHeader(prev => ({ ...prev, ...draft.header }));
+    if (draft.scores) setScores(draft.scores);
+    if (draft.observations) setObservations(draft.observations);
+    if (draft.criticalErrors) setCriticalErrors(draft.criticalErrors);
+    if (draft.criticalErrorObservations) setCriticalErrorObservations(draft.criticalErrorObservations);
+    if (draft.step) setStep(draft.step);
+    toast.success('Rascunho da avaliação recuperado!');
+  }, [setHeader, setScores, setObservations, setCriticalErrors, setCriticalErrorObservations, setStep]);
+
+  const {
+    hasDraft,
+    draftData,
+    lastSaved,
+    restoreDraft,
+    discardDraft,
+    clearDraft,
+  } = useMonitoriaDraft({
+    isViewOnly,
+    userId: user?.id,
+    ticketId: header.ticket_id,
+    header,
+    scores,
+    observations,
+    criticalErrors,
+    criticalErrorObservations,
+    dissatisfactionAnswers,
+    step,
+    onRestore: handleRestoreDraft,
+  });
 
   useEffect(() => {
     if (contentRef.current) {
@@ -478,6 +510,7 @@ export default function MonitoriaForm({
     clientFieldsToShow,
     qualityFieldsToShow,
     onSaved: (savedMonitoriaId: string) => {
+      clearDraft();
       // Envio automático com a macro ao Zendesk na finalização da monitoria
       const ticketIdTrimmed = header.ticket_id?.trim() || '';
       const shouldAutoSend = /^\d+$/.test(ticketIdTrimmed)
@@ -631,6 +664,12 @@ export default function MonitoriaForm({
               )}
             </AnimatePresence>
 
+            {lastSaved && !isViewOnly && (
+              <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-brand-muted font-medium mr-1" title={`Salvo às ${lastSaved.toLocaleTimeString('pt-BR')}`}>
+                <Check className="w-3 h-3 text-brand-accent" /> Salvo
+              </span>
+            )}
+
             <button onClick={onCancel} className="p-1.5 hover:bg-surface-subtle rounded-xl transition-all text-brand-muted cursor-pointer" title="Fechar">
               <X className="w-5 h-5" />
             </button>
@@ -639,6 +678,26 @@ export default function MonitoriaForm({
 
         {/* Form Content */}
         <div ref={contentRef} className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6 space-y-6 no-scrollbar min-h-0">
+          {/* Banner de Rascunho Encontrado */}
+          {hasDraft && draftData && (
+            <div className="p-3.5 rounded-2xl bg-brand-primary/10 border border-brand-primary/30 flex items-center justify-between gap-3 text-xs shadow-xs animate-fade-in">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <RotateCcw className="w-4 h-4 text-brand-primary shrink-0" />
+                <span className="truncate">
+                  Existe um <strong>rascunho salvo</strong> desta avaliação ({new Date(draftData.savedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}).
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button size="sm" variant="primary" onClick={restoreDraft}>
+                  Restaurar
+                </Button>
+                <Button size="sm" variant="ghost" onClick={discardDraft} className="text-brand-muted hover:text-danger">
+                  Descartar
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Stepper Progress */}
           <div className="flex items-center justify-center gap-2 sm:gap-4 md:gap-8 pb-3 border-b border-surface-border/50">
             {[

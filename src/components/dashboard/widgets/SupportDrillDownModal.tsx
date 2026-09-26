@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { X, Search, ExternalLink, Shield, Tag, User as UserIcon } from 'lucide-react';
+import { X, Search, ExternalLink, Shield, Tag, User as UserIcon, Download } from 'lucide-react';
+import { toast } from 'sonner';
 import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
 import Button from '../../ui/Button';
@@ -7,6 +8,7 @@ import { Monitoria } from '../../../types';
 import { getStatusConfig } from '../../../lib/statusHelper';
 import { formatTimelineDateTime } from '../../../lib/timeline';
 import { matchesSearch } from '../../../utils/search';
+import { exportMonitoriasToCsv } from '../../../utils/exportCsv';
 
 interface SupportDrillDownModalProps {
   title: string;
@@ -85,14 +87,31 @@ export default function SupportDrillDownModal({
               <p className="text-xs text-brand-muted mt-1 font-medium">{subtitle}</p>
             )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl text-brand-muted hover:text-brand-primary hover:bg-surface-subtle transition-colors cursor-pointer"
-            title="Fechar"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              icon={<Download className="w-3.5 h-3.5" />}
+              onClick={() => {
+                const safeTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                const success = exportMonitoriasToCsv(filteredMonitorias, `drilldown_${safeTitle}`);
+                if (success) toast.success(`${filteredMonitorias.length} tickets exportados para CSV!`);
+                else toast.error('Nenhum dado para exportar.');
+              }}
+              className="h-8 text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-brand-primary"
+              title="Exportar esta lista para CSV (compatível com Excel)"
+            >
+              Exportar CSV
+            </Button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl text-brand-muted hover:text-brand-primary hover:bg-surface-subtle transition-colors cursor-pointer"
+              title="Fechar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Toolbar de Busca */}

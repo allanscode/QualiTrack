@@ -12,10 +12,12 @@ import {
   X,
   Paperclip,
   Loader2,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadActionAttachment } from '../lib/monitoriaAttachments';
+import { exportMonitoriasToCsv } from '../utils/exportCsv';
 import { m, AnimatePresence } from 'motion/react';
 import { matchesAnySearch } from '../utils/search';
 import Card from './ui/Card';
@@ -79,6 +81,21 @@ export default function MonitoriaList({
   const detailCloseRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const [viewingMonitoria, setViewingMonitoria] = useState<Monitoria | null>(null);
+
+  // Debounced search state
+  const [searchInput, setSearchInput] = useState(filters.search);
+  useEffect(() => {
+    setSearchInput(filters.search);
+  }, [filters.search]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== filters.search) {
+        filters.setSearch(searchInput);
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchInput, filters]);
 
   // Encolhe a barra lateral ao abrir uma monitoria, para dar mais espaço ao
   // formulário, e restaura o estado anterior ao fechar — sem sobrescrever a
@@ -292,8 +309,8 @@ export default function MonitoriaList({
                 <input
                   type="text"
                   placeholder="Buscar ticket..."
-                  value={filters.search}
-                  onChange={e => filters.setSearch(e.target.value)}
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
                   className="w-full h-full bg-surface-card border border-surface-border rounded-lg pl-9 pr-3 text-[10px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent transition-all outline-none shadow-sm"
                 />
               </div>
@@ -360,6 +377,22 @@ export default function MonitoriaList({
                   size="sm"
                 />
               )}
+
+              {/* Botão Exportar CSV */}
+              <Button
+                size="sm"
+                variant="outline"
+                icon={<Download className="w-3.5 h-3.5" />}
+                onClick={() => {
+                  const success = exportMonitoriasToCsv(filtered, 'monitorias_qualitrack', staticData.users, staticData.teams);
+                  if (success) toast.success(`${filtered.length} monitorias exportadas para CSV!`);
+                  else toast.error('Nenhuma monitoria para exportar.');
+                }}
+                className="h-8 text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-brand-primary shrink-0"
+                title="Exportar registros filtrados para CSV (compatível com Excel)"
+              >
+                Exportar CSV
+              </Button>
 
               {/* Clear button — animated clean button pushed to the right */}
               <AnimatePresence>

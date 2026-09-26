@@ -34,6 +34,18 @@ const WebhookPayloadSchema = z.object({
   timestamp: z.string().optional(),
 });
 
+function timingSafeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  if (aBytes.byteLength !== bBytes.byteLength) return false;
+  let diff = 0;
+  for (let i = 0; i < aBytes.byteLength; i++) {
+    diff |= aBytes[i] ^ bBytes[i];
+  }
+  return diff === 0;
+}
+
 serve(async (req: Request) => {
   // Server-to-server endpoint; browsers have no reason to invoke this webhook.
   if (req.method === 'OPTIONS') {
@@ -63,7 +75,7 @@ serve(async (req: Request) => {
 
   const clientToken = customHeaderToken?.trim() || bearerToken;
 
-  if (!clientToken || clientToken !== expectedSecret) {
+  if (!clientToken || !timingSafeEqual(clientToken, expectedSecret)) {
     console.warn('[helpdesk-webhook] Tentativa não autorizada rejeitada (token ausente ou inválido)');
     return new Response(JSON.stringify({
       error: 'Unauthorized: Webhook token inválido ou ausente. Forneça o header x-qualitrack-webhook-token correto.',

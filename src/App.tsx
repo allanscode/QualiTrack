@@ -54,6 +54,7 @@ const AdminPanel = lazyWithRetry(() => import('./components/AdminPanel'));
 const CustomDashboardManagement = lazyWithRetry(() => import('./components/CustomDashboardManagement'));
 const AuditingQueueView = lazyWithRetry(() => import('./components/AuditingQueueView'));
 const InPlaceMonitoriaModal = lazyWithRetry(() => import('./components/InPlaceMonitoriaModal'));
+const CommandPaletteModal = lazyWithRetry(() => import('./components/CommandPaletteModal'));
 
 export default function App() {
   return (
@@ -413,6 +414,19 @@ function MainApp({
   const [isSettingsHovered, setIsSettingsHovered] = React.useState(false);
   const [focusMonitoriaTarget, setFocusMonitoriaTarget] = React.useState<{ monitoriaId?: string; ticketId?: string } | null>(null);
   const [inPlaceMonitoriaId, setInPlaceMonitoriaId] = React.useState<string | null>(null);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
+
+  // Atalho global universal para abrir Command Palette (Ctrl + K ou Cmd + K)
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleStartAuditFromQueue = (prefill: any) => {
     // O agente pode ter sido criado agora mesmo (conta provisória) pela
@@ -1023,6 +1037,20 @@ function MainApp({
         </React.Suspense>
       )}
 
+      {/* Command Palette Global (Ctrl + K) */}
+      <React.Suspense fallback={null}>
+        <CommandPaletteModal
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+          onNavigateTab={setActiveTab}
+          onNewMonitoria={() => setIsFormOpen(true)}
+          onToggleTheme={() => handleThemeChange(sidebarIsDark ? 'light' : 'dark')}
+          isDark={sidebarIsDark}
+          monitorias={monitorias}
+          users={users}
+        />
+      </React.Suspense>
+
       {/* Mobile Navigation Drawer Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -1595,6 +1623,19 @@ function MainApp({
                 <Plus className="w-4 h-4" /> Nova Monitoria
               </button>
             )}
+
+            {/* Command Palette Trigger (Ctrl + K) */}
+            <button
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="flex items-center gap-2 h-10 px-3 py-1.5 rounded-xl border border-surface-border/60 bg-surface-card hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-all text-xs font-medium shadow-xs"
+              title="Busca rápida universal (Ctrl + K)"
+            >
+              <Search className="w-3.5 h-3.5 text-brand-muted" />
+              <span className="hidden md:inline text-xs text-brand-muted">Buscar...</span>
+              <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold text-brand-muted bg-surface-subtle/80 rounded border border-surface-border/80">
+                Ctrl K
+              </kbd>
+            </button>
 
             {/* Notificações do Sistema: Carta Animada (Fechada com animação e branco preenchido quando há novas / Aberta estática quando todas lidas) */}
             <div className="relative">

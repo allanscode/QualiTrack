@@ -42,8 +42,9 @@ export default function InPlaceMonitoriaModal({
         const item = (data || []).find((m: any) => m.id === monitoriaId);
         setMonitoria(item || null);
       } else {
+        const sourceTable = user?.role === 'suporte' ? 'vw_monitorias_suporte' : 'monitorias';
         const { data, error } = await supabase
-          .from('monitorias')
+          .from(sourceTable)
           .select('*')
           .eq('id', monitoriaId)
           .single();
@@ -55,7 +56,7 @@ export default function InPlaceMonitoriaModal({
     } finally {
       setLoading(false);
     }
-  }, [monitoriaId]);
+  }, [monitoriaId, user?.role]);
 
   useEffect(() => {
     loadMonitoria();

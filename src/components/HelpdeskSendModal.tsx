@@ -15,6 +15,7 @@ import { EvaluationOutcome, HelpdeskSubmission, PublishResult } from '../types';
 import { getLatestHelpdeskSubmission, publishEvaluationToHelpdesk } from '../lib/helpdesk';
 import Card from './ui/Card';
 import Button from './ui/Button';
+import DOMPurify from 'dompurify';
 
 interface HelpdeskSendModalProps {
   monitoriaId: string;
@@ -61,8 +62,9 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
 
   const handleCopyText = () => {
     if (preview.status !== 'ready') return;
+    const cleanHtml = DOMPurify.sanitize(preview.html);
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = preview.html;
+    tempDiv.innerHTML = cleanHtml;
     const text = tempDiv.innerText || tempDiv.textContent || '';
     navigator.clipboard.writeText(text.trim());
     setCopiedMacro(true);
@@ -291,7 +293,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
               // estourar o layout do modal.
               <div
                 className="border border-surface-border rounded-xl bg-white text-slate-900 p-4 max-h-64 overflow-y-auto text-xs leading-relaxed [&_p]:mb-2"
-                dangerouslySetInnerHTML={{ __html: preview.html }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(preview.html) }}
               />
             )}
           </div>

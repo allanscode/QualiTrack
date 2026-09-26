@@ -69,6 +69,7 @@ export default defineConfig(({ command, mode, isPreview }) => {
               if (/node_modules\/(motion|framer-motion)\//.test(p)) return 'vendor-motion';
               if (/node_modules\/date-fns\//.test(p)) return 'vendor-utils';
               if (/node_modules\/@supabase\//.test(p)) return 'vendor-supabase';
+              if (/node_modules\/(pdfjs-dist|mammoth)\//.test(p)) return 'vendor-doc-viewers';
               return 'vendor-other';
             }
             // Feature chunks
