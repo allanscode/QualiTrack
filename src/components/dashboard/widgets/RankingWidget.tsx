@@ -225,7 +225,7 @@ export default function RankingWidget({
         </div>
       )}
 
-      <div className="flex-1 space-y-1.5 overflow-visible pr-1 no-scrollbar">
+      <div className="flex-1 space-y-1 overflow-visible pr-0.5 no-scrollbar">
         {data.map((item, index) => {
           const level = item.score !== undefined ? getLevelForScore(item.score) : { color: 'text-brand-primary', label: '' };
           const isCount = type === 'count';
@@ -235,7 +235,7 @@ export default function RankingWidget({
           key={item.id}
           onClick={onItemClick ? () => onItemClick(item) : undefined}
           onKeyDown={onItemClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onItemClick(item); } } : undefined}
-          className={`group relative flex items-center gap-2 py-1.5 px-2.5 rounded-2xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle/50 hover:z-[10000] transition-all duration-200 ${
+          className={`group relative flex items-center gap-2 py-1.5 px-2 rounded-xl border border-surface-border hover:border-brand-primary/20 hover:bg-surface-subtle/50 hover:z-[10000] transition-all duration-200 ${
             onItemClick ? 'cursor-pointer hover:border-brand-accent/50 hover:bg-surface-subtle/80 hover:shadow-sm active:scale-[0.99]' : ''
           }`}
           tabIndex={0}
@@ -274,21 +274,23 @@ export default function RankingWidget({
 
               {/* Rank Badge */}
               <div className="relative flex-shrink-0">
-                <div className="w-7 h-7 rounded-xl bg-brand-accent text-white flex items-center justify-center font-black text-[10px] shadow-premium group-hover:scale-105 transition-transform">
+                <div className="w-6 h-6 rounded-lg bg-brand-accent text-white flex items-center justify-center font-black text-[10px] shadow-sm group-hover:scale-105 transition-transform">
                   {index + 1}
                 </div>
                 {index === 0 && (
-                  <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-400 rounded-full border border-surface-card flex items-center justify-center">
-                    <Award className="w-2 h-2 text-white" />
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border border-surface-card flex items-center justify-center">
+                    <Award className="w-1.5 h-1.5 text-white" />
                   </div>
                 )}
               </div>
 
               {/* Name + Count */}
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-brand-primary uppercase tracking-tight leading-tight">{item.name}</p>
+              <div className="flex-1 min-w-0 pr-1">
+                <p className="text-[10px] font-semibold text-brand-primary uppercase tracking-tight leading-tight truncate" title={item.name}>
+                  {item.name}
+                </p>
                 {!isCount && (
-                  <p className="text-[9px] font-semibold text-slate-800 dark:text-slate-400 mt-0.5">
+                  <p className="text-[9px] font-semibold text-slate-800 dark:text-slate-400 mt-0.5 truncate">
                     {item.count} mon.
                   </p>
                 )}

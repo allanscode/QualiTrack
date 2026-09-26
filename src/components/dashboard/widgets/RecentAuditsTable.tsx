@@ -5,7 +5,7 @@ import { Monitoria, User } from '../../../types';
 import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
 import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
-import { Clock, ClipboardList } from 'lucide-react';
+import { Clock, ClipboardList, ChevronRight } from 'lucide-react';
 import { getStatusConfig } from '../../../lib/statusHelper';
 
 interface RecentAuditsTableProps {
@@ -78,6 +78,7 @@ export default function RecentAuditsTable({ monitorias, users, title = 'Monitori
               <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">Status</th>
               <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">Prazo</th>
               <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3">Data</th>
+              <th className="sticky top-0 z-10 bg-surface-card border-b border-surface-border px-6 py-3 text-right">Ação</th>
             </tr>
           </thead>
           <tbody>
@@ -86,7 +87,18 @@ export default function RecentAuditsTable({ monitorias, users, title = 'Monitori
               const sc = m.score || 0;
               const level = getLevelForScore(sc);
               return (
-                <tr key={m.id} className="border-t border-surface-border/60 hover:bg-surface-subtle/30 transition-colors">
+                <tr
+                  key={m.id}
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('qualitrack:focus_monitoria', {
+                        detail: { monitoriaId: m.id, ticketId: m.ticket_id },
+                      })
+                    );
+                  }}
+                  className="border-t border-surface-border/60 hover:bg-surface-subtle/70 transition-colors cursor-pointer group"
+                  title={`Clique para visualizar os detalhes da monitoria #${m.ticket_id}`}
+                >
                   <td className="px-6 py-3.5 font-mono font-black text-[10px] text-brand-muted">#{m.display_id || m.id.slice(0,4)}</td>
                   <td className="px-6 py-3.5 font-mono font-black text-sm text-brand-primary">#{m.ticket_id}</td>
                   <td className="px-6 py-3.5 text-sm font-semibold text-brand-primary">{getName(m.evaluator_id)}</td>
@@ -110,12 +122,18 @@ export default function RecentAuditsTable({ monitorias, users, title = 'Monitori
                   <td className="px-6 py-3.5 text-[10px] font-bold text-brand-muted uppercase tracking-wider">
                     {new Date(m.created_at).toLocaleDateString('pt-BR')}
                   </td>
+                  <td className="px-6 py-3.5 text-right">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-muted group-hover:text-brand-accent transition-colors">
+                      <span>Ver</span>
+                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                    </span>
+                  </td>
                 </tr>
               );
             })}
             {displayList.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-6 py-12 text-center text-brand-muted text-xs font-bold uppercase tracking-widest">
+                <td colSpan={9} className="px-6 py-12 text-center text-brand-muted text-xs font-bold uppercase tracking-widest">
                   Nenhuma monitoria encontrada
                 </td>
               </tr>

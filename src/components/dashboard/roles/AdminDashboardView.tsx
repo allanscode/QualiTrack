@@ -793,28 +793,6 @@ export default function AdminDashboardView({
     );
   };
 
-  const renderArcLabel = ({ cx, cy, midAngle, outerRadius, percent, value, fill }: any) => {
-    if (value === 0 || percent < 0.03) return null;
-    const RADIAN = Math.PI / 180;
-    // Posiciona do lado de fora da sua respectiva cor no gráfico
-    const radius = outerRadius + 14;
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-    return (
-      <text
-        x={x}
-        y={y}
-        fill={fill || 'currentColor'}
-        textAnchor={Math.abs(Math.cos(-midAngle * RADIAN)) < 0.3 ? 'middle' : x > cx ? 'start' : 'end'}
-        dominantBaseline="central"
-        className="text-[10px] font-black pointer-events-none drop-shadow-xs select-none"
-      >
-        {`${(percent * 100).toFixed(0)}%`}
-      </text>
-    );
-  };
-
   const getExplanation = (key: string, defaultText: string) => {
     const lookupKey = `admin_${key}`;
     return (config?.statCardExplanations?.[lookupKey] !== undefined && config.statCardExplanations[lookupKey] !== '')
@@ -1199,12 +1177,10 @@ export default function AdminDashboardView({
                             data={teamMonitoriaDistribution}
                             cx="50%"
                             cy="50%"
-                            innerRadius={44}
-                            outerRadius={60}
+                            innerRadius={46}
+                            outerRadius={66}
                             paddingAngle={3}
                             dataKey="value"
-                            label={renderArcLabel}
-                            labelLine={false}
                           >
                             {teamMonitoriaDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1322,12 +1298,10 @@ export default function AdminDashboardView({
                             data={gradeDistribution}
                             cx="50%"
                             cy="50%"
-                            innerRadius={44}
-                            outerRadius={60}
+                            innerRadius={46}
+                            outerRadius={66}
                             paddingAngle={3}
                             dataKey="value"
-                            label={renderArcLabel}
-                            labelLine={false}
                           >
                             {gradeDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1468,7 +1442,7 @@ export default function AdminDashboardView({
 
       {/* LINHA 7: Rankings Compactados (Melhores Suporte | Maiores Ofensores | Volume por Auditor | Top Reav. Aceitas | Top Reav. Recusadas) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        <div className="h-[420px] py-1.5">
+        <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Melhores Suporte"
             subtitle="Top 5 por score médio"
@@ -1485,7 +1459,7 @@ export default function AdminDashboardView({
             })}
           />
         </div>
-        <div className="h-[420px] py-1.5">
+        <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Maiores Ofensores"
             subtitle="Pontos de melhoria"
@@ -1504,7 +1478,7 @@ export default function AdminDashboardView({
             })}
           />
         </div>
-        <div className="h-[420px] py-1.5">
+        <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Volume por Auditor"
             subtitle="Engajamento na plataforma"
@@ -1521,7 +1495,7 @@ export default function AdminDashboardView({
             })}
           />
         </div>
-        <div className="h-[420px] py-1.5">
+        <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Top Reav. Aceitas"
             subtitle="Reavaliações procedentes"
@@ -1538,7 +1512,7 @@ export default function AdminDashboardView({
             })}
           />
         </div>
-        <div className="h-[420px] py-1.5">
+        <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Top Reav. Recusadas"
             subtitle="Reavaliações improcedentes"

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Search, ExternalLink, Shield, Tag, User as UserIcon, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import Card from '../../ui/Card';
@@ -26,6 +27,15 @@ export default function SupportDrillDownModal({
   onNavigateToMonitoria,
 }: SupportDrillDownModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Fechar com tecla ESC
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const filteredMonitorias = useMemo(() => {
     if (!searchTerm.trim()) return monitorias;
@@ -59,18 +69,18 @@ export default function SupportDrillDownModal({
     onClose();
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/25 dark:bg-black/40 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/50 backdrop-blur-md animate-fade-in overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="max-w-4xl w-full h-[92vh] sm:h-auto sm:max-h-[85vh] flex flex-col"
+        className="max-w-4xl w-full max-h-[88vh] flex flex-col my-auto animate-scale-in"
         onClick={e => e.stopPropagation()}
       >
         <Card
           padding="none"
-          className="w-full flex-1 flex flex-col bg-surface-card border-t sm:border border-surface-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden"
+          className="w-full flex-1 flex flex-col bg-surface-card border border-surface-border rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden min-h-0"
         >
         {/* Header */}
         <div className="p-4 sm:p-6 border-b border-surface-border flex items-center justify-between gap-3 sm:gap-4">
@@ -214,6 +224,7 @@ export default function SupportDrillDownModal({
         </div>
       </Card>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
