@@ -11,6 +11,8 @@ import SupportDrillDownModal from '../widgets/SupportDrillDownModal';
 import { Target, ClipboardCheck, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { chartPalette, chartColorArray } from '../chartColors';
+import { useFeedbacks } from '../../../hooks/useFeedbacks';
+import FeedbacksWidget from '../../feedback/FeedbacksWidget';
 
 // High-fidelity mock datasets for customization mode
 const mockTrendData = [
@@ -150,6 +152,7 @@ export default function AgentDashboard({
     monitorias: [],
     allMonitorias: [],
     users: [],
+    teams: [],
     forms: [],
     dissatisfactionFields: [],
     globalAvg: 0
@@ -164,8 +167,9 @@ export default function AgentDashboard({
     // safe fallback when outside DashboardProvider (e.g. customization preview)
   }
 
-  const { user, monitorias, allMonitorias, users, forms, dissatisfactionFields, globalAvg } = dashboardData;
+  const { user, monitorias, allMonitorias, users, teams, forms, dissatisfactionFields, globalAvg } = dashboardData;
   const { config, getLevelForScore, isAboveTarget } = useQualityConfig();
+  const { feedbacks, createFeedback, acknowledgeFeedback, completeFeedback } = useFeedbacks(user);
 
   const [drillDown, setDrillDown] = useState<{
     title: string;
@@ -547,6 +551,11 @@ export default function AgentDashboard({
           icon={<Users className="w-5 h-5" />}
           accent="text-slate-500"
           valueColorClass="text-slate-900 dark:text-slate-50"
+          onClick={() => setDrillDown({
+            title: 'Monitorias da Equipe',
+            subtitle: 'Monitorias avaliadas da sua equipe no período selecionado',
+            monitorias: maskedMonitorias,
+          })}
           isCustomizing={isCustomizing}
           profile="suporte"
           activeEditingId={activeEditingId}
@@ -754,6 +763,20 @@ export default function AgentDashboard({
             setActiveEditingId={setActiveEditingId}
           />
         </div>
+      </div>
+
+      {/* LINHA 7 (grid-cols-1): Meus Feedbacks e Planos 1:1 */}
+      <div>
+        <FeedbacksWidget
+          feedbacks={feedbacks}
+          currentUser={user}
+          users={users}
+          teams={teams || []}
+          monitorias={maskedMonitorias}
+          onCreateFeedback={createFeedback}
+          onAcknowledgeFeedback={acknowledgeFeedback}
+          onCompleteFeedback={completeFeedback}
+        />
       </div>
 
       {/* LINHA 8 (grid-cols-1): Histórico Recente */}

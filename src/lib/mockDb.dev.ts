@@ -1,4 +1,4 @@
-import type { User, UserTeam, Team, EvaluationForm, Monitoria, AccessRequest, DissatisfactionField, UserPreferences } from '../types';
+import type { User, UserTeam, Team, EvaluationForm, Monitoria, AccessRequest, DissatisfactionField, UserPreferences, AgentFeedback } from '../types';
 const DB_PREFIX = 'qualitrack_mock_';
 
 const generateId = (): string => {
@@ -49,6 +49,7 @@ const INITIAL_DATA: {
   business_hours: Array<{ id: string; day_of_week: number; is_open: boolean; open_time: string; close_time: string }>;
   holidays: Array<{ id: string; holiday_date: string; description: string }>;
   user_preferences: Array<{ user_id: string; preferences: UserPreferences; updated_at: string }>;
+  agent_feedbacks: AgentFeedback[];
 } = {
   users: [
     {
@@ -298,7 +299,23 @@ const INITIAL_DATA: {
     { id: 'h-7', holiday_date: '2026-11-15', description: 'Proclamação da República' },
     { id: 'h-8', holiday_date: '2026-12-25', description: 'Natal' }
   ],
-  user_preferences: []
+  user_preferences: [],
+  agent_feedbacks: [
+    {
+      id: 'fb-01',
+      agent_id: AGENT_ID,
+      manager_id: SUPPORT_MANAGER_ID,
+      team_id: 'team-chat-n1',
+      title: '1:1 Periódico - Alinhamento de Postura e FCR',
+      strengths: 'Excelente tempo de resposta e simpatia na condução do atendimento.',
+      improvements: 'Reforçar o checklist de segurança e confirmação cadastral.',
+      action_plan: 'Realizar confirmação de 2 fatores em todos os chamados com alteração de dados cadastrais.',
+      deadline_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      status: 'pendente_ciencia',
+      created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
+      updated_at: new Date(Date.now() - 2 * 86400000).toISOString(),
+    }
+  ]
 };
 
 if (typeof window !== 'undefined' && !import.meta.env.VITE_SUPABASE_URL) {
@@ -408,6 +425,17 @@ const validateMockRelations = (table: string, item: Record<string, unknown>): vo
     }
     if (m.team_id && !teams.some((t) => t.id === m.team_id)) {
       throw new Error(`[MockDB Integridade Referencial] Equipe ID "${m.team_id}" não encontrada na tabela "teams".`);
+    }
+  }
+
+  if (table === 'agent_feedbacks') {
+    const fb = item as unknown as AgentFeedback;
+    const users = getMockData<User>('users');
+    if (!users.some((u) => u.id === fb.agent_id)) {
+      throw new Error(`[MockDB Integridade Referencial] Atendente ID "${fb.agent_id}" não encontrado na tabela "users".`);
+    }
+    if (!users.some((u) => u.id === fb.manager_id)) {
+      throw new Error(`[MockDB Integridade Referencial] Gestor ID "${fb.manager_id}" não encontrado na tabela "users".`);
     }
   }
 };

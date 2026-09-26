@@ -20,6 +20,8 @@ import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
 import NegativeCallsTrainingAlert from '../widgets/NegativeCallsTrainingAlert';
 import { computeSupportManagerIndicators } from '../../../lib/supportManagerIndicators';
 import SupportDrillDownModal from '../widgets/SupportDrillDownModal';
+import { useFeedbacks } from '../../../hooks/useFeedbacks';
+import FeedbacksWidget from '../../feedback/FeedbacksWidget';
 
 // High-fidelity mock datasets for customization mode
 const mockTrendData = [
@@ -274,6 +276,7 @@ export default function SupportManagerDashboard({
 
   const { user, monitorias, allMonitorias, helpdeskSubmissions = [], users, teams, forms, dissatisfactionFields, globalAvg } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
+  const { feedbacks, createFeedback, acknowledgeFeedback, completeFeedback } = useFeedbacks(user);
 
   // Scoped Team IDs
   const myTeamIds = user?.team_ids || [];
@@ -1330,6 +1333,17 @@ export default function SupportManagerDashboard({
           </div>
         );
       })()}
+
+      <FeedbacksWidget
+        feedbacks={feedbacks}
+        currentUser={user}
+        users={users}
+        teams={teams}
+        monitorias={myMonitorias}
+        onCreateFeedback={createFeedback}
+        onAcknowledgeFeedback={acknowledgeFeedback}
+        onCompleteFeedback={completeFeedback}
+      />
 
       <RecentAuditsTable
         monitorias={isCustomizing ? mockRecentMonitorias : myMonitorias}

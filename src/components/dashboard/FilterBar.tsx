@@ -1,15 +1,17 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Calendar, X, RefreshCw } from 'lucide-react';
+import { Calendar, X, RefreshCw, FileText } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
 import CustomSelect from '../ui/CustomSelect';
 import CustomDatepicker from '../ui/CustomDatepicker';
 import { useTheme } from '../../providers/ThemeProvider';
 import { m, AnimatePresence } from 'motion/react';
 import { getPresetDateRange, detectActivePreset } from '../../lib/dashboardDatePresets';
+import ExecutiveReportModal from './widgets/ExecutiveReportModal';
 
 export default function FilterBar() {
   const { resolvedTheme } = useTheme();
-  const { filters, setFilters, users, teams, loading, refresh, user, allMonitorias, dashboardRole, refreshCooldownEnd, refreshCooldownRemaining } = useDashboard();
+  const { filters, setFilters, users, teams, forms, loading, refresh, user, allMonitorias, dashboardRole, refreshCooldownEnd, refreshCooldownRemaining } = useDashboard();
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   const defaults = useMemo(() => ({
     startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0],
@@ -105,6 +107,17 @@ export default function FilterBar() {
           >
             <X className="w-3.5 h-3.5" />
             Limpar Filtros
+          </button>
+        )}
+        {user?.role !== 'suporte' && (
+          <button
+            type="button"
+            onClick={() => setIsReportOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-primary bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/25 rounded-xl transition-all cursor-pointer"
+            title="Gerar e imprimir relatório executivo consolidado em PDF para reunião e envio a gestores"
+          >
+            <FileText className="w-3.5 h-3.5 text-brand-accent" />
+            <span>Relatório Executivo (PDF)</span>
           </button>
         )}
         <button
@@ -233,6 +246,21 @@ export default function FilterBar() {
 
         </div>
       </div>
+
+      {isReportOpen && (
+        <ExecutiveReportModal
+          isOpen={isReportOpen}
+          onClose={() => setIsReportOpen(false)}
+          monitorias={allMonitorias}
+          users={users}
+          teams={teams}
+          forms={forms}
+          initialTeamId={filters.teamId}
+          initialStartDate={filters.startDate}
+          initialEndDate={filters.endDate}
+          currentUser={user}
+        />
+      )}
     </div>
   );
 }

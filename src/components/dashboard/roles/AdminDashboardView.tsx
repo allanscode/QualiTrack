@@ -18,6 +18,8 @@ import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
+import { useFeedbacks } from '../../../hooks/useFeedbacks';
+import FeedbacksWidget from '../../feedback/FeedbacksWidget';
 
 const mockMonitoriasDeadlines = [
   {
@@ -336,8 +338,9 @@ export default function AdminDashboardView({
     monitorias: any[];
   } | null>(null);
 
-  const { monitorias, users, teams, forms, dissatisfactionFields } = dashboardData;
+  const { user, monitorias, users, teams, forms, dissatisfactionFields } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
+  const { feedbacks, createFeedback, acknowledgeFeedback, completeFeedback } = useFeedbacks(user);
 
   const [hoverMedia, setHoverMedia] = useState(false);
   const [hoverCurva, setHoverCurva] = useState(false);
@@ -1547,7 +1550,19 @@ export default function AdminDashboardView({
         />
       </div>
 
-      {/* LINHA 10: Últimas Auditorias do Sistema */}
+      {/* LINHA 10: Gestão de Feedbacks & Planos 1:1 */}
+      <FeedbacksWidget
+        feedbacks={feedbacks}
+        currentUser={user}
+        users={users}
+        teams={teams}
+        monitorias={monitorias}
+        onCreateFeedback={createFeedback}
+        onAcknowledgeFeedback={acknowledgeFeedback}
+        onCompleteFeedback={completeFeedback}
+      />
+
+      {/* LINHA 11: Últimas Auditorias do Sistema */}
       <RecentAuditsTable
         monitorias={isCustomizing ? mockRecentMonitorias : monitorias}
         users={isCustomizing ? mockUsersList : users}

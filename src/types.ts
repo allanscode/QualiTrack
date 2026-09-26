@@ -376,3 +376,27 @@ export interface AIEvaluationResult {
   dialogue?: TicketCommentMessage[];
 }
 
+export type FeedbackStatus = 'pendente_ciencia' | 'ciente' | 'concluido';
+
+export interface AgentFeedback {
+  id: string;
+  agent_id: string;
+  manager_id: string;
+  team_id?: string | null;
+  monitoria_id?: string | null;
+  title: string;
+  strengths?: string | null;
+  improvements: string;
+  action_plan: string;
+  deadline_date?: string | null;
+  status: FeedbackStatus;
+  agent_acknowledged_at?: string | null;
+  agent_notes?: string | null;
+  created_at: string;
+  updated_at?: string;
+  // Campos enriquecidos para UI
+  agent_name?: string;
+  manager_name?: string;
+  team_name?: string;
+  ticket_id?: string;
+}
