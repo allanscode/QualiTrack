@@ -56,6 +56,7 @@ const CustomDashboardManagement = lazyWithRetry(() => import('./components/Custo
 const AuditingQueueView = lazyWithRetry(() => import('./components/AuditingQueueView'));
 const InPlaceMonitoriaModal = lazyWithRetry(() => import('./components/InPlaceMonitoriaModal'));
 const CommandPaletteModal = lazyWithRetry(() => import('./components/CommandPaletteModal'));
+const NewMonitoriaModal = lazyWithRetry(() => import('./components/NewMonitoriaModal'));
 
 export default function App() {
   return (
@@ -477,6 +478,12 @@ function MainApp({
         toast.error('A avaliação foi fechada, mas não foi possível liberar o ticket. Atualize a fila.');
       });
     }
+  };
+
+  const [isNewMonitoriaModalOpen, setIsNewMonitoriaModalOpen] = useState(false);
+
+  const handleOpenNewMonitoria = () => {
+    setIsNewMonitoriaModalOpen(true);
   };
 
   const {
@@ -1086,13 +1093,34 @@ function MainApp({
         </React.Suspense>
       )}
 
+      {/* Modal Inteligente de Busca e Início de Nova Monitoria */}
+      {isNewMonitoriaModalOpen && (
+        <React.Suspense fallback={null}>
+          <NewMonitoriaModal
+            isOpen={isNewMonitoriaModalOpen}
+            onClose={() => setIsNewMonitoriaModalOpen(false)}
+            monitorias={monitorias}
+            users={users}
+            teams={teams}
+            forms={forms}
+            currentUser={userData}
+            onStartAudit={handleStartAuditFromQueue}
+            onViewExistingMonitoria={id => setInPlaceMonitoriaId(id)}
+            onOpenBlankForm={() => {
+              setFormPrefillData(undefined);
+              setIsFormOpen(true);
+            }}
+          />
+        </React.Suspense>
+      )}
+
       {/* Command Palette Global (Ctrl + K) */}
       <React.Suspense fallback={null}>
         <CommandPaletteModal
           isOpen={isCommandPaletteOpen}
           onClose={() => setIsCommandPaletteOpen(false)}
           onNavigateTab={setActiveTab}
-          onNewMonitoria={() => setIsFormOpen(true)}
+          onNewMonitoria={handleOpenNewMonitoria}
           onToggleTheme={() => handleThemeChange(sidebarIsDark ? 'light' : 'dark')}
           isDark={sidebarIsDark}
           monitorias={monitorias}
@@ -1666,7 +1694,7 @@ function MainApp({
           <div className="flex items-center gap-2 sm:gap-4">
             {(userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') && (
               <button
-                onClick={() => setIsFormOpen(true)}
+                onClick={handleOpenNewMonitoria}
                 className="hidden sm:flex action-primary h-10 px-5 rounded-xl text-sm font-semibold shadow-premium transition-all items-center gap-2"
               >
                 <Plus className="w-4 h-4" /> Nova Monitoria
@@ -1989,7 +2017,7 @@ function MainApp({
               <div className="animate-fade-in">
                 <MonitoriaList
                   user={userData}
-                  onNew={() => setIsFormOpen(true)}
+                  onNew={handleOpenNewMonitoria}
                   activeTab={activeTab}
                   initialFocusTarget={focusMonitoriaTarget}
                   onClearFocusTarget={() => setFocusMonitoriaTarget(null)}
@@ -2064,7 +2092,7 @@ function MainApp({
           {(userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') && (
             <button
               type="button"
-              onClick={() => setIsFormOpen(true)}
+              onClick={handleOpenNewMonitoria}
               className="relative -top-3 w-12 h-12 rounded-2xl bg-brand-accent text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform cursor-pointer"
               title="Nova Monitoria"
               aria-label="Nova Monitoria"

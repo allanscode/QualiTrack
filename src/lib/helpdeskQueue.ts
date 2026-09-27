@@ -663,3 +663,116 @@ export async function lookupTicketAgent(ticketId: string): Promise<TicketAgentLo
     return null;
   }
 }
+
+export interface ZendeskTicketDetails {
+  ticket_id: string;
+  subject: string;
+  description: string;
+  status: string;
+  channel?: string;
+  created_at: string;
+  satisfaction_rating?: {
+    score: string;
+    comment?: string;
+  } | null;
+  satisfaction_result: 'Positiva' | 'Negativa' | 'Sem pesquisa';
+  tags: string[];
+  agent?: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
+  requester?: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
+  organization_name?: string | null;
+  group_name?: string | null;
+  matched_agent?: {
+    id: string;
+    name: string;
+    email: string;
+    primary_team_id?: string | null;
+    team_ids?: string[];
+  } | null;
+  matched_team_id?: string | null;
+}
+
+export interface LookupTicketResult {
+  found: boolean;
+  ticket?: ZendeskTicketDetails;
+  message?: string;
+}
+
+/**
+ * Busca completa de um chamado no Zendesk pelo ID (ou URL).
+ * Usado pelo fluxo inteligente do botão "Nova Monitoria" para validar
+ * se o chamado existe, identificar duplicidades e permitir avaliação
+ * assistida com IA ou preenchimento manual guiado.
+ */
+export async function lookupTicketFromHelpdesk(ticketId: string): Promise<LookupTicketResult> {
+  const cleanId = ticketId.replace(/\D/g, '').trim();
+  if (!cleanId) {
+    return { found: false, message: 'Número de ticket inválido.' };
+  }
+
+  if (isMockMode || !supabase) {
+    // Simulação rica em mock mode
+    await new Promise(r => setTimeout(r, 600));
+    return {
+      found: true,
+      ticket: {
+        ticket_id: cleanId,
+        subject: `Atendimento ao Cliente - Suporte WebPosto #${cleanId}`,
+        description: 'Cliente entrou em contato solicitando auxílio no fechamento de caixa e conferência de turnos.',
+        status: 'solved',
+        channel: 'Chat',
+        created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+        satisfaction_rating: {
+          score: 'unoffered',
+          comment: undefined
+        },
+        satisfaction_result: 'Sem pesquisa',
+        tags: ['cliente_final', 'suporte_pdv', 'fechamento_caixa'],
+        agent: {
+          id: 9991,
+          name: 'Ana Suporte',
+          email: 'ana.suporte@empresa.com.br',
+        },
+        requester: {
+          id: 8881,
+          name: 'Carlos Gerente (Posto Ipiranga Centro)',
+          email: 'carlos@postoipiranga.com.br',
+        },
+        organization_name: 'Rede Posto Centro Ltda',
+        group_name: 'Suporte N1 - PDV',
+        matched_agent: null,
+        matched_team_id: null,
+      }
+    };
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+      body: { action: 'lookup_ticket', ticket_id: cleanId }
+    });
+
+    if (error) {
+      const msg = await extractFunctionErrorMessage(error, 'Falha ao consultar chamado no Zendesk.');
+      return { found: false, message: msg };
+    }
+
+    if (!data?.found || !data?.ticket) {
+      return { found: false, message: data?.message || 'Chamado não encontrado no Zendesk.' };
+    }
+
+    return {
+      found: true,
+      ticket: data.ticket as ZendeskTicketDetails,
+    };
+  } catch (err: any) {
+    console.error('[HelpdeskQueue] Erro ao buscar chamado no Zendesk:', err);
+    return { found: false, message: err?.message || 'Erro de conexão com o helpdesk.' };
+  }
+}

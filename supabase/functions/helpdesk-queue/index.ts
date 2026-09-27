@@ -71,6 +71,7 @@ const RequestSchema = z.object({
     'cancel_ai_evaluation',
     'resolve_agent',
     'lookup_ticket_agent',
+    'lookup_ticket',
     'sync_zendesk_groups',
     'backfill_agent_team'
   ]),
@@ -1210,6 +1211,124 @@ serve(async (req) => {
           existing_id: existing?.id || null,
           existing_team_id: existing?.primary_team_id || null,
         },
+      }, 200);
+    }
+
+    // 5.1 Busca completa de um ticket no Zendesk por ID para o fluxo de "Nova Monitoria"
+    // Retorna todos os metadados necessários para exibir o card de resumo
+    // e permite ao auditor escolher entre avaliação com IA ou manual.
+    // Também cataloga temporariamente o ticket no banco para garantir que as
+    // etapas subsequentes de IA passem na checagem de integridade.
+    if (action === 'lookup_ticket') {
+      if (!ticket_id || !/^\d+$/.test(ticket_id)) {
+        return jsonResponse({ error: 'ticket_id numérico é obrigatório para lookup_ticket' }, 400);
+      }
+
+      const ticketUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json?include=users,groups,organizations`;
+      const response = await fetch(ticketUrl, { headers: zendeskHeaders });
+
+      if (response.status === 404) {
+        return jsonResponse({ success: true, found: false, message: 'Ticket não encontrado no Zendesk.' }, 200);
+      }
+      if (!response.ok) {
+        throw new Error(`Zendesk Ticket API falhou (${response.status}).`);
+      }
+
+      const ticketData = await response.json();
+      const t = ticketData.ticket;
+      if (!t) {
+        return jsonResponse({ success: true, found: false, message: 'Ticket não encontrado no Zendesk.' }, 200);
+      }
+
+      const usersList = ticketData.users || [];
+      const groupsList = ticketData.groups || [];
+      const orgsList = ticketData.organizations || [];
+
+      const assignee = usersList.find((u: any) => u.id === t?.assignee_id);
+      const requester = usersList.find((u: any) => u.id === t?.requester_id);
+      const group = groupsList.find((g: any) => g.id === t?.group_id);
+      const org = orgsList.find((o: any) => o.id === t?.organization_id);
+
+      let existingAgent: any = null;
+      if (assignee?.email) {
+        const { data: foundUser } = await supabase
+          .from('users')
+          .select('id, name, email, primary_team_id, team_ids, active')
+          .eq('email', assignee.email.trim().toLowerCase())
+          .maybeSingle();
+        existingAgent = foundUser;
+      }
+
+      let matchedTeamId: string | null = existingAgent?.primary_team_id || existingAgent?.team_ids?.[0] || null;
+      if (!matchedTeamId && group?.name) {
+        const { data: foundTeam } = await supabase
+          .from('teams')
+          .select('id, name')
+          .ilike('name', group.name.trim())
+          .maybeSingle();
+        if (foundTeam) matchedTeamId = foundTeam.id;
+      }
+
+      const csatScore = t.satisfaction_rating?.score;
+      const isNegative = csatScore === 'bad' || csatScore === 'bad_with_comment';
+      const isPositive = csatScore === 'good' || csatScore === 'good_with_comment';
+      const queueTypeForCatalog = isNegative ? 'negativas' : isPositive ? 'positivas' : 'proativas';
+
+      try {
+        await supabase.from('queue_ticket_catalog').upsert({
+          ticket_id: String(t.id),
+          queue_type: queueTypeForCatalog,
+          verified_at: new Date().toISOString(),
+          ticket_snapshot: {
+            id: t.id,
+            subject: t.subject || '(Sem assunto)',
+            created_at: t.created_at,
+            channel: t.via?.channel || 'chat',
+            assignee: assignee ? { id: assignee.id, name: assignee.name, email: assignee.email } : null,
+            group: group ? { id: group.id, name: group.name } : null,
+          }
+        });
+      } catch (catErr) {
+        console.warn('[helpdesk-queue] Aviso ao catalogar ticket:', catErr);
+      }
+
+      return jsonResponse({
+        success: true,
+        found: true,
+        ticket: {
+          ticket_id: String(t.id),
+          subject: t.subject || '(Sem assunto)',
+          description: t.description || '',
+          status: t.status,
+          channel: t.via?.channel,
+          created_at: t.created_at,
+          satisfaction_rating: t.satisfaction_rating ? {
+            score: t.satisfaction_rating.score,
+            comment: t.satisfaction_rating.comment,
+          } : null,
+          satisfaction_result: csatStatusToSatisfactionResult(csatScore),
+          tags: Array.isArray(t.tags) ? t.tags : [],
+          agent: assignee ? {
+            id: assignee.id,
+            name: assignee.name,
+            email: assignee.email,
+          } : null,
+          requester: requester ? {
+            id: requester.id,
+            name: requester.name,
+            email: requester.email,
+          } : null,
+          organization_name: org?.name || null,
+          group_name: group?.name || null,
+          matched_agent: existingAgent ? {
+            id: existingAgent.id,
+            name: existingAgent.name,
+            email: existingAgent.email,
+            primary_team_id: existingAgent.primary_team_id,
+            team_ids: existingAgent.team_ids,
+          } : null,
+          matched_team_id: matchedTeamId,
+        }
       }, 200);
     }
 

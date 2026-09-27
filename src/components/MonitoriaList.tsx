@@ -14,7 +14,8 @@ import {
   FileText,
   Download,
   MessageSquare,
-  Award
+  Award,
+  Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadActionAttachment } from '../lib/monitoriaAttachments';
@@ -520,6 +521,20 @@ export default function MonitoriaList({
               >
                 Exportar CSV
               </Button>
+
+              {/* Botão Nova Monitoria */}
+              {['admin', 'gestor_qualidade', 'qualidade'].includes(user?.role || '') && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<Plus className="w-3.5 h-3.5" />}
+                  onClick={onNew}
+                  className="h-8 text-[10px] font-black uppercase tracking-wider shrink-0"
+                  title="Localizar chamado no Zendesk e iniciar nova monitoria"
+                >
+                  Nova Monitoria
+                </Button>
+              )}
 
               {/* Clear button — animated clean button pushed to the right */}
               <AnimatePresence>
