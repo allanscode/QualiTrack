@@ -106,14 +106,26 @@ export function useFeedbacks(currentUser: User | null) {
     }
   };
 
-  // Atendente confirma leitura e ciência
+  // Atendente confirma leitura e ciência (com validação estrita de titularidade)
   const acknowledgeFeedback = async (feedbackId: string, notes?: string) => {
     try {
+      if (!currentUser?.id) {
+        toast.error('Usuário não autenticado.');
+        return false;
+      }
+
+      // Validar titularidade para evitar BOLA / IDOR
+      const targetFeedback = feedbacks.find(f => f.id === feedbackId);
+      if (targetFeedback && targetFeedback.agent_id !== currentUser.id && currentUser.role !== 'admin') {
+        toast.error('Apenas o atendente titular pode assinar a ciência deste alinhamento.');
+        return false;
+      }
+
       const now = new Date().toISOString();
       const updates = {
         status: 'ciente' as const,
         agent_acknowledged_at: now,
-        agent_notes: notes || null,
+        agent_notes: notes?.trim() || null,
         updated_at: now,
       };
 
@@ -121,7 +133,11 @@ export function useFeedbacks(currentUser: User | null) {
         const res = await mockDb.update('agent_feedbacks', feedbackId, updates);
         if (res.error) throw res.error;
       } else {
-        const { error } = await supabase.from('agent_feedbacks').update(updates).eq('id', feedbackId);
+        let query = supabase.from('agent_feedbacks').update(updates).eq('id', feedbackId);
+        if (currentUser.role === 'suporte') {
+          query = query.eq('agent_id', currentUser.id);
+        }
+        const { error } = await query;
         if (error) throw error;
       }
 
@@ -135,12 +151,18 @@ export function useFeedbacks(currentUser: User | null) {
     }
   };
 
-  // Concluir plano de ação
+  // Concluir plano de ação (restrito a gestores e administradores)
   const completeFeedback = async (feedbackId: string) => {
     try {
+      if (!currentUser?.id || !['gestor_suporte', 'gestor_qualidade', 'admin'].includes(currentUser.role)) {
+        toast.error('Apenas gestores ou administradores podem concluir o plano de ação.');
+        return false;
+      }
+
       const now = new Date().toISOString();
       const updates = {
         status: 'concluido' as const,
+        completed_at: now,
         updated_at: now,
       };
 

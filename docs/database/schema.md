@@ -343,6 +343,7 @@ FROM monitorias;
 | `supabase/migrations/20260617000007_cleanup_orphan_tables_columns.sql` | Remove tabela órfã `critical_criteria` (nunca usada pelo app) |
 | `supabase/migrations/20260617000008_drop_monitorias_satisfaction.sql` | Remove coluna `satisfaction` (solta) de `monitorias` — app usa `satisfaction_result`, `satisfaction_has_record`, `satisfaction_record_text` |
 | `supabase/migrations/20260926000001_create_agent_feedbacks.sql` | Cria tabela `agent_feedbacks` (1:1, PDI, ciência digital) com RLS e triggers |
+| `supabase/migrations/20260926000002_harden_feedbacks_security.sql` | Endurecimento de segurança, trigger anti-tampering e blindagem de assinaturas digitais em feedbacks |
 
 ## RLS por Tabela
 

@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Printer, Copy, Check, FileText, TrendingUp, Users, Target, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { X, Printer, Copy, Check, FileText, TrendingUp, Users, Target, ShieldCheck, AlertTriangle, Mail } from 'lucide-react';
 import { Monitoria, User, Team, EvaluationForm } from '../../../types';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { toast } from 'sonner';
+import EmailReportModal from './EmailReportModal';
 
 interface ExecutiveReportModalProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ export default function ExecutiveReportModal({
     'No ciclo avaliado, a equipe manteve consistência técnica nos atendimentos. Recomenda-se reforço nos critérios ofensores mapeados neste relatório através de sessões individuais de 1:1 e treinamentos pontuais.'
   );
   const [copied, setCopied] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
   // Determinar datas conforme o preset
   const dateRange = useMemo(() => {
@@ -209,6 +211,9 @@ export default function ExecutiveReportModal({
       ) {
         map[id].critical++;
       }
+      if (typeof m.score === 'number' && !isNaN(m.score)) {
+        map[id].scores.push(m.score);
+      }
     });
 
     return Object.entries(map)
@@ -315,6 +320,15 @@ _Relatório emitido em ${new Date().toLocaleDateString('pt-BR')} por ${currentUs
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsEmailModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-500/30 bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 shadow-xs transition-colors cursor-pointer"
+              title="Disparar relatório executivo individualizado por e-mail para liderança"
+            >
+              <Mail className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Enviar por E-mail</span>
+            </button>
             <button
               type="button"
               onClick={handleCopyMarkdown}
@@ -631,6 +645,25 @@ _Relatório emitido em ${new Date().toLocaleDateString('pt-BR')} por ${currentUs
         </div>
 
       </div>
+
+      {isEmailModalOpen && (
+        <EmailReportModal
+          isOpen={isEmailModalOpen}
+          onClose={() => setIsEmailModalOpen(false)}
+          teamTitle={selectedTeam ? selectedTeam.name : 'Todas as Equipes (Visão Consolidada)'}
+          periodLabel={dateRange.label}
+          kpiSummary={{
+            avgScore: Math.round(avgScore * 10) / 10,
+            targetScore: config.targetScore,
+            totalAudits: totalVolume,
+            criticalRate: totalVolume > 0 ? Math.round((criticalErrorsCount / totalVolume) * 1000) / 10 : 0,
+          }}
+          teamManager={teamManager}
+          users={users}
+          currentUser={currentUser || null}
+          reportNotes={executiveNotes}
+        />
+      )}
     </div>,
     document.body
   );

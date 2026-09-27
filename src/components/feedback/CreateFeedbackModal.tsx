@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, MessageSquare, Award, AlertCircle, CheckSquare, Calendar, ChevronRight, HelpCircle, ChevronDown, ChevronUp, Sparkles, Lightbulb, Check } from 'lucide-react';
 import { User, Team, Monitoria } from '../../types';
@@ -17,6 +17,7 @@ interface CreateFeedbackModalProps {
     action_plan: string;
     deadline_date?: string | null;
   }) => Promise<boolean>;
+  currentUser?: User | null;
   users: User[];
   teams: Team[];
   monitorias?: Monitoria[];
@@ -46,13 +47,26 @@ export default function CreateFeedbackModal({
   isOpen,
   onClose,
   onSubmit,
+  currentUser,
   users,
   teams,
   monitorias = [],
   initialAgentId = '',
   initialMonitoriaId = '',
 }: CreateFeedbackModalProps) {
-  const supportAgents = users.filter(u => u.role === 'suporte' && u.active);
+  const supportAgents: User[] = useMemo(() => {
+    return users.filter(u => {
+      if (u.role !== 'suporte' || !u.active) return false;
+      if (currentUser?.role === 'gestor_suporte') {
+        const myTeams = currentUser.team_ids || (currentUser.primary_team_id ? [currentUser.primary_team_id] : []);
+        const agentTeams = u.team_ids || (u.primary_team_id ? [u.primary_team_id] : []);
+        if (myTeams.length > 0) {
+          return agentTeams.some(tid => myTeams.includes(tid));
+        }
+      }
+      return true;
+    });
+  }, [users, currentUser]);
 
   const [agentId, setAgentId] = useState(initialAgentId);
   const [selectedMonitoriaId, setSelectedMonitoriaId] = useState(initialMonitoriaId);
@@ -148,7 +162,7 @@ export default function CreateFeedbackModal({
                 className="w-full bg-surface-card border border-surface-border rounded-xl px-3 py-2 text-xs font-semibold text-brand-primary focus:outline-none focus:border-brand-accent"
               >
                 <option value="">Selecione o atendente...</option>
-                {supportAgents.map(a => (
+                {supportAgents.map((a: User) => (
                   <option key={a.id} value={a.id}>{a.name} ({a.email})</option>
                 ))}
               </select>

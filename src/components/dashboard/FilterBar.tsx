@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Calendar, X, RefreshCw, FileText } from 'lucide-react';
+import { Calendar, X, RefreshCw, FileText, BrainCircuit } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
 import CustomSelect from '../ui/CustomSelect';
 import CustomDatepicker from '../ui/CustomDatepicker';
@@ -7,11 +7,15 @@ import { useTheme } from '../../providers/ThemeProvider';
 import { m, AnimatePresence } from 'motion/react';
 import { getPresetDateRange, detectActivePreset } from '../../lib/dashboardDatePresets';
 import ExecutiveReportModal from './widgets/ExecutiveReportModal';
+import RootCauseAnalyzerModal from './widgets/RootCauseAnalyzerModal';
+import { useFeedbacks } from '../../hooks/useFeedbacks';
 
 export default function FilterBar() {
   const { resolvedTheme } = useTheme();
   const { filters, setFilters, users, teams, forms, loading, refresh, user, allMonitorias, dashboardRole, refreshCooldownEnd, refreshCooldownRemaining } = useDashboard();
+  const { feedbacks } = useFeedbacks(user);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isRootCauseOpen, setIsRootCauseOpen] = useState(false);
 
   const defaults = useMemo(() => ({
     startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0],
@@ -110,15 +114,26 @@ export default function FilterBar() {
           </button>
         )}
         {user?.role !== 'suporte' && (
-          <button
-            type="button"
-            onClick={() => setIsReportOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-primary bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/25 rounded-xl transition-all cursor-pointer"
-            title="Gerar e imprimir relatório executivo consolidado em PDF para reunião e envio a gestores"
-          >
-            <FileText className="w-3.5 h-3.5 text-brand-accent" />
-            <span>Relatório Executivo (PDF)</span>
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => setIsRootCauseOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 rounded-xl transition-all cursor-pointer"
+              title="Diagnóstico inteligente de causa raiz de ofensores e ROI dos feedbacks 1:1"
+            >
+              <BrainCircuit className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <span>Causa Raiz & ROI</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsReportOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-primary bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/25 rounded-xl transition-all cursor-pointer"
+              title="Gerar e imprimir relatório executivo consolidado em PDF para reunião e envio a gestores"
+            >
+              <FileText className="w-3.5 h-3.5 text-brand-accent" />
+              <span>Relatório Executivo (PDF)</span>
+            </button>
+          </>
         )}
         <button
           type="button"
@@ -259,6 +274,17 @@ export default function FilterBar() {
           initialStartDate={filters.startDate}
           initialEndDate={filters.endDate}
           currentUser={user}
+        />
+      )}
+
+      {isRootCauseOpen && (
+        <RootCauseAnalyzerModal
+          isOpen={isRootCauseOpen}
+          onClose={() => setIsRootCauseOpen(false)}
+          monitorias={allMonitorias}
+          forms={forms}
+          feedbacks={feedbacks}
+          teamName={teams.find(t => t.id === filters.teamId)?.name || 'Operação Global'}
         />
       )}
     </div>

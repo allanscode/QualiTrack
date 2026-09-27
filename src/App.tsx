@@ -7,7 +7,7 @@ import { ProtectedAuthForm } from './components/ui/ProtectedAuthForm';
 import React, { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck, Mail, MailOpen, BookOpen, Sparkles, Brain, Menu } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck, Mail, MailOpen, BookOpen, Sparkles, Brain, Menu, MessageSquare, Award } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -20,6 +20,7 @@ import { AuthProvider, useAuth } from './providers/AuthProvider';
 import { PresenceProvider } from './providers/PresenceProvider';
 import { useSidebarManager } from './hooks/useSidebarManager';
 import { useMonitoriaData } from './hooks/useMonitoriaData';
+import { useFeedbacks } from './hooks/useFeedbacks';
 import { supabase } from './lib/supabase';
 import { fetchAIGuidelines } from './lib/aiGuidelines';
 import { releaseQueueTicketAssignment, canManageQueueAssignments } from './lib/queueDistribution';
@@ -410,6 +411,7 @@ function MainApp({
   const { theme } = useAuth();
   const { users, teams, forms, refreshAll } = useStaticData();
   const { monitorias } = useMonitoriaData(userData, activeTab);
+  const { feedbacks } = useFeedbacks(userData);
   const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
   const [isSettingsHovered, setIsSettingsHovered] = React.useState(false);
   const [focusMonitoriaTarget, setFocusMonitoriaTarget] = React.useState<{ monitoriaId?: string; ticketId?: string } | null>(null);
@@ -489,9 +491,10 @@ function MainApp({
 
   const [showTeamList, setShowTeamList] = React.useState(false);
   const [showNotifications, setShowNotifications] = React.useState(false);
+  const notificationsStorageKey = userData?.id ? `qualitrack_read_notifications_${userData.id}` : 'qualitrack_read_notifications';
   const [readNotificationIds, setReadNotificationIds] = React.useState<Set<string>>(() => {
     try {
-      const saved = localStorage.getItem('qualitrack_read_notifications');
+      const saved = localStorage.getItem(notificationsStorageKey);
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch {
       return new Set();
@@ -688,6 +691,81 @@ function MainApp({
       }
     }
 
+    // Notificações de Feedbacks 1:1 para Atendente (Pendente de Ciência)
+    if (userData?.role === 'suporte') {
+      const pendingFeedbacks = feedbacks.filter(
+        fb => fb.agent_id === userData.id && fb.status === 'pendente_ciencia'
+      );
+      pendingFeedbacks.forEach(fb => {
+        const notifId = `feedback-pending-${fb.id}`;
+        const timeStr = fb.created_at
+          ? formatDate(new Date(fb.created_at), "dd/MM 'às' HH:mm")
+          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+        list.push({
+          id: notifId,
+          title: 'Feedback 1:1 Aguardando Ciência',
+          message: `Você possui um novo alinhamento "${fb.title}" com Plano de Ação Combinado aguardando sua assinatura digital.`,
+          time: timeStr,
+          type: 'monitoria',
+          iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+          icon: <MessageSquare className="w-3.5 h-3.5" />,
+          targetTab: 'dashboard',
+          read: readNotificationIds.has(notifId),
+        });
+      });
+    }
+
+    // Notificações de Feedbacks para Gestores (Ciência Confirmada Recentemente)
+    if (['gestor_suporte', 'gestor_qualidade', 'admin'].includes(userData?.role || '')) {
+      const acknowledgedFeedbacks = feedbacks.filter(
+        fb => fb.status === 'ciente' && fb.agent_acknowledged_at
+      );
+      acknowledgedFeedbacks.slice(0, 3).forEach(fb => {
+        const notifId = `feedback-ack-${fb.id}`;
+        const timeStr = fb.agent_acknowledged_at
+          ? formatDate(new Date(fb.agent_acknowledged_at), "dd/MM 'às' HH:mm")
+          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+        list.push({
+          id: notifId,
+          title: 'Ciência de Feedback Confirmada',
+          message: `O atendente confirmou a ciência do alinhamento "${fb.title}".`,
+          time: timeStr,
+          type: 'monitoria',
+          iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+          icon: <CheckCheck className="w-3.5 h-3.5" />,
+          targetTab: 'dashboard',
+          read: readNotificationIds.has(notifId),
+        });
+      });
+    }
+
+    // Alerta de SLA / Prazo de Ação Próximo (< 4 horas)
+    const nowMs = Date.now();
+    const urgentDeadlines = monitorias.filter(m => {
+      if (m.active === false || m.status === 'concluida') return false;
+      if (userData?.role === 'suporte' && m.evaluated_id !== userData.id) return false;
+      if (!m.action_deadline_at) return false;
+      const dlMs = new Date(m.action_deadline_at).getTime();
+      const diffHours = (dlMs - nowMs) / (1000 * 3600);
+      return diffHours > 0 && diffHours <= 4;
+    });
+    urgentDeadlines.slice(0, 3).forEach(m => {
+      const notifId = `sla-urgent-${m.id}`;
+      list.push({
+        id: notifId,
+        title: 'Prazo de Ação Expirando (SLA)',
+        message: `A monitoria do chamado #${m.ticket_id} possui menos de 4h para expirar o prazo regulamentar.`,
+        time: 'Urgente',
+        type: 'contestacao',
+        iconBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+        icon: <Clock className="w-3.5 h-3.5" />,
+        targetTab: 'monitorias',
+        monitoriaId: m.id,
+        ticketId: m.ticket_id,
+        read: readNotificationIds.has(notifId),
+      });
+    });
+
     // Notificações de Filas para Qualidade / Gestores / Admin (WQ-25)
     if (userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') {
       const negativeMsg = pendingNegativesCount > 0
@@ -813,7 +891,7 @@ function MainApp({
     }
 
     return list;
-  }, [userData, monitorias, readNotificationIds, sessionStartTime, guidelines]);
+  }, [userData, monitorias, readNotificationIds, sessionStartTime, guidelines, feedbacks]);
 
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
 
@@ -821,7 +899,7 @@ function MainApp({
     const allIds = new Set(notifications.map(n => n.id));
     setReadNotificationIds(allIds);
     try {
-      localStorage.setItem('qualitrack_read_notifications', JSON.stringify(Array.from(allIds)));
+      localStorage.setItem(notificationsStorageKey, JSON.stringify(Array.from(allIds)));
     } catch {}
     toast.success('Todas as notificações foram marcadas como lidas.');
   };
@@ -831,7 +909,7 @@ function MainApp({
     next.add(item.id);
     setReadNotificationIds(next);
     try {
-      localStorage.setItem('qualitrack_read_notifications', JSON.stringify(Array.from(next)));
+      localStorage.setItem(notificationsStorageKey, JSON.stringify(Array.from(next)));
     } catch {}
 
     if (item.targetTab) {

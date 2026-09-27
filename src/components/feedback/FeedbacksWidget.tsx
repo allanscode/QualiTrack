@@ -176,6 +176,7 @@ export default function FeedbacksWidget({
           isOpen={isCreateOpen}
           onClose={() => setIsCreateOpen(false)}
           onSubmit={onCreateFeedback}
+          currentUser={currentUser}
           users={users}
           teams={teams}
           monitorias={monitorias}
