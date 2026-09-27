@@ -20,6 +20,7 @@ import { retryAt } from './ai-retry.ts';
 import { canReadQueueTicket, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
 import { satisfactionResponseTimestamp } from './satisfaction.ts';
+import { literalSearchTerm, ticketMatchesQueue } from './queue-search.ts';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
@@ -566,22 +567,7 @@ serve(async (req) => {
           if (response.ok) {
             const ticketData = await response.json();
             const t = ticketData.ticket;
-            let matchesQueue = false;
-            if (t) {
-              const csat = t.satisfaction_rating?.score;
-              if (queue_type === 'negativas') {
-                matchesQueue = ['bad', 'bad_with_comment'].includes(csat) && (!VALIDATED_TAG || !t.tags?.includes(VALIDATED_TAG));
-              } else if (queue_type === 'positivas') {
-                matchesQueue = ['good', 'good_with_comment'].includes(csat);
-              } else if (queue_type === 'filhos') {
-                matchesQueue = Array.isArray(t.tags) && t.tags.includes('existe_ticket_filho');
-              } else if (queue_type === 'filhos_invalidos') {
-                matchesQueue = Array.isArray(t.tags) && t.tags.includes('ticket_filho_invalido');
-              } else {
-                // proativas: tickets sem avaliação prévia 'good' ou 'bad'
-                matchesQueue = !['good', 'good_with_comment', 'bad', 'bad_with_comment'].includes(csat);
-              }
-            }
+            const matchesQueue = t && ticketMatchesQueue(t, queue_type, VALIDATED_TAG);
             if (matchesQueue) {
               results = [t];
               sideloadedUsers = new Map<number, any>((ticketData.users || []).map((u: any) => [u.id, u]));
@@ -593,11 +579,13 @@ serve(async (req) => {
               sideloadedGroups = new Map();
               sideloadedOrgs = new Map();
             }
-          } else {
+          } else if (response.status === 404) {
             results = [];
             sideloadedUsers = new Map();
             sideloadedGroups = new Map();
             sideloadedOrgs = new Map();
+          } else {
+            throw new Error(`Zendesk Tickets API falhou (${response.status}).`);
           }
           hasMore = false;
           nextCursor = null;
@@ -616,8 +604,11 @@ serve(async (req) => {
           } else {
             searchQuery += ' satisfaction_score:unoffered';
           }
-          const cleanTerm = searchTerm.replace(/["\\]/g, ' ').trim();
-          searchQuery += ` ${cleanTerm}`;
+          try {
+            searchQuery += ` ${literalSearchTerm(searchTerm)}`;
+          } catch {
+            return jsonResponse({ error: 'Informe palavras ou o número do ticket.' }, 400);
+          }
 
           let trustedCursor: string | null;
           try {
@@ -627,19 +618,19 @@ serve(async (req) => {
             return jsonResponse({ error: 'Cursor de paginação inválido.' }, 400);
           }
           const url = trustedCursor
-            || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
+            || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups,organizations&per_page=${PAGE_SIZE}`;
           const response = await fetch(url, { headers: zendeskHeaders });
           if (!response.ok) {
             throw new Error(`Zendesk Search API falhou (${response.status}).`);
           }
 
           const searchData = await response.json();
-          results = searchData.results || [];
+          results = (searchData.results || []).filter((ticket: Parameters<typeof ticketMatchesQueue>[0]) => ticketMatchesQueue(ticket, queue_type, VALIDATED_TAG));
           sideloadedUsers = new Map<number, any>((searchData.users || []).map((u: any) => [u.id, u]));
           sideloadedGroups = new Map<number, any>((searchData.groups || []).map((g: any) => [g.id, g]));
           sideloadedOrgs = new Map<number, any>((searchData.organizations || []).map((o: any) => [o.id, o]));
-          hasMore = !!searchData.meta?.has_more;
-          nextCursor = hasMore ? (searchData.links?.next || null) : null;
+          nextCursor = searchData.next_page || null;
+          hasMore = Boolean(nextCursor);
         }
       } else {
         // Quando a view real do Zendesk está configurada, busca exatamente os
@@ -702,7 +693,7 @@ serve(async (req) => {
             '/api/v2/search.json', searchQuery); }
           catch { return jsonResponse({ error: 'Cursor de paginação inválido.' }, 400); }
           const url = trustedCursor
-            || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
+            || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups,organizations&per_page=${PAGE_SIZE}`;
           const response = await fetch(url, { headers: zendeskHeaders });
 
           if (!response.ok) {
@@ -714,8 +705,8 @@ serve(async (req) => {
           sideloadedUsers = new Map<number, any>((searchData.users || []).map((u: any) => [u.id, u]));
           sideloadedGroups = new Map<number, any>((searchData.groups || []).map((g: any) => [g.id, g]));
           sideloadedOrgs = new Map<number, any>((searchData.organizations || []).map((o: any) => [o.id, o]));
-          hasMore = !!searchData.meta?.has_more;
-          nextCursor = hasMore ? (searchData.links?.next || null) : null;
+          nextCursor = searchData.next_page || null;
+          hasMore = Boolean(nextCursor);
         }
       }
 
@@ -880,7 +871,7 @@ serve(async (req) => {
 
       // A mesma janela recente alimenta monitor e supervisao. Assim, um
       // ticket atribuido em outra pagina/sessao nao desaparece do admin.
-      if (shouldMergeRecentQueueSnapshot(queue_type, parseResult.data.cursor)) {
+      if (shouldMergeRecentQueueSnapshot(queue_type, parseResult.data.cursor, searchTerm)) {
         const recentSince = new Date(Date.now() - 15 * 60_000).toISOString();
         const { data: catalogRows, error: recentError } = await supabase.from('queue_ticket_catalog')
           .select('ticket_id, ticket_snapshot').eq('queue_type', queue_type)

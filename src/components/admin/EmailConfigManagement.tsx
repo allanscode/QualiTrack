@@ -87,6 +87,7 @@ export default function EmailConfigManagement() {
 
       const updatedConfig: EmailReportConfig = {
         ...localConfig,
+        autoDispatchEnabled: false,
         extraRecipients: parsedExtras,
       };
 
@@ -97,9 +98,9 @@ export default function EmailConfigManagement() {
 
       setLocalConfig(updatedConfig);
       toast.success('Configurações de e-mail e relatórios salvas com sucesso!');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[EmailConfigManagement] Erro ao salvar:', err);
-      toast.error(err.message || 'Erro ao salvar configurações.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar configurações.');
     } finally {
       setSaving(false);
     }
@@ -142,9 +143,9 @@ export default function EmailConfigManagement() {
       }
 
       toast.success(`E-mail de teste disparado com sucesso para ${userData.email}! Verifique sua caixa de entrada.`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[EmailConfigManagement] Erro no teste:', err);
-      toast.error(err.message || 'Falha ao enviar e-mail de teste.');
+      toast.error(err instanceof Error ? err.message : 'Falha ao enviar e-mail de teste.');
     } finally {
       setTesting(false);
     }
@@ -159,19 +160,12 @@ export default function EmailConfigManagement() {
             <h2 className="text-base font-extrabold text-brand-primary">
               Configurações de E-mails & Relatórios Executivos
             </h2>
-            {localConfig.autoDispatchEnabled ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <CheckCircle2 className="w-3 h-3" />
-                Envio Automático Ativo
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-500/10 text-slate-500 border border-slate-500/20">
-                Envio Automático Desativado
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-surface-subtle text-brand-muted border border-surface-border">
+              Envio manual disponível
+            </span>
           </div>
           <p className="text-xs text-brand-muted leading-relaxed">
-            Configure o remetente oficial, o agendamento de relatórios periódicos para gestores de equipe e o disparo direto pelo sistema.
+            Configure o nome e o assunto dos relatórios enviados manualmente pelo sistema.
           </p>
         </div>
 
@@ -252,17 +246,18 @@ export default function EmailConfigManagement() {
 
             <div>
               <label className="block text-[11px] font-bold text-brand-primary mb-1 uppercase tracking-wider">
-                E-mail de Resposta (Reply-To / Remetente)
+                E-mail de resposta personalizado — indisponível
               </label>
               <input
                 type="email"
+                disabled
                 value={localConfig.senderEmail}
                 onChange={e => setLocalConfig(prev => ({ ...prev, senderEmail: e.target.value }))}
                 placeholder="Ex: qualidade@empresa.com.br (opcional)"
                 className="w-full text-xs px-3 py-2 rounded-xl bg-surface-subtle border border-surface-border text-brand-primary focus:outline-none focus:border-brand-accent transition-colors"
               />
               <span className="text-[10px] text-brand-muted mt-1 block">
-                Se vazio, o e-mail configurado no servidor SMTP do sistema será utilizado como remetente.
+                Os envios usam o remetente institucional configurado. Este campo ainda não altera o endereço de resposta.
               </span>
             </div>
 
@@ -299,7 +294,7 @@ export default function EmailConfigManagement() {
                   Envio Automático Agendado
                 </h3>
                 <p className="text-[11px] text-brand-muted">
-                  Disparo periódico recorrente de relatórios consolidados
+                  Ainda não disponível. Use o envio manual no relatório executivo.
                 </p>
               </div>
             </div>
@@ -308,15 +303,16 @@ export default function EmailConfigManagement() {
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                checked={localConfig.autoDispatchEnabled}
-                onChange={e => setLocalConfig(prev => ({ ...prev, autoDispatchEnabled: e.target.checked }))}
+                checked={false}
+                disabled
+                aria-label="Envio automático ainda não disponível"
                 className="sr-only peer"
               />
               <div className="w-10 h-5 bg-surface-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
             </label>
           </div>
 
-          <div className={`space-y-3 transition-opacity ${localConfig.autoDispatchEnabled ? 'opacity-100' : 'opacity-60'}`}>
+          <fieldset disabled className="space-y-3 opacity-60">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold text-brand-primary mb-1 uppercase tracking-wider">
@@ -384,7 +380,7 @@ export default function EmailConfigManagement() {
                 </select>
               </div>
             )}
-          </div>
+          </fieldset>
         </Card>
       </div>
 
@@ -399,12 +395,12 @@ export default function EmailConfigManagement() {
               Destinatários do Relatório Automático
             </h3>
             <p className="text-[11px] text-brand-muted">
-              Selecione quais perfis recebem os relatórios consolidados de suas respectivas equipes
+              Preferências para uso futuro. Nenhum envio automático será realizado.
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <fieldset disabled className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label className="flex items-start gap-2.5 p-3 rounded-xl bg-surface-subtle border border-surface-border cursor-pointer hover:border-brand-accent/50 transition-colors">
             <input
               type="checkbox"
@@ -455,13 +451,14 @@ export default function EmailConfigManagement() {
               </span>
             </div>
           </label>
-        </div>
+        </fieldset>
 
         <div>
           <label className="block text-[11px] font-bold text-brand-primary mb-1 uppercase tracking-wider">
             E-mails Adicionais de Liderança (Lista de Distribuição)
           </label>
           <textarea
+            disabled
             rows={3}
             value={extraRecipientsText}
             onChange={e => setExtraRecipientsText(e.target.value)}
@@ -469,7 +466,7 @@ export default function EmailConfigManagement() {
             className="w-full text-xs p-3 rounded-xl bg-surface-subtle border border-surface-border text-brand-primary placeholder:text-brand-muted/60 focus:outline-none focus:border-brand-accent transition-colors font-mono resize-none"
           />
           <span className="text-[10px] text-brand-muted mt-1 block">
-            Insira um e-mail por linha ou separados por vírgula. Esses endereços receberão o resumo de todas as equipes no disparo automático.
+            Lista reservada para o agendamento futuro. Selecione os destinatários a cada envio manual.
           </span>
         </div>
       </Card>

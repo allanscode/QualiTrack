@@ -4,6 +4,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { corsFor, rejectRequest, escapeHtml } from '../_shared/http.ts';
 import { emailRecipientAllowed, smtpConfiguration } from '../_shared/email-policy.ts';
+import { reportMetrics, reportSubject } from './report-input.ts';
 
 const runtime = Deno as unknown as { writeAll?: (w: { write(b: Uint8Array): Promise<number> }, b: Uint8Array) => Promise<void> };
 runtime.writeAll ??= async (writer, bytes) => {
@@ -30,9 +31,15 @@ serve(async req => {
   if (error || !user) return json({ success: false, error: 'Sessão inválida' }, 401);
   const { data: caller } = await db.from('users').select('role,active').eq('id', user.id).maybeSingle();
   if (!caller?.active || !['admin', 'gestor_qualidade'].includes(caller.role)) return json({ success: false, error: 'Acesso negado' }, 403);
-  const body = await req.json().catch(() => null);
+  if (Number(req.headers.get('content-length') || 0) > 32_768) return json({ success: false, error: 'Payload muito grande.' }, 413);
+  const rawBody = await req.text();
+  if (new TextEncoder().encode(rawBody).length > 32_768) return json({ success: false, error: 'Payload muito grande.' }, 413);
+  let body;
+  try { body = JSON.parse(rawBody); } catch { return json({ success: false, error: 'JSON inválido.' }, 400); }
 
   if (body?.type === 'executive_report') {
+    const metrics = reportMetrics(body.kpiSummary);
+    if (!metrics) return json({ success: false, error: 'Indicadores do relatório inválidos.' }, 400);
     const rawRecipients: unknown = body.recipients;
     if (!Array.isArray(rawRecipients) || rawRecipients.length === 0 || rawRecipients.length > 50) {
       return json({ success: false, error: 'Lista de destinatários inválida ou vazia (máx 50).' }, 400);
@@ -55,9 +62,7 @@ serve(async req => {
     if (callerLimit.error) return json({ success: false, error: 'Serviço indisponível' }, 503);
     if (!callerLimit.data) return json({ success: false, error: 'Limite de envio atingido (máx 30 disparos por 15min).' }, 429);
 
-    const subject = typeof body.subject === 'string' && body.subject.trim()
-      ? body.subject.replace(/[\r\n]+/g, ' ').slice(0, 300).trim()
-      : '[QualiTrack] Relatório Executivo de Qualidade';
+    const subject = reportSubject(body.subject);
 
     const teamTitle = escapeHtml(typeof body.teamTitle === 'string' ? body.teamTitle.slice(0, 100) : 'Equipe');
     const periodLabel = escapeHtml(typeof body.periodLabel === 'string' ? body.periodLabel.slice(0, 100) : 'Período Atual');
@@ -65,10 +70,10 @@ serve(async req => {
     const reportNotes = escapeHtml(typeof body.reportNotes === 'string' ? body.reportNotes.slice(0, 2000) : '');
     const senderName = escapeHtml(typeof body.senderName === 'string' ? body.senderName.slice(0, 100) : 'QualiTrack - Gestão da Qualidade');
 
-    const avgScore = Number(body.kpiSummary?.avgScore ?? 0).toFixed(1);
-    const targetScore = Number(body.kpiSummary?.targetScore ?? 75);
-    const totalAudits = Math.max(0, Math.floor(Number(body.kpiSummary?.totalAudits ?? 0)));
-    const criticalRate = Number(body.kpiSummary?.criticalRate ?? 0).toFixed(1);
+    const avgScore = metrics.avgScore.toFixed(1);
+    const targetScore = metrics.targetScore;
+    const totalAudits = metrics.totalAudits;
+    const criticalRate = metrics.criticalRate.toFixed(1);
 
     const scoreColor = Number(avgScore) >= targetScore ? '#10B981' : '#F59E0B';
 
@@ -158,8 +163,8 @@ serve(async req => {
         });
       }
       return json({ success: true, count: recipients.length });
-    } catch (sendErr) {
-      console.error('send-email: falha no envio SMTP de relatório', sendErr);
+    } catch {
+      console.error('send-email: falha no envio SMTP de relatório');
       return json({ success: false, error: 'Falha no servidor SMTP ao disparar o relatório. Verifique a configuração de SMTP.' }, 503);
     } finally {
       try { await client.close(); } catch { /* ignore */ }
