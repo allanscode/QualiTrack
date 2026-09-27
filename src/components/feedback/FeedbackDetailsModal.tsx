@@ -12,6 +12,10 @@ import {
   ExternalLink,
   ShieldCheck,
   Lightbulb,
+  ThumbsUp,
+  Target,
+  Smile,
+  Shield,
 } from 'lucide-react';
 import { AgentFeedback, User, Team, Monitoria } from '../../types';
 import Badge from '../ui/Badge';
@@ -62,6 +66,14 @@ export default function FeedbackDetailsModal({
   const managerUser = users.find(u => u.id === feedback.manager_id);
   const team = teams.find(t => t.id === feedback.team_id);
   const linkedMonitoria = monitorias.find(m => m.id === feedback.monitoria_id);
+
+  // Tipagem inferida
+  const isOneOnOne = feedback.title.startsWith('[1:1]') || feedback.title.toLowerCase().includes('1:1');
+  const isPositiveFeedback = !isOneOnOne && (
+    feedback.title.toLowerCase().includes('positivo') ||
+    feedback.title.toLowerCase().includes('elogio') ||
+    (feedback.improvements && feedback.improvements.toLowerCase().includes('conduta exemplar'))
+  );
 
   const handleSign = async () => {
     if (submitting) return;
@@ -124,13 +136,23 @@ export default function FeedbackDetailsModal({
       <div
         ref={dialogRef}
         {...dialogProps}
-        className="relative w-full max-w-2xl bg-surface-bg border border-surface-border rounded-2xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[90vh] focus:outline-none"
+        className="relative w-full max-w-2xl bg-surface-bg border border-surface-border rounded-2xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh] focus:outline-none"
       >
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-surface-border flex items-center justify-between bg-surface-card flex-shrink-0 gap-3">
           <div className="min-w-0 pr-3 flex-1">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               {getStatusBadge(feedback.status)}
+              {isPositiveFeedback && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  Reconhecimento Positivo
+                </span>
+              )}
+              {isOneOnOne && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                  Sessão 1:1
+                </span>
+              )}
               <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">
                 {new Date(feedback.created_at).toLocaleDateString('pt-BR')}
               </span>
@@ -154,7 +176,7 @@ export default function FeedbackDetailsModal({
         </div>
 
         {/* Conteúdo rolável */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 text-xs text-brand-primary">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs text-brand-primary">
           {/* Mensagem de Erro Visível */}
           {actionError && (
             <div
@@ -186,7 +208,7 @@ export default function FeedbackDetailsModal({
               <div className="min-w-0">
                 <span className="text-[10px] uppercase font-bold text-brand-muted block">Gestor Responsável</span>
                 <span className="font-bold text-brand-primary block truncate">{managerUser?.name || 'Gestão'}</span>
-                <span className="text-[10px] text-brand-muted block truncate">Realizador do 1:1</span>
+                <span className="text-[10px] text-brand-muted block truncate">Realizador do Registro</span>
               </div>
             </div>
           </div>
@@ -218,49 +240,125 @@ export default function FeedbackDetailsModal({
             </div>
           )}
 
-          {/* Pontos Fortes */}
-          {feedback.strengths && (
-            <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/20">
-              <h3 className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 mb-1.5">
-                <Award className="w-3.5 h-3.5 shrink-0" /> Pontos Fortes & Reconhecimento
-              </h3>
-              <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium break-words whitespace-pre-wrap">
-                {feedback.strengths}
-              </p>
-            </div>
-          )}
+          {/* VISUALIZAÇÃO SE FOR FEEDBACK POSITIVO */}
+          {isPositiveFeedback ? (
+            <div className="space-y-4 animate-fade-in">
+              <div className="p-4 sm:p-5 rounded-2xl border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <ThumbsUp className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                      Pontos Positivos & Reconhecimento
+                    </h3>
+                    <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80">
+                      Conduta exemplar observada pela gestão
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium break-words whitespace-pre-wrap pl-1">
+                  {feedback.strengths || feedback.improvements}
+                </p>
+              </div>
 
-          {/* Oportunidades de Melhoria */}
-          <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/20">
-            <h3 className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5 mb-1.5">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> Oportunidades de Melhoria (Pontos a Desenvolver)
-            </h3>
-            <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium break-words whitespace-pre-wrap">
-              {feedback.improvements}
-            </p>
-          </div>
-
-          {/* Plano de Ação Combinado */}
-          <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20">
-            <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
-              <h3 className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
-                <CheckSquare className="w-3.5 h-3.5 shrink-0" /> Plano de Ação Combinado (PDI)
-              </h3>
-              {feedback.deadline_date && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 dark:text-blue-300">
-                  <Calendar className="w-3 h-3 shrink-0" />
-                  Meta: {new Date(feedback.deadline_date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                </span>
+              {/* Boas Práticas se houver */}
+              {feedback.action_plan && !feedback.action_plan.includes('Continuar aplicando os padrões') && (
+                <div className="p-3.5 rounded-xl border border-surface-border bg-surface-card space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted flex items-center gap-1.5">
+                    <Award className="w-3.5 h-3.5 text-amber-500" />
+                    Direcionamento para Manutenção das Boas Práticas
+                  </span>
+                  <p className="text-xs text-brand-primary leading-relaxed font-medium break-words whitespace-pre-wrap">
+                    {feedback.action_plan}
+                  </p>
+                </div>
               )}
             </div>
-            <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-wrap break-words">
-              {feedback.action_plan}
-            </p>
-            <div className="mt-2.5 pt-2 border-t border-blue-500/15 flex items-center gap-1.5 text-[10px] text-blue-700/80 dark:text-blue-300/80">
-              <Lightbulb className="w-3 h-3 flex-shrink-0" />
-              <span>Compromisso prático de evolução profissional combinado na sessão de 1:1.</span>
+          ) : isOneOnOne ? (
+            /* VISUALIZAÇÃO SE FOR ALINHAMENTO 1:1 & PDI */
+            <div className="space-y-4 animate-fade-in">
+              {/* Balanço / Clima */}
+              {feedback.strengths && (
+                <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-950/20 space-y-1.5">
+                  <h3 className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                    <Award className="w-3.5 h-3.5 shrink-0" />
+                    Balanço do Período & Reconhecimento
+                  </h3>
+                  <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium break-words whitespace-pre-wrap">
+                    {feedback.strengths}
+                  </p>
+                </div>
+              )}
+
+              {/* Focos de Desenvolvimento */}
+              <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-50/30 dark:bg-amber-950/20 space-y-1.5">
+                <h3 className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  Oportunidades & Focos de Desenvolvimento
+                </h3>
+                <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium break-words whitespace-pre-wrap">
+                  {feedback.improvements}
+                </p>
+              </div>
+
+              {/* Metas Combinadas de PDI */}
+              <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-50/30 dark:bg-blue-950/20 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 shrink-0" />
+                    Plano de Desenvolvimento Individual (PDI)
+                  </h3>
+                  {feedback.deadline_date && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 dark:text-purple-300">
+                      <Calendar className="w-3 h-3 shrink-0" />
+                      Próximo 1:1: {new Date(feedback.deadline_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-wrap break-words">
+                  {feedback.action_plan}
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* VISUALIZAÇÃO SE FOR FEEDBACK DE OPORTUNIDADE DE MELHORIA */
+            <div className="space-y-4 animate-fade-in">
+              {/* Oportunidades de Melhoria */}
+              <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/20 space-y-1.5">
+                <h3 className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  Oportunidades de Melhoria (Pontos a Desenvolver)
+                </h3>
+                <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium break-words whitespace-pre-wrap">
+                  {feedback.improvements}
+                </p>
+              </div>
+
+              {/* Plano de Ação Corretivo */}
+              <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
+                    <CheckSquare className="w-3.5 h-3.5 shrink-0" />
+                    Plano de Ação Corretivo Imediato
+                  </h3>
+                  {feedback.deadline_date && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 dark:text-blue-300">
+                      <Calendar className="w-3 h-3 shrink-0" />
+                      Prazo: {new Date(feedback.deadline_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-wrap break-words">
+                  {feedback.action_plan}
+                </p>
+                <div className="pt-2 border-t border-blue-500/15 flex items-center gap-1.5 text-[10px] text-blue-700/80 dark:text-blue-300/80">
+                  <Lightbulb className="w-3 h-3 flex-shrink-0" />
+                  <span>Compromisso prático alinhado com a liderança para evolução do atendimento.</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Status de Ciência / Assinatura do Atendente */}
           {feedback.agent_acknowledged_at ? (
@@ -282,11 +380,15 @@ export default function FeedbackDetailsModal({
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-brand-accent shrink-0" />
                 <span className="text-xs font-black uppercase tracking-wider text-brand-accent">
-                  Confirmação de Ciência Obrigatória
+                  Confirmação de Ciência Digital
                 </span>
               </div>
               <p className="text-[11px] text-brand-muted leading-relaxed">
-                Ao confirmar, você atesta que participou desta sessão de 1:1, leu os direcionamentos e se compromete com o plano de ação acordado.
+                {isPositiveFeedback
+                  ? 'Ao confirmar, você atesta a leitura deste reconhecimento profissional.'
+                  : isOneOnOne
+                  ? 'Ao confirmar, você atesta que participou da sessão de 1:1 e se compromete com as metas de desenvolvimento acordadas.'
+                  : 'Ao confirmar, você atesta que leu as orientações e se compromete com o plano de ação alinhado.'}
               </p>
               <div>
                 <label
@@ -301,23 +403,33 @@ export default function FeedbackDetailsModal({
                   value={agentNotes}
                   onChange={e => setAgentNotes(e.target.value)}
                   placeholder="Espaço para suas considerações..."
-                  className="w-full bg-surface-card border border-surface-border rounded-xl p-2.5 text-base sm:text-xs text-brand-primary focus:outline-none focus:border-brand-accent resize-none font-medium"
+                  className="w-full bg-surface-card border border-surface-border rounded-xl p-2.5 text-xs text-brand-primary focus:outline-none focus:border-brand-accent resize-none font-medium"
                 />
               </div>
               <div className="flex justify-end">
                 <Button
                   onClick={handleSign}
                   disabled={submitting}
-                  className="px-5 py-2 text-xs font-bold min-h-[44px] sm:min-h-0 flex items-center justify-center"
+                  className={`px-5 py-2 text-xs font-bold min-h-[44px] sm:min-h-0 flex items-center justify-center ${
+                    isPositiveFeedback
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : isOneOnOne
+                      ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                      : 'bg-brand-accent hover:bg-brand-accent/90 text-white'
+                  }`}
                 >
-                  {submitting ? 'Confirmando...' : 'Confirmar Ciência do Feedback'}
+                  {submitting
+                    ? 'Confirmando...'
+                    : isPositiveFeedback
+                    ? 'Confirmar Leitura do Reconhecimento'
+                    : 'Confirmar Ciência Digital'}
                 </Button>
               </div>
             </div>
           ) : (
             <div className="p-3 rounded-xl border border-surface-border bg-surface-subtle/30 flex items-center gap-2 text-brand-muted text-xs">
               <Clock className="w-4 h-4 text-amber-500 shrink-0" />
-              <span>O atendente ainda não confirmou a leitura deste feedback.</span>
+              <span>O atendente ainda não confirmou a leitura deste registro.</span>
             </div>
           )}
         </div>
@@ -325,10 +437,10 @@ export default function FeedbackDetailsModal({
         {/* Rodapé */}
         <div className="p-4 border-t border-surface-border flex items-center justify-between bg-surface-card flex-shrink-0 gap-3">
           <div className="text-[10px] text-brand-muted font-medium truncate">
-            Registro confidencial de desenvolvimento individual
+            {isOneOnOne ? 'Registro confidencial de desenvolvimento individual (PDI)' : 'Registro formal de qualidade operacional'}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {isManager && feedback.status === 'ciente' && (
+            {isManager && feedback.status === 'ciente' && !isPositiveFeedback && (
               <Button
                 variant="outline"
                 size="sm"

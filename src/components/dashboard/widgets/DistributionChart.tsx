@@ -115,6 +115,27 @@ export default function DistributionChart({
 
   const total = data.reduce((a, b) => a + b.value, 0);
 
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (!percent || percent < 0.08) return null;
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#ffffff"
+        textAnchor="middle"
+        dominantBaseline="central"
+        className="text-[9px] font-black drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] select-none pointer-events-none"
+      >
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
   const renderChart = () => {
     return (
       <PieChart>
@@ -123,10 +144,12 @@ export default function DistributionChart({
           data={data}
           cx="50%"
           cy="50%"
-          innerRadius={46}
+          innerRadius={44}
           outerRadius={66}
           paddingAngle={3}
           dataKey="value"
+          label={renderCustomLabel}
+          labelLine={false}
           isAnimationActive={false} // Optimized to save CPU cycles
         >
           {data.map((entry, index) => (
@@ -209,23 +232,41 @@ export default function DistributionChart({
         )}
         {data.length > 0 ? (
           <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-4 min-h-[160px]">
-            <div className="w-full sm:w-[50%] h-[160px] relative" style={{ minWidth: 0 }}>
+            <div className="w-full sm:w-[50%] h-[160px] relative flex items-center justify-center" style={{ minWidth: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 {renderChart()}
               </ResponsiveContainer>
+              {/* Totalizador Central no Miolo da Rosca */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                <span className="text-base sm:text-lg font-black text-brand-primary leading-none tracking-tight">
+                  {total}
+                </span>
+                <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-muted mt-0.5">
+                  Total
+                </span>
+              </div>
             </div>
             <div className="w-full sm:w-[50%] flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40 max-h-[160px] overflow-y-auto no-scrollbar">
               {data.map((entry, index) => {
                 const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
                 return (
-                  <div key={index} className="flex items-center justify-between gap-2 text-[10px] text-brand-muted font-black uppercase tracking-tight print:text-slate-800">
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                      <span className="truncate" title={entry.name}>{entry.name}</span>
+                  <div key={index} className="flex flex-col gap-1 text-[10px] text-brand-muted font-bold tracking-tight print:text-slate-800">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                        <span className="truncate uppercase font-black" title={entry.name}>{entry.name}</span>
+                      </div>
+                      <span className="text-brand-primary whitespace-nowrap font-black shrink-0">
+                        {entry.value} ({percent}%)
+                      </span>
                     </div>
-                    <span className="text-brand-primary whitespace-nowrap font-bold shrink-0">
-                      {entry.value} ({percent}%)
-                    </span>
+                    {/* Barra de Proporção Colorida */}
+                    <div className="w-full h-1 bg-surface-subtle rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-300"
+                        style={{ width: `${percent}%`, backgroundColor: entry.color }}
+                      />
+                    </div>
                   </div>
                 );
               })}
