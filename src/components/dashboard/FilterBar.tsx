@@ -119,10 +119,10 @@ export default function FilterBar() {
               type="button"
               onClick={() => setIsRootCauseOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 rounded-xl transition-all cursor-pointer"
-              title="Diagnóstico inteligente de causa raiz de ofensores e ROI dos feedbacks 1:1"
+              title="Diagnóstico inteligente de falhas, causa raiz de ofensores e evolução pós-feedback"
             >
               <BrainCircuit className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-              <span>Causa Raiz & ROI</span>
+              <span>Diagnóstico de Causa Raiz</span>
             </button>
             <button
               type="button"

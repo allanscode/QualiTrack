@@ -3,7 +3,7 @@ import { Monitoria, User } from '../types';
 import { ActionType } from '../hooks/useMonitoriaActions';
 import { getStatusConfig, getHistoryEventConfig, VARIANT_TEXT_CLASS } from '../lib/statusHelper';
 import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
-import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, History, Paperclip } from 'lucide-react';
+import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, History, Paperclip, ArrowLeftRight } from 'lucide-react';
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 import Button from './ui/Button';
 
@@ -269,6 +269,19 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                         Solicitar
                       </Button>
                     </>
+                  )}
+
+                  {/* Avançar ou Reverter Etapa no fluxo — Gestor de Qualidade e Admin */}
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActionModal({ id: m.id, type: 'alterar_etapa' })}
+                      title="Avançar ou reverter a etapa atual desta monitoria no fluxo de auditoria"
+                      icon={<ArrowLeftRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                    >
+                      Avançar / Reverter Etapa
+                    </Button>
                   )}
 
                   {/* Reabrir só faz sentido para monitorias já finalizadas/concluídas */}

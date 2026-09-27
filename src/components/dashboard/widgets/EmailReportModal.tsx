@@ -73,7 +73,7 @@ export default function EmailReportModal({
   const canDispatchDirectly = ['admin', 'gestor_qualidade'].includes(currentUser?.role || '');
 
   const defaultSubject = useMemo(() => {
-    const template = config.emailReportConfig?.subjectTemplate || '[QualiTrack] Relatório Executivo de Qualidade · {{team}} ({{period}})';
+    const template = config.emailReportConfig?.subjectTemplate || '[Qualidade WP] Relatório Executivo de Qualidade · {{team}} ({{period}})';
     return template.replace('{{team}}', teamTitle).replace('{{period}}', periodLabel);
   }, [config.emailReportConfig?.subjectTemplate, teamTitle, periodLabel]);
 
@@ -133,7 +133,7 @@ export default function EmailReportModal({
       `• Amostra Auditada: ${kpiSummary.totalAudits} atendimentos\n` +
       `• Índice de Erros Críticos: ${kpiSummary.criticalRate}%\n` +
       (reportNotes ? `\n• Parecer da Gestão:\n"${reportNotes}"\n` : '') +
-      `\n\nRelatório gerado via QualiTrack • Sistema Integrado de Gestão da Qualidade`
+      `\n\nRelatório gerado via Qualidade WP • Sistema Integrado de Gestão da Qualidade`
     );
   }, [customMessage, teamTitle, periodLabel, kpiSummary, reportNotes]);
 
@@ -193,7 +193,7 @@ export default function EmailReportModal({
           customMessage,
           kpiSummary,
           reportNotes,
-          senderName: config.emailReportConfig?.senderName || 'QualiTrack - Gestão da Qualidade',
+          senderName: config.emailReportConfig?.senderName || 'Qualidade WP - Gestão da Qualidade',
         }
       });
 

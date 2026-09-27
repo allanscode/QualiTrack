@@ -68,7 +68,7 @@ serve(async req => {
     const periodLabel = escapeHtml(typeof body.periodLabel === 'string' ? body.periodLabel.slice(0, 100) : 'Período Atual');
     const customMessage = escapeHtml(typeof body.customMessage === 'string' ? body.customMessage.slice(0, 1500) : '');
     const reportNotes = escapeHtml(typeof body.reportNotes === 'string' ? body.reportNotes.slice(0, 2000) : '');
-    const senderName = escapeHtml(typeof body.senderName === 'string' ? body.senderName.slice(0, 100) : 'QualiTrack - Gestão da Qualidade');
+    const senderName = escapeHtml(typeof body.senderName === 'string' ? body.senderName.slice(0, 100) : 'Qualidade WP - Gestão da Qualidade');
 
     const avgScore = metrics.avgScore.toFixed(1);
     const targetScore = metrics.targetScore;
@@ -95,7 +95,7 @@ serve(async req => {
 <body>
   <div class="card">
     <div class="header">
-      <h1>QualiTrack · Relatório Executivo</h1>
+      <h1>Qualidade WP · Relatório Executivo</h1>
       <p>${teamTitle} &bull; ${periodLabel}</p>
     </div>
     <div class="content">
@@ -130,7 +130,7 @@ serve(async req => {
       ${reportNotes ? `<div style="background:#fffbeb; border:1px solid #fef3c7; border-left:4px solid #f59e0b; border-radius:8px; padding:14px; font-size:13px; color:#92400e; margin-bottom:20px;"><strong>Parecer da Gestão:</strong><br/>"${reportNotes}"</div>` : ''}
     </div>
     <div class="footer">
-      Disparado por ${senderName} via QualiTrack • Sistema Integrado de Gestão da Qualidade
+      Disparado por ${senderName} via Qualidade WP • Sistema Integrado de Gestão da Qualidade
     </div>
   </div>
 </body>
@@ -141,7 +141,7 @@ serve(async req => {
       `Amostra: ${totalAudits} atendimentos\n` +
       `Erros Críticos: ${criticalRate}%\n\n` +
       (reportNotes ? `Parecer da Gestão:\n"${reportNotes}"\n\n` : '') +
-      `Disparado por ${senderName} via QualiTrack`;
+      `Disparado por ${senderName} via Qualidade WP`;
 
     const client = new SmtpClient();
     try {

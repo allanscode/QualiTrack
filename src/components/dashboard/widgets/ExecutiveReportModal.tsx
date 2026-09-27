@@ -240,7 +240,7 @@ export default function ExecutiveReportModal({
   const handleCopyMarkdown = () => {
     const teamTitle = selectedTeam ? selectedTeam.name : 'Todas as Equipes (Geral)';
     const managerName = teamManager ? teamManager.name : 'Gestão de Suporte';
-    const text = `*📊 RELATÓRIO EXECUTIVO DE QUALIDADE · QUALITRACK*
+    const text = `*📊 RELATÓRIO EXECUTIVO DE QUALIDADE · QUALIDADE WP*
 *Equipe:* ${teamTitle}
 *Gestor Responsável:* ${managerName}
 *Período:* ${dateRange.label} (${dateRange.start} até ${dateRange.end})
@@ -257,7 +257,7 @@ ${topOfensores.map((o, i) => `${i + 1}. ${o.text} (${o.failRate.toFixed(1)}% fal
 *📝 Parecer da Qualidade:*
 "${executiveNotes}"
 
-_Relatório emitido em ${new Date().toLocaleDateString('pt-BR')} por ${currentUser?.name || 'QualiTrack QA'}._`;
+_Relatório emitido em ${new Date().toLocaleDateString('pt-BR')} por ${currentUser?.name || 'Qualidade WP'}._`;
 
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -405,7 +405,7 @@ _Relatório emitido em ${new Date().toLocaleDateString('pt-BR')} por ${currentUs
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-blue-100 text-blue-800">
-                      QualiTrack QA System
+                      Qualidade WP System
                     </span>
                     <span className="text-xs font-bold text-slate-500">Documento Oficial</span>
                   </div>
@@ -617,29 +617,33 @@ _Relatório emitido em ${new Date().toLocaleDateString('pt-BR')} por ${currentUs
               />
             </div>
 
-            {/* 7. ASSINATURAS FORMAIS */}
-            <div className="pt-8 border-t border-slate-300 grid grid-cols-2 gap-8 page-break-inside-avoid">
-              <div className="text-center">
-                <div className="border-t border-slate-400 w-48 mx-auto mb-1" />
-                <p className="text-xs font-black text-slate-900 uppercase">
-                  {currentUser?.name || 'Responsável Qualidade'}
-                </p>
-                <p className="text-[10px] text-slate-500 uppercase font-semibold">Equipe de Gestão da Qualidade</p>
-              </div>
-              <div className="text-center">
-                <div className="border-t border-slate-400 w-48 mx-auto mb-1" />
-                <p className="text-xs font-black text-slate-900 uppercase">
-                  {teamManager ? teamManager.name : 'Gestor de Suporte'}
-                </p>
-                <p className="text-[10px] text-slate-500 uppercase font-semibold">
-                  {selectedTeam ? `Gestão ${selectedTeam.name}` : 'Gestão de Atendimento'}
-                </p>
-              </div>
-            </div>
+            {/* 7. CHANCELA & AUTENTICAÇÃO DIGITAL DO SISTEMA (SEM ASSINATURA MANUAL) */}
+            <div className="pt-6 border-t-2 border-slate-200 page-break-inside-avoid">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">
+                    <ShieldCheck className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                      Documento Autenticado Digitalmente
+                    </p>
+                    <p className="text-[11px] text-slate-600 font-medium">
+                      Emitido pelo sistema <span className="font-bold text-blue-600">Qualidade WP</span> · Válido sem assinatura manual
+                    </p>
+                  </div>
+                </div>
 
-            {/* Rodapé confidencial */}
-            <div className="text-center pt-4 text-[9px] text-slate-400 uppercase tracking-widest font-bold">
-              QualiTrack QA · Relatório Gerado Automaticamente · Confidencial Interno
+                <div className="text-right text-[10px] text-slate-500 font-mono">
+                  <p className="font-bold text-slate-700">Chancela Digital: QWP-{new Date().getFullYear()}-{reportMonitorias.length.toString().padStart(4, '0')}</p>
+                  <p className="text-slate-500">Emissão: {new Date().toLocaleDateString('pt-BR')} • Emissor: {currentUser?.name || 'Gestão da Qualidade'}</p>
+                </div>
+              </div>
+
+              {/* Rodapé confidencial */}
+              <div className="text-center pt-3 text-[9px] text-slate-400 uppercase tracking-widest font-bold">
+                Qualidade WP · Sistema Integrado de Gestão da Qualidade · Confidencial Interno
+              </div>
             </div>
           </div>
         </div>

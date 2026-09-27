@@ -12,7 +12,9 @@ import {
   Paperclip,
   Loader2,
   FileText,
-  Download
+  Download,
+  MessageSquare,
+  Award
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadActionAttachment } from '../lib/monitoriaAttachments';
@@ -28,6 +30,8 @@ import { useQualityConfig } from '../lib/useQualityConfig';
 import { useMonitoriaData } from '../hooks/useMonitoriaData';
 import { useMonitoriaFilters } from '../hooks/useMonitoriaFilters';
 import { useMonitoriaActions } from '../hooks/useMonitoriaActions';
+import { useFeedbacks } from '../hooks/useFeedbacks';
+import FeedbacksSubtabView from './feedback/FeedbacksSubtabView';
 import MonitoriaForm from './MonitoriaForm';
 import { MonitoriaRow } from './MonitoriaRow';
 import MonitoriaDetails from './MonitoriaDetails';
@@ -52,6 +56,7 @@ interface MonitoriaListProps {
   activeTab?: string;
   initialFocusTarget?: { monitoriaId?: string; ticketId?: string } | null;
   onClearFocusTarget?: () => void;
+  initialSubTab?: 'avaliacoes' | 'feedbacks' | 'one_on_one';
 }
 
 export default function MonitoriaList({
@@ -59,10 +64,40 @@ export default function MonitoriaList({
   onNew,
   activeTab,
   initialFocusTarget,
-  onClearFocusTarget
+  onClearFocusTarget,
+  initialSubTab = 'avaliacoes',
 }: MonitoriaListProps) {
   const { config: qualityConfig, getLevelForScore } = useQualityConfig();
   const staticData = useStaticData();
+
+  const maskedUsers = useMemo(() => {
+    if (user?.role === 'suporte') {
+      return staticData.users.map(u => {
+        if (['qualidade', 'gestor_qualidade', 'admin'].includes(u.role)) {
+          return { ...u, name: 'Análise da Qualidade', email: 'qualidade@sistema.local' };
+        }
+        return u;
+      });
+    }
+    return staticData.users;
+  }, [staticData.users, user?.role]);
+
+  const [monitoriaViewMode, setMonitoriaViewMode] = useState<'avaliacoes' | 'feedbacks' | 'one_on_one'>(initialSubTab);
+  const feedbacksState = useFeedbacks(user);
+
+  const pendingFeedbacksCount = useMemo(() => {
+    return feedbacksState.feedbacks.filter(f => {
+      const isOneOnOne = f.title.startsWith('[1:1]') || f.title.toLowerCase().includes('1:1');
+      return !isOneOnOne && f.status === 'pendente_ciencia';
+    }).length;
+  }, [feedbacksState.feedbacks]);
+
+  const pendingOneOnOneCount = useMemo(() => {
+    return feedbacksState.feedbacks.filter(f => {
+      const isOneOnOne = f.title.startsWith('[1:1]') || f.title.toLowerCase().includes('1:1');
+      return isOneOnOne && f.status === 'pendente_ciencia';
+    }).length;
+  }, [feedbacksState.feedbacks]);
 
   const { monitorias, loading, load } = useMonitoriaData(user, activeTab);
   const filters = useMonitoriaFilters();
@@ -71,6 +106,7 @@ export default function MonitoriaList({
     actionNote, setActionNote,
     actionAttachments, setActionAttachments,
     reopenStatus, setReopenStatus,
+    targetStatus, setTargetStatus,
     submitting,
     handleAction,
   } = useMonitoriaActions(user, monitorias, qualityConfig, load);
@@ -282,9 +318,116 @@ export default function MonitoriaList({
 
   return (
     <div className="space-y-6 animate-fade-in pb-8">
-      {/* Block 1: Filters & Status Joined */}
-      <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card rounded-3xl">
-        <div className="p-6 space-y-6">
+      {/* Navegação Superior de Subabas de Monitorias: Avaliações | Feedbacks | 1:1 & PDI */}
+      <div className="flex items-center gap-2 p-1.5 bg-surface-card border border-surface-border rounded-2xl shadow-premium overflow-x-auto no-scrollbar">
+        <button
+          type="button"
+          onClick={() => setMonitoriaViewMode('avaliacoes')}
+          className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            monitoriaViewMode === 'avaliacoes'
+              ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
+              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>Avaliações</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+            monitoriaViewMode === 'avaliacoes' ? 'bg-black/20 text-brand-on-primary' : 'bg-surface-subtle text-brand-muted'
+          }`}>
+            {monitorias.filter(m => m.active !== false).length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMonitoriaViewMode('feedbacks')}
+          className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            monitoriaViewMode === 'feedbacks'
+              ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
+              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>Feedbacks</span>
+          {pendingFeedbacksCount > 0 ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
+              {pendingFeedbacksCount} pendente{pendingFeedbacksCount !== 1 ? 's' : ''}
+            </span>
+          ) : (
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+              monitoriaViewMode === 'feedbacks' ? 'bg-black/20 text-brand-on-primary' : 'bg-surface-subtle text-brand-muted'
+            }`}>
+              {feedbacksState.feedbacks.filter(f => !f.title.startsWith('[1:1]') && !f.title.toLowerCase().includes('1:1')).length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMonitoriaViewMode('one_on_one')}
+          className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            monitoriaViewMode === 'one_on_one'
+              ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
+              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+          }`}
+        >
+          <Award className="w-4 h-4" />
+          <span>1:1 & PDI</span>
+          {pendingOneOnOneCount > 0 ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
+              {pendingOneOnOneCount} pendente{pendingOneOnOneCount !== 1 ? 's' : ''}
+            </span>
+          ) : (
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+              monitoriaViewMode === 'one_on_one' ? 'bg-black/20 text-brand-on-primary' : 'bg-surface-subtle text-brand-muted'
+            }`}>
+              {feedbacksState.feedbacks.filter(f => f.title.startsWith('[1:1]') || f.title.toLowerCase().includes('1:1')).length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {monitoriaViewMode === 'feedbacks' && (
+        <FeedbacksSubtabView
+          currentUser={user}
+          users={maskedUsers}
+          teams={staticData.teams}
+          monitorias={monitorias}
+          feedbacks={feedbacksState.feedbacks}
+          loading={feedbacksState.loading}
+          refreshing={feedbacksState.refreshing}
+          error={feedbacksState.error}
+          onRefresh={feedbacksState.refreshFeedbacks}
+          onCreateFeedback={feedbacksState.createFeedback}
+          onAcknowledgeFeedback={feedbacksState.acknowledgeFeedback}
+          onCompleteFeedback={feedbacksState.completeFeedback}
+          mode="feedback"
+        />
+      )}
+
+      {monitoriaViewMode === 'one_on_one' && (
+        <FeedbacksSubtabView
+          currentUser={user}
+          users={maskedUsers}
+          teams={staticData.teams}
+          monitorias={monitorias}
+          feedbacks={feedbacksState.feedbacks}
+          loading={feedbacksState.loading}
+          refreshing={feedbacksState.refreshing}
+          error={feedbacksState.error}
+          onRefresh={feedbacksState.refreshFeedbacks}
+          onCreateFeedback={feedbacksState.createFeedback}
+          onAcknowledgeFeedback={feedbacksState.acknowledgeFeedback}
+          onCompleteFeedback={feedbacksState.completeFeedback}
+          mode="one_on_one"
+        />
+      )}
+
+      {monitoriaViewMode === 'avaliacoes' && (
+        <>
+          {/* Block 1: Filters & Status Joined */}
+          <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card rounded-3xl">
+            <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full">
             {/* Busca (col-span-12 lg:col-span-4) */}
             <div className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-1">
@@ -487,6 +630,8 @@ export default function MonitoriaList({
           )}
         </div>
       </Card>
+      </>
+      )}
 
       {selectedId && !viewingMonitoria && createPortal(
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/25 dark:bg-black/40 p-0 sm:p-6 backdrop-blur-md" onMouseDown={event => { if (event.target === event.currentTarget) closeDetails(); }}>
@@ -542,6 +687,7 @@ export default function MonitoriaList({
                     actionModal.type === 'manter' ? 'Recusar Reavaliação' :
                     actionModal.type === 'escalar' ? 'Escalar para Qualidade' :
                     actionModal.type === 'reabrir' ? 'Reabertura de Monitoria' :
+                    actionModal.type === 'alterar_etapa' ? 'Avançar / Reverter Etapa' :
                     actionModal.type.toUpperCase()
                   }</strong> nesta monitoria.
                   <br /><br />
@@ -573,10 +719,77 @@ export default function MonitoriaList({
                   </div>
                 )}
 
+                {actionModal.type === 'alterar_etapa' && (() => {
+                  const m = monitorias.find(item => item.id === actionModal.id);
+                  const currentSt = m?.status || 'pendente_revisao';
+                  const STAGE_ORDER: Record<string, number> = {
+                    'pendente_revisao': 1,
+                    'em_contestacao': 2,
+                    'aguardando_gestor_suporte': 3,
+                    'aguardando_gestor_qualidade': 4,
+                    'reavaliacao_solicitada': 4,
+                    'concluida': 5,
+                  };
+                  const isAdvance = (STAGE_ORDER[targetStatus] ?? 0) > (STAGE_ORDER[currentSt] ?? 0);
+                  const isReversion = (STAGE_ORDER[targetStatus] ?? 0) < (STAGE_ORDER[currentSt] ?? 0);
+
+                  return (
+                    <div className="mb-6 p-4 rounded-2xl bg-surface-subtle border border-surface-border space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-brand-muted tracking-wider">Etapa Atual:</span>
+                        <Badge variant="neutral" size="xs">{currentSt}</Badge>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-1.5 block">
+                          Nova Etapa de Destino *
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={targetStatus}
+                            onChange={e => setTargetStatus(e.target.value as any)}
+                            className="w-full appearance-none bg-surface-card border border-surface-border rounded-xl p-3 pr-10 text-xs font-semibold text-brand-primary focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/50 transition-all"
+                          >
+                            <option value="pendente_revisao">Pendente Revisão (Agente de Suporte)</option>
+                            <option value="em_contestacao">Em Contestação (Monitor de Qualidade)</option>
+                            <option value="aguardando_gestor_suporte">Gestão Suporte (Gestor de Suporte)</option>
+                            <option value="aguardando_gestor_qualidade">Gestão Qualidade (Gestor de Qualidade)</option>
+                            <option value="reavaliacao_solicitada">Reavaliação Solicitada (Auditor)</option>
+                            <option value="concluida">Concluída (Finalizada)</option>
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-brand-muted">
+                            <ChevronDown className="h-4 w-4" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-[10px] font-bold text-brand-muted">Operação:</span>
+                        {isAdvance && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            ➡️ Avanço de Etapa
+                          </span>
+                        )}
+                        {isReversion && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                            ⬅️ Reversão de Etapa
+                          </span>
+                        )}
+                        {!isAdvance && !isReversion && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-500/10 text-slate-600 border border-slate-500/20">
+                            Mesma Etapa
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {(() => {
                   const isSupportManager = user?.role === 'gestor_suporte';
                   const isApproval = actionModal.type === 'aprovar' || actionModal.type === 'aceitar';
                   const isContestation = actionModal.type === 'contestar';
+                  const isAlterarEtapa = actionModal.type === 'alterar_etapa';
 
                   let noteLabel = 'Justificativa / Motivo';
                   let notePlaceholder = 'Descreva detalhadamente o motivo desta ação...';
@@ -590,6 +803,10 @@ export default function MonitoriaList({
                     noteLabel = 'Justificativa da Contestação';
                     notePlaceholder = 'Descreva detalhadamente a justificativa para contestar a avaliação (obrigatório)...';
                     noteRequired = true;
+                  } else if (isAlterarEtapa) {
+                    noteLabel = 'Justificativa Administrativa da Mudança de Etapa';
+                    notePlaceholder = 'Descreva obrigatoriamente o motivo da reversão ou avanço desta monitoria no histórico...';
+                    noteRequired = true;
                   }
 
                   const showNoteField = (
@@ -601,7 +818,8 @@ export default function MonitoriaList({
                     actionModal.type === 'excluir' ||
                     actionModal.type === 'solicitar_reavaliacao' ||
                     actionModal.type === 'manter' ||
-                    actionModal.type === 'recusar_agente'
+                    actionModal.type === 'recusar_agente' ||
+                    actionModal.type === 'alterar_etapa'
                   );
 
                   return (

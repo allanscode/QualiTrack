@@ -71,6 +71,8 @@ export default function InPlaceMonitoriaModal({
     setActionAttachments,
     reopenStatus,
     setReopenStatus,
+    targetStatus,
+    setTargetStatus,
     submitting,
     handleAction,
   } = useMonitoriaActions(user, monitoria ? [monitoria] : [], qualityConfig, () => {
@@ -243,6 +245,7 @@ export default function InPlaceMonitoriaModal({
                        actionModal.type === 'manter' ? 'Recusar Reavaliação' :
                        actionModal.type === 'escalar' ? 'Escalar para Qualidade' :
                        actionModal.type === 'reabrir' ? 'Reabertura de Monitoria' :
+                       actionModal.type === 'alterar_etapa' ? 'Avançar / Reverter Etapa' :
                        actionModal.type.toUpperCase()}
                     </strong>
                   </div>
@@ -265,10 +268,31 @@ export default function InPlaceMonitoriaModal({
                     </div>
                   )}
 
+                  {actionModal.type === 'alterar_etapa' && (
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-brand-muted tracking-widest mb-1.5">
+                        Nova Etapa de Destino *
+                      </label>
+                      <Select
+                        value={targetStatus}
+                        onChange={e => setTargetStatus(e.target.value as any)}
+                        options={[
+                          { value: 'pendente_revisao', label: 'Pendente Revisão (Agente)' },
+                          { value: 'em_contestacao', label: 'Em Contestação (Qualidade)' },
+                          { value: 'aguardando_gestor_suporte', label: 'Gestão Suporte (Gestor Suporte)' },
+                          { value: 'aguardando_gestor_qualidade', label: 'Gestão Qualidade (Gestor Qualidade)' },
+                          { value: 'reavaliacao_solicitada', label: 'Reavaliação Solicitada (Auditor)' },
+                          { value: 'concluida', label: 'Concluída (Finalizada)' }
+                        ]}
+                      />
+                    </div>
+                  )}
+
                   {(() => {
                     const isApproval = actionModal.type === 'aprovar' || actionModal.type === 'aceitar';
                     const isContestation = actionModal.type === 'contestar';
-                    const isRequired = user?.role === 'gestor_suporte' && (isApproval || isContestation);
+                    const isAlterarEtapa = actionModal.type === 'alterar_etapa';
+                    const isRequired = (user?.role === 'gestor_suporte' && (isApproval || isContestation)) || isAlterarEtapa;
 
                     let label = 'Observações / Justificativa';
                     let placeholder = 'Descreva os detalhes desta ação...';
@@ -279,6 +303,9 @@ export default function InPlaceMonitoriaModal({
                     } else if (isContestation) {
                       label = 'Justificativa da Contestação';
                       placeholder = 'Explique o motivo da contestação...';
+                    } else if (isAlterarEtapa) {
+                      label = 'Justificativa Administrativa da Mudança de Etapa';
+                      placeholder = 'Explique obrigatoriamente o motivo da reversão ou avanço desta monitoria no histórico...';
                     }
 
                     return (

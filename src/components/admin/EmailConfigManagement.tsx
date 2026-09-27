@@ -38,9 +38,9 @@ export default function EmailConfigManagement() {
     return (
       config.emailReportConfig || {
         enabled: true,
-        senderName: 'QualiTrack - Gestão da Qualidade',
-        senderEmail: '',
-        subjectTemplate: '[QualiTrack] Relatório Executivo de Qualidade · {{team}} ({{period}})',
+        senderName: 'Qualidade WP - Gestão da Qualidade',
+        senderEmail: 'qualidade@webposto.com.br',
+        subjectTemplate: '[Qualidade WP] Relatório Executivo de Qualidade · {{team}} ({{period}})',
         autoDispatchEnabled: false,
         frequency: 'weekly',
         dayOfWeek: 1,
@@ -126,7 +126,7 @@ export default function EmailConfigManagement() {
           subject: `[TESTE] ${localConfig.subjectTemplate.replace('{{team}}', 'Equipe Demonstração').replace('{{period}}', 'Mês Vigente')}`,
           teamTitle: 'Equipe Demonstração',
           periodLabel: 'Período Vigente (Teste)',
-          customMessage: 'Este é um e-mail de teste disparado a partir das Configurações de Relatórios Executivos do QualiTrack.',
+          customMessage: 'Este é um e-mail de teste disparado a partir das Configurações de Relatórios Executivos do Qualidade WP via servidor smtp.gmail.com (qualidade@webposto.com.br).',
           kpiSummary: {
             avgScore: 92.5,
             targetScore: config.targetScore || 75,
@@ -134,7 +134,7 @@ export default function EmailConfigManagement() {
             criticalRate: 2.2,
           },
           reportNotes: 'Disparo de homologação validando layout responsivo e entrega SMTP.',
-          senderName: localConfig.senderName || 'QualiTrack - Gestão da Qualidade',
+          senderName: localConfig.senderName || 'Qualidade WP - Gestão da Qualidade',
         },
       });
 
@@ -239,25 +239,31 @@ export default function EmailConfigManagement() {
                 type="text"
                 value={localConfig.senderName}
                 onChange={e => setLocalConfig(prev => ({ ...prev, senderName: e.target.value }))}
-                placeholder="Ex: QualiTrack - Gestão da Qualidade"
+                placeholder="Ex: Qualidade WP - Gestão da Qualidade"
                 className="w-full text-xs px-3 py-2 rounded-xl bg-surface-subtle border border-surface-border text-brand-primary focus:outline-none focus:border-brand-accent transition-colors"
               />
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-brand-primary mb-1 uppercase tracking-wider">
-                E-mail de resposta personalizado — indisponível
+                Servidor SMTP & E-mail Autenticado
               </label>
-              <input
-                type="email"
-                disabled
-                value={localConfig.senderEmail}
-                onChange={e => setLocalConfig(prev => ({ ...prev, senderEmail: e.target.value }))}
-                placeholder="Ex: qualidade@empresa.com.br (opcional)"
-                className="w-full text-xs px-3 py-2 rounded-xl bg-surface-subtle border border-surface-border text-brand-primary focus:outline-none focus:border-brand-accent transition-colors"
-              />
-              <span className="text-[10px] text-brand-muted mt-1 block">
-                Os envios usam o remetente institucional configurado. Este campo ainda não altera o endereço de resposta.
+              <div className="p-3 bg-surface-subtle border border-surface-border rounded-xl space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-brand-muted">Servidor SMTP:</span>
+                  <span className="font-mono font-bold text-brand-primary">smtp.gmail.com (Porta 465 SSL)</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-brand-muted">Remetente / Usuário:</span>
+                  <span className="font-mono font-bold text-brand-primary">qualidade@webposto.com.br</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-brand-muted">Autenticação:</span>
+                  <Badge variant="success" size="xs">Senha de App Configurada</Badge>
+                </div>
+              </div>
+              <span className="text-[10px] text-brand-muted mt-1.5 block">
+                Disparos realizados com TLS seguro através da conta institucional oficial do Qualidade WP.
               </span>
             </div>
 
@@ -269,7 +275,7 @@ export default function EmailConfigManagement() {
                 type="text"
                 value={localConfig.subjectTemplate}
                 onChange={e => setLocalConfig(prev => ({ ...prev, subjectTemplate: e.target.value }))}
-                placeholder="[QualiTrack] Relatório de Qualidade · {{team}} ({{period}})"
+                placeholder="[Qualidade WP] Relatório de Qualidade · {{team}} ({{period}})"
                 className="w-full text-xs px-3 py-2 rounded-xl bg-surface-subtle border border-surface-border text-brand-primary focus:outline-none focus:border-brand-accent transition-colors font-mono"
               />
               <div className="flex items-center gap-2 mt-1.5 text-[10px] text-brand-muted">

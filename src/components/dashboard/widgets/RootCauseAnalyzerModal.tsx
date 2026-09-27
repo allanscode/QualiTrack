@@ -58,9 +58,9 @@ export default function RootCauseAnalyzerModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black text-brand-primary uppercase tracking-wider">
-                  Diagnóstico de Causa Raiz & ROI do Feedback
+                  Diagnóstico de Falhas & Causa Raiz
                 </h2>
-                <Badge variant="info" size="sm">IA Analítica</Badge>
+                <Badge variant="info" size="sm">Análise Local em Memória</Badge>
               </div>
               <p className="text-xs text-brand-muted font-medium mt-0.5">
                 {teamName} • Amostra de {diagnosis.totalAudits} avaliações analisadas
@@ -102,7 +102,7 @@ export default function RootCauseAnalyzerModal({
             }`}
           >
             <TrendingUp className="w-3.5 h-3.5" />
-            <span>Impacto do 1:1 (ROI do PDI)</span>
+            <span>Evolução Pós-Feedback</span>
             {diagnosis.feedbackROI.totalAgentsWith1on1 > 0 && (
               <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-black rounded-full">
                 +{diagnosis.feedbackROI.overallDelta}%
@@ -120,7 +120,7 @@ export default function RootCauseAnalyzerModal({
             }`}
           >
             <Lightbulb className="w-3.5 h-3.5" />
-            <span>Recomendações Acionáveis</span>
+            <span>Recomendações Práticas</span>
             <span className="text-[10px] px-1.5 py-0.2 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-black rounded-full">
               {diagnosis.recommendations.length}
             </span>
@@ -253,25 +253,33 @@ export default function RootCauseAnalyzerModal({
             </div>
           )}
 
-          {/* ABA 2: ROI DO FEEDBACK 1:1 */}
+          {/* ABA 2: EVOLUÇÃO PÓS-FEEDBACK 1:1 */}
           {activeTab === 'roi' && (
             <div className="space-y-4">
               <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20 flex items-start gap-3">
                 <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-xs font-black text-emerald-800 dark:text-emerald-300">
-                    Mensuração de Impacto & Retorno do Feedback 1:1 (PDI)
+                    Evolução do Desempenho Pós-Feedback (PDI)
                   </h4>
                   <p className="text-[11px] text-emerald-700 dark:text-emerald-400/90 mt-1 leading-relaxed">
-                    Compara a média de notas dos atendentes <strong>antes</strong> do primeiro 1:1 com as notas obtidas <strong>após</strong> a realização do feedback, comprovando se as ações combinadas geraram evolução real.
+                    Compara a média de notas dos atendentes <strong>antes</strong> do alinhamento com as notas obtidas <strong>após</strong> a realização do feedback/1:1, comprovando se as ações combinadas geraram evolução prática.
                   </p>
                 </div>
+              </div>
+
+              {/* Box explicativo sobre processamento em memória / sem custos de API */}
+              <div className="p-3.5 rounded-xl border border-purple-500/20 bg-purple-50/30 dark:bg-purple-950/20 flex items-center gap-2.5 text-[11px] text-brand-muted">
+                <BrainCircuit className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                <span>
+                  <strong>Como funciona esta análise:</strong> O cálculo de correlação estatística é realizado 100% localmente no navegador em tempo real, sem envio de dados a APIs de inteligência artificial de terceiros e com custo zero de processamento.
+                </span>
               </div>
 
               {diagnosis.feedbackROI.agentDetails.length === 0 ? (
                 <div className="p-8 text-center bg-surface-card rounded-xl border border-surface-border text-brand-muted">
                   <MessageSquare className="w-8 h-8 opacity-30 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-brand-primary">Dados insuficientes para cálculo de ROI</p>
+                  <p className="text-xs font-bold text-brand-primary">Dados insuficientes para cálculo de evolução pós-feedback</p>
                   <p className="text-[11px] mt-1">
                     É necessário ter monitorias realizadas antes e depois da data do feedback registrado para traçar o comparativo de evolução.
                   </p>

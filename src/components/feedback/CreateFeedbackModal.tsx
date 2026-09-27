@@ -38,6 +38,7 @@ interface CreateFeedbackModalProps {
   monitorias?: Monitoria[];
   initialAgentId?: string;
   initialMonitoriaId?: string;
+  initialType?: 'feedback' | 'one_on_one';
 }
 
 const ACTION_PLAN_EXAMPLES = [
@@ -68,6 +69,7 @@ export default function CreateFeedbackModal({
   monitorias = [],
   initialAgentId = '',
   initialMonitoriaId = '',
+  initialType = 'feedback',
 }: CreateFeedbackModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const initialFocusRef = useRef<HTMLSelectElement>(null);
@@ -95,6 +97,7 @@ export default function CreateFeedbackModal({
     });
   }, [users, currentUser]);
 
+  const [recordType, setRecordType] = useState<'feedback' | 'one_on_one'>(initialType);
   const [agentId, setAgentId] = useState(initialAgentId);
   const [selectedMonitoriaId, setSelectedMonitoriaId] = useState(initialMonitoriaId);
   const [title, setTitle] = useState('');
@@ -126,12 +129,23 @@ export default function CreateFeedbackModal({
     setSubmitting(true);
     setSubmitError(null);
 
+    let finalTitle = title.trim();
+    if (recordType === 'one_on_one') {
+      if (!finalTitle.startsWith('[1:1]')) {
+        finalTitle = `[1:1] ${finalTitle}`;
+      }
+    } else {
+      if (!finalTitle.startsWith('[Feedback]') && !finalTitle.startsWith('[1:1]')) {
+        finalTitle = `[Feedback] ${finalTitle}`;
+      }
+    }
+
     try {
       const success = await onSubmit({
         agent_id: agentId,
         team_id: detectedTeamId,
         monitoria_id: selectedMonitoriaId || null,
-        title: title.trim(),
+        title: finalTitle,
         strengths: strengths.trim() || null,
         improvements: improvements.trim(),
         action_plan: actionPlan.trim(),
@@ -211,6 +225,44 @@ export default function CreateFeedbackModal({
             </div>
           )}
 
+          {/* Seletor de Tipo: Feedback Operacional vs Alinhamento Mensal 1:1 */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5">
+              Tipo de Registro *
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-surface-subtle border border-surface-border rounded-xl">
+              <button
+                type="button"
+                onClick={() => setRecordType('feedback')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  recordType === 'feedback'
+                    ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
+                    : 'text-brand-muted hover:text-brand-primary'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Feedback Operacional</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecordType('one_on_one')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  recordType === 'one_on_one'
+                    ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
+                    : 'text-brand-muted hover:text-brand-primary'
+                }`}
+              >
+                <Award className="w-3.5 h-3.5" />
+                <span>Alinhamento Mensal 1:1 & PDI</span>
+              </button>
+            </div>
+            <p className="text-[10px] text-brand-muted mt-1">
+              {recordType === 'one_on_one'
+                ? 'Retorno mensal estruturado com Plano de Ação Combinado e ciência digital do atendente.'
+                : 'Registro pontual sobre conduta, procedimento ou monitoria específica para ciência do atendente.'}
+            </p>
+          </div>
+
           {/* Linha 1: Atendente & Monitoria Vinculada */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -252,7 +304,7 @@ export default function CreateFeedbackModal({
                 disabled={!agentId}
                 className="w-full bg-surface-card border border-surface-border rounded-xl px-3 py-2.5 text-base sm:text-xs font-semibold text-brand-primary focus:outline-none focus:border-brand-accent disabled:opacity-50 min-h-[44px] sm:min-h-0"
               >
-                <option value="">Nenhuma (1:1 Periódico Geral)</option>
+                <option value="">Nenhuma (Alinhamento Geral)</option>
                 {agentMonitorias.map(m => (
                   <option key={m.id} value={m.id}>
                     Ticket #{m.ticket_id} — Nota: {m.score ?? '—'}% ({new Date(m.created_at).toLocaleDateString('pt-BR')})
@@ -268,7 +320,7 @@ export default function CreateFeedbackModal({
               htmlFor="create-feedback-title-input"
               className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5"
             >
-              Assunto / Título do 1:1 *
+              {recordType === 'one_on_one' ? 'Título do Alinhamento 1:1 *' : 'Título do Feedback Operacional *'}
             </label>
             <input
               id="create-feedback-title-input"
@@ -276,7 +328,7 @@ export default function CreateFeedbackModal({
               required
               value={title}
               onChange={e => setTitle(e.target.value)}
-              placeholder="Ex.: 1:1 Quinzenal - Alinhamento de Postura e FCR no Chat"
+              placeholder={recordType === 'one_on_one' ? 'Ex.: Alinhamento Mensal - Outubro/2026 - PDI & Qualidade' : 'Ex.: Assertividade na Triagem Técnica do N1'}
               className="w-full bg-surface-card border border-surface-border rounded-xl px-3.5 py-2.5 text-base sm:text-xs text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-accent font-semibold min-h-[44px] sm:min-h-0"
             />
           </div>

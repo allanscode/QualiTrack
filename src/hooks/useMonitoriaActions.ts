@@ -5,7 +5,7 @@ import { addBusinessHours } from '../lib/businessHours';
 import { resolveContestationResult } from '../lib/contestation';
 import { toast } from 'sonner';
 
-export type ActionType = 'aceitar' | 'contestar' | 'manter' | 'aprovar' | 'escalar' | 'excluir' | 'reavaliar' | 'devolver' | 'editAdmin' | 'solicitar_reavaliacao' | 'recusar_agente' | 'reabrir';
+export type ActionType = 'aceitar' | 'contestar' | 'manter' | 'aprovar' | 'escalar' | 'excluir' | 'reavaliar' | 'devolver' | 'editAdmin' | 'solicitar_reavaliacao' | 'recusar_agente' | 'reabrir' | 'alterar_etapa';
 
 const actionDescriptions: Record<string, string> = {
   // "pelo suporte" foi removido: aceitar/contestar passaram a ser exclusivos
@@ -23,7 +23,8 @@ const actionDescriptions: Record<string, string> = {
   'solicitar_reavaliacao': 'Reavaliação solicitada pelo Gestor',
   'devolver': 'Devolvido para reanálise da Qualidade',
   'recusar_agente': 'Contestação mantida pelo Agente (enviado ao Gestor)',
-  'reabrir': 'Monitoria reaberta pelo Administrador'
+  'reabrir': 'Monitoria reaberta pelo Administrador',
+  'alterar_etapa': 'Etapa alterada administrativamente'
 };
 
 const getDeadlineHours = (status: MonitoriaStatus, actionDeadline: any): number => {
@@ -38,6 +39,15 @@ const getDeadlineHours = (status: MonitoriaStatus, actionDeadline: any): number 
   }
 };
 
+const STAGE_ORDER: Record<string, number> = {
+  'pendente_revisao': 1,
+  'em_contestacao': 2,
+  'aguardando_gestor_suporte': 3,
+  'aguardando_gestor_qualidade': 4,
+  'reavaliacao_solicitada': 4,
+  'concluida': 5,
+};
+
 export function useMonitoriaActions(
   user: User | null,
   monitorias: Monitoria[],
@@ -48,6 +58,7 @@ export function useMonitoriaActions(
   const [actionNote, setActionNote] = useState('');
   const [actionAttachments, setActionAttachments] = useState<ActionAttachment[]>([]);
   const [reopenStatus, setReopenStatus] = useState<MonitoriaStatus>('pendente_revisao');
+  const [targetStatus, setTargetStatus] = useState<MonitoriaStatus>('pendente_revisao');
   const [submitting, setSubmitting] = useState(false);
 
   const setActionModal = (modal: { id: string; type: ActionType } | null) => {
@@ -55,6 +66,9 @@ export function useMonitoriaActions(
     if (!modal) {
       setActionNote('');
       setActionAttachments([]);
+    } else if (modal.type === 'alterar_etapa') {
+      const mon = monitorias.find(m => m.id === modal.id);
+      if (mon) setTargetStatus(mon.status);
     }
   };
 
@@ -84,16 +98,26 @@ export function useMonitoriaActions(
       }
     }
 
-    const now = new Date().toISOString();
+    // Validação obrigatória para alteração de etapa administrativa
+    if (type === 'alterar_etapa') {
+      if (user.role !== 'admin' && user.role !== 'gestor_qualidade') {
+        toast.error('Apenas Administrador e Gestor de Qualidade podem alterar a etapa.');
+        setSubmitting(false);
+        return;
+      }
+      if (!trimmedNote || trimmedNote.length < 5) {
+        toast.error('Justificativa administrativa é obrigatória (mínimo 5 caracteres).');
+        setSubmitting(false);
+        return;
+      }
+      if (targetStatus === monitoria.status) {
+        toast.error('O novo status selecionado é idêntico ao status atual.');
+        setSubmitting(false);
+        return;
+      }
+    }
 
-    const historyEntry: MonitoriaHistoryEntry = {
-      action: actionDescriptions[type] || 'Ação realizada',
-      by_id: user.id,
-      by_name: user.name,
-      at: now,
-      note: actionNote || undefined,
-      attachments: actionAttachments.length > 0 ? actionAttachments : undefined,
-    };
+    const now = new Date().toISOString();
 
     let nextStatus: MonitoriaStatus = monitoria.status;
     if (type === 'aceitar' || type === 'aprovar') nextStatus = 'concluida';
@@ -103,6 +127,21 @@ export function useMonitoriaActions(
     else if (type === 'escalar') nextStatus = 'aguardando_gestor_qualidade';
     else if (type === 'solicitar_reavaliacao') nextStatus = 'reavaliacao_solicitada';
     else if (type === 'reabrir') nextStatus = reopenStatus;
+    else if (type === 'alterar_etapa') nextStatus = targetStatus;
+
+    const isAdvance = (STAGE_ORDER[nextStatus] ?? 0) >= (STAGE_ORDER[monitoria.status] ?? 0);
+    const entryAction = type === 'alterar_etapa'
+      ? (isAdvance ? `Etapa avançada administrativamente (${monitoria.status} ➔ ${nextStatus})` : `Etapa revertida administrativamente (${monitoria.status} ➔ ${nextStatus})`)
+      : (actionDescriptions[type] || 'Ação realizada');
+
+    const historyEntry: MonitoriaHistoryEntry = {
+      action: entryAction,
+      by_id: user.id,
+      by_name: user.name,
+      at: now,
+      note: actionNote || undefined,
+      attachments: actionAttachments.length > 0 ? actionAttachments : undefined,
+    };
 
     const existingAttachments = monitoria.action_attachments || [];
     const combinedAttachments = actionAttachments.length > 0
@@ -144,7 +183,7 @@ export function useMonitoriaActions(
         const { error } = await supabase.from('monitorias').update(update).eq('id', id);
         if (error) throw error;
       }
-      toast.success('Ação registrada com sucesso!');
+      toast.success(type === 'alterar_etapa' ? `Etapa da monitoria ${isAdvance ? 'avançada' : 'revertida'} com sucesso!` : 'Ação registrada com sucesso!');
       setActionModal(null);
       load();
     } catch (e: any) {
@@ -157,6 +196,7 @@ export function useMonitoriaActions(
     actionNote, setActionNote,
     actionAttachments, setActionAttachments,
     reopenStatus, setReopenStatus,
+    targetStatus, setTargetStatus,
     submitting,
     handleAction,
   };

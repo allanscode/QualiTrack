@@ -108,3 +108,35 @@ ambiente hospedado ou a uma homologação autenticada completa de cada perfil.
 O advisor remoto após a atualização não reportou mais `search_path` mutável nem
 funções `SECURITY DEFINER` executáveis por anônimos. As categorias restantes são
 as três descritas acima (view, RPCs autenticados e senhas vazadas).
+
+## Continuação e Aditivos de Release (Módulo 1:1, PDI, Transição de Etapas e Identidade Qualidade WP)
+
+### 1. Subabas integradas em Monitorias ("Feedbacks" e "1:1 & PDI")
+- Integradas as subabas dedicadas `[Avaliações | Feedbacks | 1:1 & PDI]` diretamente no topo do painel de monitorias (`MonitoriaList.tsx`), com contadores de pendências em tempo real.
+- **Feedbacks:** registros pontuais de orientação operacional com ciência digital do atendente.
+- **1:1 & PDI:** retorno mensal estruturado com alinhamento de metas e plano de ação combinado com assinatura digital do atendente.
+- Anonimato de auditor rigorosamente preservado via lista anonimizada (`maskedUsers`), ocultando identidade civil de monitores de qualidade perante o perfil de suporte.
+
+### 2. Diagnóstico de Falhas & Causa Raiz (Ajuste de Terminologia e IA Local)
+- Removida a terminologia "ROI" (inadequada para contexto de qualidade). A interface foi renomeada para **Diagnóstico de Falhas & Causa Raiz** e aba **Evolução Pós-Feedback**.
+- Esclarecimento explícito na interface: todo o processamento analítico e correlações estatísticas são executados 100% no navegador (client-side in-memory), sem chamadas a APIs pagas e com custo zero de tokens.
+
+### 3. Identidade Institucional "Qualidade WP" e Chancela Digital de Relatórios
+- Atualização integral do nome do sistema para **Qualidade WP** em cabeçalhos, relatórios executivos e templates de e-mail.
+- Substituída a assinatura manual com caneta no relatório executivo por **chancela e rodapé de certificação/autenticação digital do sistema**, com protocolo único gerado (`QWP-...`).
+
+### 4. Gestão Administrativa de Histórico: Reverter / Avançar Etapas
+- Concedida permissão exclusiva aos papéis `admin` e `gestor_qualidade` para alterar a etapa de qualquer monitoria ativa (`alterar_etapa`).
+- Exigência de nota de justificativa administrativa obrigatória (mínimo 5 caracteres), com recálculo automático de deadline em dias úteis e registro na linha do tempo.
+
+### 5. Configuração e Servidor SMTP Homologados
+- Servidor SMTP: `smtp.gmail.com` na porta `465` (SSL TLS implícito).
+- Conta autenticada e remetente padrão: `qualidade@webposto.com.br`.
+- Nome do Remetente: `Qualidade WP - Gestão da Qualidade`.
+- Sanitização rigorosa contra injeção de headers CRLF (`\r\n`) em assuntos de relatórios e validação de e-mails via regex compatível com RFC.
+
+### 6. Validação Defensiva Pós-Ajustes
+- `npm.cmd test -- --run`: 233 testes em 36 arquivos passaram com 100% de sucesso.
+- `npm.cmd run test:database`: 50 testes de segurança, RLS e RPCs passaram com 100% de sucesso.
+- `npm.cmd run lint`: verificação estrita de TypeScript (`tsc --noEmit`) concluída sem erros.
+
