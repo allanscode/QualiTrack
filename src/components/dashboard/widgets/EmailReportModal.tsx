@@ -9,12 +9,16 @@ import {
   AlertTriangle,
   Info,
   Check,
+  Send,
+  Loader2,
 } from 'lucide-react';
 import { User } from '../../../types';
 import Button from '../../ui/Button';
 import Badge from '../../ui/Badge';
 import { toast } from 'sonner';
 import { useDialogAccessibility } from '../../../hooks/useDialogAccessibility';
+import { useQualityConfig } from '../../../lib/useQualityConfig';
+import { supabase, isMockMode } from '../../../lib/supabase';
 
 interface EmailReportModalProps {
   isOpen: boolean;
@@ -65,6 +69,14 @@ export default function EmailReportModal({
     );
   }, [users, teamManager]);
 
+  const { config } = useQualityConfig();
+  const canDispatchDirectly = ['admin', 'gestor_qualidade'].includes(currentUser?.role || '');
+
+  const defaultSubject = useMemo(() => {
+    const template = config.emailReportConfig?.subjectTemplate || '[QualiTrack] Relatório Executivo de Qualidade · {{team}} ({{period}})';
+    return template.replace('{{team}}', teamTitle).replace('{{period}}', periodLabel);
+  }, [config.emailReportConfig?.subjectTemplate, teamTitle, periodLabel]);
+
   // Destinatários selecionados (por padrão inclui o gestor da equipe se houver)
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>(() => {
     if (teamManager?.email) return [teamManager.email];
@@ -72,14 +84,13 @@ export default function EmailReportModal({
   });
 
   const [additionalEmails, setAdditionalEmails] = useState('');
-  const [subject, setSubject] = useState(
-    `[QualiTrack] Relatório Executivo de Qualidade · ${teamTitle} (${periodLabel})`
-  );
+  const [subject, setSubject] = useState(defaultSubject);
   const [customMessage, setCustomMessage] = useState(
     `Prezados,\n\nSegue o Relatório Executivo Consolidado de Qualidade para alinhamento e acompanhamento dos indicadores operacionais da equipe ${teamTitle}.\n\nAtenciosamente,\n${currentUser?.name || 'Gestão da Qualidade'}`
   );
   const [copyToSelf, setCopyToSelf] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [directSending, setDirectSending] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
 
   // Validação de formato de e-mail seguro (RFC sanitizado, prevenindo caracteres de controle)
@@ -146,6 +157,57 @@ export default function EmailReportModal({
       setTimeout(() => setCopiedSummary(false), 3000);
     } catch {
       toast.error('Não foi possível copiar o texto automaticamente. Selecione e copie manualmente.');
+    }
+  };
+
+  const handleSendDirectEmail = async () => {
+    if (directSending || processing) return;
+
+    if (allRecipients.length === 0) {
+      toast.error('Selecione ou insira ao menos um destinatário para o envio.');
+      return;
+    }
+
+    const invalid = allRecipients.filter(email => !isValidEmail(email));
+    if (invalid.length > 0) {
+      toast.error(`E-mail(s) com formato inválido: ${invalid.join(', ')}`);
+      return;
+    }
+
+    setDirectSending(true);
+    try {
+      if (isMockMode || !supabase) {
+        await new Promise(r => setTimeout(r, 600));
+        toast.success(`[Simulação] Relatório executivo enviado com sucesso para ${allRecipients.length} destinatário(s)!`);
+        onClose();
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('send-email', {
+        body: {
+          type: 'executive_report',
+          recipients: allRecipients,
+          subject: sanitizedSubject,
+          teamTitle,
+          periodLabel,
+          customMessage,
+          kpiSummary,
+          reportNotes,
+          senderName: config.emailReportConfig?.senderName || 'QualiTrack - Gestão da Qualidade',
+        }
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || error?.message || 'Falha ao disparar relatório por e-mail.');
+      }
+
+      toast.success(`Relatório executivo disparado com sucesso para ${allRecipients.length} destinatário(s)!`);
+      onClose();
+    } catch (err: any) {
+      console.error('[EmailReportModal] Erro ao disparar e-mail:', err);
+      toast.error(err.message || 'Erro ao disparar e-mail pelo sistema.');
+    } finally {
+      setDirectSending(false);
     }
   };
 
@@ -417,7 +479,7 @@ export default function EmailReportModal({
                 ) : (
                   <>
                     <Copy className="w-3.5 h-3.5 text-brand-muted" />
-                    <span>Copiar Resumo</span>
+                    <span>Copiar</span>
                   </>
                 )}
               </button>
@@ -425,20 +487,43 @@ export default function EmailReportModal({
               <button
                 type="button"
                 onClick={onClose}
-                disabled={processing}
-                className="px-4 py-2 text-xs font-bold text-brand-muted hover:text-brand-primary rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer min-h-[44px] sm:min-h-0 disabled:opacity-50"
+                disabled={processing || directSending}
+                className="px-3 py-2 text-xs font-bold text-brand-muted hover:text-brand-primary rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer min-h-[44px] sm:min-h-0 disabled:opacity-50"
               >
                 Cancelar
               </button>
 
-              <Button
+              <button
                 type="submit"
-                disabled={processing || allRecipients.length === 0}
-                className="px-4 py-2 text-xs font-bold flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-0"
+                disabled={processing || directSending || allRecipients.length === 0}
+                className="px-3 py-2 text-xs font-bold rounded-xl border border-surface-border hover:bg-surface-subtle text-brand-muted hover:text-brand-primary transition-colors cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-0"
+                title="Abrir no cliente de e-mail local (Outlook, Thunderbird, etc.)"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                <span>{processing ? 'Abrindo aplicativo...' : 'Abrir no Aplicativo de E-mail'}</span>
-              </Button>
+                <span>{processing ? 'Abrindo...' : 'App Local'}</span>
+              </button>
+
+              {canDispatchDirectly && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleSendDirectEmail}
+                  disabled={directSending || processing || allRecipients.length === 0}
+                  className="px-4 py-2 text-xs font-bold flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-0 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20"
+                >
+                  {directSending ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Disparando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Disparar pelo Sistema</span>
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </form>

@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Calendar,
   Target,
-  Brain
+  Brain,
+  Mail
 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -23,8 +24,9 @@ import FormsManagement from './admin/FormsManagement';
 import RequestsManagement from './admin/RequestsManagement';
 import DissatisfactionFieldsManagement from './admin/DissatisfactionFieldsManagement';
 import AIHubManagement from './admin/AIHubManagement';
+import EmailConfigManagement from './admin/EmailConfigManagement';
 
-export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub';
+export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub' | 'emails';
 
 interface TabItem {
   key: AdminSubTab;
@@ -41,11 +43,15 @@ const ALL_ADMIN_TABS: TabItem[] = [
   { key: 'metas', label: 'Metas', icon: Target },
   { key: 'campos_extras', label: 'Campos Extras', icon: Sliders },
   { key: 'ia_hub', label: 'Inteligência Artificial', icon: Brain },
+  { key: 'emails', label: 'E-mails & Disparos', icon: Mail },
 ];
 
 function getAvailableTabs(role?: string): TabItem[] {
   if (role === 'admin') return ALL_ADMIN_TABS;
-  if (role === 'gestor_qualidade' || role === 'qualidade') {
+  if (role === 'gestor_qualidade') {
+    return ALL_ADMIN_TABS.filter(t => ['teams', 'forms', 'campos_extras', 'ia_hub', 'emails'].includes(t.key));
+  }
+  if (role === 'qualidade') {
     return ALL_ADMIN_TABS.filter(t => ['teams', 'forms', 'campos_extras', 'ia_hub'].includes(t.key));
   }
   if (role === 'gestor_suporte') {
@@ -198,6 +204,7 @@ export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPa
           {activeSubTab === 'metas' && <QualityConfigManagement mode="metas" />}
           {activeSubTab === 'campos_extras' && <DissatisfactionFieldsManagement forms={staticData.forms} />}
           {activeSubTab === 'ia_hub' && <AIHubManagement currentUser={currentUser} />}
+          {activeSubTab === 'emails' && <EmailConfigManagement />}
         </m.div>
       </AnimatePresence>
     </div>

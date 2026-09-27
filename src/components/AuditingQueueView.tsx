@@ -254,8 +254,17 @@ export default function AuditingQueueView({
   const [loading, setLoading] = useState(false);
   const [tickets, setTickets] = useState<AuditingQueueTicket[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedAgentFilter, setSelectedAgentFilter] = useState('');
   const [selectedMonitorFilter, setSelectedMonitorFilter] = useState('');
+
+  // Sincroniza busca com debounce de 400ms para pesquisar em toda a base do Zendesk (> 1.000 tickets)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Estado para modal/visualização rápida de IA
   const [evaluatingTicketId, setEvaluatingTicketId] = useState<string | null>(null);
@@ -552,13 +561,19 @@ ${checksSummary}${recs}`;
   // targetCursor: null = primeira página. Passar explicitamente (mesmo
   // sendo null) evita reusar por engano o cursor de uma página anterior ao
   // trocar de fila ou dar refresh.
-  const loadQueueData = async (targetCursor: string | null = null) => {
+  const loadQueueData = async (targetCursor: string | null = null, searchOverride?: string) => {
     const seq = ++loadSeqRef.current;
     const queueAtCallTime = activeQueue;
+    const activeSearch = searchOverride !== undefined ? searchOverride : debouncedSearch;
 
     setLoading(true);
     try {
-      const { tickets: data, nextCursor, hasMore: more } = await fetchQueueTickets(queueAtCallTime, monitorias, targetCursor);
+      const { tickets: data, nextCursor, hasMore: more } = await fetchQueueTickets(
+        queueAtCallTime,
+        monitorias,
+        targetCursor,
+        activeSearch || undefined
+      );
       // Descarta a resposta se já não for mais a busca mais recente — uma
       // troca de fila nesse meio tempo já disparou outra chamada, com seq
       // maior.
@@ -579,7 +594,7 @@ ${checksSummary}${recs}`;
     setPrevCursors(prev => [...prev, cursor]);
     setPageNumber(p => p + 1);
     setCurrentPage(1);
-    loadQueueData(cursor);
+    loadQueueData(cursor, debouncedSearch);
   };
 
   const goToPrevPage = () => {
@@ -590,8 +605,20 @@ ${checksSummary}${recs}`;
     setPrevCursors(stack);
     setPageNumber(p => Math.max(1, p - 1));
     setCurrentPage(1);
-    loadQueueData(target);
+    loadQueueData(target, debouncedSearch);
   };
+
+  // Reage à busca textual ou por ID em toda a base do Zendesk (> 1.000 chamados na view)
+  const prevDebouncedSearchRef = useRef(debouncedSearch);
+  useEffect(() => {
+    if (prevDebouncedSearchRef.current === debouncedSearch) return;
+    prevDebouncedSearchRef.current = debouncedSearch;
+    setCursor(null);
+    setPrevCursors([]);
+    setPageNumber(1);
+    setCurrentPage(1);
+    loadQueueData(null, debouncedSearch);
+  }, [debouncedSearch]);
 
   // Ao trocar de fila (Negativas/Proativas/Positivas), limpa a lista e
   // reseta a paginação antes de buscar a nova — senão os tickets da fila
@@ -609,8 +636,11 @@ ${checksSummary}${recs}`;
       setHasMore(false);
       setPageNumber(1);
       setCurrentPage(1);
+      setSearchTerm('');
+      setDebouncedSearch('');
+      prevDebouncedSearchRef.current = '';
       prevQueueRef.current = activeQueue;
-      loadQueueData(null);
+      loadQueueData(null, '');
     } else {
       loadQueueData(null);
     }

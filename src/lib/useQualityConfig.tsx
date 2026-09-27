@@ -10,6 +10,21 @@ export interface QualityLevel {
   bgColor: string;
 }
 
+export interface EmailReportConfig {
+  enabled: boolean;
+  senderName: string;
+  senderEmail: string;
+  subjectTemplate: string;
+  autoDispatchEnabled: boolean;
+  frequency: 'weekly' | 'monthly';
+  dayOfWeek: number; // 1 = Segunda, 2 = Terça, 3 = Quarta, 4 = Quinta, 5 = Sexta
+  dayOfMonth: number; // 1 a 28
+  dispatchTime: string; // "08:00"
+  targetRoleRecipients: ('gestor_suporte' | 'gestor_qualidade' | 'admin')[];
+  extraRecipients: string[];
+  lastAutoDispatchAt?: string;
+}
+
 export interface QualityConfig {
   levels: QualityLevel[];
   targetScore: number;
@@ -29,6 +44,7 @@ export interface QualityConfig {
   };
   statCardExplanations?: Record<string, string>;
   dashboardWidgetTitles?: Record<string, string>;
+  emailReportConfig?: EmailReportConfig;
 }
 
 const DEFAULT_CONFIG: QualityConfig = {
@@ -54,7 +70,20 @@ const DEFAULT_CONFIG: QualityConfig = {
     holidays: ['01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '25/12']
   },
   statCardExplanations: {},
-  dashboardWidgetTitles: {}
+  dashboardWidgetTitles: {},
+  emailReportConfig: {
+    enabled: true,
+    senderName: 'QualiTrack - Gestão da Qualidade',
+    senderEmail: '',
+    subjectTemplate: '[QualiTrack] Relatório Executivo de Qualidade · {{team}} ({{period}})',
+    autoDispatchEnabled: false,
+    frequency: 'weekly',
+    dayOfWeek: 1,
+    dayOfMonth: 1,
+    dispatchTime: '08:00',
+    targetRoleRecipients: ['gestor_suporte', 'gestor_qualidade'],
+    extraRecipients: [],
+  }
 };
 
 const STORAGE_KEY = 'qualitrack_quality_config';
@@ -117,6 +146,20 @@ function normalizeConfig(cfg: any): QualityConfig {
       { label: 'Atenção', minScore: 60, maxScore: 79, color: 'text-level-atencao', bgColor: 'bg-level-atencao' },
       { label: 'Ruim', minScore: 0, maxScore: 59, color: 'text-level-ruim', bgColor: 'bg-level-ruim' }
     ];
+  }
+  if (!migrated.emailReportConfig) {
+    migrated.emailReportConfig = { ...DEFAULT_CONFIG.emailReportConfig };
+  } else {
+    migrated.emailReportConfig = {
+      ...DEFAULT_CONFIG.emailReportConfig,
+      ...migrated.emailReportConfig,
+      extraRecipients: Array.isArray(migrated.emailReportConfig.extraRecipients)
+        ? migrated.emailReportConfig.extraRecipients
+        : [],
+      targetRoleRecipients: Array.isArray(migrated.emailReportConfig.targetRoleRecipients)
+        ? migrated.emailReportConfig.targetRoleRecipients
+        : ['gestor_suporte', 'gestor_qualidade']
+    };
   }
   return migrated as QualityConfig;
 }

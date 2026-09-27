@@ -320,6 +320,35 @@ export function DashboardProvider({
   const loadDataRef = useRef(loadData);
   loadDataRef.current = loadData;
 
+  // Re-filtração instantânea em memória quando os filtros do dashboard mudam (zero queries adicionais ao Supabase)
+  useEffect(() => {
+    if (!hasLoadedOnce.current || allMonitorias.length === 0) return;
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+
+    let filtered = allMonitorias.filter(m => {
+      const targetDate = m.created_at;
+      if (!targetDate) return true;
+      const d = new Date(targetDate).getTime();
+      const startD = filters.startDate ? new Date(filters.startDate).getTime() : 0;
+      const endD = filters.endDate ? new Date(filters.endDate + 'T23:59:59').getTime() : Infinity;
+      return d >= startD && d <= endD;
+    });
+
+    if (filters.teamId) filtered = filtered.filter(m => m.team_id === filters.teamId);
+    if (filters.agentId && currentUser.role !== 'suporte') filtered = filtered.filter(m => m.evaluated_id === filters.agentId);
+    if (filters.auditorId) filtered = filtered.filter(m => m.evaluator_id === filters.auditorId);
+    if (filters.formId) filtered = filtered.filter(m => m.form_id === filters.formId);
+    if (filters.status) filtered = filtered.filter(m => m.status === filters.status);
+    if (filters.channel) filtered = filtered.filter(m => m.channel === filters.channel);
+
+    const scored = filtered.filter(m => m.score !== undefined && m.score !== null);
+    const gAvg = scored.length > 0 ? scored.reduce((acc, m) => acc + (m.score || 0), 0) / scored.length : 0;
+
+    setMonitorias(filtered);
+    setGlobalAvg(gAvg);
+  }, [allMonitorias, filters]);
+
   useEffect(() => {
     const handleReconnect = () => {
       console.log('[Dashboard] Reconexão detectada. Recarregando monitorias...');

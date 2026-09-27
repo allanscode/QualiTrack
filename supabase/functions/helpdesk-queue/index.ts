@@ -101,6 +101,7 @@ const RequestSchema = z.object({
     }).optional(),
   }).optional(),
   ticket_subject: z.string().max(500).optional(),
+  search_term: z.string().max(200).optional(),
   // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
   // de fetch_queue. Ausente/null = primeira página.
   cursor: z.string().max(2000).nullable().optional(),
@@ -554,80 +555,168 @@ serve(async (req) => {
       let nextCursor: string | null = null;
       let hasMore = false;
 
-      // Quando a view real do Zendesk está configurada, busca exatamente os
-      // tickets dela (mesma contagem que a equipe vê lá dentro), em vez de
-      // reconstruir o filtro via Search API.
-      const viewId = queue_type === 'negativas' ? NEGATIVE_VIEW_ID
-        : queue_type === 'positivas' ? POSITIVE_VIEW_ID
-        : queue_type === 'proativas' ? PROACTIVE_VIEW_ID
-        : queue_type === 'filhos' ? CHILD_VIEW_ID
-        : queue_type === 'filhos_invalidos' ? INVALID_CHILD_VIEW_ID
-        : '';
+      const searchTerm = parseResult.data.search_term?.trim();
 
-      if (viewId) {
-        let trustedCursor: string | null;
-        try { trustedCursor = trustedZendeskCursor(parseResult.data.cursor, subdomain,
-          `/api/v2/views/${viewId}/tickets.json`); }
-        catch { return jsonResponse({ error: 'Cursor de paginação inválido.' }, 400); }
-        const url = trustedCursor
-          || `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
-
-        const response = await fetch(url, { headers: zendeskHeaders });
-        if (!response.ok) {
-          throw new Error(`Zendesk Views API falhou (${response.status}).`);
-        }
-
-        const viewData = await response.json();
-        results = viewData.tickets || [];
-        sideloadedUsers = new Map<number, any>((viewData.users || []).map((u: any) => [u.id, u]));
-        sideloadedGroups = new Map<number, any>((viewData.groups || []).map((g: any) => [g.id, g]));
-        sideloadedOrgs = new Map<number, any>((viewData.organizations || []).map((o: any) => [o.id, o]));
-        hasMore = !!viewData.meta?.has_more;
-        nextCursor = hasMore ? (viewData.links?.next || null) : null;
-      } else {
-        let searchQuery = 'type:ticket';
-
-        if (queue_type === 'negativas') {
-          searchQuery += ' satisfaction_score:bad satisfaction_score:bad_with_comment';
-          // Chamados já apurados/validados pela qualidade (tag aplicada via
-          // macro) saem da fila — só filtra se a tag real estiver configurada.
-          if (VALIDATED_TAG) {
-            searchQuery += ` -tags:${VALIDATED_TAG}`;
+      if (searchTerm) {
+        const numericMatch = searchTerm.match(/^#?(\d+)$/);
+        if (numericMatch) {
+          const targetTicketId = numericMatch[1];
+          const ticketUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${targetTicketId}.json?include=users,groups,organizations`;
+          const response = await fetch(ticketUrl, { headers: zendeskHeaders });
+          if (response.ok) {
+            const ticketData = await response.json();
+            const t = ticketData.ticket;
+            let matchesQueue = false;
+            if (t) {
+              const csat = t.satisfaction_rating?.score;
+              if (queue_type === 'negativas') {
+                matchesQueue = ['bad', 'bad_with_comment'].includes(csat) && (!VALIDATED_TAG || !t.tags?.includes(VALIDATED_TAG));
+              } else if (queue_type === 'positivas') {
+                matchesQueue = ['good', 'good_with_comment'].includes(csat);
+              } else if (queue_type === 'filhos') {
+                matchesQueue = Array.isArray(t.tags) && t.tags.includes('existe_ticket_filho');
+              } else if (queue_type === 'filhos_invalidos') {
+                matchesQueue = Array.isArray(t.tags) && t.tags.includes('ticket_filho_invalido');
+              } else {
+                // proativas: tickets sem avaliação prévia 'good' ou 'bad'
+                matchesQueue = !['good', 'good_with_comment', 'bad', 'bad_with_comment'].includes(csat);
+              }
+            }
+            if (matchesQueue) {
+              results = [t];
+              sideloadedUsers = new Map<number, any>((ticketData.users || []).map((u: any) => [u.id, u]));
+              sideloadedGroups = new Map<number, any>((ticketData.groups || []).map((g: any) => [g.id, g]));
+              sideloadedOrgs = new Map<number, any>((ticketData.organizations || []).map((o: any) => [o.id, o]));
+            } else {
+              results = [];
+              sideloadedUsers = new Map();
+              sideloadedGroups = new Map();
+              sideloadedOrgs = new Map();
+            }
+          } else {
+            results = [];
+            sideloadedUsers = new Map();
+            sideloadedGroups = new Map();
+            sideloadedOrgs = new Map();
           }
-        } else if (queue_type === 'positivas') {
-          searchQuery += ' satisfaction_score:good satisfaction_score:good_with_comment';
-        } else if (queue_type === 'filhos') {
-          searchQuery += ' tags:existe_ticket_filho';
-        } else if (queue_type === 'filhos_invalidos') {
-          searchQuery += ' tags:ticket_filho_invalido';
+          hasMore = false;
+          nextCursor = null;
         } else {
-          // Proativas: CSAT nunca respondido pelo cliente (não é "sem
-          // filtro nenhum" como antes — isso trazia qualquer ticket
-          // solved/closed, sem relação com equidade de monitoria).
-          searchQuery += ' satisfaction_score:unoffered';
+          // Busca textual na base do Zendesk usando Search API
+          let searchQuery = 'type:ticket';
+          if (queue_type === 'negativas') {
+            searchQuery += ' satisfaction_score:bad satisfaction_score:bad_with_comment';
+            if (VALIDATED_TAG) searchQuery += ` -tags:${VALIDATED_TAG}`;
+          } else if (queue_type === 'positivas') {
+            searchQuery += ' satisfaction_score:good satisfaction_score:good_with_comment';
+          } else if (queue_type === 'filhos') {
+            searchQuery += ' tags:existe_ticket_filho';
+          } else if (queue_type === 'filhos_invalidos') {
+            searchQuery += ' tags:ticket_filho_invalido';
+          } else {
+            searchQuery += ' satisfaction_score:unoffered';
+          }
+          const cleanTerm = searchTerm.replace(/["\\]/g, ' ').trim();
+          searchQuery += ` ${cleanTerm}`;
+
+          let trustedCursor: string | null;
+          try {
+            trustedCursor = trustedZendeskCursor(parseResult.data.cursor, subdomain,
+              '/api/v2/search.json', searchQuery);
+          } catch {
+            return jsonResponse({ error: 'Cursor de paginação inválido.' }, 400);
+          }
+          const url = trustedCursor
+            || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
+          const response = await fetch(url, { headers: zendeskHeaders });
+          if (!response.ok) {
+            throw new Error(`Zendesk Search API falhou (${response.status}).`);
+          }
+
+          const searchData = await response.json();
+          results = searchData.results || [];
+          sideloadedUsers = new Map<number, any>((searchData.users || []).map((u: any) => [u.id, u]));
+          sideloadedGroups = new Map<number, any>((searchData.groups || []).map((g: any) => [g.id, g]));
+          sideloadedOrgs = new Map<number, any>((searchData.organizations || []).map((o: any) => [o.id, o]));
+          hasMore = !!searchData.meta?.has_more;
+          nextCursor = hasMore ? (searchData.links?.next || null) : null;
         }
+      } else {
+        // Quando a view real do Zendesk está configurada, busca exatamente os
+        // tickets dela (mesma contagem que a equipe vê lá dentro), em vez de
+        // reconstruir o filtro via Search API.
+        const viewId = queue_type === 'negativas' ? NEGATIVE_VIEW_ID
+          : queue_type === 'positivas' ? POSITIVE_VIEW_ID
+          : queue_type === 'proativas' ? PROACTIVE_VIEW_ID
+          : queue_type === 'filhos' ? CHILD_VIEW_ID
+          : queue_type === 'filhos_invalidos' ? INVALID_CHILD_VIEW_ID
+          : '';
 
-        // Sideload de usuários, grupos e organizações para resolver o atendente (nome/e-mail),
-        // a equipe de origem e o tipo de cliente (organização/tags) de cada chamado.
-        let trustedCursor: string | null;
-        try { trustedCursor = trustedZendeskCursor(parseResult.data.cursor, subdomain,
-          '/api/v2/search.json', searchQuery); }
-        catch { return jsonResponse({ error: 'Cursor de paginação inválido.' }, 400); }
-        const url = trustedCursor
-          || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
-        const response = await fetch(url, { headers: zendeskHeaders });
+        if (viewId) {
+          let trustedCursor: string | null;
+          try { trustedCursor = trustedZendeskCursor(parseResult.data.cursor, subdomain,
+            `/api/v2/views/${viewId}/tickets.json`); }
+          catch { return jsonResponse({ error: 'Cursor de paginação inválido.' }, 400); }
+          const url = trustedCursor
+            || `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
 
-        if (!response.ok) {
-          throw new Error(`Zendesk Search API falhou (${response.status}).`);
+          const response = await fetch(url, { headers: zendeskHeaders });
+          if (!response.ok) {
+            throw new Error(`Zendesk Views API falhou (${response.status}).`);
+          }
+
+          const viewData = await response.json();
+          results = viewData.tickets || [];
+          sideloadedUsers = new Map<number, any>((viewData.users || []).map((u: any) => [u.id, u]));
+          sideloadedGroups = new Map<number, any>((viewData.groups || []).map((g: any) => [g.id, g]));
+          sideloadedOrgs = new Map<number, any>((viewData.organizations || []).map((o: any) => [o.id, o]));
+          hasMore = !!viewData.meta?.has_more;
+          nextCursor = hasMore ? (viewData.links?.next || null) : null;
+        } else {
+          let searchQuery = 'type:ticket';
+
+          if (queue_type === 'negativas') {
+            searchQuery += ' satisfaction_score:bad satisfaction_score:bad_with_comment';
+            // Chamados já apurados/validados pela qualidade (tag aplicada via
+            // macro) saem da fila — só filtra se a tag real estiver configurada.
+            if (VALIDATED_TAG) {
+              searchQuery += ` -tags:${VALIDATED_TAG}`;
+            }
+          } else if (queue_type === 'positivas') {
+            searchQuery += ' satisfaction_score:good satisfaction_score:good_with_comment';
+          } else if (queue_type === 'filhos') {
+            searchQuery += ' tags:existe_ticket_filho';
+          } else if (queue_type === 'filhos_invalidos') {
+            searchQuery += ' tags:ticket_filho_invalido';
+          } else {
+            // Proativas: CSAT nunca respondido pelo cliente (não é "sem
+            // filtro nenhum" como antes — isso trazia qualquer ticket
+            // solved/closed, sem relação com equidade de monitoria).
+            searchQuery += ' satisfaction_score:unoffered';
+          }
+
+          // Sideload de usuários, grupos e organizações para resolver o atendente (nome/e-mail),
+          // a equipe de origem e o tipo de cliente (organização/tags) de cada chamado.
+          let trustedCursor: string | null;
+          try { trustedCursor = trustedZendeskCursor(parseResult.data.cursor, subdomain,
+            '/api/v2/search.json', searchQuery); }
+          catch { return jsonResponse({ error: 'Cursor de paginação inválido.' }, 400); }
+          const url = trustedCursor
+            || `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(searchQuery)}&sort_by=created_at&sort_order=desc&include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
+          const response = await fetch(url, { headers: zendeskHeaders });
+
+          if (!response.ok) {
+            throw new Error(`Zendesk Search API falhou (${response.status}).`);
+          }
+
+          const searchData = await response.json();
+          results = searchData.results || [];
+          sideloadedUsers = new Map<number, any>((searchData.users || []).map((u: any) => [u.id, u]));
+          sideloadedGroups = new Map<number, any>((searchData.groups || []).map((g: any) => [g.id, g]));
+          sideloadedOrgs = new Map<number, any>((searchData.organizations || []).map((o: any) => [o.id, o]));
+          hasMore = !!searchData.meta?.has_more;
+          nextCursor = hasMore ? (searchData.links?.next || null) : null;
         }
-
-        const searchData = await response.json();
-        results = searchData.results || [];
-        sideloadedUsers = new Map<number, any>((searchData.users || []).map((u: any) => [u.id, u]));
-        sideloadedGroups = new Map<number, any>((searchData.groups || []).map((g: any) => [g.id, g]));
-        sideloadedOrgs = new Map<number, any>((searchData.organizations || []).map((o: any) => [o.id, o]));
-        hasMore = !!searchData.meta?.has_more;
-        nextCursor = hasMore ? (searchData.links?.next || null) : null;
       }
 
       // O ticket embute score/comentário, mas não o instante da resposta.
