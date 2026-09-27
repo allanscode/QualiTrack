@@ -119,7 +119,7 @@ function AppContent() {
 
   return (
     <>
-      <Toaster position="top-right" richColors closeButton duration={4000} />
+      <Toaster position="top-right" richColors closeButton duration={2500} />
       <AnimatePresence>
         {showIdleWarning && currentUser && (
           <m.div
@@ -908,7 +908,7 @@ function MainApp({
     try {
       localStorage.setItem(notificationsStorageKey, JSON.stringify(Array.from(allIds)));
     } catch {}
-    toast.success('Todas as notificações foram marcadas como lidas.');
+    toast.success('Todas as notificações foram marcadas como lidas.', { duration: 1500 });
   };
 
   const handleNotificationClick = (item: any) => {

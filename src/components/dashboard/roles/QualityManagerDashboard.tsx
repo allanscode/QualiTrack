@@ -786,6 +786,27 @@ export default function QualityManagerDashboard({
     );
   };
 
+  const renderDonutSliceLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (!percent || percent < 0.08) return null;
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#ffffff"
+        textAnchor="middle"
+        dominantBaseline="central"
+        className="text-[9px] font-black drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] select-none pointer-events-none"
+      >
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
   const getExplanation = (key: string, defaultText: string) => {
     const lookupKey = `gestor_qualidade_${key}`;
     return (config?.statCardExplanations?.[lookupKey] !== undefined && config.statCardExplanations[lookupKey] !== '')
@@ -1206,7 +1227,7 @@ export default function QualityManagerDashboard({
               <div className="flex-1 flex flex-col min-h-0">
                 {teamMonitoriaDistribution.length > 0 ? (
                   <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-3 min-h-0">
-                    <div className="w-full sm:w-[50%] h-[150px] relative">
+                    <div className="w-full sm:w-[50%] h-[150px] relative flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Tooltip content={<CustomTooltipMedia />} />
@@ -1214,10 +1235,12 @@ export default function QualityManagerDashboard({
                             data={teamMonitoriaDistribution}
                             cx="50%"
                             cy="50%"
-                            innerRadius={46}
+                            innerRadius={44}
                             outerRadius={66}
                             paddingAngle={3}
                             dataKey="value"
+                            label={renderDonutSliceLabel}
+                            labelLine={false}
                           >
                             {teamMonitoriaDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1225,21 +1248,38 @@ export default function QualityManagerDashboard({
                           </Pie>
                         </PieChart>
                       </ResponsiveContainer>
+                      {/* Totalizador Central */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                        <span className="text-base font-black text-brand-primary leading-none tracking-tight">
+                          {teamMonitoriaDistribution.reduce((acc: number, item: any) => acc + item.value, 0)}
+                        </span>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-brand-muted mt-0.5">
+                          Total
+                        </span>
+                      </div>
                     </div>
-                    {/* Lateral Legend with % (WQ-28) */}
+                    {/* Lateral Legend with % and progress bars */}
                     <div className="w-full sm:w-[50%] max-h-[150px] overflow-y-auto pr-1 no-scrollbar flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40">
                       {teamMonitoriaDistribution.map((entry: any, index: number) => {
                         const totalVal = teamMonitoriaDistribution.reduce((acc: number, item: any) => acc + item.value, 0);
                         const percent = totalVal > 0 ? ((entry.value / totalVal) * 100).toFixed(1) : '0';
                         return (
-                          <div key={index} className="flex items-center justify-between gap-1.5 text-[9px] text-brand-muted font-black uppercase tracking-tight">
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                              <span className="truncate" title={entry.name}>{entry.name}</span>
+                          <div key={index} className="flex flex-col gap-1 text-[9px] text-brand-muted font-bold tracking-tight">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                                <span className="truncate uppercase font-black" title={entry.name}>{entry.name}</span>
+                              </div>
+                              <span className="text-brand-primary whitespace-nowrap font-black shrink-0">
+                                {entry.value} ({percent}%)
+                              </span>
                             </div>
-                            <span className="text-brand-primary whitespace-nowrap font-bold shrink-0">
-                              {entry.value} ({percent}%)
-                            </span>
+                            <div className="w-full h-1 bg-surface-subtle rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{ width: `${percent}%`, backgroundColor: entry.color }}
+                              />
+                            </div>
                           </div>
                         );
                       })}
@@ -1327,7 +1367,7 @@ export default function QualityManagerDashboard({
               <div className="flex-1 flex flex-col min-h-0">
                 {gradeDistribution.length > 0 ? (
                   <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-3 min-h-0">
-                    <div className="w-full sm:w-[50%] h-[150px] relative">
+                    <div className="w-full sm:w-[50%] h-[150px] relative flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Tooltip content={<CustomTooltipCurva />} />
@@ -1335,10 +1375,12 @@ export default function QualityManagerDashboard({
                             data={gradeDistribution}
                             cx="50%"
                             cy="50%"
-                            innerRadius={46}
+                            innerRadius={44}
                             outerRadius={66}
                             paddingAngle={3}
                             dataKey="value"
+                            label={renderDonutSliceLabel}
+                            labelLine={false}
                           >
                             {gradeDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1346,21 +1388,38 @@ export default function QualityManagerDashboard({
                           </Pie>
                         </PieChart>
                       </ResponsiveContainer>
+                      {/* Totalizador Central */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                        <span className="text-base font-black text-brand-primary leading-none tracking-tight">
+                          {gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0)}
+                        </span>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-brand-muted mt-0.5">
+                          Total
+                        </span>
+                      </div>
                     </div>
-                    {/* Lateral Legend with % (WQ-28) */}
+                    {/* Lateral Legend with % and progress bars */}
                     <div className="w-full sm:w-[50%] max-h-[150px] overflow-y-auto pr-1 no-scrollbar flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40">
                       {gradeDistribution.map((entry: any, index: number) => {
                         const totalVal = gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0);
                         const percent = totalVal > 0 ? ((entry.value / totalVal) * 100).toFixed(1) : '0';
                         return (
-                          <div key={index} className="flex items-center justify-between gap-1.5 text-[9px] text-brand-muted font-black uppercase tracking-tight">
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                              <span className="truncate" title={entry.name}>{entry.name.split(' (')[0]}</span>
+                          <div key={index} className="flex flex-col gap-1 text-[9px] text-brand-muted font-bold tracking-tight">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                                <span className="truncate uppercase font-black" title={entry.name}>{entry.name.split(' (')[0]}</span>
+                              </div>
+                              <span className="text-brand-primary whitespace-nowrap font-black shrink-0">
+                                {entry.value} ({percent}%)
+                              </span>
                             </div>
-                            <span className="text-brand-primary whitespace-nowrap font-bold shrink-0">
-                              {entry.value} ({percent}%)
-                            </span>
+                            <div className="w-full h-1 bg-surface-subtle rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{ width: `${percent}%`, backgroundColor: entry.color }}
+                              />
+                            </div>
                           </div>
                         );
                       })}

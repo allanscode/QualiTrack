@@ -561,7 +561,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }));
           localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
           try { localStorage.removeItem(lockKey); } catch { /* ignora */ }
-          toast.success(`Bem-vindo, ${user.name}!`);
+          toast.success(`Bem-vindo, ${user.name}!`, { duration: 1500 });
         } else {
           // Mesma contagem do fluxo Supabase, para o comportamento nao divergir
           // entre os modos.
@@ -589,7 +589,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         if (error) throw error;
         try { localStorage.removeItem(lockKey); } catch { /* ignora */ }
-        toast.success('Login realizado com sucesso!');
+        toast.success('Login realizado com sucesso!', { duration: 1500 });
       }
     } catch (e: any) {
       const novasTentativas = tentativas + 1;
