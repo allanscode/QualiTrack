@@ -3,8 +3,9 @@ export type QueueType = 'negativas' | 'positivas' | 'proativas' | 'filhos' | 'fi
 export function shouldMergeRecentQueueSnapshot(
   queueType: QueueType,
   cursor: string | null | undefined,
+  searchTerm?: string,
 ): boolean {
-  return (queueType === 'negativas' || queueType === 'filhos') && !cursor;
+  return (queueType === 'negativas' || queueType === 'filhos') && !cursor && !searchTerm?.trim();
 }
 
 export function trustedZendeskCursor(
@@ -20,6 +21,7 @@ export function trustedZendeskCursor(
   if (parsed.origin !== expectedOrigin || parsed.pathname !== expectedPath ||
       parsed.username || parsed.password || parsed.hash ||
       (parsed.searchParams.has('page[size]') && Number(parsed.searchParams.get('page[size]')) > 25) ||
+      (parsed.searchParams.has('per_page') && Number(parsed.searchParams.get('per_page')) > 25) ||
       (expectedSearchQuery !== undefined && parsed.searchParams.get('query') !== expectedSearchQuery)) {
     throw new Error('Cursor de paginação fora da fila autorizada.');
   }

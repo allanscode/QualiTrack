@@ -137,7 +137,8 @@ export interface QueueTicketsPage {
 export async function fetchQueueTickets(
   type: AuditingQueueType,
   existingMonitorias: Monitoria[] = [],
-  cursor: string | null = null
+  cursor: string | null = null,
+  searchTerm?: string
 ): Promise<QueueTicketsPage> {
   const auditedTicketIds = new Set(
     existingMonitorias.map(m => m.ticket_id?.trim()).filter(Boolean)
@@ -152,10 +153,24 @@ export async function fetchQueueTickets(
       await new Promise(r => setTimeout(r, (window as any).__MOCK_QUEUE_DELAY_MS__));
     }
     tickets = getMockQueueTickets(type, auditedTicketIds);
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase().trim();
+      tickets = tickets.filter(t =>
+        t.ticket_id.toLowerCase().includes(term) ||
+        t.subject.toLowerCase().includes(term) ||
+        (t.agent_name && t.agent_name.toLowerCase().includes(term)) ||
+        (t.requester_name && t.requester_name.toLowerCase().includes(term))
+      );
+    }
   } else {
     try {
       const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
-        body: { action: 'fetch_queue', queue_type: type, cursor }
+        body: {
+          action: 'fetch_queue',
+          queue_type: type,
+          cursor,
+          search_term: searchTerm?.trim() || undefined
+        }
       });
 
       if (error || !data?.tickets) {

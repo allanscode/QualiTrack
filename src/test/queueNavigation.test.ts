@@ -50,4 +50,24 @@ describe('Reestruturação da navegação das Filas de Triagem', () => {
     expect(allSubTabs).toContain(notificationConfig.targetQueueSubTab);
     expect(QUEUE_TITLES[notificationConfig.targetQueueSubTab]).toBe('CSAT Negativas');
   });
+
+  it('fetchQueueTickets filtra tickets pelo termo de busca e exclui tickets já avaliados', async () => {
+    const { fetchQueueTickets } = await import('../lib/helpdeskQueue');
+    const mockMonitorias = [
+      { id: 'm1', ticket_id: '900001', score: 95 } as any
+    ];
+
+    // Busca sem filtro: 900001 deve ser excluído por já estar avaliado
+    const resultAll = await fetchQueueTickets('negativas', mockMonitorias, null);
+    expect(resultAll.tickets.some(t => t.ticket_id === '900001')).toBe(false);
+
+    // Busca com termo específico '900002'
+    const resultSearch = await fetchQueueTickets('negativas', mockMonitorias, null, '900002');
+    expect(resultSearch.tickets.length).toBe(1);
+    expect(resultSearch.tickets[0].ticket_id).toBe('900002');
+
+    // Busca por termo inexistente
+    const resultNone = await fetchQueueTickets('negativas', mockMonitorias, null, 'ticket-inexistente-xyz');
+    expect(resultNone.tickets.length).toBe(0);
+  });
 });

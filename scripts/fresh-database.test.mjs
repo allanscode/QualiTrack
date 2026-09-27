@@ -45,6 +45,13 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       await db.exec('SET ROLE authenticated');
       try { return await run(); } finally { await db.exec('RESET ROLE'); }
     };
+    await t.test('trigger entry points are private while business RPCs remain callable', async () => {
+      const { rows } = await db.query(`SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname='public' AND p.prorettype='trigger'::regtype
+          AND (has_function_privilege('anon',p.oid,'EXECUTE') OR has_function_privilege('authenticated',p.oid,'EXECUTE'))`);
+      assert.deepEqual(rows, []);
+      assert.equal((await db.query("SELECT has_function_privilege('authenticated','public.acknowledge_agent_feedback(uuid,text)','EXECUTE') AS allowed")).rows[0].allowed, true);
+    });
     await t.test('all application tables empty and RLS enabled; no password/demo seed', async () => {
       const { rows } = await db.query("SELECT relname,relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND relkind='r'");
       assert.ok(rows.length >= 20, `expected baseline and incremental tables, got ${rows.length}`);
