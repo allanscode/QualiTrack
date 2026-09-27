@@ -15,7 +15,11 @@ import {
   Download,
   MessageSquare,
   Award,
-  Plus
+  Plus,
+  ArrowLeft,
+  ArrowRight,
+  ArrowLeftRight,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadActionAttachment } from '../lib/monitoriaAttachments';
@@ -30,7 +34,7 @@ import CustomDatepicker from './ui/CustomDatepicker';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import { useMonitoriaData } from '../hooks/useMonitoriaData';
 import { useMonitoriaFilters } from '../hooks/useMonitoriaFilters';
-import { useMonitoriaActions } from '../hooks/useMonitoriaActions';
+import { useMonitoriaActions, getPreviousStage, getNextStage, getStageLabel, STAGES_FLOW } from '../hooks/useMonitoriaActions';
 import { useFeedbacks } from '../hooks/useFeedbacks';
 import FeedbacksSubtabView from './feedback/FeedbacksSubtabView';
 import MonitoriaForm from './MonitoriaForm';
@@ -726,131 +730,34 @@ export default function MonitoriaList({
           <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center overflow-y-auto bg-black/25 dark:bg-black/40 p-0 sm:p-6 backdrop-blur-md" onMouseDown={event => { if (event.target === event.currentTarget) setActionModal(null); }}>
             <m.div data-action-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-action-title" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="w-full max-w-md overflow-y-auto rounded-t-3xl sm:rounded-3xl max-h-[92dvh] sm:max-h-[calc(100dvh-3rem)]">
               <Card className="w-full shadow-2xl border-t sm:border border-surface-border bg-surface-card rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 pb-safe">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary">
-                    <AlertTriangle className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 id="monitoria-action-title" className="text-lg font-black text-brand-primary uppercase tracking-tight">Confirmar Ação</h3>
-                    <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Protocolo #{monitorias.find(m => m.id === actionModal.id)?.display_id || '---'}</p>
-                  </div>
-                </div>
-
-                <p className="text-sm text-brand-muted font-medium mb-6 leading-relaxed">
-                  Você está prestes a realizar a ação de <strong className="text-brand-primary underline underline-offset-4">{
-                    actionModal.type === 'aceitar' ? 'Aprovação/Aceite' :
-                    actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
-                    actionModal.type === 'excluir' ? 'Exclusão' :
-                    actionModal.type === 'solicitar_reavaliacao' ? 'Solicitação de Reavaliação' :
-                    actionModal.type === 'manter' ? 'Recusar Reavaliação' :
-                    actionModal.type === 'escalar' ? 'Escalar para Qualidade' :
-                    actionModal.type === 'reabrir' ? 'Reabertura de Monitoria' :
-                    actionModal.type === 'alterar_etapa' ? 'Avançar / Reverter Etapa' :
-                    actionModal.type.toUpperCase()
-                  }</strong> nesta monitoria.
-                  <br /><br />
-                  Esta operação ficará registrada no histórico e {
-                    (actionModal.type === 'aceitar' || actionModal.type === 'aprovar')
-                      ? 'finalizará o processo deste ticket.'
-                      : 'dará continuidade ao fluxo de revisão.'
-                  }
-                </p>
-
-                {actionModal.type === 'reabrir' && (
-                  <div className="mb-6">
-                    <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 block">Retornar para qual etapa?</label>
-                    <div className="relative mb-4">
-                      <select
-                        value={reopenStatus}
-                        onChange={e => setReopenStatus(e.target.value as any)}
-                        className="w-full appearance-none bg-surface-bg border border-surface-border rounded-lg p-3 pr-10 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/50 transition-all"
-                      >
-                        <option value="pendente_revisao">Pendente Revisão (Agente de Suporte)</option>
-                        <option value="em_contestacao">Em Contestação (Monitor de Qualidade)</option>
-                        <option value="aguardando_gestor_suporte">Gestão Suporte (Gestor de Suporte)</option>
-                        <option value="aguardando_gestor_qualidade">Gestão Qualidade (Gestor de Qualidade)</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-brand-muted">
-                        <ChevronDown className="h-4 w-4" />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {actionModal.type === 'alterar_etapa' && (() => {
+                {(() => {
                   const m = monitorias.find(item => item.id === actionModal.id);
                   const currentSt = m?.status || 'pendente_revisao';
-                  const STAGE_ORDER: Record<string, number> = {
-                    'pendente_revisao': 1,
-                    'em_contestacao': 2,
-                    'aguardando_gestor_suporte': 3,
-                    'aguardando_gestor_qualidade': 4,
-                    'reavaliacao_solicitada': 4,
-                    'concluida': 5,
-                  };
-                  const isAdvance = (STAGE_ORDER[targetStatus] ?? 0) > (STAGE_ORDER[currentSt] ?? 0);
-                  const isReversion = (STAGE_ORDER[targetStatus] ?? 0) < (STAGE_ORDER[currentSt] ?? 0);
+                  const isStepChange = actionModal.type === 'alterar_etapa' || actionModal.type === 'avancar_etapa' || actionModal.type === 'retroceder_etapa';
+                  const prev = getPreviousStage(currentSt);
+                  const next = getNextStage(currentSt);
 
-                  return (
-                    <div className="mb-6 p-4 rounded-2xl bg-surface-subtle border border-surface-border space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase text-brand-muted tracking-wider">Etapa Atual:</span>
-                        <Badge variant="neutral" size="xs">{currentSt}</Badge>
-                      </div>
+                  const modalTitle =
+                    actionModal.type === 'avancar_etapa' ? 'Avançar Etapa' :
+                    actionModal.type === 'retroceder_etapa' ? 'Retroceder Etapa' :
+                    actionModal.type === 'alterar_etapa' ? 'Alterar Etapa da Monitoria' :
+                    actionModal.type === 'reabrir' ? 'Reabrir Monitoria' :
+                    actionModal.type === 'aceitar' ? 'Aprovação e Aceite' :
+                    actionModal.type === 'aprovar' ? 'Aprovar Monitoria' :
+                    actionModal.type === 'contestar' ? 'Contestar Avaliação' :
+                    actionModal.type === 'solicitar_reavaliacao' ? 'Solicitar Reavaliação' :
+                    actionModal.type === 'manter' ? 'Recusar Reavaliação' :
+                    actionModal.type === 'escalar' ? 'Escalar para Gestão Qualidade' :
+                    actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
+                    actionModal.type === 'excluir' ? 'Excluir Monitoria' :
+                    'Confirmar Ação';
 
-                      <div>
-                        <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-1.5 block">
-                          Nova Etapa de Destino *
-                        </label>
-                        <div className="relative">
-                          <select
-                            value={targetStatus}
-                            onChange={e => setTargetStatus(e.target.value as any)}
-                            className="w-full appearance-none bg-surface-card border border-surface-border rounded-xl p-3 pr-10 text-xs font-semibold text-brand-primary focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/50 transition-all"
-                          >
-                            <option value="pendente_revisao">Pendente Revisão (Agente de Suporte)</option>
-                            <option value="em_contestacao">Em Contestação (Monitor de Qualidade)</option>
-                            <option value="aguardando_gestor_suporte">Gestão Suporte (Gestor de Suporte)</option>
-                            <option value="aguardando_gestor_qualidade">Gestão Qualidade (Gestor de Qualidade)</option>
-                            <option value="reavaliacao_solicitada">Reavaliação Solicitada (Auditor)</option>
-                            <option value="concluida">Concluída (Finalizada)</option>
-                          </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-brand-muted">
-                            <ChevronDown className="h-4 w-4" />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-1">
-                        <span className="text-[10px] font-bold text-brand-muted">Operação:</span>
-                        {isAdvance && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                            ➡️ Avanço de Etapa
-                          </span>
-                        )}
-                        {isReversion && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                            ⬅️ Reversão de Etapa
-                          </span>
-                        )}
-                        {!isAdvance && !isReversion && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-500/10 text-slate-600 border border-slate-500/20">
-                            Mesma Etapa
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {(() => {
                   const isSupportManager = user?.role === 'gestor_suporte';
                   const isApproval = actionModal.type === 'aprovar' || actionModal.type === 'aceitar';
                   const isContestation = actionModal.type === 'contestar';
-                  const isAlterarEtapa = actionModal.type === 'alterar_etapa';
 
-                  let noteLabel = 'Justificativa / Motivo';
-                  let notePlaceholder = 'Descreva detalhadamente o motivo desta ação...';
+                  let noteLabel = 'Justificativa / Motivo (Opcional)';
+                  let notePlaceholder = 'Descreva os detalhes desta ação...';
                   let noteRequired = false;
 
                   if (isSupportManager && isApproval) {
@@ -861,10 +768,14 @@ export default function MonitoriaList({
                     noteLabel = 'Justificativa da Contestação';
                     notePlaceholder = 'Descreva detalhadamente a justificativa para contestar a avaliação (obrigatório)...';
                     noteRequired = true;
-                  } else if (isAlterarEtapa) {
-                    noteLabel = 'Justificativa Administrativa da Mudança de Etapa';
-                    notePlaceholder = 'Descreva obrigatoriamente o motivo da reversão ou avanço desta monitoria no histórico...';
-                    noteRequired = true;
+                  } else if (isStepChange) {
+                    noteLabel = 'Observação da Gestão (Opcional)';
+                    notePlaceholder = 'Opcional: Caso deixe em branco, será registrado automaticamente um log padrão no histórico.';
+                    noteRequired = false;
+                  } else if (actionModal.type === 'reabrir') {
+                    noteLabel = 'Motivo da Reabertura (Opcional)';
+                    notePlaceholder = 'Opcional: Caso deixe em branco, o sistema registrará a justificativa padrão no histórico.';
+                    noteRequired = false;
                   }
 
                   const showNoteField = (
@@ -877,19 +788,151 @@ export default function MonitoriaList({
                     actionModal.type === 'solicitar_reavaliacao' ||
                     actionModal.type === 'manter' ||
                     actionModal.type === 'recusar_agente' ||
-                    actionModal.type === 'alterar_etapa'
+                    isStepChange
                   );
+
+                  const isSameStage = isStepChange && m && targetStatus === currentSt;
 
                   return (
                     <>
+                      <div className="flex items-center gap-4 mb-6">
+                        <div className="w-12 h-12 rounded-2xl bg-brand-primary/5 flex items-center justify-center text-brand-primary shrink-0">
+                          {actionModal.type === 'reabrir' ? (
+                            <RotateCcw className="w-6 h-6 text-amber-500" />
+                          ) : isStepChange ? (
+                            <ArrowLeftRight className="w-6 h-6 text-brand-highlight" />
+                          ) : (
+                            <AlertTriangle className="w-6 h-6" />
+                          )}
+                        </div>
+                        <div>
+                          <h3 id="monitoria-action-title" className="text-lg font-black text-brand-primary uppercase tracking-tight">
+                            {modalTitle}
+                          </h3>
+                          <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">
+                            Protocolo #{m?.display_id || '---'} · Ticket #{m?.ticket_id || 'S/N'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-brand-muted font-medium mb-5 leading-relaxed">
+                        {isStepChange
+                          ? 'Defina a nova etapa para a qual deseja mover esta monitoria. A transição e seu autor ficarão gravados no histórico.'
+                          : actionModal.type === 'reabrir'
+                          ? 'A monitoria será reativada no fluxo de trabalho e retornará para a etapa indicada.'
+                          : `Você está prestes a realizar a ação de ${modalTitle.toLowerCase()} nesta monitoria. Esta operação ficará registrada no histórico.`}
+                      </p>
+
+                      {/* Bloco de Reabertura */}
+                      {actionModal.type === 'reabrir' && (
+                        <div className="mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-3">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider text-[10px]">
+                              Reabertura Operacional:
+                            </span>
+                            <Badge variant="warning" size="xs">Reabrir</Badge>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-black text-amber-800 dark:text-amber-300 uppercase tracking-widest ml-1 mb-1.5 block">
+                              Retornar para qual etapa?
+                            </label>
+                            <div className="relative">
+                              <select
+                                value={reopenStatus}
+                                onChange={e => setReopenStatus(e.target.value as any)}
+                                className="w-full appearance-none bg-surface-card border border-surface-border rounded-xl p-2.5 pr-10 text-xs font-bold text-brand-primary focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/50 transition-all cursor-pointer"
+                              >
+                                <option value="pendente_revisao">Pendente Revisão (Agente de Suporte)</option>
+                                <option value="em_contestacao">Em Contestação (Monitor de Qualidade)</option>
+                                <option value="aguardando_gestor_suporte">Gestão Suporte (Gestor de Suporte)</option>
+                                <option value="aguardando_gestor_qualidade">Gestão Qualidade (Gestor de Qualidade)</option>
+                              </select>
+                              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-brand-muted">
+                                <ChevronDown className="h-4 w-4" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bloco de Mudança de Etapa (Avançar / Retroceder / Alterar) */}
+                      {isStepChange && (
+                        <div className="mb-5 p-4 rounded-2xl bg-surface-subtle border border-surface-border space-y-3">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-brand-muted uppercase tracking-wider text-[10px]">Etapa Atual:</span>
+                            <Badge variant={getStatusConfig(currentSt).variant} size="xs">
+                              {getStatusConfig(currentSt).shortLabel}
+                            </Badge>
+                          </div>
+
+                          {/* Atalhos Rápidos com 1 clique */}
+                          <div className="flex items-center gap-2 pt-1">
+                            {prev && (
+                              <button
+                                type="button"
+                                onClick={() => setTargetStatus(prev)}
+                                className={`flex-1 py-2 px-2.5 rounded-xl border text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                  targetStatus === prev
+                                    ? 'bg-purple-500/15 border-purple-500/40 text-purple-700 dark:text-purple-300 ring-2 ring-purple-500/20 shadow-xs'
+                                    : 'bg-surface-card border-surface-border text-brand-muted hover:text-brand-primary hover:border-brand-primary/30'
+                                }`}
+                              >
+                                <ArrowLeft className="w-3.5 h-3.5" />
+                                <span>Retroceder: {getStageLabel(prev)}</span>
+                              </button>
+                            )}
+                            {next && (
+                              <button
+                                type="button"
+                                onClick={() => setTargetStatus(next)}
+                                className={`flex-1 py-2 px-2.5 rounded-xl border text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                  targetStatus === next
+                                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20 shadow-xs'
+                                    : 'bg-surface-card border-surface-border text-brand-muted hover:text-brand-primary hover:border-brand-primary/30'
+                                }`}
+                              >
+                                <span>Avançar: {getStageLabel(next)}</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-1.5 block">
+                              Ou escolha outra etapa de destino:
+                            </label>
+                            <div className="relative">
+                              <select
+                                value={targetStatus}
+                                onChange={e => setTargetStatus(e.target.value as any)}
+                                className="w-full appearance-none bg-surface-card border border-surface-border rounded-xl p-2.5 pr-10 text-xs font-bold text-brand-primary focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/50 transition-all cursor-pointer"
+                              >
+                                {STAGES_FLOW.map(stage => (
+                                  <option key={stage.status} value={stage.status}>
+                                    {stage.label} ({stage.roleLabel})
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-brand-muted">
+                                <ChevronDown className="h-4 w-4" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {showNoteField && (
                         <div className="mb-4">
                           <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1 mb-2 flex items-center justify-between">
                             <span>{noteLabel}</span>
-                            {noteRequired && <span className="text-[9px] text-danger font-semibold tracking-normal">Obrigatório</span>}
+                            {noteRequired ? (
+                              <span className="text-[9px] text-danger font-semibold tracking-normal">Obrigatório</span>
+                            ) : (
+                              <span className="text-[9px] text-brand-muted font-normal tracking-normal">Opcional</span>
+                            )}
                           </label>
                           <textarea
-                            className="w-full bg-surface-bg border border-surface-border rounded-lg p-4 text-sm font-medium focus:outline-none focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all min-h-[100px]"
+                            className="w-full bg-surface-bg border border-surface-border rounded-xl p-3 text-xs font-medium focus:outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/30 transition-all min-h-[90px] resize-none"
                             placeholder={notePlaceholder}
                             value={actionNote}
                             onChange={e => setActionNote(e.target.value)}
@@ -959,21 +1002,32 @@ export default function MonitoriaList({
                           </div>
                         )}
                       </div>
+
+                      <div className="flex gap-3">
+                        <Button
+                          variant="outline"
+                          className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest"
+                          onClick={() => setActionModal(null)}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          variant="primary"
+                          className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest"
+                          onClick={async () => {
+                            const success = await handleAction();
+                            if (success) {
+                              closeDetails();
+                            }
+                          }}
+                          disabled={submitting || Boolean(isSameStage)}
+                        >
+                          {submitting ? 'Processando...' : isSameStage ? 'Selecione outra etapa' : 'Confirmar Ação'}
+                        </Button>
+                      </div>
                     </>
                   );
                 })()}
-
-                <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest" onClick={() => setActionModal(null)}>Cancelar</Button>
-                  <Button variant="primary" className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest" onClick={async () => {
-                    const success = await handleAction();
-                    if (success) {
-                      closeDetails();
-                    }
-                  }} disabled={submitting}>
-                    {submitting ? 'Processando...' : 'Confirmar Ação'}
-                  </Button>
-                </div>
               </Card>
             </m.div>
           </div>, document.body

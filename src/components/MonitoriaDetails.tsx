@@ -1,9 +1,9 @@
 import React from 'react';
 import { Monitoria, User } from '../types';
-import { ActionType } from '../hooks/useMonitoriaActions';
+import { ActionType, getPreviousStage, getNextStage, getStageLabel } from '../hooks/useMonitoriaActions';
 import { getStatusConfig, getHistoryEventConfig, VARIANT_TEXT_CLASS } from '../lib/statusHelper';
 import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
-import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, History, Paperclip, ArrowLeftRight, Clock } from 'lucide-react';
+import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, History, Paperclip, ArrowLeftRight, ArrowLeft, ArrowRight, Clock } from 'lucide-react';
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 import Button from './ui/Button';
 
@@ -306,32 +306,66 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                     </>
                   )}
 
-                  {/* Avançar ou Reverter Etapa no fluxo — Gestor de Qualidade e Admin */}
-                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setActionModal({ id: m.id, type: 'alterar_etapa' })}
-                      title="Avançar ou reverter a etapa atual desta monitoria no fluxo de auditoria"
-                      icon={<ArrowLeftRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                    >
-                      Avançar / Reverter Etapa
-                    </Button>
-                  )}
+                  {/* Controles de Etapa e Fluxo — Exclusivos de Administrador e Gestor de Qualidade */}
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (() => {
+                    const prevStage = getPreviousStage(m.status);
+                    const nextStage = getNextStage(m.status);
+                    const isClosed = ['concluida', 'finalizada_alterada', 'contestacao_aceita', 'contestacao_negada'].includes(m.status);
 
-                  {/* Reabrir só faz sentido para monitorias já finalizadas/concluídas */}
-                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') &&
-                    m.active !== false &&
-                    ['concluida', 'finalizada_alterada', 'contestacao_aceita', 'contestacao_negada'].includes(m.status) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setActionModal({ id: m.id, type: 'reabrir' })}
-                        icon={<RotateCcw className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-[-45deg]" />}
-                      >
-                        Reabrir
-                      </Button>
-                  )}
+                    return (
+                      <>
+                        {prevStage && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setActionModal({ id: m.id, type: 'retroceder_etapa' })}
+                            title={`Retroceder etapa para: ${getStageLabel(prevStage)}`}
+                            icon={<ArrowLeft className="w-3.5 h-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" />}
+                            className="font-bold border-surface-border text-brand-primary hover:bg-surface-subtle"
+                          >
+                            Retroceder Etapa
+                          </Button>
+                        )}
+
+                        {nextStage && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setActionModal({ id: m.id, type: 'avancar_etapa' })}
+                            title={`Avançar etapa para: ${getStageLabel(nextStage)}`}
+                            icon={<ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />}
+                            className="font-bold shadow-sm"
+                          >
+                            Avançar Etapa
+                          </Button>
+                        )}
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActionModal({ id: m.id, type: 'alterar_etapa' })}
+                          title="Selecionar manualmente qualquer etapa do fluxo de auditoria"
+                          icon={<ArrowLeftRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
+                          className="font-bold border-surface-border text-brand-primary hover:bg-surface-subtle"
+                        >
+                          Alterar Etapa
+                        </Button>
+
+                        {isClosed && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setActionModal({ id: m.id, type: 'reabrir' })}
+                            title="Reabrir esta monitoria finalizada e retornar para análise"
+                            icon={<RotateCcw className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-[-45deg]" />}
+                            className="font-bold border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                          >
+                            Reabrir Monitoria
+                          </Button>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {/* Excluir é soft-delete (active=false via UPDATE, não DELETE
                       real) — governado por monitorias_update_policy, que já

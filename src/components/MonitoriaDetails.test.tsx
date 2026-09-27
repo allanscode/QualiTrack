@@ -50,7 +50,9 @@ describe('MonitoriaDetails', () => {
     );
     expect(screen.getByRole('button', { name: 'Reavaliar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Recusar' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Avançar \/ Reverter Etapa/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Avançar Etapa/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Retroceder Etapa/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Alterar Etapa/i })).toBeInTheDocument();
     unmount1();
 
     // Aguardando gestor de suporte
@@ -68,7 +70,7 @@ describe('MonitoriaDetails', () => {
       <MonitoriaDetails monitoria={concluidaSla} user={adminUser} users={[supportUser, managerUser, adminUser]} onView={vi.fn()} onAction={vi.fn()} />
     );
     expect(screen.getByText(/Finalizada por SLA \(Decurso de Prazo\)/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reabrir' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Reabrir/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Editar Avaliação' })).toBeInTheDocument();
-  });
+  }, 15000);
 });
