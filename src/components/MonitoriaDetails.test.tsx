@@ -39,4 +39,36 @@ describe('MonitoriaDetails', () => {
     expect(screen.getByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Contestar' })).toBeInTheDocument();
   });
+
+  it('allows administrator to execute governance and workflow actions across different stages', () => {
+    const adminUser = { id: 'admin-1', role: 'admin', name: 'Admin Master' } as User;
+
+    // Em contestação
+    const contestada = { ...monitoria, status: 'em_contestacao' } as Monitoria;
+    const { unmount: unmount1 } = render(
+      <MonitoriaDetails monitoria={contestada} user={adminUser} users={[supportUser, managerUser, adminUser]} onView={vi.fn()} onAction={vi.fn()} />
+    );
+    expect(screen.getByRole('button', { name: 'Reavaliar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Recusar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Avançar \/ Reverter Etapa/i })).toBeInTheDocument();
+    unmount1();
+
+    // Aguardando gestor de suporte
+    const aguardandoSuporte = { ...monitoria, status: 'aguardando_gestor_suporte' } as Monitoria;
+    const { unmount: unmount2 } = render(
+      <MonitoriaDetails monitoria={aguardandoSuporte} user={adminUser} users={[supportUser, managerUser, adminUser]} onView={vi.fn()} onAction={vi.fn()} />
+    );
+    expect(screen.getByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Escalar' })).toBeInTheDocument();
+    unmount2();
+
+    // Concluída por SLA
+    const concluidaSla = { ...monitoria, status: 'concluida', resolution_type: 'automatic' } as Monitoria;
+    render(
+      <MonitoriaDetails monitoria={concluidaSla} user={adminUser} users={[supportUser, managerUser, adminUser]} onView={vi.fn()} onAction={vi.fn()} />
+    );
+    expect(screen.getByText(/Finalizada por SLA \(Decurso de Prazo\)/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reabrir' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar Avaliação' })).toBeInTheDocument();
+  });
 });

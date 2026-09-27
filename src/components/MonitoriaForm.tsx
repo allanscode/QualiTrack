@@ -35,7 +35,8 @@ import {
   Quote,
   Search,
   Copy,
-  Check
+  Check,
+  Pencil
 } from 'lucide-react';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useQualityConfig } from '../lib/useQualityConfig';
@@ -95,9 +96,10 @@ export default function MonitoriaForm({
   // Só é "somente leitura" quando initialData é uma monitoria JÁ SALVA (tem
   // id) — dados de pré-preenchimento vindos da Central de Filas (ticket_id,
   // sugestões da IA etc.) não têm id ainda e precisam continuar editáveis.
-  const isViewOnly = !!(initialData as any)?.id && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit;
+  const [isEditModeOverride, setIsEditModeOverride] = useState(false);
+  const isViewOnly = !!(initialData as any)?.id && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit && !isEditModeOverride;
   const isReevaluating = !!(initialData as any)?._reevaluate;
-  const isAdminEdit = !!(initialData as any)?._adminEdit;
+  const isAdminEdit = !!(initialData as any)?._adminEdit || isEditModeOverride;
 
   const aiEval: AIEvaluationResult | undefined =
     (initialData as any)?.aiEvaluation ||
@@ -617,7 +619,9 @@ export default function MonitoriaForm({
               </div>
               {isViewOnly && (
                 <p className="hidden sm:block text-[11px] text-brand-muted mt-0.5 max-w-md leading-relaxed truncate">
-                  Monitorias salvas não podem ser editadas. Para alterar, use <span className="text-brand-primary font-bold">Reavaliar</span>.
+                  {user?.role === 'admin' || user?.role === 'gestor_qualidade'
+                    ? 'Modo somente leitura. Para retificar critérios ou notas, use o botão "Habilitar Edição".'
+                    : 'Monitorias salvas são somente leitura.'}
                 </p>
               )}
               {initialData?.display_id && <Badge variant="info" size="xs" className="mt-0.5 text-[9px]">Mon: {initialData.display_id}</Badge>}
@@ -668,6 +672,19 @@ export default function MonitoriaForm({
               <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-brand-muted font-medium mr-1" title={`Salvo às ${lastSaved.toLocaleTimeString('pt-BR')}`}>
                 <Check className="w-3 h-3 text-brand-accent" /> Salvo
               </span>
+            )}
+
+            {isViewOnly && (user?.role === 'admin' || user?.role === 'gestor_qualidade') && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsEditModeOverride(true)}
+                icon={<Pencil className="w-3.5 h-3.5" />}
+                className="h-8 text-[10px] font-black uppercase tracking-wider shrink-0"
+                title="Habilitar edição desta avaliação como Administrador"
+              >
+                Habilitar Edição
+              </Button>
             )}
 
             <button onClick={onCancel} className="p-1.5 hover:bg-surface-subtle rounded-xl transition-all text-brand-muted cursor-pointer" title="Fechar">

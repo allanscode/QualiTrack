@@ -3,7 +3,7 @@ import { Monitoria, User } from '../types';
 import { ActionType } from '../hooks/useMonitoriaActions';
 import { getStatusConfig, getHistoryEventConfig, VARIANT_TEXT_CLASS } from '../lib/statusHelper';
 import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
-import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, History, Paperclip, ArrowLeftRight } from 'lucide-react';
+import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, History, Paperclip, ArrowLeftRight, Clock } from 'lucide-react';
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 import Button from './ui/Button';
 
@@ -119,6 +119,41 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                   </div>
                 )}
 
+                {/* Alertas de SLA e Conclusão para Orientação Operacional */}
+                {m.status === 'concluida' && m.resolution_type === 'automatic' && (
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-xs text-amber-800 dark:text-amber-300">
+                    <Clock className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                    <div className="space-y-1">
+                      <p className="font-black uppercase tracking-wide text-[11px] text-amber-700 dark:text-amber-400">
+                        Finalizada por SLA (Decurso de Prazo)
+                      </p>
+                      <p className="text-[11px] leading-relaxed">
+                        O prazo regulamentar para contestação expirou sem manifestação, concluindo a monitoria automaticamente. As ações normais de aprovação e contestação foram encerradas.
+                        {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && (
+                          <span className="block mt-1 font-semibold text-brand-primary">
+                            Como {user?.role === 'admin' ? 'Administrador' : 'Gestor de Qualidade'}, você pode <strong>Reabrir</strong> para uma etapa anterior, <strong>Avançar/Reverter Etapa</strong> ou <strong>Editar a Avaliação</strong> pelos botões abaixo.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {m.status !== 'concluida' && m.action_deadline_at && new Date(m.action_deadline_at).getTime() < Date.now() && (
+                  <div className="p-3 rounded-2xl bg-functional-error/10 border border-functional-error/30 flex items-start gap-3 text-xs text-functional-error">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-black uppercase tracking-wide text-[11px]">Prazo de SLA Expirado nesta Etapa</p>
+                      <p className="text-[11px] leading-relaxed opacity-90">
+                        O prazo limite desta etapa ({new Date(m.action_deadline_at).toLocaleString('pt-BR')}) já se esgotou.
+                        {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && (
+                          <span> Você pode intervir e concluir a tratativa, reverter etapa ou definir novo andamento.</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-2 items-stretch sm:items-center border-t border-surface-border pt-4">
                   <Button
                     variant="outline"
@@ -206,7 +241,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                     </>
                   )}
 
-                  {user?.role === 'gestor_suporte' && m.status === 'aguardando_gestor_suporte' && (
+                  {(user?.role === 'gestor_suporte' || user?.role === 'admin') && m.status === 'aguardando_gestor_suporte' && (
                     <>
                       <Button
                         variant="secondary"
@@ -227,7 +262,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                     </>
                   )}
 
-                  {(user?.role === 'qualidade' || user?.role === 'gestor_qualidade') && (m.status === 'em_contestacao' || m.status === 'reavaliacao_solicitada') && (
+                  {(user?.role === 'qualidade' || user?.role === 'gestor_qualidade' || user?.role === 'admin') && (m.status === 'em_contestacao' || m.status === 'reavaliacao_solicitada') && (
                     <>
                       <Button
                         variant="secondary"
@@ -250,7 +285,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                     </>
                   )}
 
-                  {user?.role === 'gestor_qualidade' && m.status === 'aguardando_gestor_qualidade' && (
+                  {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'aguardando_gestor_qualidade' && (
                     <>
                       <Button
                         variant="secondary"

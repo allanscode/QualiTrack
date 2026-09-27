@@ -587,7 +587,23 @@ export default function MonitoriaList({
                   matchesTab = m.status === t;
                 }
 
-                return matchesActiveStatus && matchesTab;
+                if (!matchesActiveStatus || !matchesTab) return false;
+
+                if (user?.role === 'suporte' && m.evaluated_id !== user.id) return false;
+                if (user?.role === 'gestor_suporte') {
+                  if (user.team_ids?.length && m.team_id && !user.team_ids.includes(m.team_id)) return false;
+                  else if (!user.team_ids?.length) return false;
+                }
+
+                if (filters.teamFilter && m.team_id !== filters.teamFilter) return false;
+                if (filters.suporteFilter && m.evaluated_id !== filters.suporteFilter) return false;
+                if (filters.auditorFilter && m.evaluator_id !== filters.auditorFilter) return false;
+
+                const targetDate = filters.dateType === 'analysis' ? (m.analysis_date || m.created_at) : m.ticket_date;
+                if (filters.startDate && targetDate < filters.startDate) return false;
+                if (filters.endDate && targetDate > filters.endDate + 'T23:59:59') return false;
+
+                return true;
               }).length;
 
               return (
@@ -635,12 +651,39 @@ export default function MonitoriaList({
               <MonitoriaRow key={m.id} monitoria={m} teams={staticData.teams} getName={getName} getLevelForScore={getLevelForScore} onOpen={openDetails} />
             ))
           ) : (
-            <div className="py-24 text-center bg-surface-bg/10">
-              <div className="w-16 h-16 rounded-3xl bg-surface-subtle flex items-center justify-center mx-auto mb-4 opacity-50">
-                <Search className="w-8 h-8 text-brand-muted" />
+            <div className="py-20 px-4 text-center bg-surface-bg/10">
+              <div className="w-14 h-14 rounded-3xl bg-surface-subtle flex items-center justify-center mx-auto mb-3 opacity-60">
+                <Search className="w-6 h-6 text-brand-muted" />
               </div>
-              <p className="text-brand-muted font-black uppercase tracking-[0.2em] text-xs">Nenhuma monitoria encontrada</p>
-              <p className="text-brand-muted/60 text-[10px] mt-2 font-bold uppercase">Ajuste os filtros ou o período de busca</p>
+              <p className="text-brand-primary font-black uppercase tracking-wider text-xs">Nenhuma monitoria encontrada</p>
+              <p className="text-brand-muted text-[11px] mt-1 font-semibold">
+                Nenhum registro corresponde aos filtros selecionados{filters.tab !== 'todas' ? ` nesta aba ("${filters.tab.replace('_', ' ')}")` : ''}.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                {(filters.startDate || filters.endDate) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      filters.setStartDate('');
+                      filters.setEndDate('');
+                    }}
+                    className="text-[10px] font-black uppercase tracking-wider"
+                  >
+                    Limpar Período de Datas
+                  </Button>
+                )}
+                {filters.hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={filters.clearFilters}
+                    className="text-[10px] font-black uppercase tracking-wider text-functional-error hover:bg-functional-error/10"
+                  >
+                    Limpar Todos os Filtros
+                  </Button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -923,8 +966,10 @@ export default function MonitoriaList({
                 <div className="flex gap-3">
                   <Button variant="outline" className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest" onClick={() => setActionModal(null)}>Cancelar</Button>
                   <Button variant="primary" className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest" onClick={async () => {
-                    await handleAction();
-                    closeDetails();
+                    const success = await handleAction();
+                    if (success) {
+                      closeDetails();
+                    }
                   }} disabled={submitting}>
                     {submitting ? 'Processando...' : 'Confirmar Ação'}
                   </Button>

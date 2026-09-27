@@ -72,14 +72,14 @@ export function useMonitoriaActions(
     }
   };
 
-  const handleAction = async () => {
-    if (!actionModal || !user) return;
+  const handleAction = async (): Promise<boolean> => {
+    if (!actionModal || !user) return false;
     setSubmitting(true);
     const { id, type } = actionModal;
     const monitoria = monitorias.find(m => m.id === id);
     if (!monitoria) {
       setSubmitting(false);
-      return;
+      return false;
     }
 
     const trimmedNote = actionNote.trim();
@@ -89,12 +89,12 @@ export function useMonitoriaActions(
       if ((type === 'aprovar' || type === 'aceitar') && !trimmedNote) {
         toast.error('Ação Corretiva é obrigatória para aprovação pelo gestor de suporte.');
         setSubmitting(false);
-        return;
+        return false;
       }
       if (type === 'contestar' && !trimmedNote) {
         toast.error('Justificativa da Contestação é obrigatória para contestar.');
         setSubmitting(false);
-        return;
+        return false;
       }
     }
 
@@ -103,17 +103,17 @@ export function useMonitoriaActions(
       if (user.role !== 'admin' && user.role !== 'gestor_qualidade') {
         toast.error('Apenas Administrador e Gestor de Qualidade podem alterar a etapa.');
         setSubmitting(false);
-        return;
+        return false;
       }
       if (!trimmedNote || trimmedNote.length < 5) {
         toast.error('Justificativa administrativa é obrigatória (mínimo 5 caracteres).');
         setSubmitting(false);
-        return;
+        return false;
       }
       if (targetStatus === monitoria.status) {
         toast.error('O novo status selecionado é idêntico ao status atual.');
         setSubmitting(false);
-        return;
+        return false;
       }
     }
 
@@ -186,8 +186,10 @@ export function useMonitoriaActions(
       toast.success(type === 'alterar_etapa' ? `Etapa da monitoria ${isAdvance ? 'avançada' : 'revertida'} com sucesso!` : 'Ação registrada com sucesso!');
       setActionModal(null);
       load();
+      return true;
     } catch (e: any) {
       toast.error('Erro: ' + e.message);
+      return false;
     } finally { setSubmitting(false); }
   };
 
