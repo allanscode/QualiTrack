@@ -3,6 +3,14 @@ import { ptBR } from 'date-fns/locale';
 import { Monitoria, User, Team } from '../types';
 import { getStatusConfig } from '../lib/statusHelper';
 
+export function escapeCsvCell(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  const text = String(value).replace(/[\r\n]+/g, ' ');
+  // CSV quoting alone does not prevent spreadsheet formula evaluation.
+  const safe = /^[\s\u0000-\u001f]*[=+\-@]/u.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
 /**
  * Exporta uma lista de monitorias para formato CSV compatível diretamente com o Microsoft Excel (padrão Brasil).
  * Utiliza delimitador ponto-e-vírgula (;) e BOM UTF-8 (\uFEFF) para garantir acentuação correta.
@@ -15,11 +23,7 @@ export function exportMonitoriasToCsv(
 ) {
   if (!monitorias || monitorias.length === 0) return false;
 
-  const escapeCell = (val: any): string => {
-    if (val === null || val === undefined) return '';
-    const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
-    return `"${str}"`;
-  };
+  const escapeCell = escapeCsvCell;
 
   const getAgentName = (m: Monitoria) => {
     if (m.evaluated_name) return m.evaluated_name;

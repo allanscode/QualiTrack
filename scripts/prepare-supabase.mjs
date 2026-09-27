@@ -47,22 +47,47 @@ export async function buildFreshSql() {
   return { sql: `-- GENERATED. Fresh Supabase project ONLY. No demo users or business records.\nBEGIN;\n${chunks.join('\n')}\nCOMMIT;\n`, manifest };
 }
 
+// The immutable baseline is timestamped 20260915010000. From the reviewed
+// boundary migration onward, install the actual production migrations in order.
+// A same-named file in fresh-migrations is an explicitly reviewed clean-install
+// correction (currently 2401); it replaces, rather than duplicates, the source.
+export async function discoverFreshMigrations() {
+  const sourceDir = path.join(root, 'supabase', 'migrations');
+  const overrideDir = path.join(root, 'supabase', 'fresh-migrations');
+  const sourceNames = (await readdir(sourceDir))
+    .filter(name => /^\d{14}_[a-z0-9_]+\.sql$/.test(name) && name.slice(0, 14) >= '20260917000001')
+    .sort();
+  const overrides = new Set((await readdir(overrideDir)).filter(name => name.endsWith('.sql')));
+  const names = new Set(sourceNames);
+  for (const name of overrides) names.add(name);
+  const migrations = [];
+  for (const name of [...names].sort()) {
+    if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(name) || name.slice(0, 14) <= '20260915010000') {
+      throw new Error(`Invalid fresh incremental migration name: ${name}`);
+    }
+    const hasSource = sourceNames.includes(name);
+    const hasOverride = overrides.has(name);
+    if (!hasSource && !hasOverride) throw new Error(`Fresh migration source missing: ${name}`);
+    const relative = hasOverride ? `supabase/fresh-migrations/${name}` : `supabase/migrations/${name}`;
+    migrations.push({ name, relative, sql: (await read(relative)).replace(/\r\n/g, '\n') });
+  }
+  return migrations;
+}
+
 async function prepare() {
   const output = path.join(root, '.supabase-fresh');
   const migrations = path.join(output, 'supabase', 'migrations');
   const filename = '20260915010000_clean_install.sql';
-  const incrementalDir = path.join(root, 'supabase', 'fresh-migrations');
-  const incremental = (await readdir(incrementalDir)).filter(name => name.endsWith('.sql')).sort();
-  if (incremental.some(name => !/^\d{14}_[a-z0-9_]+\.sql$/.test(name) || name.slice(0,14) <= '20260915010000')) {
-    throw new Error('Fresh incremental migration names must be timestamped after the clean baseline.');
-  }
+  const incremental = await discoverFreshMigrations();
   await mkdir(migrations, { recursive: true });
-  const unexpected = (await readdir(migrations)).filter(name => name !== filename && !incremental.includes(name));
+  const unexpected = (await readdir(migrations)).filter(name => name !== filename && !incremental.some(item => item.name === name));
   if (unexpected.length) throw new Error('Unexpected migrations in generated folder; refusing to overwrite a different migration chain.');
   const { sql, manifest } = await buildFreshSql();
   await writeFile(path.join(migrations, filename), sql);
-  for (const name of incremental) await cp(path.join(incrementalDir,name),path.join(migrations,name));
-  await writeFile(path.join(output, 'sources.json'), JSON.stringify(manifest, null, 2) + '\n');
+  for (const migration of incremental) await writeFile(path.join(migrations, migration.name), migration.sql);
+  await writeFile(path.join(output, 'sources.json'), JSON.stringify([...manifest, ...incremental.map(item => ({
+    file: item.relative, sha256: createHash('sha256').update(item.sql).digest('hex'),
+  }))], null, 2) + '\n');
   await writeFile(path.join(output, 'supabase', 'config.toml'), 'project_id = "qualitrack-clean-install"\n\n' + await read('supabase/config.toml'));
   await cp(path.join(root, 'supabase', 'functions'), path.join(output, 'supabase', 'functions'), { recursive: true });
   console.log(`Prepared ${output}\nNo database contacted. Read docs/supabase-clean-install.md before deployment.`);

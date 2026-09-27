@@ -24,12 +24,14 @@ export default defineConfig(({ command, mode, isPreview }) => {
     }
     if (new URL(url).protocol !== 'https:') throw new Error('Produção exige Supabase HTTPS.');
     if (!env.VITE_TURNSTILE_SITE_KEY) {
-      env.VITE_TURNSTILE_SITE_KEY = '1x00000000000000000000AA';
+      throw new Error('Configure VITE_TURNSTILE_SITE_KEY antes do build.');
     }
+    if (env.VERCEL_ENV === 'production' && (env.VITE_TEST_CAPTCHA_BYPASS === 'true' ||
+        /^[123]x0/.test(env.VITE_TURNSTILE_SITE_KEY))) throw new Error('Produção não aceita CAPTCHA de teste.');
     if (key.startsWith('eyJ')) {
       const payload = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString());
       if (payload.role !== 'anon') throw new Error('O frontend aceita somente a chave anon/publicável.');
-    }
+    } else if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) throw new Error('O frontend aceita somente a chave anon/publicável.');
   }
   return {
     plugins: [react(), tailwindcss()],

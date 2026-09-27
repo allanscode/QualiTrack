@@ -16,6 +16,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import type { HelpdeskProvider, PublishResult } from './types.ts';
 import { buildEvaluationHtml } from './template.ts';
 import { ZendeskProvider } from './zendesk.ts';
+import { publicationAccess } from './access.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 
@@ -91,7 +92,9 @@ serve(async (req: Request) => {
       return failure('Usuário não autenticado', 'auth', 401);
     }
 
-    const body = await req.json();
+    const raw = await req.text();
+    if (new TextEncoder().encode(raw).length > 16384) return failure('Requisição muito grande', 'validation', 413);
+    const body = JSON.parse(raw);
     const parsed = PublishSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -115,7 +118,7 @@ serve(async (req: Request) => {
     // 2. Buscar a monitoria por monitoria_id. 404 se não existir.
     const { data: monitoria, error: monitoriaError } = await supabaseAdmin
       .from('monitorias')
-      .select('id, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score')
+      .select('id, active, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score')
       .eq('id', monitoria_id)
       .maybeSingle();
 
@@ -152,15 +155,13 @@ serve(async (req: Request) => {
       return failure('Usuário sem cadastro ativo no sistema', 'auth', 403);
     }
 
-    const podePublicar =
-      caller.role === 'admin' ||
-      caller.role === 'gestor_qualidade' ||
-      (caller.role === 'qualidade' && monitoria.evaluator_id === user.id);
-
-    const podeVisualizar =
-      podePublicar ||
-      (caller.role === 'suporte' && monitoria.evaluated_id === user.id) ||
-      caller.role === 'gestor_suporte';
+    let teamIds: string[] = [];
+    if (caller.role === 'gestor_suporte') {
+      const { data: teams, error: teamError } = await supabaseAdmin.from('user_teams').select('team_id').eq('user_id', user.id);
+      if (teamError) return failure('Não foi possível verificar sua equipe', 'auth', 503);
+      teamIds = (teams ?? []).map((team: { team_id: string }) => team.team_id);
+    }
+    const { preview: podeVisualizar, publish: podePublicar } = publicationAccess(caller, monitoria, teamIds);
 
     if (!dry_run && !podePublicar) {
       return failure('Você não tem permissão para publicar esta avaliação no helpdesk', 'auth', 403);
@@ -169,6 +170,11 @@ serve(async (req: Request) => {
     if (!podeVisualizar) {
       return failure('Você não tem permissão para ver esta avaliação', 'auth', 403);
     }
+    const { data: allowed, error: limitError } = await supabaseAdmin.rpc('consume_security_rate_limit', {
+      bucket_key: `helpdesk-publish:${dry_run ? 'preview' : 'send'}:${user.id}`,
+      max_requests: dry_run ? 60 : 5, window_seconds: 60,
+    });
+    if (limitError || !allowed) return failure('Aguarde um minuto antes de tentar novamente.', 'validation', 429);
 
     // 3. Validar que ticket_id está preenchido e é numérico (para Zendesk).
     const ticketId: string | null = monitoria.ticket_id;
@@ -243,9 +249,14 @@ serve(async (req: Request) => {
       provider = resolveProvider();
     } catch (err: any) {
       console.error('[helpdesk-publish-evaluation] Provider não configurado:', err);
-      return failure(err.message ?? 'Provider de helpdesk não configurado', 'provider', 500);
+      return failure('Integração de helpdesk indisponível.', 'provider', 503);
     }
 
+    const { data: claimId, error: claimError } = await supabaseAdmin.rpc('claim_helpdesk_publication', {
+      p_monitoria: monitoria_id, p_caller: user.id, p_force: force ?? false,
+    });
+    if (claimError) return failure('Envio em andamento ou pendente de conferência. Atualize e confira o ticket antes de reenviar.', 'provider', 409);
+    if (!claimId) return jsonResponse({ success: true, preview_html: previewHtml, ticket_id: normalizedTicketId }, 200);
     try {
       const { externalCommentId } = await provider.publishEvaluation({
         ticketId: normalizedTicketId,
@@ -254,18 +265,14 @@ serve(async (req: Request) => {
       });
 
       // 7. Registrar o sucesso em helpdesk_submissions.
-      const { error: insertError } = await supabaseAdmin.from('helpdesk_submissions').insert({
-        monitoria_id,
-        provider: provider.name,
-        external_ticket_id: normalizedTicketId,
-        outcome: resolvedOutcome,
-        status: 'sent',
-        external_comment_id: externalCommentId,
-        created_by: user.id,
+      const { error: insertError } = await supabaseAdmin.rpc('finish_helpdesk_publication', {
+        p_monitoria: monitoria_id, p_claim: claimId, p_provider: provider.name,
+        p_ticket: normalizedTicketId, p_outcome: resolvedOutcome, p_comment: externalCommentId, p_success: true,
       });
 
       if (insertError) {
         console.error('[helpdesk-publish-evaluation] Falha ao gravar helpdesk_submissions (sucesso):', insertError);
+        return failure('O helpdesk recebeu a atualização, mas o recibo não foi salvo. Não reenvie; solicite conferência.', 'provider', 503);
       }
 
       return jsonResponse(
@@ -278,17 +285,12 @@ serve(async (req: Request) => {
         200,
       );
     } catch (err: any) {
-      const errorMessage = err?.message ?? 'Falha desconhecida ao publicar no helpdesk';
+      const errorMessage = 'Não foi possível confirmar o envio. Confira o ticket no helpdesk antes de tentar novamente.';
       console.error('[helpdesk-publish-evaluation] Falha ao publicar no provider:', err);
 
-      const { error: insertError } = await supabaseAdmin.from('helpdesk_submissions').insert({
-        monitoria_id,
-        provider: provider.name,
-        external_ticket_id: normalizedTicketId,
-        outcome: resolvedOutcome,
-        status: 'failed',
-        error_message: errorMessage,
-        created_by: user.id,
+      const { error: insertError } = await supabaseAdmin.rpc('finish_helpdesk_publication', {
+        p_monitoria: monitoria_id, p_claim: claimId, p_provider: provider.name,
+        p_ticket: normalizedTicketId, p_outcome: resolvedOutcome, p_comment: null, p_success: false,
       });
 
       if (insertError) {
@@ -299,6 +301,6 @@ serve(async (req: Request) => {
     }
   } catch (error: any) {
     console.error('[helpdesk-publish-evaluation] Erro inesperado:', error);
-    return failure(error?.message ?? 'Erro interno', 'validation', 500);
+    return failure('Não foi possível processar a solicitação.', 'validation', error instanceof SyntaxError ? 400 : 500);
   }
 });

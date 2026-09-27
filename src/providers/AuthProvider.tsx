@@ -4,6 +4,8 @@ import { supabase, mockDb, upsertUserPreferences, isMockMode, assertSupabase, in
 import { User, UserRole, ROLE_LABELS, UserPreferences } from '../types';
 import { useTheme, resolveSystemTheme, applyThemeToDOM } from './ThemeProvider';
 import { useSessionManager, lastDbThemeRef, ABSOLUTE_TIMEOUT_MS, IDLE_TIMEOUT_MS, MOCK_SESSION_KEY, LAST_ACTIVITY_KEY } from '../hooks/useSessionManager';
+import { sessionStartedAt, clearPrivateDrafts } from '../lib/sessionSecurity';
+import { queryClient } from '../lib/queryClient';
 import { toast } from 'sonner';
 import { endCurrentPresenceSession } from '../lib/presence';
 
@@ -377,6 +379,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const sb = supabase ?? assertSupabase();
     const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
+      if (session) sessionStartTimeRef.current = sessionStartedAt(session);
       if (event === 'PASSWORD_RECOVERY') {
         if (pkceFlowRef.current && pkceTimerRef.current) {
           clearTimeout(pkceTimerRef.current);
@@ -426,7 +429,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log('[Auth] SIGNED_IN: User already loaded, skipping handleUserSession');
             return;
           }
-          sessionStartTimeRef.current = Date.now();
+          sessionStartTimeRef.current = sessionStartedAt(session);
           setTimeout(() => {
             handleUserSessionRef.current?.(session.user);
           }, 0);
@@ -614,6 +617,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // --- handleLogout ---
   const handleLogout = useCallback(async (options?: { silent?: boolean; message?: string }) => {
+    clearPrivateDrafts(userData?.id);
+    queryClient.clear();
     if (!isMockMode) {
       try {
         await endCurrentPresenceSession();

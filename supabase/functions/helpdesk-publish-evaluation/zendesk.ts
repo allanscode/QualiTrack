@@ -52,12 +52,12 @@ export class ZendeskProvider implements HelpdeskProvider {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(20000),
     });
 
     if (!response.ok) {
-      const bodyText = await response.text().catch(() => '');
       throw new Error(
-        `Zendesk retornou ${response.status} ao atualizar o ticket ${input.ticketId}: ${bodyText || response.statusText}`,
+        `Zendesk retornou ${response.status} ao atualizar o ticket.`,
       );
     }
 

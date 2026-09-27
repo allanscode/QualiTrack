@@ -35,7 +35,6 @@ export const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey &
         detectSessionInUrl: true,
         flowType: 'implicit',
         storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-        lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => await fn(),
       },
       realtime: {
         worker: true

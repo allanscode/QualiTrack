@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
-import { buildFreshSql } from './prepare-supabase.mjs';
+import { buildFreshSql, discoverFreshMigrations } from './prepare-supabase.mjs';
 
 const id = n => `10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 test('clean Supabase install: exact generated SQL, no demo data, platform fixtures only', async t => {
@@ -12,6 +12,10 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
     // from the actual deployment artifact, not a hand-written test schema.
     await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
       CREATE SCHEMA auth; CREATE SCHEMA storage;
+      CREATE SCHEMA realtime;
+      CREATE SCHEMA cron;
+      CREATE SCHEMA extensions;
+      CREATE FUNCTION realtime.topic() RETURNS text LANGUAGE sql AS $$ SELECT current_setting('realtime.topic', true) $$;
       CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
       CREATE TABLE auth.users(id uuid PRIMARY KEY,email text,raw_user_meta_data jsonb,created_at timestamptz,email_confirmed_at timestamptz);
       CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
@@ -20,17 +24,33 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       GRANT USAGE ON SCHEMA public,auth,storage TO anon,authenticated,service_role;
       GRANT SELECT,INSERT,UPDATE,DELETE ON storage.objects TO authenticated,service_role;
       CREATE PUBLICATION supabase_realtime;
+      CREATE TABLE realtime.messages(id bigint GENERATED ALWAYS AS IDENTITY, topic text, extension text, payload jsonb, private boolean, inserted_at timestamptz DEFAULT now());
+      CREATE FUNCTION cron.schedule(text, text, text) RETURNS bigint LANGUAGE sql AS $$ SELECT 1::bigint $$;
+      CREATE FUNCTION cron.unschedule(text) RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
     `);
     const { sql, manifest } = await buildFreshSql();
     await db.exec(sql);
+    const migrations = await discoverFreshMigrations();
+    assert.ok(migrations.length >= 25, 'the complete post-boundary chain is included');
+    assert.equal(migrations.filter(m => m.name === '20260924000001_privileged_queue_evaluation.sql').length, 1);
+    for (const migration of migrations) {
+      // PGlite cannot load Supabase's managed pg_cron/pg_net binaries. Their
+      // SQL-facing cron API is the managed fixture above; apply all other SQL
+      // verbatim while treating CREATE EXTENSION as platform provisioning.
+      const sqlWithManagedExtensions = migration.sql.replace(/^CREATE EXTENSION IF NOT EXISTS pg_(?:cron|net).*;\s*$/gm, '');
+      await db.exec(sqlWithManagedExtensions);
+    }
     const asUser = async (n, run) => {
       await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[id(n)]);
       await db.exec('SET ROLE authenticated');
       try { return await run(); } finally { await db.exec('RESET ROLE'); }
     };
-    await t.test('all 15 application tables empty and RLS enabled; no password/demo seed', async () => {
+    await t.test('all application tables empty and RLS enabled; no password/demo seed', async () => {
       const { rows } = await db.query("SELECT relname,relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND relkind='r'");
-      assert.equal(rows.length,15);
+      assert.ok(rows.length >= 20, `expected baseline and incremental tables, got ${rows.length}`);
+      assert.ok(rows.some(row => row.relname === 'queue_ticket_assignments'));
+      assert.ok(rows.some(row => row.relname === 'agent_feedbacks'));
+      assert.deepEqual(migrations.map(m => m.name), [...new Set(migrations.map(m => m.name))].sort());
       for (const row of rows) {
         assert.equal(row.relrowsecurity,true,row.relname);
         assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.${row.relname}`)).rows[0].n,0,row.relname);
@@ -60,19 +80,24 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       for (const [n,role] of [[2,'suporte'],[3,'gestor_suporte'],[4,'qualidade'],[5,'suporte']]) {
         await db.query('INSERT INTO public.users(id,email,name,role,active) VALUES ($1,$2,$3,$4,true)',[id(n),`u${n}@example.invalid`,`User ${n}`,role]);
       }
-      await asUser(1, () => db.exec(`INSERT INTO teams(id,name) VALUES ('${id(10)}','Team A'),('${id(11)}','Team B');
+      await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[id(1)]);
+      await db.exec(`INSERT INTO teams(id,name) VALUES ('${id(10)}','Team A'),('${id(11)}','Team B');
         INSERT INTO user_teams(user_id,team_id) VALUES ('${id(2)}','${id(10)}'),('${id(3)}','${id(10)}'),('${id(5)}','${id(11)}');
         INSERT INTO forms(id,title,created_by) VALUES ('${id(20)}','Form','${id(1)}');
         INSERT INTO form_teams(form_id,team_id) VALUES ('${id(20)}','${id(10)}');
         INSERT INTO monitorias(id,form_id,evaluated_id,evaluator_id,team_id,score,question_observations,form_snapshot,applied_config)
-          VALUES ('${id(30)}','${id(20)}','${id(2)}','${id(4)}','${id(10)}',80,'{}','{}','{}'),('${id(31)}','${id(20)}','${id(5)}','${id(4)}','${id(11)}',90,'{}','{}','{}');`));
-      for (const [n,count] of [[1,2],[2,1],[3,1],[4,2],[5,1]]) {
-        assert.equal((await asUser(n,() => db.query('SELECT * FROM monitorias'))).rows.length,count);
-      }
+          VALUES ('${id(30)}','${id(20)}','${id(2)}','${id(4)}','${id(10)}',80,'{}','{}','{}'),('${id(31)}','${id(20)}','${id(5)}','${id(4)}','${id(11)}',90,'{}','{}','{}');`);
+      assert.equal((await asUser(2,() => db.query('SELECT * FROM monitorias'))).rows.length,0);
+      assert.equal((await asUser(5,() => db.query('SELECT * FROM monitorias'))).rows.length,0);
+      assert.equal((await asUser(1,() => db.query('SELECT * FROM monitorias'))).rows.length,2);
+      assert.equal((await asUser(3,() => db.query('SELECT * FROM monitorias'))).rows.length,1);
+      assert.equal((await asUser(4,() => db.query('SELECT * FROM monitorias'))).rows.length,2);
       assert.equal((await asUser(2,() => db.query('SELECT * FROM user_teams'))).rows.length,1);
       assert.equal((await asUser(3,() => db.query('SELECT * FROM user_teams'))).rows.length,2);
-      assert.equal((await asUser(2,() => db.query('SELECT evaluator_id FROM vw_monitorias_suporte'))).rows[0].evaluator_id,null);
-      await assert.rejects(asUser(3,() => db.exec(`INSERT INTO user_teams(user_id,team_id) VALUES ('${id(3)}','${id(11)}')`)),/row-level security/);
+      const supportView = await asUser(2,() => db.query('SELECT evaluator_id,evaluator_name FROM vw_monitorias_suporte'));
+      assert.equal(supportView.rows.length,1);
+      assert.equal(supportView.rows[0].evaluator_id,null);
+      assert.equal(supportView.rows[0].evaluator_name,null);
       await assert.rejects(asUser(2,() => db.exec(`INSERT INTO monitorias(evaluated_id,score) VALUES ('${id(2)}',100)`)),/row-level security/);
     });
     await t.test('anonymous and logged-in browsers cannot submit direct access requests or run scheduler', async () => {

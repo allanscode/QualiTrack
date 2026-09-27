@@ -5,18 +5,22 @@ senhas, monitorias, solicitações, arquivos ou histórico do banco de testes.
 
 ## O que está preparado
 
-- `npm run prepare:supabase` gera `.supabase-fresh/supabase`, com uma migration inicial,
-  configuração das funções e código das Edge Functions. Não acessa nenhum servidor.
-- A base cria 15 tabelas da aplicação, relacionamentos, índices, RLS, helpers privados,
-  trigger Auth segura, view de suporte, bucket privado de manuais e Realtime.
+- `npm run prepare:supabase` gera `.supabase-fresh/supabase`, com o baseline existente,
+  a cadeia incremental completa e ordenada, configuração e Edge Functions. Não acessa servidor.
+- O baseline cria 15 tabelas da aplicação; incrementais posteriores adicionam as estruturas
+  atuais, seus relacionamentos, índices, RLS e helpers privados. A cadeia final inclui feedbacks,
+  fila/IA, presença, anexos e os limites de publicação atuais.
 - Nenhum usuário, senha padrão, equipe, formulário ou monitoria é inserido.
   Horários comerciais, feriados e configurações funcionais também começam vazios.
 - Cron e primeiro administrador têm procedimentos separados, de ativação explícita.
 - A instalação usa uma transação e recusa projetos com tabelas/views/sequências da
   aplicação ou usuários Auth existentes. Não remove o ambiente antigo.
-- `sources.json` registra os hashes dos arquivos usados. A seleção de trechos está
-  explícita em `scripts/prepare-supabase.mjs`; as migrations legadas não são reexecutadas
-  indiscriminadamente. Extensões gerenciadas de Auth/Storage são fornecidas pelo Supabase.
+- `sources.json` registra os hashes do baseline. O timestamp `20260915010000` permanece
+  estável para instalações que já o registraram. Incrementais de `supabase/migrations`
+  desde `20260917000001` são descobertas automaticamente em ordem; arquivos homônimos em
+  `supabase/fresh-migrations` são adaptações revisadas que substituem a cópia original,
+  sem duplicar timestamps. Uma ponte de helpers anterior à fronteira cobre dependências
+  ausentes do baseline. Extensões gerenciadas são provisionadas pelo Supabase.
 
 ## Validação antes de qualquer publicação
 
@@ -30,9 +34,12 @@ npm.cmd run test:database
 npm.cmd run prepare:supabase
 ```
 
-Os testes executam o SQL gerado em PostgreSQL/PGlite com fixtures **apenas da
-plataforma Supabase**. Validam criação vazia, recusa de reinstalação, RLS com dados
-sintéticos, trigger Auth, primeiro administrador, Storage e regras de prazo.
+Os testes aplicam o baseline e todos os incrementais gerados em PostgreSQL/PGlite,
+em ordem, com fixtures **apenas da plataforma Supabase**. Validam criação vazia,
+recusa de reinstalação, RLS com dados sintéticos, anonimato na tabela/view,
+trigger Auth, primeiro administrador, Storage e regras de prazo. PGlite não carrega
+os binários gerenciados `pg_cron`/`pg_net`; somente seus comandos de provisionamento
+são simulados, usando uma API `cron` de teste.
 Não substituem um ensaio no Supabase hospedado: Auth HTTP, SMTP, runtime Edge,
 PostgREST, entrega Realtime, pg_cron e navegador ainda precisam de homologação real.
 
@@ -54,7 +61,8 @@ npx.cmd supabase db push --workdir .supabase-fresh
 ```
 
 O dry-run lista migrations; não prova que o SQL foi executado com sucesso.
-O primeiro push deve conter somente `20260915010000_clean_install.sql`.
+O primeiro push deve conter `20260915010000_clean_install.sql` e todos os incrementais
+posteriores listados pelo dry-run. Confira a ordem e a quantidade esperadas antes de escrever.
 Não usar `--include-all`, `db reset`, `migration repair` para fingir histórico aplicado,
 `apply_all_pending.sql` ou os seeds antigos. [Referência da CLI](https://supabase.com/docs/reference/cli/supabase-db-push).
 
@@ -123,8 +131,10 @@ Não confundir testes de isolamento de linhas com aprovação completa desses re
 ## Histórico futuro e retorno
 
 Depois da primeira instalação, congelar a base na revisão de release. Novas migrations
-vão em `supabase/fresh-migrations`, com timestamp posterior à base; executar novamente
-o preparador e usar o mesmo workdir na CLI. Não reescrever uma migration aplicada.
+de produto ficam em `supabase/migrations`; o preparador as inclui automaticamente quando
+posteriores a `20260917000001`. Reserve `supabase/fresh-migrations` para adaptações
+explícitas de instalação limpa, com o mesmo nome da migration substituída. Execute
+novamente o preparador e use o mesmo workdir na CLI. Não reescrever migration aplicada.
 A cadeia do banco free permanece separada até sua aposentadoria.
 
 Manter o ambiente de desenvolvimento intacto. Antes do primeiro uso operacional,
