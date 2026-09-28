@@ -44,7 +44,7 @@ Vínculo agente↔conta feito por **e-mail**, não por lista local. Ver `resolve
 
 ## Rascunho de Avaliação (`ai_evaluation_drafts`)
 
-Uma linha por `ticket_id` (UNIQUE), sobrescrita a cada reavaliação. Desacopla "rodar a IA" de "abrir a ficha": `handleEvaluateWithAI` só salva o rascunho; `handleLaunchMonitoria` (em `AuditingQueueView.tsx`) é quem chama `onStartAudit`. Apagado automaticamente quando o ticket correspondente aparece como `already_audited` (monitoria real já existe).
+Uma linha por `ticket_id` (UNIQUE), sobrescrita a cada reavaliação. A conclusão da IA salva o resultado atomicamente no banco. Um trigger copia a fila de origem e o retrato verificado do ticket de `queue_ticket_catalog` para `ai_evaluation_drafts`. A Central de Filas lê esses rascunhos independentemente da view atual do Zendesk e mantém o ticket na fila de origem, com o botão **Verificar Avaliação**, mesmo depois que ele deixa a view. Ao salvar uma monitoria ativa para o ticket, outro trigger remove o rascunho. No modo mock, os rascunhos são guardados em `localStorage`. Rascunhos legados sem origem ou retrato aparecem em Proativas como recuperados, com aviso para conferir os dados do ticket.
 
 ## Ações da Edge Function `helpdesk-queue`
 

@@ -292,6 +292,10 @@ export interface AuditingQueueTicket {
   status: string;
   url?: string;
   already_audited?: boolean;
+  /** Rascunho de IA preservado no banco após o ticket sair da view do Zendesk. */
+  saved_ai_draft?: boolean;
+  /** Rascunho antigo sem retrato do ticket; dados devem ser conferidos. */
+  draft_metadata_incomplete?: boolean;
   /** true = atendente já atingiu o máximo de 2 avaliações positivas no mês. */
   positive_cap_reached?: boolean;
   tags?: string[];

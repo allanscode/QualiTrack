@@ -21,8 +21,7 @@ export default function FilterBar() {
   const [isRootCauseOpen, setIsRootCauseOpen] = useState(false);
 
   const defaults = useMemo(() => ({
-    startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
+    ...getPresetDateRange('mes'),
     teamId: '',
     agentId: '',
     auditorId: '',

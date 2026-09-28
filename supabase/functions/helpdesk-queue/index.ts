@@ -79,6 +79,7 @@ const RequestSchema = z.object({
   ticket_id: z.string().optional(),
   job_id: z.string().uuid().optional(),
   draft_meta: z.object({
+    source_queue: z.enum(['negativas', 'proativas', 'positivas']).optional(),
     form_id: z.string().uuid().nullable().optional(),
     agent_name: z.string().nullable().optional(),
     agent_email: z.string().nullable().optional(),

@@ -107,6 +107,19 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       assert.equal(supportView.rows[0].evaluator_name,null);
       await assert.rejects(asUser(2,() => db.exec(`INSERT INTO monitorias(evaluated_id,score) VALUES ('${id(2)}',100)`)),/row-level security/);
     });
+    await t.test('AI draft keeps its original queue snapshot until a monitoria is saved', async () => {
+      const snapshot = { ticket_id: '12345', subject: 'Proactive ticket', csat_status: 'unrated', ticket_date: '2026-09-28', status: 'open' };
+      await db.query(`INSERT INTO public.queue_ticket_catalog(ticket_id,queue_type,ticket_snapshot)
+        VALUES ('12345','proativas',$1::jsonb)`, [JSON.stringify(snapshot)]);
+      await db.query(`INSERT INTO public.ai_evaluation_drafts(ticket_id,result,created_by,source_queue)
+        VALUES ('12345','{"summary":"Ready"}'::jsonb,$1,'proativas')`, [id(4)]);
+      const { rows } = await db.query(`SELECT source_queue,ticket_snapshot FROM public.ai_evaluation_drafts WHERE ticket_id='12345'`);
+      assert.equal(rows[0].source_queue, 'proativas');
+      assert.deepEqual(rows[0].ticket_snapshot, snapshot);
+      await db.query(`INSERT INTO public.monitorias(ticket_id,evaluator_id,evaluated_id,team_id,form_id,score)
+        VALUES ('12345',$1,$2,$3,$4,90)`, [id(4),id(2),id(10),id(20)]);
+      assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.ai_evaluation_drafts WHERE ticket_id='12345'`)).rows[0].n, 0);
+    });
     await t.test('anonymous and logged-in browsers cannot submit direct access requests or run scheduler', async () => {
       for (const role of ['anon','authenticated']) {
         await db.exec(`SET ROLE ${role}`);

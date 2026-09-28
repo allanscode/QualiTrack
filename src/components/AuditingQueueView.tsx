@@ -29,7 +29,7 @@ import {
 import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChatParser';
 import { formatTicketDateTime, toTicketDateInput } from '../lib/ticketDateTime';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
-import { fetchAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
+import { fetchAIDrafts, fetchOpenAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import { claimAIJob, completeAIJob, failAIJob, cancelAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
 import {
   AlertTriangle,
@@ -570,17 +570,46 @@ ${checksSummary}${recs}`;
 
     setLoading(true);
     try {
-      const { tickets: data, nextCursor, hasMore: more } = await fetchQueueTickets(
-        queueAtCallTime,
-        monitorias,
-        targetCursor,
-        activeSearch || undefined
-      );
+      const [pageResult, savedResult] = await Promise.allSettled([
+        fetchQueueTickets(queueAtCallTime, monitorias, targetCursor, activeSearch || undefined),
+        targetCursor === null ? fetchOpenAIDrafts(queueAtCallTime) : Promise.resolve([]),
+      ]);
+      if (pageResult.status === 'rejected') throw pageResult.reason;
+      const { tickets: data, nextCursor, hasMore: more } = pageResult.value;
+      if (savedResult.status === 'rejected') console.error('Erro ao carregar rascunhos da fila:', savedResult.reason);
+      const saved = savedResult.status === 'fulfilled' ? savedResult.value : [];
+      const auditedIds = new Set(monitorias.map(m => m.ticket_id?.trim()).filter(Boolean));
+      const existingIds = new Set(data.map(ticket => ticket.ticket_id));
+      const search = activeSearch?.trim().toLocaleLowerCase('pt-BR');
+      const retained = saved
+        .filter(draft => !auditedIds.has(draft.ticket_id) && !existingIds.has(draft.ticket_id))
+        .map(draft => ({
+          ...(draft.ticket_snapshot || {
+            ticket_id: draft.ticket_id,
+            subject: `Ticket #${draft.ticket_id} · rascunho IA recuperado`,
+            agent_name: draft.agent_name,
+            agent_email: draft.agent_email,
+            agent_id: draft.agent_id,
+            team_id: draft.team_id,
+            channel: draft.channel,
+            csat_status: 'unrated' as const,
+            ticket_date: draft.created_at,
+            status: 'archived',
+          }),
+          ticket_id: draft.ticket_id,
+          saved_ai_draft: true,
+          draft_metadata_incomplete: !draft.ticket_snapshot,
+        }))
+        .filter(ticket => !search || [ticket.ticket_id, ticket.subject, ticket.agent_name, ticket.requester_name]
+          .some(value => value?.toLocaleLowerCase('pt-BR').includes(search)));
       // Descarta a resposta se já não for mais a busca mais recente — uma
       // troca de fila nesse meio tempo já disparou outra chamada, com seq
       // maior.
       if (seq !== loadSeqRef.current) return;
-      setTickets(data);
+      if (saved.length > 0) {
+        setDrafts(previous => ({ ...previous, ...Object.fromEntries(saved.map(draft => [draft.ticket_id, draft])) }));
+      }
+      setTickets([...retained, ...data]);
       setCursor(nextCursor);
       setHasMore(more);
     } catch (err) {
@@ -670,7 +699,9 @@ ${checksSummary}${recs}`;
       setDrafts({});
       return;
     }
+    let cancelled = false;
     fetchAIDrafts(tickets.map(t => t.ticket_id)).then(loaded => {
+      if (cancelled) return;
       const stillPending: Record<string, AIEvaluationDraft> = {};
       tickets.forEach(t => {
         const draft = loaded[t.ticket_id];
@@ -686,6 +717,7 @@ ${checksSummary}${recs}`;
       });
       setDrafts(stillPending);
     });
+    return () => { cancelled = true; };
   }, [activeQueue, tickets]);
 
   const ticketIdsKey = tickets.map(ticket => ticket.ticket_id).join(',');
@@ -757,7 +789,7 @@ ${checksSummary}${recs}`;
 
       const matchesAgent = !selectedAgentFilter || t.agent_name?.toLowerCase().includes(selectedAgentFilter.toLowerCase());
 
-      const hasDraft = !!drafts[t.ticket_id] || (activeQueue === 'filhos' && (!!t.child_evaluation || validatedChildTickets.has(t.ticket_id)));
+      const hasDraft = t.saved_ai_draft || !!drafts[t.ticket_id] || (activeQueue === 'filhos' && (!!t.child_evaluation || validatedChildTickets.has(t.ticket_id)));
       if (aiDraftFilter === 'with_draft' && !hasDraft) return false;
       if (aiDraftFilter === 'without_draft' && hasDraft) return false;
 
@@ -797,7 +829,7 @@ ${checksSummary}${recs}`;
   }, [filteredTickets, startIndex, endIndex]);
 
   const evaluableTicketsCount = useMemo(() => {
-    return paginatedTickets.filter(t => !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached).length;
+    return paginatedTickets.filter(t => !t.saved_ai_draft && !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached).length;
   }, [paginatedTickets, drafts]);
 
   const toggleTicketSelection = (ticketId: string) => {
@@ -926,6 +958,7 @@ ${checksSummary}${recs}`;
     const teamId = matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0] || ticket.team_id;
     const agentId = ticket.agent_id || matchedAgent?.id;
     const draftMeta = {
+      source_queue: activeQueue,
       form_id: formToUse.id,
       agent_name: matchedAgent?.name || ticket.agent_name,
       agent_email: matchedAgent?.email || ticket.agent_email,
@@ -989,6 +1022,7 @@ ${checksSummary}${recs}`;
         agentId, teamId, channel: ticket.channel,
         satisfactionComment: ticket.csat_comment, result: aiResult,
         guidelineIds, createdBy: currentUserId,
+        sourceQueue: activeQueue, ticketSnapshot: ticket,
       });
       setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
         ...previous[ticket.ticket_id], status: 'completed', result: aiResult,
@@ -1044,7 +1078,7 @@ ${checksSummary}${recs}`;
       : paginatedTickets;
 
     const pending = candidateTickets.filter(t => {
-      if (drafts[t.ticket_id] || t.already_audited || t.positive_cap_reached) return false;
+      if (t.saved_ai_draft || drafts[t.ticket_id] || t.already_audited || t.positive_cap_reached) return false;
       return true;
     });
 
@@ -1249,6 +1283,10 @@ ${checksSummary}${recs}`;
     const draft = drafts[ticket.ticket_id];
     if (!draft) return;
 
+    if (ticket.draft_metadata_incomplete) {
+      toast.warning('Rascunho antigo recuperado: confira a data e os dados do ticket antes de salvar a monitoria.');
+    }
+
     let queueAssignment;
     try {
       queueAssignment = await beginAssignedWork(ticket);
@@ -1341,11 +1379,14 @@ ${checksSummary}${recs}`;
     const calculatedScore = calculateAIEvaluationScore(draft.result, selectedForm);
 
     return (
-      <span
-        title="Nota calculada pelas respostas da IA usando os pesos da ficha"
-        className="inline-flex items-center px-2.5 py-1 rounded-lg bg-functional-success text-functional-success text-xs font-mono font-black flex-shrink-0"
-      >
-        {Math.round(calculatedScore)}%
+      <span className="inline-flex items-center gap-1.5 flex-wrap">
+        {ticket.saved_ai_draft && <Badge variant="warning" size="xs">{ticket.draft_metadata_incomplete ? 'Rascunho recuperado · conferir dados' : 'Rascunho IA salvo'}</Badge>}
+        <span
+          title="Nota calculada pelas respostas da IA usando os pesos da ficha"
+          className="inline-flex items-center px-2.5 py-1 rounded-lg bg-functional-success text-functional-success text-xs font-mono font-black flex-shrink-0"
+        >
+          {Math.round(calculatedScore)}%
+        </span>
       </span>
     );
   };
@@ -1485,6 +1526,10 @@ ${checksSummary}${recs}`;
 
     const draft = drafts[ticket.ticket_id];
 
+    if (ticket.saved_ai_draft && !draft) {
+      return <Badge variant="warning" size="xs">Carregando rascunho IA...</Badge>;
+    }
+
     if (draft) {
       return (
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
@@ -1498,7 +1543,7 @@ ${checksSummary}${recs}`;
             <CheckSquare className="w-3.5 h-3.5" />
             <span>Verificar Avaliação</span>
           </Button>
-          {!ticket.positive_cap_reached && (
+          {!ticket.positive_cap_reached && !ticket.saved_ai_draft && (
             <Button
               size="sm"
               variant="outline"

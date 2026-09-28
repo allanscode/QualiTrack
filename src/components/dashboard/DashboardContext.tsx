@@ -5,6 +5,7 @@ import { useStaticData } from '../../lib/StaticDataContext';
 import { toast } from 'sonner';
 import { useQualityConfig } from '../../lib/useQualityConfig';
 import { getRemainingBusinessSeconds } from '../../lib/businessHours';
+import { getPresetDateRange } from '../../lib/dashboardDatePresets';
 
 export interface DashboardFilters {
   startDate: string;
@@ -91,16 +92,15 @@ export function DashboardProvider({
   const isSimulated = false;
   const user = loggedInUser;
 
-  const [filters, setFilters] = useState<DashboardFilters>({
-    startDate: new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
+  const [filters, setFilters] = useState<DashboardFilters>(() => ({
+    ...getPresetDateRange('mes'),
     teamId: '',
     agentId: '',
     auditorId: '',
     formId: '',
     status: '',
     channel: ''
-  });
+  }));
 
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
   const [allMonitorias, setAllMonitorias] = useState<Monitoria[]>([]);
