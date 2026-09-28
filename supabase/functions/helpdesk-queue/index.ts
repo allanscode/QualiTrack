@@ -655,7 +655,7 @@ serve(async (req) => {
             `/api/v2/views/${viewId}/tickets.json`); }
           catch { return jsonResponse({ error: 'Cursor de paginação inválido.' }, 400); }
           const url = trustedCursor
-            || `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups,organizations&page[size]=${PAGE_SIZE}`;
+            || `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?include=users,groups,organizations&page[size]=${PAGE_SIZE}${queue_type === 'proativas' ? '&sort_by=created&sort_order=desc' : ''}`;
 
           const response = await fetch(url, { headers: zendeskHeaders });
           if (!response.ok) {

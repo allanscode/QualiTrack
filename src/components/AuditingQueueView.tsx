@@ -609,7 +609,12 @@ ${checksSummary}${recs}`;
       if (saved.length > 0) {
         setDrafts(previous => ({ ...previous, ...Object.fromEntries(saved.map(draft => [draft.ticket_id, draft])) }));
       }
-      setTickets([...retained, ...data]);
+      const mergedTickets = [...retained, ...data];
+      if (queueAtCallTime === 'proativas') {
+        mergedTickets.sort((a, b) =>
+          (Date.parse(b.ticket_date || '') || 0) - (Date.parse(a.ticket_date || '') || 0));
+      }
+      setTickets(mergedTickets);
       setCursor(nextCursor);
       setHasMore(more);
     } catch (err) {
