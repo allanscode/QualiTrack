@@ -1182,8 +1182,8 @@ export default function AdminDashboardView({
               
               <div className="flex-1 flex flex-col min-h-0">
                 {teamMonitoriaDistribution.length > 0 ? (
-                  <div className="flex-1 min-h-0 flex flex-col @min-[450px]:flex-row items-center justify-between gap-3">
-                    <div className="w-full h-[140px] @min-[450px]:w-[148px] @min-[450px]:h-[160px] @min-[450px]:shrink-0 relative flex items-center justify-center">
+                  <div className="flex-1 min-h-0 flex flex-row items-center justify-between gap-2">
+                    <div className="w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Tooltip content={<CustomTooltipMedia />} wrapperStyle={{ zIndex: 30 }} />
@@ -1215,14 +1215,14 @@ export default function AdminDashboardView({
                       </div>
                     </div>
                     {/* Lateral Legend with % and progress bars */}
-                    <div className="w-full min-h-0 flex-1 overflow-y-auto pr-1 flex flex-col justify-start gap-2 pl-0 @min-[450px]:pl-3 @min-[450px]:border-l border-surface-border/40">
+                    <div className="min-w-0 min-h-0 flex-1 overflow-y-auto pr-1 flex flex-col justify-start gap-2 pl-2 border-l border-surface-border/40">
                       {teamMonitoriaDistribution.map((entry: any, index: number) => {
                         const totalVal = teamMonitoriaDistribution.reduce((acc: number, item: any) => acc + item.value, 0);
                         const percent = totalVal > 0 ? ((entry.value / totalVal) * 100).toFixed(1) : '0';
                         return (
                           <div key={index} className="flex flex-col gap-1 text-[9px] text-brand-muted font-bold tracking-tight">
-                            <div className="flex items-center justify-between gap-1.5">
-                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <div className="flex flex-wrap items-start justify-between gap-1.5">
+                              <div className="flex items-start gap-1.5 min-w-[80px] flex-1">
                                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
                                 <span className="min-w-0 break-words uppercase font-black leading-tight" title={entry.name}>{entry.name}</span>
                               </div>
@@ -1324,8 +1324,8 @@ export default function AdminDashboardView({
               
               <div className="flex-1 flex flex-col min-h-0">
                 {gradeDistribution.length > 0 ? (
-                  <div className="flex-1 min-h-0 flex flex-col @min-[450px]:flex-row items-center justify-between gap-3">
-                    <div className="w-full h-[140px] @min-[450px]:w-[148px] @min-[450px]:h-[160px] @min-[450px]:shrink-0 relative flex items-center justify-center">
+                  <div className="flex-1 min-h-0 flex flex-row items-center justify-between gap-2">
+                    <div className="w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Tooltip content={<CustomTooltipCurva />} wrapperStyle={{ zIndex: 30 }} />
@@ -1357,14 +1357,14 @@ export default function AdminDashboardView({
                       </div>
                     </div>
                     {/* Lateral Legend with % and progress bars */}
-                    <div className="w-full min-h-0 flex-1 overflow-y-auto pr-1 flex flex-col justify-start gap-2 pl-0 @min-[450px]:pl-3 @min-[450px]:border-l border-surface-border/40">
+                    <div className="min-w-0 min-h-0 flex-1 overflow-y-auto pr-1 flex flex-col justify-start gap-2 pl-2 border-l border-surface-border/40">
                       {gradeDistribution.map((entry: any, index: number) => {
                         const totalVal = gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0);
                         const percent = totalVal > 0 ? ((entry.value / totalVal) * 100).toFixed(1) : '0';
                         return (
                           <div key={index} className="flex flex-col gap-1 text-[9px] text-brand-muted font-bold tracking-tight">
-                            <div className="flex items-center justify-between gap-1.5">
-                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <div className="flex flex-wrap items-start justify-between gap-1.5">
+                              <div className="flex items-start gap-1.5 min-w-[80px] flex-1">
                                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
                                 <span className="min-w-0 break-words uppercase font-black leading-tight" title={entry.name}>{entry.name.split(' (')[0]}</span>
                               </div>
