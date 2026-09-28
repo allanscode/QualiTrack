@@ -22,6 +22,7 @@ import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import CustomSelect from '../ui/CustomSelect';
 import { edgeFunctionErrorMessage } from '../../lib/edgeFunctionError';
+import { ProtectedAuthForm, readCaptchaToken } from '../ui/ProtectedAuthForm';
 
 const getInitials = (name: string) => {
   const parts = name.trim().split(/\s+/);
@@ -41,6 +42,8 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [editingUser, setEditingUser] = useState<{ name: string, email: string, role: string, team_ids: string[], primary_team_id?: string, password?: string, id?: string }>({ name: '', email: '', role: 'suporte', team_ids: [], primary_team_id: '', password: '' });
   const [saving, setSaving] = useState(false);
+  const [resetTarget, setResetTarget] = useState<{ name: string; email: string; role: string } | null>(null);
+  const [resetSending, setResetSending] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [teamSearch, setTeamSearch] = useState('');
@@ -210,19 +213,36 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
     }
   };
 
-  const handleResetPassword = async (email: string) => {
+  const handleResetPassword = async (event: React.FormEvent<HTMLFormElement>) => {
+    if (!resetTarget || resetSending) return;
+    setResetSending(true);
     try {
       if (!supabase) {
-        toast.info(`[MOCK] Email de recuperação enviado para ${email}`);
+        toast.info(`[MOCK] Email de recuperação enviado para ${resetTarget.email}`);
+        setResetTarget(null);
         return;
       }
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const captchaToken = readCaptchaToken(event);
+      const { error } = await supabase.auth.resetPasswordForEmail(resetTarget.email, {
         redirectTo: window.location.origin,
+        captchaToken,
       });
       if (error) throw error;
       toast.success('Email de recuperação enviado!');
-    } catch (e: any) {
-      toast.error('Não foi possível enviar o email de recuperação.');
+      setResetTarget(null);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '';
+      if (/rate limit|too many requests|security purposes/i.test(message)) {
+        toast.error('Limite temporário de envios atingido. Aguarde um minuto e tente novamente.');
+      } else if (/captcha|verificação de segurança/i.test(message)) {
+        toast.error('Confirme a verificação de segurança e tente novamente.');
+      } else if (/smtp|sending.*email|email.*sending/i.test(message)) {
+        toast.error('O serviço de e-mail não conseguiu enviar a recuperação. Verifique a configuração SMTP do Supabase Auth.');
+      } else {
+        toast.error(message || 'Não foi possível enviar o e-mail de recuperação.');
+      }
+    } finally {
+      setResetSending(false);
     }
   };
 
@@ -387,8 +407,9 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                     ) : (
                       <>
                         <button 
-                          onClick={() => handleResetPassword(u.email)} 
+                          onClick={() => setResetTarget({ name: u.name, email: u.email, role: u.role })}
                           title="Reenviar Senha"
+                          aria-label={`Enviar redefinição de senha para ${u.name}`}
                           className="group p-2.5 rounded-lg hover:bg-brand-subtle text-brand-muted hover:text-brand-primary transition-all duration-200 cursor-pointer"
                         >
                           <Key className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
@@ -434,6 +455,35 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
           </tbody>
         </table>
       </Card>
+
+      {createPortal(
+        <AnimatePresence>
+          {resetTarget && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs" role="dialog" aria-modal="true" aria-label="Redefinir senha">
+              <Card className="w-full max-w-md border border-surface-border shadow-2xl">
+                <div className="mb-5 flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-black text-brand-primary">Enviar redefinição de senha</h3>
+                    <p className="mt-1 text-xs text-brand-muted">Um link de recuperação será enviado para {resetTarget.name}.</p>
+                  </div>
+                  <button type="button" onClick={() => setResetTarget(null)} aria-label="Fechar" className="text-brand-muted hover:text-brand-primary"><X className="size-5" /></button>
+                </div>
+                <p className="mb-4 break-all rounded-xl bg-surface-subtle px-3 py-2 text-sm text-brand-primary">{resetTarget.email}</p>
+                {resetTarget.role === 'suporte' && (
+                  <p className="mb-4 text-xs text-brand-muted">O acesso dos Agentes de Atendimento ao sistema está temporariamente suspenso.</p>
+                )}
+                <ProtectedAuthForm onSubmit={handleResetPassword} className="space-y-4">
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setResetTarget(null)}>Cancelar</Button>
+                    <Button type="submit" disabled={resetSending}>{resetSending ? 'Enviando...' : 'Enviar e-mail'}</Button>
+                  </div>
+                </ProtectedAuthForm>
+              </Card>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {createPortal(
         <AnimatePresence>

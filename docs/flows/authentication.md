@@ -8,6 +8,8 @@
 
 ## Fluxo de Login
 
+Durante a fase de implementação com os gestores, o perfil `suporte` (Agente de Atendimento) não tem acesso ao aplicativo. A regra temporária está em `src/lib/accessPolicy.ts` e é aplicada no login e na restauração de sessão, em Supabase e MockDB. O perfil `gestor_suporte` continua liberado. Após a liberação operacional, alterar `AGENT_ACCESS_ENABLED` e publicar uma nova versão.
+
 ```mermaid
 sequenceDiagram
     participant U as Usuário

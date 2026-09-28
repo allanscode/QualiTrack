@@ -42,7 +42,7 @@
 - Reativação e desativação via `supabase.from('users').update()`
 
 ### Reset de Senha
-- `handleResetPassword` chama `supabase.auth.resetPasswordForEmail()`
+- O administrador confirma o destinatário em um modal com Turnstile antes do envio. `handleResetPassword` passa o `captchaToken` a `supabase.auth.resetPasswordForEmail()`, exigido pela configuração de Auth em produção. O modal mostra erros específicos para CAPTCHA, limite temporário e SMTP.
 
 ## Gestão de Equipes (`TeamsManagement.tsx`)
 

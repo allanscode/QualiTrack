@@ -8,6 +8,7 @@ import { sessionStartedAt, clearPrivateDrafts } from '../lib/sessionSecurity';
 import { queryClient } from '../lib/queryClient';
 import { toast } from 'sonner';
 import { endCurrentPresenceSession } from '../lib/presence';
+import { AGENT_ACCESS_PAUSED_MESSAGE, canAccessApp } from '../lib/accessPolicy';
 
 export type AuthView = 'login' | 'request-access' | 'pending' | 'change-password' | 'forgot-password' | 'setup-password';
 
@@ -121,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isPasswordRecoveryRef = useRef(false);
   const isCleaningSessionRef = useRef(false);
   const isInviteFlowRef = useRef(false);
+  const pendingLoginRef = useRef(false);
   const pkceFlowRef = useRef(false);
   const pkceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -197,6 +199,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data } = await mockDb.get('users');
         const dbUser = (data || []).find((u: any) => u.email === user.email && u.active);
         if (dbUser) {
+          if (!canAccessApp(dbUser.role)) {
+            setAppReady(false);
+            setCurrentUser(null);
+            setUserData(null);
+            setAuthView('login');
+            localStorage.removeItem(MOCK_SESSION_KEY);
+            localStorage.removeItem(LAST_ACTIVITY_KEY);
+            toast.error(AGENT_ACCESS_PAUSED_MESSAGE);
+            return;
+          }
           const enriched = await enrichUserWithTeamIds(dbUser);
 
           // must_change_password: manda para a tela ja existente de definir
@@ -215,6 +227,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           setUserData(enriched);
           setCurrentUser(user);
+          if (pendingLoginRef.current) toast.success('Login realizado com sucesso!', { duration: 1500 });
           const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
           if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin' || savedTab === 'custom_dashboard') {
             setActiveTab(savedTab as any);
@@ -233,6 +246,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const sb = supabase ?? assertSupabase();
         const { data, error } = await sb.from('users').select('*').eq('email', user.email).single();
         if (data && data.active) {
+          if (!canAccessApp(data.role)) {
+            setAppReady(false);
+            setCurrentUser(null);
+            setUserData(null);
+            setAuthView('login');
+            localStorage.removeItem(LAST_ACTIVITY_KEY);
+            await sb.auth.signOut({ scope: 'local' });
+            toast.error(AGENT_ACCESS_PAUSED_MESSAGE);
+            return;
+          }
           const enriched = await enrichUserWithTeamIds(data);
 
           // must_change_password: mesma logica do branch mock acima. A
@@ -251,6 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           setUserData(enriched);
           setCurrentUser(user);
+          if (pendingLoginRef.current) toast.success('Login realizado com sucesso!', { duration: 1500 });
           const savedTab = window.location.hash.replace('#', '') || localStorage.getItem('qualitrack_active_tab') || 'dashboard';
           if (savedTab === 'dashboard' || savedTab === 'monitorias' || savedTab === 'admin' || savedTab === 'custom_dashboard') {
             setActiveTab(savedTab as any);
@@ -275,6 +299,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.error(e);
     } finally {
+      pendingLoginRef.current = false;
       setLoading(false);
       // Small additional delay so loading screen is visible
       await new Promise(r => setTimeout(r, 100));
@@ -311,6 +336,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               mockDb.get('users').then(async ({ data }) => {
                 const dbUser = (data || []).find((u: any) => u.id === parsed.userId && u.active);
                 if (dbUser) {
+                  if (!canAccessApp(dbUser.role)) {
+                    localStorage.removeItem(MOCK_SESSION_KEY);
+                    localStorage.removeItem(LAST_ACTIVITY_KEY);
+                    toast.error(AGENT_ACCESS_PAUSED_MESSAGE);
+                    return;
+                  }
                   const enriched = await enrichUserWithTeamIds(dbUser);
                   setCurrentUser(enriched);
                   setUserData(enriched);
@@ -536,6 +567,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setLoading(false);
             toast.error('Esta conta está desativada.'); return;
           }
+          if (!canAccessApp(user.role)) {
+            setLoading(false);
+            toast.error(AGENT_ACCESS_PAUSED_MESSAGE);
+            return;
+          }
 
           const { data: prefRows } = await mockDb.get('user_preferences');
           const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
@@ -578,6 +614,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       } else {
         const sb = supabase ?? assertSupabase();
+        pendingLoginRef.current = true;
         const signInOptions: { captchaToken?: string } = {};
         if (captchaToken && !captchaToken.startsWith('preview_')) {
           signInOptions.captchaToken = captchaToken;
@@ -589,9 +626,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         if (error) throw error;
         try { localStorage.removeItem(lockKey); } catch { /* ignora */ }
-        toast.success('Login realizado com sucesso!', { duration: 1500 });
       }
     } catch (e: any) {
+      pendingLoginRef.current = false;
       const novasTentativas = tentativas + 1;
       try {
         if (novasTentativas >= MAX_TENTATIVAS) {
