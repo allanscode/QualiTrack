@@ -28,6 +28,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 interface TrendChartProps {
   title: string;
+  displayTitle?: string;
   subtitle?: string;
   data: any[];
   dataKeys: { key: string; color: string; name: string }[];
@@ -39,6 +40,7 @@ interface TrendChartProps {
 
 function TrendChart({
   title, 
+  displayTitle,
   subtitle, 
   data, 
   dataKeys,
@@ -184,7 +186,7 @@ function TrendChart({
           </AnimatePresence>
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest whitespace-normal leading-snug print:text-black">{title}</h3>
+          <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest whitespace-normal leading-snug print:text-black">{displayTitle || title}</h3>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-4 text-[10px] font-black uppercase tracking-widest text-brand-muted flex-shrink-0 print:text-slate-700">
@@ -225,6 +227,7 @@ function TrendChart({
                   strokeWidth={2.5}
                   fillOpacity={1}
                   fill={`url(#color-${dk.key})`}
+                  dot={data.length === 1 ? { r: 4, strokeWidth: 0, fill: dk.color } : false}
                   activeDot={{ r: 5, strokeWidth: 0, fill: dk.color }}
                   isAnimationActive={false} // Optimized to save CPU cycles
                 />
@@ -232,6 +235,11 @@ function TrendChart({
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        {data.length === 1 && !isCustomizing && (
+          <p className="mt-1 text-center text-[10px] font-medium text-brand-muted">
+            Há dados em apenas um período. A linha aparecerá quando houver outro período com avaliações.
+          </p>
+        )}
       </Card>
   );
 }

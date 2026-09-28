@@ -29,7 +29,7 @@ DashboardMain
 
 Em **Customizar Dashboards**, o administrador seleciona um dos cinco cargos e define quais cards, gráficos e tabelas aparecem. Na própria prévia, cada card pode ser arrastado para outra posição ou movido e removido pelos botões da barra superior. A lista completa começa recolhida para deixar a prévia acessível e oferece as mesmas ações; itens retirados ficam em **Disponíveis para adicionar**. **Restaurar ordem** devolve a disposição original. A prévia e o dashboard real consomem a mesma configuração.
 
-O gráfico **Performance Histórica** de administrador, gestor de qualidade e gestor de suporte exibe as médias diárias global, das monitorias positivas (nota >= 75%) e das negativas (nota < 75%). Dias sem avaliações de uma categoria não exibem ponto naquela série.
+Os gráficos de linha de **Performance Histórica** e **Evolução** acompanham a escala selecionada: Dia mostra pontos diários (30 dias), Mês mostra um ponto por mês (12 meses) e Ano mostra pontos anuais (5 anos), sempre até a data selecionada. Os filtros de equipe, agente, auditor, formulário, status e canal continuam aplicados. Performance Histórica mantém as séries de médias global, positivas (nota >= 75%) e negativas (nota < 75%); períodos sem uma categoria não exibem ponto naquela série.
 
 Os botões **Diagnóstico de Causa Raiz** e **Relatório Executivo (PDF)** têm controles de visibilidade independentes por cargo. O cargo `suporte` não tem acesso a essas ações, independentemente da configuração visual.
 
@@ -57,8 +57,8 @@ Centraliza dados e filtros para todos os dashboards.
 ### Filtros
 ```typescript
 interface DashboardFilters {
-  startDate: string;  // Default: 30 dias atrás
-  endDate: string;    // Default: hoje
+  startDate: string;  // Default: primeiro dia do mês atual
+  endDate: string;    // Default: último dia do mês atual
   teamId: string;
   agentId: string;
   auditorId: string;
