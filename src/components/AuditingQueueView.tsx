@@ -28,6 +28,7 @@ import {
 } from '../lib/helpdeskQueue';
 import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChatParser';
 import { formatTicketDateTime, toTicketDateInput } from '../lib/ticketDateTime';
+import { useQueueUpdateNotice } from '../hooks/useQueueUpdateNotice';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
 import { fetchAIDrafts, fetchOpenAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import { claimAIJob, completeAIJob, failAIJob, cancelAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
@@ -542,6 +543,13 @@ ${checksSummary}${recs}`;
   const [prevCursors, setPrevCursors] = useState<(string | null)[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
+  const { hasUpdates: hasQueueUpdates, rememberPage } = useQueueUpdateNotice({
+    activeQueue,
+    enabled: currentSubTab !== 'monitores',
+    searchTerm,
+    loading,
+    batchRunning,
+  });
 
   const teamsMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -617,6 +625,7 @@ ${checksSummary}${recs}`;
       setTickets(mergedTickets);
       setCursor(nextCursor);
       setHasMore(more);
+      if (targetCursor === null && !activeSearch) rememberPage(queueAtCallTime, data.map(ticket => ticket.ticket_id));
     } catch (err) {
       console.error('Erro ao carregar fila:', err);
       toast.error('Não foi possível carregar a fila de chamados.');
@@ -644,6 +653,14 @@ ${checksSummary}${recs}`;
     loadQueueData(target, debouncedSearch);
   };
 
+  const refreshQueue = () => {
+    if (loading) return;
+    setPrevCursors([]);
+    setPageNumber(1);
+    setCurrentPage(1);
+    loadQueueData(null);
+  };
+
   // Reage à busca textual ou por ID em toda a base do Zendesk (> 1.000 chamados na view)
   const prevDebouncedSearchRef = useRef(debouncedSearch);
   useEffect(() => {
@@ -656,15 +673,11 @@ ${checksSummary}${recs}`;
     loadQueueData(null, debouncedSearch);
   }, [debouncedSearch]);
 
-  // Ao trocar de fila (Negativas/Proativas/Positivas), limpa a lista e
-  // reseta a paginação antes de buscar a nova — senão os tickets da fila
-  // anterior ficam visíveis por alguns segundos enquanto a nova fila
-  // carrega, parecendo que são da fila que acabou de ser selecionada. Não
-  // limpa em refresh automático (mudança só em monitorias.length), pra não
-  // piscar a tela à toa.
+  // Ao trocar de fila, carrega uma vez. Mudanças em monitorias são refletidas
+  // localmente; só uma ação explícita substitui a lista atual.
   const prevQueueRef = useRef(activeQueue);
   useEffect(() => {
-    if (currentSubTab === 'monitores') return;
+    if (currentSubTab === 'monitores' || currentSubTab !== activeQueue) return;
     if (prevQueueRef.current !== activeQueue) {
       setTickets([]);
       setCursor(null);
@@ -680,22 +693,15 @@ ${checksSummary}${recs}`;
     } else {
       loadQueueData(null);
     }
-  }, [activeQueue, monitorias.length, currentSubTab]);
+  }, [activeQueue, currentSubTab]);
 
   useEffect(() => {
-    if (currentSubTab === 'monitores') return;
-    const refreshIfVisible = () => {
-      if (document.visibilityState === 'visible' && pageNumber === 1 && !batchRunning) loadQueueData(null);
-    };
-    const interval = window.setInterval(refreshIfVisible, 60_000);
-    document.addEventListener('visibilitychange', refreshIfVisible);
-    window.addEventListener('focus', refreshIfVisible);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', refreshIfVisible);
-      window.removeEventListener('focus', refreshIfVisible);
-    };
-  }, [activeQueue, pageNumber, batchRunning, monitorias.length, currentSubTab]);
+    const audited = new Set(monitorias.map(m => m.ticket_id?.trim()).filter(Boolean));
+    setTickets(previous => {
+      const remaining = previous.filter(ticket => !audited.has(ticket.ticket_id));
+      return remaining.length === previous.length ? previous : remaining;
+    });
+  }, [monitorias]);
 
   // Carrega os rascunhos de IA já prontos para os tickets da página atual —
   // agora ativo nas filas de Negativas, Positivas e Proativas.
@@ -2164,12 +2170,7 @@ ${checksSummary}${recs}`;
           {/* Botão Atualizar (ação secundária discreta com tooltip) */}
           <button
             type="button"
-            onClick={() => {
-              if (loading) return;
-              setPrevCursors([]);
-              setPageNumber(1);
-              loadQueueData(null);
-            }}
+            onClick={refreshQueue}
             disabled={loading}
             aria-label="Atualizar"
             title={loading ? 'Sincronizando com Zendesk...' : 'Atualizar fila'}
@@ -2190,6 +2191,16 @@ ${checksSummary}${recs}`;
           <div className="w-full h-full bg-gradient-to-r from-transparent via-brand-highlight to-transparent animate-shimmer" />
         </div>
       </div>
+
+      {hasQueueUpdates && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-accent/30 bg-brand-accent/10 px-3 py-2 text-xs text-brand-primary">
+          <span>Há novidades na fila. Atualize para ver os chamados mais recentes.</span>
+          <button type="button" onClick={refreshQueue} disabled={loading}
+            className="font-bold text-brand-accent hover:underline disabled:opacity-50">
+            Atualizar agora
+          </button>
+        </div>
+      )}
 
       {/* Conteúdo da Fila: NEGATIVAS */}
       {activeQueue === 'negativas' && (

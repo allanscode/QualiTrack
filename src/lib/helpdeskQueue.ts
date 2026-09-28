@@ -128,6 +128,20 @@ export interface QueueTicketsPage {
   hasMore: boolean;
 }
 
+/** Consulta leve para avisar sobre mudanças sem recarregar os cards da fila. */
+export async function checkQueueUpdates(type: AuditingQueueType): Promise<string[]> {
+  if (isMockMode || !supabase) {
+    return getMockQueueTickets(type, new Set()).slice(0, 25).map(ticket => ticket.ticket_id);
+  }
+  const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+    body: { action: 'check_queue_updates', queue_type: type },
+  });
+  if (error || !Array.isArray(data?.ticket_ids)) {
+    throw new Error(data?.error || await extractFunctionErrorMessage(error, 'Falha ao consultar novidades da fila.'));
+  }
+  return data.ticket_ids.filter((id: unknown): id is string => typeof id === 'string');
+}
+
 /**
  * Busca UMA página de tickets das filas do Zendesk (Negativas, Proativas ou
  * Positivas) — 25 por vez. Views grandes (Proativas: centenas de tickets de

@@ -48,6 +48,8 @@ Uma linha por `ticket_id` (UNIQUE), sobrescrita a cada reavaliação. A conclus�
 
 A fila Proativa solicita à view do Zendesk os tickets por data de criação decrescente em todas as páginas. Ao combinar a página com rascunhos recuperados, a interface mantém os itens visíveis do mais recente para o mais antigo.
 
+As filas carregam ao abrir, trocar de fila, buscar, paginar ou clicar em **Atualizar**. Enquanto a tela permanece aberta, uma consulta leve a cada 3 minutos compara apenas os IDs da primeira página da view e mostra um aviso se houver novidades; ela não substitui os cards nem muda a página atual. O progresso de IA e as atribuições continuam chegando por Realtime. Ao salvar uma monitoria, o ticket concluído sai da lista local sem recarregar a fila inteira.
+
 ## Ações da Edge Function `helpdesk-queue`
 
 | Action | Papel exigido | Observação |

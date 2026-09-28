@@ -61,9 +61,20 @@ const INVALID_CHILD_VIEW_ID = Deno.env.get('HELPDESK_INVALID_CHILD_VIEW_ID') || 
 // o `cursor` devolvido na resposta anterior.
 const PAGE_SIZE = 25;
 
+function viewIdForQueue(queueType: QueueType): string {
+  switch (queueType) {
+    case 'negativas': return NEGATIVE_VIEW_ID;
+    case 'positivas': return POSITIVE_VIEW_ID;
+    case 'proativas': return PROACTIVE_VIEW_ID;
+    case 'filhos': return CHILD_VIEW_ID;
+    case 'filhos_invalidos': return INVALID_CHILD_VIEW_ID;
+  }
+}
+
 const RequestSchema = z.object({
   action: z.enum([
     'fetch_queue',
+    'check_queue_updates',
     'fetch_dialogue',
     'evaluate_ai',
     'evaluate_child_ticket',
@@ -484,6 +495,57 @@ serve(async (req) => {
       Accept: 'application/json',
     };
 
+    // Consulta somente IDs da primeira página. Não cria agentes, não altera
+    // atribuições e não troca os cards que o usuário está analisando.
+    if (action === 'check_queue_updates') {
+      if (!queue_type) return jsonResponse({ error: 'Fila obrigatória.' }, 400);
+      if (!['admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte'].includes(caller.role as string)) {
+        return jsonResponse({ error: 'Sem acesso à fila.' }, 403);
+      }
+      const viewId = viewIdForQueue(queue_type);
+      let url: string;
+      if (viewId) {
+        const sortBy = queue_type === 'proativas' ? 'created' : 'updated';
+        url = `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?page[size]=${PAGE_SIZE}&sort_by=${sortBy}&sort_order=desc`;
+      } else {
+        let query = 'type:ticket';
+        if (queue_type === 'negativas') {
+          query += ' satisfaction_score:bad satisfaction_score:bad_with_comment';
+          if (VALIDATED_TAG) query += ` -tags:${VALIDATED_TAG}`;
+        } else if (queue_type === 'positivas') {
+          query += ' satisfaction_score:good satisfaction_score:good_with_comment';
+        } else if (queue_type === 'filhos') {
+          query += ' tags:existe_ticket_filho';
+        } else if (queue_type === 'filhos_invalidos') {
+          query += ' tags:ticket_filho_invalido';
+        } else {
+          query += ' satisfaction_score:unoffered';
+        }
+        const sortBy = queue_type === 'proativas' ? 'created_at' : 'updated_at';
+        url = `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(query)}&sort_by=${sortBy}&sort_order=desc&per_page=${PAGE_SIZE}`;
+      }
+      const response = await fetch(url, { headers: zendeskHeaders });
+      if (!response.ok) return jsonResponse({ error: `Zendesk falhou (${response.status}).` }, 502);
+      const body = await response.json();
+      const rows = viewId ? body.tickets : body.results;
+      let ids: string[] = (Array.isArray(rows) ? rows : []).map((ticket: { id: number }) => String(ticket.id));
+      if (ids.length > 0) {
+        const { data: completed, error: completedError } = await supabase.from('monitorias')
+          .select('ticket_id').in('ticket_id', ids);
+        if (completedError) return jsonResponse({ error: 'Falha ao conferir monitorias.' }, 500);
+        const completedIds = new Set((completed || []).map(row => row.ticket_id));
+        ids = ids.filter(id => !completedIds.has(id));
+        if (ids.length > 0 && caller.role === 'qualidade' && (queue_type === 'negativas' || queue_type === 'filhos')) {
+          const { data: assigned, error: assignmentError } = await supabase.from('queue_ticket_assignments')
+            .select('ticket_id').eq('queue_type', queue_type).eq('assigned_to', user.id).in('ticket_id', ids);
+          if (assignmentError) return jsonResponse({ error: 'Falha ao conferir atribuições.' }, 500);
+          const assignedIds = new Set((assigned || []).map(row => row.ticket_id));
+          ids = ids.filter(id => assignedIds.has(id));
+        }
+      }
+      return jsonResponse({ ticket_ids: ids }, 200);
+    }
+
     const hasVerifiedTicketAccess = async (requestedId: string): Promise<boolean> => {
       if (caller.role === 'admin' || caller.role === 'gestor_qualidade') return true;
       const cutoff = new Date(Date.now() - 15 * 60_000).toISOString();
@@ -642,12 +704,7 @@ serve(async (req) => {
         // Quando a view real do Zendesk está configurada, busca exatamente os
         // tickets dela (mesma contagem que a equipe vê lá dentro), em vez de
         // reconstruir o filtro via Search API.
-        const viewId = queue_type === 'negativas' ? NEGATIVE_VIEW_ID
-          : queue_type === 'positivas' ? POSITIVE_VIEW_ID
-          : queue_type === 'proativas' ? PROACTIVE_VIEW_ID
-          : queue_type === 'filhos' ? CHILD_VIEW_ID
-          : queue_type === 'filhos_invalidos' ? INVALID_CHILD_VIEW_ID
-          : '';
+        const viewId = viewIdForQueue(queue_type);
 
         if (viewId) {
           let trustedCursor: string | null;
