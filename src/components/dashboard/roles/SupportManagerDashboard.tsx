@@ -1177,7 +1177,7 @@ export default function SupportManagerDashboard({
                       </div>
                     </div>
                     {/* Lateral Legend with % and progress bars */}
-                    <div className="min-w-0 max-h-[220px] flex-1 overflow-y-auto pr-1 flex flex-col justify-start gap-2 pl-2 border-l border-surface-border/40">
+                    <div className="min-w-0 max-h-[220px] flex-1 overflow-y-auto no-scrollbar pr-1 flex flex-col justify-start gap-2 pl-2 border-l border-surface-border/40">
                       {gradeDistribution.map((entry: any, index: number) => {
                         const totalVal = gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0);
                         const percent = totalVal > 0 ? ((entry.value / totalVal) * 100).toFixed(1) : '0';

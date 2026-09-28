@@ -247,7 +247,7 @@ function DistributionChart({
                 </span>
               </div>
             </div>
-            <div className="min-w-0 max-h-[220px] flex-1 flex flex-col justify-start gap-2 pl-2 border-l border-surface-border/40 overflow-y-auto pr-1">
+            <div className="min-w-0 max-h-[220px] flex-1 flex flex-col justify-start gap-2 pl-2 border-l border-surface-border/40 overflow-y-auto no-scrollbar pr-1">
               {data.map((entry, index) => {
                 const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
                 return (
