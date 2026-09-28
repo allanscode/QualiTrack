@@ -1111,7 +1111,7 @@ export default function SupportManagerDashboard({
               </div>
             </Card>
           ) : (
-            <Card padding="md" className="h-full flex flex-col overflow-visible">
+            <Card padding="md" className="@container h-full min-h-0 flex flex-col overflow-visible">
               <div className="flex items-center gap-3 mb-3 min-w-0">
                 <div 
                   className={`relative w-8 h-8 rounded-xl bg-icon-accent flex items-center justify-center flex-shrink-0 text-brand-accent transition-all ${
@@ -1144,8 +1144,8 @@ export default function SupportManagerDashboard({
               
               <div className="flex-1 flex flex-col min-h-0">
                 {gradeDistribution.length > 0 ? (
-                  <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-3 min-h-0">
-                    <div className="w-full sm:w-[50%] h-[150px] relative flex items-center justify-center">
+                  <div className="flex-1 min-h-0 flex flex-col @min-[450px]:flex-row items-center justify-between gap-3">
+                    <div className="w-full h-[140px] @min-[450px]:w-[148px] @min-[450px]:h-[160px] @min-[450px]:shrink-0 relative flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Tooltip content={<CustomTooltipCurva />} wrapperStyle={{ zIndex: 30 }} />
@@ -1177,7 +1177,7 @@ export default function SupportManagerDashboard({
                       </div>
                     </div>
                     {/* Lateral Legend with % and progress bars */}
-                    <div className="w-full sm:w-[50%] max-h-[150px] overflow-y-auto pr-1 no-scrollbar flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40">
+                    <div className="w-full min-h-0 flex-1 overflow-y-auto pr-1 flex flex-col justify-start gap-2 pl-0 @min-[450px]:pl-3 @min-[450px]:border-l border-surface-border/40">
                       {gradeDistribution.map((entry: any, index: number) => {
                         const totalVal = gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0);
                         const percent = totalVal > 0 ? ((entry.value / totalVal) * 100).toFixed(1) : '0';
@@ -1186,7 +1186,7 @@ export default function SupportManagerDashboard({
                             <div className="flex items-center justify-between gap-1.5">
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                                <span className="truncate uppercase font-black" title={entry.name}>{entry.name.split(' (')[0]}</span>
+                                <span className="min-w-0 break-words uppercase font-black leading-tight" title={entry.name}>{entry.name.split(' (')[0]}</span>
                               </div>
                               <span className="text-brand-primary whitespace-nowrap font-black shrink-0">
                                 {entry.value} ({percent}%)

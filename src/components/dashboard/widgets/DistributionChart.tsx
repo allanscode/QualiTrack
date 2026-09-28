@@ -163,7 +163,7 @@ function DistributionChart({
 
 
   return (
-    <Card padding="lg" className="h-full flex flex-col print:shadow-none print:border print:border-slate-300 print:bg-white print:text-black print:p-4">
+    <Card padding="lg" className="@container h-full min-h-0 flex flex-col print:shadow-none print:border print:border-slate-300 print:bg-white print:text-black print:p-4">
         {isEditing ? (
           <div className="flex flex-col gap-2 mb-4 animate-fade-in print:hidden" onClick={(e) => e.stopPropagation()}>
             <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
@@ -232,8 +232,8 @@ function DistributionChart({
           </div>
         )}
         {data.length > 0 ? (
-          <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-4 min-h-[160px]">
-            <div className="w-full sm:w-[50%] h-[160px] relative flex items-center justify-center" style={{ minWidth: 0 }}>
+          <div className="flex-1 min-h-0 flex flex-col @min-[450px]:flex-row items-center justify-between gap-3">
+            <div className="w-full h-[140px] @min-[450px]:w-[148px] @min-[450px]:h-[160px] @min-[450px]:shrink-0 relative flex items-center justify-center" style={{ minWidth: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 {renderChart()}
               </ResponsiveContainer>
@@ -247,7 +247,7 @@ function DistributionChart({
                 </span>
               </div>
             </div>
-            <div className="w-full sm:w-[50%] flex flex-col justify-center gap-2 pl-0 sm:pl-3 sm:border-l border-surface-border/40 max-h-[160px] overflow-y-auto no-scrollbar">
+            <div className="w-full min-h-0 flex-1 flex flex-col justify-start gap-2 pl-0 @min-[450px]:pl-3 @min-[450px]:border-l border-surface-border/40 overflow-y-auto pr-1">
               {data.map((entry, index) => {
                 const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
                 return (
@@ -255,7 +255,7 @@ function DistributionChart({
                     <div className="flex items-center justify-between gap-1.5">
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                        <span className="truncate uppercase font-black" title={entry.name}>{entry.name}</span>
+                        <span className="min-w-0 break-words uppercase font-black leading-tight" title={entry.name}>{entry.name}</span>
                       </div>
                       <span className="text-brand-primary whitespace-nowrap font-black shrink-0">
                         {entry.value} ({percent}%)
