@@ -145,8 +145,8 @@ function DistributionChart({
           data={data}
           cx="50%"
           cy="50%"
-          innerRadius={44}
-          outerRadius={66}
+          innerRadius={36}
+          outerRadius={54}
           paddingAngle={3}
           dataKey="value"
           label={renderCustomLabel}
@@ -233,7 +233,7 @@ function DistributionChart({
         )}
         {data.length > 0 ? (
           <div className="flex-1 min-h-0 flex flex-row items-center justify-between gap-2">
-            <div className="w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
+            <div className="w-[120px] @min-[380px]:w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 {renderChart()}
               </ResponsiveContainer>
@@ -247,7 +247,7 @@ function DistributionChart({
                 </span>
               </div>
             </div>
-            <div className="min-w-0 min-h-0 flex-1 flex flex-col justify-start gap-2 pl-2 border-l border-surface-border/40 overflow-y-auto pr-1">
+            <div className="min-w-0 max-h-[220px] flex-1 flex flex-col justify-start gap-2 pl-2 border-l border-surface-border/40 overflow-y-auto pr-1">
               {data.map((entry, index) => {
                 const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0';
                 return (

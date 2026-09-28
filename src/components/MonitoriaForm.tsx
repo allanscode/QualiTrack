@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Bot,
   RotateCcw,
+  RotateCw,
   MessageSquare,
   Hash,
   Clock,
@@ -1514,7 +1515,7 @@ export default function MonitoriaForm({
                       variant="outline"
                       loading={generatingAuditorRecord}
                       onClick={handleGenerateAuditorRecord}
-                      icon={<RotateCcw className={`w-3.5 h-3.5 ${generatingAuditorRecord ? 'animate-spin' : ''}`} />}
+                      icon={<RotateCw className={`w-3.5 h-3.5 ${generatingAuditorRecord ? 'animate-spin' : ''}`} />}
                       title="Substitui o registro atual por um novo texto baseado nas observações da etapa de Avaliação"
                       className="shrink-0"
                     >
