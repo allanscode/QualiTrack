@@ -9,11 +9,14 @@ import { getPresetDateRange, detectActivePreset } from '../../lib/dashboardDateP
 import ExecutiveReportModal from './widgets/ExecutiveReportModal';
 import RootCauseAnalyzerModal from './widgets/RootCauseAnalyzerModal';
 import { useFeedbacks } from '../../hooks/useFeedbacks';
+import { useQualityConfig } from '../../lib/useQualityConfig';
 
 export default function FilterBar() {
   const { resolvedTheme } = useTheme();
   const { filters, setFilters, users, teams, forms, loading, refresh, user, allMonitorias, dashboardRole, refreshCooldownEnd, refreshCooldownRemaining } = useDashboard();
   const { feedbacks } = useFeedbacks(user);
+  const { config } = useQualityConfig();
+  const hiddenActions = config.dashboardHiddenActions?.[dashboardRole] || [];
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isRootCauseOpen, setIsRootCauseOpen] = useState(false);
 
@@ -115,6 +118,7 @@ export default function FilterBar() {
         )}
         {user?.role !== 'suporte' && (
           <>
+            {!hiddenActions.includes('root_cause') && (
             <button
               type="button"
               onClick={() => setIsRootCauseOpen(true)}
@@ -124,6 +128,8 @@ export default function FilterBar() {
               <BrainCircuit className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
               <span>Diagnóstico de Causa Raiz</span>
             </button>
+            )}
+            {!hiddenActions.includes('executive_report') && (
             <button
               type="button"
               onClick={() => setIsReportOpen(true)}
@@ -133,6 +139,7 @@ export default function FilterBar() {
               <FileText className="w-3.5 h-3.5 text-brand-accent" />
               <span>Relatório Executivo (PDF)</span>
             </button>
+            )}
           </>
         )}
         <button

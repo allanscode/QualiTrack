@@ -3,6 +3,7 @@ import { useDashboard } from '../DashboardContext';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { Monitoria, User } from '../../../types';
 import Card from '../../ui/Card';
+import { withDashboardTile } from '../DashboardTileLayout';
 import Badge from '../../ui/Badge';
 import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
 import { Clock, ClipboardList, ChevronRight } from 'lucide-react';
@@ -16,7 +17,7 @@ interface RecentAuditsTableProps {
 }
 
 
-export default function RecentAuditsTable({ monitorias, users, title = 'Monitorias Recentes', isCustomizing = false }: RecentAuditsTableProps) {
+function RecentAuditsTable({ monitorias, users, title = 'Monitorias Recentes', isCustomizing = false }: RecentAuditsTableProps) {
   let dashboardContext = null;
   try {
     dashboardContext = useDashboard();
@@ -144,3 +145,5 @@ export default function RecentAuditsTable({ monitorias, users, title = 'Monitori
     </Card>
   );
 }
+
+export default withDashboardTile(RecentAuditsTable, 'RecentAuditsTable', 'Monitorias Recentes');

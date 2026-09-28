@@ -22,6 +22,7 @@ import { computeSupportManagerIndicators } from '../../../lib/supportManagerIndi
 import SupportDrillDownModal from '../widgets/SupportDrillDownModal';
 import { useFeedbacks } from '../../../hooks/useFeedbacks';
 import FeedbacksWidget from '../../feedback/FeedbacksWidget';
+import { DashboardTile } from '../DashboardTileLayout';
 
 // High-fidelity mock datasets for customization mode
 const mockTrendData = [
@@ -965,12 +966,14 @@ export default function SupportManagerDashboard({
         />
       </div>
 
+      <DashboardTile type="NegativeCallsTrainingAlert" title="Necessidade de treinamento">
       <NegativeCallsTrainingAlert
         monitorias={isCustomizing ? [] : allMonitorias}
         users={users}
         teamIds={myTeamIds}
         isCustomizing={isCustomizing}
       />
+      </DashboardTile>
 
       {/* LINHA 3 (Métricas de Reavaliação - lg:grid-cols-4 gap-6) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1079,6 +1082,7 @@ export default function SupportManagerDashboard({
       {/* LINHA 6 (Distribuição e Alertas - lg:grid-cols-2 gap-6) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Bloco: Curva de Qualidade / Distribuição por Nível */}
+        <DashboardTile type="CustomChart" title="Curva de Qualidade" profile="gestor_suporte">
         <div className="h-[380px]">
           {isEditingCurva ? (
             <Card padding="md" className="h-full flex flex-col justify-between border-brand-accent/50 bg-surface-card shadow-lg relative z-50">
@@ -1217,8 +1221,10 @@ export default function SupportManagerDashboard({
             </Card>
           )}
         </div>
+        </DashboardTile>
 
         {/* Bloco 3: Ações Expirando list */}
+        <DashboardTile type="CustomChart" title="Ações Expirando" profile="gestor_suporte">
         <div className="h-[380px]">
           <Card padding="md" className="h-full flex flex-col overflow-visible">
             <div className="flex items-center gap-3 mb-3 flex-shrink-0">
@@ -1247,6 +1253,7 @@ export default function SupportManagerDashboard({
             )}
           </Card>
         </div>
+        </DashboardTile>
       </div>
 
       {/* LINHA 7 (O Cockpit de 4 Rankings - lg:grid-cols-4 gap-6) */}
@@ -1374,6 +1381,7 @@ export default function SupportManagerDashboard({
         );
       })()}
 
+      <DashboardTile type="FeedbacksWidget" title="Feedbacks & Gestão de 1:1">
       <FeedbacksWidget
         feedbacks={feedbacks}
         currentUser={user}
@@ -1384,6 +1392,7 @@ export default function SupportManagerDashboard({
         onAcknowledgeFeedback={acknowledgeFeedback}
         onCompleteFeedback={completeFeedback}
       />
+      </DashboardTile>
 
       <RecentAuditsTable
         monitorias={isCustomizing ? mockRecentMonitorias : myMonitorias}

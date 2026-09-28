@@ -18,6 +18,7 @@ import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
+import { DashboardTile } from '../DashboardTileLayout';
 
 const mockMonitoriasDeadlines = [
   {
@@ -1156,6 +1157,7 @@ export default function QualityManagerDashboard({
       {/* LINHA 4: Gráficos de Distribuição Isolados (Distribuição por Equipe | Curva de Qualidade | Precisão da Qualidade, lg:grid-cols-3 gap-6) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bloco Distribuição por Equipe */}
+        <DashboardTile type="CustomChart" title="Distribuição por Equipe" profile="gestor_qualidade">
         <div className="h-[380px]">
           {isEditingMedia ? (
             <Card padding="lg" className="h-full flex flex-col justify-between border-brand-accent/50 bg-surface-card shadow-lg animate-fade-in relative z-50">
@@ -1294,8 +1296,10 @@ export default function QualityManagerDashboard({
             </Card>
           )}
         </div>
+        </DashboardTile>
 
         {/* Bloco Distribuição por Nível / Curva de Qualidade */}
+        <DashboardTile type="CustomChart" title="Curva de Qualidade" profile="gestor_qualidade">
         <div className="h-[380px]">
           {isEditingCurva ? (
             <Card padding="lg" className="h-full flex flex-col justify-between border-brand-accent/50 bg-surface-card shadow-lg animate-fade-in relative z-50">
@@ -1434,6 +1438,7 @@ export default function QualityManagerDashboard({
             </Card>
           )}
         </div>
+        </DashboardTile>
 
         {/* Bloco Precisão da Qualidade */}
         <div className="h-[380px]">
@@ -1475,6 +1480,7 @@ export default function QualityManagerDashboard({
         </div>
 
         {/* Bloco Ações Expirando list */}
+        <DashboardTile type="CustomChart" title="Ações Expirando" profile="gestor_qualidade">
         <div className="h-[380px]">
           <Card padding="lg" className="h-full flex flex-col overflow-visible">
             <div className="flex items-center gap-3 mb-4 flex-shrink-0">
@@ -1503,6 +1509,7 @@ export default function QualityManagerDashboard({
             )}
           </Card>
         </div>
+        </DashboardTile>
       </div>
 
       {/* LINHA 6: Performance Histórica */}

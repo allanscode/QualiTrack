@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Clock } from 'lucide-react';
 import { Monitoria } from '../../../types';
 import Card from '../../ui/Card';
+import { withDashboardTile } from '../DashboardTileLayout';
 import Badge from '../../ui/Badge';
 import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
@@ -20,7 +21,7 @@ interface ActionDeadlineWidgetProps {
   preFilteredSorted?: boolean;
 }
 
-export default function ActionDeadlineWidget({ 
+function ActionDeadlineWidget({
   title, 
   monitorias, 
   targetStatus,
@@ -224,3 +225,5 @@ export default function ActionDeadlineWidget({
     </Card>
   );
 }
+
+export default withDashboardTile(ActionDeadlineWidget, 'ActionDeadlineWidget');

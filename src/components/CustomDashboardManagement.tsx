@@ -6,6 +6,8 @@ import SupportManagerDashboard from './dashboard/roles/SupportManagerDashboard';
 import QualityDashboard from './dashboard/roles/QualityDashboard';
 import AgentDashboard from './dashboard/roles/AgentDashboard';
 import { DashboardProvider } from './dashboard/DashboardContext';
+import { DashboardTileLayout } from './dashboard/DashboardTileLayout';
+import DashboardLayoutControls from './dashboard/DashboardLayoutControls';
 import { User } from '../types';
 
 export default function CustomDashboardManagement({ user }: { user: User | null }) {
@@ -24,7 +26,7 @@ export default function CustomDashboardManagement({ user }: { user: User | null 
             </h1>
           </div>
           <p className="text-xs text-brand-muted font-bold uppercase tracking-wider">
-            Personalize as descrições explicativas dos blocos e gráficos por perfil de acesso.
+            Defina o que cada cargo vê e organize a posição dos indicadores.
           </p>
         </div>
 
@@ -60,14 +62,18 @@ export default function CustomDashboardManagement({ user }: { user: User | null 
             Instruções de Customização:
           </h4>
           <p className="text-[11px] text-brand-muted font-medium leading-relaxed">
-            O painel abaixo é uma simulação segura em tempo real (dados fictícios de alta fidelidade). Passe o mouse sobre o ícone nativo de qualquer cartão ou gráfico para ver a explicação atual e clique diretamente no ícone para editá-la. O limite máximo é de 35 caracteres. Suas alterações se aplicam instantaneamente a todos os usuários reais daquele perfil de acesso.
+            Remova, adicione ou mova os itens da visão selecionada. A prévia usa dados fictícios. Você também pode clicar no ícone de um card ou gráfico para editar sua explicação; as mudanças são aplicadas aos usuários do cargo escolhido.
           </p>
         </div>
       </div>
 
+      <DashboardLayoutControls role={selectedProfile} />
+
       {/* Dynamic Dashboard View rendering according to the selected profile */}
       <div className="space-y-6">
+        <h2 className="text-sm font-black text-brand-primary">Prévia do dashboard</h2>
         <DashboardProvider user={user} activeTab="custom_dashboard">
+          <DashboardTileLayout key={selectedProfile} role={selectedProfile}>
           {selectedProfile === 'admin' && (
             <AdminDashboardView 
               isCustomizing={true}
@@ -107,6 +113,7 @@ export default function CustomDashboardManagement({ user }: { user: User | null 
               setActiveEditingId={setActiveEditingId}
             />
           )}
+          </DashboardTileLayout>
         </DashboardProvider>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import Card from '../../ui/Card';
+import { withDashboardTile } from '../DashboardTileLayout';
 import { BarChart3 } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard, useEditing } from '../DashboardContext';
@@ -24,7 +25,7 @@ interface ComparativeBarChartProps {
   setActiveEditingId?: (id: string | null) => void;
 }
 
-export default function ComparativeBarChart({ 
+function ComparativeBarChart({
   title = '', 
   subtitle, 
   data, 
@@ -213,3 +214,5 @@ export default function ComparativeBarChart({
     </Card>
   );
 }
+
+export default withDashboardTile(ComparativeBarChart, 'ComparativeBarChart');

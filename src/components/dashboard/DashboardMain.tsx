@@ -2,6 +2,7 @@ import React from 'react';
 import { User } from '../../types';
 import { DashboardProvider, useDashboard } from './DashboardContext';
 import FilterBar from './FilterBar';
+import { DashboardTileLayout } from './DashboardTileLayout';
 
 // We will import the specific role dashboards here
 import AgentDashboard from './roles/AgentDashboard';
@@ -60,7 +61,9 @@ export default function DashboardMain({
     <DashboardProvider user={user} activeTab={activeTab}>
       <div className="space-y-6">
         <FilterBar />
-        <DashboardRouter />
+        <DashboardTileLayout role={user.role}>
+          <DashboardRouter />
+        </DashboardTileLayout>
       </div>
     </DashboardProvider>
   );

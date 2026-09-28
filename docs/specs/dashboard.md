@@ -25,6 +25,14 @@ DashboardMain
 
 ## DashboardContext
 
+## Personalização por cargo
+
+Em **Customizar Dashboards**, o administrador seleciona um dos cinco cargos e define quais cards, gráficos e tabelas aparecem. Itens removidos ficam na lista **Disponíveis para adicionar** e podem ser restaurados. Os itens visíveis podem ser reordenados por arraste ou pelas setas; **Restaurar ordem** devolve a disposição original. A prévia e o dashboard real consomem a mesma configuração.
+
+Os botões **Diagnóstico de Causa Raiz** e **Relatório Executivo (PDF)** têm controles de visibilidade independentes por cargo. O cargo `suporte` não tem acesso a essas ações, independentemente da configuração visual.
+
+O catálogo de widgets e a ordem estão em `src/lib/dashboardLayout.ts`; a configuração fica em `quality_configs.config.dashboardLayouts` e `dashboardHiddenActions` (ou MockDb em desenvolvimento). Os IDs usam tipo e título original do widget, de modo que mudar uma descrição explicativa não altera a disposição.
+
 Centraliza dados e filtros para todos os dashboards.
 
 ### Dados Fornecidos

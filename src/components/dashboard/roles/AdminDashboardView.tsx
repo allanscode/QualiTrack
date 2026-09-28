@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
 import { useFeedbacks } from '../../../hooks/useFeedbacks';
 import FeedbacksWidget from '../../feedback/FeedbacksWidget';
+import { DashboardTile } from '../DashboardTileLayout';
 
 const mockMonitoriasDeadlines = [
   {
@@ -1122,6 +1123,7 @@ export default function AdminDashboardView({
       {/* LINHA 4: Gráficos de Distribuição Isolados (Distribuição por Equipe | Curva de Qualidade | Precisão da Qualidade, lg:grid-cols-3 gap-6) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bloco Distribuição por Equipe */}
+        <DashboardTile type="CustomChart" title="Distribuição por Equipe" profile="admin">
         <div className="h-[380px]">
           {isEditingMedia ? (
             <Card padding="lg" className="h-full flex flex-col justify-between border-brand-accent/50 bg-surface-card shadow-lg animate-fade-in relative z-50">
@@ -1260,8 +1262,10 @@ export default function AdminDashboardView({
             </Card>
           )}
         </div>
+        </DashboardTile>
 
         {/* Bloco Distribuição por Nível / Curva de Qualidade */}
+        <DashboardTile type="CustomChart" title="Curva de Qualidade" profile="admin">
         <div className="h-[380px]">
           {isEditingCurva ? (
             <Card padding="lg" className="h-full flex flex-col justify-between border-brand-accent/50 bg-surface-card shadow-lg animate-fade-in relative z-50">
@@ -1400,6 +1404,7 @@ export default function AdminDashboardView({
             </Card>
           )}
         </div>
+        </DashboardTile>
 
         {/* Bloco Precisão da Qualidade */}
         <div className="h-[380px]">
@@ -1441,6 +1446,7 @@ export default function AdminDashboardView({
         </div>
 
         {/* Bloco Ações Expirando list */}
+        <DashboardTile type="CustomChart" title="Ações Expirando" profile="admin">
         <div className="h-[380px]">
           <Card padding="lg" className="h-full flex flex-col overflow-visible">
             <div className="flex items-center gap-3 mb-4 flex-shrink-0">
@@ -1469,6 +1475,7 @@ export default function AdminDashboardView({
             )}
           </Card>
         </div>
+        </DashboardTile>
       </div>
 
       {/* LINHA 6: Performance Histórica */}
@@ -1610,6 +1617,7 @@ export default function AdminDashboardView({
       </div>
 
       {/* LINHA 10: Gestão de Feedbacks & Planos 1:1 */}
+      <DashboardTile type="FeedbacksWidget" title="Feedbacks & Gestão de 1:1">
       <FeedbacksWidget
         feedbacks={feedbacks}
         currentUser={user}
@@ -1620,6 +1628,7 @@ export default function AdminDashboardView({
         onAcknowledgeFeedback={acknowledgeFeedback}
         onCompleteFeedback={completeFeedback}
       />
+      </DashboardTile>
 
       {/* LINHA 11: Últimas Auditorias do Sistema */}
       <RecentAuditsTable

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import Card from '../../ui/Card';
+import { withDashboardTile } from '../DashboardTileLayout';
 import { AlertOctagon, TrendingUp } from 'lucide-react';
 import { Monitoria, EvaluationForm } from '../../../types';
 import { chartPalette } from '../chartColors';
@@ -21,7 +22,7 @@ interface OfensoresChartProps {
   setActiveEditingId?: (id: string | null) => void;
 }
 
-export default function OfensoresChart({ 
+function OfensoresChart({
   monitorias, 
   forms, 
   limit = 5, 
@@ -520,3 +521,5 @@ export default function OfensoresChart({
     </>
   );
 }
+
+export default withDashboardTile(OfensoresChart, 'OfensoresChart');

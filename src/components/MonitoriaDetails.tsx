@@ -165,7 +165,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                     Visualizar Avaliação Completa
                   </Button>
 
-                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && (
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && !['em_contestacao', 'reavaliacao_solicitada'].includes(m.status) && (
                     <Button
                       variant="outline"
                       size="sm"

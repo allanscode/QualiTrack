@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+.dashboard-tile-grid > [data-dashboard-slot]:empty,
+.dashboard-tile-source .grid:empty,
+.dashboard-tile-source .grid > div:empty,
+.dashboard-tile-source > div:empty,
+.dashboard-tile-source > div > div:empty {
+  display: none;
+}
+
 @variant dark (&:where(.dark, .dark *));
 
 @theme {

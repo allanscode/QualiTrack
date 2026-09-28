@@ -725,8 +725,7 @@ export default function MonitoriaList({
         </div>, document.body
       )}
 
-      <AnimatePresence>
-        {actionModal && createPortal(
+      {actionModal && createPortal(
           <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center overflow-y-auto bg-black/25 dark:bg-black/40 p-0 sm:p-6 backdrop-blur-md" onMouseDown={event => { if (event.target === event.currentTarget) setActionModal(null); }}>
             <m.div data-action-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-action-title" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="w-full max-w-md overflow-y-auto rounded-t-3xl sm:rounded-3xl max-h-[92dvh] sm:max-h-[calc(100dvh-3rem)]">
               <Card className="w-full shadow-2xl border-t sm:border border-surface-border bg-surface-card rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 pb-safe">
@@ -1031,8 +1030,7 @@ export default function MonitoriaList({
               </Card>
             </m.div>
           </div>, document.body
-        )}
-      </AnimatePresence>
+      )}
 
       {viewingMonitoria && (
         <MonitoriaForm

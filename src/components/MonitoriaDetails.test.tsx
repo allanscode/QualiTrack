@@ -49,6 +49,7 @@ describe('MonitoriaDetails', () => {
       <MonitoriaDetails monitoria={contestada} user={adminUser} users={[supportUser, managerUser, adminUser]} onView={vi.fn()} onAction={vi.fn()} />
     );
     expect(screen.getByRole('button', { name: 'Reavaliar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Editar Avaliação' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Recusar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Avançar Etapa/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Retroceder Etapa/i })).toBeInTheDocument();

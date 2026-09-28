@@ -7,6 +7,7 @@ import {
   Tooltip,
 } from 'recharts';
 import Card from '../../ui/Card';
+import { withDashboardTile } from '../DashboardTileLayout';
 import { PieChart as PieChartIcon } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard, useEditing } from '../DashboardContext';
@@ -36,7 +37,7 @@ interface DistributionChartProps {
 
 const QUALITY_DISTRIBUTION_TITLE = 'Insatisfação — Visão da Qualidade';
 
-export default function DistributionChart({ 
+function DistributionChart({
   title, 
   data,
   isCustomizing = false,
@@ -280,3 +281,5 @@ export default function DistributionChart({
       </Card>
   );
 }
+
+export default withDashboardTile(DistributionChart, 'DistributionChart');

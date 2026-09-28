@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback, useRef, type ReactNode } from 'react';
 import { supabase, mockDb } from './supabase';
 import { getRemainingBusinessSeconds, addBusinessHours } from './businessHours';
+import type { DashboardLayouts, DashboardRole } from './dashboardLayout';
 
 export interface QualityLevel {
   label: string;
@@ -44,6 +45,8 @@ export interface QualityConfig {
   };
   statCardExplanations?: Record<string, string>;
   dashboardWidgetTitles?: Record<string, string>;
+  dashboardLayouts?: DashboardLayouts;
+  dashboardHiddenActions?: Partial<Record<DashboardRole, string[]>>;
   emailReportConfig?: EmailReportConfig;
 }
 
@@ -71,6 +74,8 @@ const DEFAULT_CONFIG: QualityConfig = {
   },
   statCardExplanations: {},
   dashboardWidgetTitles: {},
+  dashboardLayouts: {},
+  dashboardHiddenActions: {},
   emailReportConfig: {
     enabled: true,
     senderName: 'QualiTrack - Gestão da Qualidade',
@@ -138,6 +143,12 @@ function normalizeConfig(cfg: any): QualityConfig {
   if (!migrated.dashboardWidgetTitles) {
     migrated.dashboardWidgetTitles = {};
   }
+  if (!migrated.dashboardLayouts || typeof migrated.dashboardLayouts !== 'object') {
+    migrated.dashboardLayouts = {};
+  }
+  if (!migrated.dashboardHiddenActions || typeof migrated.dashboardHiddenActions !== 'object') {
+    migrated.dashboardHiddenActions = {};
+  }
   // Programmatic migration of configurations that do not have exactly 4 levels
   if (!migrated.levels || !Array.isArray(migrated.levels) || migrated.levels.length !== 4) {
     migrated.levels = [
@@ -189,6 +200,7 @@ const QualityConfigContext = createContext<QualityConfigContextValue | null>(nul
 export function QualityConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<QualityConfig>(loadFromStorage);
   const [oldConfig, setOldConfig] = useState<QualityConfig>(config);
+  const savedConfigRef = useRef(config);
   const fetchedRef = useRef(false);
 
   useEffect(() => {
@@ -202,6 +214,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
           const cfg = normalizeConfig(data.config);
           setConfig(cfg);
           setOldConfig(cfg);
+          savedConfigRef.current = cfg;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
         }
       } else {
@@ -210,6 +223,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
           const cfg = normalizeConfig(data[0].config);
           setConfig(cfg);
           setOldConfig(cfg);
+          savedConfigRef.current = cfg;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
         }
       }
@@ -218,29 +232,37 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveConfig = useCallback(async (newConfig: QualityConfig) => {
+    const previousConfig = savedConfigRef.current;
     setConfig(newConfig);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
 
-    if (supabase) {
-      // supabase-js devolve { error } em vez de lançar. Sem checar, uma falha
-      // aqui passava despercebida: a config seguia salva no localStorage e a
-      // tela parecia correta, mas nada era gravado no banco — e a próxima
-      // máquina (ou aba limpa) voltaria à configuração antiga.
-      const { data: existing, error: selError } = await supabase.from('quality_configs').select('id').maybeSingle();
-      if (selError) throw selError;
-      const { error } = existing
-        ? await supabase.from('quality_configs').update({ config: newConfig }).eq('id', existing.id)
-        : await supabase.from('quality_configs').insert({ config: newConfig });
-      if (error) throw error;
-    } else {
-      const { data: existing } = await mockDb.get('quality_configs');
-      if (existing && existing.length > 0) {
-        await mockDb.update('quality_configs', existing[0].id, { config: newConfig });
+    try {
+      if (supabase) {
+        // supabase-js devolve { error } em vez de lançar. Sem checar, uma falha
+        // aqui passava despercebida: a config seguia salva no localStorage e a
+        // tela parecia correta, mas nada era gravado no banco — e a próxima
+        // máquina (ou aba limpa) voltaria à configuração antiga.
+        const { data: existing, error: selError } = await supabase.from('quality_configs').select('id').maybeSingle();
+        if (selError) throw selError;
+        const { error } = existing
+          ? await supabase.from('quality_configs').update({ config: newConfig }).eq('id', existing.id)
+          : await supabase.from('quality_configs').insert({ config: newConfig });
+        if (error) throw error;
       } else {
-        await mockDb.insert('quality_configs', { config: newConfig });
+        const { data: existing } = await mockDb.get('quality_configs');
+        if (existing && existing.length > 0) {
+          await mockDb.update('quality_configs', existing[0].id, { config: newConfig });
+        } else {
+          await mockDb.insert('quality_configs', { config: newConfig });
+        }
       }
+      setOldConfig(newConfig);
+      savedConfigRef.current = newConfig;
+    } catch (error) {
+      setConfig(current => current === newConfig ? previousConfig : current);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(previousConfig));
+      throw error;
     }
-    setOldConfig(newConfig);
   }, []);
 
   const getLevelForScore = useCallback((score: number, type: 'goal' | 'status' = 'status'): QualityLevel => {

@@ -270,7 +270,12 @@ export default function NewMonitoriaModal({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto"
+      onMouseDown={event => {
+        if (event.target === event.currentTarget && !evaluatingAI) onClose();
+      }}
+    >
       <div
         ref={dialogRef}
         {...dialogProps}

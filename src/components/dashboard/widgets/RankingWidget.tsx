@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, Award, ChevronRight } from 'lucide-react';
 import Card from '../../ui/Card';
+import { withDashboardTile } from '../DashboardTileLayout';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
@@ -49,7 +50,7 @@ function getIconBg(accent: string): string {
   return 'bg-surface-subtle';
 }
 
-export default function RankingWidget({ 
+function RankingWidget({
   title, 
   subtitle, 
   data, 
@@ -319,3 +320,5 @@ export default function RankingWidget({
     </Card>
   );
 }
+
+export default withDashboardTile(RankingWidget, 'RankingWidget');

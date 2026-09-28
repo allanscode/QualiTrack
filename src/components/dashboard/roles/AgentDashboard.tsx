@@ -14,6 +14,7 @@ import { chartPalette, chartColorArray } from '../chartColors';
 import { useFeedbacks } from '../../../hooks/useFeedbacks';
 import FeedbacksWidget from '../../feedback/FeedbacksWidget';
 import QualityAchievementsWidget from '../widgets/QualityAchievementsWidget';
+import { DashboardTile } from '../DashboardTileLayout';
 
 // High-fidelity mock datasets for customization mode
 const mockTrendData = [
@@ -768,14 +769,17 @@ export default function AgentDashboard({
 
       {/* LINHA 7 (grid-cols-1): Minhas Conquistas & Gamificação */}
       <div>
+        <DashboardTile type="QualityAchievementsWidget" title="Minhas Conquistas & Gamificação">
         <QualityAchievementsWidget
           monitorias={maskedMonitorias}
           currentUser={user}
         />
+        </DashboardTile>
       </div>
 
       {/* LINHA 8 (grid-cols-1): Meus Feedbacks e Planos 1:1 */}
       <div>
+        <DashboardTile type="FeedbacksWidget" title="Meus Feedbacks & Planos 1:1">
         <FeedbacksWidget
           feedbacks={feedbacks}
           currentUser={user}
@@ -786,6 +790,7 @@ export default function AgentDashboard({
           onAcknowledgeFeedback={acknowledgeFeedback}
           onCompleteFeedback={completeFeedback}
         />
+        </DashboardTile>
       </div>
 
       {/* LINHA 8 (grid-cols-1): Histórico Recente */}

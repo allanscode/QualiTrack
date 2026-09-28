@@ -7,6 +7,7 @@ import { usePresence } from '../../../providers/PresenceProvider';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { toast } from 'sonner';
 import { User } from '../../../types';
+import { withDashboardTile } from '../DashboardTileLayout';
 
 interface StatCardProps {
   title: string;
@@ -68,7 +69,7 @@ function getIconBg(accent: string): string {
   return 'bg-slate-100 dark:bg-white/[0.04]';
 }
 
-export default function StatCard({ 
+function StatCard({
   title, 
   value, 
   sub, 
@@ -402,3 +403,5 @@ export default function StatCard({
     </>
   );
 }
+
+export default withDashboardTile(StatCard, 'StatCard');

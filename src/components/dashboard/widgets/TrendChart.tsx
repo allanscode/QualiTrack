@@ -6,6 +6,7 @@ import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
+import { withDashboardTile } from '../DashboardTileLayout';
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -36,7 +37,7 @@ interface TrendChartProps {
   setActiveEditingId?: (id: string | null) => void;
 }
 
-export default function TrendChart({ 
+function TrendChart({
   title, 
   subtitle, 
   data, 
@@ -234,3 +235,5 @@ export default function TrendChart({
       </Card>
   );
 }
+
+export default withDashboardTile(TrendChart, 'TrendChart');
