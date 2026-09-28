@@ -12,7 +12,8 @@ const InviteSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   role: z.enum(['admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte', 'suporte']).optional(),
-  team_ids: z.array(z.string().uuid()).optional()
+  team_ids: z.array(z.string().uuid()).optional(),
+  primary_team_id: z.string().uuid().nullable().optional()
 })
 
 // Rate limiting store (in-memory, resets on cold start)
@@ -140,7 +141,13 @@ serve(async (req) => {
       )
     }
 
-    const { email, name, role, team_ids } = result.data
+    const { email, name, role, team_ids, primary_team_id } = result.data
+    if (primary_team_id && !team_ids?.includes(primary_team_id)) {
+      return new Response(JSON.stringify({ success: false, error: 'A equipe principal deve estar entre as equipes selecionadas.' }), {
+        status: 400,
+        headers: { ...corsHeaders, ...rateLimitHeaders, 'Content-Type': 'application/json' },
+      })
+    }
     if (!emailRecipientAllowed(email.toLowerCase(), Deno.env.get('EMAIL_ALLOWED_RECIPIENTS'))) {
       return new Response(JSON.stringify({ success: false, error: 'Envio não habilitado para este destinatário no ambiente.' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -166,7 +173,8 @@ serve(async (req) => {
       name: name,
       role: role || 'suporte',
       active: true,
-      must_change_password: true
+      must_change_password: true,
+      ...(primary_team_id !== undefined ? { primary_team_id } : {}),
     }
 
     const { data: existingUser, error: searchError } = await supabaseAdmin

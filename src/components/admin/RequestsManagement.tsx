@@ -16,6 +16,7 @@ import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import CustomSelect from '../ui/CustomSelect';
+import { edgeFunctionErrorMessage } from '../../lib/edgeFunctionError';
 
 const getInitials = (name: string) => {
   const parts = name.trim().split(/\s+/);
@@ -91,8 +92,8 @@ export default function RequestsManagement({ requests: initialRequests, teams, l
             headers: { Authorization: `Bearer ${accessToken}` },
             body: { ...userPayload, team_ids: approveData.team_ids || [] }
           });
-          if (funcError) throw funcError;
-          if (data?.success === false) throw new Error(data.details?.message || 'Erro ao convidar usuário');
+          if (funcError) throw new Error(await edgeFunctionErrorMessage(funcError, 'Falha ao convidar usuário.'));
+          if (data?.success === false) throw new Error(data.error || 'Falha ao convidar usuário.');
 
           const { error: reqError } = await supabase.from('access_requests').update({ status: 'approved' }).eq('id', approvingReq.id);
           if (reqError) throw reqError;

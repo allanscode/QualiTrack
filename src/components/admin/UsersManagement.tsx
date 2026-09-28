@@ -21,6 +21,7 @@ import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import CustomSelect from '../ui/CustomSelect';
+import { edgeFunctionErrorMessage } from '../../lib/edgeFunctionError';
 
 const getInitials = (name: string) => {
   const parts = name.trim().split(/\s+/);
@@ -151,8 +152,8 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
                 headers: { Authorization: `Bearer ${accessToken}` },
                 body: { id: editingUser.id, email: emailLower }
               });
-              if (emailFuncError) throw emailFuncError;
-              if (emailData?.success === false) throw new Error(emailData.error || 'Falha ao atualizar e-mail');
+              if (emailFuncError) throw new Error(await edgeFunctionErrorMessage(emailFuncError, 'Falha ao atualizar e-mail.'));
+              if (emailData?.success === false) throw new Error(emailData.error || 'Falha ao atualizar e-mail.');
             }
 
             // Ordem importa: user_teams_insert/update/delete autorizam por
@@ -172,8 +173,8 @@ export default function UsersManagement({ users, teams, loadData }: UsersManagem
               headers: { Authorization: `Bearer ${accessToken}` },
               body: { ...userPayload, team_ids: teamIds }
             });
-            if (funcError) throw funcError;
-            if (data?.success === false) throw new Error(data.details?.message || 'Erro ao convidar usuário');
+            if (funcError) throw new Error(await edgeFunctionErrorMessage(funcError, 'Falha ao convidar usuário.'));
+            if (data?.success === false) throw new Error(data.error || 'Falha ao convidar usuário.');
             userId = data?.user?.id || null;
             if (userId) await syncUserTeams(userId, teamIds);
           }
