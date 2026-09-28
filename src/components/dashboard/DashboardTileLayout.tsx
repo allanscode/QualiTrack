@@ -1,10 +1,12 @@
-import { createContext, createElement, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ComponentType, ReactNode } from 'react';
+import { ArrowDown, ArrowUp, EyeOff, GripVertical } from 'lucide-react';
 import { DashboardStateContext } from './DashboardContext';
 import { useQualityConfig } from '../../lib/useQualityConfig';
 import { DASHBOARD_WIDGETS, orderedWidgets, widgetId } from '../../lib/dashboardLayout';
 import type { DashboardRole, DashboardWidgetDefinition, DashboardWidgetType } from '../../lib/dashboardLayout';
+import type { DashboardLayoutEditor } from '../../hooks/useDashboardLayoutEditor';
 
 interface LayoutContextValue {
   role: DashboardRole;
@@ -15,8 +17,63 @@ interface LayoutContextValue {
 
 const LayoutContext = createContext<LayoutContextValue | null>(null);
 
-function Slot({ item, registerSlot }: { item: DashboardWidgetDefinition; registerSlot: LayoutContextValue['registerSlot'] }) {
+function Slot({ item, index, count, registerSlot, editor }: {
+  item: DashboardWidgetDefinition;
+  index: number;
+  count: number;
+  registerSlot: LayoutContextValue['registerSlot'];
+  editor?: DashboardLayoutEditor;
+}) {
   const ref = useCallback((node: HTMLDivElement | null) => registerSlot(item.id, node), [item.id, registerSlot]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [dropTarget, setDropTarget] = useState(false);
+
+  useEffect(() => {
+    if (!editor || !rootRef.current) return;
+    const node = rootRef.current;
+    const onDragStart = (event: DragEvent) => {
+      if (editor.saving || (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, [contenteditable="true"]'))) {
+        event.preventDefault();
+        return;
+      }
+      event.dataTransfer?.setData('text/plain', item.id);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+      editor.setDraggedId(item.id);
+    };
+    const onDragOver = (event: DragEvent) => {
+      if (editor.saving || !editor.draggedId || editor.draggedId === item.id) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      setDropTarget(true);
+    };
+    const onDragLeave = (event: DragEvent) => {
+      if (event.relatedTarget instanceof Node && node.contains(event.relatedTarget)) return;
+      setDropTarget(false);
+    };
+    const onDrop = (event: DragEvent) => {
+      const sourceId = event.dataTransfer?.getData('text/plain') || editor.draggedId;
+      if (sourceId && sourceId !== item.id) {
+        event.preventDefault();
+        editor.reorder(sourceId, item.id);
+      }
+      setDropTarget(false);
+      editor.setDraggedId(null);
+    };
+    const onDragEnd = () => { setDropTarget(false); editor.setDraggedId(null); };
+    node.addEventListener('dragstart', onDragStart);
+    node.addEventListener('dragover', onDragOver);
+    node.addEventListener('dragleave', onDragLeave);
+    node.addEventListener('drop', onDrop);
+    node.addEventListener('dragend', onDragEnd);
+    return () => {
+      node.removeEventListener('dragstart', onDragStart);
+      node.removeEventListener('dragover', onDragOver);
+      node.removeEventListener('dragleave', onDragLeave);
+      node.removeEventListener('drop', onDrop);
+      node.removeEventListener('dragend', onDragEnd);
+    };
+  }, [editor, item.id]);
+
   const size = item.type === 'StatCard'
     ? 'min-h-32'
     : item.type === 'RecentAuditsTable' || item.type === 'FeedbacksWidget' || item.type === 'QualityAchievementsWidget' || item.type === 'NegativeCallsTrainingAlert'
@@ -24,13 +81,31 @@ function Slot({ item, registerSlot }: { item: DashboardWidgetDefinition; registe
       : item.type === 'TrendChart' || item.type === 'OfensoresChart' || item.type === 'ComparativeBarChart'
         ? 'sm:col-span-2 xl:col-span-4 h-[380px]'
         : 'sm:col-span-2 h-[360px]';
-  return <div ref={ref} data-dashboard-slot={item.id} className={`min-w-0 ${size}`} />;
+  return (
+    <div
+      ref={rootRef}
+      data-dashboard-slot={item.id}
+      draggable={Boolean(editor && !editor.saving)}
+      className={`min-w-0 flex flex-col ${size} ${editor ? 'rounded-2xl transition-shadow cursor-grab active:cursor-grabbing' : ''} ${dropTarget ? 'ring-2 ring-brand-accent ring-offset-2 ring-offset-surface-bg' : ''} ${editor?.draggedId === item.id ? 'opacity-45' : ''}`}
+    >
+      {editor && (
+        <div className="mb-2 flex min-h-9 items-center gap-1 rounded-xl border border-surface-border bg-surface-card px-2 text-brand-muted shadow-sm">
+          <GripVertical className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-brand-primary" title={item.title}>{item.title}</span>
+          <button type="button" disabled={editor.saving || index === 0} onClick={() => editor.move(item.id, -1)} aria-label={`Mover ${item.title} para cima na prévia`} title="Mover para cima" className="rounded-lg p-1.5 hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-brand-accent disabled:opacity-30"><ArrowUp className="size-4" /></button>
+          <button type="button" disabled={editor.saving || index === count - 1} onClick={() => editor.move(item.id, 1)} aria-label={`Mover ${item.title} para baixo na prévia`} title="Mover para baixo" className="rounded-lg p-1.5 hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-brand-accent disabled:opacity-30"><ArrowDown className="size-4" /></button>
+          <button type="button" disabled={editor.saving} onClick={() => editor.remove(item.id)} aria-label={`Remover ${item.title} da prévia`} title="Remover da visão deste cargo" className="rounded-lg p-1.5 text-functional-error hover:bg-functional-error/10 focus-visible:ring-2 focus-visible:ring-brand-accent disabled:opacity-30"><EyeOff className="size-4" /></button>
+        </div>
+      )}
+      <div ref={ref} className="min-h-0 flex-1" />
+    </div>
+  );
 }
 
-export function DashboardTileLayout({ role, children }: { role: DashboardRole; children: ReactNode }) {
+export function DashboardTileLayout({ role, children, editor }: { role: DashboardRole; children: ReactNode; editor?: DashboardLayoutEditor }) {
   const { config } = useQualityConfig();
   const layout = config.dashboardLayouts?.[role];
-  const arranged = Boolean(layout?.order?.length);
+  const arranged = Boolean(editor || layout?.order?.length);
   const [slots, setSlots] = useState<Record<string, HTMLDivElement>>({});
   const registerSlot = useCallback((id: string, node: HTMLDivElement | null) => {
     setSlots(current => {
@@ -43,13 +118,13 @@ export function DashboardTileLayout({ role, children }: { role: DashboardRole; c
     });
   }, []);
   const context = useMemo(() => ({ role, arranged, slots, registerSlot }), [role, arranged, slots, registerSlot]);
-  const visibleWidgets = orderedWidgets(role, layout).filter(item => !layout?.hidden?.includes(item.id));
+  const visibleWidgets = editor?.visible || orderedWidgets(role, layout).filter(item => !layout?.hidden?.includes(item.id));
 
   return (
     <LayoutContext value={context}>
       {arranged && (
         <div className="dashboard-tile-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6" aria-label="Indicadores do dashboard">
-          {visibleWidgets.map(item => <Slot key={item.id} item={item} registerSlot={registerSlot} />)}
+          {visibleWidgets.map((item, index) => <Slot key={item.id} item={item} index={index} count={visibleWidgets.length} registerSlot={registerSlot} editor={editor} />)}
         </div>
       )}
       <div className={arranged ? 'dashboard-tile-source' : ''}>{children}</div>
@@ -71,7 +146,7 @@ export function DashboardTile({ type, title, profile, children }: TileProps & { 
     if (role && config.dashboardLayouts?.[role]?.hidden?.includes(id)) return null;
     if (layoutContext?.arranged && DASHBOARD_WIDGETS[layoutContext.role].some(item => item.id === id)) {
       const slot = layoutContext.slots[id];
-      return slot ? createPortal(children, slot) : null;
+      return slot ? createPortal(<div data-dashboard-tile-content className="h-full min-h-0">{children}</div>, slot) : null;
     }
     return children;
 }

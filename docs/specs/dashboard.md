@@ -27,7 +27,9 @@ DashboardMain
 
 ## Personalização por cargo
 
-Em **Customizar Dashboards**, o administrador seleciona um dos cinco cargos e define quais cards, gráficos e tabelas aparecem. Itens removidos ficam na lista **Disponíveis para adicionar** e podem ser restaurados. Os itens visíveis podem ser reordenados por arraste ou pelas setas; **Restaurar ordem** devolve a disposição original. A prévia e o dashboard real consomem a mesma configuração.
+Em **Customizar Dashboards**, o administrador seleciona um dos cinco cargos e define quais cards, gráficos e tabelas aparecem. Na própria prévia, cada card pode ser arrastado para outra posição ou movido e removido pelos botões da barra superior. A lista completa começa recolhida para deixar a prévia acessível e oferece as mesmas ações; itens retirados ficam em **Disponíveis para adicionar**. **Restaurar ordem** devolve a disposição original. A prévia e o dashboard real consomem a mesma configuração.
+
+O gráfico **Performance Histórica** de administrador, gestor de qualidade e gestor de suporte exibe as médias diárias global, das monitorias positivas (nota >= 75%) e das negativas (nota < 75%). Dias sem avaliações de uma categoria não exibem ponto naquela série.
 
 Os botões **Diagnóstico de Causa Raiz** e **Relatório Executivo (PDF)** têm controles de visibilidade independentes por cargo. O cargo `suporte` não tem acesso a essas ações, independentemente da configuração visual.
 

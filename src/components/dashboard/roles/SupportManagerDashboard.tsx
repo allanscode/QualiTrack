@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
 import { chartColorMap, chartColorArray, chartPalette } from '../chartColors';
+import { buildPerformanceTrend } from '../../../lib/performanceTrend';
 import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
 import NegativeCallsTrainingAlert from '../widgets/NegativeCallsTrainingAlert';
 import { computeSupportManagerIndicators } from '../../../lib/supportManagerIndicators';
@@ -26,12 +27,12 @@ import { DashboardTile } from '../DashboardTileLayout';
 
 // High-fidelity mock datasets for customization mode
 const mockTrendData = [
-  { name: '01/05', ScoreMedio: 82.3, MeuScore: 84.5, ScoreEquipe: 81.2, MediaEquipe: 81.5 },
-  { name: '05/05', ScoreMedio: 84.1, MeuScore: 83.2, ScoreEquipe: 82.5, MediaEquipe: 82.1 },
-  { name: '10/05', ScoreMedio: 83.8, MeuScore: 86.1, ScoreEquipe: 83.1, MediaEquipe: 82.8 },
-  { name: '15/05', ScoreMedio: 85.2, MeuScore: 87.4, ScoreEquipe: 84.8, MediaEquipe: 83.5 },
-  { name: '20/05', ScoreMedio: 86.5, MeuScore: 85.9, ScoreEquipe: 85.2, MediaEquipe: 84.2 },
-  { name: '25/05', ScoreMedio: 87.0, MeuScore: 88.2, ScoreEquipe: 86.1, MediaEquipe: 85.0 }
+  { name: '01/05', ScoreMedio: 82.3, MeuScore: 84.5, ScoreEquipe: 81.2, MediaEquipe: 81.5, Positivas: 86, Negativas: 59 },
+  { name: '05/05', ScoreMedio: 84.1, MeuScore: 83.2, ScoreEquipe: 82.5, MediaEquipe: 82.1, Positivas: 88, Negativas: 65 },
+  { name: '10/05', ScoreMedio: 83.8, MeuScore: 86.1, ScoreEquipe: 83.1, MediaEquipe: 82.8, Positivas: 89, Negativas: 61 },
+  { name: '15/05', ScoreMedio: 85.2, MeuScore: 87.4, ScoreEquipe: 84.8, MediaEquipe: 83.5, Positivas: 91, Negativas: 68 },
+  { name: '20/05', ScoreMedio: 86.5, MeuScore: 85.9, ScoreEquipe: 85.2, MediaEquipe: 84.2, Positivas: 92, Negativas: 70 },
+  { name: '25/05', ScoreMedio: 87.0, MeuScore: 88.2, ScoreEquipe: 86.1, MediaEquipe: 85.0, Positivas: 93, Negativas: 66 }
 ];
 
 const mockDistributionData = [
@@ -469,25 +470,7 @@ export default function SupportManagerDashboard({
   const hasReversalData = totalContestations > 0;
 
   // Performance Histórica (Trend chart)
-  const trendData = useMemo(() => {
-    if (isCustomizing) return mockTrendData;
-    const days: Record<string, { totalScore: number, count: number }> = {};
-    scoredMonitorias.forEach((m: any) => {
-      const date = new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      if (!days[date]) days[date] = { totalScore: 0, count: 0 };
-      days[date].totalScore += m.score || 0;
-      days[date].count += 1;
-    });
-
-    return Object.entries(days).map(([name, data]) => ({
-      name,
-      ScoreEquipe: Math.round((data.totalScore / data.count) * 100) / 100
-    })).sort((a, b) => {
-      const [da, ma] = a.name.split('/').map(Number);
-      const [db, mb] = b.name.split('/').map(Number);
-      return ma !== mb ? ma - mb : da - db;
-    });
-  }, [isCustomizing, scoredMonitorias]);
+  const trendData = useMemo(() => isCustomizing ? mockTrendData : buildPerformanceTrend(scoredMonitorias), [isCustomizing, scoredMonitorias]);
 
   const trendPercentage = useMemo(() => {
     if (isCustomizing) return 1.85;
@@ -1070,7 +1053,11 @@ export default function SupportManagerDashboard({
             title="Performance Histórica"
             subtitle="Nota média agregada das suas equipes"
             data={trendData}
-            dataKeys={[{ key: 'ScoreEquipe', name: 'Média Geral', color: chartPalette().excelente }]}
+            dataKeys={[
+              { key: 'ScoreEquipe', name: 'Média Global', color: chartPalette().excelente },
+              { key: 'Positivas', name: 'Positivas', color: chartPalette().aceitavel },
+              { key: 'Negativas', name: 'Negativas', color: chartPalette().ruim },
+            ]}
             isCustomizing={isCustomizing}
             profile="gestor_suporte"
             activeEditingId={activeEditingId}

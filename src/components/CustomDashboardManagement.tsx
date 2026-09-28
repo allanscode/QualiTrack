@@ -8,11 +8,13 @@ import AgentDashboard from './dashboard/roles/AgentDashboard';
 import { DashboardProvider } from './dashboard/DashboardContext';
 import { DashboardTileLayout } from './dashboard/DashboardTileLayout';
 import DashboardLayoutControls from './dashboard/DashboardLayoutControls';
+import { useDashboardLayoutEditor } from '../hooks/useDashboardLayoutEditor';
 import { User } from '../types';
 
 export default function CustomDashboardManagement({ user }: { user: User | null }) {
   const [selectedProfile, setSelectedProfile] = useState<'admin' | 'gestor_qualidade' | 'gestor_suporte' | 'qualidade' | 'suporte'>('admin');
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
+  const layoutEditor = useDashboardLayoutEditor(selectedProfile);
 
   return (
     <div className="space-y-6">
@@ -62,18 +64,18 @@ export default function CustomDashboardManagement({ user }: { user: User | null 
             Instruções de Customização:
           </h4>
           <p className="text-[11px] text-brand-muted font-medium leading-relaxed">
-            Remova, adicione ou mova os itens da visão selecionada. A prévia usa dados fictícios. Você também pode clicar no ícone de um card ou gráfico para editar sua explicação; as mudanças são aplicadas aos usuários do cargo escolhido.
+            Arraste os cards na prévia para mudar a ordem ou use os botões em cada card. Itens removidos aparecem em “Disponíveis para adicionar”. A lista completa fica recolhida abaixo. A prévia usa dados fictícios; clique no ícone de um card ou gráfico para editar sua explicação.
           </p>
         </div>
       </div>
 
-      <DashboardLayoutControls role={selectedProfile} />
+      <DashboardLayoutControls editor={layoutEditor} />
 
       {/* Dynamic Dashboard View rendering according to the selected profile */}
       <div className="space-y-6">
-        <h2 className="text-sm font-black text-brand-primary">Prévia do dashboard</h2>
+        <h2 className="text-sm font-black text-brand-primary">Arraste os cards para organizar a prévia</h2>
         <DashboardProvider user={user} activeTab="custom_dashboard">
-          <DashboardTileLayout key={selectedProfile} role={selectedProfile}>
+          <DashboardTileLayout key={selectedProfile} role={selectedProfile} editor={layoutEditor}>
           {selectedProfile === 'admin' && (
             <AdminDashboardView 
               isCustomizing={true}

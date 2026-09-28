@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-.dashboard-tile-grid > [data-dashboard-slot]:empty,
+.dashboard-tile-grid > [data-dashboard-slot]:not(:has([data-dashboard-tile-content])),
 .dashboard-tile-source .grid:empty,
 .dashboard-tile-source .grid > div:empty,
 .dashboard-tile-source > div:empty,
