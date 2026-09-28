@@ -190,6 +190,8 @@ Se qualquer erro_critico marcado → Score Final = 0
 
 ## Anonimização
 
+Somente `qualidade`, `gestor_qualidade` e `admin` podem iniciar auditorias de chamados ou criar monitorias. `gestor_suporte` consulta as filas e acompanha a etapa de gestão, mas não inicia avaliações manuais nem com IA. A policy de INSERT em `monitorias` aplica a mesma restrição no banco.
+
 Agentes (`role=suporte`) e gestores de suporte (`role=gestor_suporte`) veem:
 - `evaluator_name` → "Analise da Qualidade" (nome real ocultado)
 - Garantido no frontend via renderização condicional no `RecentAuditsTable`

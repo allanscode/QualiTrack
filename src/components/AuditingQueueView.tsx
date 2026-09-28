@@ -92,6 +92,7 @@ import {
 import { usePresence } from '../providers/PresenceProvider';
 import { matchesAssignedMonitor } from '../lib/queueMonitorFilter';
 import { calculateAIEvaluationScore } from '../utils/aiEvaluationScore';
+import { canAuditTickets } from '../lib/auditPermissions';
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -159,6 +160,7 @@ export default function AuditingQueueView({
     activeSubTab && activeSubTab !== 'monitores' ? activeSubTab : 'negativas'
   ));
   const isSupervisorView = canManageQueueAssignments(currentUserRole);
+  const canAudit = canAuditTickets(currentUserRole);
 
   // Redireciona monitores comuns para fora da sub-aba de supervisão
   useEffect(() => {
@@ -863,6 +865,7 @@ ${checksSummary}${recs}`;
   // Abre o popup de confirmação da avaliação da IA com a seleção automática
   // de ficha e manual baseada no tipo de cliente (organização no Zendesk).
   const openGuidelinePicker = async (ticket: AuditingQueueTicket) => {
+    if (!canAudit) return;
     if (ticket.positive_cap_reached) {
       toast.warning('Este atendente já atingiu o máximo de 2 avaliações positivas no mês.');
       return;
@@ -894,6 +897,7 @@ ${checksSummary}${recs}`;
     silent = false,
     selectionContext?: Record<string, unknown>
   ) => {
+    if (!canAudit) return;
     if (globalEvaluatingTickets.has(ticket.ticket_id)) {
       const duplicateError = new Error(`O ticket #${ticket.ticket_id} já está sendo avaliado com IA.`);
       if (!silent) setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'Este ticket já está em análise.' }));
@@ -1034,6 +1038,7 @@ ${checksSummary}${recs}`;
   // Avaliação em LOTE — se houver tickets selecionados via checkbox, avalia apenas eles.
   // Caso contrário, avalia todos os tickets elegíveis visíveis da página atual.
   const handleBatchEvaluate = async () => {
+    if (!canAudit) return;
     const candidateTickets = selectedTicketIds.size > 0
       ? paginatedTickets.filter(t => selectedTicketIds.has(t.ticket_id))
       : paginatedTickets;
@@ -1165,6 +1170,7 @@ ${checksSummary}${recs}`;
 
   // Avaliação de conformidade com IA para tickets filhos
   const handleEvaluateChildTicket = async (ticket: AuditingQueueTicket) => {
+    if (!canAudit) return;
     let jobId: string;
     try {
       const job = await claimAIJob(ticket.ticket_id, 'chamado_filho', currentUserId);
@@ -1239,6 +1245,7 @@ ${checksSummary}${recs}`;
   // Abre a ficha de monitoria com o rascunho da IA já salvo pra esse
   // ticket — com o form_id bloqueado para alteração manual.
   const handleLaunchMonitoria = async (ticket: AuditingQueueTicket) => {
+    if (!canAudit) return;
     const draft = drafts[ticket.ticket_id];
     if (!draft) return;
 
@@ -1278,6 +1285,7 @@ ${checksSummary}${recs}`;
 
   // Inicia auditoria manual direta (sem IA prévia) abrindo o fluxo oficial 1-2-3-4
   const handleStartManualAudit = async (ticket: AuditingQueueTicket) => {
+    if (!canAudit) return;
     let queueAssignment;
     try {
       queueAssignment = await beginAssignedWork(ticket);
@@ -1454,6 +1462,7 @@ ${checksSummary}${recs}`;
   // diretamente o formulário oficial no fluxo das 4 etapas (1-2-3-4) para ir batendo os dados.
   // Se ainda não avaliado, o botão principal é "Avaliar com IA" (índigo/roxo) ou "Auditar Manual".
   const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
+    if (!canAudit) return null;
     const isEvaluating = isEvaluatingTicket(ticket.ticket_id);
 
     // Se o ticket está em processo de avaliação (mesmo que o usuário tenha mudado de tela/aba),
@@ -1578,6 +1587,7 @@ ${checksSummary}${recs}`;
   };
 
   const handleStartChildAudit = async (ticket: AuditingQueueTicket) => {
+    if (!canAudit) return;
     let queueAssignment;
     try {
       queueAssignment = await beginAssignedWork(ticket);
@@ -2048,7 +2058,7 @@ ${checksSummary}${recs}`;
         {/* Ações da Toolbar */}
         <div className="flex items-center gap-2 shrink-0 ml-auto md:ml-0">
           {/* Seleção de tickets da página atual */}
-          {paginatedTickets.length > 0 && (
+          {canAudit && paginatedTickets.length > 0 && (
             <label
               className="h-9 inline-flex items-center gap-1.5 px-2.5 rounded-lg border border-surface-border bg-surface-subtle/40 hover:bg-surface-subtle text-xs font-medium text-brand-muted hover:text-brand-primary cursor-pointer transition-colors shrink-0 select-none"
               title={paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar todos os chamados da página' : 'Selecionar todos os chamados da página'}
@@ -2072,7 +2082,7 @@ ${checksSummary}${recs}`;
           )}
 
           {/* Botão Avaliar Página / Selecionados */}
-          {(activeQueue === 'positivas' || activeQueue === 'proativas' || activeQueue === 'negativas') && (
+          {canAudit && (activeQueue === 'positivas' || activeQueue === 'proativas' || activeQueue === 'negativas') && (
             <button
               type="button"
               onClick={handleBatchEvaluate}
@@ -2153,14 +2163,14 @@ ${checksSummary}${recs}`;
             {paginatedTickets.map(ticket => (
               <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
-                    <input
+                    {canAudit ? <input
                       type="checkbox"
                       checked={selectedTicketIds.has(ticket.ticket_id)}
                       onChange={() => toggleTicketSelection(ticket.ticket_id)}
                       disabled={batchRunning}
                       className="w-4 h-4 mt-0.5 rounded text-brand-highlight focus:ring-brand-highlight border-surface-border cursor-pointer flex-shrink-0"
                       title="Selecionar para avaliação"
-                    />
+                    /> : <span className="w-4 h-4" aria-hidden="true" />}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <QueueTicketNumber ticketId={ticket.ticket_id} />
@@ -2250,14 +2260,14 @@ ${checksSummary}${recs}`;
                     <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-info/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-info/40 border-info/50 bg-info/3' : ''}`}>
                       <div className="flex items-start justify-between gap-2.5">
                         <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                          <input
+                          {canAudit ? <input
                             type="checkbox"
                             checked={selectedTicketIds.has(ticket.ticket_id)}
                             onChange={() => toggleTicketSelection(ticket.ticket_id)}
                             disabled={batchRunning}
                             className="w-4 h-4 mt-0.5 rounded text-info focus:ring-info border-surface-border cursor-pointer flex-shrink-0"
                             title="Selecionar para avaliação"
-                          />
+                          /> : <span className="w-4 h-4 shrink-0" aria-hidden="true" />}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <QueueTicketNumber ticketId={ticket.ticket_id} />
@@ -2345,14 +2355,14 @@ ${checksSummary}${recs}`;
                   <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-functional-success/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-emerald-500/40 border-emerald-500/50 bg-emerald-500/3' : ''}`}>
                     <div className="flex items-start justify-between gap-2.5">
                       <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                        <input
+                        {canAudit ? <input
                           type="checkbox"
                           checked={selectedTicketIds.has(ticket.ticket_id)}
                           onChange={() => toggleTicketSelection(ticket.ticket_id)}
                           disabled={batchRunning}
                           className="w-4 h-4 mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 border-surface-border cursor-pointer flex-shrink-0"
                           title="Selecionar para avaliação"
-                        />
+                        /> : <span className="w-4 h-4 shrink-0" aria-hidden="true" />}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <QueueTicketNumber ticketId={ticket.ticket_id} />
@@ -2448,14 +2458,14 @@ ${checksSummary}${recs}`;
                   return (
                     <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
-                          <input
+                          {canAudit ? <input
                             type="checkbox"
                             checked={selectedTicketIds.has(ticket.ticket_id)}
                             onChange={() => toggleTicketSelection(ticket.ticket_id)}
                             disabled={batchRunning}
                             className="w-4 h-4 mt-0.5 rounded text-brand-highlight focus:ring-brand-highlight border-surface-border cursor-pointer flex-shrink-0"
                             title="Selecionar para avaliação"
-                          />
+                          /> : <span className="w-4 h-4" aria-hidden="true" />}
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <QueueTicketNumber ticketId={ticket.ticket_id} />
@@ -2511,7 +2521,7 @@ ${checksSummary}${recs}`;
                         </div>
 
                         <div className="flex min-w-0 flex-col items-end gap-1.5" role="status" aria-live="polite">
-                          <Button
+                          {(canAudit || evaluation) && <Button
                             size="sm"
                             variant={isValidated ? "outline" : "primary"}
                             disabled={isEvaluatingTicket(ticket.ticket_id)}
@@ -2530,7 +2540,7 @@ ${checksSummary}${recs}`;
                             ) : (
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}
-                          </Button>
+                          </Button>}
                           {renderCancelAIAction(ticket.ticket_id)}
                           {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
                         </div>
@@ -2584,14 +2594,14 @@ ${checksSummary}${recs}`;
                   return (
                     <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-functional-error/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-functional-error/40 border-functional-error/50 bg-functional-error/3' : ''}`}>
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
-                          <input
+                          {canAudit ? <input
                             type="checkbox"
                             checked={selectedTicketIds.has(ticket.ticket_id)}
                             onChange={() => toggleTicketSelection(ticket.ticket_id)}
                             disabled={batchRunning}
                             className="w-4 h-4 mt-0.5 rounded text-functional-error focus:ring-functional-error border-surface-border cursor-pointer flex-shrink-0"
                             title="Selecionar para avaliação"
-                          />
+                          /> : <span className="w-4 h-4" aria-hidden="true" />}
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <QueueTicketNumber ticketId={ticket.ticket_id} />
@@ -2645,7 +2655,7 @@ ${checksSummary}${recs}`;
                         </div>
 
                         <div className="flex min-w-0 flex-col items-end gap-1.5" role="status" aria-live="polite">
-                          <Button
+                          {(canAudit || evaluation) && <Button
                             size="sm"
                             variant="outline"
                             disabled={isEvaluatingTicket(ticket.ticket_id)}
@@ -2664,7 +2674,7 @@ ${checksSummary}${recs}`;
                             ) : (
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}
-                          </Button>
+                          </Button>}
                           {renderCancelAIAction(ticket.ticket_id)}
                           {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
                         </div>
@@ -3047,7 +3057,7 @@ ${checksSummary}${recs}`;
                         </div>
 
                         {/* Alternador Manual Válido / Inválido */}
-                        <div className="flex items-center gap-1.5 bg-surface-card/80 p-1 rounded-xl border border-surface-border self-start sm:self-auto">
+                        {canAudit && <div className="flex items-center gap-1.5 bg-surface-card/80 p-1 rounded-xl border border-surface-border self-start sm:self-auto">
                           <button
                             type="button"
                             onClick={() => setChildManualVerdict('conforme')}
@@ -3072,7 +3082,7 @@ ${checksSummary}${recs}`;
                             <X className="w-3 h-3" />
                             <span>Inválido</span>
                           </button>
-                        </div>
+                        </div>}
                       </div>
                     );
                   })()}
@@ -3237,7 +3247,7 @@ ${checksSummary}${recs}`;
                   Fechar
                 </Button>
 
-                <div className="flex items-center gap-2">
+                {canAudit && <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -3271,7 +3281,7 @@ ${checksSummary}${recs}`;
                     <Check className="w-3.5 h-3.5" />
                     <span>Salvar Monitoria</span>
                   </Button>
-                </div>
+                </div>}
               </div>
             </Card>
           </div>

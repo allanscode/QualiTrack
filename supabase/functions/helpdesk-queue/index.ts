@@ -17,7 +17,7 @@ import {
 } from './ai-fallback.ts';
 import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODEL } from './openrouter-client.ts';
 import { retryAt } from './ai-retry.ts';
-import { canReadQueueTicket, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
+import { canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
 import { satisfactionResponseTimestamp } from './satisfaction.ts';
 import { literalSearchTerm, ticketMatchesQueue } from './queue-search.ts';
@@ -348,6 +348,10 @@ serve(async (req) => {
     }
 
     const { action, queue_type, ticket_id } = parseResult.data;
+
+    if (!canRunQueueAction(caller.role as string, action)) {
+      return jsonResponse({ error: 'Apenas a equipe de Qualidade pode auditar chamados.' }, 403);
+    }
 
     // Rate limit geral: 60 requisições/minuto por usuário, cobre toda action.
     const general = await supabase.rpc('consume_security_rate_limit', {

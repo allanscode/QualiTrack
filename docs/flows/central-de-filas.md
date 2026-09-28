@@ -52,9 +52,9 @@ Uma linha por `ticket_id` (UNIQUE), sobrescrita a cada reavaliação. Desacopla 
 |---|---|---|
 | `fetch_queue` | admin, gestor_qualidade, qualidade, gestor_suporte | Busca tickets (view salva ou Search API + paginação por cursor) |
 | `fetch_dialogue` | idem | Comentários do ticket + `ticket_fields` (classificação) |
-| `evaluate_ai` | idem | Chama OpenRouter; não depende do Zendesk |
+| `evaluate_ai` / `evaluate_child_ticket` / `generate_auditor_record` | admin, gestor_qualidade, qualidade | Inicia análise de qualidade com IA; gestor_suporte apenas consulta as filas |
 | `lookup_ticket_agent` | idem | Só leitura, usado no `MonitoriaForm` manual |
-| `resolve_agent` | idem | Cadastro manual de agente não existente |
+| `resolve_agent` | admin, gestor_qualidade, qualidade | Cadastro de agente durante a criação de monitoria |
 | `sync_zendesk_groups` | **admin apenas** | Importa grupos do Zendesk como `public.teams` (não duplica por nome) |
 
 `ticket_id`, quando presente, é validado como `/^\d+$/` **antes** de qualquer dispatch — interpolado cru numa URL do Zendesk, um valor não numérico permitiria path traversal para outro endpoint da API usando o `ZENDESK_API_TOKEN` privilegiado (achado corrigido em revisão de segurança, 25/08).

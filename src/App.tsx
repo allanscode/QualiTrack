@@ -25,6 +25,7 @@ import { supabase } from './lib/supabase';
 import { fetchAIGuidelines } from './lib/aiGuidelines';
 import { releaseQueueTicketAssignment, canManageQueueAssignments } from './lib/queueDistribution';
 import { getContestationNotifications } from './lib/contestationNotifications';
+import { canAuditTickets } from './lib/auditPermissions';
 import type { AdminSubTab } from './components/AdminPanel';
 
 export const QUEUE_TITLES: Record<QueueSubTab, string> = {
@@ -432,6 +433,7 @@ function MainApp({
   }, []);
 
   const handleStartAuditFromQueue = (prefill: any) => {
+    if (!canAuditTickets(userData?.role)) return;
     // O agente pode ter sido criado agora mesmo (conta provisória) pela
     // Edge Function de triagem — se ainda não está no cache local de
     // usuários, atualiza para que o formulário já abra com o nome
@@ -483,6 +485,7 @@ function MainApp({
   const [isNewMonitoriaModalOpen, setIsNewMonitoriaModalOpen] = useState(false);
 
   const handleOpenNewMonitoria = () => {
+    if (!canAuditTickets(userData?.role)) return;
     setIsNewMonitoriaModalOpen(true);
   };
 
@@ -1121,6 +1124,7 @@ function MainApp({
           onClose={() => setIsCommandPaletteOpen(false)}
           onNavigateTab={setActiveTab}
           onNewMonitoria={handleOpenNewMonitoria}
+          canCreateMonitoria={canAuditTickets(userData?.role)}
           onToggleTheme={() => handleThemeChange(sidebarIsDark ? 'light' : 'dark')}
           isDark={sidebarIsDark}
           monitorias={monitorias}

@@ -25,6 +25,7 @@ interface CommandPaletteModalProps {
   onClose: () => void;
   onNavigateTab: (tab: string) => void;
   onNewMonitoria: () => void;
+  canCreateMonitoria: boolean;
   onToggleTheme: () => void;
   isDark: boolean;
   monitorias: Monitoria[];
@@ -36,6 +37,7 @@ export default function CommandPaletteModal({
   onClose,
   onNavigateTab,
   onNewMonitoria,
+  canCreateMonitoria,
   onToggleTheme,
   isDark,
   monitorias,
@@ -88,14 +90,14 @@ export default function CommandPaletteModal({
       icon: Shield,
       action: () => { onNavigateTab('admin'); onClose(); },
     },
-    {
+    ...(canCreateMonitoria ? [{
       id: 'action-new',
       category: 'Ações Rápidas',
       title: 'Nova Monitoria',
       subtitle: 'Criar uma nova avaliação de atendimento',
       icon: Plus,
       action: () => { onNewMonitoria(); onClose(); },
-    },
+    }] : []),
     {
       id: 'action-theme',
       category: 'Ações Rápidas',
@@ -104,7 +106,7 @@ export default function CommandPaletteModal({
       icon: isDark ? Sun : Moon,
       action: () => { onToggleTheme(); onClose(); },
     },
-  ], [onNavigateTab, onNewMonitoria, onToggleTheme, isDark, onClose]);
+  ], [onNavigateTab, onNewMonitoria, canCreateMonitoria, onToggleTheme, isDark, onClose]);
 
   // Busca dinâmica de tickets e atendentes
   const searchResults = useMemo(() => {
