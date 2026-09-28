@@ -2273,7 +2273,7 @@ ${checksSummary}${recs}`;
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {renderAiActions(ticket, 'bg-functional-error hover:bg-functional-error/90')}
+                    {renderAiActions(ticket, 'action-primary')}
                   </div>
                 </div>
               </Card>
