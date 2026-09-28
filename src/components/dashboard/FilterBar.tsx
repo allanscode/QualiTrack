@@ -104,12 +104,12 @@ export default function FilterBar() {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-end gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end sm:gap-3">
         {hasChanged && (
           <button
             type="button"
             onClick={handleClear}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-functional-error hover:bg-functional-error/10 rounded-xl transition-all cursor-pointer"
+            className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-functional-error hover:bg-functional-error/10 rounded-xl transition-all cursor-pointer"
             title="Limpar todos os filtros e retornar ao período padrão"
           >
             <X className="w-3.5 h-3.5" />
@@ -122,10 +122,10 @@ export default function FilterBar() {
             <button
               type="button"
               onClick={() => setIsRootCauseOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 rounded-xl transition-all cursor-pointer"
+              className="min-w-0 min-h-10 flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 text-center text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 rounded-xl transition-all cursor-pointer"
               title="Diagnóstico inteligente de falhas, causa raiz de ofensores e evolução pós-feedback"
             >
-              <BrainCircuit className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <BrainCircuit className="w-3.5 h-3.5 shrink-0 text-purple-600 dark:text-purple-400" />
               <span>Diagnóstico de Causa Raiz</span>
             </button>
             )}
@@ -133,10 +133,10 @@ export default function FilterBar() {
             <button
               type="button"
               onClick={() => setIsReportOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-primary bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/25 rounded-xl transition-all cursor-pointer"
+              className="min-w-0 min-h-10 flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 text-center text-xs font-bold text-brand-primary bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/25 rounded-xl transition-all cursor-pointer"
               title="Gerar e imprimir relatório executivo consolidado em PDF para reunião e envio a gestores"
             >
-              <FileText className="w-3.5 h-3.5 text-brand-accent" />
+              <FileText className="w-3.5 h-3.5 shrink-0 text-brand-accent" />
               <span>Relatório Executivo (PDF)</span>
             </button>
             )}
@@ -146,7 +146,7 @@ export default function FilterBar() {
           type="button"
           onClick={refresh}
           disabled={loading || !!refreshCooldownRemaining}
-          className="flex items-center gap-2 px-3 py-1.5 text-brand-muted hover:text-brand-primary transition-colors text-xs font-semibold tracking-wide disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          className="col-span-2 sm:col-span-1 min-h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-brand-muted hover:text-brand-primary transition-colors text-xs font-semibold tracking-wide disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           {loading ? 'Atualizando...' : refreshCooldownRemaining ? `Atualizar (${refreshCooldownRemaining})` : 'Atualizar Dados'}
@@ -194,7 +194,7 @@ export default function FilterBar() {
           </div>
 
           {/* Date Range Group (com gap explícito e separação garantida dos dropdowns) */}
-          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto min-w-[270px]">
+          <div className="flex flex-col min-[360px]:flex-row items-center gap-2 shrink-0 w-full sm:w-auto min-[360px]:min-w-[270px]">
             <CustomDatepicker
               value={filters.startDate}
               onChange={(val: string) => setFilters({ ...filters, startDate: val })}

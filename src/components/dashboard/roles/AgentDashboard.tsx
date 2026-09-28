@@ -783,6 +783,7 @@ export default function AgentDashboard({
         <FeedbacksWidget
           feedbacks={feedbacks}
           currentUser={user}
+          viewRole="suporte"
           users={maskedUsers}
           teams={teams || []}
           monitorias={maskedMonitorias}

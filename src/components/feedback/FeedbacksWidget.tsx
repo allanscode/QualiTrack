@@ -8,7 +8,7 @@ import {
   AlertTriangle,
   RefreshCw,
 } from 'lucide-react';
-import { AgentFeedback, User, Team, Monitoria } from '../../types';
+import { AgentFeedback, User, Team, Monitoria, UserRole } from '../../types';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
@@ -18,6 +18,7 @@ import FeedbackDetailsModal from './FeedbackDetailsModal';
 interface FeedbacksWidgetProps {
   feedbacks: AgentFeedback[];
   currentUser: User | null;
+  viewRole?: UserRole;
   users: User[];
   teams: Team[];
   monitorias?: Monitoria[];
@@ -33,6 +34,7 @@ interface FeedbacksWidgetProps {
 export default function FeedbacksWidget({
   feedbacks,
   currentUser,
+  viewRole,
   users,
   teams,
   monitorias = [],
@@ -47,8 +49,9 @@ export default function FeedbacksWidget({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedFeedback, setSelectedFeedback] = useState<AgentFeedback | null>(null);
 
-  const isAgent = currentUser?.role === 'suporte';
-  const isManager = ['gestor_suporte', 'gestor_qualidade', 'admin'].includes(currentUser?.role || '');
+  const effectiveRole = viewRole ?? currentUser?.role;
+  const isAgent = effectiveRole === 'suporte';
+  const isManager = ['gestor_suporte', 'gestor_qualidade', 'admin'].includes(effectiveRole || '');
 
   // Métricas
   const pendingScienceCount = feedbacks.filter(f => f.status === 'pendente_ciencia').length;

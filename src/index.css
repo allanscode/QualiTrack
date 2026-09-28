@@ -193,7 +193,6 @@ h1, h2, h3, h4, h5, h6 {
 .auth-screen {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
 }
 
 .auth-screen::before {

@@ -321,19 +321,19 @@ export default function MonitoriaList({
   return (
     <div className="space-y-6 animate-fade-in pb-8">
       {/* Navegação Superior de Subabas de Monitorias: Avaliações | Feedbacks | 1:1 & PDI */}
-      <div className="flex items-center gap-2 p-1.5 bg-surface-card border border-surface-border rounded-2xl shadow-premium overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-1 sm:gap-2 p-1.5 bg-surface-card border border-surface-border rounded-2xl shadow-premium overflow-x-auto no-scrollbar">
         <button
           type="button"
           onClick={() => setMonitoriaViewMode('avaliacoes')}
-          className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-0 py-2.5 px-1 sm:min-w-[140px] sm:px-4 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-2 whitespace-nowrap cursor-pointer ${
             monitoriaViewMode === 'avaliacoes'
               ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
               : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
           }`}
         >
-          <FileText className="w-4 h-4" />
+          <FileText className="hidden sm:block w-4 h-4" />
           <span>Avaliações</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+          <span className={`hidden sm:inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
             monitoriaViewMode === 'avaliacoes' ? 'bg-black/20 text-brand-on-primary' : 'bg-surface-subtle text-brand-muted'
           }`}>
             {monitorias.filter(m => m.active !== false).length}
@@ -343,20 +343,20 @@ export default function MonitoriaList({
         <button
           type="button"
           onClick={() => setMonitoriaViewMode('feedbacks')}
-          className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-0 py-2.5 px-1 sm:min-w-[140px] sm:px-4 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-2 whitespace-nowrap cursor-pointer ${
             monitoriaViewMode === 'feedbacks'
               ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
               : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
           }`}
         >
-          <MessageSquare className="w-4 h-4" />
+          <MessageSquare className="hidden sm:block w-4 h-4" />
           <span>Feedbacks</span>
           {pendingFeedbacksCount > 0 ? (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
-              {pendingFeedbacksCount} pendente{pendingFeedbacksCount !== 1 ? 's' : ''}
+            <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
+              <span className="sm:hidden">{pendingFeedbacksCount}</span><span className="hidden sm:inline">{pendingFeedbacksCount} pendente{pendingFeedbacksCount !== 1 ? 's' : ''}</span>
             </span>
           ) : (
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+            <span className={`hidden sm:inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
               monitoriaViewMode === 'feedbacks' ? 'bg-black/20 text-brand-on-primary' : 'bg-surface-subtle text-brand-muted'
             }`}>
               {feedbacksState.feedbacks.filter(f => !f.title.startsWith('[1:1]') && !f.title.toLowerCase().includes('1:1')).length}
@@ -367,20 +367,20 @@ export default function MonitoriaList({
         <button
           type="button"
           onClick={() => setMonitoriaViewMode('one_on_one')}
-          className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-0 py-2.5 px-1 sm:min-w-[140px] sm:px-4 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-2 whitespace-nowrap cursor-pointer ${
             monitoriaViewMode === 'one_on_one'
               ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
               : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
           }`}
         >
-          <Award className="w-4 h-4" />
+          <Award className="hidden sm:block w-4 h-4" />
           <span>1:1 & PDI</span>
           {pendingOneOnOneCount > 0 ? (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
-              {pendingOneOnOneCount} pendente{pendingOneOnOneCount !== 1 ? 's' : ''}
+            <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
+              <span className="sm:hidden">{pendingOneOnOneCount}</span><span className="hidden sm:inline">{pendingOneOnOneCount} pendente{pendingOneOnOneCount !== 1 ? 's' : ''}</span>
             </span>
           ) : (
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+            <span className={`hidden sm:inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
               monitoriaViewMode === 'one_on_one' ? 'bg-black/20 text-brand-on-primary' : 'bg-surface-subtle text-brand-muted'
             }`}>
               {feedbacksState.feedbacks.filter(f => f.title.startsWith('[1:1]') || f.title.toLowerCase().includes('1:1')).length}
@@ -429,7 +429,7 @@ export default function MonitoriaList({
         <>
           {/* Block 1: Filters & Status Joined */}
           <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card rounded-3xl">
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full">
             {/* Busca (col-span-12 lg:col-span-4) */}
             <div className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-1">
@@ -446,7 +446,7 @@ export default function MonitoriaList({
             </div>
 
             {/* Grupo Datas (col-span-12 lg:col-span-4) */}
-            <div className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-2 flex items-center gap-2 w-full">
+            <div className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-2 flex flex-col min-[360px]:flex-row items-center gap-2 w-full">
               <CustomDatepicker
                 value={filters.startDate}
                 onChange={(val: string) => filters.setStartDate(val)}
