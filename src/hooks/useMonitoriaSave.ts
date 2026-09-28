@@ -177,7 +177,6 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           score: deps.score,
           status: nextStatus,
           resolution_type: nextStatus === 'concluida' ? 'human' : (deps.initialData?.resolution_type || null),
-          concluded_at: nextStatus === 'concluida' ? (deps.initialData?.concluded_at || nowTs) : null,
           evaluator_note: deps.header.evaluator_note,
           client_contact_log: deps.header.satisfaction_result === 'Negativa' ? deps.header.client_contact_log : '',
           client_contact_channel: deps.header.satisfaction_result === 'Negativa' ? (deps.header.client_contact_channel || []) : [],

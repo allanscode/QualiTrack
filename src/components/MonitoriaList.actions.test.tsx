@@ -34,7 +34,7 @@ HTMLElement.prototype.scrollIntoView = vi.fn();
 
 function ListWithSelectedMonitoria() {
   const [focusTarget, setFocusTarget] = useState<{ monitoriaId: string } | null>({ monitoriaId: 'monitoria-1' });
-  return <MonitoriaList user={admin} onNew={vi.fn()} activeTab="monitorias" initialFocusTarget={focusTarget} onClearFocusTarget={() => setFocusTarget(null)} />;
+  return <MonitoriaList user={admin} activeTab="monitorias" initialFocusTarget={focusTarget} onClearFocusTarget={() => setFocusTarget(null)} />;
 }
 
 describe('MonitoriaList actions', () => {

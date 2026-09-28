@@ -15,7 +15,6 @@ import {
   Download,
   MessageSquare,
   Award,
-  Plus,
   ArrowLeft,
   ArrowRight,
   ArrowLeftRight,
@@ -57,7 +56,6 @@ function VirtualMonitoriaRow({ index, style, monitorias, teams, getName, getLeve
 
 interface MonitoriaListProps {
   user: User | null;
-  onNew: () => void;
   activeTab?: string;
   initialFocusTarget?: { monitoriaId?: string; ticketId?: string } | null;
   onClearFocusTarget?: () => void;
@@ -66,7 +64,6 @@ interface MonitoriaListProps {
 
 export default function MonitoriaList({
   user,
-  onNew,
   activeTab,
   initialFocusTarget,
   onClearFocusTarget,
@@ -525,20 +522,6 @@ export default function MonitoriaList({
               >
                 Exportar CSV
               </Button>
-
-              {/* Botão Nova Monitoria */}
-              {['admin', 'gestor_qualidade', 'qualidade'].includes(user?.role || '') && (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  icon={<Plus className="w-3.5 h-3.5" />}
-                  onClick={onNew}
-                  className="h-8 text-[10px] font-black uppercase tracking-wider shrink-0"
-                  title="Localizar chamado no Zendesk e iniciar nova monitoria"
-                >
-                  Nova Monitoria
-                </Button>
-              )}
 
               {/* Clear button — animated clean button pushed to the right */}
               <AnimatePresence>

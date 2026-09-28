@@ -2017,7 +2017,6 @@ function MainApp({
               <div className="animate-fade-in">
                 <MonitoriaList
                   user={userData}
-                  onNew={handleOpenNewMonitoria}
                   activeTab={activeTab}
                   initialFocusTarget={focusMonitoriaTarget}
                   onClearFocusTarget={() => setFocusMonitoriaTarget(null)}
