@@ -1182,7 +1182,7 @@ export default function AdminDashboardView({
                     <div className="w-full sm:w-[50%] h-[150px] relative flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Tooltip content={<CustomTooltipMedia />} />
+                          <Tooltip content={<CustomTooltipMedia />} wrapperStyle={{ zIndex: 30 }} />
                           <Pie
                             data={teamMonitoriaDistribution}
                             cx="50%"
@@ -1201,7 +1201,7 @@ export default function AdminDashboardView({
                         </PieChart>
                       </ResponsiveContainer>
                       {/* Totalizador Central */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                      <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
                         <span className="text-base font-black text-brand-primary leading-none tracking-tight">
                           {teamMonitoriaDistribution.reduce((acc: number, item: any) => acc + item.value, 0)}
                         </span>
@@ -1324,7 +1324,7 @@ export default function AdminDashboardView({
                     <div className="w-full sm:w-[50%] h-[150px] relative flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Tooltip content={<CustomTooltipCurva />} />
+                          <Tooltip content={<CustomTooltipCurva />} wrapperStyle={{ zIndex: 30 }} />
                           <Pie
                             data={gradeDistribution}
                             cx="50%"
@@ -1343,7 +1343,7 @@ export default function AdminDashboardView({
                         </PieChart>
                       </ResponsiveContainer>
                       {/* Totalizador Central */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                      <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
                         <span className="text-base font-black text-brand-primary leading-none tracking-tight">
                           {gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0)}
                         </span>

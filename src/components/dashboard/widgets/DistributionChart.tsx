@@ -140,7 +140,7 @@ function DistributionChart({
   const renderChart = () => {
     return (
       <PieChart>
-        <Tooltip content={<CustomTooltip total={total} />} />
+        <Tooltip content={<CustomTooltip total={total} />} wrapperStyle={{ zIndex: 30 }} />
         <Pie
           data={data}
           cx="50%"
@@ -238,7 +238,7 @@ function DistributionChart({
                 {renderChart()}
               </ResponsiveContainer>
               {/* Totalizador Central no Miolo da Rosca */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+              <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
                 <span className="text-base sm:text-lg font-black text-brand-primary leading-none tracking-tight">
                   {total}
                 </span>
