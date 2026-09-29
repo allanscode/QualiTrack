@@ -8,10 +8,6 @@ interface Turnstile {
 }
 declare global { interface Window { turnstile?: Turnstile } }
 
-export function isCaptchaBypassAllowed(hostname: string, requested: boolean): boolean {
-  return requested && hostname.endsWith('.vercel.app') && hostname !== 'qualitrack.vercel.app';
-}
-
 let loader: Promise<void> | undefined;
 function loadWidget(): Promise<void> {
   return loader ??= new Promise((resolve, reject) => {
@@ -33,16 +29,7 @@ export function ProtectedAuthForm({ onSubmit, children, className }: {
   const widget = useRef<string | undefined>(undefined);
   const [failed, setFailed] = useState(false);
 
-  // O bypass exige duas travas: flag compilada apenas na branch de testes e
-  // hostname de preview. Builds da main/producao nunca recebem essa flag.
-  const isTestPreview = typeof window !== 'undefined' && isCaptchaBypassAllowed(
-    window.location.hostname,
-    import.meta.env.VITE_TEST_CAPTCHA_BYPASS === 'true',
-  );
-
-  const sitekey = isTestPreview
-    ? '1x00000000000000000000AA' // Cloudflare Turnstile Always Passes dummy key
-    : import.meta.env.VITE_TURNSTILE_SITE_KEY;
+  const sitekey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
   useEffect(() => {
     if (isMockMode || !sitekey) return;
@@ -62,7 +49,7 @@ export function ProtectedAuthForm({ onSubmit, children, className }: {
         <div ref={element} />
       </div>
     )}
-    {!isMockMode && (!sitekey || failed) && !isTestPreview && (
+    {!isMockMode && (!sitekey || failed) && (
       <p className="text-center" role="alert">
         Verificação de segurança indisponível. Contate o administrador.
       </p>
@@ -74,16 +61,7 @@ export function readCaptchaToken(event: FormEvent): string {
   const form = event.currentTarget as HTMLFormElement;
   const token = new FormData(form).get('cf-turnstile-response');
 
-  const isTestPreview = typeof window !== 'undefined' && isCaptchaBypassAllowed(
-    window.location.hostname,
-    import.meta.env.VITE_TEST_CAPTCHA_BYPASS === 'true',
-  );
-
   if (typeof token !== 'string' || !token) {
-    if (isTestPreview) {
-      // Em preview, se o widget não tiver emitido token, devolve um token de teste
-      return 'preview_turnstile_test_token';
-    }
     throw new Error('Confirme a verificação de segurança.');
   }
   return token;

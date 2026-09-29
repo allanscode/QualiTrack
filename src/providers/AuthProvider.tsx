@@ -615,14 +615,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         const sb = supabase ?? assertSupabase();
         pendingLoginRef.current = true;
-        const signInOptions: { captchaToken?: string } = {};
-        if (captchaToken && !captchaToken.startsWith('preview_')) {
-          signInOptions.captchaToken = captchaToken;
-        }
         const { error } = await sb.auth.signInWithPassword({
           email: emailLower,
           password: credentials.password,
-          options: signInOptions
+          options: { captchaToken }
         });
         if (error) throw error;
         try { localStorage.removeItem(lockKey); } catch { /* ignora */ }
