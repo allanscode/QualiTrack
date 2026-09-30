@@ -224,7 +224,11 @@ export async function fetchQueueTickets(
   // Proativas ficavam mostrando o ticket com badge "Auditado" só depois de
   // "Reavaliar"/"Avaliar com IA" de novo, mesmo já tendo monitoria salva —
   // confuso e deixava a fila "suja" com trabalho já concluído.
-  tickets = tickets.filter(t => !t.already_audited && !['closed', 'archived'].includes(t.status?.toLowerCase() || ''));
+  // A view de CSAT vazio inclui tickets fechados: eles ainda podem receber
+  // monitoria interna, embora o Zendesk não aceite novos comentários neles.
+  tickets = tickets.filter(t => !t.already_audited &&
+    t.status?.toLowerCase() !== 'archived' &&
+    (type === 'proativas' || t.status?.toLowerCase() !== 'closed'));
 
   // Fila de Positivas: trava de no máximo 2 avaliações por atendente no mês,
   // usando o e-mail como chave de identificação agnóstica de plataforma.
