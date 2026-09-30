@@ -80,7 +80,7 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
     if (!isMockMode && supabase) {
       const realtimeClient = supabase;
       logoutChannel = realtimeClient
-        .channel(`session-control-${user.id}`)
+        .channel(`session-control-${user.id}-${Math.random().toString(36).slice(2, 11)}`)
         .on('postgres_changes', {
           event: 'INSERT', schema: 'public', table: 'session_control_commands',
           filter: `target_user_id=eq.${user.id}`,

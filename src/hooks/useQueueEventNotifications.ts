@@ -35,7 +35,7 @@ export function useQueueEventNotifications(user: User | null): QueueEventNotific
     };
 
     void refresh();
-    const channel = client.channel(`queue-notifications-${user.id}`)
+    const channel = client.channel(`queue-notifications-${user.id}-${Math.random().toString(36).slice(2, 11)}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'queue_event_notifications' }, () => {
         void refresh();
       })

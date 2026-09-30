@@ -53,7 +53,7 @@ export function useFeedbacks(currentUser: User | null) {
     if (isMockMode || !supabase || !currentUser?.active) return;
     const client = supabase;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-    const channel = client.channel(`agent-feedbacks-${currentUser.id}`)
+    const channel = client.channel(`agent-feedbacks-${currentUser.id}-${Math.random().toString(36).slice(2, 11)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_feedbacks' }, () => {
         if (refreshTimer) clearTimeout(refreshTimer);
         refreshTimer = setTimeout(() => { void loadFeedbacks(); }, 300);
