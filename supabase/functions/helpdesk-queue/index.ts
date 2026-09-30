@@ -22,6 +22,7 @@ import { calculateCanonicalQualityScore } from './quality-score.ts';
 import { satisfactionResponseTimestamp } from './satisfaction.ts';
 import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
 import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro } from './child-view.ts';
+import { childMacroCustomFields, missingCustomFields } from './child-macro-fields.ts';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
@@ -394,6 +395,40 @@ async function reconcilePublishedChildMacros(supabase: SupabaseClient): Promise<
     updated, already_marked: alreadyMarked, without_macro: withoutMacro, errors, truncated }, 200);
 }
 
+// Correção pontual: aplica só os campos da macro QA Válido/Invalidado em um
+// chamado filho cujo comentário já foi publicado sem os campos. Não posta
+// comentário nem mexe em tags.
+async function applyChildMacroFields(ticketId: string, verdict: 'conforme' | 'nao_conforme'): Promise<Response> {
+  const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
+  const email = Deno.env.get('ZENDESK_EMAIL');
+  const token = Deno.env.get('ZENDESK_API_TOKEN');
+  if (!subdomain || !email || !token) return jsonResponse({ error: 'Zendesk não configurado.' }, 500);
+  if (!/^\d+$/.test(ticketId)) return jsonResponse({ error: 'ticket_id inválido.' }, 400);
+  const headers = {
+    Authorization: `Basic ${btoa(`${email}/token:${token}`)}`,
+    'Content-Type': 'application/json', Accept: 'application/json',
+  };
+  const ticketUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticketId}.json`;
+  const current = await fetch(ticketUrl, { headers, signal: AbortSignal.timeout(10000) });
+  if (!current.ok) return jsonResponse({ error: `Zendesk não encontrou o ticket (${current.status}).` }, 502);
+  const ticket = (await current.json()).ticket;
+  if (typeof ticket?.updated_at !== 'string') return jsonResponse({ error: 'Versão do ticket indisponível.' }, 502);
+  const commentsResponse = await fetch(`${ticketUrl.replace('.json', '')}/comments.json?sort_order=desc&per_page=100`, {
+    headers, signal: AbortSignal.timeout(10000),
+  });
+  if (!commentsResponse.ok || !hasPublishedChildMacro((await commentsResponse.json()).comments)) {
+    return jsonResponse({ error: 'O ticket não tem a macro de chamado filho publicada; nada foi alterado.' }, 409);
+  }
+  const fields = childMacroCustomFields(verdict);
+  const update = await fetch(ticketUrl, {
+    method: 'PUT', headers, signal: AbortSignal.timeout(20000),
+    body: JSON.stringify({ ticket: { custom_fields: fields, safe_update: true, updated_stamp: ticket.updated_at } }),
+  });
+  if (!update.ok) return jsonResponse({ error: `Zendesk recusou a atualização (${update.status}).` }, 502);
+  const missing = missingCustomFields((await update.json().catch(() => null))?.ticket?.custom_fields, fields);
+  return jsonResponse({ success: missing.length === 0, ticket_id: ticketId, verdict, missing_fields: missing }, 200);
+}
+
 serve(async (req) => {
   const rejected = rejectRequest(req, corsHeaders);
   if (rejected) return rejected;
@@ -421,6 +456,15 @@ serve(async (req) => {
       }
       const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
       return await reconcilePublishedChildMacros(workerClient);
+    }
+    if (workerBody?.action === 'apply_child_macro_fields') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      if (!['conforme', 'nao_conforme'].includes(workerBody.verdict)) {
+        return jsonResponse({ error: 'verdict deve ser conforme ou nao_conforme.' }, 400);
+      }
+      return await applyChildMacroFields(String(workerBody.ticket_id ?? ''), workerBody.verdict);
     }
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -688,6 +732,8 @@ serve(async (req) => {
       const previousMacro = hasPublishedChildMacro(commentsBody.comments);
 
       const verdictLabel = child_verdict === 'conforme' ? 'VÁLIDO' : 'INVÁLIDO';
+      // Espelha as ações da macro "QA | Ticket Válido/Invalidado" do Zendesk.
+      const macroFields = childMacroCustomFields(child_verdict === 'conforme' ? 'conforme' : 'nao_conforme');
       const response = await fetch(ticketUrl, {
         method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(20000),
         body: JSON.stringify({ ticket: {
@@ -695,11 +741,17 @@ serve(async (req) => {
             body: `[QualidadeWP · Chamado filho ${verdictLabel}]\n\n${comment_text}`,
             public: false,
           } }),
+          custom_fields: macroFields,
           tags: [...currentTags, CHILD_AUDITED_TAG], safe_update: true, updated_stamp: updatedStamp,
         } }),
       });
       if (response.status === 409) return jsonResponse({ error: 'O ticket mudou no Zendesk. Atualize a fila e tente novamente.' }, 409);
       if (!response.ok) return jsonResponse({ error: `Zendesk recusou a macro (${response.status}).` }, 502);
+      const updatedBody = await response.json().catch(() => null);
+      const missingFields = missingCustomFields(updatedBody?.ticket?.custom_fields, macroFields);
+      if (missingFields.length) {
+        console.error('[helpdesk-queue] Zendesk não gravou os campos da macro no ticket filho:', ticket_id, missingFields);
+      }
 
       await syncCatalog();
       return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: previousMacro }, 200);

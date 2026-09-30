@@ -78,6 +78,16 @@ export class ZendeskProvider implements HelpdeskProvider {
     }
 
     const data = await response.json();
+
+    // O Zendesk responde 2xx mesmo ignorando um campo (ex.: valor que não bate
+    // com a tag da opção do dropdown). Registra para não passar despercebido.
+    const returnedFields: { id: number; value: unknown }[] = data?.ticket?.custom_fields ?? [];
+    const notApplied = customFields.filter(field =>
+      !returnedFields.some(item => item.id === field.id && item.value === field.value));
+    if (notApplied.length) {
+      console.error('[helpdesk-publish-evaluation] Zendesk não gravou os campos da macro:', input.ticketId, notApplied);
+    }
+
     const commentId = data?.audit?.events?.find((event: any) => event?.type === 'Comment')?.id;
 
     if (!commentId) {
