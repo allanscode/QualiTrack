@@ -2908,33 +2908,33 @@ ${checksSummary}${recs}`;
               </div>
 
               <div className="grid grid-cols-5 gap-2 pt-1">
-                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
-                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Avaliados</div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center min-w-0 overflow-hidden">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-tight truncate" title="Avaliados">Avaliados</div>
                   <div className="text-sm font-black text-functional-success font-mono flex items-center justify-center gap-1 mt-0.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     {batchProgress.done}
                   </div>
                 </div>
-                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
-                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Reprocessamento</div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center min-w-0 overflow-hidden">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-tight truncate" title="Reprocessamento">Reprocesso</div>
                   <div className="text-sm font-black text-brand-highlight font-mono mt-0.5">{batchProgress.queued}</div>
                 </div>
-                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
-                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Falhas</div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center min-w-0 overflow-hidden">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-tight truncate" title="Falhas">Falhas</div>
                   <div className="text-sm font-black text-functional-error font-mono flex items-center justify-center gap-1 mt-0.5">
-                    <XCircle className="w-3.5 h-3.5" />
+                    <XCircle className="w-3.5 h-3.5 shrink-0" />
                     {batchProgress.errors}
                   </div>
                 </div>
-                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
-                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Restantes</div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center min-w-0 overflow-hidden">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-tight truncate" title="Restantes">Restantes</div>
                   <div className="text-sm font-black text-brand-primary font-mono flex items-center justify-center gap-1 mt-0.5">
-                    <Clock className="w-3.5 h-3.5 text-brand-muted" />
+                    <Clock className="w-3.5 h-3.5 text-brand-muted shrink-0" />
                     {Math.max(0, batchProgress.total - batchProgress.done - batchProgress.queued - batchProgress.errors)}
                   </div>
                 </div>
-                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
-                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Total do Lote</div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center min-w-0 overflow-hidden">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-tight truncate" title="Total do Lote">Total Lote</div>
                   <div className="text-sm font-black text-brand-primary font-mono mt-0.5">
                     {batchProgress.total}
                   </div>
@@ -2989,17 +2989,17 @@ ${checksSummary}${recs}`;
 
             {/* Rodapé Seguro com Botão de Interrupção */}
             <div className="flex items-center justify-between pt-3 border-t border-surface-border">
-              <div className="flex items-center gap-2 text-[11px] text-brand-muted">
+              <div className="flex items-center gap-2 text-[11px] text-brand-muted min-w-0 pr-2">
                 <Lock className="w-3.5 h-3.5 text-brand-muted shrink-0" />
-                <span>Navegação segura protegida contra duplo clique</span>
+                <span className="truncate">Navegação segura protegida contra duplo clique</span>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => { batchCancelRef.current = true; }}
-                className="text-functional-error hover:bg-functional-error/10 font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
+                className="text-functional-error hover:bg-functional-error/10 font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap shrink-0"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 shrink-0" />
                 <span>Interromper Lote</span>
               </Button>
             </div>
