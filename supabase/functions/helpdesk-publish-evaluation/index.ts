@@ -235,6 +235,7 @@ serve(async (req: Request) => {
         ? monitoria.satisfaction_record_text ?? null
         : null,
     });
+    const previewHtml = comment_text === undefined ? generatedHtml : buildEditedCommentHtml(comment_text);
 
     // 5. Se dry_run, devolver o HTML e parar — nenhuma escrita.
     if (dry_run) {
@@ -266,7 +267,6 @@ serve(async (req: Request) => {
     const { data: claimId, error: claimError } = await supabaseAdmin.rpc('claim_helpdesk_publication', {
       p_monitoria: monitoria_id, p_caller: user.id, p_force: force ?? false,
     });
-    const previewHtml = comment_text === undefined ? generatedHtml : buildEditedCommentHtml(comment_text);
     if (claimError) return failure('Envio em andamento ou pendente de conferência. Atualize e confira o ticket antes de reenviar.', 'provider', 409);
     if (!claimId) return jsonResponse({ success: true, preview_html: previewHtml, ticket_id: normalizedTicketId }, 200);
     try {

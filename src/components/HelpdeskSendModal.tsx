@@ -195,8 +195,8 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
             <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Enviar ao Zendesk</h3>
             <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mt-1">Ticket #{ticketId}</p>
             {fromConclusion && (
-              <p className="text-[10px] font-bold text-success uppercase tracking-widest mt-1">
-                Monitoria salva ✓ — o envio abaixo é opcional agora
+              <p className="text-[10px] font-bold text-warning uppercase tracking-widest mt-1">
+                Monitoria salva no QualidadeWP. Envio ao Zendesk pendente.
               </p>
             )}
           </div>
@@ -312,6 +312,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
             {preview.status === 'error' && (
               <div className="flex flex-col items-center gap-3 py-8 border border-error/30 rounded-xl bg-error/5 px-4">
                 <p className="text-xs font-bold text-error text-center">{preview.message}</p>
+                {fromConclusion && <p className="text-xs text-brand-primary text-center">A monitoria já foi salva. Nenhuma macro foi enviada nesta etapa.</p>}
                 <Button variant="outline" size="sm" onClick={() => fetchPreview(outcome)} icon={<RotateCcw className="w-3.5 h-3.5" />}>
                   Tentar novamente
                 </Button>
@@ -362,6 +363,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
               <div>
                 <p className="text-xs font-bold text-error uppercase tracking-wide">Falha ao enviar</p>
                 <p className="text-[11px] font-medium text-brand-primary mt-1">{sendState.message}</p>
+                {fromConclusion && <p className="text-[11px] font-medium text-brand-primary mt-1">A monitoria permanece salva. Você pode retomar o envio ao abrir a avaliação em Monitorias.</p>}
               </div>
             </div>
           )}
