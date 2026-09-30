@@ -12,7 +12,7 @@ export function ticketMatchesQueue(
   queue: QueueType,
   validatedTag: string,
 ): boolean {
-  if (!ticketCanReceiveEvaluation(ticket)) return false;
+  if (!ticketCanReceiveEvaluation(ticket, queue)) return false;
   const score = ticket.satisfaction_rating?.score;
   const tags = Array.isArray(ticket.tags) ? ticket.tags : [];
   switch (queue) {
@@ -24,17 +24,24 @@ export function ticketMatchesQueue(
   }
 }
 
-export function ticketCanReceiveEvaluation(ticket: { status?: string } | null | undefined): boolean {
+export function ticketCanReceiveEvaluation(
+  ticket: { status?: string } | null | undefined,
+  queue?: QueueType,
+): boolean {
   const status = ticket?.status?.toLowerCase();
-  return Boolean(ticket) && status !== 'closed' && status !== 'archived';
+  if (!ticket || status === 'archived') return false;
+  if (queue === 'proativas') return true;
+  return status !== 'closed';
 }
 
 export function queueSearchQuery(queue: QueueType, validatedTag: string): string {
+  if (queue === 'proativas') {
+    return 'type:ticket status:closed satisfaction:unoffered';
+  }
   const base = 'type:ticket status<closed';
   switch (queue) {
     case 'negativas': return `${base} satisfaction:bad${validatedTag ? ` -tags:${validatedTag}` : ''}`;
     case 'positivas': return `${base} satisfaction:good`;
-    case 'proativas': return `${base} satisfaction:unoffered`;
     case 'filhos': return `${base} tags:existe_ticket_filho`;
     case 'filhos_invalidos': return `${base} tags:ticket_filho_invalido`;
   }

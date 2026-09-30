@@ -45,13 +45,13 @@ const VALIDATED_TAG = Deno.env.get('HELPDESK_VALIDATED_TAG') || '';
 // qualidade mantém lá dentro (ex.: negativas ainda não validadas) — em vez
 // de reconstruir o filtro via Search API e arriscar divergir da contagem
 // real que a equipe vê no Zendesk.
-const NEGATIVE_VIEW_ID = Deno.env.get('HELPDESK_NEGATIVE_VIEW_ID') || '';
-const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '';
+const NEGATIVE_VIEW_ID = Deno.env.get('HELPDESK_NEGATIVE_VIEW_ID') || '47295789542804';
+const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '48318855861396';
 // Proativas: view real do Zendesk com os tickets de CSAT vazio/não avaliado
 // (ex.: 808 pesquisas vazias na view configurada) — antes essa fila não
 // buscava ticket nenhum do Zendesk, só sorteava um número de ticket
 // FICTÍCIO pra abrir a ficha. Agora usa tickets reais, igual as outras duas.
-const PROACTIVE_VIEW_ID = Deno.env.get('HELPDESK_PROACTIVE_VIEW_ID') || '';
+const PROACTIVE_VIEW_ID = Deno.env.get('HELPDESK_PROACTIVE_VIEW_ID') || '47851284392724';
 const CHILD_VIEW_ID = Deno.env.get('HELPDESK_CHILD_VIEW_ID') || '47405806430228';
 const INVALID_CHILD_VIEW_ID = Deno.env.get('HELPDESK_INVALID_CHILD_VIEW_ID') || '47656856998292';
 
@@ -585,7 +585,7 @@ serve(async (req) => {
       const body = await response.json();
       const rows = viewId ? body.tickets : body.results;
       let ids: string[] = (Array.isArray(rows) ? rows : [])
-        .filter(ticketCanReceiveEvaluation)
+        .filter((ticket: any) => ticketCanReceiveEvaluation(ticket, queue_type))
         .map((ticket: { id: number }) => String(ticket.id));
       if (ids.length > 0) {
         const { data: completed, error: completedError } = await supabase.from('monitorias')
@@ -819,7 +819,7 @@ serve(async (req) => {
         }
       }
 
-      results = results.filter(ticketCanReceiveEvaluation);
+      results = results.filter((ticket: any) => ticketCanReceiveEvaluation(ticket, queue_type));
 
       // O ticket embute score/comentário, mas não o instante da resposta.
       // Reaproveita primeiro o snapshot recente e só busca ratings ainda sem
@@ -1039,7 +1039,7 @@ serve(async (req) => {
           const merged = new Map(visibleTickets.map(ticket => [ticket.ticket_id, ticket]));
           for (const row of catalogRows || []) {
             if (allowedIds.has(row.ticket_id) && row.ticket_snapshot && typeof row.ticket_snapshot === 'object'
-              && ticketCanReceiveEvaluation(row.ticket_snapshot)) {
+              && ticketCanReceiveEvaluation(row.ticket_snapshot, queue_type)) {
               merged.set(row.ticket_id, row.ticket_snapshot);
             }
           }

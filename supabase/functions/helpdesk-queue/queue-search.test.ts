@@ -15,7 +15,9 @@ describe('queue search boundaries', () => {
     expect(ticketMatchesQueue({ tags: ['existe_ticket_filho'] }, 'filhos', '')).toBe(true);
     expect(ticketMatchesQueue({ tags: [] }, 'filhos', '')).toBe(false);
     expect(ticketMatchesQueue({ status: 'closed', satisfaction_rating: { score: 'bad' } }, 'negativas', '')).toBe(false);
+    expect(ticketMatchesQueue({ status: 'closed', satisfaction_rating: { score: 'unoffered' } }, 'proativas', '')).toBe(true);
     expect(ticketCanReceiveEvaluation({ status: 'closed' })).toBe(false);
+    expect(ticketCanReceiveEvaluation({ status: 'closed' }, 'proativas')).toBe(true);
     expect(ticketCanReceiveEvaluation({ status: 'solved' })).toBe(true);
   });
   it('does not mix unrelated cached assignments into search results', () => {
@@ -26,7 +28,7 @@ describe('queue search boundaries', () => {
   it('uses supported Zendesk search terms and excludes closed tickets', () => {
     expect(queueSearchQuery('negativas', 'validado')).toBe('type:ticket status<closed satisfaction:bad -tags:validado');
     expect(queueSearchQuery('positivas', '')).toBe('type:ticket status<closed satisfaction:good');
-    expect(queueSearchQuery('proativas', '')).toBe('type:ticket status<closed satisfaction:unoffered');
+    expect(queueSearchQuery('proativas', '')).toBe('type:ticket status:closed satisfaction:unoffered');
   });
   it('binds offset pagination to the original search and bounded page size', () => {
     const url = 'https://example.zendesk.com/api/v2/search.json?query=type%3Aticket&per_page=25&page=2';
