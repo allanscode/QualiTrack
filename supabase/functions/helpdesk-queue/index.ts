@@ -20,7 +20,8 @@ import { retryAt } from './ai-retry.ts';
 import { canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
 import { satisfactionResponseTimestamp } from './satisfaction.ts';
-import { literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
+import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
+import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro } from './child-view.ts';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
@@ -536,16 +537,77 @@ serve(async (req) => {
         return jsonResponse({ error: 'O ticket está fechado no Zendesk e não aceita comentários.' }, 409);
       }
 
+      if (!Array.isArray(ticketBody.ticket?.tags)) {
+        return jsonResponse({ error: 'Zendesk não retornou as tags atuais do ticket. Atualize e tente novamente.' }, 502);
+      }
+      const currentTags: string[] = ticketBody.ticket.tags;
+      const syncCatalog = async () => {
+        const { data: catalogRows, error: catalogReadError } = await supabase.from('queue_ticket_catalog')
+          .select('queue_type,ticket_snapshot').eq('ticket_id', ticket_id).in('queue_type', ['filhos', 'filhos_invalidos']);
+        if (catalogReadError) console.error('[helpdesk-queue] Falha ao consultar catálogo após macro:', catalogReadError);
+        for (const row of catalogRows || []) {
+          const snapshot = row.ticket_snapshot && typeof row.ticket_snapshot === 'object' ? row.ticket_snapshot : {};
+          const tags = Array.isArray(snapshot.tags) ? snapshot.tags : currentTags;
+          const { error: catalogUpdateError } = await supabase.from('queue_ticket_catalog')
+            .update({ ticket_snapshot: { ...snapshot, tags: [...new Set([...tags, CHILD_AUDITED_TAG])] } })
+            .eq('ticket_id', ticket_id).eq('queue_type', row.queue_type);
+          if (catalogUpdateError) console.error('[helpdesk-queue] Falha ao atualizar catálogo após macro:', catalogUpdateError);
+        }
+      };
+      const updatedStamp = ticketBody.ticket?.updated_at;
+      if (typeof updatedStamp !== 'string' || !updatedStamp) {
+        return jsonResponse({ error: 'Zendesk não retornou a versão atual do ticket. Atualize e tente novamente.' }, 502);
+      }
+
+      // A tag só tira o ticket da view se ambas as views a excluírem. Preserva
+      // todos os filtros existentes e configura a exclusão uma única vez.
+      for (const viewId of new Set([CHILD_VIEW_ID, INVALID_CHILD_VIEW_ID].filter(Boolean))) {
+        const viewUrl = `https://${subdomain}.zendesk.com/api/v2/views/${viewId}.json`;
+        const viewResponse = await fetch(viewUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(10000) });
+        if (!viewResponse.ok) return jsonResponse({ error: `Não foi possível conferir a view ${viewId} no Zendesk (${viewResponse.status}). Nenhuma macro foi enviada.` }, 502);
+        const viewBody = await viewResponse.json();
+        let conditions: ReturnType<typeof childViewConditionsWithAuditExclusion>;
+        try { conditions = childViewConditionsWithAuditExclusion(viewBody.view); }
+        catch { return jsonResponse({ error: `A view ${viewId} não retornou filtros completos. Nenhuma macro foi enviada.` }, 502); }
+        if (!conditions) continue;
+        const updateResponse = await fetch(viewUrl, {
+          method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(10000),
+          body: JSON.stringify({ view: conditions }),
+        });
+        if (!updateResponse.ok) return jsonResponse({ error: `Não foi possível configurar a saída da view ${viewId} (${updateResponse.status}). Nenhuma macro foi enviada.` }, 502);
+      }
+
+      if (currentTags.includes(CHILD_AUDITED_TAG)) {
+        await syncCatalog();
+        return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: true }, 200);
+      }
+
+      // A versão antiga postava somente o comentário. Se ele já existe, faz
+      // apenas a marcação de saída; repetir a macro criaria comentário duplicado.
+      const commentsResponse = await fetch(
+        `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}/comments.json?sort_order=desc&per_page=100`,
+        { headers: zendeskHeaders, signal: AbortSignal.timeout(10000) },
+      );
+      if (!commentsResponse.ok) return jsonResponse({ error: 'Não foi possível conferir envios anteriores no Zendesk. Nenhuma macro foi enviada.' }, 502);
+      const commentsBody = await commentsResponse.json();
+      const previousMacro = hasPublishedChildMacro(commentsBody.comments);
+
       const verdictLabel = child_verdict === 'conforme' ? 'VÁLIDO' : 'INVÁLIDO';
       const response = await fetch(ticketUrl, {
         method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(20000),
-        body: JSON.stringify({ ticket: { comment: {
-          body: `[QualidadeWP · Chamado filho ${verdictLabel}]\n\n${comment_text}`,
-          public: false,
-        } } }),
+        body: JSON.stringify({ ticket: {
+          ...(previousMacro ? {} : { comment: {
+            body: `[QualidadeWP · Chamado filho ${verdictLabel}]\n\n${comment_text}`,
+            public: false,
+          } }),
+          tags: [...currentTags, CHILD_AUDITED_TAG], safe_update: true, updated_stamp: updatedStamp,
+        } }),
       });
+      if (response.status === 409) return jsonResponse({ error: 'O ticket mudou no Zendesk. Atualize a fila e tente novamente.' }, 409);
       if (!response.ok) return jsonResponse({ error: `Zendesk recusou a macro (${response.status}).` }, 502);
-      return jsonResponse({ success: true, ticket_id, verdict: child_verdict }, 200);
+
+      await syncCatalog();
+      return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: previousMacro }, 200);
     }
 
     if (action === 'fetch_draft_statuses') {

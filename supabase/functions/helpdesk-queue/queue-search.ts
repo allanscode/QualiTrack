@@ -1,5 +1,7 @@
 import type { QueueType } from './access.ts';
 
+export const CHILD_AUDITED_TAG = 'qwp_filho_avaliado';
+
 // Search is plain text: operators supplied by a browser must never broaden a queue.
 export function literalSearchTerm(value: string): string {
   const words = value.match(/[\p{L}\p{N}_]+/gu);
@@ -25,11 +27,13 @@ export function ticketMatchesQueue(
 }
 
 export function ticketCanReceiveEvaluation(
-  ticket: { status?: string } | null | undefined,
+  ticket: { status?: string; tags?: unknown } | null | undefined,
   queue?: QueueType,
 ): boolean {
   const status = ticket?.status?.toLowerCase();
   if (!ticket || status === 'archived') return false;
+  if ((queue === 'filhos' || queue === 'filhos_invalidos') &&
+    Array.isArray(ticket.tags) && ticket.tags.includes(CHILD_AUDITED_TAG)) return false;
   if (queue === 'proativas') return true;
   return status !== 'closed';
 }

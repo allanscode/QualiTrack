@@ -96,6 +96,7 @@ import { usePresence } from '../providers/PresenceProvider';
 import { matchesAssignedMonitor } from '../lib/queueMonitorFilter';
 import { calculateAIEvaluationScore } from '../utils/aiEvaluationScore';
 import { resolveTicketTeamId } from '../lib/ticketTeam';
+import { buildChildTicketMacro } from '../lib/childTicketMacro';
 import { canAuditTickets } from '../lib/auditPermissions';
 
 interface AuditingQueueViewProps {
@@ -403,27 +404,7 @@ export default function AuditingQueueView({
       return;
     }
     const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
-    const isValido = currentVerdict === 'conforme';
-    const typeLabel = childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : 'Escalonamento Interno';
-    const checksSummary = (childAiEvaluation.checks || [])
-      .map(c => `• ${c.rule}: ${c.passed ? 'OK' : 'NÃO CONFORME'} (${c.details})`)
-      .join('\n');
-    const recs = childAiEvaluation.recommendations?.length
-      ? `\n\nRecomendações:\n${childAiEvaluation.recommendations.map(r => `• ${r}`).join('\n')}`
-      : '';
-
-    const defaultMacro = `${isValido ? '✅ Auditoria de Chamado Filho — VÁLIDO' : '❌ Auditoria de Chamado Filho — INVÁLIDO'} (#${childPreviewTicket.ticket_id})
-
-Tipo Identificado: ${typeLabel}
-Assunto: ${childPreviewTicket.subject}
-
-Parecer da Qualidade:
-${childAiEvaluation.summary}
-
-Checklist de Conformidade (POP v1.1):
-${checksSummary}${recs}`;
-
-    setChildCustomMacro(defaultMacro);
+    setChildCustomMacro(buildChildTicketMacro(childAiEvaluation, currentVerdict));
   }, [childPreviewTicket?.ticket_id, childAiEvaluation, childManualVerdict]);
 
   // Estado para visualização do diálogo / conversa do chamado filho
@@ -3288,25 +3269,7 @@ ${checksSummary}${recs}`;
                   {/* Macro Pronta para o Zendesk */}
                   {(() => {
                     const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
-                    const isValido = currentVerdict === 'conforme';
-                    const typeLabel = childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : 'Escalonamento Interno';
-                    const checksSummary = (childAiEvaluation.checks || [])
-                      .map(c => `• ${c.rule}: ${c.passed ? 'OK' : 'NÃO CONFORME'} (${c.details})`)
-                      .join('\n');
-                    const recs = childAiEvaluation.recommendations?.length
-                      ? `\n\nRecomendações:\n${childAiEvaluation.recommendations.map(r => `• ${r}`).join('\n')}`
-                      : '';
-
-                    const macroText = `${isValido ? '✅ Auditoria de Chamado Filho — VÁLIDO' : '❌ Auditoria de Chamado Filho — INVÁLIDO'} (#${childPreviewTicket.ticket_id})
-
-Tipo Identificado: ${typeLabel}
-Assunto: ${childPreviewTicket.subject}
-
-Parecer da Qualidade:
-${childAiEvaluation.summary}
-
-Checklist de Conformidade (POP v1.1):
-${checksSummary}${recs}`;
+                    const macroText = buildChildTicketMacro(childAiEvaluation, currentVerdict);
 
                     return (
                       <div className="space-y-2">
@@ -3414,6 +3377,7 @@ ${checksSummary}${recs}`;
                         };
                         setValidatedChildTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
                         setPublishedChildMacroTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
+                        setTickets(prev => prev.filter(ticket => ticket.ticket_id !== childPreviewTicket.ticket_id));
                         toast.success(`Macro de chamado filho ${isValido ? 'válido' : 'inválido'} enviada ao Zendesk.`);
                         handleCloseChildPreview();
                       } catch (error) {

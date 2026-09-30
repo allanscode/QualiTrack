@@ -13,6 +13,8 @@ describe('queue search boundaries', () => {
     expect(ticketMatchesQueue({ satisfaction_rating: { score: 'bad' }, tags: ['validado'] }, 'negativas', 'validado')).toBe(false);
     expect(ticketMatchesQueue({ satisfaction_rating: { score: 'bad' } }, 'proativas', '')).toBe(false);
     expect(ticketMatchesQueue({ tags: ['existe_ticket_filho'] }, 'filhos', '')).toBe(true);
+    expect(ticketMatchesQueue({ tags: ['existe_ticket_filho', 'qwp_filho_avaliado'] }, 'filhos', '')).toBe(false);
+    expect(ticketCanReceiveEvaluation({ status: 'solved', tags: ['qwp_filho_avaliado'] }, 'filhos_invalidos')).toBe(false);
     expect(ticketMatchesQueue({ tags: [] }, 'filhos', '')).toBe(false);
     expect(ticketMatchesQueue({ status: 'closed', satisfaction_rating: { score: 'bad' } }, 'negativas', '')).toBe(false);
     expect(ticketMatchesQueue({ status: 'closed', satisfaction_rating: { score: 'unoffered' } }, 'proativas', '')).toBe(true);
