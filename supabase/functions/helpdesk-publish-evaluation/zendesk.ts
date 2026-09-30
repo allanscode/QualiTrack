@@ -21,6 +21,22 @@ export class ZendeskProvider implements HelpdeskProvider {
 
   constructor(private readonly config: ZendeskConfig) {}
 
+  async checkPublicationEligibility(ticketId: string): Promise<{ eligible: boolean; reason?: string }> {
+    const response = await fetch(`https://${this.config.subdomain}.zendesk.com/api/v2/tickets/${ticketId}.json`, {
+      headers: { Authorization: `Basic ${btoa(`${this.config.email}/token:${this.config.apiToken}`)}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.status === 404) return { eligible: false, reason: 'Ticket não encontrado no Zendesk.' };
+    if (!response.ok) throw new Error(`Zendesk retornou ${response.status} ao conferir o ticket.`);
+    const data = await response.json();
+    const status = String(data?.ticket?.status || '').toLowerCase();
+    if (!status) throw new Error('Zendesk não retornou o status do ticket.');
+    if (status === 'closed' || status === 'archived') {
+      return { eligible: false, reason: 'O ticket está fechado no Zendesk e não aceita a publicação da avaliação. A monitoria permanece salva.' };
+    }
+    return { eligible: true };
+  }
+
   async publishEvaluation(input: PublishEvaluationInput): Promise<{ externalCommentId: string }> {
     const url = `https://${this.config.subdomain}.zendesk.com/api/v2/tickets/${input.ticketId}.json`;
     const auth = btoa(`${this.config.email}/token:${this.config.apiToken}`);

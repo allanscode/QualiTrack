@@ -128,6 +128,20 @@ export interface QueueTicketsPage {
   hasMore: boolean;
 }
 
+export async function publishChildTicketMacro(
+  ticketId: string,
+  verdict: 'conforme' | 'nao_conforme',
+  commentText: string,
+): Promise<void> {
+  if (isMockMode) return;
+  if (!supabase) throw new Error('Conexão com o Zendesk indisponível.');
+  const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+    body: { action: 'publish_child_macro', ticket_id: ticketId, child_verdict: verdict, comment_text: commentText },
+  });
+  if (error) throw new Error(await extractFunctionErrorMessage(error, 'Não foi possível enviar a macro ao Zendesk.'));
+  if (!data?.success) throw new Error(data?.error || 'O Zendesk não confirmou o envio da macro.');
+}
+
 /** Consulta leve para avisar sobre mudanças sem recarregar os cards da fila. */
 export async function checkQueueUpdates(type: AuditingQueueType): Promise<string[]> {
   if (isMockMode || !supabase) {
@@ -210,7 +224,7 @@ export async function fetchQueueTickets(
   // Proativas ficavam mostrando o ticket com badge "Auditado" só depois de
   // "Reavaliar"/"Avaliar com IA" de novo, mesmo já tendo monitoria salva —
   // confuso e deixava a fila "suja" com trabalho já concluído.
-  tickets = tickets.filter(t => !t.already_audited);
+  tickets = tickets.filter(t => !t.already_audited && !['closed', 'archived'].includes(t.status?.toLowerCase() || ''));
 
   // Fila de Positivas: trava de no máximo 2 avaliações por atendente no mês,
   // usando o e-mail como chave de identificação agnóstica de plataforma.
@@ -540,7 +554,6 @@ export async function evaluateChildTicketWithAI(
   ticketId: string,
   ticketSubject: string,
   dialogue?: TicketCommentMessage[],
-  tags?: string[],
   ticketFields?: { title: string; value: string }[],
   macroType?: ChildTicketMacroType,
   jobId?: string,
@@ -556,7 +569,6 @@ export async function evaluateChildTicketWithAI(
         ticket_id: ticketId,
         ticket_subject: ticketSubject,
         dialogue: dialogue || [],
-        tags: tags || [],
         ticket_fields: ticketFields,
         macro_type: macroType,
         job_id: jobId,
@@ -583,8 +595,7 @@ function getFallbackChildTicketEvaluation(ticketId: string, macroType?: ChildTic
     checks: [
       { rule: "Preservação do Assunto (Inalterabilidade)", passed: true, details: "O assunto original da macro não foi alterado, mantendo a integridade dos 5 gatilhos do Zendesk (DB-361)." },
       { rule: "Preservação do Texto da Macro", passed: true, details: "O texto-base da macro foi mantido integralmente, complementado com as informações técnicas do atendimento." },
-      { rule: "Direcionamento Correto ('Para')", passed: true, details: "Encaminhado corretamente para o grupo técnico especialista / fila responsável." },
-      { rule: "Governança de Tags e Automação", passed: true, details: "Tags estruturais obrigatórias identificadas e preservadas no ticket." }
+      { rule: "Direcionamento Correto ('Para')", passed: true, details: "Encaminhado corretamente para o grupo técnico especialista / fila responsável." }
     ],
     recommendations: ["Conferência preliminar aprovada. Revise os logs e evidências técnicas anexadas antes de concluir a validação."]
   };
@@ -652,6 +663,7 @@ export interface TicketAgentLookup {
   /** Se já existir uma conta com esse e-mail no QualiTrack, o id dela. */
   existing_id?: string | null;
   existing_team_id?: string | null;
+  ticket_group_team_id?: string | null;
 }
 
 /**
@@ -703,6 +715,7 @@ export interface ZendeskTicketDetails {
   } | null;
   organization_name?: string | null;
   group_name?: string | null;
+  ticket_group_team_id?: string | null;
   matched_agent?: {
     id: string;
     name: string;

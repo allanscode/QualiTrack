@@ -283,10 +283,15 @@ export interface AuditingQueueTicket {
   agent_email?: string;
   agent_id?: string;
   team_id?: string;
+  /** Equipe que corresponde ao grupo atribuído ao ticket no Zendesk, mesmo se não for equipe principal do agente. */
+  ticket_group_team_id?: string;
+  group_name?: string;
   csat_status: 'bad' | 'good' | 'unrated' | 'offered';
   csat_comment?: string;
   /** Momento em que o cliente enviou a avaliação CSAT no Zendesk. */
   csat_rated_at?: string;
+  /** Momento da resolução atual no Zendesk; não substitui ticket_date na ficha. */
+  solved_at?: string;
   channel?: string;
   ticket_date: string;
   status: string;

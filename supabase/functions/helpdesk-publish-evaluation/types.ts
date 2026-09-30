@@ -15,6 +15,7 @@ export interface PublishRequest {
   outcome?: EvaluationOutcome;
   dry_run?: boolean;
   force?: boolean;
+  comment_text?: string;
 }
 
 /** Estágio em que uma falha ocorreu, usado pelo frontend para decidir a mensagem/ação. */
@@ -54,5 +55,6 @@ export interface PublishEvaluationInput {
  */
 export interface HelpdeskProvider {
   readonly name: string;
+  checkPublicationEligibility(ticketId: string): Promise<{ eligible: boolean; reason?: string }>;
   publishEvaluation(input: PublishEvaluationInput): Promise<{ externalCommentId: string }>;
 }

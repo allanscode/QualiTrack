@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
+import { EvaluationForm, Monitoria } from '../types';
 import { useMonitoriaFormState } from './useMonitoriaFormState';
 
 describe('useMonitoriaFormState', () => {
@@ -34,5 +35,16 @@ describe('useMonitoriaFormState', () => {
       )
     );
     expect(result.current.header.ticket_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('usa a ficha corrigida em vez do snapshot da ficha anterior', () => {
+    const oldForm = { id: 'old-form', title: 'Ficha Revenda', sections: [] } as unknown as EvaluationForm;
+    const correctedForm = { id: 'corrected-form', title: 'Ficha Cliente Final', sections: [] } as unknown as EvaluationForm;
+    const initialData = { form_id: oldForm.id, form_snapshot: oldForm } as Monitoria;
+    const { result } = renderHook(() => useMonitoriaFormState(initialData, [oldForm, correctedForm], []));
+
+    expect(result.current.selectedForm?.id).toBe(oldForm.id);
+    act(() => result.current.setHeader(previous => ({ ...previous, form_id: correctedForm.id })));
+    expect(result.current.selectedForm?.id).toBe(correctedForm.id);
   });
 });

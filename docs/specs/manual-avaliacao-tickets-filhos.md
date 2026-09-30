@@ -25,7 +25,6 @@ flowchart TD
     TF["Abertura de Ticket Filho (Side Conversation)"] --> Q1["1. Preservação do Assunto"]
     TF --> Q2["2. Preservação do Texto da Macro"]
     TF --> Q3["3. Direcionamento Correto ('Para')"]
-    TF --> Q4["4. Governança de Tags"]
     
     Q1 -->|Assunto Alterado| INV["❌ Falha Grave / Fila de Inválidos"]
     Q1 -->|Assunto Íntegro| OK1["✔ Conforme"]
@@ -36,8 +35,6 @@ flowchart TD
     Q3 -->|Pessoa Física em Análise Técnica| ERRO["❌ Direcionamento Incorreto"]
     Q3 -->|Grupo Técnico Especialista| OK3["✔ Conforme"]
     
-    Q4 -->|Tags Estruturais Ausentes| ATN["⚠️ Atenção / Ressalva"]
-    Q4 -->|Tags Injetadas| OK4["✔ Conforme"]
 ```
 
 ---
@@ -102,46 +99,31 @@ flowchart TD
 
 ---
 
-## 3. Governança de Tags e Preservação Histórica
+## 3. Matriz de Pontuação e Status do Parecer (QualiTrack)
 
-Além dos três pilares, o monitor de qualidade deve certificar-se da integridade das tags injetadas:
+O sistema de auditoria inteligente considera apenas os três quesitos abaixo. Tags do Zendesk não compõem o parecer nem a nota.
 
-1. **Tags Obrigatórias por Macro:**
-   - **Nova Demanda:** Presença mandatória das tags `existe_ticket_filho` e `existe_nova_demanda`.
-   - **Nova Demanda Mais Pagamentos:** Tags `existe_ticket_filho` e `maispag_nova_demanda`.
-   - **Análise Técnica:** Tags correspondentes ao escopo: `transferencia_analise`, `transferencia_analise_fiscal`, `transferencia_analise_contabil`, etc.
-2. **Blindagem contra Perda de Tags (`current_tags`):**
-   - O analista nunca deve remover manualmente tags de governança ou aplicar macros depreciadas que façam substituição total (`set_tags`). O QualiTrack audita a presença das tags transitórias e definitivas.
-
----
-
-## 4. Matriz de Pontuação e Status do Parecer (QualiTrack)
-
-O sistema de auditoria inteligente calcula a pontuação de conformidade com base nos seguintes pesos:
-
-| Quesito Auditado | Peso no Score | Penalidade se Não Conforme | Impacto no Status Geral |
-| :--- | :---: | :---: | :--- |
-| **1. Preservação do Assunto** | **35%** | -35 pts | Se reprovado, limita o status máximo a **Não Conforme** (quebra de automação). |
-| **2. Preservação do Texto da Macro** | **30%** | -30 pts | Se ausente, penaliza gravemente a nota da monitoria. |
-| **3. Direcionamento Correto ("Para")** | **25%** | -25 pts | Direcionamento incorreto rebaixa para **Atenção** ou **Não Conforme**. |
-| **4. Governança de Tags Estruturais** | **10%** | -10 pts | Tags ausentes geram alerta operacional. |
+| Quesito Auditado | Impacto no Status Geral |
+| :--- | :--- |
+| **1. Preservação do Assunto** | Se reprovado, limita o status máximo a **Não Conforme**. |
+| **2. Preservação do Texto da Macro** | Se ausente, penaliza gravemente a nota da monitoria. |
+| **3. Direcionamento Correto ("Para")** | Direcionamento incorreto rebaixa para **Atenção** ou **Não Conforme**. |
 
 ### Classificação de Parecer:
 * 🟢 **Conforme (90 a 100 pontos):** Todos os três pilares cumpridos com rigor; assunto inalterado; macro presente e detalhada com logs/AnyDesk; direcionamento exato.
-* 🟡 **Atenção / Ressalvas (70 a 89 pontos):** Assunto e direcionamento corretos, mas com detalhamento técnico insuficiente no comentário adicional ou pequena divergência de tags.
+* 🟡 **Atenção / Ressalvas (70 a 89 pontos):** Assunto e direcionamento corretos, mas com detalhamento técnico insuficiente no comentário adicional.
 * 🔴 **Não Conforme (0 a 69 pontos):** Assunto alterado (gatilho quebrado), texto da macro suprimido ou encaminhamento para destino incorreto.
 
 ---
 
-## 5. Checklist Rápido de Pré-Validação para o Auditor
+## 4. Checklist Rápido de Pré-Validação para o Auditor
 
 Ao auditar um chamado na fila de **Triagem de Chamados Filhos**, execute o seguinte checklist:
 
 - [ ] **1. Assunto:** O título do chamado filho coincide estritamente com o catálogo? (Sem IDs extras, sem nomes de postos inseridos no assunto).
 - [ ] **2. Texto:** A mensagem estrutural da macro foi mantida? Há enriquecimento com dados técnicos (AnyDesk, logs, passos de teste)?
 - [ ] **3. Destinatário ("Para"):** O ticket foi para o Grupo Técnico correto (ou para o próprio analista no caso de Nova Demanda)?
-- [ ] **4. Tags:** As tags estruturais (`existe_ticket_filho`, `transferencia_analise`, etc.) constam no ticket?
-- [ ] **5. Chamado Pai Vinculado:** O ID do chamado pai (`parent_ticket_id` / `problem_id`) foi capturado e validado corretamente?
+- [ ] **4. Chamado Pai Vinculado:** O ID do chamado pai (`parent_ticket_id` / `problem_id`) foi capturado e validado corretamente?
 
 ---
 

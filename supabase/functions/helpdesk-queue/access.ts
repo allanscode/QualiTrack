@@ -1,6 +1,6 @@
 export type QueueType = 'negativas' | 'positivas' | 'proativas' | 'filhos' | 'filhos_invalidos';
 
-const AUDIT_ACTIONS = new Set(['evaluate_ai', 'evaluate_child_ticket', 'generate_auditor_record', 'resolve_agent']);
+const AUDIT_ACTIONS = new Set(['evaluate_ai', 'evaluate_child_ticket', 'generate_auditor_record', 'resolve_agent', 'fetch_draft_statuses', 'publish_child_macro']);
 
 export function canRunQueueAction(role: string, action: string): boolean {
   return !AUDIT_ACTIONS.has(action) || role === 'qualidade' || role === 'gestor_qualidade' || role === 'admin';

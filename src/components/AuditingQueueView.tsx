@@ -22,6 +22,7 @@ import {
   evaluateChildTicketWithAI,
   fetchTicketDialogue,
   normalizeChannel,
+  publishChildTicketMacro,
   csatStatusToSatisfactionResult,
   resolveCustomerType,
   resolveFormAndGuidelineForCustomerType,
@@ -30,7 +31,7 @@ import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChat
 import { formatTicketDateTime, toTicketDateInput } from '../lib/ticketDateTime';
 import { useQueueUpdateNotice } from '../hooks/useQueueUpdateNotice';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
-import { fetchAIDrafts, fetchOpenAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
+import { fetchAIDrafts, fetchOpenAIDrafts, saveAIDraft, deleteAIDraft, removeAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import { claimAIJob, completeAIJob, failAIJob, cancelAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
 import {
   AlertTriangle,
@@ -67,6 +68,7 @@ import {
   Copy,
   MessageSquare,
   UserCog,
+  Trash2,
   Hash
 } from 'lucide-react';
 import Card from './ui/Card';
@@ -93,6 +95,7 @@ import {
 import { usePresence } from '../providers/PresenceProvider';
 import { matchesAssignedMonitor } from '../lib/queueMonitorFilter';
 import { calculateAIEvaluationScore } from '../utils/aiEvaluationScore';
+import { resolveTicketTeamId } from '../lib/ticketTeam';
 import { canAuditTickets } from '../lib/auditPermissions';
 
 interface AuditingQueueViewProps {
@@ -111,6 +114,8 @@ interface AuditingQueueViewProps {
     form_id?: string;
     evaluated_id?: string;
     team_id?: string;
+    ticket_group_team_id?: string;
+    group_name?: string;
     channel?: string;
     ticket_date?: string;
     satisfaction_result?: string;
@@ -352,6 +357,7 @@ export default function AuditingQueueView({
   // Rascunhos de avaliação da IA já prontos (persistidos), por ticket_id —
   // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
   const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>({});
+  const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
   const [aiJobs, setAIJobs] = useState<Record<string, AIEvaluationJob>>({});
 
   // Filtro de rascunhos feitos pela IA (Todos | Com Rascunho IA | Sem Rascunho IA)
@@ -387,6 +393,8 @@ export default function AuditingQueueView({
   const [childManualVerdict, setChildManualVerdict] = useState<'conforme' | 'nao_conforme' | null>(null);
   const [copiedChildMacro, setCopiedChildMacro] = useState(false);
   const [childCustomMacro, setChildCustomMacro] = useState<string>('');
+  const [publishingChildMacro, setPublishingChildMacro] = useState(false);
+  const [publishedChildMacroTickets, setPublishedChildMacroTickets] = useState<Set<string>>(new Set());
 
   // Sincroniza o texto gerado da macro do chamado filho sempre que a avaliação da IA ou o veredito mudar
   useEffect(() => {
@@ -726,7 +734,21 @@ ${checksSummary}${recs}`;
           stillPending[t.ticket_id] = draft;
         }
       });
-      setDrafts(stillPending);
+      setDrafts(previous => {
+        const next: Record<string, AIEvaluationDraft> = {};
+        tickets.forEach(ticket => {
+          if (ticket.already_audited) return;
+          const loadedDraft = stillPending[ticket.ticket_id];
+          const currentDraft = previous[ticket.ticket_id];
+          if (loadedDraft && currentDraft) {
+            next[ticket.ticket_id] = Date.parse(currentDraft.updated_at) > Date.parse(loadedDraft.updated_at)
+              ? currentDraft : loadedDraft;
+          } else if (loadedDraft || currentDraft) {
+            next[ticket.ticket_id] = loadedDraft || currentDraft;
+          }
+        });
+        return next;
+      });
     });
     return () => { cancelled = true; };
   }, [activeQueue, tickets]);
@@ -792,6 +814,11 @@ ${checksSummary}${recs}`;
   // Filtro de busca na lista de tickets com suporte a filtro de rascunhos da IA
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
+      if (isDistributedQueue(activeQueue)) {
+        if (!assignmentsReady[activeQueue]) return false;
+        if (queueAssignments[activeQueue][t.ticket_id]?.status === 'completed') return false;
+      }
+
       const matchesSearch = !searchTerm ||
         t.ticket_id.includes(searchTerm) ||
         t.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -876,7 +903,10 @@ ${checksSummary}${recs}`;
     const assignment = queueAssignments[queueType][ticket.ticket_id];
     const canOverrideAssignment = canManageQueueAssignments(currentUserRole);
     const isResponsibleMonitor = currentUserRole === 'qualidade' && assignment?.assigned_to === currentUserId;
-    if (!assignment || !currentUserId || (!canOverrideAssignment && !isResponsibleMonitor)) {
+    if (!assignment) {
+      throw new Error('Este ticket ainda não foi atribuído a um monitor. Aguarde a distribuição da fila.');
+    }
+    if (!currentUserId || (!canOverrideAssignment && !isResponsibleMonitor)) {
       throw new Error('Somente o monitor responsável pode iniciar a avaliação deste ticket.');
     }
     const started = await startQueueTicketAssignment(ticket.ticket_id, queueType);
@@ -909,7 +939,7 @@ ${checksSummary}${recs}`;
   // de ficha e manual baseada no tipo de cliente (organização no Zendesk).
   const openGuidelinePicker = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
-    if (ticket.positive_cap_reached) {
+    if (ticket.positive_cap_reached && !drafts[ticket.ticket_id]) {
       toast.warning('Este atendente já atingiu o máximo de 2 avaliações positivas no mês.');
       return;
     }
@@ -966,7 +996,7 @@ ${checksSummary}${recs}`;
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
       (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
     );
-    const teamId = matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0] || ticket.team_id;
+    const teamId = resolveTicketTeamId(ticket, matchedAgent);
     const agentId = ticket.agent_id || matchedAgent?.id;
     const draftMeta = {
       source_queue: activeQueue,
@@ -1239,7 +1269,7 @@ ${checksSummary}${recs}`;
     setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: '' }));
 
     try {
-      const { comments, ticketFields, tags } = await fetchTicketDialogue(ticket.ticket_id);
+      const { comments, ticketFields } = await fetchTicketDialogue(ticket.ticket_id);
       if (cancelledAIJobIds.has(jobId)) return;
       const normalizedComments = normalizeTicketDialogue(comments || [], ticket.agent_name, ticket.requester_name);
       ticket.dialogue = normalizedComments;
@@ -1250,7 +1280,6 @@ ${checksSummary}${recs}`;
         ticket.ticket_id,
         ticket.subject,
         comments,
-        tags || ticket.tags,
         ticketFields,
         ticket.child_macro_type,
         jobId
@@ -1289,6 +1318,27 @@ ${checksSummary}${recs}`;
 
   // Abre a ficha de monitoria com o rascunho da IA já salvo pra esse
   // ticket — com o form_id bloqueado para alteração manual.
+  const handleRemoveDraft = async (ticket: AuditingQueueTicket) => {
+    if (!canAudit || deletingDraftId || !drafts[ticket.ticket_id]) return;
+    if (!window.confirm(`Excluir o rascunho de IA do ticket #${ticket.ticket_id}? Esta ação não exclui o ticket nem uma monitoria salva.`)) return;
+    setDeletingDraftId(ticket.ticket_id);
+    try {
+      const deleted = await removeAIDraft(ticket.ticket_id);
+      if (!deleted) throw new Error('Rascunho não encontrado ou sem permissão para excluir.');
+      setDrafts(previous => {
+        const next = { ...previous };
+        delete next[ticket.ticket_id];
+        return next;
+      });
+      setTickets(previous => previous.filter(item => item.ticket_id !== ticket.ticket_id || !item.saved_ai_draft));
+      toast.success(`Rascunho de IA do ticket #${ticket.ticket_id} excluído.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível excluir o rascunho.');
+    } finally {
+      setDeletingDraftId(null);
+    }
+  };
+
   const handleLaunchMonitoria = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
     const draft = drafts[ticket.ticket_id];
@@ -1315,7 +1365,9 @@ ${checksSummary}${recs}`;
       ticket_subject: ticket.subject,
       form_id: draft.form_id,
       evaluated_id: draft.agent_id,
-      team_id: draft.team_id,
+      team_id: resolveTicketTeamId({ ticket_group_team_id: ticket.ticket_group_team_id, team_id: draft.team_id }),
+      ticket_group_team_id: ticket.ticket_group_team_id,
+      group_name: ticket.group_name,
       channel: normalizeChannel(draft.channel),
       ticket_date: toTicketDateInput(ticket.ticket_date),
       satisfaction_result: csatStatusToSatisfactionResult(ticket.csat_status),
@@ -1355,7 +1407,9 @@ ${checksSummary}${recs}`;
       ticket_subject: ticket.subject,
       form_id: autoForm?.id,
       evaluated_id: ticket.agent_id || matchedAgent?.id,
-      team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
+      team_id: resolveTicketTeamId(ticket, matchedAgent),
+      ticket_group_team_id: ticket.ticket_group_team_id,
+      group_name: ticket.group_name,
       channel: normalizeChannel(ticket.channel),
       // O Zendesk devolve o timestamp de criação. O datepicker recebe apenas
       // yyyy-MM-dd no fuso de São Paulo para não reinterpretar o dia pela timezone do navegador.
@@ -1392,6 +1446,7 @@ ${checksSummary}${recs}`;
     return (
       <span className="inline-flex items-center gap-1.5 flex-wrap">
         {ticket.saved_ai_draft && <Badge variant="warning" size="xs">{ticket.draft_metadata_incomplete ? 'Rascunho recuperado · conferir dados' : 'Rascunho IA salvo'}</Badge>}
+        <Badge variant="neutral" size="xs">Ficha: {selectedForm?.title || 'não encontrada'}</Badge>
         <span
           title="Nota calculada pelas respostas da IA usando os pesos da ficha"
           className="inline-flex items-center px-2.5 py-1 rounded-lg bg-functional-success text-functional-success text-xs font-mono font-black flex-shrink-0"
@@ -1477,6 +1532,23 @@ ${checksSummary}${recs}`;
     );
   };
 
+  const renderTicketResolution = (ticket: AuditingQueueTicket) => {
+    const resolvedAt = ticket.status?.toLowerCase() === 'solved'
+      ? formatTicketDateTime(ticket.solved_at)
+      : '—';
+    const label = resolvedAt !== '—'
+      ? `Resolvido: ${resolvedAt}`
+      : ticket.status?.toLowerCase() === 'solved' ? 'Resolução indisponível' : 'Ainda não resolvido';
+    const details = [`Criado: ${formatTicketDateTime(ticket.ticket_date)}`];
+    if (ticket.csat_rated_at) details.push(`Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}`);
+    return (
+      <span className="flex items-center gap-1" title={details.join(' | ')}>
+        <Clock className="w-3 h-3 opacity-60" />
+        {label}
+      </span>
+    );
+  };
+
   // Selo "Atribuído a" da distribuição 1-para-1, visível só para Supervisor
   // de Qualidade e Admin (o monitor comum já só enxerga os seus na lista).
   const renderAssignedMonitorBadge = (ticket: AuditingQueueTicket) => {
@@ -1537,6 +1609,26 @@ ${checksSummary}${recs}`;
 
     const draft = drafts[ticket.ticket_id];
 
+    if (isDistributedQueue(activeQueue) && !queueAssignments[activeQueue][ticket.ticket_id]) {
+      return (
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          <Badge variant="warning" size="xs">Aguardando atribuição a um monitor</Badge>
+          {draft && canManageQueueAssignments(currentUserRole) && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={deletingDraftId === ticket.ticket_id}
+              onClick={() => void handleRemoveDraft(ticket)}
+              aria-label={`Excluir rascunho de IA do ticket #${ticket.ticket_id}`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Excluir rascunho</span>
+            </Button>
+          )}
+        </div>
+      );
+    }
+
     if (ticket.saved_ai_draft && !draft) {
       return <Badge variant="warning" size="xs">Carregando rascunho IA...</Badge>;
     }
@@ -1554,14 +1646,26 @@ ${checksSummary}${recs}`;
             <CheckSquare className="w-3.5 h-3.5" />
             <span>Verificar Avaliação</span>
           </Button>
-          {!ticket.positive_cap_reached && !ticket.saved_ai_draft && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={deletingDraftId === ticket.ticket_id}
+            onClick={() => void handleRemoveDraft(ticket)}
+            className="flex items-center gap-1.5 border-functional-error/30 text-functional-error hover:bg-functional-error/10"
+            title="Excluir somente o rascunho de IA deste ticket"
+            aria-label={`Excluir rascunho de IA do ticket #${ticket.ticket_id}`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Excluir rascunho</span>
+          </Button>
+          {!ticket.positive_cap_reached && (
             <Button
               size="sm"
               variant="outline"
               disabled={isEvaluating}
               onClick={() => openGuidelinePicker(ticket)}
               className="flex items-center gap-1 border-amber-400 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-[11px] font-medium"
-              title="Roda a IA de novo e sobrescreve este rascunho"
+              title="Escolher outra ficha ou manual e gerar um novo rascunho"
             >
               <Bot className={`w-3 h-3 ${isEvaluating ? 'animate-spin' : ''}`} />
               <span>Reavaliar</span>
@@ -1663,7 +1767,9 @@ ${checksSummary}${recs}`;
       ticket_subject: ticket.subject,
       form_id: autoForm?.id,
       evaluated_id: ticket.agent_id || matchedAgent?.id,
-      team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
+      team_id: resolveTicketTeamId(ticket, matchedAgent),
+      ticket_group_team_id: ticket.ticket_group_team_id,
+      group_name: ticket.group_name,
       channel: normalizeChannel(ticket.channel),
       ticket_date: toTicketDateInput(ticket.ticket_date),
       satisfaction_result: 'Sem pesquisa',
@@ -1678,7 +1784,7 @@ ${checksSummary}${recs}`;
 
   // Controles de paginação com seletor de itens por página (5, 10, 15, 20) — padrão 10
   const renderPagination = () => {
-    if (totalItems === 0 && !(selectedMonitorFilter && isDistributedQueue(activeQueue) && (hasMore || prevCursors.length > 0))) return null;
+    if (totalItems === 0 && !hasMore && prevCursors.length === 0) return null;
 
     const canGoPrev = validCurrentPage > 1 || prevCursors.length > 0;
     const canGoNext = validCurrentPage < totalLocalPages || hasMore;
@@ -1700,7 +1806,7 @@ ${checksSummary}${recs}`;
     };
 
     return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-surface-border mt-4">
+      <div className="sticky bottom-0 z-20 mt-auto flex flex-col sm:flex-row items-center justify-between gap-3 px-3 py-3 border border-surface-border rounded-xl bg-surface-card/95 backdrop-blur-md shadow-premium-sm">
         <div className="flex flex-wrap items-center gap-3 text-xs text-brand-muted">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-medium text-brand-muted">Exibir:</span>
@@ -1787,7 +1893,9 @@ ${checksSummary}${recs}`;
   );
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className={currentSubTab === 'monitores'
+      ? 'space-y-6 animate-fade-in'
+      : 'flex min-h-[calc(100dvh-11rem)] md:min-h-[calc(100dvh-8.5rem)] flex-col gap-6 animate-fade-in'}>
       {currentSubTab === 'monitores' ? (
         !isSupervisorView ? (
           <Card className="p-8 text-center border-amber-500/20 bg-amber-500/5 rounded-2xl">
@@ -1987,7 +2095,7 @@ ${checksSummary}${recs}`;
         <>
 
       {/* 2. Barra Superior da Fila — Toolbar Compacta e Coesa */}
-      <div className="relative flex flex-wrap md:flex-nowrap items-center gap-2 p-2 rounded-xl bg-surface-card/60 backdrop-blur-sm border border-surface-border/60 transition-all">
+      <div className="sticky top-0 z-30 flex flex-wrap md:flex-nowrap items-center gap-2 p-2 rounded-xl bg-surface-card/95 backdrop-blur-md border border-surface-border shadow-premium-sm transition-all">
         {/* Campo de Busca (elemento de maior largura) */}
         <div className="relative flex-1 min-w-[200px] max-w-none sm:max-w-md">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
@@ -2204,7 +2312,7 @@ ${checksSummary}${recs}`;
 
       {/* Conteúdo da Fila: NEGATIVAS */}
       {activeQueue === 'negativas' && (
-        <div className="space-y-4">
+        <div className="flex flex-1 flex-col gap-4">
           {loading && paginatedTickets.length === 0 ? (
             renderSkeletonGrid()
           ) : paginatedTickets.length === 0 ? (
@@ -2222,7 +2330,7 @@ ${checksSummary}${recs}`;
               {/* Lista de Tickets Negativos */}
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
             {paginatedTickets.map(ticket => (
-              <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
+              <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
                     {canAudit ? <input
                       type="checkbox"
@@ -2270,25 +2378,17 @@ ${checksSummary}${recs}`;
                   </div>
                 </div>
 
-                {ticket.csat_comment && (
-                  <div className="p-2.5 rounded-xl bg-functional-error/5 border border-functional-error/15 text-[11px] font-medium text-brand-primary italic">
-                    "{ticket.csat_comment}"
-                  </div>
-                )}
+                <div aria-label="Comentário de satisfação do cliente" className="p-2.5 rounded-xl bg-functional-error/5 border border-functional-error/15 text-[11px] font-medium text-brand-primary italic">
+                  "{ticket.csat_comment?.trim() || ''}"
+                </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                  <div className="flex items-center gap-3">
+                <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                     {renderAgentInfo(ticket)}
-                    <span
-                      className="flex items-center gap-1"
-                      title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
-                    >
-                      <Clock className="w-3 h-3 opacity-60" />
-                      {formatTicketDateTime(ticket.ticket_date)}
-                    </span>
+                    {renderTicketResolution(ticket)}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {renderAiActions(ticket, 'action-primary')}
                   </div>
                 </div>
@@ -2303,7 +2403,7 @@ ${checksSummary}${recs}`;
 
       {/* Conteúdo da Fila: PROATIVAS (Amostragem Justa) */}
       {activeQueue === 'proativas' && (
-        <div className="space-y-4">
+        <div className="flex flex-1 flex-col gap-4">
           {loading && paginatedTickets.length === 0 ? (
             renderSkeletonGrid()
           ) : paginatedTickets.length === 0 ? (
@@ -2318,7 +2418,7 @@ ${checksSummary}${recs}`;
                 {paginatedTickets.map(ticket => {
                   const isPriority = ticket.agent_email && topPriorityEmails.has(ticket.agent_email.toLowerCase());
                   return (
-                    <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-info/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-info/40 border-info/50 bg-info/3' : ''}`}>
+                    <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-info/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-info/40 border-info/50 bg-info/3' : ''}`}>
                       <div className="flex items-start justify-between gap-2.5">
                         <div className="flex items-start gap-2.5 flex-1 min-w-0">
                           {canAudit ? <input
@@ -2372,19 +2472,13 @@ ${checksSummary}${recs}`;
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                        <div className="flex items-center gap-3">
+                      <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                           {renderAgentInfo(ticket)}
-                          <span
-                            className="flex items-center gap-1"
-                            title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
-                          >
-                            <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.ticket_date)}
-                          </span>
+                          {renderTicketResolution(ticket)}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {renderAiActions(ticket, 'bg-gradient-to-r from-info to-info/80')}
                         </div>
                       </div>
@@ -2395,12 +2489,13 @@ ${checksSummary}${recs}`;
               {renderPagination()}
             </>
           )}
+          {!loading && paginatedTickets.length === 0 && renderPagination()}
         </div>
       )}
 
       {/* Conteúdo da Fila: POSITIVAS (+ IA Copilot) */}
       {activeQueue === 'positivas' && (
-        <div className="space-y-4">
+        <div className="flex flex-1 flex-col gap-4">
           {loading && paginatedTickets.length === 0 ? (
             renderSkeletonGrid()
           ) : paginatedTickets.length === 0 ? (
@@ -2413,7 +2508,7 @@ ${checksSummary}${recs}`;
               {/* Lista de Chamados Positivos */}
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
                 {paginatedTickets.map(ticket => (
-                  <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-functional-success/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-emerald-500/40 border-emerald-500/50 bg-emerald-500/3' : ''}`}>
+                  <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-functional-success/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-emerald-500/40 border-emerald-500/50 bg-emerald-500/3' : ''}`}>
                     <div className="flex items-start justify-between gap-2.5">
                       <div className="flex items-start gap-2.5 flex-1 min-w-0">
                         {canAudit ? <input
@@ -2462,25 +2557,17 @@ ${checksSummary}${recs}`;
                       </div>
                     </div>
 
-                    {ticket.csat_comment && (
-                      <div className="p-2.5 rounded-xl bg-functional-success/5 border border-functional-success/15 text-[11px] font-medium text-brand-primary italic">
-                        "{ticket.csat_comment}"
-                      </div>
-                    )}
+                    <div aria-label="Comentário de satisfação do cliente" className="p-2.5 rounded-xl bg-functional-success/5 border border-functional-success/15 text-[11px] font-medium text-brand-primary italic">
+                      "{ticket.csat_comment?.trim() || ''}"
+                    </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                      <div className="flex items-center gap-3">
+                    <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                         {renderAgentInfo(ticket)}
-                        <span
-                          className="flex items-center gap-1"
-                          title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
-                        >
-                          <Clock className="w-3 h-3 opacity-60" />
-                          {formatTicketDateTime(ticket.ticket_date)}
-                        </span>
+                        {renderTicketResolution(ticket)}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {renderAiActions(ticket, 'bg-gradient-to-r from-emerald-600 to-teal-600')}
                       </div>
                     </div>
@@ -2490,12 +2577,13 @@ ${checksSummary}${recs}`;
               {renderPagination()}
             </>
           )}
+          {!loading && paginatedTickets.length === 0 && renderPagination()}
         </div>
       )}
 
       {/* Conteúdo da Fila: CHAMADOS FILHOS */}
       {activeQueue === 'filhos' && (
-        <div className="space-y-4">
+        <div className="flex flex-1 flex-col gap-4">
 
           {loading && paginatedTickets.length === 0 ? (
             renderSkeletonGrid()
@@ -2517,7 +2605,7 @@ ${checksSummary}${recs}`;
                   const evaluation = ticket.child_evaluation;
 
                   return (
-                    <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
+                    <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
                           {canAudit ? <input
                             type="checkbox"
@@ -2569,16 +2657,10 @@ ${checksSummary}${recs}`;
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                        <div className="flex items-center gap-3">
+                      <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                           {renderAgentInfo(ticket)}
-                          <span
-                            className="flex items-center gap-1"
-                            title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
-                          >
-                            <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.ticket_date)}
-                          </span>
+                          {renderTicketResolution(ticket)}
                         </div>
 
                         <div className="flex min-w-0 flex-col items-end gap-1.5" role="status" aria-live="polite">
@@ -2618,7 +2700,7 @@ ${checksSummary}${recs}`;
 
       {/* Conteúdo da Fila: FILHOS INVÁLIDOS */}
       {activeQueue === 'filhos_invalidos' && (
-        <div className="space-y-4">
+        <div className="flex flex-1 flex-col gap-4">
           <div className="p-4 rounded-2xl bg-functional-error/10 border border-functional-error/25 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-functional-error text-white flex items-center justify-center flex-shrink-0 shadow-sm">
@@ -2629,7 +2711,7 @@ ${checksSummary}${recs}`;
                   Fila de Chamados Filhos Inválidos
                 </h3>
                 <p className="text-[11px] font-semibold text-brand-primary/80">
-                  Chamados abertos fora do padrão ou com inconsistências (falta de tags obrigatórias, destinatário incorreto, falta de detalhamento).
+                  Chamados abertos fora do padrão ou com inconsistências de destinatário ou detalhamento.
                 </p>
               </div>
             </div>
@@ -2653,7 +2735,7 @@ ${checksSummary}${recs}`;
                   const evaluation = ticket.child_evaluation;
 
                   return (
-                    <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-functional-error/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-functional-error/40 border-functional-error/50 bg-functional-error/3' : ''}`}>
+                    <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-functional-error/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-functional-error/40 border-functional-error/50 bg-functional-error/3' : ''}`}>
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
                           {canAudit ? <input
                             type="checkbox"
@@ -2703,16 +2785,10 @@ ${checksSummary}${recs}`;
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                        <div className="flex items-center gap-3">
+                      <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                           {renderAgentInfo(ticket)}
-                          <span
-                            className="flex items-center gap-1"
-                            title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
-                          >
-                            <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.ticket_date)}
-                          </span>
+                          {renderTicketResolution(ticket)}
                         </div>
 
                         <div className="flex min-w-0 flex-col items-end gap-1.5" role="status" aria-live="polite">
@@ -2747,6 +2823,7 @@ ${checksSummary}${recs}`;
               {renderPagination()}
             </>
           )}
+          {!loading && paginatedTickets.length === 0 && renderPagination()}
         </div>
       )}
       </>
@@ -3074,8 +3151,7 @@ ${checksSummary}${recs}`;
                       {[
                         'Verificando inalterabilidade do assunto da macro homologada...',
                         'Conferindo preservação do texto estrutural e enriquecimento técnico...',
-                        'Validando direcionamento ("Para") ao grupo especialista correto...',
-                        'Checando governança de tags nativas de automação...'
+                        'Validando direcionamento ("Para") ao grupo especialista correto...'
                       ].map((stepLabel, idx) => (
                         <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-surface-subtle/50 text-[11px] text-brand-muted">
                           <RefreshCw className="w-3 h-3 animate-spin text-brand-highlight flex-shrink-0" />
@@ -3258,7 +3334,7 @@ ${checksSummary}${recs}`;
                             <button
                               type="button"
                               onClick={() => {
-                                const textToCopy = childCustomMacro || macroText;
+                                const textToCopy = childCustomMacro;
                                 navigator.clipboard.writeText(textToCopy);
                                 setCopiedChildMacro(true);
                                 toast.success('Macro do chamado filho copiada para colar no Zendesk!');
@@ -3281,7 +3357,7 @@ ${checksSummary}${recs}`;
                           </div>
                         </div>
                         <textarea
-                          value={childCustomMacro || macroText}
+                          value={childCustomMacro}
                           onChange={e => setChildCustomMacro(e.target.value)}
                           rows={6}
                           className="w-full p-3 rounded-xl border border-surface-border bg-surface-subtle text-xs font-mono text-brand-primary leading-relaxed focus:outline-none focus:border-brand-highlight focus:ring-1 focus:ring-brand-highlight resize-y"
@@ -3301,7 +3377,7 @@ ${checksSummary}${recs}`;
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={loadingChildAi}
+                  disabled={loadingChildAi || publishingChildMacro}
                   className="disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   onClick={handleCloseChildPreview}
                 >
@@ -3323,24 +3399,32 @@ ${checksSummary}${recs}`;
                   <Button
                     variant="primary"
                     size="sm"
-                    disabled={loadingChildAi || !childAiEvaluation}
+                    disabled={loadingChildAi || !childAiEvaluation || publishingChildMacro || publishedChildMacroTickets.has(childPreviewTicket.ticket_id)}
                     className="flex items-center gap-1.5 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                    onClick={() => {
-                      if (loadingChildAi || !childAiEvaluation) return;
+                    onClick={async () => {
+                      if (loadingChildAi || !childAiEvaluation || publishingChildMacro) return;
                       const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
                       const isValido = currentVerdict === 'conforme';
-
-                      childPreviewTicket.child_evaluation = {
-                        ...childAiEvaluation,
-                        status: isValido ? 'conforme' : 'nao_conforme',
-                      };
-                      setValidatedChildTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
-                      toast.success(`Chamado filho #${childPreviewTicket.ticket_id} salvo como ${isValido ? 'Válido' : 'Inválido'} no QualidadeWP!`);
-                      handleCloseChildPreview();
+                      setPublishingChildMacro(true);
+                      try {
+                        await publishChildTicketMacro(childPreviewTicket.ticket_id, currentVerdict, childCustomMacro);
+                        childPreviewTicket.child_evaluation = {
+                          ...childAiEvaluation,
+                          status: currentVerdict,
+                        };
+                        setValidatedChildTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
+                        setPublishedChildMacroTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
+                        toast.success(`Macro de chamado filho ${isValido ? 'válido' : 'inválido'} enviada ao Zendesk.`);
+                        handleCloseChildPreview();
+                      } catch (error) {
+                        toast.error(error instanceof Error ? error.message : 'Falha ao enviar a macro ao Zendesk.');
+                      } finally {
+                        setPublishingChildMacro(false);
+                      }
                     }}
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>Salvar Monitoria</span>
+                    <span>{publishingChildMacro ? 'Enviando...' : publishedChildMacroTickets.has(childPreviewTicket.ticket_id) ? 'Enviada ao Zendesk' : 'Enviar macro ao Zendesk'}</span>
                   </Button>
                 </div>}
               </div>
@@ -3554,6 +3638,12 @@ ${checksSummary}${recs}`;
           forms,
           guidelineOptions
         );
+        const effectiveForm = selectionOverrideEnabled
+          ? forms.find(form => form.id === selectedOverrideFormId)
+          : autoForm;
+        const effectiveGuideline = selectionOverrideEnabled
+          ? guidelineOptions.find(guideline => guideline.id === selectedOverrideGuidelineIds[0])
+          : autoGuideline;
 
         return createPortal(
           <div
@@ -3662,13 +3752,13 @@ ${checksSummary}${recs}`;
                         <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
                           Ficha de Monitoria
                         </span>
-                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">Sugestão</Badge>
+                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">{selectionOverrideEnabled ? 'Selecionada' : 'Sugestão'}</Badge>
                       </div>
                       <div className="text-xs font-black text-brand-primary mt-0.5">
-                        {autoForm?.title || 'Ficha de Atendimento Geral'}
+                        {effectiveForm?.title || 'Selecione uma ficha'}
                       </div>
                       <p className="text-[10px] font-medium text-brand-muted mt-0.5">
-                        Definida com base no tipo de cliente ({detectedCustomerType === 'cliente_final' ? 'Cliente Final' : 'Revenda'})
+                        {selectionOverrideEnabled ? `Sugestão automática: ${autoForm?.title || 'nenhuma'}` : `Definida com base no tipo de cliente (${detectedCustomerType === 'cliente_final' ? 'Cliente Final' : 'Revenda'})`}
                       </p>
                     </div>
                   </div>
@@ -3683,13 +3773,13 @@ ${checksSummary}${recs}`;
                         <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
                           Manual de Atendimento
                         </span>
-                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">Sugestão</Badge>
+                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">{selectionOverrideEnabled ? 'Selecionado' : 'Sugestão'}</Badge>
                       </div>
                       <div className="text-xs font-black text-brand-primary mt-0.5">
-                        {autoGuideline?.title || 'Critérios padrão da ficha'}
+                        {effectiveGuideline?.title || 'Critérios padrão da ficha'}
                       </div>
                       <p className="text-[10px] font-medium text-brand-muted mt-0.5 line-clamp-1">
-                        {autoGuideline?.content ? autoGuideline.content.slice(0, 100) + '...' : 'Diretrizes operacionais alinhadas à organização do chamado.'}
+                        {effectiveGuideline?.content ? effectiveGuideline.content.slice(0, 100) + '...' : 'Avaliação sem manual adicional.'}
                       </p>
                     </div>
                   </div>
@@ -3759,12 +3849,11 @@ ${checksSummary}${recs}`;
                     variant="primary"
                     size="sm"
                     className="flex items-center gap-1.5"
-                    disabled={!autoForm || evaluatingTicketId === guidelinePickerTicket.ticket_id || (selectionOverrideEnabled && (!selectedOverrideFormId || !selectionOverrideReason.trim()))}
+                    disabled={!effectiveForm || evaluatingTicketId === guidelinePickerTicket.ticket_id || (selectionOverrideEnabled && !selectionOverrideReason.trim())}
                     onClick={() => {
                       const ticket = guidelinePickerTicket;
-                      const formToUse = selectionOverrideEnabled
-                        ? forms.find(form => form.id === selectedOverrideFormId) || autoForm!
-                        : autoForm!;
+                      if (!effectiveForm) return;
+                      const formToUse = effectiveForm;
                       const guidelineIds = selectionOverrideEnabled
                         ? selectedOverrideGuidelineIds
                         : (autoGuideline ? [autoGuideline.id] : []);
@@ -3874,7 +3963,7 @@ ${checksSummary}${recs}`;
                   A IA auditará a abertura deste chamado baseando-se estritamente nas 4 regras de conformidade:
                 </div>
 
-                {/* As 4 Regras de Ouro */}
+                {/* As 3 Regras de Ouro */}
                 <div className="space-y-1.5 text-[10px]">
                   <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
                     <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">1</span>
@@ -3892,12 +3981,6 @@ ${checksSummary}${recs}`;
                     <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">3</span>
                     <div>
                       <strong className="text-brand-primary">Direcionamento ("Para"):</strong> Destinatário correto (Grupo para Análise Técnica; Próprio analista para Nova Demanda; Analista N2 nominal para Apoio Técnico).
-                    </div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
-                    <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">4</span>
-                    <div>
-                      <strong className="text-brand-primary">Governança de Tags:</strong> Preservação das tags nativas da macro (<code>existe_ticket_filho</code>, <code>transferencia_analise</code>, etc.).
                     </div>
                   </div>
                 </div>

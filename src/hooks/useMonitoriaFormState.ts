@@ -40,7 +40,7 @@ export function useMonitoriaFormState(
   );
 
   const selectedForm = useMemo(() => {
-    if (initialData?.form_snapshot) return initialData.form_snapshot;
+    if (initialData?.form_snapshot && initialData.form_id === header.form_id) return initialData.form_snapshot;
     return forms.find(f => f.id === header.form_id);
   }, [initialData, forms, header.form_id]);
 

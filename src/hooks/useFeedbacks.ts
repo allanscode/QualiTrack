@@ -49,6 +49,22 @@ export function useFeedbacks(currentUser: User | null) {
     return () => { request.current++; };
   }, [loadFeedbacks]);
 
+  useEffect(() => {
+    if (isMockMode || !supabase || !currentUser?.active) return;
+    const client = supabase;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const channel = client.channel(`agent-feedbacks-${currentUser.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_feedbacks' }, () => {
+        if (refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => { void loadFeedbacks(); }, 300);
+      })
+      .subscribe();
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      void client.removeChannel(channel);
+    };
+  }, [currentUser?.id, currentUser?.active, loadFeedbacks]);
+
   const perform = async (work: () => Promise<void>, success: string) => {
     if (!currentUser?.active || mutation.current) return false;
     mutation.current = true;

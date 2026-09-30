@@ -118,6 +118,12 @@ serve(async (req: Request) => {
     }
 
     const payload = parseResult.data;
+    if (!/^\d+$/.test(payload.ticket_id)) {
+      return new Response(JSON.stringify({ error: 'ticket_id deve ser numérico' }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = secretApiKey();
@@ -137,6 +143,78 @@ serve(async (req: Request) => {
       if (logError) console.warn('[helpdesk-webhook] Falha ao registrar metadados do evento.');
     } catch {
       console.warn('[helpdesk-webhook] Falha ao registrar metadados do evento.');
+    }
+
+    if (payload.event === 'child_ticket_created') {
+      const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
+      const email = Deno.env.get('ZENDESK_EMAIL');
+      const apiToken = Deno.env.get('ZENDESK_API_TOKEN');
+      if (!subdomain || !email || !apiToken) {
+        return new Response(JSON.stringify({ error: 'Integração Zendesk não configurada' }), { status: 503 });
+      }
+
+      const ticketResponse = await fetch(
+        `https://${subdomain}.zendesk.com/api/v2/tickets/${payload.ticket_id}.json`,
+        {
+          headers: { Authorization: `Basic ${btoa(`${email}/token:${apiToken}`)}` },
+          signal: AbortSignal.timeout(15000),
+        },
+      );
+      if (!ticketResponse.ok) {
+        console.error('[helpdesk-webhook] Falha ao confirmar chamado filho no Zendesk.');
+        return new Response(JSON.stringify({ error: 'Falha ao confirmar ticket no Zendesk' }), { status: 503 });
+      }
+      const { ticket } = await ticketResponse.json();
+      if (String(ticket?.id) !== payload.ticket_id || ['closed', 'archived'].includes(ticket?.status)) {
+        return new Response(JSON.stringify({ success: true, ignored: true }), { status: 200 });
+      }
+      const { data: existingMonitoria, error: monitoriaError } = await supabase.from('monitorias')
+        .select('id').eq('ticket_id', payload.ticket_id).limit(1);
+      if (monitoriaError) {
+        return new Response(JSON.stringify({ error: 'Falha ao verificar monitoria' }), { status: 503 });
+      }
+      if (existingMonitoria?.length) {
+        return new Response(JSON.stringify({ success: true, ignored: true }), { status: 200 });
+      }
+
+      // O evento assinado pelo Zendesk confirma o ticket. Registrar no catálogo
+      // permite distribuir no instante do evento; a leitura da fila completa o snapshot.
+      const { error: catalogError } = await supabase.from('queue_ticket_catalog').upsert({
+        ticket_id: payload.ticket_id,
+        queue_type: 'filhos',
+        verified_at: new Date().toISOString(),
+      }, { onConflict: 'ticket_id,queue_type' });
+      if (catalogError) {
+        console.error('[helpdesk-webhook] Falha ao registrar ticket no catálogo.');
+        return new Response(JSON.stringify({ error: 'Falha ao preparar distribuição' }), { status: 503 });
+      }
+      const { error: assignmentError } = await supabase.rpc('assign_queue_tickets', {
+        p_tickets: [{ ticket_id: payload.ticket_id, queue_type: 'filhos' }],
+      });
+      if (assignmentError) {
+        console.error('[helpdesk-webhook] Falha ao distribuir chamado filho.');
+        return new Response(JSON.stringify({ error: 'Falha ao distribuir chamado filho' }), { status: 503 });
+      }
+    }
+
+    if (payload.event === 'csat_bad' || payload.event === 'child_ticket_created') {
+      const occurredAt = payload.timestamp && !Number.isNaN(Date.parse(payload.timestamp))
+        ? new Date(payload.timestamp).toISOString()
+        : new Date().toISOString();
+      const eventKey = `${payload.event}:${payload.ticket_id}:${payload.timestamp ? occurredAt : occurredAt.slice(0, 16)}`;
+      const { error } = await supabase.from('queue_event_notifications').upsert({
+        event_key: eventKey,
+        event_type: payload.event,
+        ticket_id: payload.ticket_id,
+        occurred_at: occurredAt,
+      }, { onConflict: 'event_key', ignoreDuplicates: true });
+      if (error) {
+        console.error('[helpdesk-webhook] Falha ao registrar notificação de fila.');
+        return new Response(JSON.stringify({ error: 'Falha ao registrar o evento de fila' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     return new Response(JSON.stringify({

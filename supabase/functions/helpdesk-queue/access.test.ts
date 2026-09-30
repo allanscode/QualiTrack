@@ -12,7 +12,7 @@ describe('shouldMergeRecentQueueSnapshot', () => {
 
 describe('queue audit permissions', () => {
   it('keeps support managers in read-only queue actions', () => {
-    for (const action of ['evaluate_ai', 'evaluate_child_ticket', 'generate_auditor_record', 'resolve_agent']) {
+    for (const action of ['evaluate_ai', 'evaluate_child_ticket', 'generate_auditor_record', 'resolve_agent', 'publish_child_macro']) {
       expect(canRunQueueAction('gestor_suporte', action)).toBe(false);
       for (const role of ['qualidade', 'gestor_qualidade', 'admin']) {
         expect(canRunQueueAction(role, action)).toBe(true);

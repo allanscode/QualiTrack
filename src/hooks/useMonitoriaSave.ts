@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 interface SaveHookDeps {
   user: User | null;
   initialData: Monitoria | undefined;
+  ticketGroupTeamId?: string;
   isReevaluating: boolean;
   isAdminEdit: boolean;
   header: Record<string, any>;
@@ -183,7 +184,9 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           active: true,
           form_snapshot: {
             ...(deps.selectedForm as any),
-            ai_evaluation: (deps.initialData as any)?.aiEvaluation || (deps.initialData as any)?.form_snapshot?.ai_evaluation,
+            ai_evaluation: deps.header.form_id === deps.initialData?.form_id
+              ? ((deps.initialData as any)?.aiEvaluation || (deps.initialData as any)?.form_snapshot?.ai_evaluation)
+              : undefined,
             child_ai_evaluation: (deps.initialData as any)?.childAiEvaluation || (deps.initialData as any)?.form_snapshot?.child_ai_evaluation,
           },
           history: [...(deps.initialData?.history || []), historyEntry],
@@ -234,7 +237,8 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
         // Zendesk, ou cadastrada manualmente sem selecionar equipe) — agora
         // que essa monitoria confirmou a equipe certa. Best-effort, não
         // bloqueia o fluxo: a monitoria já foi salva com sucesso acima.
-        if (deps.header.evaluated_id && deps.header.team_id && !evaluatedUser?.primary_team_id) {
+        if (deps.header.evaluated_id && deps.header.team_id && !evaluatedUser?.primary_team_id
+          && deps.header.team_id !== deps.ticketGroupTeamId) {
           backfillAgentTeam(deps.header.evaluated_id, deps.header.team_id);
         }
 

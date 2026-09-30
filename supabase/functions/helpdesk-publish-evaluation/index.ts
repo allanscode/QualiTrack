@@ -2,8 +2,8 @@ import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
 import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 // Orquestra a publicação de uma avaliação de qualidade no helpdesk:
 // autentica o chamador, busca a monitoria, monta o HTML do comentário
-// (sempre no servidor — o frontend nunca envia HTML, só pede o preview
-// com dry_run: true), escolhe o provider e registra o resultado.
+// (sempre no servidor — o frontend pode enviar texto simples editado,
+// nunca HTML), escolhe o provider e registra o resultado.
 //
 // Trocar de helpdesk = trocar o `switch` abaixo por outra implementação de
 // HelpdeskProvider (ver types.ts). Nada de Zendesk deve aparecer aqui além
@@ -14,7 +14,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 import type { HelpdeskProvider, PublishResult } from './types.ts';
-import { buildEvaluationHtml } from './template.ts';
+import { buildEditedCommentHtml, buildEvaluationHtml } from './template.ts';
 import { ZendeskProvider } from './zendesk.ts';
 import { publicationAccess } from './access.ts';
 
@@ -26,6 +26,7 @@ const PublishSchema = z.object({
   outcome: z.enum(['positiva', 'negativa']).optional(),
   dry_run: z.boolean().optional(),
   force: z.boolean().optional(),
+  comment_text: z.string().trim().min(1).max(12000).optional(),
 });
 
 function jsonResponse(body: PublishResult, status: number): Response {
@@ -105,7 +106,7 @@ serve(async (req: Request) => {
       );
     }
 
-    const { monitoria_id, outcome, dry_run, force } = parsed.data;
+    const { monitoria_id, outcome, dry_run, force, comment_text } = parsed.data;
 
     // Client com service role: a busca/gravação da monitoria e do envio
     // acontece independentemente das políticas de RLS do usuário chamador
@@ -227,7 +228,7 @@ serve(async (req: Request) => {
     }
 
     // 4. Montar o HTML a partir do template + campos.
-    const previewHtml = buildEvaluationHtml({
+    const generatedHtml = buildEvaluationHtml({
       outcome: resolvedOutcome,
       evaluatorNote: monitoria.evaluator_note ?? null,
       satisfactionRecordText: monitoria.satisfaction_has_record
@@ -252,9 +253,20 @@ serve(async (req: Request) => {
       return failure('Integração de helpdesk indisponível.', 'provider', 503);
     }
 
+    try {
+      const eligibility = await provider.checkPublicationEligibility(normalizedTicketId);
+      if (!eligibility.eligible) {
+        return failure(eligibility.reason || 'Este ticket não aceita publicações.', 'validation', 409);
+      }
+    } catch (error) {
+      console.error('[helpdesk-publish-evaluation] Falha ao conferir status do ticket:', error);
+      return failure('Não foi possível conferir o estado do ticket no helpdesk. Tente novamente mais tarde.', 'provider', 502);
+    }
+
     const { data: claimId, error: claimError } = await supabaseAdmin.rpc('claim_helpdesk_publication', {
       p_monitoria: monitoria_id, p_caller: user.id, p_force: force ?? false,
     });
+    const previewHtml = comment_text === undefined ? generatedHtml : buildEditedCommentHtml(comment_text);
     if (claimError) return failure('Envio em andamento ou pendente de conferência. Atualize e confira o ticket antes de reenviar.', 'provider', 409);
     if (!claimId) return jsonResponse({ success: true, preview_html: previewHtml, ticket_id: normalizedTicketId }, 200);
     try {
