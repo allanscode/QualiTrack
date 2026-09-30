@@ -1806,7 +1806,7 @@ ${checksSummary}${recs}`;
     };
 
     return (
-      <div className="sticky bottom-0 z-20 mt-auto flex flex-col sm:flex-row items-center justify-between gap-3 px-3 py-3 border border-surface-border rounded-xl bg-surface-card/95 backdrop-blur-md shadow-premium-sm">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 py-3 border border-surface-border rounded-xl bg-surface-card shadow-premium-sm">
         <div className="flex flex-wrap items-center gap-3 text-xs text-brand-muted">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-medium text-brand-muted">Exibir:</span>
@@ -2509,8 +2509,8 @@ ${checksSummary}${recs}`;
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
                 {paginatedTickets.map(ticket => (
                   <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-functional-success/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-emerald-500/40 border-emerald-500/50 bg-emerald-500/3' : ''}`}>
-                    <div className="flex items-start justify-between gap-2.5">
-                      <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-start gap-2.5 min-w-0">
                         {canAudit ? <input
                           type="checkbox"
                           checked={selectedTicketIds.has(ticket.ticket_id)}
@@ -2549,7 +2549,7 @@ ${checksSummary}${recs}`;
                           </h4>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5 pl-[26px]">
                         {renderScoreBadge(ticket)}
                         <Badge variant="success" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
                           CSAT Bom
