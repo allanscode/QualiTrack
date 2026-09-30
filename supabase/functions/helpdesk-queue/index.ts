@@ -306,6 +306,94 @@ async function resolveOrCreateAgent(
   return { id: created.id as string, team_id: teamId, ticket_group_team_id: teamId };
 }
 
+async function reconcilePublishedChildMacros(supabase: SupabaseClient): Promise<Response> {
+  const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
+  const email = Deno.env.get('ZENDESK_EMAIL');
+  const token = Deno.env.get('ZENDESK_API_TOKEN');
+  if (!subdomain || !email || !token) return jsonResponse({ error: 'Zendesk não configurado.' }, 500);
+  const headers = {
+    Authorization: `Basic ${btoa(`${email}/token:${token}`)}`,
+    'Content-Type': 'application/json', Accept: 'application/json',
+  };
+  const base = `https://${subdomain}.zendesk.com/api/v2`;
+  const ticketIds = new Set<string>();
+  let truncated = false;
+
+  for (const viewId of new Set([CHILD_VIEW_ID, INVALID_CHILD_VIEW_ID].filter(Boolean))) {
+    const viewUrl = `${base}/views/${viewId}.json`;
+    const viewResponse = await fetch(viewUrl, { headers, signal: AbortSignal.timeout(10000) });
+    if (!viewResponse.ok) return jsonResponse({ error: `Falha ao ler a view ${viewId} (${viewResponse.status}).` }, 502);
+    const view = (await viewResponse.json()).view;
+    let conditions: ReturnType<typeof childViewConditionsWithAuditExclusion>;
+    try { conditions = childViewConditionsWithAuditExclusion(view); }
+    catch { return jsonResponse({ error: `Condições incompletas na view ${viewId}.` }, 502); }
+    if (conditions) {
+      const update = await fetch(viewUrl, {
+        method: 'PUT', headers, signal: AbortSignal.timeout(10000),
+        body: JSON.stringify({ view: conditions }),
+      });
+      if (!update.ok) return jsonResponse({ error: `Falha ao atualizar a view ${viewId} (${update.status}).` }, 502);
+    }
+
+    let next: string | null = `${base}/views/${viewId}/tickets.json?page[size]=25`;
+    for (let page = 0; next && page < 4; page++) {
+      const response = await fetch(next, { headers, signal: AbortSignal.timeout(15000) });
+      if (!response.ok) return jsonResponse({ error: `Falha ao listar a view ${viewId} (${response.status}).` }, 502);
+      const body = await response.json();
+      for (const ticket of body.tickets || []) if (ticket.id) ticketIds.add(String(ticket.id));
+      const candidate = body.meta?.has_more ? body.links?.next : null;
+      if (candidate && !String(candidate).startsWith(`${base}/views/${viewId}/tickets.json`)) {
+        return jsonResponse({ error: `Paginação inesperada na view ${viewId}.` }, 502);
+      }
+      next = candidate || null;
+    }
+    if (next) truncated = true;
+  }
+
+  const updated: string[] = [];
+  const alreadyMarked: string[] = [];
+  const withoutMacro: string[] = [];
+  const errors: string[] = [];
+  for (const id of ticketIds) {
+    try {
+      const ticketUrl = `${base}/tickets/${id}.json`;
+      const ticketResponse = await fetch(ticketUrl, { headers, signal: AbortSignal.timeout(10000) });
+      if (!ticketResponse.ok) throw new Error(`ticket ${ticketResponse.status}`);
+      const ticket = (await ticketResponse.json()).ticket;
+      if (!Array.isArray(ticket?.tags) || typeof ticket.updated_at !== 'string') throw new Error('ticket incompleto');
+      if (ticket.tags.includes(CHILD_AUDITED_TAG)) { alreadyMarked.push(id); continue; }
+      const commentsResponse = await fetch(`${base}/tickets/${id}/comments.json?sort_order=desc&per_page=100`, {
+        headers, signal: AbortSignal.timeout(10000),
+      });
+      if (!commentsResponse.ok) throw new Error(`comentários ${commentsResponse.status}`);
+      if (!hasPublishedChildMacro((await commentsResponse.json()).comments)) { withoutMacro.push(id); continue; }
+      const update = await fetch(ticketUrl, {
+        method: 'PUT', headers, signal: AbortSignal.timeout(20000),
+        body: JSON.stringify({ ticket: {
+          tags: [...ticket.tags, CHILD_AUDITED_TAG], safe_update: true, updated_stamp: ticket.updated_at,
+        } }),
+      });
+      if (!update.ok) throw new Error(`atualização ${update.status}`);
+      const { data: rows, error: readError } = await supabase.from('queue_ticket_catalog')
+        .select('queue_type,ticket_snapshot').eq('ticket_id', id).in('queue_type', ['filhos', 'filhos_invalidos']);
+      if (readError) throw new Error('catálogo não consultado');
+      for (const row of rows || []) {
+        const snapshot = row.ticket_snapshot && typeof row.ticket_snapshot === 'object' ? row.ticket_snapshot : {};
+        const tags = Array.isArray(snapshot.tags) ? snapshot.tags : ticket.tags;
+        const { error } = await supabase.from('queue_ticket_catalog')
+          .update({ ticket_snapshot: { ...snapshot, tags: [...new Set([...tags, CHILD_AUDITED_TAG])] } })
+          .eq('ticket_id', id).eq('queue_type', row.queue_type);
+        if (error) throw new Error('catálogo não atualizado');
+      }
+      updated.push(id);
+    } catch (error) {
+      errors.push(`${id}: ${error instanceof Error ? error.message : 'erro desconhecido'}`);
+    }
+  }
+  return jsonResponse({ success: errors.length === 0 && !truncated, scanned: ticketIds.size,
+    updated, already_marked: alreadyMarked, without_macro: withoutMacro, errors, truncated }, 200);
+}
+
 serve(async (req) => {
   const rejected = rejectRequest(req, corsHeaders);
   if (rejected) return rejected;
@@ -326,6 +414,13 @@ serve(async (req) => {
       }
       const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
       return await processAIRetries(workerClient);
+    }
+    if (workerBody?.action === 'reconcile_child_macros') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
+      return await reconcilePublishedChildMacros(workerClient);
     }
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
