@@ -302,7 +302,9 @@ export default function MonitoriaList({
   const activeSuportes = useMemo(() => {
     let filtered = staticData.users.filter(u => u.role === 'suporte' && u.active !== false);
     if (user?.role === 'gestor_suporte' && user.team_ids?.length) {
-      filtered = filtered.filter(u => u.team_ids?.some(tid => user.team_ids!.includes(tid)));
+      filtered = filtered.filter(u => u.primary_team_id
+        ? user.team_ids!.includes(u.primary_team_id)
+        : u.team_ids?.some(tid => user.team_ids!.includes(tid)));
     }
     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [staticData.users, user]);

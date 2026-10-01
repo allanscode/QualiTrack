@@ -27,7 +27,9 @@ describe('useMonitoriaSave', () => {
       dissatisfactionAnswers: {}, score: 100,
       selectedForm: { id: 'form-1', sections: [{ questions: [{ id: 'pergunta' }] }] },
       qualityConfig: { action_deadline: {}, businessHours: {} },
-      allUsers: [], forms: [], teams: [], dissatisfactionFields: [], clientFieldsToShow: [], qualityFieldsToShow: [],
+      allUsers: [{ id: 'agente-1', name: 'Agente PJ', primary_team_id: 'equipe-pj' }],
+      forms: [], teams: [{ id: 'equipe-pj', name: 'PJs' }],
+      dissatisfactionFields: [], clientFieldsToShow: [], qualityFieldsToShow: [],
       onSaved,
     } as unknown as Parameters<typeof useMonitoriaSave>[0];
 
@@ -38,6 +40,9 @@ describe('useMonitoriaSave', () => {
     expect(db.insert).toHaveBeenCalledOnce();
     const payload = db.insert.mock.calls[0][0][0];
     expect(payload.status).toBe('concluida');
+    expect(payload.team_id).toBe('equipe-pj');
+    expect(payload.team_name).toBe('PJs');
+    expect(payload.ticket_group_team_id).toBe('equipe-1');
     expect(payload).not.toHaveProperty('concluded_at');
   });
 });

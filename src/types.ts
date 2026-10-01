@@ -137,6 +137,8 @@ export interface Monitoria {
   question_observations?: Record<string, string>;
   critical_error_observations?: Record<string, string>;
   team_id?: string;
+  /** Grupo original do ticket; team_id identifica a equipe gestora. */
+  ticket_group_team_id?: string;
   satisfaction_record_text?: string;
   selected_critical_errors?: string[];
   form_snapshot?: EvaluationForm;
