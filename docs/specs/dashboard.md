@@ -25,6 +25,13 @@ DashboardMain
 
 ## DashboardContext
 
+Para monitorias, `team_id` representa a equipe principal do agente avaliado e
+determina o gestor de suporte que pode ver a monitoria e as metricas em que ela
+conta. `ticket_group_team_id` preserva o grupo original do ticket Zendesk. Assim,
+um agente da equipe PJ atendendo um ticket de Escala conta para PJ e permanece
+visivel apenas aos gestores vinculados a PJ. Se a equipe principal do agente
+mudar, as monitorias existentes acompanham a nova equipe gestora.
+
 ## Personalização por cargo
 
 Em **Customizar Dashboards**, o administrador seleciona um dos cinco cargos e define quais cards, gráficos e tabelas aparecem. Na própria prévia, cada card pode ser arrastado para outra posição ou movido e removido pelos botões da barra superior. A lista completa começa recolhida para deixar a prévia acessível e oferece as mesmas ações; itens retirados ficam em **Disponíveis para adicionar**. **Restaurar ordem** devolve a disposição original. A prévia e o dashboard real consomem a mesma configuração.

@@ -91,7 +91,9 @@ export default function FilterBar() {
     let list = users.filter(u => u.role === 'suporte' && u.active !== false);
     if (dashboardRole === 'gestor_suporte') {
       const myTeamIds = user?.team_ids || [];
-      list = list.filter(u => u.team_ids?.some(tid => myTeamIds.includes(tid)));
+      list = list.filter(u => u.primary_team_id
+        ? myTeamIds.includes(u.primary_team_id)
+        : u.team_ids?.some(tid => myTeamIds.includes(tid)));
     }
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [users, user, dashboardRole]);

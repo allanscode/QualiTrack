@@ -156,14 +156,17 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
         }
 
         const evaluatedUser = deps.allUsers.find(u => u.id === deps.header.evaluated_id);
-        const selectedTeam = deps.teams.find(t => t.id === (deps.header.team_id || evaluatedUser?.team_ids?.[0]));
+        const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
+        const ticketGroupTeamId = deps.initialData?.ticket_group_team_id || deps.ticketGroupTeamId || deps.header.team_id;
+        const selectedTeam = deps.teams.find(t => t.id === managementTeamId);
         const selectedFormObj = deps.forms.find(f => f.id === deps.header.form_id);
 
         const payload = {
           form_id: deps.header.form_id,
           evaluator_id: deps.initialData?.evaluator_id || currentUser.id,
           evaluated_id: deps.header.evaluated_id,
-          team_id: deps.header.team_id || null,
+          team_id: managementTeamId || null,
+          ticket_group_team_id: ticketGroupTeamId || null,
           ticket_id: deps.header.ticket_id,
           channel: deps.header.channel,
           ticket_date: deps.header.ticket_date,

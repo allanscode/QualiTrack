@@ -107,6 +107,23 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       assert.equal(supportView.rows[0].evaluator_name,null);
       await assert.rejects(asUser(2,() => db.exec(`INSERT INTO monitorias(evaluated_id,score) VALUES ('${id(2)}',100)`)),/row-level security/);
     });
+    await t.test('PJ evaluation belongs to the agent primary team despite the ticket group', async () => {
+      await db.exec(`INSERT INTO users(id,email,name,role,active) VALUES ('${id(6)}','manager-b@example.invalid','Manager B','gestor_suporte',true);
+        INSERT INTO user_teams(user_id,team_id) VALUES ('${id(6)}','${id(11)}'),('${id(2)}','${id(11)}');
+        UPDATE users SET primary_team_id='${id(10)}' WHERE id='${id(2)}';
+        INSERT INTO monitorias(id,form_id,evaluated_id,evaluator_id,team_id,score,question_observations,form_snapshot,applied_config)
+          VALUES ('${id(32)}','${id(20)}','${id(2)}','${id(4)}','${id(11)}',85,'{}','{}','{}');`);
+      const evaluation = (await db.query('SELECT team_id,team_name,ticket_group_team_id FROM monitorias WHERE id=$1',[id(32)])).rows[0];
+      assert.equal(evaluation.team_id,id(10));
+      assert.equal(evaluation.team_name,'Team A');
+      assert.equal(evaluation.ticket_group_team_id,id(11));
+      assert.equal((await asUser(3,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,1);
+      assert.equal((await asUser(6,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,0);
+      await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[id(1)]);
+      await db.exec(`UPDATE users SET primary_team_id='${id(11)}' WHERE id='${id(2)}'`);
+      assert.equal((await asUser(3,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,0);
+      assert.equal((await asUser(6,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,1);
+    });
     await t.test('AI draft keeps its original queue snapshot until a monitoria is saved', async () => {
       const snapshot = { ticket_id: '12345', subject: 'Proactive ticket', csat_status: 'unrated', ticket_date: '2026-09-28', status: 'open' };
       await db.query(`INSERT INTO public.queue_ticket_catalog(ticket_id,queue_type,ticket_snapshot)
