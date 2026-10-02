@@ -512,7 +512,12 @@ export async function evaluateTicketWithAI(
       throw new Error(data?.error || 'A IA não retornou resultado para este ticket');
     }
 
-    return data.result as AIEvaluationResult;
+    const result = data.result as AIEvaluationResult;
+    if (data?.technical) {
+      result.fallback_used = Boolean(data.technical.fallbackUsed);
+      result.model = data.technical.model;
+    }
+    return result;
   } catch (err: any) {
     console.error('[HelpdeskQueue] Erro ao chamar avaliação com IA:', err);
     throw err;
@@ -585,7 +590,12 @@ export async function evaluateChildTicketWithAI(
     if (data?.queued === true && typeof data.job_id === 'string') return { queued: true, job_id: data.job_id };
     if (!data?.result) throw new Error(data?.error || 'A IA não retornou resultado.');
 
-    return data.result as ChildTicketAiEvaluation;
+    const result = data.result as ChildTicketAiEvaluation;
+    if (data?.technical) {
+      result.fallback_used = Boolean(data.technical.fallbackUsed);
+      result.model = data.technical.model;
+    }
+    return result;
   } catch (err) {
     console.error('[HelpdeskQueue] Erro ao chamar avaliação de chamado filho com IA:', err);
     throw err;

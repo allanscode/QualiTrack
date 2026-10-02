@@ -210,6 +210,7 @@ export default function AuditingQueueView({
     filhos_invalidos: {},
   });
   const [assignmentModalTicket, setAssignmentModalTicket] = useState<AuditingQueueTicket | null>(null);
+  const notifiedFallbacksRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -238,6 +239,14 @@ export default function AuditingQueueView({
         const job = payload.new as AIEvaluationJob | undefined;
         if (!job?.ticket_id) return;
         setAIJobs(previous => ({ ...previous, [job.ticket_id]: job }));
+
+        if (job.status === 'running' && job.phase === 'fallback_gemini') {
+          const toastKey = `ai-fallback-${job.job_id || job.ticket_id}`;
+          if (!notifiedFallbacksRef.current.has(toastKey)) {
+            notifiedFallbacksRef.current.add(toastKey);
+            toast.warning(`Chamado #${job.ticket_id}: o modelo primário oscilou ou falhou. Tentando análise com IA de contingência...`, { id: toastKey, duration: 6000 });
+          }
+        }
         if (job.status === 'completed' && job.evaluation_type === 'chamado_filho' && job.result) {
           setTickets(previous => previous.map(ticket => ticket.ticket_id === job.ticket_id
             ? { ...ticket, child_evaluation: job.result as ChildTicketAiEvaluation } : ticket));
@@ -1029,6 +1038,10 @@ export default function AuditingQueueView({
       aiResult.ticket_fields = ticketFields;
       aiResult.dialogue = dialogue;
 
+      if (aiResult.fallback_used) {
+        toast.info(`Chamado #${ticket.ticket_id}: análise concluída via IA de contingência (${aiResult.model || "modelo alternativo"}).`, { id: `ai-completed-fallback-${ticket.ticket_id}`, duration: 5000 });
+      }
+
       setTicketProgress(ticket.ticket_id, 3);
       // A resposta já foi persistida pelo backend; esta curta permanência
       // permite perceber a etapa final antes de trocar o botão de estado.
@@ -1281,6 +1294,9 @@ export default function AuditingQueueView({
       } }));
       setChildAiEvaluation(result);
       ticket.child_evaluation = result;
+      if (result.fallback_used) {
+        toast.info(`Chamado filho #${ticket.ticket_id}: análise concluída via IA de contingência (${result.model || "modelo alternativo"}).`, { id: `ai-completed-fallback-${ticket.ticket_id}`, duration: 5000 });
+      }
       setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: '' }));
     } catch (err: any) {
       if (cancelledAIJobIds.has(jobId)) return;
@@ -1582,7 +1598,7 @@ export default function AuditingQueueView({
             disabled={true}
             className="flex min-w-0 items-center justify-center gap-1.5 bg-indigo-600/80 text-white font-semibold shadow-xs cursor-not-allowed"
           >
-            <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} />
+            <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
           </Button>
           {renderCancelAIAction(ticket.ticket_id)}
         </div>
@@ -2661,7 +2677,7 @@ export default function AuditingQueueView({
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
                             {isEvaluatingTicket(ticket.ticket_id) ? (
-                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} />
+                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
                             ) : (
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}
@@ -2789,7 +2805,7 @@ export default function AuditingQueueView({
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
                             {isEvaluatingTicket(ticket.ticket_id) ? (
-                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} />
+                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
                             ) : (
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}

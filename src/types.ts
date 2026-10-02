@@ -243,6 +243,8 @@ export interface ChildTicketAiEvaluation {
   summary: string;
   checks: ChildTicketCheckResult[];
   recommendations: string[];
+  fallback_used?: boolean;
+  model?: string;
 }
 
 export interface AIEvaluationLog {
@@ -316,6 +318,8 @@ export interface AuditingQueueTicket {
   child_macro_type?: ChildTicketMacroType;
   child_evaluation?: ChildTicketAiEvaluation;
   dialogue?: TicketCommentMessage[];
+  fallback_used?: boolean;
+  model?: string;
 }
 
 export interface AgentQueueSummary {
@@ -385,6 +389,8 @@ export interface AIEvaluationResult {
   suggested_critical_errors: Record<string, boolean>;
   ticket_fields?: { title: string; value: string }[];
   dialogue?: TicketCommentMessage[];
+  fallback_used?: boolean;
+  model?: string;
 }
 
 export type FeedbackStatus = 'pendente_ciencia' | 'ciente' | 'concluido';
