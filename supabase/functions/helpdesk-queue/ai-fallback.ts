@@ -127,9 +127,7 @@ export interface RunAIModelChainOptions<T> {
 }
 
 export async function runAIModelChain<T>(options: RunAIModelChainOptions<T>): Promise<AIChainResult<T>> {
-  if (options.targets.length !== 1 || options.targets[0].provider !== 'openrouter'
-    || options.targets[0].model !== 'google/gemma-4-31b-it'
-    || options.targets[0].maxAttempts < 1) {
+  if (options.targets.length === 0 || options.targets.some(target => target.provider !== 'openrouter')) {
     throw new AIModelError('Cadeia de IA inválida.', 'request_configuration_error', false, 'global');
   }
 

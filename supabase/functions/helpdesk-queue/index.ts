@@ -15,7 +15,7 @@ import {
   type AIAttemptRecord,
   type AIModelTarget,
 } from './ai-fallback.ts';
-import { callOpenRouter, OPENROUTER_MODEL } from './openrouter-client.ts';
+import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS, OPENROUTER_HANG_GUARD_MS } from './openrouter-client.ts';
 import { retryAt } from './ai-retry.ts';
 import { canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
@@ -26,10 +26,12 @@ import { childMacroCustomFields, missingCustomFields } from './child-macro-field
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
-const AI_PRIMARY_TIMEOUT_MS = Math.min(120_000, Math.max(1_000, Number(Deno.env.get('AI_PRIMARY_TIMEOUT_MS') || '30000') || 30000));
-const AI_TARGETS: AIModelTarget[] = [
-  { provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4, timeoutMs: AI_PRIMARY_TIMEOUT_MS },
-];
+const AI_HANG_TIMEOUT_MS = Math.min(300_000, Math.max(1_000, Number(Deno.env.get('AI_PRIMARY_TIMEOUT_MS') || String(OPENROUTER_HANG_GUARD_MS)) || OPENROUTER_HANG_GUARD_MS));
+// Gemma gratuito primeiro; depois fallbacks gratuitos dos mais inteligentes. O timeout
+// existe apenas para o caso de o modelo não retornar.
+const AI_TARGETS: AIModelTarget[] = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS].map(model => ({
+  provider: 'openrouter' as const, model, maxAttempts: 2, timeoutMs: AI_HANG_TIMEOUT_MS,
+}));
 
 
 const MAX_REQUEST_BYTES = 1_000_000;
@@ -121,6 +123,7 @@ const RequestSchema = z.object({
     }).optional(),
   }).optional(),
   ticket_subject: z.string().max(500).optional(),
+  ticket_status: z.string().max(40).optional(),
   search_term: z.string().max(200).optional(),
   // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
   // de fetch_queue. Ausente/null = primeira página.
@@ -566,7 +569,7 @@ serve(async (req) => {
       if (!started) return jsonResponse({ error: 'Este job de IA já está em execução ou não pertence ao usuário.' }, 409);
     }
 
-    // 3. Avaliação com IA: apenas Gemma 4 via OpenRouter.
+    // 3. Avaliação com IA: GLM pago primeiro, Gemini pago somente após esgotar GLM.
     if (action === 'evaluate_ai') {
       return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
         signal => handleEvaluateAI(parseResult.data, supabase, user.id, signal));
@@ -1882,7 +1885,7 @@ async function cancelledAIJob(supabase: SupabaseClient, jobId: string): Promise<
   return data?.status === 'cancelled';
 }
 
-async function setAIPhase(supabase: SupabaseClient, jobId: string, phase: 'running_gemma' | 'retry_pending'): Promise<void> {
+async function setAIPhase(supabase: SupabaseClient, jobId: string, phase: 'running_gemma' | 'running_glm' | 'fallback_gemini' | 'retry_pending'): Promise<void> {
   const { data, error } = await supabase.rpc('set_ai_evaluation_phase', { p_job_id: jobId, p_phase: phase });
   if (error) throw new Error('Falha ao atualizar etapa do job de IA.');
   if (!data) throw new AIModelError('Análise interrompida.', 'cancelled', false, 'global');
@@ -2359,7 +2362,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     const chain = await runAIModelChain({
       targets: aiTargets,
       signal,
-      onTargetStart: async () => setAIPhase(supabase, payload.job_id!, 'running_gemma'),
+      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, target.model === OPENROUTER_MODEL ? 'running_gemma' : 'fallback_gemini'),
       execute: async (target, _attempt, attemptSignal) => {
         const modelStarted = Date.now();
         const response = await callOpenRouter({
@@ -2486,7 +2489,7 @@ async function handleEvaluateChildTicket(
   callerId?: string,
   signal?: AbortSignal,
 ): Promise<Response> {
-  const { ticket_id, ticket_subject, dialogue, ticket_fields, macro_type } = payload;
+  const { ticket_id, ticket_subject, ticket_status, dialogue, ticket_fields, macro_type } = payload;
 
   if (!ticket_id) {
     return jsonResponse({ error: 'ticket_id é obrigatório para evaluate_child_ticket' }, 400);
@@ -2551,7 +2554,7 @@ Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base n
 O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentais:
 
 =============================================================================
-1. PRESERVAÇÃO DO ASSUNTO (INALTERABILIDADE - REGRA CRÍTICA):
+1. ASSUNTO DA ABERTURA E ALTERAÇÃO AUTOMÁTICA NA RESOLUÇÃO:
 =============================================================================
 - O assunto do ticket filho DEVE conter o nome da macro padrão homologada.
 - O Zendesk e as automações frequentemente adicionam:
@@ -2567,7 +2570,8 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
   * "Encaminhado para Análise Técnica - Correções" (ou "Encaminhado para Análise de Correções")
   * "Encaminhado para Desenvolvimento"
   * "Apoio Análise Técnica"
-- QUANDO DEVE FALHAR (passed: false): APENAS se o assunto foi totalmente descaracterizado e substituído por texto livre que não contém nenhuma das macros homologadas acima (ex: "Erro no PDV", "Cliente com dúvida", "Impressora travada").
+- EXCEÇÃO OBRIGATÓRIA: A macro de resolvido do Zendesk altera automaticamente o assunto depois da abertura. Se o ticket estiver resolvido e o assunto atual não contiver mais o nome da macro de abertura, considere o quesito do assunto CONFORME (passed: true), salvo se houver evidência clara de que o analista alterou manualmente o assunto antes da resolução. Não reprove nem reduza a nota somente por essa alteração automática. Explique no check que o título atual reflete a macro de resolvido.
+- QUANDO DEVE FALHAR (passed: false): Se não houver indicação de resolução e o assunto da abertura tiver sido descaracterizado manualmente e substituído por texto livre sem nenhuma macro homologada (ex: "Erro no PDV", "Cliente com dúvida", "Impressora travada").
 
 =============================================================================
 2. PRESERVAÇÃO DO TEXTO DA MACRO COM ENRIQUECIMENTO TÉCNICO:
@@ -2595,6 +2599,7 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
 DADOS DO CHAMADO FILHO SOB AUDITORIA:
 - Ticket: #${ticket_id}
 - Assunto Registrado: ${sanitizeMessageBody(ticket_subject || 'Não informado')}
+- Status Atual do Ticket: ${sanitizeMessageBody(ticket_status || 'Não informado')}
 - Tipo Sugerido/Macro: ${macro_type || 'Detectar automaticamente'}
 - Campos do Ticket:
 ${ticketFieldsText || '(nenhum campo extra)'}
@@ -2603,7 +2608,7 @@ CONTEÚDO / DESCRIÇÃO / COMENTÁRIOS DO TICKET FILHO:
 ${dialogueText || '(sem texto registrado)'}
 
 CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
-1. rule: "Preservação do Assunto (Inalterabilidade)"
+1. rule: "Assunto da Abertura e Macro de Resolvido"
 2. rule: "Preservação do Texto da Macro"
 3. rule: "Direcionamento Correto ('Para')"
 
@@ -2624,7 +2629,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     const chain = await runAIModelChain({
       targets: aiTargets,
       signal,
-      onTargetStart: async () => setAIPhase(supabase, payload.job_id!, 'running_gemma'),
+      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, target.model === OPENROUTER_MODEL ? 'running_gemma' : 'fallback_gemini'),
       execute: async (target, _attempt, attemptSignal) => {
         const modelStarted = Date.now();
         const response = await callOpenRouter({
