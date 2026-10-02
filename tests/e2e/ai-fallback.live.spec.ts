@@ -27,7 +27,7 @@ async function request<T>(path: string, init: RequestInit, key = serviceRoleKey)
 test.describe('avaliação real paga via OpenRouter em projeto E2E isolado', () => {
   test.skip(!runLive, 'Exige projeto Supabase E2E dedicado e opt-in explícito.');
 
-  test('GLM pago conclui e salva um único resultado válido', async () => {
+  test('Gemma 4 conclui e salva um único resultado válido', async () => {
     test.setTimeout(120_000);
     assertSafeLiveE2E(supabaseUrl);
     await cleanupStaleLiveE2E(supabaseUrl, serviceRoleKey);
@@ -127,8 +127,8 @@ test.describe('avaliação real paga via OpenRouter em projeto E2E isolado', () 
 
       expect(logs).toHaveLength(1);
       console.log(JSON.stringify({ ticketId, finalProvider: logs[0].provider, finalModel: logs[0].model, attempts: logs[0].attempts }));
-      expect(logs[0]).toMatchObject({ provider: 'openrouter', model: 'z-ai/glm-5.3-flash', status: 'success', fallback_used: false });
-      expect(logs[0].attempts[0]).toMatchObject({ model: 'z-ai/glm-5.3-flash', status: 'success' });
+      expect(logs[0]).toMatchObject({ provider: 'openrouter', model: 'google/gemma-4-31b-it', status: 'success', fallback_used: false });
+      expect(logs[0].attempts[0]).toMatchObject({ model: 'google/gemma-4-31b-it', status: 'success' });
     } finally {
       await cleanupLiveE2EFixture(supabaseUrl, serviceRoleKey, user?.id, ticketId);
     }

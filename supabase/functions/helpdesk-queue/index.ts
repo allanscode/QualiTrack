@@ -15,7 +15,7 @@ import {
   type AIAttemptRecord,
   type AIModelTarget,
 } from './ai-fallback.ts';
-import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODEL } from './openrouter-client.ts';
+import { callOpenRouter, OPENROUTER_MODEL } from './openrouter-client.ts';
 import { retryAt } from './ai-retry.ts';
 import { canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
@@ -29,7 +29,6 @@ const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 const AI_PRIMARY_TIMEOUT_MS = Math.min(120_000, Math.max(1_000, Number(Deno.env.get('AI_PRIMARY_TIMEOUT_MS') || '30000') || 30000));
 const AI_TARGETS: AIModelTarget[] = [
   { provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4, timeoutMs: AI_PRIMARY_TIMEOUT_MS },
-  { provider: 'openrouter', model: OPENROUTER_FALLBACK_MODEL, maxAttempts: 3, timeoutMs: 45_000 },
 ];
 
 
@@ -567,7 +566,7 @@ serve(async (req) => {
       if (!started) return jsonResponse({ error: 'Este job de IA já está em execução ou não pertence ao usuário.' }, 409);
     }
 
-    // 3. Avaliação com IA: GLM pago primeiro, Gemini pago somente após esgotar GLM.
+    // 3. Avaliação com IA: apenas Gemma 4 via OpenRouter.
     if (action === 'evaluate_ai') {
       return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
         signal => handleEvaluateAI(parseResult.data, supabase, user.id, signal));
@@ -1883,7 +1882,7 @@ async function cancelledAIJob(supabase: SupabaseClient, jobId: string): Promise<
   return data?.status === 'cancelled';
 }
 
-async function setAIPhase(supabase: SupabaseClient, jobId: string, phase: 'running_glm' | 'fallback_gemini' | 'retry_pending'): Promise<void> {
+async function setAIPhase(supabase: SupabaseClient, jobId: string, phase: 'running_gemma' | 'retry_pending'): Promise<void> {
   const { data, error } = await supabase.rpc('set_ai_evaluation_phase', { p_job_id: jobId, p_phase: phase });
   if (error) throw new Error('Falha ao atualizar etapa do job de IA.');
   if (!data) throw new AIModelError('Análise interrompida.', 'cancelled', false, 'global');
@@ -2360,7 +2359,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     const chain = await runAIModelChain({
       targets: aiTargets,
       signal,
-      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, target.model === OPENROUTER_MODEL ? 'running_glm' : 'fallback_gemini'),
+      onTargetStart: async () => setAIPhase(supabase, payload.job_id!, 'running_gemma'),
       execute: async (target, _attempt, attemptSignal) => {
         const modelStarted = Date.now();
         const response = await callOpenRouter({
@@ -2625,7 +2624,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     const chain = await runAIModelChain({
       targets: aiTargets,
       signal,
-      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, target.model === OPENROUTER_MODEL ? 'running_glm' : 'fallback_gemini'),
+      onTargetStart: async () => setAIPhase(supabase, payload.job_id!, 'running_gemma'),
       execute: async (target, _attempt, attemptSignal) => {
         const modelStarted = Date.now();
         const response = await callOpenRouter({

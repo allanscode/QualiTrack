@@ -65,7 +65,7 @@ As filas carregam ao abrir, trocar de fila, buscar, paginar ou clicar em **Atual
 
 ## Modelo de IA
 
-`OPENROUTER_MODEL` aceita lista separada por vírgula — o parâmetro `models` (não `model`) do OpenRouter tenta em cadeia. Ordem atual prioriza confiabilidade sobre velocidade: só `nvidia/nemotron-3-super-120b-a12b:free` foi confirmado respeitando o `json_schema` com fidelidade nos campos; outros modelos gratuitos testados (`minimax-*`, `dots-studio-*`) ignoravam o schema e devolviam `200 OK` com campos inventados.
+O modelo de análise é fixado no backend como `google/gemma-4-31b-it`, chamado pelo OpenRouter com `response_format: json_schema` e `require_parameters: true`. A variante `:free` não garante a aplicação do JSON Schema. Não há lista de modelos de contingência; falhas transitórias são tentadas novamente no mesmo Gemma 4 e, se necessário, entram na fila de reprocessamento.
 
 **Ordem das propriedades no `responseSchema` importa**: `answers` vem antes de `score`/`summary` — testado que, na ordem inversa, o modelo "reservava" `score: 0` e `summary: ""` antes de avaliar qualquer critério (typeof correto, valor semanticamente vazio). A validação pós-parse rejeita isso explicitamente (`score > 0`, `summary.trim().length > 0`), não só `typeof`.
 
@@ -81,7 +81,7 @@ Ver [`docs/database/schema.md`](../database/schema.md#ai_evaluation_guidelines) 
 | `HELPDESK_NEGATIVE_VIEW_ID` / `HELPDESK_POSITIVE_VIEW_ID` | Não (fallback: Search API) | View salva por fila |
 | `HELPDESK_VALIDATED_TAG` | Não | Exclui negativas já validadas por tag/macro |
 | `OPENROUTER_API_KEY` | Sim (para `evaluate_ai`) | Chave da IA |
-| `OPENROUTER_MODEL` | Não (default hardcoded) | Lista de modelos com fallback |
+| `AI_PRIMARY_TIMEOUT_MS` | Não (default 30000 ms) | Janela de tentativas do Gemma 4 |
 
 ## Divergência do Plano Original
 

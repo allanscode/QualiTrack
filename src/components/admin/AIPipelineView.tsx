@@ -62,7 +62,7 @@ export default function AIPipelineView() {
           </div>
           <h4 className="font-bold text-brand-primary">Execução & Validação</h4>
           <p className="text-brand-muted text-[11px] leading-relaxed">
-            Executa o GLM 5.3 Flash pelo OpenRouter com JSON Schema estrito e failover entre providers do mesmo modelo.
+            Executa o Gemma 4 31B pelo OpenRouter com JSON Schema estrito e failover entre providers do mesmo modelo.
           </p>
         </Card>
       </div>
@@ -126,7 +126,7 @@ export default function AIPipelineView() {
 
         <div className="space-y-2 text-[11px] text-brand-muted">
           <p>
-            • <strong>Modelo único:</strong> GLM 5.3 Flash (<code className="font-mono text-brand-primary font-bold">z-ai/glm-5.3-flash</code>) pelo OpenRouter, acessado exclusivamente pela Edge Function com chave armazenada em secret.
+            • <strong>Modelo único:</strong> Gemma 4 31B (<code className="font-mono text-brand-primary font-bold">google/gemma-4-31b-it</code>) pelo OpenRouter, acessado exclusivamente pela Edge Function com chave armazenada em secret.
           </p>
           <p>
             • <strong>Resiliência:</strong> failover automático entre providers do mesmo modelo, até três novas tentativas com espera progressiva e reprocessamento posterior em falhas transitórias.

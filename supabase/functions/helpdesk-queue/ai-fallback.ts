@@ -127,9 +127,9 @@ export interface RunAIModelChainOptions<T> {
 }
 
 export async function runAIModelChain<T>(options: RunAIModelChainOptions<T>): Promise<AIChainResult<T>> {
-  if (options.targets.length !== 2 || options.targets.some(target => target.provider !== 'openrouter')
-    || options.targets[0].model !== 'z-ai/glm-5.3-flash'
-    || options.targets[1].model !== 'google/gemini-3.8-flash') {
+  if (options.targets.length !== 1 || options.targets[0].provider !== 'openrouter'
+    || options.targets[0].model !== 'google/gemma-4-31b-it'
+    || options.targets[0].maxAttempts < 1) {
     throw new AIModelError('Cadeia de IA inválida.', 'request_configuration_error', false, 'global');
   }
 
