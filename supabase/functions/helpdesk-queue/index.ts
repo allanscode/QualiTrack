@@ -221,6 +221,14 @@ async function backfillAgentTeamIfMissing(
  */
 /** Vincula o agente ao grupo confirmado pelo Zendesk sem trocar a equipe principal. */
 async function ensureAgentTeamMembership(supabase: SupabaseClient, userId: string, teamId: string): Promise<void> {
+  // Apenas operadores (role 'suporte') devem ter grupos do Zendesk vinculados dinamicamente.
+  // Para gestores, auditores e admins, user_teams define seus escopos de supervisão e permissão,
+  // controlados exclusivamente no painel de administração.
+  const { data: user } = await supabase.from('users').select('role').eq('id', userId).maybeSingle();
+  if (user && user.role !== 'suporte') {
+    return;
+  }
+
   const { error } = await supabase.from('user_teams')
     .upsert({ user_id: userId, team_id: teamId }, { onConflict: 'user_id,team_id', ignoreDuplicates: true });
   if (error) throw new Error(`Não foi possível vincular o agente ao grupo do ticket: ${error.message}`);
@@ -246,7 +254,7 @@ async function resolveOrCreateAgent(
   // a equipe principal de exibição.
   const { data: existing } = await supabase
     .from('users')
-    .select('id, primary_team_id')
+    .select('id, role, primary_team_id')
     .eq('email', normalizedEmail)
     .maybeSingle();
 
@@ -265,10 +273,10 @@ async function resolveOrCreateAgent(
   }
 
   if (existing) {
-    if (teamId && sourceSystem === 'zendesk') {
+    if (teamId && sourceSystem === 'zendesk' && existing.role === 'suporte') {
       await ensureAgentTeamMembership(supabase, existing.id as string, teamId);
     }
-    const resolvedTeamId = backfillExisting
+    const resolvedTeamId = (backfillExisting && existing.role === 'suporte')
       ? await backfillAgentTeamIfMissing(supabase, existing.id as string,
         existing.primary_team_id as string | null | undefined, teamId)
       : (existing.primary_team_id as string | undefined);
@@ -1557,7 +1565,7 @@ serve(async (req) => {
 
       const { data: existing } = await supabase
         .from('users')
-        .select('id, name, primary_team_id')
+        .select('id, name, role, primary_team_id')
         .eq('email', assignee.email.trim().toLowerCase())
         .maybeSingle();
       let ticketGroupTeamId: string | null = null;
@@ -1566,7 +1574,7 @@ serve(async (req) => {
           .from('teams').select('id').ilike('name', group.name.trim()).maybeSingle();
         ticketGroupTeamId = foundTeam?.id || null;
       }
-      if (existing?.id && ticketGroupTeamId) {
+      if (existing?.id && ticketGroupTeamId && existing.role === 'suporte') {
         await ensureAgentTeamMembership(supabase, existing.id, ticketGroupTeamId);
       }
 
@@ -1623,7 +1631,7 @@ serve(async (req) => {
       if (assignee?.email) {
         const { data: foundUser } = await supabase
           .from('users')
-          .select('id, name, email, primary_team_id, team_ids, active')
+          .select('id, name, email, role, primary_team_id, team_ids, active')
           .eq('email', assignee.email.trim().toLowerCase())
           .maybeSingle();
         existingAgent = foundUser;
@@ -1638,7 +1646,7 @@ serve(async (req) => {
           .maybeSingle();
         if (foundTeam) ticketGroupTeamId = foundTeam.id;
       }
-      if (existingAgent?.id && ticketGroupTeamId) {
+      if (existingAgent?.id && ticketGroupTeamId && existingAgent.role === 'suporte') {
         await ensureAgentTeamMembership(supabase, existingAgent.id, ticketGroupTeamId);
       }
       const matchedTeamId = ticketGroupTeamId || existingAgent?.primary_team_id || existingAgent?.team_ids?.[0] || null;
