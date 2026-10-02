@@ -1,7 +1,6 @@
 import { AIModelError, httpAIError, normalizeAIError } from './ai-fallback.ts';
 
-export const OPENROUTER_MODEL = 'z-ai/glm-5.3-flash';
-export const OPENROUTER_FALLBACK_MODEL = 'google/gemini-3.8-flash';
+export const OPENROUTER_MODEL = 'google/gemma-4-31b-it';
 
 interface OpenRouterResponse {
   id?: string;
@@ -25,7 +24,7 @@ export async function callOpenRouter(options: {
 }): Promise<{ text: string; routedProvider?: string; routerAttempt?: number; requestId?: string; promptTokens?: number; completionTokens?: number; cost?: number }> {
   const { prompt, responseSchema, apiKey, model = OPENROUTER_MODEL, maxTokens, signal, fetcher = fetch } = options;
   if (!apiKey) throw new AIModelError('OPENROUTER_API_KEY não configurada.', 'credentials_error', false, 'provider');
-  if (model !== OPENROUTER_MODEL && model !== OPENROUTER_FALLBACK_MODEL)
+  if (model !== OPENROUTER_MODEL)
     throw new AIModelError('Modelo não permitido.', 'request_configuration_error', false, 'global');
 
   const response = await fetcher('https://openrouter.ai/api/v1/chat/completions', {

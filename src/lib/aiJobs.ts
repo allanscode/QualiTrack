@@ -6,7 +6,7 @@ export interface AIEvaluationJob {
   job_id: string;
   evaluation_type: 'atendimento' | 'chamado_filho';
   status: 'running' | 'completed' | 'failed' | 'cancelled';
-  phase?: 'pending' | 'running_glm' | 'fallback_gemini' | 'retry_pending' | 'completed' | 'cancelled' | 'failed';
+  phase?: 'pending' | 'running_glm' | 'fallback_gemini' | 'running_gemma' | 'retry_pending' | 'completed' | 'cancelled' | 'failed';
   started_by: string;
   result: AIEvaluationResult | ChildTicketAiEvaluation | null;
 }
