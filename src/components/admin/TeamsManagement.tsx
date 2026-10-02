@@ -121,6 +121,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
+  const [groupAssignmentFilter, setGroupAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   const [hoveredTeamId, setHoveredTeamId] = useState<string | null>(null);
@@ -212,25 +213,42 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
     return item ? item.icon : Shield;
   };
 
+  const getTeamPath = (team: Team): string => {
+    const parent = teams.find(candidate => candidate.id === team.parent_team_id);
+    return parent ? `${parent.name} / ${team.name}` : team.name;
+  };
+
   const filteredTeams = useMemo(() => {
     return teams
       .filter(t => userAllowedTeamIds ? userAllowedTeamIds.has(t.id) : true)
       .filter(t => statusFilter === 'active' ? t.active !== false : t.active === false)
       .filter(t => matchesSearch(t.name, searchTerm))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => {
+        const aRoot = teams.find(team => team.id === a.parent_team_id) || a;
+        const bRoot = teams.find(team => team.id === b.parent_team_id) || b;
+        const aHasSubteams = teams.some(team => team.parent_team_id === aRoot.id);
+        const bHasSubteams = teams.some(team => team.parent_team_id === bRoot.id);
+        return Number(bHasSubteams) - Number(aHasSubteams) || aRoot.name.localeCompare(bRoot.name)
+          || Number(Boolean(a.parent_team_id)) - Number(Boolean(b.parent_team_id))
+          || a.name.localeCompare(b.name);
+      });
   }, [teams, userAllowedTeamIds, statusFilter, searchTerm]);
 
   const visibleGroups = useMemo(() => groups
     .filter(group => !userAllowedTeamIds || teamGroups.some(link => link.group_id === group.id && userAllowedTeamIds.has(link.team_id)))
     .filter(group => statusFilter === 'active' ? group.active !== false : group.active === false)
+    .filter(group => groupAssignmentFilter === 'all' || (groupAssignmentFilter === 'assigned') === teamGroups.some(link => link.group_id === group.id))
     .filter(group => !searchTerm || matchesSearch(group.name, searchTerm)
       || teamGroups.some(link => link.group_id === group.id && teams.some(team => team.id === link.team_id && matchesSearch(team.name, searchTerm))))
     .sort((a, b) => a.name.localeCompare(b.name)),
-  [groups, teams, teamGroups, userAllowedTeamIds, statusFilter, searchTerm]);
+  [groups, teams, teamGroups, userAllowedTeamIds, statusFilter, groupAssignmentFilter, searchTerm]);
 
   const legacyZendeskTeams = useMemo(() => teams
     .filter(team => team.zendesk_group_id != null)
     .sort((a, b) => a.name.localeCompare(b.name)), [teams]);
+
+  const groupsWithoutZendeskId = useMemo(() => groups.filter(group => group.active !== false && group.zendesk_group_id == null).length, [groups]);
+  const groupsWithoutTeam = useMemo(() => groups.filter(group => group.active !== false && !teamGroups.some(link => link.group_id === group.id)).length, [groups, teamGroups]);
 
   const isSiglaDuplicate = useMemo(() => {
     if (!editingTeam.sigla?.trim()) return false;
@@ -275,14 +293,14 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
     const executeWithRetry = async (retryCount = 0): Promise<void> => {
       try {
         if (!supabase) {
-          const payload = { name: editingTeam.name, sigla: editingTeam.sigla?.toUpperCase(), description: editingTeam.description || '', icon: editingTeam.icon || 'Shield', active: true, kind: 'team' as const };
+          const payload = { name: editingTeam.name, sigla: editingTeam.sigla?.toUpperCase(), description: editingTeam.description || '', icon: editingTeam.icon || 'Shield', active: true, kind: 'team' as const, parent_team_id: editingTeam.parent_team_id || null };
           if (editingTeam.id) await mockDb.update('teams', editingTeam.id, payload);
           else await mockDb.insert('teams', payload);
           return;
         }
 
         await supabase.auth.getSession();
-        const payload = { name: editingTeam.name, sigla: editingTeam.sigla?.toUpperCase(), description: editingTeam.description || '', icon: editingTeam.icon || 'Shield', active: true, kind: 'team' as const };
+        const payload = { name: editingTeam.name, sigla: editingTeam.sigla?.toUpperCase(), description: editingTeam.description || '', icon: editingTeam.icon || 'Shield', active: true, kind: 'team' as const, parent_team_id: editingTeam.parent_team_id || null };
 
         const operation = (async () => {
           const { error } = await supabase.from('teams').upsert([{ ...(editingTeam.id ? { id: editingTeam.id } : {}), ...payload }]);
@@ -313,8 +331,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
     }
   };
 
-  // A sincronização identifica grupos pelo ID do Zendesk. Cadastros antigos
-  // com o mesmo nome aguardam conversão explícita para preservar seus vínculos.
+  // A sincronização associa os IDs do Zendesk aos grupos já importados.
   const handleSyncZendeskGroups = async () => {
     if (!supabase) {
       toast.error('Sincronização com Zendesk indisponível em modo mock/offline.');
@@ -331,12 +348,9 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
         throw new Error(data?.error || error?.message || 'Falha ao sincronizar grupos do Zendesk');
       }
       const created: string[] = data?.created || [];
-      const pending: string[] = data?.pending || [];
-      if (created.length === 0 && pending.length === 0) {
-        toast.info('Grupos do Zendesk atualizados. Nenhuma alteração pendente.');
-      } else {
-        toast.success(`${created.length} grupo(s) importado(s); ${pending.length} equipe(s) antiga(s) aguardando conversão.`);
-      }
+      toast.success(created.length > 0
+        ? `${created.length} novo(s) grupo(s) importado(s). IDs do Zendesk atualizados.`
+        : 'Grupos e IDs do Zendesk sincronizados.');
       loadData();
     } catch (e: any) {
       console.error('Erro ao sincronizar grupos do Zendesk:', e);
@@ -545,11 +559,11 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
       <div className="flex gap-1 border-b border-surface-border" role="tablist" aria-label="Organização do atendimento">
         <button type="button" role="tab" aria-selected={view === 'teams'} onClick={() => setView('teams')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === 'teams' ? 'border-brand-primary text-brand-primary' : 'border-transparent text-brand-muted hover:text-brand-primary'}`}>
-          Equipes
+          Equipes <span className="ml-1 text-xs opacity-70">{filteredTeams.length}</span>
         </button>
         <button type="button" role="tab" aria-selected={view === 'groups'} onClick={() => setView('groups')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === 'groups' ? 'border-brand-primary text-brand-primary' : 'border-transparent text-brand-muted hover:text-brand-primary'}`}>
-          Grupos do Zendesk
+          Grupos do Zendesk <span className="ml-1 text-xs opacity-70">{visibleGroups.length}</span>
         </button>
       </div>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -572,6 +586,18 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
               className="w-44"
             />
           </div>
+          {view === 'groups' && (
+            <CustomSelect
+              value={groupAssignmentFilter}
+              onChange={value => setGroupAssignmentFilter(value as 'all' | 'assigned' | 'unassigned')}
+              options={[
+                { value: 'all', label: 'Todos os grupos' },
+                { value: 'unassigned', label: 'Sem equipe' },
+                { value: 'assigned', label: 'Com equipe' },
+              ]}
+              className="w-44"
+            />
+          )}
         </div>
         {!isReadOnly && (
           <div className="flex items-center gap-3">
@@ -602,14 +628,25 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
       </div>
 
       {view === 'groups' && <>
+      {groupsWithoutZendeskId > 0 && currentUser?.role === 'admin' && (
+        <p className="rounded-lg border border-surface-border bg-surface-subtle px-4 py-3 text-sm text-brand-muted">
+          {groupsWithoutZendeskId} grupo(s) importado(s) ainda sem ID do Zendesk. Use <strong className="text-brand-primary">Sincronizar grupos</strong> para associá-los pelo nome.
+        </p>
+      )}
       <section className="space-y-3" aria-labelledby="zendesk-groups-title">
         <div className="flex items-baseline justify-between gap-3">
           <h3 id="zendesk-groups-title" className="text-sm font-bold text-brand-primary">Grupos de tickets</h3>
-          <span className="text-xs text-brand-muted">{visibleGroups.length} grupo(s)</span>
+          <span className="text-xs text-brand-muted">{visibleGroups.length} grupo(s){!isReadOnly && groupsWithoutTeam > 0 ? ` · ${groupsWithoutTeam} sem equipe` : ''}</span>
         </div>
         {visibleGroups.length === 0 ? (
           <div className="rounded-xl border border-dashed border-surface-border px-4 py-6 text-sm text-brand-muted">
-            Nenhum grupo nesta visualização. Sincronize o Zendesk ou ajuste os filtros.
+            {isReadOnly
+              ? 'Nenhum grupo vinculado às suas equipes nesta visualização.'
+              : groupAssignmentFilter === 'unassigned' && !searchTerm
+                ? 'Todos os grupos desta visualização já estão vinculados a uma equipe.'
+                : groups.length === 0
+                  ? 'Nenhum grupo cadastrado. Sincronize o Zendesk para importar os grupos.'
+                  : 'Nenhum grupo encontrado. Ajuste a busca ou os filtros.'}
           </div>
         ) : (
           <div className="divide-y divide-surface-border rounded-xl border border-surface-border bg-surface-card">
@@ -620,12 +657,12 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                 <div key={group.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-brand-primary">{group.name}</p>
-                    <p className="text-xs text-brand-muted">{group.zendesk_group_id ? `Zendesk #${group.zendesk_group_id}` : 'Grupo interno'} · {linkedTeams.length ? `${linkedTeams.length} equipe(s) atendem` : 'Sem equipe vinculada'}</p>
+                    <p className="text-xs text-brand-muted">{group.zendesk_group_id ? `Zendesk #${group.zendesk_group_id}` : 'ID do Zendesk pendente'} · {linkedTeams.length ? `${linkedTeams.length} equipe(s) atendem` : 'Sem equipe vinculada'}</p>
                     {linkedTeams.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {linkedTeams.map(team => (
                           <span key={team.id} className="inline-flex items-center gap-1 rounded-md border border-surface-border bg-surface-subtle px-2 py-1 text-xs text-brand-primary">
-                            {team.name}
+                            {getTeamPath(team)}
                             {!isReadOnly && <button type="button" aria-label={`Remover ${team.name} do grupo ${group.name}`}
                               disabled={groupSavingId === group.id} onClick={() => handleRemoveGroupTeam(group.id, team.id)}
                               className="rounded-sm p-0.5 text-brand-muted hover:text-error focus-visible:outline-2 focus-visible:outline-brand-primary"><X className="h-3 w-3" /></button>}
@@ -639,7 +676,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                       <CustomSelect
                         value=""
                         onChange={value => handleAddGroupTeam(group.id, value)}
-                        options={teams.filter(t => t.active !== false && !linkedTeamIds.includes(t.id)).map(team => ({ value: team.id, label: team.name }))}
+                        options={teams.filter(t => t.active !== false && !linkedTeamIds.includes(t.id)).map(team => ({ value: team.id, label: getTeamPath(team) }))}
                         disabled={groupSavingId === group.id}
                         placeholder="Adicionar equipe"
                         size="sm"
@@ -676,7 +713,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                     value={conversionTargets[team.id] || ''}
                     onChange={value => setConversionTargets(prev => ({ ...prev, [team.id]: value }))}
                     options={teams.filter(candidate => candidate.id !== team.id && candidate.active !== false)
-                      .map(candidate => ({ value: candidate.id, label: candidate.name }))}
+                      .map(candidate => ({ value: candidate.id, label: getTeamPath(candidate) }))}
                     placeholder="Primeira equipe do grupo"
                     className="w-full sm:w-52"
                     size="sm"
@@ -692,23 +729,36 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
       </>}
 
       {view === 'teams' && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-stretch">
-        {filteredTeams.map(t => {
+        {filteredTeams.map((t, index) => {
           const TeamIcon = getTeamIcon(t.icon);
+          const parentTeam = teams.find(team => team.id === t.parent_team_id);
+          const rootTeam = parentTeam || t;
+          const previousTeam = filteredTeams[index - 1];
+          const previousRootId = previousTeam?.parent_team_id || previousTeam?.id;
+          const startsSection = rootTeam.id !== previousRootId && teams.some(team => team.parent_team_id === rootTeam.id);
           const activeAgents = users.filter(u => u.active !== false && u.team_ids?.includes(t.id));
           const activeAgentsCount = activeAgents.filter(u => u.role === 'suporte').length;
           const activeManagersCount = activeAgents.filter(u => u.role === 'gestor_suporte').length;
-          const teamGroupCount = teamGroups.filter(link => link.team_id === t.id).length;
+          const linkedGroups = groups.filter(group => group.active !== false && teamGroups.some(link => link.team_id === t.id && link.group_id === group.id))
+            .sort((a, b) => a.name.localeCompare(b.name));
+          const teamGroupCount = linkedGroups.length;
           
           return (
+            <React.Fragment key={t.id}>
+            {startsSection && (
+              <div className="col-span-full flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-surface-border pb-2 pt-2">
+                <h3 className="text-base font-bold text-brand-primary">{rootTeam.name}</h3>
+                <span className="text-xs text-brand-muted">Equipe principal e suas gestões</span>
+              </div>
+            )}
             <Card 
-              key={t.id} 
               padding="sm" 
               onClick={() => {
                 if (isReadOnly) {
                   setSelectedDrawerTeam(t);
                 }
               }}
-              className={`group hover:border-brand-accent transition-all relative flex flex-col justify-center min-h-[90px] ${isReadOnly ? 'cursor-pointer hover:shadow-md' : ''}`}
+              className={`group hover:border-brand-accent transition-all relative flex flex-col justify-center min-h-[90px] ${isReadOnly ? 'cursor-pointer hover:shadow-md' : ''} ${t.parent_team_id ? 'border-brand-accent/30' : ''}`}
             >
               {t.active === false && (
                 <div className="absolute inset-0 bg-surface-bg/60 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-card">
@@ -723,6 +773,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                   <div className="min-w-0">
                     <div className="flex flex-col gap-0.5">
                       <h4 className="font-black text-[11px] text-brand-primary uppercase tracking-tight leading-tight break-words">{t.name}</h4>
+                      {t.parent_team_id && <span className="text-[10px] text-brand-muted">{parentTeam ? `Subequipe de ${parentTeam.name}` : 'Subequipe'}</span>}
                       {t.sigla && <span className="w-fit px-1 py-0.5 rounded-md bg-surface-subtle text-[7px] font-black text-brand-muted border border-surface-border">{t.sigla}</span>}
                     </div>
                     <div className="mt-1 flex relative">
@@ -770,7 +821,17 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                         </AnimatePresence>
                       </span>
                     </div>
-                    {teamGroupCount > 0 && <p className="mt-1 text-[11px] text-brand-muted">{teamGroupCount} grupo{teamGroupCount === 1 ? '' : 's'} de tickets</p>}
+                    <div className="mt-2 border-t border-surface-border pt-2">
+                      <p className="text-[11px] font-semibold text-brand-muted">{teamGroupCount} grupo{teamGroupCount === 1 ? '' : 's'} do Zendesk</p>
+                      {teamGroupCount > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {linkedGroups.slice(0, 3).map(group => (
+                            <span key={group.id} className="max-w-full truncate rounded-md bg-surface-subtle px-1.5 py-0.5 text-[10px] text-brand-primary" title={group.name}>{group.name}</span>
+                          ))}
+                          {teamGroupCount > 3 && <span className="px-1 py-0.5 text-[10px] text-brand-muted">+{teamGroupCount - 3}</span>}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 {!isReadOnly && (
@@ -797,6 +858,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                 )}
               </div>
             </Card>
+            </React.Fragment>
           );
         })}
       </div>}
@@ -821,6 +883,21 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                       onChange={e => setEditingTeam({ ...editingTeam, name: e.target.value })} 
                       placeholder="Ex: Suporte Nível 1"
                     />
+                  </div>
+
+                  <div className="space-y-1">
+                    <CustomSelect
+                      label="Equipe superior"
+                      value={editingTeam.parent_team_id || ''}
+                      onChange={value => setEditingTeam({ ...editingTeam, parent_team_id: value || null })}
+                      options={[
+                        { value: '', label: 'Equipe principal' },
+                        ...teams.filter(team => team.active !== false && !team.parent_team_id && team.id !== editingTeam.id)
+                          .map(team => ({ value: team.id, label: team.name })),
+                      ]}
+                      disabled={Boolean(editingTeam.id && teams.some(team => team.parent_team_id === editingTeam.id))}
+                    />
+                    <p className="text-xs text-brand-muted">Agrupa a equipe no painel. Cada gestor continua vendo apenas seus próprios agentes.</p>
                   </div>
                   
                   <div className="flex flex-col">

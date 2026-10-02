@@ -252,7 +252,7 @@ async function resolveZendeskTicketGroup(
   }
   if (!row && groupName) {
     const result = await supabase.from('teams')
-      .select('id, kind').ilike('name', groupName.trim()).limit(1);
+      .select('id, kind').eq('kind', 'group').ilike('name', groupName.trim()).limit(1);
     row = result.data?.[0] || null;
   }
   if (!row) return null;
@@ -869,8 +869,8 @@ serve(async (req) => {
       });
     };
 
-    // 6. Sincroniza a identidade dos grupos do Zendesk. Equipes existentes
-    // com o mesmo nome ficam pendentes de conversão explícita no painel.
+    // 6. Sincroniza a identidade dos grupos do Zendesk. Equipes gestoras
+    // com o mesmo nome continuam separadas dos grupos de ticket.
     // Restrito a admin: criar Team usa a mesma regra de RLS de
     // TeamsManagement (só admin escreve em public.teams), e aqui a Edge
     // Function usa service role (ignora RLS), então a checagem é manual.
@@ -898,13 +898,14 @@ serve(async (req) => {
       const knownTeams = existingTeams || [];
 
       const created: string[] = [];
-      const pending: string[] = [];
-
       for (const g of zendeskGroups) {
         const name = (g.name || '').trim();
         if (!name) continue;
-        const match = knownTeams.find(t => t.zendesk_group_id === g.id)
-          || knownTeams.find(t => !t.zendesk_group_id && t.name.trim().toLowerCase() === name.toLowerCase());
+        // O antigo "Grupo WebPosto" virou a equipe principal. Não recriar
+        // esse marcador organizacional como grupo de tickets.
+        if (name.toLowerCase() === 'grupo webposto' || name.toLowerCase() === 'webposto') continue;
+        const match = knownTeams.find(t => t.kind === 'group' && t.zendesk_group_id === g.id)
+          || knownTeams.find(t => t.kind === 'group' && !t.zendesk_group_id && t.name.trim().toLowerCase() === name.toLowerCase());
         if (match) {
           if (match.zendesk_group_id !== g.id) {
             const { error: linkError } = await supabase.from('teams')
@@ -912,13 +913,12 @@ serve(async (req) => {
             if (linkError) throw linkError;
             match.zendesk_group_id = g.id;
           }
-          if (match.kind === 'group' && match.name !== name) {
+          if (match.name !== name) {
             const { error: renameError } = await supabase.from('teams')
               .update({ name }).eq('id', match.id);
             if (renameError) throw renameError;
             match.name = name;
           }
-          if (match.kind !== 'group') pending.push(name);
           continue;
         }
         const { error: insertError } = await supabase.from('teams')
@@ -929,7 +929,7 @@ serve(async (req) => {
         created.push(name);
       }
 
-      return jsonResponse({ success: true, created, pending }, 200);
+      return jsonResponse({ success: true, created, pending: [] }, 200);
     }
 
     // 1. Busca de Fila de Chamados — sempre UMA página por chamada (25

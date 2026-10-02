@@ -171,6 +171,8 @@ export interface Team {
   /** Equipes gerem pessoas; grupos identificam a origem do ticket Zendesk. */
   kind?: 'team' | 'group';
   zendesk_group_id?: number | null;
+  /** Organiza subequipes no painel sem ampliar as permissões dos gestores. */
+  parent_team_id?: string | null;
 }
 
 export interface TeamGroup {
