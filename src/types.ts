@@ -168,6 +168,14 @@ export interface Team {
   description?: string;
   sigla?: string;
   icon?: string;
+  /** Equipes gerem pessoas; grupos identificam a origem do ticket Zendesk. */
+  kind?: 'team' | 'group';
+  zendesk_group_id?: number | null;
+}
+
+export interface TeamGroup {
+  team_id: string;
+  group_id: string;
 }
 
 export interface AccessRequest {

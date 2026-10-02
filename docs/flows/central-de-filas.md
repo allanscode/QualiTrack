@@ -65,7 +65,7 @@ As filas carregam ao abrir, trocar de fila, buscar, paginar ou clicar em **Atual
 
 ## Modelo de IA
 
-O modelo de análise é fixado no backend como `google/gemma-4-31b-it`, chamado pelo OpenRouter com `response_format: json_schema` e `require_parameters: true`. A variante `:free` não garante a aplicação do JSON Schema. Não há lista de modelos de contingência; falhas transitórias são tentadas novamente no mesmo Gemma 4 e, se necessário, entram na fila de reprocessamento.
+A cadeia de análise é fixada no backend como `z-ai/glm-5.3-flash` → `google/gemma-4-31b-it` → `google/gemini-3.8-flash`, todos pagos pelo OpenRouter e sem sufixo `:free`. Cada modelo pode ser tentado até duas vezes antes do próximo. O JSON Schema é incluído no prompt; o backend valida a resposta antes de concluir o job. A chamada atual não envia `response_format: json_schema` nem `require_parameters: true`. Falhas transitórias após a cadeia entram na fila de reprocessamento.
 
 **Ordem das propriedades no `responseSchema` importa**: `answers` vem antes de `score`/`summary` — testado que, na ordem inversa, o modelo "reservava" `score: 0` e `summary: ""` antes de avaliar qualquer critério (typeof correto, valor semanticamente vazio). A validação pós-parse rejeita isso explicitamente (`score > 0`, `summary.trim().length > 0`), não só `typeof`.
 
@@ -81,7 +81,7 @@ Ver [`docs/database/schema.md`](../database/schema.md#ai_evaluation_guidelines) 
 | `HELPDESK_NEGATIVE_VIEW_ID` / `HELPDESK_POSITIVE_VIEW_ID` | Não (fallback: Search API) | View salva por fila |
 | `HELPDESK_VALIDATED_TAG` | Não | Exclui negativas já validadas por tag/macro |
 | `OPENROUTER_API_KEY` | Sim (para `evaluate_ai`) | Chave da IA |
-| `AI_PRIMARY_TIMEOUT_MS` | Não (default 30000 ms) | Janela de tentativas do Gemma 4 |
+| `AI_PRIMARY_TIMEOUT_MS` | Não (padrão 120000 ms) | Janela de tentativas por modelo |
 
 ## Divergência do Plano Original
 

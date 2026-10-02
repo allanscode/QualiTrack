@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { isVerifiedTicketGroupPair, resolveTicketTeamId } from './ticketTeam';
 
 describe('equipe do ticket Zendesk', () => {
-  it('prioriza o grupo do ticket sobre a equipe principal do agente', () => {
+  it('mantém a equipe gestora mesmo quando o ticket veio de outro grupo', () => {
     expect(resolveTicketTeamId(
       { ticket_group_team_id: 'tef', team_id: 'cliente-final' },
       { primary_team_id: 'cliente-final', team_ids: ['cliente-final'] },
-    )).toBe('tef');
+    )).toBe('cliente-final');
   });
 
   it('permite a exceção somente para o agente e o grupo do ticket original', () => {

@@ -1,24 +1,29 @@
-# IA de avaliação: Gemma 4 31B pelo OpenRouter
+# IA de avaliação pelo OpenRouter
 
-O único modelo é `google/gemma-4-31b-it`. O OpenRouter pode alternar providers que servem esse mesmo modelo. A variante `:free` não é usada porque não garante o JSON Schema estrito exigido pelas análises. A aplicação não usa a API direta do Google nem a chave de manutenção do OpenRouter.
+A Edge Function `helpdesk-queue` usa uma única secret `OPENROUTER_API_KEY` para chamar, nesta ordem, os modelos pagos:
+
+1. `z-ai/glm-5.3-flash` — primeira opção para prompts longos de tickets, com entrada barata e boa capacidade.
+2. `google/gemma-4-31b-it` — contingência com saída barata.
+3. `google/gemini-3.8-flash` — última contingência, de custo mais alto.
+
+Os IDs não usam o sufixo `:free`. O OpenRouter pode alternar provedores dentro de cada modelo. O JSON Schema é enviado no prompt e a aplicação valida a resposta antes de persistir a avaliação; a chamada atual não envia `response_format: json_schema`.
 
 ## Configuração no Supabase
 
-1. No projeto Supabase correto, cadastre a chave de inferência como secret da Edge Function com o nome `OPENROUTER_API_KEY`. Não a inclua em `.env` do frontend, migrations, banco, logs ou comandos registrados no histórico do shell. A chave de manutenção não é necessária.
-2. Configure `AI_PRIMARY_TIMEOUT_MS=30000` como secret e aplique `20261002000001_gemma4_ai_phase.sql` antes de publicar a Edge Function `helpdesk-queue`. As migrations anteriores mantêm a fila e o cron de reprocessamento.
-3. No Vault, crie `ai_retry_project_url` com a URL do projeto Supabase e `ai_retry_service_key` com a chave secreta **nomeada** (`default`, `sb_secret_…`) do mesmo projeto. Este projeto prioriza `SUPABASE_SECRET_KEYS` sobre a chave legada `service_role`; a chave legada falha na autorização do worker. **Não** armazene a chave OpenRouter no Vault ou na tabela de retries. Sem esses dois valores, o cron não dispara chamadas e os jobs ficam pendentes.
-4. Confirme que o cron está ativo em Supabase > Integrations > Cron e que a Edge Function recebe chamadas `process_ai_retries` após uma falha transitória.
+1. Cadastre a chave de inferência como secret `OPENROUTER_API_KEY` da Edge Function. Não a inclua no frontend, migrations, banco ou logs. A mesma chave serve aos três modelos.
+2. Aplique `20261002000001_gemma4_ai_phase.sql` antes de publicar `helpdesk-queue`. A migration permite as fases `running_glm`, `running_gemma` e `fallback_gemini`.
+3. Opcionalmente configure `AI_PRIMARY_TIMEOUT_MS`. O padrão é 120000 ms por modelo, limitado pelo backend entre 1000 e 300000 ms. Cada modelo admite até duas tentativas dentro dessa janela, com espera progressiva em falhas transitórias.
+4. No Vault, configure `ai_retry_project_url` com a URL do projeto e `ai_retry_service_key` com a chave secreta nomeada do mesmo projeto. Esses valores permitem ao cron chamar `process_ai_retries`; a chave OpenRouter fica somente nos secrets da função.
+5. Confirme que o cron está ativo em Supabase > Integrations > Cron.
 
 ## Comportamento
 
-- Cada ticket possui um único job ativo. O payload necessário para reprocessar é persistido na tabela privada `ai_evaluation_retry_queue`, sem chave de API e com diálogo sanitizado.
-- A janela por execução do Gemma é de 30 segundos, incluindo até quatro tentativas com backoff; respostas posteriores à expiração são descartadas. O OpenRouter pode alternar providers do mesmo modelo em cada chamada. Não existe fallback para outro modelo.
-- Cancelamento manual muda o job para `cancelled`, remove-o da fila de retries e impede conclusão mesmo após reload. O worker confirma a interrupção no banco antes de outro job poder começar no mesmo ticket. O banco rejeita resultados de IDs antigos. A fase do job (`pending`, `running_gemma`, `retry_pending`) é persistida sem revelar modelo na interface.
-- Tentativas registram job/modelo/provider quando disponíveis, timestamps, duração, HTTP, tokens, custo e ID de geração. A chave e o prompt não são persistidos nos logs técnicos. Para conferir custo/provider definitivos, use o ID de geração na atividade do OpenRouter.
-- Se 429, timeout, 5xx ou resposta inválida persistirem, o job continua `running` e o worker tenta novamente em 1, 2, 4, 8... minutos, até o máximo de uma hora entre tentativas.
-- Erros definitivos de autenticação/configuração encerram o job com erro. O resultado só é salvo após validar o JSON e apenas pela transação de conclusão do job.
-- A chave de inferência exposta foi substituída no secret da Edge Function e desativada no OpenRouter. A chave de manutenção que foi compartilhada também precisa ser revogada e recriada na conta OpenRouter; ela não é usada pela aplicação.
+- Um ticket tem um único job ativo. O payload de reprocessamento fica na tabela privada `ai_evaluation_retry_queue`, sem chave de API e com diálogo sanitizado.
+- Após duas tentativas malsucedidas do GLM, a cadeia tenta Gemma; depois, Gemini. Falhas definitivas de credenciais ou configuração interrompem a cadeia. Falhas transitórias podem entrar na fila de reprocessamento.
+- O cancelamento muda o job para `cancelled` e impede que uma resposta tardia conclua o ticket. A fase do job é persistida para acompanhar o progresso.
+- As tentativas registram modelo, provedor quando disponível, duração, status HTTP, tokens, custo e ID de geração. A chave e o prompt não são persistidos nos logs técnicos. O custo definitivo pode ser conferido pelo ID de geração no OpenRouter.
+- O resultado é salvo somente após validar o JSON e concluir o job no banco.
 
-## Testes E2E com cobrança
+## Testes com cobrança
 
-Os testes live recusam o projeto de produção mesmo com opt-in. Para rodá-los, configure um projeto Supabase de staging dedicado, informe seu ID exato em `E2E_EXPECTED_PROJECT_REF` e habilite `E2E_ALLOW_MUTATIONS=1` somente nesse ambiente. As fixtures carregam marcador de origem e a rotina de limpeza remove apenas contas/tickets criados pelo teste. Não execute esses cenários com contas ou dados reais de produção.
+Os testes locais usam respostas simuladas e não fazem chamadas pagas. Para testes ao vivo, use um projeto Supabase de staging dedicado com `E2E_EXPECTED_PROJECT_REF` e `E2E_ALLOW_MUTATIONS=1`. O deploy em produção e a inclusão da chave real são etapas operacionais separadas.

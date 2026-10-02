@@ -1,4 +1,4 @@
-import type { User, UserTeam, Team, EvaluationForm, Monitoria, AccessRequest, DissatisfactionField, UserPreferences, AgentFeedback } from '../types';
+import type { User, UserTeam, Team, TeamGroup, EvaluationForm, Monitoria, AccessRequest, DissatisfactionField, UserPreferences, AgentFeedback } from '../types';
 const DB_PREFIX = 'qualitrack_mock_';
 
 const generateId = (): string => {
@@ -42,6 +42,7 @@ const INITIAL_DATA: {
   user_teams: UserTeam[];
   forms: EvaluationForm[];
   teams: Team[];
+  team_groups: TeamGroup[];
   monitorias: Monitoria[];
   access_requests: AccessRequest[];
   quality_configs: any[];
@@ -108,6 +109,11 @@ const INITIAL_DATA: {
   teams: [
     { id: 'team-alpha', name: 'Equipe Alpha', sigla: 'ALF', active: true, description: 'Equipe de atendimento Alpha' },
     { id: 'team-beta', name: 'Equipe Beta', sigla: 'BET', active: true, description: 'Equipe de atendimento Beta' },
+    { id: 'group-cliente-final', name: 'Cliente Final', kind: 'group', zendesk_group_id: 1, active: true },
+  ],
+  team_groups: [
+    { team_id: 'team-alpha', group_id: 'group-cliente-final' },
+    { team_id: 'team-beta', group_id: 'group-cliente-final' },
   ],
   user_teams: [
     { id: 'ut-1', user_id: AGENT_ID, team_id: 'team-alpha', created_at: new Date().toISOString() },

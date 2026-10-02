@@ -240,8 +240,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
         // Zendesk, ou cadastrada manualmente sem selecionar equipe) — agora
         // que essa monitoria confirmou a equipe certa. Best-effort, não
         // bloqueia o fluxo: a monitoria já foi salva com sucesso acima.
-        if (deps.header.evaluated_id && deps.header.team_id && !evaluatedUser?.primary_team_id
-          && deps.header.team_id !== deps.ticketGroupTeamId) {
+        if (deps.header.evaluated_id && deps.header.team_id && !evaluatedUser?.primary_team_id) {
           backfillAgentTeam(deps.header.evaluated_id, deps.header.team_id);
         }
 

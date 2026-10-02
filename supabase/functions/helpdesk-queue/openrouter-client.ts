@@ -1,13 +1,10 @@
 import { AIModelError, httpAIError, normalizeAIError } from './ai-fallback.ts';
 
-// Somente modelos gratuitos (sufixo :free). Gemma é o primário; os demais são
-// fallbacks ordenados do mais inteligente ao menos.
-export const OPENROUTER_MODEL = 'google/gemma-4-31b-it:free';
+// Cadeia paga em ordem de custo/capacidade para prompts longos de tickets.
+export const OPENROUTER_MODEL = 'z-ai/glm-5.3-flash';
 export const OPENROUTER_FALLBACK_MODELS = [
-  'nvidia/nemotron-3-ultra-550b-a55b:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'qwen/qwen3.8-27b:free',
-  'google/gemma-4-26b-a4b-it:free',
+  'google/gemma-4-31b-it',
+  'google/gemini-3.8-flash',
 ] as const;
 export const OPENROUTER_FALLBACK_MODEL = OPENROUTER_FALLBACK_MODELS[0];
 export const OPENROUTER_ALLOWED_MODELS: readonly string[] = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS];
@@ -50,8 +47,7 @@ export async function callOpenRouter(options: {
     },
     body: JSON.stringify({
       model,
-      // Modelos gratuitos nem sempre suportam json_schema: o schema vai no prompt
-      // e parseModelJSON/validate* garantem o formato na resposta.
+      // O schema no prompt é validado após a resposta pela aplicação.
       messages: [{
         role: 'user',
         content: `${prompt}
@@ -75,7 +71,7 @@ ${JSON.stringify(responseSchema)}`,
     throw new AIModelError('OpenRouter retornou um envelope JSON inválido.', 'response_parse_error', true);
   }
   if (!data.model) throw new AIModelError('OpenRouter não confirmou o modelo esperado.', 'incomplete_response', true);
-  if (data.model.replace(/:free$/, '') !== model.replace(/:free$/, '')) {
+  if (data.model !== model) {
     throw new AIModelError('OpenRouter retornou outro modelo.', 'request_configuration_error', false, 'global');
   }
   const content = data.choices?.[0]?.message?.content;

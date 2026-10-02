@@ -27,11 +27,16 @@ import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 const AI_HANG_TIMEOUT_MS = Math.min(300_000, Math.max(1_000, Number(Deno.env.get('AI_PRIMARY_TIMEOUT_MS') || String(OPENROUTER_HANG_GUARD_MS)) || OPENROUTER_HANG_GUARD_MS));
-// Gemma gratuito primeiro; depois fallbacks gratuitos dos mais inteligentes. O timeout
-// existe apenas para o caso de o modelo não retornar.
+// GLM pago primeiro; Gemma e Gemini pagos entram em sequência se necessário.
 const AI_TARGETS: AIModelTarget[] = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS].map(model => ({
   provider: 'openrouter' as const, model, maxAttempts: 2, timeoutMs: AI_HANG_TIMEOUT_MS,
 }));
+
+function phaseForAIModel(model: string): 'running_glm' | 'running_gemma' | 'fallback_gemini' {
+  if (model === OPENROUTER_MODEL) return 'running_glm';
+  if (model === OPENROUTER_FALLBACK_MODELS[0]) return 'running_gemma';
+  return 'fallback_gemini';
+}
 
 
 const MAX_REQUEST_BYTES = 1_000_000;
@@ -219,9 +224,9 @@ async function backfillAgentTeamIfMissing(
  * (sem senha, sem convite) que é herdada automaticamente quando ele concluir
  * o onboarding formal com o mesmo e-mail (trigger `handle_new_user`).
  */
-/** Vincula o agente ao grupo confirmado pelo Zendesk sem trocar a equipe principal. */
+/** Vincula um novo agente à equipe gestora, nunca ao grupo do ticket. */
 async function ensureAgentTeamMembership(supabase: SupabaseClient, userId: string, teamId: string): Promise<void> {
-  // Apenas operadores (role 'suporte') devem ter grupos do Zendesk vinculados dinamicamente.
+  // Apenas operadores (role 'suporte') recebem vínculos automáticos.
   // Para gestores, auditores e admins, user_teams define seus escopos de supervisão e permissão,
   // controlados exclusivamente no painel de administração.
   const { data: user } = await supabase.from('users').select('role').eq('id', userId).maybeSingle();
@@ -231,7 +236,31 @@ async function ensureAgentTeamMembership(supabase: SupabaseClient, userId: strin
 
   const { error } = await supabase.from('user_teams')
     .upsert({ user_id: userId, team_id: teamId }, { onConflict: 'user_id,team_id', ignoreDuplicates: true });
-  if (error) throw new Error(`Não foi possível vincular o agente ao grupo do ticket: ${error.message}`);
+  if (error) throw new Error(`Não foi possível vincular o agente à equipe: ${error.message}`);
+}
+
+async function resolveZendeskTicketGroup(
+  supabase: SupabaseClient,
+  zendeskGroupId?: number,
+  groupName?: string,
+): Promise<{ id: string; team_id?: string } | null> {
+  let row: { id: string; kind?: string } | null = null;
+  if (zendeskGroupId) {
+    const result = await supabase.from('teams')
+      .select('id, kind').eq('zendesk_group_id', zendeskGroupId).maybeSingle();
+    row = result.data;
+  }
+  if (!row && groupName) {
+    const result = await supabase.from('teams')
+      .select('id, kind').ilike('name', groupName.trim()).limit(1);
+    row = result.data?.[0] || null;
+  }
+  if (!row) return null;
+  if (row.kind !== 'group') return { id: row.id, team_id: row.id };
+  const { data: links, error } = await supabase.from('team_groups')
+    .select('team_id').eq('group_id', row.id).limit(2);
+  if (error) throw error;
+  return { id: row.id, team_id: links?.length === 1 ? links[0].team_id : undefined };
 }
 
 async function resolveOrCreateAgent(
@@ -245,6 +274,7 @@ async function resolveOrCreateAgent(
   // equipe na própria ficha), pula o match por nome e usa direto.
   explicitTeamId?: string,
   backfillExisting = true,
+  zendeskGroupId?: number,
 ): Promise<{ id?: string; team_id?: string; ticket_group_team_id?: string } | null> {
   if (!email) return null;
   const normalizedEmail = email.trim().toLowerCase();
@@ -258,29 +288,22 @@ async function resolveOrCreateAgent(
     .eq('email', normalizedEmail)
     .maybeSingle();
 
-  // Tenta casar a equipe pelo nome do grupo/time do helpdesk (best-effort),
-  // a menos que o chamador já tenha passado o team_id explicitamente. Feito
-  // ANTES do "if (existing)" abaixo porque agora serve tanto pra criar um
-  // agente novo quanto pra completar o vínculo de um que já existe.
+  // Um grupo do Zendesk identifica o ticket. Só sua equipe responsável pode
+  // tornar-se equipe principal do agente e dona da monitoria.
   let teamId: string | undefined = explicitTeamId;
-  if (!teamId && teamName) {
-    const { data: team } = await supabase
-      .from('teams')
-      .select('id')
-      .ilike('name', teamName)
-      .maybeSingle();
-    teamId = team?.id as string | undefined;
+  let ticketGroupTeamId: string | undefined;
+  if (sourceSystem === 'zendesk' && (zendeskGroupId || teamName)) {
+    const group = await resolveZendeskTicketGroup(supabase, zendeskGroupId, teamName);
+    ticketGroupTeamId = group?.id;
+    teamId = group?.team_id || teamId;
   }
 
   if (existing) {
-    if (teamId && sourceSystem === 'zendesk' && existing.role === 'suporte') {
-      await ensureAgentTeamMembership(supabase, existing.id as string, teamId);
-    }
     const resolvedTeamId = (backfillExisting && existing.role === 'suporte')
       ? await backfillAgentTeamIfMissing(supabase, existing.id as string,
         existing.primary_team_id as string | null | undefined, teamId)
-      : (existing.primary_team_id as string | undefined);
-    return { id: existing.id as string, team_id: resolvedTeamId, ticket_group_team_id: teamId };
+      : ((existing.primary_team_id as string | undefined) || teamId);
+    return { id: existing.id as string, team_id: resolvedTeamId, ticket_group_team_id: ticketGroupTeamId };
   }
 
   // public.users.id não tem DEFAULT (normalmente é preenchido com o id do
@@ -306,7 +329,7 @@ async function resolveOrCreateAgent(
 
   if (createError) {
     console.error('[helpdesk-queue] Falha ao criar agente provisório:', createError.message);
-    return teamId ? { team_id: teamId, ticket_group_team_id: teamId } : null;
+    return teamId || ticketGroupTeamId ? { team_id: teamId, ticket_group_team_id: ticketGroupTeamId } : null;
   }
 
   // Espelha o vínculo em user_teams (fonte de verdade para multi-equipe).
@@ -314,7 +337,7 @@ async function resolveOrCreateAgent(
     await ensureAgentTeamMembership(supabase, created.id, teamId);
   }
 
-  return { id: created.id as string, team_id: teamId, ticket_group_team_id: teamId };
+  return { id: created.id as string, team_id: teamId, ticket_group_team_id: ticketGroupTeamId };
 }
 
 async function reconcilePublishedChildMacros(supabase: SupabaseClient): Promise<Response> {
@@ -577,7 +600,7 @@ serve(async (req) => {
       if (!started) return jsonResponse({ error: 'Este job de IA já está em execução ou não pertence ao usuário.' }, 409);
     }
 
-    // 3. Avaliação com IA: GLM pago primeiro, Gemini pago somente após esgotar GLM.
+    // 3. Avaliação com IA: GLM, Gemma e Gemini pagos, nessa ordem.
     if (action === 'evaluate_ai') {
       return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
         signal => handleEvaluateAI(parseResult.data, supabase, user.id, signal));
@@ -846,8 +869,8 @@ serve(async (req) => {
       });
     };
 
-    // 6. Importa os grupos (equipes) do Zendesk como Teams do QualiTrack —
-    // cria só os que ainda não existem (casados por nome, sem duplicar).
+    // 6. Sincroniza a identidade dos grupos do Zendesk. Equipes existentes
+    // com o mesmo nome ficam pendentes de conversão explícita no painel.
     // Restrito a admin: criar Team usa a mesma regra de RLS de
     // TeamsManagement (só admin escreve em public.teams), e aqui a Edge
     // Function usa service role (ignora RLS), então a checagem é manual.
@@ -856,36 +879,57 @@ serve(async (req) => {
         return jsonResponse({ error: 'Apenas administradores podem sincronizar equipes do Zendesk.' }, 403);
       }
 
-      const groupsResp = await fetch(`https://${subdomain}.zendesk.com/api/v2/groups.json`, { headers: zendeskHeaders });
-      if (!groupsResp.ok) {
-        throw new Error(`Zendesk Groups API falhou (${groupsResp.status}).`);
+      const zendeskGroups: { id: number; name: string }[] = [];
+      const origin = `https://${subdomain}.zendesk.com`;
+      let nextUrl: string | null = `${origin}/api/v2/groups.json?per_page=100`;
+      while (nextUrl) {
+        const groupsResp = await fetch(nextUrl, { headers: zendeskHeaders });
+        if (!groupsResp.ok) throw new Error(`Zendesk Groups API falhou (${groupsResp.status}).`);
+        const groupsData = await groupsResp.json();
+        zendeskGroups.push(...(groupsData.groups || []));
+        const candidate = groupsData.next_page as string | null;
+        if (candidate && new URL(candidate).origin !== origin) throw new Error('Paginação Zendesk inválida.');
+        nextUrl = candidate;
       }
-      const groupsData = await groupsResp.json();
-      const zendeskGroups: { id: number; name: string }[] = groupsData.groups || [];
 
-      const { data: existingTeams } = await supabase.from('teams').select('name');
-      const existingNames = new Set((existingTeams || []).map((t: any) => (t.name as string).trim().toLowerCase()));
+      const { data: existingTeams, error: teamError } = await supabase
+        .from('teams').select('id, name, kind, zendesk_group_id');
+      if (teamError) throw teamError;
+      const knownTeams = existingTeams || [];
 
       const created: string[] = [];
-      const skipped: string[] = [];
+      const pending: string[] = [];
 
       for (const g of zendeskGroups) {
         const name = (g.name || '').trim();
         if (!name) continue;
-        if (existingNames.has(name.toLowerCase())) {
-          skipped.push(name);
+        const match = knownTeams.find(t => t.zendesk_group_id === g.id)
+          || knownTeams.find(t => !t.zendesk_group_id && t.name.trim().toLowerCase() === name.toLowerCase());
+        if (match) {
+          if (match.zendesk_group_id !== g.id) {
+            const { error: linkError } = await supabase.from('teams')
+              .update({ zendesk_group_id: g.id }).eq('id', match.id);
+            if (linkError) throw linkError;
+            match.zendesk_group_id = g.id;
+          }
+          if (match.kind === 'group' && match.name !== name) {
+            const { error: renameError } = await supabase.from('teams')
+              .update({ name }).eq('id', match.id);
+            if (renameError) throw renameError;
+            match.name = name;
+          }
+          if (match.kind !== 'group') pending.push(name);
           continue;
         }
-        const { error: insertError } = await supabase.from('teams').insert({ name, active: true });
+        const { error: insertError } = await supabase.from('teams')
+          .insert({ name, active: true, kind: 'group', zendesk_group_id: g.id });
         if (insertError) {
-          console.error(`[helpdesk-queue] Falha ao criar equipe "${name}":`, insertError.message);
-          continue;
+          throw insertError;
         }
-        existingNames.add(name.toLowerCase());
         created.push(name);
       }
 
-      return jsonResponse({ success: true, created, skipped }, 200);
+      return jsonResponse({ success: true, created, pending }, 200);
     }
 
     // 1. Busca de Fila de Chamados — sempre UMA página por chamada (25
@@ -1136,6 +1180,7 @@ serve(async (req) => {
           group?.name,
           undefined,
           false,
+          group?.id,
         );
 
         let childMacroType: 'nova_demanda' | 'analise_tecnica' | 'apoio_tecnico' | 'produtividade' | undefined;
@@ -1188,7 +1233,7 @@ serve(async (req) => {
           agent_name: assignee?.name,
           agent_email: assignee?.email,
           agent_id: agentLink?.id,
-          team_id: agentLink?.ticket_group_team_id || agentLink?.team_id,
+          team_id: agentLink?.team_id,
           ticket_group_team_id: agentLink?.ticket_group_team_id,
           group_name: group?.name,
           tags: Array.isArray(t.tags) ? t.tags : [],
@@ -1568,15 +1613,8 @@ serve(async (req) => {
         .select('id, name, role, primary_team_id')
         .eq('email', assignee.email.trim().toLowerCase())
         .maybeSingle();
-      let ticketGroupTeamId: string | null = null;
-      if (group?.name) {
-        const { data: foundTeam } = await supabase
-          .from('teams').select('id').ilike('name', group.name.trim()).maybeSingle();
-        ticketGroupTeamId = foundTeam?.id || null;
-      }
-      if (existing?.id && ticketGroupTeamId && existing.role === 'suporte') {
-        await ensureAgentTeamMembership(supabase, existing.id, ticketGroupTeamId);
-      }
+      const groupLink = await resolveZendeskTicketGroup(supabase, group?.id, group?.name);
+      const ticketGroupTeamId = groupLink?.id || null;
 
       return jsonResponse({
         success: true,
@@ -1586,7 +1624,7 @@ serve(async (req) => {
           team_name: group?.name,
           channel: t?.via?.channel,
           existing_id: existing?.id || null,
-          existing_team_id: existing?.primary_team_id || null,
+          existing_team_id: existing?.primary_team_id || groupLink?.team_id || null,
           ticket_group_team_id: ticketGroupTeamId,
         },
       }, 200);
@@ -1631,25 +1669,15 @@ serve(async (req) => {
       if (assignee?.email) {
         const { data: foundUser } = await supabase
           .from('users')
-          .select('id, name, email, role, primary_team_id, team_ids, active')
+          .select('id, name, email, role, primary_team_id, active')
           .eq('email', assignee.email.trim().toLowerCase())
           .maybeSingle();
         existingAgent = foundUser;
       }
 
-      let ticketGroupTeamId: string | null = null;
-      if (group?.name) {
-        const { data: foundTeam } = await supabase
-          .from('teams')
-          .select('id, name')
-          .ilike('name', group.name.trim())
-          .maybeSingle();
-        if (foundTeam) ticketGroupTeamId = foundTeam.id;
-      }
-      if (existingAgent?.id && ticketGroupTeamId && existingAgent.role === 'suporte') {
-        await ensureAgentTeamMembership(supabase, existingAgent.id, ticketGroupTeamId);
-      }
-      const matchedTeamId = ticketGroupTeamId || existingAgent?.primary_team_id || existingAgent?.team_ids?.[0] || null;
+      const groupLink = await resolveZendeskTicketGroup(supabase, group?.id, group?.name);
+      const ticketGroupTeamId = groupLink?.id || null;
+      const matchedTeamId = existingAgent?.primary_team_id || groupLink?.team_id || null;
 
       const csatScore = t.satisfaction_rating?.score;
       const isNegative = csatScore === 'bad' || csatScore === 'bad_with_comment';
@@ -1708,7 +1736,7 @@ serve(async (req) => {
             name: existingAgent.name,
             email: existingAgent.email,
             primary_team_id: existingAgent.primary_team_id,
-            team_ids: existingAgent.team_ids,
+            team_ids: existingAgent.primary_team_id ? [existingAgent.primary_team_id] : [],
           } : null,
           matched_team_id: matchedTeamId,
         }
@@ -2370,7 +2398,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     const chain = await runAIModelChain({
       targets: aiTargets,
       signal,
-      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, target.model === OPENROUTER_MODEL ? 'running_gemma' : 'fallback_gemini'),
+      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, phaseForAIModel(target.model)),
       execute: async (target, _attempt, attemptSignal) => {
         const modelStarted = Date.now();
         const response = await callOpenRouter({
@@ -2637,7 +2665,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     const chain = await runAIModelChain({
       targets: aiTargets,
       signal,
-      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, target.model === OPENROUTER_MODEL ? 'running_gemma' : 'fallback_gemini'),
+      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, phaseForAIModel(target.model)),
       execute: async (target, _attempt, attemptSignal) => {
         const modelStarted = Date.now();
         const response = await callOpenRouter({

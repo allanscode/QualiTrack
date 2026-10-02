@@ -62,7 +62,7 @@ export default function AIPipelineView() {
           </div>
           <h4 className="font-bold text-brand-primary">Execução & Validação</h4>
           <p className="text-brand-muted text-[11px] leading-relaxed">
-            Executa o Gemma 4 31B pelo OpenRouter com JSON Schema estrito e failover entre providers do mesmo modelo.
+            Tenta GLM 5.3 Flash, depois Gemma 4 e Gemini 3.8 Flash pelo OpenRouter. A resposta é validada antes de criar a avaliação.
           </p>
         </Card>
       </div>
@@ -126,10 +126,10 @@ export default function AIPipelineView() {
 
         <div className="space-y-2 text-[11px] text-brand-muted">
           <p>
-            • <strong>Modelo único:</strong> Gemma 4 31B (<code className="font-mono text-brand-primary font-bold">google/gemma-4-31b-it</code>) pelo OpenRouter, acessado exclusivamente pela Edge Function com chave armazenada em secret.
+            • <strong>Ordem dos modelos pagos:</strong> GLM 5.3 Flash → Gemma 4 31B → Gemini 3.8 Flash. A Edge Function usa uma chave OpenRouter armazenada em secret.
           </p>
           <p>
-            • <strong>Resiliência:</strong> failover automático entre providers do mesmo modelo, até três novas tentativas com espera progressiva e reprocessamento posterior em falhas transitórias.
+            • <strong>Resiliência:</strong> até duas tentativas por modelo, failover entre provedores disponíveis e reprocessamento posterior em falhas transitórias.
           </p>
         </div>
       </Card>

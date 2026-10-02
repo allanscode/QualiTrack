@@ -240,7 +240,7 @@ export default function AuditingQueueView({
         if (!job?.ticket_id) return;
         setAIJobs(previous => ({ ...previous, [job.ticket_id]: job }));
 
-        if (job.status === 'running' && job.phase === 'fallback_gemini') {
+        if (job.status === 'running' && (job.phase === 'running_gemma' || job.phase === 'fallback_gemini')) {
           const toastKey = `ai-fallback-${job.job_id || job.ticket_id}`;
           if (!notifiedFallbacksRef.current.has(toastKey)) {
             notifiedFallbacksRef.current.add(toastKey);
@@ -1363,7 +1363,10 @@ export default function AuditingQueueView({
       ticket_subject: ticket.subject,
       form_id: draft.form_id,
       evaluated_id: draft.agent_id,
-      team_id: resolveTicketTeamId({ ticket_group_team_id: ticket.ticket_group_team_id, team_id: draft.team_id }),
+      team_id: resolveTicketTeamId(
+        { ticket_group_team_id: ticket.ticket_group_team_id, team_id: draft.team_id },
+        agents.find(agent => agent.id === draft.agent_id),
+      ),
       ticket_group_team_id: ticket.ticket_group_team_id,
       group_name: ticket.group_name,
       channel: normalizeChannel(draft.channel),
@@ -1598,7 +1601,7 @@ export default function AuditingQueueView({
             disabled={true}
             className="flex min-w-0 items-center justify-center gap-1.5 bg-indigo-600/80 text-white font-semibold shadow-xs cursor-not-allowed"
           >
-            <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
+            <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
           </Button>
           {renderCancelAIAction(ticket.ticket_id)}
         </div>
@@ -2677,7 +2680,7 @@ export default function AuditingQueueView({
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
                             {isEvaluatingTicket(ticket.ticket_id) ? (
-                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
+                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
                             ) : (
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}
@@ -2805,7 +2808,7 @@ export default function AuditingQueueView({
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
                             {isEvaluatingTicket(ticket.ticket_id) ? (
-                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
+                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
                             ) : (
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}

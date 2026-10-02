@@ -195,6 +195,7 @@ export default function MonitoriaForm({
   const ticketGroupTeamId = (initialData as Monitoria & { ticket_group_team_id?: string } | undefined)?.ticket_group_team_id
     || activeLookedUpGroup?.teamId;
   const isTicketGroupPair = (agentId: string | undefined, teamId: string | undefined) =>
+    teams.some(team => team.id === ticketGroupTeamId) &&
     isVerifiedTicketGroupPair(
       header.ticket_id,
       initialData?.ticket_id || activeLookedUpGroup?.ticketId,
@@ -489,21 +490,12 @@ export default function MonitoriaForm({
         setHeader(prev => (prev.evaluated_id || prev.ticket_id?.trim() !== ticketId) ? prev : ({
           ...prev,
           evaluated_id: found.existing_id!,
-          team_id: found.ticket_group_team_id || prev.team_id || found.existing_team_id || '',
+          team_id: found.existing_team_id || prev.team_id || '',
         }));
         setUnregisteredAgentPreview(null);
       } else {
         setUnregisteredAgentPreview(found);
-        // Atendente ainda não cadastrado, mas o grupo dele no Zendesk (ex.:
-        // "Suporte Interno") já existe como Equipe no QualiTrack (importado
-        // via Admin > Equipes > Importar do Zendesk) — casa por nome e
-        // pré-seleciona, pra não depender do monitor escolher certo na mão.
-        if (found.team_name && !header.team_id) {
-          const matchedTeam = teams.find(t => t.name.trim().toLowerCase() === found.team_name!.trim().toLowerCase());
-          if (matchedTeam) {
-            setHeader(prev => (prev.team_id || prev.ticket_id?.trim() !== ticketId) ? prev : ({ ...prev, team_id: matchedTeam.id }));
-          }
-        }
+        // O grupo Zendesk não define a equipe gestora de um novo agente.
       }
     }, 700);
 
@@ -962,12 +954,10 @@ export default function MonitoriaForm({
                     className="w-full"
                     disabled={isViewOnly || isReevaluating}
                   />
-                  {isTicketGroupPair(header.evaluated_id, ticketGroupTeamId) && (
+                  {ticketGroupTeamId && (
                     <p className="ml-1 text-[10px] font-medium text-brand-muted">
-                      Grupo do ticket no Zendesk: {(initialData as Monitoria & { group_name?: string } | undefined)?.group_name || activeLookedUpGroup?.groupName || teams.find(team => team.id === ticketGroupTeamId)?.name}.
-                      {header.team_id === ticketGroupTeamId
-                        ? ' O agente também foi vinculado a este grupo; sua equipe principal foi preservada.'
-                        : ' A equipe desta monitoria foi alterada manualmente.'}
+                      Grupo do ticket no Zendesk: {(initialData as Monitoria & { group_name?: string } | undefined)?.group_name || activeLookedUpGroup?.groupName || teams.find(team => team.id === ticketGroupTeamId)?.name || 'Grupo não identificado'}.
+                      {' '}A monitoria pertence à equipe principal do agente.
                     </p>
                   )}
                 </div>
