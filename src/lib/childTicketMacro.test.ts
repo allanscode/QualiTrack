@@ -12,17 +12,20 @@ const evaluation: ChildTicketAiEvaluation = {
 };
 
 describe('macro de chamado filho', () => {
-  it('mantém o parecer e até dois ajustes sem repetir checklist e assunto', () => {
+  it('mantém o parecer e todos os ajustes sem repetir checklist e assunto', () => {
     const text = buildChildTicketMacro(evaluation, 'nao_conforme');
     expect(text).toContain('Chamado filho inválido.');
     expect(text).toContain(evaluation.summary);
     expect(text).toContain('Informar o pedido.; Registrar a evidência.');
     expect(text).not.toContain('Contexto');
-    expect(text).not.toContain('Terceira recomendação.');
+    expect(text).toContain('Terceira recomendação.');
   });
 
-  it('limita o tamanho mesmo com respostas extensas da IA', () => {
-    const text = buildChildTicketMacro({ ...evaluation, summary: 'Resumo '.repeat(200), recommendations: ['A'.repeat(300), 'B'.repeat(300)] }, 'nao_conforme');
-    expect(text.length).toBeLessThan(700);
+  it('preserva integralmente respostas extensas da IA', () => {
+    const summary = 'Resumo '.repeat(200);
+    const recommendations = ['A'.repeat(300), 'B'.repeat(300)];
+    const text = buildChildTicketMacro({ ...evaluation, summary, recommendations }, 'nao_conforme');
+    expect(text).toContain(summary.trim());
+    for (const recommendation of recommendations) expect(text).toContain(recommendation);
   });
 });

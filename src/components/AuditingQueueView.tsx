@@ -1263,7 +1263,8 @@ export default function AuditingQueueView({
         comments,
         ticketFields,
         ticket.child_macro_type,
-        jobId
+        jobId,
+        ticket.status
       );
       if (cancelledAIJobIds.has(jobId)) return;
 
@@ -3130,7 +3131,7 @@ export default function AuditingQueueView({
                     <div className="h-4 w-48 rounded bg-surface-border/50 animate-pulse" />
                     <div className="space-y-1.5 pt-1">
                       {[
-                        'Verificando inalterabilidade do assunto da macro homologada...',
+                        'Verificando assunto de abertura e alterações da macro de resolvido...',
                         'Conferindo preservação do texto estrutural e enriquecimento técnico...',
                         'Validando direcionamento ("Para") ao grupo especialista correto...'
                       ].map((stepLabel, idx) => (
@@ -3932,7 +3933,7 @@ export default function AuditingQueueView({
                   <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
                     <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">1</span>
                     <div>
-                      <strong className="text-brand-primary">Preservação do Assunto:</strong> Inalterabilidade da macro base. Aceita identificador do chamado pai e prefixos (ex: <code>"Ticket Nova Demanda do #169238"</code>).
+                      <strong className="text-brand-primary">Assunto da Abertura:</strong> Aceita identificador do chamado pai, prefixos (ex: <code>"Ticket Nova Demanda do #169238"</code>) e alterações automáticas pela macro de resolvido.
                     </div>
                   </div>
                   <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">

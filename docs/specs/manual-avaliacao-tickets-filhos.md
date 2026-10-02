@@ -26,8 +26,8 @@ flowchart TD
     TF --> Q2["2. Preservação do Texto da Macro"]
     TF --> Q3["3. Direcionamento Correto ('Para')"]
     
-    Q1 -->|Assunto Alterado| INV["❌ Falha Grave / Fila de Inválidos"]
-    Q1 -->|Assunto Íntegro| OK1["✔ Conforme"]
+    Q1 -->|Alteração manual indevida na abertura| INV["❌ Falha Grave / Fila de Inválidos"]
+    Q1 -->|Assunto válido ou alterado pela macro de resolvido| OK1["✔ Conforme"]
     
     Q2 -->|Texto da Macro Apagado| REP["❌ Não Conforme"]
     Q2 -->|Macro Presente + Detalhes Extras| OK2["✔ Excelente"]
@@ -39,16 +39,16 @@ flowchart TD
 
 ---
 
-### Quesito 1: Preservação Intacta do Assunto (Inalterabilidade)
+### Quesito 1: Assunto da Abertura e Macro de Resolvido
 
-* **Regra de Ouro:** **O ASSUNTO DO TICKET FILHO NUNCA PODE SER ALTERADO PELO ANALISTA.**
-* **Fundamento Técnico:** O Zendesk possui 5 gatilhos estruturais padronizados pelo projeto de dados (DB-361). Esses gatilhos realizam a leitura exata da string de texto do assunto preenchido automaticamente pela macro. Se o analista alterar uma única letra, adicionar o número do chamado pai no título, ou personalizar o texto, a automação falhará e o chamado cairá na fila de *Chamados Filhos Inválidos*.
+* **Regra de Ouro:** O analista não deve descaracterizar manualmente o assunto criado pela macro de abertura. O prefixo `Ticket` e o identificador do chamado pai são aceitos.
+* **Fundamento Técnico:** Os gatilhos estruturais do Zendesk dependem do assunto da abertura. A macro de resolvido altera o assunto automaticamente depois; o título atual pode, portanto, diferir do título original sem indicar falha na abertura.
 * **Critério de Avaliação do QA:**
-  * **Conforme (Aprovado):** O assunto do ticket filho coincide perfeitamente com o catálogo oficial de macros estruturais.
-  * **Não Conforme (Reprovado - Falha Crítica):** O assunto foi renomeado, abreviado, prefixado com dados do cliente ou totalmente reescrito.
+  * **Conforme (Aprovado):** O assunto da abertura corresponde à macro estrutural, incluindo prefixo ou ID do pai. Também é conforme quando o assunto atual foi alterado pela macro de resolvido.
+  * **Não Conforme (Reprovado - Falha Crítica):** Há evidência de que o analista descaracterizou manualmente o assunto antes da resolução.
 
 #### Catálogo Oficial de Assuntos Homologados:
-| Macro Aplicada | Assunto Obrigatório e Inalterável | Fila / Destino Estrutural |
+| Macro Aplicada | Assunto de Abertura Homologado | Fila / Destino Estrutural |
 | :--- | :--- | :--- |
 | **🛠 Enviar para Análise Técnica CLIENTE FINAL** | `Encaminhado para Análise Técnica Cliente Final` | Análise Técnica - Cliente Final |
 | **🛠 Enviar para Análise Técnica REVENDA** | `Encaminhado para Análise Técnica REVENDA` | Análise Técnica - Revenda |
@@ -110,9 +110,9 @@ O sistema de auditoria inteligente considera apenas os três quesitos abaixo. Ta
 | **3. Direcionamento Correto ("Para")** | Direcionamento incorreto rebaixa para **Atenção** ou **Não Conforme**. |
 
 ### Classificação de Parecer:
-* 🟢 **Conforme (90 a 100 pontos):** Todos os três pilares cumpridos com rigor; assunto inalterado; macro presente e detalhada com logs/AnyDesk; direcionamento exato.
+* 🟢 **Conforme (90 a 100 pontos):** Todos os três pilares cumpridos com rigor; assunto da abertura válido, inclusive após mudança pela macro de resolvido; macro presente e detalhada com logs/AnyDesk; direcionamento exato.
 * 🟡 **Atenção / Ressalvas (70 a 89 pontos):** Assunto e direcionamento corretos, mas com detalhamento técnico insuficiente no comentário adicional.
-* 🔴 **Não Conforme (0 a 69 pontos):** Assunto alterado (gatilho quebrado), texto da macro suprimido ou encaminhamento para destino incorreto.
+* 🔴 **Não Conforme (0 a 69 pontos):** Assunto da abertura alterado manualmente de forma indevida, texto da macro suprimido ou encaminhamento para destino incorreto.
 
 ---
 
@@ -120,7 +120,7 @@ O sistema de auditoria inteligente considera apenas os três quesitos abaixo. Ta
 
 Ao auditar um chamado na fila de **Triagem de Chamados Filhos**, execute o seguinte checklist:
 
-- [ ] **1. Assunto:** O título do chamado filho coincide estritamente com o catálogo? (Sem IDs extras, sem nomes de postos inseridos no assunto).
+- [ ] **1. Assunto:** O título da abertura corresponde à macro, considerando prefixo e ID do pai? Se o ticket foi resolvido, a mudança automática de assunto pela macro de resolvido foi aceita?
 - [ ] **2. Texto:** A mensagem estrutural da macro foi mantida? Há enriquecimento com dados técnicos (AnyDesk, logs, passos de teste)?
 - [ ] **3. Destinatário ("Para"):** O ticket foi para o Grupo Técnico correto (ou para o próprio analista no caso de Nova Demanda)?
 - [ ] **4. Chamado Pai Vinculado:** O ID do chamado pai (`parent_ticket_id` / `problem_id`) foi capturado e validado corretamente?

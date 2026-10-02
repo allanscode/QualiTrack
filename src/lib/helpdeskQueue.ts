@@ -561,6 +561,7 @@ export async function evaluateChildTicketWithAI(
   ticketFields?: { title: string; value: string }[],
   macroType?: ChildTicketMacroType,
   jobId?: string,
+  ticketStatus?: string,
 ): Promise<ChildTicketAiEvaluation | AIQueuedResult> {
   if (isMockMode || !supabase) {
     return getFallbackChildTicketEvaluation(ticketId, macroType);
@@ -572,6 +573,7 @@ export async function evaluateChildTicketWithAI(
         action: 'evaluate_child_ticket',
         ticket_id: ticketId,
         ticket_subject: ticketSubject,
+        ticket_status: ticketStatus,
         dialogue: dialogue || [],
         ticket_fields: ticketFields,
         macro_type: macroType,
@@ -597,7 +599,7 @@ function getFallbackChildTicketEvaluation(ticketId: string, macroType?: ChildTic
     score: 100,
     summary: `Conferência automática prévia para o chamado filho #${ticketId}. Os quesitos operacionais de assunto, texto da macro e direcionamento foram validados.`,
     checks: [
-      { rule: "Preservação do Assunto (Inalterabilidade)", passed: true, details: "O assunto original da macro não foi alterado, mantendo a integridade dos 5 gatilhos do Zendesk (DB-361)." },
+      { rule: "Assunto da Abertura e Macro de Resolvido", passed: true, details: "O assunto da abertura é válido; alterações automáticas pela macro de resolvido também são aceitas." },
       { rule: "Preservação do Texto da Macro", passed: true, details: "O texto-base da macro foi mantido integralmente, complementado com as informações técnicas do atendimento." },
       { rule: "Direcionamento Correto ('Para')", passed: true, details: "Encaminhado corretamente para o grupo técnico especialista / fila responsável." }
     ],

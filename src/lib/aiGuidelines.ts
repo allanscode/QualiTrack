@@ -113,8 +113,8 @@ Este manual normatiza a criação de chamados filhos (Side Conversations) aberto
    - Utilizado para registro de atividades internas, homologações ou tarefas complementares de suporte.
 
 ## 3. As 3 Regras de Ouro da Auditoria de Qualidade
-- **Regra 1: Preservação do Assunto (Inalterabilidade):**
-  O assunto gerado pela macro não pode ser descaracterizado. O prefixo "Ticket " e o número do ticket pai (ex: "Nova Demanda do #169238" ou "Ticket Nova Demanda do #169238") são totalmente válidos e conformes. Apenas reprova se houver texto livre desconexo da macro.
+- **Regra 1: Assunto da abertura e macro de resolvido:**
+  O assunto gerado pela macro de abertura não deve ser descaracterizado manualmente. O prefixo "Ticket " e o número do ticket pai (ex: "Nova Demanda do #169238" ou "Ticket Nova Demanda do #169238") são válidos. A macro de resolvido do Zendesk altera automaticamente o assunto depois da abertura; essa mudança é conforme e não reprova o ticket. Reprove apenas quando houver evidência de alteração manual indevida antes da resolução.
 - **Regra 2: Preservação do Texto da Macro com Enriquecimento:**
   O texto-base da macro deve ser mantido e enriquecido obrigatoriamente com dados técnicos (versão, logs, AnyDesk, descrição da falha e testes já realizados).
 - **Regra 3: Direcionamento Correto ("Para"):**
