@@ -401,8 +401,7 @@ export default function SupportManagerDashboard({
     if (isCustomizing) return onlineUsers;
     return onlineUsers.filter((ou: any) => {
       const fullUser = users.find((u: any) => u.id === ou.id);
-      const uTeamIds = fullUser?.team_ids || [];
-      return uTeamIds.some((tid: string) => myTeamIds.includes(tid));
+      return Boolean(fullUser?.primary_team_id && myTeamIds.includes(fullUser.primary_team_id));
     });
   }, [isCustomizing, onlineUsers, myTeamIds, users]);
 
