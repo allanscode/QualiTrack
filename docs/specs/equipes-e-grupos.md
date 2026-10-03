@@ -32,6 +32,12 @@ A prévia da base identificou gestores para WebPosto (Ana Karolina e Ricardo Fad
 
 ## Configuração no painel
 
+### Revisão das equipes PJ
+
+As equipes PJ Bruno, PJ Duarte, PJ SumWise e PJ Trindade usam `requires_pj_review = true`. Em **Configurações → Equipes**, o cartão **Fluxo das equipes PJ** mostra o revisor atual e permite que Admin ou Gestor da Qualidade altere esse responsável para um atendente ativo. A migração inicial configura Victor Ellyan Aguiar, quando sua conta ativa está presente. A mudança vale para novos encaminhamentos; os casos já atribuídos mantêm o revisor anterior.
+
+O gestor da equipe PJ envia aprovação ou contestação com justificativa. A aprovação também está disponível para notas iguais ou superiores a 75; a contestação permanece limitada a notas abaixo de 75. O caso entra em **Revisão PJ**, onde apenas o revisor designado pode aprovar ou reprovar o parecer, também com justificativa. Ambos os resultados seguem para **Gestor da Qualidade**, responsável pela decisão final. O painel mostra as três etapas e os pareceres na linha do tempo. O prazo vencido continua visível, mas o cron não conclui automaticamente uma monitoria PJ.
+
 Em **Configurações → Equipes**, use as abas internas **Equipes** e **Grupos do Zendesk**. Na primeira, crie equipes e vincule gestores; na segunda, sincronize o Zendesk, converta cadastros antigos e indique quais equipes atendem cada grupo.
 
 1. Após a migração, revisar as oito equipes reais e a equipe principal de cada agente em **Usuários**. Vincular os gestores ainda ausentes quando as respectivas contas existirem.

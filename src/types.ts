@@ -86,6 +86,7 @@ export type MonitoriaStatus =
   | 'pendente_revisao'
   | 'em_contestacao'
   | 'aguardando_gestor_suporte'
+  | 'aguardando_revisao_pj'
   | 'aguardando_gestor_qualidade'
   | 'concluida'
   | 'contestacao_aceita'
@@ -139,6 +140,12 @@ export interface Monitoria {
   team_id?: string;
   /** Grupo original do ticket; team_id identifica a equipe gestora. */
   ticket_group_team_id?: string;
+  pj_reviewer_id?: string | null;
+  pj_review_kind?: 'approval' | 'contestation' | null;
+  pj_review_decision?: 'approved' | 'rejected' | null;
+  pj_review_note?: string | null;
+  pj_reviewed_at?: string | null;
+  pj_review_required?: boolean;
   satisfaction_record_text?: string;
   selected_critical_errors?: string[];
   form_snapshot?: EvaluationForm;
@@ -173,6 +180,8 @@ export interface Team {
   zendesk_group_id?: number | null;
   /** Organiza subequipes no painel sem ampliar as permissões dos gestores. */
   parent_team_id?: string | null;
+  /** Exige parecer do revisor PJ antes da decisão final da Qualidade. */
+  requires_pj_review?: boolean;
 }
 
 export interface TeamGroup {

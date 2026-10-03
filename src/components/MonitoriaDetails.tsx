@@ -1,26 +1,30 @@
 import React from 'react';
-import { Monitoria, User } from '../types';
+import { Monitoria, Team, User } from '../types';
 import { ActionType, getPreviousStage, getNextStage, getStageLabel } from '../hooks/useMonitoriaActions';
 import { getStatusConfig, getHistoryEventConfig, VARIANT_TEXT_CLASS } from '../lib/statusHelper';
 import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
 import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, History, Paperclip, ArrowLeftRight, ArrowLeft, ArrowRight, Clock } from 'lucide-react';
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 import Button from './ui/Button';
+import PjReviewFlow from './PjReviewFlow';
 
 type Props = {
   monitoria: Monitoria;
   user: User | null;
   users: User[];
+  teams?: Team[];
   onView: (m: Monitoria) => void;
   onAction: (modal: { id: string; type: ActionType }) => void;
 };
 
-export default function MonitoriaDetails({ monitoria: m, user, users, onView, onAction }: Props) {
+export default function MonitoriaDetails({ monitoria: m, user, users, teams = [], onView, onAction }: Props) {
   const staticData = { users };
   const setViewingMonitoria = onView;
   const setActionModal = onAction;
+  const isPj = Boolean(m.pj_review_required || m.pj_review_kind) || teams.some(team => team.id === m.team_id && team.requires_pj_review);
   return (
     <div className="space-y-5">
+              {isPj && <PjReviewFlow monitoria={m} users={users} />}
               {m.history?.length > 0 && (
                 <div className="pb-4">
                   <p className="text-xs font-black uppercase text-brand-primary tracking-wider mb-3 ml-1 flex items-center gap-2">
@@ -192,7 +196,8 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                     </Button>
                   )}
 
-                  {user?.role === 'gestor_suporte' && m.status === 'pendente_revisao' && (m.score === undefined || m.score === null || m.score < 75) && (
+                  {user?.role === 'gestor_suporte' && m.status === 'pendente_revisao'
+                    && (isPj || m.score === undefined || m.score === null || m.score < 75) && (
                     <>
                       <Button
                         variant="secondary"
@@ -200,16 +205,17 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                         onClick={() => setActionModal({ id: m.id, type: 'aceitar' })}
                         icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                       >
-                        Aprovar
+                        {isPj ? 'Enviar aprovação a Victor' : 'Aprovar'}
                       </Button>
-                      <Button
+                      {((isPj && m.score != null && m.score < 75)
+                        || (!isPj && (m.score === undefined || m.score === null || m.score < 75))) && <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
                         icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                       >
-                        Contestar
-                      </Button>
+                        {isPj ? 'Enviar contestação a Victor' : 'Contestar'}
+                      </Button>}
                     </>
                   )}
 
@@ -220,7 +226,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                       que não vai entrar. O nome de quem agiu fica registrado no histórico
                       (by_name), então não se perde rastreabilidade de que foi a Qualidade
                       substituindo a decisão do Gestor de Atendimento. */}
-                  {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && m.status === 'pendente_revisao' && (
+                  {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && !isPj && m.status === 'pendente_revisao' && (
                     <>
                       <Button
                         variant="secondary"
@@ -228,7 +234,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                         onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
                         icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                       >
-                        Aprovar
+                        {isPj ? 'Enviar aprovação a Victor' : 'Aprovar'}
                       </Button>
                       <Button
                         variant="outline"
@@ -241,7 +247,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                     </>
                   )}
 
-                  {(user?.role === 'gestor_suporte' || user?.role === 'admin') && m.status === 'aguardando_gestor_suporte' && (
+                  {(user?.role === 'gestor_suporte' || (user?.role === 'admin' && !isPj)) && m.status === 'aguardando_gestor_suporte' && (
                     <>
                       <Button
                         variant="secondary"
@@ -249,7 +255,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                         onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
                         icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                       >
-                        Aprovar
+                        {isPj ? 'Enviar aprovação a Victor' : 'Aprovar'}
                       </Button>
                       <Button
                         variant="outline"
@@ -257,7 +263,23 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                         onClick={() => setActionModal({ id: m.id, type: 'escalar' })}
                         icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-y-0.5" />}
                       >
-                        Escalar
+                        {isPj ? 'Enviar contestação a Victor' : 'Escalar'}
+                      </Button>
+                    </>
+                  )}
+
+                  {user?.role === 'suporte' && m.status === 'aguardando_revisao_pj'
+                    && m.pj_reviewer_id === user.id && (
+                    <>
+                      <Button variant="secondary" size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'revisao_pj_aprovar' })}
+                        icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
+                        Aprovar parecer
+                      </Button>
+                      <Button variant="outline" size="sm"
+                        onClick={() => setActionModal({ id: m.id, type: 'revisao_pj_reprovar' })}
+                        icon={<XCircle className="w-3.5 h-3.5" />}>
+                        Reprovar parecer
                       </Button>
                     </>
                   )}
@@ -307,7 +329,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, onView, on
                   )}
 
                   {/* Controles de Etapa e Fluxo — Exclusivos de Administrador e Gestor de Qualidade */}
-                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (() => {
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && !isPj && m.active !== false && (() => {
                     const prevStage = getPreviousStage(m.status);
                     const nextStage = getNextStage(m.status);
                     const isClosed = ['concluida', 'finalizada_alterada', 'contestacao_aceita', 'contestacao_negada'].includes(m.status);

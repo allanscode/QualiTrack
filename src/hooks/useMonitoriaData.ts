@@ -55,6 +55,9 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
 
             const fetchPromise = Promise.all([
               monitoriasQuery.abortSignal(controller.signal),
+              ...(isSuporte ? [supabase!.from('vw_monitorias_pj_reviewer')
+                .select('*').order('created_at', { ascending: false })
+                .abortSignal(controller.signal)] : []),
             ]);
 
             const timeoutPromise = new Promise((_, reject) =>
@@ -81,8 +84,9 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
           }
         };
 
-        const [mRes] = await executeWithRetry();
-        fetchedMonitorias = mRes.data || [];
+        const [mRes, reviewerRes] = await executeWithRetry();
+        fetchedMonitorias = [...new Map([...(mRes.data || []), ...(reviewerRes?.data || [])]
+          .map((item: Monitoria) => [item.id, item])).values()];
       }
 
       setMonitorias(fetchedMonitorias.map((r: any) => ({ ...r, history: r.history || [], answers: r.answers || {} })));

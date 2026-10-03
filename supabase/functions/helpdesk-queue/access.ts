@@ -44,3 +44,8 @@ export function canReadQueueTicket(
   if (queueType === 'negativas' || queueType === 'filhos') return role === 'qualidade' && assignedTo === userId;
   return role === 'qualidade' || role === 'gestor_suporte';
 }
+
+export function canReadMatchedTicketTeam(role: string, matchedTeamId: string | null, managerTeamIds: string[]): boolean {
+  if (role !== 'gestor_suporte') return ['admin', 'gestor_qualidade', 'qualidade'].includes(role);
+  return Boolean(matchedTeamId && managerTeamIds.includes(matchedTeamId));
+}

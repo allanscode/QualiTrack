@@ -111,7 +111,7 @@ export default function MonitoriaList({
     targetStatus, setTargetStatus,
     submitting,
     handleAction,
-  } = useMonitoriaActions(user, monitorias, qualityConfig, load);
+  } = useMonitoriaActions(user, monitorias, qualityConfig, load, staticData.teams);
 
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -225,7 +225,7 @@ export default function MonitoriaList({
       if (filters.statusFilter === 'active' && m.active === false) return false;
       if (filters.statusFilter === 'removed' && m.active !== false) return false;
 
-      if (user?.role === 'suporte' && m.evaluated_id !== user.id) return false;
+      if (user?.role === 'suporte' && m.evaluated_id !== user.id && m.pj_reviewer_id !== user.id) return false;
 
       if (user?.role === 'gestor_suporte') {
         if (user.team_ids?.length && m.team_id && !user.team_ids.includes(m.team_id)) return false;
@@ -555,6 +555,7 @@ export default function MonitoriaList({
               { id: 'pendente_revisao', label: 'Pendente Revisão' },
               { id: 'em_contestacao', label: 'Em Contestação' },
               { id: 'aguardando_gestor_suporte', label: 'Gestão Suporte' },
+              { id: 'aguardando_revisao_pj', label: 'Revisão PJ' },
               { id: 'aguardando_gestor_qualidade', label: 'Gestão Qualidade' },
               { id: 'concluida', label: 'Concluídas' },
               { id: 'expiradas_prazo', label: 'Por SLA', fullTitle: 'Finalizadas por SLA (Decurso de Prazo)' },
@@ -578,7 +579,7 @@ export default function MonitoriaList({
 
                 if (!matchesActiveStatus || !matchesTab) return false;
 
-                if (user?.role === 'suporte' && m.evaluated_id !== user.id) return false;
+                if (user?.role === 'suporte' && m.evaluated_id !== user.id && m.pj_reviewer_id !== user.id) return false;
                 if (user?.role === 'gestor_suporte') {
                   if (user.team_ids?.length && m.team_id && !user.team_ids.includes(m.team_id)) return false;
                   else if (!user.team_ids?.length) return false;
@@ -702,7 +703,7 @@ export default function MonitoriaList({
                   <button ref={detailCloseRef} type="button" onClick={closeDetails} aria-label="Fechar detalhes" className="shrink-0 rounded-xl p-2 text-brand-primary hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-brand-accent"><X className="size-5" /></button>
                 </header>
                 <div className="min-h-0 overflow-y-auto p-4 sm:p-6 pb-safe">
-                  <MonitoriaDetails monitoria={m} user={user} users={staticData.users} onView={item => setViewingMonitoria(item)} onAction={modal => setActionModal(modal)} />
+                  <MonitoriaDetails monitoria={m} user={user} users={staticData.users} teams={staticData.teams} onView={item => setViewingMonitoria(item)} onAction={modal => setActionModal(modal)} />
                 </div>
               </>;
             })()}
@@ -717,11 +718,15 @@ export default function MonitoriaList({
                 {(() => {
                   const m = monitorias.find(item => item.id === actionModal.id);
                   const currentSt = m?.status || 'pendente_revisao';
+                  const isPjAction = Boolean(m?.pj_review_required || m?.pj_review_kind) || staticData.teams.some(team => team.id === m?.team_id && team.requires_pj_review);
+                  const isReviewerAction = actionModal.type === 'revisao_pj_aprovar' || actionModal.type === 'revisao_pj_reprovar';
                   const isStepChange = actionModal.type === 'alterar_etapa' || actionModal.type === 'avancar_etapa' || actionModal.type === 'retroceder_etapa';
                   const prev = getPreviousStage(currentSt);
                   const next = getNextStage(currentSt);
 
                   const modalTitle =
+                    actionModal.type === 'revisao_pj_aprovar' ? 'Aprovar parecer PJ' :
+                    actionModal.type === 'revisao_pj_reprovar' ? 'Reprovar parecer PJ' :
                     actionModal.type === 'avancar_etapa' ? 'Avançar Etapa' :
                     actionModal.type === 'retroceder_etapa' ? 'Retroceder Etapa' :
                     actionModal.type === 'alterar_etapa' ? 'Alterar Etapa da Monitoria' :
@@ -731,7 +736,7 @@ export default function MonitoriaList({
                     actionModal.type === 'contestar' ? 'Contestar Avaliação' :
                     actionModal.type === 'solicitar_reavaliacao' ? 'Solicitar Reavaliação' :
                     actionModal.type === 'manter' ? 'Recusar Reavaliação' :
-                    actionModal.type === 'escalar' ? 'Escalar para Gestão Qualidade' :
+                    actionModal.type === 'escalar' ? (isPjAction ? 'Enviar contestação a Victor' : 'Escalar para Gestão Qualidade') :
                     actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
                     actionModal.type === 'excluir' ? 'Excluir Monitoria' :
                     'Confirmar Ação';
@@ -744,7 +749,11 @@ export default function MonitoriaList({
                   let notePlaceholder = 'Descreva os detalhes desta ação...';
                   let noteRequired = false;
 
-                  if (isSupportManager && isApproval) {
+                  if (isReviewerAction) {
+                    noteLabel = 'Justificativa do parecer (obrigatória)';
+                    notePlaceholder = 'Explique sua decisão. O caso seguirá para decisão final da Qualidade.';
+                    noteRequired = true;
+                  } else if (isSupportManager && isApproval) {
                     noteLabel = 'Ação Corretiva';
                     notePlaceholder = 'Descreva detalhadamente a ação corretiva aplicada para esta monitoria (obrigatório)...';
                     noteRequired = true;
@@ -772,6 +781,7 @@ export default function MonitoriaList({
                     actionModal.type === 'solicitar_reavaliacao' ||
                     actionModal.type === 'manter' ||
                     actionModal.type === 'recusar_agente' ||
+                    isReviewerAction ||
                     isStepChange
                   );
 

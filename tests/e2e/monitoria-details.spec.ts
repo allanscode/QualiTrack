@@ -13,3 +13,22 @@ for (const theme of ['light', 'dark']) {
     });
   }
 }
+
+for (const width of [390, 1280]) {
+  test(`PJ review route remains readable at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 740 });
+    await page.goto('/tests/e2e/fixtures/monitoria-details.html?pj=1');
+    await expect(page.getByRole('region', { name: 'Fluxo de aprovação PJ' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Aprovar parecer' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reprovar parecer' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+    await page.screenshot({ path: `scratch/pj-review-${width}.png`, fullPage: true });
+    await page.goto('/tests/e2e/fixtures/monitoria-details.html?pj=1&stage=reviewed');
+    await expect(page.getByText('Parecer reprovado')).toBeVisible();
+    await expect(page.getByText('Decisão final pendente')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+    await page.goto('/tests/e2e/fixtures/monitoria-details.html?pj=1&stage=manager');
+    await expect(page.getByRole('button', { name: 'Enviar aprovação a Victor' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Enviar contestação a Victor' })).toHaveCount(0);
+  });
+}

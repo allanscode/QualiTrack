@@ -17,7 +17,7 @@ import {
 } from './ai-fallback.ts';
 import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS, OPENROUTER_HANG_GUARD_MS } from './openrouter-client.ts';
 import { retryAt } from './ai-retry.ts';
-import { canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
+import { canReadMatchedTicketTeam, canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
 import { satisfactionResponseTimestamp } from './satisfaction.ts';
 import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
@@ -534,6 +534,13 @@ serve(async (req) => {
     if (callerError || !caller?.active || !allowedRoles.includes(caller.role as string)) {
       return jsonResponse({ error: 'Sem permissão para acessar a Central de Filas.' }, 403);
     }
+    const managerTeamIds: string[] = [];
+    if (caller.role === 'gestor_suporte') {
+      const { data: memberships, error: membershipsError } = await supabase.from('user_teams')
+        .select('team_id').eq('user_id', user.id);
+      if (membershipsError) return jsonResponse({ error: 'Falha ao verificar equipes do gestor.' }, 503);
+      managerTeamIds.push(...(memberships || []).map(item => item.team_id));
+    }
 
     const parseResult = RequestSchema.safeParse(workerBody || {});
 
@@ -791,8 +798,19 @@ serve(async (req) => {
     }
 
     if (action === 'fetch_draft_statuses') {
-      const ids = parseResult.data.ticket_ids;
+      let ids = parseResult.data.ticket_ids;
       if (!ids?.length) return jsonResponse({ error: 'IDs de tickets obrigatórios.' }, 400);
+      if (caller.role === 'gestor_suporte') {
+        const { data: catalog, error: catalogError } = await supabase.from('queue_ticket_catalog')
+          .select('ticket_id,ticket_snapshot').in('ticket_id', ids);
+        if (catalogError) return jsonResponse({ error: 'Falha ao verificar equipes dos tickets.' }, 503);
+        const allowedIds = new Set((catalog || []).filter(row =>
+          canReadMatchedTicketTeam(caller.role as string,
+            typeof row.ticket_snapshot?.team_id === 'string' ? row.ticket_snapshot.team_id : null,
+            managerTeamIds)).map(row => row.ticket_id));
+        ids = ids.filter(ticketId => allowedIds.has(ticketId));
+        if (ids.length === 0) return jsonResponse({ statuses: {} }, 200);
+      }
       const response = await fetch(
         `https://${subdomain}.zendesk.com/api/v2/tickets/show_many?ids=${ids.join(',')}`,
         { headers: zendeskHeaders, signal: AbortSignal.timeout(15000) },
@@ -843,6 +861,16 @@ serve(async (req) => {
           ids = ids.filter(id => assignedIds.has(id));
         }
       }
+      if (caller.role === 'gestor_suporte' && ids.length > 0) {
+        const { data: catalog, error: catalogError } = await supabase.from('queue_ticket_catalog')
+          .select('ticket_id,ticket_snapshot').in('ticket_id', ids);
+        if (catalogError) return jsonResponse({ error: 'Falha ao verificar equipes dos tickets.' }, 503);
+        const allowedIds = new Set((catalog || []).filter(row =>
+          canReadMatchedTicketTeam(caller.role as string,
+            typeof row.ticket_snapshot?.team_id === 'string' ? row.ticket_snapshot.team_id : null,
+            managerTeamIds)).map(row => row.ticket_id));
+        ids = ids.filter(ticketId => allowedIds.has(ticketId));
+      }
       return jsonResponse({ ticket_ids: ids }, 200);
     }
 
@@ -850,9 +878,9 @@ serve(async (req) => {
       if (caller.role === 'admin' || caller.role === 'gestor_qualidade') return true;
       const cutoff = new Date(Date.now() - 15 * 60_000).toISOString();
       const [{ data: direct, error: directError }, { data: children, error: childrenError }] = await Promise.all([
-        supabase.from('queue_ticket_catalog').select('ticket_id,queue_type')
+        supabase.from('queue_ticket_catalog').select('ticket_id,queue_type,ticket_snapshot')
           .eq('ticket_id', requestedId).gte('verified_at', cutoff),
-        supabase.from('queue_ticket_catalog').select('ticket_id,queue_type')
+        supabase.from('queue_ticket_catalog').select('ticket_id,queue_type,ticket_snapshot')
           .eq('parent_ticket_id', requestedId).eq('queue_type', 'filhos').gte('verified_at', cutoff),
       ]);
       if (directError || childrenError) throw new Error('Falha ao verificar o catálogo da fila.');
@@ -865,7 +893,10 @@ serve(async (req) => {
       if (assignmentsError) throw new Error('Falha ao verificar responsável pelo ticket.');
       return candidates.some(c => {
         const owner = (assignments || []).find(a => a.ticket_id === c.ticket_id && a.queue_type === c.queue_type)?.assigned_to || null;
-        return canReadQueueTicket(caller.role as string, user.id, c.queue_type as QueueType, owner);
+        return canReadQueueTicket(caller.role as string, user.id, c.queue_type as QueueType, owner)
+          && (caller.role !== 'gestor_suporte' || canReadMatchedTicketTeam(caller.role,
+            typeof c.ticket_snapshot?.team_id === 'string' ? c.ticket_snapshot.team_id : null,
+            managerTeamIds));
       });
     };
 
@@ -1320,6 +1351,11 @@ serve(async (req) => {
         }
       }
 
+      if (caller.role === 'gestor_suporte') {
+        visibleTickets = visibleTickets.filter(ticket =>
+          canReadMatchedTicketTeam(caller.role as string,
+            typeof ticket.team_id === 'string' ? ticket.team_id : null, managerTeamIds));
+      }
       return jsonResponse({ success: true, tickets: visibleTickets, next_cursor: nextCursor, has_more: hasMore }, 200);
     }
 
@@ -1678,6 +1714,11 @@ serve(async (req) => {
       const groupLink = await resolveZendeskTicketGroup(supabase, group?.id, group?.name);
       const ticketGroupTeamId = groupLink?.id || null;
       const matchedTeamId = existingAgent?.primary_team_id || groupLink?.team_id || null;
+      if (caller.role === 'gestor_suporte') {
+        if (!canReadMatchedTicketTeam(caller.role, matchedTeamId, managerTeamIds)) {
+          return jsonResponse({ error: 'Ticket fora das equipes deste gestor.' }, 403);
+        }
+      }
 
       const csatScore = t.satisfaction_rating?.score;
       const isNegative = csatScore === 'bad' || csatScore === 'bad_with_comment';

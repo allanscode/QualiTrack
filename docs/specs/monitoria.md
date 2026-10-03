@@ -11,6 +11,12 @@
 
 ## Modelo de Dados (`Monitoria`)
 
+### Fluxo de monitorias PJ
+
+Quando `teams.requires_pj_review` está ativo, a sequência obrigatória é **Gestor PJ → revisor PJ (Victor Ellyan Aguiar na configuração inicial) → Gestor da Qualidade**. O gestor encaminha aprovação ou contestação por `act_on_monitoria_as_support_manager`; o status passa a `aguardando_revisao_pj`. O revisor designado usa `review_pj_monitoria` para aprovar ou reprovar o parecer, registra justificativa e envia para `aguardando_gestor_qualidade` em ambos os casos. A Qualidade toma a decisão final. `pj_reviewer_id`, `pj_review_kind`, `pj_review_decision`, `pj_review_note` e `pj_reviewed_at` registram a rota e a decisão.
+
+O revisor, cujo papel no cadastro é `suporte`, lê apenas casos atribuídos a ele pela view `vw_monitorias_pj_reviewer`, que oculta a identidade do auditor. A view normal `vw_monitorias_suporte` continua limitada às monitorias do próprio atendente. A RLS e os triggers impedem mudanças diretas do parecer ou saltos entre etapas. `process_action_deadline_timeouts` ignora equipes PJ para não substituir as decisões humanas.
+
 ```typescript
 interface Monitoria {
   id: string;

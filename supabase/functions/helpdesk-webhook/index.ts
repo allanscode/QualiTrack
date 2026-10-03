@@ -16,22 +16,22 @@ import { secretApiKey } from '../_shared/keys.ts';
 
 const WebhookPayloadSchema = z.object({
   event: z.enum(['csat_bad', 'child_ticket_created', 'ticket_updated', 'ping']).default('ticket_updated'),
-  ticket_id: z.union([z.string(), z.number()]).transform(v => String(v)),
-  subject: z.string().optional(),
-  requester_name: z.string().optional(),
-  assignee_name: z.string().optional(),
-  assignee_email: z.string().optional(),
-  group_name: z.string().optional(),
+  ticket_id: z.union([z.string().max(30), z.number()]).transform(v => String(v)),
+  subject: z.string().max(1000).optional(),
+  requester_name: z.string().max(250).optional(),
+  assignee_name: z.string().max(250).optional(),
+  assignee_email: z.string().max(254).optional(),
+  group_name: z.string().max(250).optional(),
   csat_status: z.enum(['bad', 'good', 'offered', 'unrated']).optional(),
-  csat_comment: z.string().optional(),
-  parent_ticket_id: z.union([z.string(), z.number()]).optional().transform(v => (v && String(v).trim()) ? String(v).trim() : undefined),
-  macro_type: z.string().optional(),
-  tags: z.union([z.array(z.string()), z.string().transform(s => s.split(/\s+/).filter(Boolean))]).optional(),
+  csat_comment: z.string().max(12000).optional(),
+  parent_ticket_id: z.union([z.string().max(30), z.number()]).optional().transform(v => (v && String(v).trim()) ? String(v).trim() : undefined),
+  macro_type: z.string().max(250).optional(),
+  tags: z.union([z.array(z.string().max(250)).max(150), z.string().max(16000).transform(s => s.split(/\s+/).filter(Boolean))]).optional(),
   ticket_fields: z.array(z.object({
-    title: z.string(),
-    value: z.string(),
-  })).optional(),
-  timestamp: z.string().optional(),
+    title: z.string().max(250),
+    value: z.string().max(10000),
+  })).max(150).optional(),
+  timestamp: z.string().max(80).optional(),
 });
 
 function timingSafeEqual(a: string, b: string): boolean {
@@ -44,6 +44,34 @@ function timingSafeEqual(a: string, b: string): boolean {
     diff |= aBytes[i] ^ bBytes[i];
   }
   return diff === 0;
+}
+
+async function readLimitedBody(req: Request, limit: number): Promise<string | null> {
+  if (!req.body) return '';
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 serve(async (req: Request) => {
@@ -87,7 +115,15 @@ serve(async (req: Request) => {
 
   // 2. PARSE E PROCESSAMENTO DO PAYLOAD
   try {
-    const rawBody = await req.json().catch(() => null);
+    const maxBodyBytes = 262_144;
+    if (Number(req.headers.get('content-length') || 0) > maxBodyBytes) {
+      return new Response(JSON.stringify({ error: 'Payload muito grande' }), { status: 413, headers: { 'Content-Type': 'application/json' } });
+    }
+    const rawText = await readLimitedBody(req, maxBodyBytes);
+    if (rawText === null) {
+      return new Response(JSON.stringify({ error: 'Payload muito grande' }), { status: 413, headers: { 'Content-Type': 'application/json' } });
+    }
+    const rawBody = (() => { try { return JSON.parse(rawText); } catch { return null; } })();
     if (!rawBody) {
       return new Response(JSON.stringify({ error: 'Payload JSON inválido ou vazio' }), {
         status: 400,

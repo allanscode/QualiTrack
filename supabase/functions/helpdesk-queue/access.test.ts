@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canRunQueueAction, shouldMergeRecentQueueSnapshot } from './access';
+import { canReadMatchedTicketTeam, canRunQueueAction, shouldMergeRecentQueueSnapshot } from './access';
 
 describe('shouldMergeRecentQueueSnapshot', () => {
   it('only merges the shared window on the first page of distributed queues', () => {
@@ -19,5 +19,15 @@ describe('queue audit permissions', () => {
       }
     }
     expect(canRunQueueAction('gestor_suporte', 'fetch_queue')).toBe(true);
+  });
+});
+
+describe('ticket lookup team boundary', () => {
+  it('allows a manager only when the ticket resolves to one of their teams', () => {
+    expect(canReadMatchedTicketTeam('gestor_suporte', 'pj-bruno', ['pj-bruno'])).toBe(true);
+    expect(canReadMatchedTicketTeam('gestor_suporte', 'pj-duarte', ['pj-bruno'])).toBe(false);
+    expect(canReadMatchedTicketTeam('gestor_suporte', null, ['pj-bruno'])).toBe(false);
+    expect(canReadMatchedTicketTeam('qualidade', null, [])).toBe(true);
+    expect(canReadMatchedTicketTeam('suporte', 'pj-bruno', ['pj-bruno'])).toBe(false);
   });
 });
