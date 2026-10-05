@@ -6,6 +6,7 @@ import { buildFreshSql, discoverFreshMigrations } from './prepare-supabase.mjs';
 const id = n => `40000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const positiveRouteMigrationName = '20261005000002_pj_positive_auto_conclusion.sql';
 const staleClientMigrationName = '20261005000003_pj_positive_stale_client_compat.sql';
+const statusConstraintMigrationName = '20261005000004_pj_review_status_constraint.sql';
 
 test('PJ approval and contestation pass through the assigned reviewer before Quality', async () => {
   const db = new PGlite();
@@ -30,8 +31,10 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
     const migrations = await discoverFreshMigrations();
     const positiveRouteMigration = migrations.find(migration => migration.name === positiveRouteMigrationName);
     const staleClientMigration = migrations.find(migration => migration.name === staleClientMigrationName);
+    const statusConstraintMigration = migrations.find(migration => migration.name === statusConstraintMigrationName);
     assert.ok(positiveRouteMigration);
     assert.ok(staleClientMigration);
+    assert.ok(statusConstraintMigration);
     for (const migration of migrations.filter(item => item.name < positiveRouteMigrationName)) {
       await db.exec(migration.sql.replace(/^CREATE EXTENSION IF NOT EXISTS pg_(?:cron|net).*;\s*$/gm, ''));
     }
@@ -105,6 +108,19 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
     assert.equal((await asUser(5, () => db.query('SELECT id FROM public.vw_monitorias_pj_reviewer'))).rows.length, 0);
     assert.equal((await asUser(2, () => db.query('SELECT reviewer_id FROM public.pj_review_settings'))).rows.length, 0);
     assert.equal((await asUser(4, () => db.query('SELECT reviewer_id FROM public.pj_review_settings'))).rows.length, 1);
+    await db.exec(`ALTER TABLE public.monitorias ADD CONSTRAINT chk_monitoria_status CHECK (status IN (
+      'pendente_revisao','em_contestacao','aguardando_gestor_suporte',
+      'aguardando_gestor_qualidade','concluida','contestacao_aceita',
+      'contestacao_negada','finalizada_alterada','reavaliacao_solicitada'
+    ))`);
+    await assert.rejects(asUser(1, () => db.query('SELECT public.act_on_monitoria_as_support_manager($1,$2,$3,$4)',
+      [id(31), 'contestar', 'Parecer de teste', []])), /chk_monitoria_status/);
+    assert.equal((await db.query('SELECT status,pj_reviewer_id FROM public.monitorias WHERE id=$1', [id(31)])).rows[0].status,
+      'pendente_revisao');
+    await db.exec(statusConstraintMigration.sql);
+    const statusChecks = (await db.query(`SELECT conname FROM pg_constraint WHERE conrelid='public.monitorias'::regclass
+      AND contype='c' AND conname IN ('chk_monitoria_status','monitorias_status_check')`)).rows;
+    assert.deepEqual(statusChecks, [{ conname: 'chk_monitoria_status' }]);
     await assert.rejects(asUser(4, () => db.query("UPDATE public.monitorias SET status='concluida',pj_review_decision='approved' WHERE id=$1", [id(30)])), /parecer|revisão/i);
     const directManagerUpdate = await asUser(1, () => db.query("UPDATE public.monitorias SET status='aguardando_revisao_pj',pj_reviewer_id=$1,pj_review_kind='approval' WHERE id=$2", [id(2), id(30)]));
     assert.equal(directManagerUpdate.affectedRows, 0, 'RLS blocks a direct manager update');
