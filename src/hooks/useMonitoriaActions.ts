@@ -171,8 +171,7 @@ export function useMonitoriaActions(
 
     const trimmedNote = actionNote.trim();
     const isReviewerAction = type === 'revisao_pj_aprovar' || type === 'revisao_pj_reprovar';
-    const isPj = Boolean(monitoria.pj_review_required || monitoria.pj_review_kind) || teams.some(team =>
-      team.id === monitoria.team_id && team.requires_pj_review);
+    const isPj = Boolean(monitoria.pj_review_required || monitoria.pj_review_kind);
     const isPjManagerAction = isPj && user.role === 'gestor_suporte'
       && ['aceitar', 'aprovar', 'contestar', 'escalar'].includes(type);
 

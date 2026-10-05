@@ -689,7 +689,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="max-w-xl space-y-1">
               <h3 id="pj-review-settings-title" className="text-sm font-bold text-brand-primary">Fluxo das equipes PJ</h3>
-              <p className="text-xs leading-relaxed text-brand-muted">Gestor PJ → revisor → gestor da qualidade. Aprovações e contestações seguem a mesma ordem; o parecer do revisor não encerra a monitoria.</p>
+              <p className="text-xs leading-relaxed text-brand-muted">Notas abaixo de 75%: a aprovação ou contestação do gestor PJ segue para Victor, que aprova ou reprova o parecer antes da Gestão da Qualidade. Notas a partir de 75% são concluídas diretamente.</p>
               <p className="text-xs text-brand-muted">A troca de revisor vale para os próximos casos. Os já encaminhados permanecem com o responsável registrado.</p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end md:w-auto">
@@ -980,7 +980,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                   <div className="min-w-0">
                     <div className="flex flex-col gap-0.5">
                       <h4 className="font-black text-[11px] text-brand-primary uppercase tracking-tight leading-tight break-words">{t.name}</h4>
-                      {t.requires_pj_review && <span className="w-fit rounded-md bg-brand-accent/10 px-1.5 py-0.5 text-[9px] font-semibold text-brand-primary">Gestor → Victor → Qualidade</span>}
+                      {t.requires_pj_review && <span className="w-fit rounded-md bg-brand-accent/10 px-1.5 py-0.5 text-[9px] font-semibold text-brand-primary">Revisão PJ abaixo de 75%</span>}
                       {t.approval_manager_id && <span className="text-[10px] text-brand-muted">Aprovação: {users.find(user => user.id === t.approval_manager_id)?.name || 'gestor designado'}</span>}
                       {t.parent_team_id && <span className="text-[10px] text-brand-muted">{parentTeam ? `Subequipe de ${parentTeam.name}` : 'Subequipe'}</span>}
                       {t.sigla && <span className="w-fit px-1 py-0.5 rounded-md bg-surface-subtle text-[7px] font-black text-brand-muted border border-surface-border">{t.sigla}</span>}

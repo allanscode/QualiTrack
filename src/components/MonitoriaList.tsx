@@ -720,7 +720,7 @@ export default function MonitoriaList({
                 {(() => {
                   const m = monitorias.find(item => item.id === actionModal.id);
                   const currentSt = m?.status || 'pendente_revisao';
-                  const isPjAction = Boolean(m?.pj_review_required || m?.pj_review_kind) || staticData.teams.some(team => team.id === m?.team_id && team.requires_pj_review);
+                  const isPjAction = Boolean(m?.pj_review_required || m?.pj_review_kind);
                   const isReviewerAction = actionModal.type === 'revisao_pj_aprovar' || actionModal.type === 'revisao_pj_reprovar';
                   const isStepChange = actionModal.type === 'alterar_etapa' || actionModal.type === 'avancar_etapa' || actionModal.type === 'retroceder_etapa';
                   const prev = getPreviousStage(currentSt);

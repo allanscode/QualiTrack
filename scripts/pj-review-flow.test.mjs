@@ -4,6 +4,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { buildFreshSql, discoverFreshMigrations } from './prepare-supabase.mjs';
 
 const id = n => `40000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const positiveRouteMigrationName = '20261005000002_pj_positive_auto_conclusion.sql';
 
 test('PJ approval and contestation pass through the assigned reviewer before Quality', async () => {
   const db = new PGlite();
@@ -25,7 +26,10 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
       CREATE FUNCTION cron.unschedule(text) RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;`);
     const { sql } = await buildFreshSql();
     await db.exec(sql);
-    for (const migration of await discoverFreshMigrations()) {
+    const migrations = await discoverFreshMigrations();
+    const positiveRouteMigration = migrations.find(migration => migration.name === positiveRouteMigrationName);
+    assert.ok(positiveRouteMigration);
+    for (const migration of migrations.filter(item => item.name < positiveRouteMigrationName)) {
       await db.exec(migration.sql.replace(/^CREATE EXTENSION IF NOT EXISTS pg_(?:cron|net).*;\s*$/gm, ''));
     }
     await db.exec('INSERT INTO public.business_hours(day_of_week) SELECT generate_series(1,5)');
@@ -61,6 +65,27 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
       (id,form_id,evaluated_id,evaluator_id,team_id,score,question_observations,form_snapshot,applied_config)
       VALUES ($1,$2,$3,$4,$5,92,'{}','{}','{}')`,
       [id(33), id(20), id(3), id(6), id(10)]);
+    await db.exec(positiveRouteMigration.sql);
+    const backfilledPositive = (await db.query('SELECT status,pj_review_required,resolution_type,action_deadline_at,history FROM public.monitorias WHERE id=$1', [id(33)])).rows[0];
+    assert.equal(backfilledPositive.status, 'concluida');
+    assert.equal(backfilledPositive.pj_review_required, false);
+    assert.equal(backfilledPositive.resolution_type, 'human');
+    assert.equal(backfilledPositive.action_deadline_at, null);
+    assert.match(backfilledPositive.history.at(-1).action, /correção da regra PJ/);
+    await db.query(`INSERT INTO public.monitorias
+      (id,form_id,evaluated_id,evaluator_id,team_id,score,status,question_observations,form_snapshot,applied_config)
+      VALUES ($1,$2,$3,$4,$5,75,'concluida','{}','{}','{}')`,
+      [id(34), id(20), id(3), id(6), id(10)]);
+    assert.deepEqual((await db.query('SELECT status,pj_review_required FROM public.monitorias WHERE id=$1', [id(34)])).rows[0],
+      { status: 'concluida', pj_review_required: false });
+    await assert.rejects(db.query(`INSERT INTO public.monitorias
+      (id,form_id,evaluated_id,evaluator_id,team_id,score,question_observations,form_snapshot,applied_config)
+      VALUES ($1,$2,$3,$4,$5,75,'{}','{}','{}')`,
+      [id(35), id(20), id(3), id(6), id(10)]), /devem ser concluídas/i);
+    await assert.rejects(db.query(`INSERT INTO public.monitorias
+      (id,form_id,evaluated_id,evaluator_id,team_id,score,status,question_observations,form_snapshot,applied_config)
+      VALUES ($1,$2,$3,$4,$5,60,'concluida','{}','{}','{}')`,
+      [id(35), id(20), id(3), id(6), id(10)]), /nota inferior a 75/i);
 
     assert.equal((await asUser(2, () => db.query('SELECT id FROM public.vw_monitorias_pj_reviewer'))).rows.length, 0);
     assert.equal((await asUser(5, () => db.query('SELECT id FROM public.vw_monitorias_pj_reviewer'))).rows.length, 0);
@@ -74,14 +99,12 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
       [id(30), 'aceitar', 'Ação corretiva aplicada', []]));
     await asUser(1, () => db.query('SELECT public.act_on_monitoria_as_support_manager($1,$2,$3,$4)',
       [id(31), 'contestar', 'Nota da contestação', []]));
-    await asUser(1, () => db.query('SELECT public.act_on_monitoria_as_support_manager($1,$2,$3,$4)',
-      [id(33), 'aceitar', 'Aprovação de nota alta', []]));
-    const pending = (await db.query('SELECT id,status,pj_reviewer_id,pj_review_kind FROM public.monitorias WHERE id IN ($1,$2,$3) ORDER BY id', [id(30), id(31), id(33)])).rows;
-    assert.deepEqual(pending.map(row => row.status), ['aguardando_revisao_pj', 'aguardando_revisao_pj', 'aguardando_revisao_pj']);
-    assert.deepEqual(pending.map(row => row.pj_review_kind), ['approval', 'contestation', 'approval']);
+    const pending = (await db.query('SELECT id,status,pj_reviewer_id,pj_review_kind FROM public.monitorias WHERE id IN ($1,$2) ORDER BY id', [id(30), id(31)])).rows;
+    assert.deepEqual(pending.map(row => row.status), ['aguardando_revisao_pj', 'aguardando_revisao_pj']);
+    assert.deepEqual(pending.map(row => row.pj_review_kind), ['approval', 'contestation']);
     assert.ok(pending.every(row => row.pj_reviewer_id === id(2)));
     const reviewerRows = await asUser(2, () => db.query('SELECT id,evaluator_id,evaluator_name FROM public.vw_monitorias_pj_reviewer'));
-    assert.equal(reviewerRows.rows.length, 3);
+    assert.equal(reviewerRows.rows.length, 2);
     assert.ok(reviewerRows.rows.every(row => row.evaluator_id === null && row.evaluator_name === null));
     assert.equal((await asUser(5, () => db.query('SELECT id FROM public.vw_monitorias_pj_reviewer'))).rows.length, 0);
     await assert.rejects(asUser(5, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)', [id(30), 'approved', 'Tentei aprovar'])), /fila deste revisor/i);
@@ -89,10 +112,9 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
 
     await asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)', [id(30), 'approved', 'Concordo com o gestor']));
     await asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)', [id(31), 'rejected', 'Discordo do gestor']));
-    await asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)', [id(33), 'approved', 'Concordo com a nota alta']));
-    const reviewed = (await db.query('SELECT id,status,pj_review_decision,pj_review_note FROM public.monitorias WHERE id IN ($1,$2,$3) ORDER BY id', [id(30), id(31), id(33)])).rows;
-    assert.deepEqual(reviewed.map(row => row.status), ['aguardando_gestor_qualidade', 'aguardando_gestor_qualidade', 'aguardando_gestor_qualidade']);
-    assert.deepEqual(reviewed.map(row => row.pj_review_decision), ['approved', 'rejected', 'approved']);
+    const reviewed = (await db.query('SELECT id,status,pj_review_decision,pj_review_note FROM public.monitorias WHERE id IN ($1,$2) ORDER BY id', [id(30), id(31)])).rows;
+    assert.deepEqual(reviewed.map(row => row.status), ['aguardando_gestor_qualidade', 'aguardando_gestor_qualidade']);
+    assert.deepEqual(reviewed.map(row => row.pj_review_decision), ['approved', 'rejected']);
     await assert.rejects(asUser(4, () => db.query("UPDATE public.monitorias SET pj_review_note='Adulterado' WHERE id=$1", [id(31)])), /parecer de Victor/i);
     await asUser(4, () => db.query("UPDATE public.monitorias SET status='concluida' WHERE id=$1", [id(30)]));
     assert.equal((await db.query('SELECT status FROM public.monitorias WHERE id=$1', [id(30)])).rows[0].status, 'concluida');

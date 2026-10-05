@@ -119,12 +119,15 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
         const evaluatedUser = deps.allUsers.find(u => u.id === deps.header.evaluated_id);
         const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
         const selectedTeam = deps.teams.find(t => t.id === managementTeamId);
-        const requiresPjReview = selectedTeam?.requires_pj_review === true
-          || deps.initialData?.pj_review_required === true;
         const isPositive = isEvaluationValid(deps.score);
+        const requiresPjReview = deps.initialData?.pj_review_required === true
+          || (selectedTeam?.requires_pj_review === true && !isPositive);
+        const reopensPjReview = deps.isAdminEdit && deps.initialData?.status === 'concluida'
+          && deps.initialData.pj_review_required !== true && requiresPjReview;
         let nextStatus: MonitoriaStatus;
         if (deps.isAdminEdit) {
-          nextStatus = deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao');
+          nextStatus = reopensPjReview ? 'pendente_revisao'
+            : (deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao'));
         } else {
           nextStatus = requiresPjReview ? 'pendente_revisao' : (isPositive ? 'concluida' : 'pendente_revisao');
         }
@@ -183,7 +186,9 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           selected_critical_errors: Object.keys(deps.criticalErrors).filter(id => deps.criticalErrors[id]),
           score: deps.score,
           status: nextStatus,
-          resolution_type: nextStatus === 'concluida' ? 'human' : (deps.initialData?.resolution_type || null),
+          pj_review_required: requiresPjReview,
+          resolution_type: nextStatus === 'concluida' ? 'human'
+            : (reopensPjReview ? null : (deps.initialData?.resolution_type || null)),
           evaluator_note: deps.header.evaluator_note,
           client_contact_log: deps.header.satisfaction_result === 'Negativa' ? deps.header.client_contact_log : '',
           client_contact_channel: deps.header.satisfaction_result === 'Negativa' ? (deps.header.client_contact_channel || []) : [],

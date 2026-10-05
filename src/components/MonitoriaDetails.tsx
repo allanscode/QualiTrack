@@ -21,7 +21,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
   const staticData = { users };
   const setViewingMonitoria = onView;
   const setActionModal = onAction;
-  const isPj = Boolean(m.pj_review_required || m.pj_review_kind) || teams.some(team => team.id === m.team_id && team.requires_pj_review);
+  const isPj = Boolean(m.pj_review_required || m.pj_review_kind);
   const approvalManagerId = teams.find(team => team.id === m.team_id)?.approval_manager_id;
   const canActAsTeamManager = user?.role === 'gestor_suporte' && (!approvalManagerId || approvalManagerId === user.id);
   return (
