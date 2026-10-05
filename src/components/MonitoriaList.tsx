@@ -228,8 +228,9 @@ export default function MonitoriaList({
       if (user?.role === 'suporte' && m.evaluated_id !== user.id && m.pj_reviewer_id !== user.id) return false;
 
       if (user?.role === 'gestor_suporte') {
-        if (user.team_ids?.length && m.team_id && !user.team_ids.includes(m.team_id)) return false;
-        else if (!user.team_ids?.length) return false;
+        const ownsTeam = Boolean(m.team_id && user.team_ids?.includes(m.team_id));
+        const isAssignedReviewer = m.pj_reviewer_id === user.id;
+        if (!ownsTeam && !isAssignedReviewer) return false;
       }
 
       if (filters.tab !== 'todas') {
@@ -581,8 +582,9 @@ export default function MonitoriaList({
 
                 if (user?.role === 'suporte' && m.evaluated_id !== user.id && m.pj_reviewer_id !== user.id) return false;
                 if (user?.role === 'gestor_suporte') {
-                  if (user.team_ids?.length && m.team_id && !user.team_ids.includes(m.team_id)) return false;
-                  else if (!user.team_ids?.length) return false;
+                  const ownsTeam = Boolean(m.team_id && user.team_ids?.includes(m.team_id));
+                  const isAssignedReviewer = m.pj_reviewer_id === user.id;
+                  if (!ownsTeam && !isAssignedReviewer) return false;
                 }
 
                 if (filters.teamFilter && m.team_id !== filters.teamFilter) return false;

@@ -29,7 +29,7 @@ test('imported Zendesk groups become children of management teams', async () => 
     const migrations = await discoverFreshMigrations();
     const split = migrations.find(migration => migration.name === migrationName);
     assert.ok(split, 'the data migration is in the deployment chain');
-    for (const migration of migrations.filter(item => item.name !== migrationName)) {
+    for (const migration of migrations.filter(item => item.name < migrationName)) {
       await db.exec(migration.sql.replace(/^CREATE EXTENSION IF NOT EXISTS pg_(?:cron|net).*;\s*$/gm, ''));
     }
 

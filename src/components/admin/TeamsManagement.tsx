@@ -100,6 +100,22 @@ interface TeamsManagementProps {
   currentUser?: User | null;
 }
 
+interface ZendeskDivisionPreview {
+  checked_at: string;
+  scanned_memberships: number;
+  rows: Array<{
+    user_id: string;
+    name: string;
+    current_team: string;
+    zendesk_groups: string[];
+    zendesk_team_field: string | null;
+    suggested_team: 'Cliente Final' | 'Revenda' | 'Escala' | 'Mais Pagamentos'
+      | 'PJ Bruno' | 'PJ Duarte' | 'PJ SumWise' | 'PJ Trindade' | null;
+    status: 'sugerido' | 'revisar' | 'pj_preservado' | 'atribuido';
+    reason: string;
+  }>;
+}
+
 export default function TeamsManagement({ teams, groups, teamGroups, users, loadData, currentUser }: TeamsManagementProps) {
   const isReadOnly = currentUser?.role === 'gestor_suporte';
   const canConfigurePj = currentUser?.role === 'admin' || currentUser?.role === 'gestor_qualidade';
@@ -126,13 +142,18 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
   const [pjReviewerId, setPjReviewerId] = useState('');
   const [savedPjReviewerId, setSavedPjReviewerId] = useState('');
   const [savingPjReviewer, setSavingPjReviewer] = useState(false);
+  const [savingApprovalManager, setSavingApprovalManager] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [hoveredTeamId, setHoveredTeamId] = useState<string | null>(null);
   const [selectedDrawerTeam, setSelectedDrawerTeam] = useState<Team | null>(null);
   const [selectedUserToAdd, setSelectedUserToAdd] = useState<string>('');
+  const [selectedGroupToAdd, setSelectedGroupToAdd] = useState<string>('');
   const [operationLoading, setOperationLoading] = useState(false);
   const [syncingZendesk, setSyncingZendesk] = useState(false);
+  const [checkingZendeskMembers, setCheckingZendeskMembers] = useState(false);
+  const [zendeskDivisionPreview, setZendeskDivisionPreview] = useState<ZendeskDivisionPreview | null>(null);
+  const [divisionFilter, setDivisionFilter] = useState<'all' | ZendeskDivisionPreview['rows'][number]['status']>('revisar');
   const [groupSavingId, setGroupSavingId] = useState<string | null>(null);
   const [conversionTargets, setConversionTargets] = useState<Record<string, string>>({});
   const [isIconDropdownOpen, setIsIconDropdownOpen] = useState(false);
@@ -295,6 +316,10 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
 
   const groupsWithoutZendeskId = useMemo(() => groups.filter(group => group.active !== false && group.zendesk_group_id == null).length, [groups]);
   const groupsWithoutTeam = useMemo(() => groups.filter(group => group.active !== false && !teamGroups.some(link => link.group_id === group.id)).length, [groups, teamGroups]);
+  const webPostoRoot = useMemo(() => teams.find(team => team.kind !== 'group' && team.name === 'WebPosto' && !team.parent_team_id), [teams]);
+  const unassignedWebAgents = useMemo(() => webPostoRoot
+    ? users.filter(user => user.active !== false && user.role === 'suporte' && user.primary_team_id === webPostoRoot.id).length
+    : 0, [users, webPostoRoot]);
 
   const isSiglaDuplicate = useMemo(() => {
     if (!editingTeam.sigla?.trim()) return false;
@@ -305,6 +330,14 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
     if (!selectedDrawerTeam) return null;
     return teams.find(t => t.id === selectedDrawerTeam.id) || selectedDrawerTeam;
   }, [selectedDrawerTeam, teams]);
+
+  const drawerGroups = useMemo(() => activeDrawerTeam
+    ? groups.filter(group => group.active !== false && teamGroups.some(link => link.team_id === activeDrawerTeam.id && link.group_id === group.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    : [], [activeDrawerTeam, groups, teamGroups]);
+  const availableDrawerGroups = useMemo(() => groups
+    .filter(group => group.active !== false && !drawerGroups.some(linked => linked.id === group.id))
+    .sort((a, b) => a.name.localeCompare(b.name)), [groups, drawerGroups]);
 
   const [drawerMemberIds, setDrawerMemberIds] = useState<string[]>([]);
 
@@ -327,6 +360,30 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
   const availableManagers = useMemo(() => users
     .filter(user => user.active !== false && user.role === 'gestor_suporte')
     .sort((a, b) => a.name.localeCompare(b.name)), [users]);
+
+  const drawerManagers = useMemo(() => availableManagers.filter(manager => drawerMemberIds.includes(manager.id)),
+    [availableManagers, drawerMemberIds]);
+
+  const saveApprovalManager = async (managerId: string) => {
+    if (!activeDrawerTeam || isReadOnly) return;
+    setSavingApprovalManager(true);
+    try {
+      if (supabase) {
+        const { error } = await supabase.from('teams').update({ approval_manager_id: managerId || null }).eq('id', activeDrawerTeam.id);
+        if (error) throw error;
+      } else {
+        const result = await mockDb.update('teams', activeDrawerTeam.id, { approval_manager_id: managerId || null });
+        if (result.error) throw result.error;
+      }
+      toast.success('Gestor aprovador atualizado.');
+      loadData();
+    } catch (error) {
+      console.error('Erro ao atualizar gestor aprovador:', error);
+      toast.error('Salve primeiro o vínculo do gestor com a equipe e tente novamente.');
+    } finally {
+      setSavingApprovalManager(false);
+    }
+  };
 
   const availableUsersToLink = useMemo(() => {
     if (!activeDrawerTeam) return [];
@@ -406,6 +463,29 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
     }
   };
 
+  const handleCheckZendeskMembers = async () => {
+    if (!supabase) return toast.error('Consulta ao Zendesk indisponível em modo offline.');
+    setCheckingZendeskMembers(true);
+    try {
+      const accessToken = await requireAccessToken();
+      const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: { action: 'preview_webposto_memberships' },
+      });
+      if (error || data?.success === false || !Array.isArray(data?.rows)) {
+        throw new Error(data?.error || error?.message || 'Falha ao consultar vínculos no Zendesk.');
+      }
+      setZendeskDivisionPreview(data as ZendeskDivisionPreview);
+      setDivisionFilter('revisar');
+      toast.success('Vínculos de agentes conferidos no Zendesk.');
+    } catch (error) {
+      console.error('Erro ao conferir vínculos do Zendesk:', error);
+      toast.error(error instanceof Error ? error.message : 'Não foi possível conferir os agentes.');
+    } finally {
+      setCheckingZendeskMembers(false);
+    }
+  };
+
   const handleAddGroupTeam = async (groupId: string, teamId: string) => {
     if (!teamId) return;
     setGroupSavingId(groupId);
@@ -419,6 +499,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
         if (error) throw error;
       }
       toast.success('Equipe autorizada a atender este grupo.');
+      setSelectedGroupToAdd('');
       loadData();
     } catch (error) {
       console.error('Erro ao vincular grupo:', error);
@@ -616,7 +697,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                 label="Revisor PJ"
                 value={pjReviewerId}
                 onChange={setPjReviewerId}
-                options={users.filter(user => user.active !== false && user.role === 'suporte')
+                options={users.filter(user => user.active !== false && ['suporte', 'gestor_suporte'].includes(user.role))
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map(user => ({ value: user.id, label: user.name }))}
                 placeholder="Selecione um agente"
@@ -640,6 +721,62 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
           Grupos do Zendesk <span className="ml-1 text-xs opacity-70">{visibleGroups.length}</span>
         </button>
       </div>
+      {view === 'teams' && !isReadOnly && unassignedWebAgents > 0 && (
+        <div className="rounded-xl border border-brand-accent/40 bg-brand-accent/5 px-4 py-3 text-sm text-brand-primary" role="status">
+          <strong>{unassignedWebAgents} agente{unassignedWebAgents === 1 ? '' : 's'} CLT ainda na WebPosto principal.</strong>{' '}
+          Defina a equipe principal de cada um em Usuários: Cliente Final, Revenda ou outra subequipe. O grupo do ticket não determina essa divisão.
+        </div>
+      )}
+      {view === 'teams' && currentUser?.role === 'admin' && webPostoRoot && (
+        <section className="rounded-xl border border-surface-border bg-surface-card p-4" aria-label="Conferência dos agentes no Zendesk">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-brand-primary">Conferir divisão CLT e PJ</h3>
+              <p className="text-xs text-brand-muted">Consulta os grupos e o campo “Vinculado à equipe” no Zendesk para identificar CLT, Escala e PJ.</p>
+            </div>
+            <Button type="button" variant="outline" onClick={handleCheckZendeskMembers} disabled={checkingZendeskMembers}>
+              {checkingZendeskMembers ? 'Conferindo...' : 'Conferir no Zendesk'}
+            </Button>
+          </div>
+          {zendeskDivisionPreview && (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-brand-muted">{zendeskDivisionPreview.scanned_memberships} vínculos consultados. Filtre os casos que precisam de decisão.</p>
+              <div className="flex flex-wrap gap-2" aria-label="Filtrar conferência Zendesk">
+                {([
+                  ['revisar', 'Revisar'],
+                  ['sugerido', 'Sugestões'],
+                  ['pj_preservado', 'PJ / campo'],
+                  ['atribuido', 'Já atribuídos'],
+                  ['all', 'Todos'],
+                ] as const).map(([value, label]) => {
+                  const count = value === 'all' ? zendeskDivisionPreview.rows.length
+                    : zendeskDivisionPreview.rows.filter(row => row.status === value).length;
+                  return <button key={value} type="button" aria-pressed={divisionFilter === value}
+                    onClick={() => setDivisionFilter(value)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${divisionFilter === value
+                      ? 'border-brand-primary bg-brand-primary text-brand-on-primary'
+                      : 'border-surface-border bg-surface-card text-brand-muted hover:text-brand-primary'}`}>
+                    {label} {count}
+                  </button>;
+                })}
+              </div>
+              <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+                {!zendeskDivisionPreview.rows.some(row => divisionFilter === 'all' || row.status === divisionFilter) && (
+                  <p className="rounded-lg border border-dashed border-surface-border p-4 text-xs text-brand-muted">Nenhum agente nesta categoria.</p>
+                )}
+                {zendeskDivisionPreview.rows.filter(row => divisionFilter === 'all' || row.status === divisionFilter).map(row => (
+                  <div key={row.user_id} className="rounded-lg border border-surface-border bg-surface-subtle/40 p-3 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] sm:gap-3">
+                    <div className="min-w-0"><strong className="block truncate text-xs text-brand-primary" title={row.name}>{row.name}</strong><span className="text-[11px] text-brand-muted">Atual: {row.current_team}</span></div>
+                    <p className="mt-1 break-words text-[11px] text-brand-muted sm:mt-0">{row.zendesk_groups.join(' · ') || 'Sem grupos correspondentes'}{row.zendesk_team_field && <span className="block mt-1 font-semibold text-brand-primary">Campo equipe: {row.zendesk_team_field}</span>}</p>
+                    <div className="mt-1 text-[11px] sm:mt-0"><strong className="text-brand-primary">{row.status === 'pj_preservado' ? 'PJ / campo' : row.status === 'atribuido' ? 'Equipe definida' : row.suggested_team || 'Revisar'}</strong><p className="text-brand-muted">{row.reason}</p></div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-brand-muted">Confirme as sugestões na equipe principal em Usuários. A regra de PJ usa o campo “Vinculado à equipe”, independentemente dos grupos de tickets.</p>
+            </div>
+          )}
+        </section>
+      )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative w-64 h-10">
@@ -827,12 +964,8 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
             )}
             <Card 
               padding="sm" 
-              onClick={() => {
-                if (isReadOnly) {
-                  setSelectedDrawerTeam(t);
-                }
-              }}
-              className={`group hover:border-brand-accent transition-all relative flex flex-col justify-center min-h-[90px] ${isReadOnly ? 'cursor-pointer hover:shadow-md' : ''} ${t.parent_team_id ? 'border-brand-accent/30' : ''}`}
+              onClick={() => setSelectedDrawerTeam(t)}
+              className={`group hover:border-brand-accent transition-all relative flex flex-col justify-center min-h-[90px] cursor-pointer hover:shadow-md ${t.parent_team_id ? 'border-brand-accent/30' : ''}`}
             >
               {t.active === false && (
                 <div className="absolute inset-0 bg-surface-bg/60 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-card">
@@ -848,6 +981,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                     <div className="flex flex-col gap-0.5">
                       <h4 className="font-black text-[11px] text-brand-primary uppercase tracking-tight leading-tight break-words">{t.name}</h4>
                       {t.requires_pj_review && <span className="w-fit rounded-md bg-brand-accent/10 px-1.5 py-0.5 text-[9px] font-semibold text-brand-primary">Gestor → Victor → Qualidade</span>}
+                      {t.approval_manager_id && <span className="text-[10px] text-brand-muted">Aprovação: {users.find(user => user.id === t.approval_manager_id)?.name || 'gestor designado'}</span>}
                       {t.parent_team_id && <span className="text-[10px] text-brand-muted">{parentTeam ? `Subequipe de ${parentTeam.name}` : 'Subequipe'}</span>}
                       {t.sigla && <span className="w-fit px-1 py-0.5 rounded-md bg-surface-subtle text-[7px] font-black text-brand-muted border border-surface-border">{t.sigla}</span>}
                     </div>
@@ -906,13 +1040,18 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                           {teamGroupCount > 3 && <span className="px-1 py-0.5 text-[10px] text-brand-muted">+{teamGroupCount - 3}</span>}
                         </div>
                       )}
+                      {!isReadOnly && <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedDrawerTeam(t); }}
+                        className="mt-1 inline-block text-left text-[10px] font-semibold text-brand-primary underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-brand-accent">
+                        Gerenciar grupos e pessoas
+                      </button>}
                     </div>
                   </div>
                 </div>
                 {!isReadOnly && (
                   <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button 
-                      onClick={() => { 
+                      onClick={(event) => {
+                        event.stopPropagation();
                         setEditingTeam(t); 
                         setIsIconDropdownOpen(false);
                         setIsModalOpen(true); 
@@ -923,11 +1062,11 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                     </button>
                     {deleteConfirmId === t.id ? (
                       <div className="flex items-center gap-0.5 animate-in fade-in slide-in-from-right-2">
-                        <button onClick={() => handleToggleStatus(t.id, false)} className="px-1.5 py-1 rounded-md bg-error text-white text-[8px] font-black uppercase cursor-pointer">Sim</button>
-                        <button onClick={() => setDeleteConfirmId(null)} className="px-1.5 py-1 rounded-md bg-surface-subtle text-brand-muted text-[8px] font-black uppercase cursor-pointer">Não</button>
+                        <button onClick={(event) => { event.stopPropagation(); handleToggleStatus(t.id, false); }} className="px-1.5 py-1 rounded-md bg-error text-white text-[8px] font-black uppercase cursor-pointer">Sim</button>
+                        <button onClick={(event) => { event.stopPropagation(); setDeleteConfirmId(null); }} className="px-1.5 py-1 rounded-md bg-surface-subtle text-brand-muted text-[8px] font-black uppercase cursor-pointer">Não</button>
                       </div>
                     ) : (
-                      <button onClick={() => setDeleteConfirmId(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-brand-muted hover:text-error dark:hover:text-red-400 transition-all cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={(event) => { event.stopPropagation(); setDeleteConfirmId(t.id); }} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-brand-muted hover:text-error dark:hover:text-red-400 transition-all cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
                     )}
                   </div>
                 )}
@@ -1156,6 +1295,43 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 thin-scrollbar">
+                  <section className="space-y-2 rounded-xl border border-surface-border bg-surface-card p-4" aria-label="Gestor aprovador da equipe">
+                    <h4 className="text-sm font-bold text-brand-primary">Gestor das aprovações</h4>
+                    <p className="text-xs text-brand-muted">Define quem pode aprovar ou contestar as monitorias desta equipe. As regras de quando pedir aprovação continuam iguais.</p>
+                    <CustomSelect value={activeDrawerTeam.approval_manager_id || ''} onChange={saveApprovalManager}
+                      options={[{ value: '', label: 'Qualquer gestor vinculado' }, ...drawerManagers.map(manager => ({ value: manager.id, label: manager.name }))]}
+                      placeholder="Qualquer gestor vinculado" disabled={isReadOnly || savingApprovalManager || operationLoading}
+                      aria-label="Gestor das aprovações" className="w-full" size="sm" />
+                  </section>
+                  <section className="space-y-3 rounded-xl border border-surface-border bg-surface-subtle/50 p-4" aria-label="Grupos do Zendesk da equipe">
+                    <div>
+                      <h4 className="text-sm font-bold text-brand-primary">Grupos do Zendesk ({drawerGroups.length})</h4>
+                      <p className="text-xs text-brand-muted">Esta equipe pode atender tickets destes grupos. Um grupo pode servir a várias equipes.</p>
+                    </div>
+                    {drawerGroups.length === 0 ? (
+                      <p className="text-xs text-brand-muted">Nenhum grupo vinculado.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {drawerGroups.map(group => (
+                          <span key={group.id} className="inline-flex max-w-full items-center gap-1 rounded-lg border border-surface-border bg-surface-card px-2 py-1 text-xs text-brand-primary">
+                            <span className="truncate" title={group.name}>{group.name}</span>
+                            {!isReadOnly && <button type="button" aria-label={`Remover grupo ${group.name} desta equipe`}
+                              disabled={groupSavingId !== null} onClick={() => handleRemoveGroupTeam(group.id, activeDrawerTeam.id)}
+                              className="rounded p-0.5 text-brand-muted hover:bg-surface-subtle hover:text-error disabled:opacity-50"><X className="h-3.5 w-3.5" /></button>}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {!isReadOnly && <div className="flex gap-2">
+                      <CustomSelect value={selectedGroupToAdd} onChange={setSelectedGroupToAdd}
+                        options={availableDrawerGroups.map(group => ({ value: group.id, label: group.name }))}
+                        placeholder="Buscar grupo do Zendesk..." aria-label="Adicionar grupo do Zendesk" className="min-w-0 flex-1" size="sm" />
+                      <Button type="button" onClick={() => handleAddGroupTeam(selectedGroupToAdd, activeDrawerTeam.id)}
+                        disabled={!selectedGroupToAdd || groupSavingId !== null} className="shrink-0" aria-label="Vincular grupo à equipe">
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>}
+                  </section>
                   <section className="space-y-3" aria-label="Gestores responsáveis">
                     <div>
                       <h4 className="text-sm font-bold text-brand-primary">Gestores responsáveis</h4>
@@ -1181,6 +1357,9 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                       </div>
                     )}
                   </section>
+                  <p className="rounded-lg border border-surface-border px-3 py-2 text-xs text-brand-muted">
+                    Para mudar quem acompanha as monitorias de um agente, altere sua <strong>Equipe principal</strong> em Usuários. O vínculo de membro abaixo apenas adiciona acesso à equipe.
+                  </p>
                   {/* Section B: Add Member */}
                   {!isReadOnly && (
                     <div className="bg-slate-50/50 dark:bg-slate-900/30 p-4 border border-slate-100 dark:border-slate-800/60 rounded-xl space-y-3">

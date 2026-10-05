@@ -60,6 +60,7 @@ As filas carregam ao abrir, trocar de fila, buscar, paginar ou clicar em **Atual
 | `lookup_ticket_agent` | idem | Só leitura, usado no `MonitoriaForm` manual |
 | `resolve_agent` | admin, gestor_qualidade, qualidade | Cadastro de agente durante a criação de monitoria |
 | `sync_zendesk_groups` | **admin apenas** | Importa grupos do Zendesk como `public.teams` (não duplica por nome) |
+| `preview_webposto_memberships` | **admin apenas** | Consulta vínculos de agentes aos grupos do Zendesk e retorna sugestões de divisão CLT/PJ sem alterar usuários |
 
 `ticket_id`, quando presente, é validado como `/^\d+$/` **antes** de qualquer dispatch — interpolado cru numa URL do Zendesk, um valor não numérico permitiria path traversal para outro endpoint da API usando o `ZENDESK_API_TOKEN` privilegiado (achado corrigido em revisão de segurança, 25/08).
 

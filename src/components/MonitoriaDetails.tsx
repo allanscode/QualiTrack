@@ -22,6 +22,8 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
   const setViewingMonitoria = onView;
   const setActionModal = onAction;
   const isPj = Boolean(m.pj_review_required || m.pj_review_kind) || teams.some(team => team.id === m.team_id && team.requires_pj_review);
+  const approvalManagerId = teams.find(team => team.id === m.team_id)?.approval_manager_id;
+  const canActAsTeamManager = user?.role === 'gestor_suporte' && (!approvalManagerId || approvalManagerId === user.id);
   return (
     <div className="space-y-5">
               {isPj && <PjReviewFlow monitoria={m} users={users} />}
@@ -196,7 +198,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                     </Button>
                   )}
 
-                  {user?.role === 'gestor_suporte' && m.status === 'pendente_revisao'
+                  {canActAsTeamManager && m.status === 'pendente_revisao'
                     && (isPj || m.score === undefined || m.score === null || m.score < 75) && (
                     <>
                       <Button
@@ -247,7 +249,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                     </>
                   )}
 
-                  {(user?.role === 'gestor_suporte' || (user?.role === 'admin' && !isPj)) && m.status === 'aguardando_gestor_suporte' && (
+                  {(canActAsTeamManager || (user?.role === 'admin' && !isPj)) && m.status === 'aguardando_gestor_suporte' && (
                     <>
                       <Button
                         variant="secondary"
@@ -268,7 +270,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                     </>
                   )}
 
-                  {user?.role === 'suporte' && m.status === 'aguardando_revisao_pj'
+                  {(user?.role === 'suporte' || user?.role === 'gestor_suporte') && m.status === 'aguardando_revisao_pj'
                     && m.pj_reviewer_id === user.id && (
                     <>
                       <Button variant="secondary" size="sm"

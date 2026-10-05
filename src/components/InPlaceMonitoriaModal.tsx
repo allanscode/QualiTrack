@@ -49,7 +49,7 @@ export default function InPlaceMonitoriaModal({
           .eq('id', monitoriaId)
           .maybeSingle();
         if (error) throw error;
-        if (!data && user?.role === 'suporte') {
+        if (!data && (user?.role === 'suporte' || user?.role === 'gestor_suporte')) {
           const reviewerResult = await supabase.from('vw_monitorias_pj_reviewer')
             .select('*').eq('id', monitoriaId).maybeSingle();
           if (reviewerResult.error) throw reviewerResult.error;

@@ -176,10 +176,19 @@ export function useMonitoriaActions(
     const isPjManagerAction = isPj && user.role === 'gestor_suporte'
       && ['aceitar', 'aprovar', 'contestar', 'escalar'].includes(type);
 
-    if (isReviewerAction && (user.role !== 'suporte'
+    if (isReviewerAction && (!['suporte', 'gestor_suporte'].includes(user.role)
       || monitoria.status !== 'aguardando_revisao_pj'
       || monitoria.pj_reviewer_id !== user.id || !trimmedNote)) {
       toast.error('A revisão PJ exige o revisor designado e uma justificativa.');
+      setSubmitting(false);
+      return false;
+    }
+
+    const approvingTeam = teams.find(team => team.id === monitoria.team_id);
+    if (!isReviewerAction && user.role === 'gestor_suporte' && approvingTeam?.approval_manager_id
+      && approvingTeam.approval_manager_id !== user.id
+      && ['aceitar', 'aprovar', 'contestar', 'escalar'].includes(type)) {
+      toast.error('Outro gestor foi designado para aprovar esta equipe.');
       setSubmitting(false);
       return false;
     }

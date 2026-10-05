@@ -182,6 +182,8 @@ export interface Team {
   parent_team_id?: string | null;
   /** Exige parecer do revisor PJ antes da decisão final da Qualidade. */
   requires_pj_review?: boolean;
+  /** Gestor designado para aprovar monitorias desta equipe; null permite os gestores vinculados. */
+  approval_manager_id?: string | null;
 }
 
 export interface TeamGroup {

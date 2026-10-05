@@ -13,12 +13,25 @@
 | Equipe de pessoas | Gestores informados | Observação |
 |---|---|---|
 | PJ Bruno, PJ Duarte, PJ SumWise e PJ Trindade | Gestores PJ cadastrados | Uma equipe gestora principal para cada operação PJ. |
-| WebPosto | Ana Karolina e Ricardo Fadini | Equipe principal CLT. Cliente Final é um grupo de tickets compartilhado com os PJs. |
+| WebPosto | Gestões distribuídas pelas subequipes | Equipe principal CLT. Agentes ainda sem indicação operacional permanecem aqui até a atribuição no painel. |
+| Cliente Final, subequipe da WebPosto | Ana Karolina e Ricardo Fadini | Gestão dos agentes CLT designados para Cliente Final. |
+| Revenda, subequipe da WebPosto | Victor Ellyan Aguiar | Gestão dos agentes CLT designados para Revenda; Victor continua como revisor das monitorias PJ. |
+| Escala, subequipe da WebPosto | Victor Ellyan Aguiar | Gestão dos agentes CLT vinculados aos dois tipos de ticket ou a grupos de Escala/TEF. |
 | Fiscal, subequipe da WebPosto | Margareth | Acesso às monitorias dos próprios agentes. |
 | Contábil, subequipe da WebPosto | Maria Cicera | Acesso às monitorias dos próprios agentes. |
 | Mais Pagamentos, subequipe da WebPosto | Flaviany | Vincular quando a conta estiver cadastrada. |
 
 Os nomes acima são uma referência de configuração. A permissão efetiva depende do vínculo com o ID da equipe no banco; nomes não são usados para conceder acesso automaticamente.
+
+**Cliente Final** e **Revenda** também existem como grupos de tickets do Zendesk. Esses grupos são compartilhados pelas equipes CLT e PJ. O grupo do ticket não altera automaticamente a equipe principal do agente, o gestor responsável nem a visibilidade das monitorias. A migração inicial usa os vínculos reais do perfil e dos grupos Zendesk para registrar a equipe gestora; agentes sem indicação suficiente permanecem na WebPosto para atribuição em **Usuários → Equipe principal**.
+
+O administrador pode usar **Conferir no Zendesk** na aba **Equipes** para comparar os vínculos reais de agentes com os grupos e o campo de perfil `vinculado_a_equipe`. O campo PJ prevalece sobre os grupos de tickets. Sem PJ, grupos dos dois lados indicam Escala; grupos de Cliente Final/Cliente Sul ou Revenda indicam a frente respectiva; grupos apenas de Escala/TEF indicam Escala. O relatório é somente leitura, usa o token guardado na Edge Function e mostra apenas usuários já cadastrados no QualiTrack. A equipe principal pode ser corrigida em **Usuários**.
+
+### Levantamento Zendesk de 05/10/2026
+
+A consulta de 553 vínculos em seis páginas, complementada pelos perfis de usuário, encontrou **18 atendentes para Cliente Final**, **20 para Revenda**, **5 para Escala**, **1 para Mais Pagamentos** e **2 para equipes PJ** que ainda constavam na raiz. A migração `20261005000001_webposto_management_divisions.sql` inclui esses 46 IDs como fotografia da consulta e só os move se ainda estiverem ativos, com papel `suporte` e equipe principal WebPosto. Os 11 atendentes já vinculados a equipes PJ permanecem nelas, independentemente dos grupos de tickets atendidos. Victor aparece nos dois conjuntos de grupos, mas vai para Revenda e acompanha Escala pela decisão explícita de gestão.
+
+Somente **Jhonatan Valentim** (sem grupos retornados) e **Leonardo Luzolo** (apenas grupo Migração) permanecem na WebPosto sem gestor definido. Nenhum dos dois possui monitoria ativa no levantamento. O vínculo do grupo Migração ou a ausência de grupos não indica com segurança Cliente Final, Revenda ou Escala. A equipe raiz não concede automaticamente a seus gestores acesso às subequipes; a atribuição desses dois fica destacada no painel.
 
 ## Migração do cadastro legado importado
 
@@ -38,7 +51,9 @@ As equipes PJ Bruno, PJ Duarte, PJ SumWise e PJ Trindade usam `requires_pj_revie
 
 O gestor da equipe PJ envia aprovação ou contestação com justificativa. A aprovação também está disponível para notas iguais ou superiores a 75; a contestação permanece limitada a notas abaixo de 75. O caso entra em **Revisão PJ**, onde apenas o revisor designado pode aprovar ou reprovar o parecer, também com justificativa. Ambos os resultados seguem para **Gestor da Qualidade**, responsável pela decisão final. O painel mostra as três etapas e os pareceres na linha do tempo. O prazo vencido continua visível, mas o cron não conclui automaticamente uma monitoria PJ.
 
-Em **Configurações → Equipes**, use as abas internas **Equipes** e **Grupos do Zendesk**. Na primeira, crie equipes e vincule gestores; na segunda, sincronize o Zendesk, converta cadastros antigos e indique quais equipes atendem cada grupo.
+Em **Configurações → Equipes**, use as abas internas **Equipes** e **Grupos do Zendesk**. Na primeira, abra o cartão de uma equipe para gerir seus gestores, agentes e grupos do Zendesk no mesmo painel. A aba **Grupos do Zendesk** permite sincronizar, converter cadastros antigos e editar o vínculo pelo lado do grupo. O vínculo grupo–equipe é muitos para muitos.
+
+No painel da equipe, **Gestor das aprovações** permite designar um dos gestores ativos vinculados ou manter **Qualquer gestor vinculado**. A escolha limita quem pode aprovar ou contestar as monitorias daquela equipe; não muda as regras atuais sobre quais monitorias precisam de aprovação nem o acesso de leitura dos outros gestores. O servidor verifica essa regra na RPC, inclusive no fluxo PJ. Ao remover o gestor designado da equipe, a designação é limpa automaticamente.
 
 1. Após a migração, revisar as oito equipes reais e a equipe principal de cada agente em **Usuários**. Vincular os gestores ainda ausentes quando as respectivas contas existirem.
 2. Sincronizar os grupos do Zendesk para preencher os IDs externos dos grupos importados.

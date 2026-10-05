@@ -106,12 +106,93 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
       (id,form_id,evaluated_id,evaluator_id,team_id,score,question_observations,form_snapshot,applied_config)
       VALUES ($1,$2,$3,$4,$5,55,'{}','{}','{}')`,
       [id(32), id(20), id(3), id(6), id(10)]);
-    await db.query('INSERT INTO public.teams(id,name,kind) VALUES ($1,$2,$3)', [id(11), 'WebPosto', 'team']);
+    await db.query('INSERT INTO public.teams(id,name,kind) VALUES ($1,$2,$3)', [id(11), 'Cliente final', 'team']);
+    await db.query("INSERT INTO public.teams(id,name,kind,parent_team_id) VALUES ($1,'Mais Pagamentos','team',$3),($2,'PJ Trindade','team',NULL)",
+      [id(14), id(15), id(11)]);
     await db.query('UPDATE public.users SET primary_team_id=$1 WHERE id=$2', [id(11), id(3)]);
     const transferred = (await db.query('SELECT team_id,pj_review_required FROM public.monitorias WHERE id=$1', [id(32)])).rows[0];
     assert.equal(transferred.team_id, id(11));
     assert.equal(transferred.pj_review_required, true, 'PJ workflow remains required after an agent changes team');
     await assert.rejects(asUser(4, () => db.query("UPDATE public.monitorias SET status='concluida' WHERE id=$1", [id(32)])), /parecer/i);
+
+    // The operational WebPosto split promotes Victor without removing his
+    // assigned PJ review queue or granting him the PJ manager's team access.
+    await db.query(`INSERT INTO public.users(id,email,name,role,active,primary_team_id) VALUES
+      ($1,'ana@example.invalid','Ana Karolina','gestor_suporte',true,$4),
+      ($2,'ricardo@example.invalid','Ricardo Fadini','gestor_suporte',true,$4),
+      ($3,'other-manager@example.invalid','Outro Gestor PJ','gestor_suporte',true,$5)`,
+      [id(7), id(8), id(9), id(11), id(10)]);
+    await db.query('INSERT INTO public.user_teams(user_id,team_id) VALUES ($1,$4),($2,$4),($3,$4),($5,$6)',
+      [id(7), id(8), id(2), id(11), id(9), id(10)]);
+    await db.query("INSERT INTO public.teams(id,name,kind) VALUES ($1,'Cliente Final','group'),($2,'Revenda','group')",
+      [id(12), id(13)]);
+    await db.query('INSERT INTO public.team_groups(team_id,group_id) VALUES ($1,$2)', [id(10), id(12)]);
+    const finalRosterUser = 'b8aaa9c7-4675-465d-b4af-a2bbaa4d3a61';
+    const revendaRosterUser = '7aeca8dc-66af-4e46-92db-8dcc064cd990';
+    const escalaRosterUser = '045dad4a-90e2-4ba3-912f-def26c5b2c93';
+    const pjFieldRosterUser = 'cf09bf40-30e3-48e3-ba1c-50298b7b754a';
+    await db.query(`INSERT INTO public.users(id,email,name,role,active,primary_team_id) VALUES
+      ($1,'final-roster@example.invalid','Atendente Final','suporte',true,$3),
+      ($2,'revenda-roster@example.invalid','Atendente Revenda','suporte',true,$3),
+      ($4,'escala-roster@example.invalid','Atendente Escala','suporte',true,$3),
+      ($5,'pj-field-roster@example.invalid','Atendente PJ Campo','suporte',true,$3)`,
+      [finalRosterUser, revendaRosterUser, id(11), escalaRosterUser, pjFieldRosterUser]);
+    await db.query('INSERT INTO public.user_teams(user_id,team_id) VALUES ($1,$3),($2,$3),($4,$3),($5,$3)',
+      [finalRosterUser, revendaRosterUser, id(11), escalaRosterUser, pjFieldRosterUser]);
+    const divisionMigration = (await discoverFreshMigrations())
+      .find(migration => migration.name === '20261005000001_webposto_management_divisions.sql');
+    assert.ok(divisionMigration);
+    await db.exec(divisionMigration.sql);
+    assert.equal((await db.query('SELECT name FROM public.teams WHERE id=$1', [id(11)])).rows[0].name, 'WebPosto');
+
+    const divisions = (await db.query("SELECT name,parent_team_id FROM public.teams WHERE kind='team' AND name IN ('Cliente Final','Revenda','Escala') ORDER BY name")).rows;
+    assert.deepEqual(divisions.map(team => team.name), ['Cliente Final', 'Escala', 'Revenda']);
+    assert.ok(divisions.every(team => team.parent_team_id === id(11)));
+    const finalId = (await db.query("SELECT id FROM public.teams WHERE name='Cliente Final' AND kind='team'")).rows[0].id;
+    const revendaId = (await db.query("SELECT id FROM public.teams WHERE name='Revenda' AND kind='team'")).rows[0].id;
+    const escalaId = (await db.query("SELECT id FROM public.teams WHERE name='Escala' AND kind='team'")).rows[0].id;
+    assert.equal((await db.query('SELECT approval_manager_id FROM public.teams WHERE id=$1', [revendaId])).rows[0].approval_manager_id, id(2));
+    assert.equal((await db.query('SELECT approval_manager_id FROM public.teams WHERE id=$1', [escalaId])).rows[0].approval_manager_id, id(2));
+    assert.equal((await db.query('SELECT role,primary_team_id FROM public.users WHERE id=$1', [id(2)])).rows[0].role, 'gestor_suporte');
+    const managerLinks = (await db.query('SELECT team_id FROM public.user_teams WHERE user_id=$1', [id(2)])).rows.map(row => row.team_id);
+    assert.deepEqual(new Set(managerLinks), new Set([revendaId, escalaId]));
+    assert.deepEqual((await db.query('SELECT user_id,team_id FROM public.user_teams WHERE user_id IN ($1,$2) ORDER BY user_id',
+      [id(7), id(8)])).rows.map(row => row.team_id), [finalId, finalId]);
+    assert.equal((await db.query('SELECT count(*)::int AS total FROM public.team_groups WHERE team_id IN ($1,$2,$3)',
+      [finalId, revendaId, escalaId])).rows[0].total, 6);
+    assert.equal((await db.query('SELECT count(*)::int AS total FROM public.team_groups WHERE team_id=$1 AND group_id=$2',
+      [id(10), id(12)])).rows[0].total, 1, 'PJ ticket-group coverage remains linked');
+    assert.equal((await asUser(7, () => db.query('SELECT id FROM public.monitorias WHERE id=$1', [id(32)]))).rows.length, 0,
+      'Cliente Final management does not inherit the WebPosto root backlog');
+    assert.equal((await db.query('SELECT primary_team_id FROM public.users WHERE id=$1', [id(3)])).rows[0].primary_team_id, id(11),
+      'an existing CLT agent stays in WebPosto until an explicit management choice');
+    assert.deepEqual((await db.query('SELECT id,primary_team_id FROM public.users WHERE id IN ($1,$2) ORDER BY id',
+      [finalRosterUser, revendaRosterUser])).rows.map(row => row.primary_team_id), [revendaId, finalId],
+      'Zendesk evidence moves CLT agents to the management division');
+    assert.deepEqual((await db.query('SELECT user_id,team_id FROM public.user_teams WHERE user_id IN ($1,$2) ORDER BY user_id',
+      [finalRosterUser, revendaRosterUser])).rows.map(row => row.team_id), [revendaId, finalId],
+      'moved agents no longer retain broad WebPosto membership');
+    assert.equal((await db.query('SELECT primary_team_id FROM public.users WHERE id=$1', [escalaRosterUser])).rows[0].primary_team_id, escalaId);
+    assert.equal((await db.query('SELECT primary_team_id FROM public.users WHERE id=$1', [pjFieldRosterUser])).rows[0].primary_team_id, id(10),
+      'the Zendesk PJ field takes precedence over ticket-group membership');
+
+    await db.query('UPDATE public.teams SET approval_manager_id=$1 WHERE id=$2', [id(1), id(10)]);
+    await db.query('UPDATE public.users SET primary_team_id=$1 WHERE id=$2', [id(10), id(5)]);
+    await db.query(`INSERT INTO public.monitorias
+      (id,form_id,evaluated_id,evaluator_id,team_id,score,question_observations,form_snapshot,applied_config)
+      VALUES ($1,$2,$3,$4,$5,60,'{}','{}','{}')`,
+      [id(36), id(20), id(5), id(6), id(10)]);
+    await assert.rejects(asUser(9, () => db.query('SELECT public.act_on_monitoria_as_support_manager($1,$2,$3,$4)',
+      [id(36), 'aceitar', 'Tentativa de outro gestor', []])), /outro gestor designado/i);
+    await asUser(1, () => db.query('SELECT public.act_on_monitoria_as_support_manager($1,$2,$3,$4)',
+      [id(36), 'aceitar', 'Parecer do gestor designado', []]));
+    assert.equal((await asUser(2, () => db.query('SELECT id FROM public.vw_monitorias_pj_reviewer WHERE id=$1', [id(36)]))).rows.length, 1);
+    assert.equal((await asUser(2, () => db.query('SELECT id FROM public.monitorias WHERE id=$1', [id(36)]))).rows.length, 0,
+      'reviewer view does not grant direct base-table access to PJ monitorias');
+    await asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)',
+      [id(36), 'rejected', 'Discordo do parecer PJ']));
+    assert.equal((await db.query('SELECT status FROM public.monitorias WHERE id=$1', [id(36)])).rows[0].status,
+      'aguardando_gestor_qualidade');
   } finally {
     await db.close();
   }

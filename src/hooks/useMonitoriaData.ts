@@ -55,7 +55,7 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
 
             const fetchPromise = Promise.all([
               monitoriasQuery.abortSignal(controller.signal),
-              ...(isSuporte ? [supabase!.from('vw_monitorias_pj_reviewer')
+              ...(['suporte', 'gestor_suporte'].includes(currentUser.role) ? [supabase!.from('vw_monitorias_pj_reviewer')
                 .select('*').order('created_at', { ascending: false })
                 .abortSignal(controller.signal)] : []),
             ]);

@@ -24,6 +24,7 @@ import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiv
 import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro } from './child-view.ts';
 import { childMacroCustomFields, missingCustomFields } from './child-macro-fields.ts';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
+import { previewWebpostoDivisions, type ZendeskMembership, type ZendeskMembershipGroup, type ZendeskMembershipUser } from './webposto-memberships.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 const AI_HANG_TIMEOUT_MS = Math.min(300_000, Math.max(1_000, Number(Deno.env.get('AI_PRIMARY_TIMEOUT_MS') || String(OPENROUTER_HANG_GUARD_MS)) || OPENROUTER_HANG_GUARD_MS));
@@ -94,6 +95,7 @@ const RequestSchema = z.object({
     'lookup_ticket',
     'publish_child_macro',
     'sync_zendesk_groups',
+    'preview_webposto_memberships',
     'backfill_agent_team'
   ]),
   queue_type: z.enum(['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos']).optional(),
@@ -170,6 +172,97 @@ const RequestSchema = z.object({
   team_id: z.string().optional(),
   evaluated_id: z.string().optional(),
 });
+
+async function buildWebpostoMembershipPreview(
+  supabase: SupabaseClient, subdomain: string, zendeskHeaders: HeadersInit,
+): Promise<Response> {
+      const { data: managementTeams, error: managementError } = await supabase.from('teams')
+        .select('id,name,kind,parent_team_id').eq('kind', 'team');
+      if (managementError) throw managementError;
+      const webPosto = managementTeams?.find(team => team.name === 'WebPosto' && !team.parent_team_id)
+        || managementTeams?.find(team => team.name.toLowerCase() === 'cliente final' && !team.parent_team_id);
+      if (!webPosto) return jsonResponse({ error: 'Equipe WebPosto não encontrada.' }, 409);
+      const relevantTeams = (managementTeams || []).filter(team => team.id === webPosto.id
+        || team.parent_team_id === webPosto.id || /^PJ\s/i.test(team.name));
+      const { data: localAgents, error: agentsError } = await supabase.from('users')
+        .select('id,name,email,role,primary_team_id,external_id,source_system')
+        .eq('active', true).eq('role', 'suporte')
+        .in('primary_team_id', relevantTeams.map(team => team.id));
+      if (agentsError) throw agentsError;
+
+      const origin = `https://${subdomain}.zendesk.com`;
+      const memberships: ZendeskMembership[] = [];
+      const zendeskUsers = new Map<number, ZendeskMembershipUser>();
+      const zendeskGroups = new Map<number, ZendeskMembershipGroup>();
+      let nextUrl: string | null = `${origin}/api/v2/group_memberships.json?include=users,groups&per_page=100`;
+      let pages = 0;
+      while (nextUrl) {
+        if (++pages > 50) return jsonResponse({ error: 'Há mais de 5.000 vínculos; consulta incompleta. Nenhuma sugestão foi aplicada.' }, 503);
+        const parsedUrl = new URL(nextUrl);
+        if (parsedUrl.origin !== origin || !['/api/v2/group_memberships', '/api/v2/group_memberships.json'].includes(parsedUrl.pathname)
+          || parsedUrl.username || parsedUrl.password || parsedUrl.hash) {
+          return jsonResponse({ error: 'Paginação de grupos inválida.' }, 502);
+        }
+        const response = await fetch(parsedUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(15000) });
+        if (!response.ok) return jsonResponse({ error: `Zendesk Group Memberships API falhou (${response.status}).` }, 502);
+        const data = await response.json();
+        if (!Array.isArray(data.group_memberships)) return jsonResponse({ error: 'Resposta de vínculos inválida.' }, 502);
+        memberships.push(...data.group_memberships);
+        for (const item of Array.isArray(data.users) ? data.users : []) {
+          if (Number.isSafeInteger(item.id)) zendeskUsers.set(item.id, {
+            id: item.id, email: item.email,
+            user_fields: item.user_fields && typeof item.user_fields === 'object' && !Array.isArray(item.user_fields)
+              ? item.user_fields : null,
+          });
+        }
+        for (const item of Array.isArray(data.groups) ? data.groups : []) {
+          if (Number.isSafeInteger(item.id) && typeof item.name === 'string') zendeskGroups.set(item.id, { id: item.id, name: item.name });
+        }
+        nextUrl = typeof data.next_page === 'string' ? data.next_page : null;
+      }
+      if (memberships.length > 0 && (zendeskUsers.size === 0 || zendeskGroups.size === 0)) {
+        return jsonResponse({ error: 'O Zendesk não retornou usuários e grupos associados aos vínculos.' }, 502);
+      }
+
+      // Sideloaded users omit custom profile fields on some Zendesk plans.
+      // Read complete profiles only for agents already present in QualiTrack.
+      const zendeskIdByEmail = new Map([...zendeskUsers.values()]
+        .filter(user => typeof user.email === 'string' && user.email.trim())
+        .map(user => [user.email!.toLowerCase().trim(), user.id]));
+      const matchedZendeskIds = [...new Set((localAgents || []).flatMap(agent => {
+        const byId = agent.source_system === 'zendesk' && /^\d+$/.test(agent.external_id || '')
+          ? Number(agent.external_id) : null;
+        const byEmail = zendeskIdByEmail.get(agent.email.toLowerCase().trim());
+        return [byId, byEmail].filter((id): id is number => id !== null && id !== undefined && Number.isSafeInteger(id));
+      }))];
+      for (let offset = 0; offset < matchedZendeskIds.length; offset += 100) {
+        const ids = matchedZendeskIds.slice(offset, offset + 100);
+        const response = await fetch(`${origin}/api/v2/users/show_many.json?ids=${ids.join(',')}`, {
+          headers: zendeskHeaders, signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) return jsonResponse({ error: `Zendesk Users API falhou (${response.status}).` }, 502);
+        const data = await response.json();
+        if (!Array.isArray(data.users)) return jsonResponse({ error: 'Resposta de perfis Zendesk inválida.' }, 502);
+        for (const item of data.users) {
+          if (Number.isSafeInteger(item.id)) zendeskUsers.set(item.id, {
+            id: item.id, email: item.email,
+            user_fields: item.user_fields && typeof item.user_fields === 'object' && !Array.isArray(item.user_fields)
+              ? item.user_fields : null,
+          });
+        }
+      }
+
+      const rows = previewWebpostoDivisions({
+        localUsers: localAgents || [],
+        teams: relevantTeams,
+        memberships,
+        zendeskUsers: [...zendeskUsers.values()],
+        zendeskGroups: [...zendeskGroups.values()],
+        webPostoTeamId: webPosto.id,
+      });
+      return jsonResponse({ success: true, checked_at: new Date().toISOString(), scanned_memberships: memberships.length,
+        scanned_pages: pages, rows }, 200);
+}
 
 function jsonResponse(body: any, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -498,6 +591,17 @@ serve(async (req) => {
         return jsonResponse({ error: 'verdict deve ser conforme ou nao_conforme.' }, 400);
       }
       return await applyChildMacroFields(String(workerBody.ticket_id ?? ''), workerBody.verdict);
+    }
+    if (workerBody?.action === 'preview_webposto_memberships' && req.headers.get('apikey') === secretApiKey()) {
+      const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
+      const email = Deno.env.get('ZENDESK_EMAIL');
+      const apiToken = Deno.env.get('ZENDESK_API_TOKEN');
+      if (!subdomain || !email || !apiToken) return jsonResponse({ error: 'Zendesk não configurado.' }, 500);
+      const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
+      return await buildWebpostoMembershipPreview(workerClient, subdomain, {
+        Authorization: `Basic ${btoa(`${email}/token:${apiToken}`)}`,
+        Accept: 'application/json',
+      });
     }
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -899,6 +1003,13 @@ serve(async (req) => {
             managerTeamIds));
       });
     };
+
+    // Read-only comparison of Zendesk membership with current CLT/PJ ownership.
+    // The Zendesk token and unmatched Zendesk identities never leave the server.
+    if (action === 'preview_webposto_memberships') {
+      if (caller.role !== 'admin') return jsonResponse({ error: 'Apenas administradores podem consultar os vínculos de agentes.' }, 403);
+      return await buildWebpostoMembershipPreview(supabase, subdomain, zendeskHeaders);
+    }
 
     // 6. Sincroniza a identidade dos grupos do Zendesk. Equipes gestoras
     // com o mesmo nome continuam separadas dos grupos de ticket.
