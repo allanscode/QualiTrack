@@ -5,6 +5,7 @@ import { buildFreshSql, discoverFreshMigrations } from './prepare-supabase.mjs';
 
 const id = n => `40000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const positiveRouteMigrationName = '20261005000002_pj_positive_auto_conclusion.sql';
+const staleClientMigrationName = '20261005000003_pj_positive_stale_client_compat.sql';
 
 test('PJ approval and contestation pass through the assigned reviewer before Quality', async () => {
   const db = new PGlite();
@@ -28,7 +29,9 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
     await db.exec(sql);
     const migrations = await discoverFreshMigrations();
     const positiveRouteMigration = migrations.find(migration => migration.name === positiveRouteMigrationName);
+    const staleClientMigration = migrations.find(migration => migration.name === staleClientMigrationName);
     assert.ok(positiveRouteMigration);
+    assert.ok(staleClientMigration);
     for (const migration of migrations.filter(item => item.name < positiveRouteMigrationName)) {
       await db.exec(migration.sql.replace(/^CREATE EXTENSION IF NOT EXISTS pg_(?:cron|net).*;\s*$/gm, ''));
     }
@@ -66,6 +69,7 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
       VALUES ($1,$2,$3,$4,$5,92,'{}','{}','{}')`,
       [id(33), id(20), id(3), id(6), id(10)]);
     await db.exec(positiveRouteMigration.sql);
+    await db.exec(staleClientMigration.sql);
     const backfilledPositive = (await db.query('SELECT status,pj_review_required,resolution_type,action_deadline_at,history FROM public.monitorias WHERE id=$1', [id(33)])).rows[0];
     assert.equal(backfilledPositive.status, 'concluida');
     assert.equal(backfilledPositive.pj_review_required, false);
@@ -78,10 +82,20 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
       [id(34), id(20), id(3), id(6), id(10)]);
     assert.deepEqual((await db.query('SELECT status,pj_review_required FROM public.monitorias WHERE id=$1', [id(34)])).rows[0],
       { status: 'concluida', pj_review_required: false });
-    await assert.rejects(db.query(`INSERT INTO public.monitorias
-      (id,form_id,evaluated_id,evaluator_id,team_id,score,question_observations,form_snapshot,applied_config)
-      VALUES ($1,$2,$3,$4,$5,75,'{}','{}','{}')`,
-      [id(35), id(20), id(3), id(6), id(10)]), /devem ser concluídas/i);
+    await asUser(6, () => db.query(`INSERT INTO public.monitorias
+      (id,form_id,evaluated_id,evaluator_id,team_id,score,status,action_deadline_at,history,
+       question_observations,form_snapshot,applied_config)
+      VALUES ($1,$2,$3,$4,$5,75,'pendente_revisao',now() + interval '2 days',
+        '[{"action":"Monitoria Criada"}]'::jsonb,'{}','{}','{}')`,
+      [id(35), id(20), id(3), id(6), id(10)]));
+    const staleClientPositive = (await db.query(`SELECT status,pj_review_required,resolution_type,
+      action_deadline_at,history FROM public.monitorias WHERE id=$1`, [id(35)])).rows[0];
+    assert.equal(staleClientPositive.status, 'concluida');
+    assert.equal(staleClientPositive.pj_review_required, false);
+    assert.equal(staleClientPositive.resolution_type, 'human');
+    assert.equal(staleClientPositive.action_deadline_at, null);
+    assert.equal(staleClientPositive.history[0].action, 'Monitoria Criada');
+    assert.match(staleClientPositive.history.at(-1).action, /concluída automaticamente/);
     await assert.rejects(db.query(`INSERT INTO public.monitorias
       (id,form_id,evaluated_id,evaluator_id,team_id,score,status,question_observations,form_snapshot,applied_config)
       VALUES ($1,$2,$3,$4,$5,60,'concluida','{}','{}','{}')`,
