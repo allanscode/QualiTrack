@@ -139,9 +139,6 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
   const [groupAssignmentFilter, setGroupAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
-  const [pjReviewerId, setPjReviewerId] = useState('');
-  const [savedPjReviewerId, setSavedPjReviewerId] = useState('');
-  const [savingPjReviewer, setSavingPjReviewer] = useState(false);
   const [savingApprovalManager, setSavingApprovalManager] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -167,48 +164,6 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
       }
     };
   }, [isModalOpen, selectedDrawerTeam]);
-
-  useEffect(() => {
-    if (!canConfigurePj) return;
-    let cancelled = false;
-    const loadPjReviewer = async () => {
-      const result = supabase
-        ? await supabase.from('pj_review_settings').select('reviewer_id').eq('id', true).maybeSingle()
-        : { data: (await mockDb.get('pj_review_settings')).data?.[0] || null, error: null };
-      if (result.error) {
-        toast.error('Não foi possível carregar o revisor PJ.');
-        return;
-      }
-      if (!cancelled) {
-        const id = result.data?.reviewer_id || '';
-        setPjReviewerId(id);
-        setSavedPjReviewerId(id);
-      }
-    };
-    void loadPjReviewer();
-    return () => { cancelled = true; };
-  }, [canConfigurePj]);
-
-  const savePjReviewer = async () => {
-    if (!pjReviewerId) return toast.error('Selecione um revisor PJ ativo.');
-    setSavingPjReviewer(true);
-    try {
-      if (supabase) {
-        const { error } = await supabase.from('pj_review_settings')
-          .upsert({ id: true, reviewer_id: pjReviewerId });
-        if (error) throw error;
-      } else {
-        const { error } = await mockDb.upsert('pj_review_settings', { id: 'pj', reviewer_id: pjReviewerId });
-        if (error) throw error;
-      }
-      setSavedPjReviewerId(pjReviewerId);
-      toast.success('Revisor PJ atualizado para os próximos encaminhamentos.');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Não foi possível atualizar o revisor PJ.');
-    } finally {
-      setSavingPjReviewer(false);
-    }
-  };
 
   const TEAM_ICONS_LIST = [
     { id: 'Shield', icon: Shield },
@@ -686,28 +641,9 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
 
       {view === 'teams' && canConfigurePj && teams.some(team => team.requires_pj_review) && (
         <section className="rounded-2xl border border-surface-border bg-surface-card px-4 py-4 sm:px-5" aria-labelledby="pj-review-settings-title">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div className="max-w-xl space-y-1">
-              <h3 id="pj-review-settings-title" className="text-sm font-bold text-brand-primary">Fluxo das equipes PJ</h3>
-              <p className="text-xs leading-relaxed text-brand-muted">Notas abaixo de 75%: a aprovação ou contestação do gestor PJ segue para Victor, que aprova ou reprova o parecer antes da Gestão da Qualidade. Notas a partir de 75% são concluídas diretamente.</p>
-              <p className="text-xs text-brand-muted">A troca de revisor vale para os próximos casos. Os já encaminhados permanecem com o responsável registrado.</p>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end md:w-auto">
-              <CustomSelect
-                label="Revisor PJ"
-                value={pjReviewerId}
-                onChange={setPjReviewerId}
-                options={users.filter(user => user.active !== false && ['suporte', 'gestor_suporte'].includes(user.role))
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map(user => ({ value: user.id, label: user.name }))}
-                placeholder="Selecione um agente"
-                className="w-full sm:w-64"
-              />
-              <Button onClick={savePjReviewer}
-                disabled={savingPjReviewer || !pjReviewerId || pjReviewerId === savedPjReviewerId}>
-                {savingPjReviewer ? 'Salvando...' : 'Salvar revisor'}
-              </Button>
-            </div>
+          <div className="max-w-xl space-y-1">
+            <h3 id="pj-review-settings-title" className="text-sm font-bold text-brand-primary">Fluxo das equipes PJ</h3>
+            <p className="text-xs leading-relaxed text-brand-muted">Notas abaixo de 75%: a aprovação ou contestação do gestor PJ segue diretamente para a Gestão da Qualidade. Notas a partir de 75% são concluídas diretamente.</p>
           </div>
         </section>
       )}

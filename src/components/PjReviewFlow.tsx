@@ -1,13 +1,11 @@
-import { ArrowRight, CheckCircle2, Clock3, XCircle } from 'lucide-react';
-import { Monitoria, User } from '../types';
+import { ArrowRight, CheckCircle2, Clock3 } from 'lucide-react';
+import { Monitoria } from '../types';
 
-type Props = { monitoria: Monitoria; users: User[] };
+type Props = { monitoria: Monitoria };
 
-export default function PjReviewFlow({ monitoria, users }: Props) {
-  const { status, pj_review_kind: kind, pj_review_decision: decision } = monitoria;
-  const reviewerName = users.find(user => user.id === monitoria.pj_reviewer_id)?.name || 'Victor Aguiar';
+export default function PjReviewFlow({ monitoria }: Props) {
+  const { status, pj_review_kind: kind } = monitoria;
   const managerDone = Boolean(kind);
-  const victorDone = Boolean(decision);
   const qualityActive = status === 'aguardando_gestor_qualidade' || status === 'reavaliacao_solicitada';
   const completed = ['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(status);
 
@@ -18,14 +16,9 @@ export default function PjReviewFlow({ monitoria, users }: Props) {
       state: managerDone ? 'done' : 'active',
     },
     {
-      name: reviewerName,
-      detail: decision === 'approved' ? 'Parecer aprovado' : decision === 'rejected' ? 'Parecer reprovado' : 'Aguardando decisão',
-      state: decision === 'rejected' ? 'rejected' : victorDone ? 'done' : managerDone ? 'active' : 'waiting',
-    },
-    {
       name: 'Gestor da Qualidade',
       detail: completed ? 'Decisão final registrada' : status === 'reavaliacao_solicitada'
-        ? 'Reavaliação solicitada' : qualityActive ? 'Decisão final pendente' : 'Aguardando Victor',
+        ? 'Reavaliação solicitada' : qualityActive ? 'Decisão final pendente' : 'Aguardando gestor PJ',
       state: completed ? 'done' : qualityActive ? 'active' : 'waiting',
     },
   ] as const;
@@ -34,12 +27,12 @@ export default function PjReviewFlow({ monitoria, users }: Props) {
     <section aria-label="Fluxo de aprovação PJ" className="rounded-2xl border border-surface-border bg-surface-subtle/60 p-4">
       <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="text-sm font-bold text-brand-primary">Fluxo de aprovação PJ</h3>
-        <p className="text-xs text-brand-muted">Cada parecer fica registrado antes da decisão final.</p>
+        <p className="text-xs text-brand-muted">O parecer do gestor segue diretamente para a decisão final da Qualidade.</p>
       </div>
-      <ol className="grid gap-2 sm:grid-cols-3">
+      <ol className="grid gap-2 sm:grid-cols-2">
         {steps.map((step, index) => {
-          const Icon = step.state === 'done' ? CheckCircle2 : step.state === 'rejected' ? XCircle : Clock3;
-          const tone = step.state === 'done' ? 'text-success' : step.state === 'rejected' ? 'text-error'
+          const Icon = step.state === 'done' ? CheckCircle2 : Clock3;
+          const tone = step.state === 'done' ? 'text-success'
             : step.state === 'active' ? 'text-brand-primary' : 'text-brand-muted';
           return (
             <li key={step.name} className="flex min-w-0 items-start gap-2 rounded-xl bg-surface-card px-3 py-3">
@@ -53,11 +46,6 @@ export default function PjReviewFlow({ monitoria, users }: Props) {
           );
         })}
       </ol>
-      {decision && monitoria.pj_review_note && (
-        <p className="mt-3 text-xs text-brand-primary">
-          <span className="font-semibold">Justificativa de {reviewerName}:</span> {monitoria.pj_review_note}
-        </p>
-      )}
     </section>
   );
 }

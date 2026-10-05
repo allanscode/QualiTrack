@@ -7,8 +7,9 @@ const id = n => `40000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const positiveRouteMigrationName = '20261005000002_pj_positive_auto_conclusion.sql';
 const staleClientMigrationName = '20261005000003_pj_positive_stale_client_compat.sql';
 const statusConstraintMigrationName = '20261005000004_pj_review_status_constraint.sql';
+const directQualityMigrationName = '20261005000005_pj_direct_quality_route.sql';
 
-test('PJ approval and contestation pass through the assigned reviewer before Quality', async () => {
+test('PJ manager approval and contestation go directly to Quality', async () => {
   const db = new PGlite();
   try {
     await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
@@ -32,9 +33,11 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
     const positiveRouteMigration = migrations.find(migration => migration.name === positiveRouteMigrationName);
     const staleClientMigration = migrations.find(migration => migration.name === staleClientMigrationName);
     const statusConstraintMigration = migrations.find(migration => migration.name === statusConstraintMigrationName);
+    const directQualityMigration = migrations.find(migration => migration.name === directQualityMigrationName);
     assert.ok(positiveRouteMigration);
     assert.ok(staleClientMigration);
     assert.ok(statusConstraintMigration);
+    assert.ok(directQualityMigration);
     for (const migration of migrations.filter(item => item.name < positiveRouteMigrationName)) {
       await db.exec(migration.sql.replace(/^CREATE EXTENSION IF NOT EXISTS pg_(?:cron|net).*;\s*$/gm, ''));
     }
@@ -127,31 +130,41 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
 
     await asUser(1, () => db.query('SELECT public.act_on_monitoria_as_support_manager($1,$2,$3,$4)',
       [id(30), 'aceitar', 'Ação corretiva aplicada', []]));
+    assert.equal((await db.query('SELECT status FROM public.monitorias WHERE id=$1', [id(30)])).rows[0].status,
+      'aguardando_revisao_pj', 'legacy reviewer case exists before the route migration');
+    await db.query("SELECT set_config('request.jwt.claim.sub','',false)");
+    await db.exec(directQualityMigration.sql);
+    const migrated = (await db.query('SELECT status,pj_reviewer_id,pj_review_kind FROM public.monitorias WHERE id=$1', [id(30)])).rows[0];
+    assert.deepEqual(migrated, {
+      status: 'aguardando_gestor_qualidade', pj_reviewer_id: null, pj_review_kind: 'approval',
+    });
     await asUser(1, () => db.query('SELECT public.act_on_monitoria_as_support_manager($1,$2,$3,$4)',
       [id(31), 'contestar', 'Nota da contestação', []]));
-    const pending = (await db.query('SELECT id,status,pj_reviewer_id,pj_review_kind FROM public.monitorias WHERE id IN ($1,$2) ORDER BY id', [id(30), id(31)])).rows;
-    assert.deepEqual(pending.map(row => row.status), ['aguardando_revisao_pj', 'aguardando_revisao_pj']);
-    assert.deepEqual(pending.map(row => row.pj_review_kind), ['approval', 'contestation']);
-    assert.ok(pending.every(row => row.pj_reviewer_id === id(2)));
-    const reviewerRows = await asUser(2, () => db.query('SELECT id,evaluator_id,evaluator_name FROM public.vw_monitorias_pj_reviewer'));
-    assert.equal(reviewerRows.rows.length, 2);
-    assert.ok(reviewerRows.rows.every(row => row.evaluator_id === null && row.evaluator_name === null));
-    assert.equal((await asUser(5, () => db.query('SELECT id FROM public.vw_monitorias_pj_reviewer'))).rows.length, 0);
-    await assert.rejects(asUser(5, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)', [id(30), 'approved', 'Tentei aprovar'])), /fila deste revisor/i);
-    await assert.rejects(asUser(4, () => db.query("UPDATE public.monitorias SET pj_review_decision='approved' WHERE id=$1", [id(30)])), /parecer de Victor/i);
-
-    await asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)', [id(30), 'approved', 'Concordo com o gestor']));
-    await asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)', [id(31), 'rejected', 'Discordo do gestor']));
-    const reviewed = (await db.query('SELECT id,status,pj_review_decision,pj_review_note FROM public.monitorias WHERE id IN ($1,$2) ORDER BY id', [id(30), id(31)])).rows;
-    assert.deepEqual(reviewed.map(row => row.status), ['aguardando_gestor_qualidade', 'aguardando_gestor_qualidade']);
-    assert.deepEqual(reviewed.map(row => row.pj_review_decision), ['approved', 'rejected']);
-    await assert.rejects(asUser(4, () => db.query("UPDATE public.monitorias SET pj_review_note='Adulterado' WHERE id=$1", [id(31)])), /parecer de Victor/i);
+    const contested = (await db.query('SELECT status,pj_reviewer_id,pj_review_kind,pj_review_decision,contestation_result FROM public.monitorias WHERE id=$1', [id(31)])).rows[0];
+    assert.deepEqual(contested, {
+      status: 'aguardando_gestor_qualidade', pj_reviewer_id: null,
+      pj_review_kind: 'contestation', pj_review_decision: null, contestation_result: 'pending',
+    });
+    assert.equal((await asUser(2, () => db.query('SELECT id FROM public.vw_monitorias_pj_reviewer'))).rows.length, 0);
+    await assert.rejects(asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)',
+      [id(31), 'approved', 'Parecer antigo'])), /revisão de Victor foi encerrada/i);
+    await db.query(`INSERT INTO public.monitorias
+      (id,form_id,evaluated_id,evaluator_id,team_id,score,question_observations,form_snapshot,applied_config)
+      VALUES ($1,$2,$3,$4,$5,60,'{}','{}','{}')`,
+      [id(37), id(20), id(3), id(6), id(10)]);
+    await assert.rejects(asUser(4, () => db.query("UPDATE public.monitorias SET status='concluida' WHERE id=$1", [id(37)])), /parecer do gestor/i);
+    await asUser(1, () => db.query('SELECT public.act_on_monitoria_as_support_manager($1,$2,$3,$4)',
+      [id(37), 'aceitar', 'Aprovação direta à Qualidade', []]));
+    assert.equal((await db.query('SELECT status,pj_review_kind FROM public.monitorias WHERE id=$1', [id(37)])).rows[0].status,
+      'aguardando_gestor_qualidade');
+    await assert.rejects(asUser(4, () => db.query("UPDATE public.monitorias SET pj_review_decision='approved' WHERE id=$1", [id(31)])), /etapa de parecer do revisor PJ foi encerrada/i);
     await asUser(4, () => db.query("UPDATE public.monitorias SET status='concluida' WHERE id=$1", [id(30)]));
     assert.equal((await db.query('SELECT status FROM public.monitorias WHERE id=$1', [id(30)])).rows[0].status, 'concluida');
     await assert.rejects(asUser(4, () => db.query("UPDATE public.monitorias SET status='concluida' WHERE id=$1", [id(31)])), /resolver a contestação/i);
     await asUser(4, () => db.query("UPDATE public.monitorias SET status='concluida',contestation_result='approved' WHERE id=$1", [id(31)]));
     assert.equal((await db.query('SELECT contestation_result FROM public.monitorias WHERE id=$1', [id(31)])).rows[0].contestation_result, 'approved');
-    await assert.rejects(asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)', [id(30), 'rejected', 'Segunda tentativa'])), /fila deste revisor/i);
+    const bypassAttempt = await asUser(1, () => db.query("UPDATE public.monitorias SET status='aguardando_revisao_pj' WHERE id=$1", [id(37)]));
+    assert.equal(bypassAttempt.affectedRows, 0, 'manager cannot restore the retired reviewer stage directly');
 
     await db.query("SELECT set_config('request.jwt.claim.sub','',false)");
     await db.query(`INSERT INTO public.monitorias
@@ -195,6 +208,7 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
       .find(migration => migration.name === '20261005000001_webposto_management_divisions.sql');
     assert.ok(divisionMigration);
     await db.exec(divisionMigration.sql);
+    await db.exec(directQualityMigration.sql);
     assert.equal((await db.query('SELECT name FROM public.teams WHERE id=$1', [id(11)])).rows[0].name, 'WebPosto');
 
     const divisions = (await db.query("SELECT name,parent_team_id FROM public.teams WHERE kind='team' AND name IN ('Cliente Final','Revenda','Escala') ORDER BY name")).rows;
@@ -238,13 +252,13 @@ test('PJ approval and contestation pass through the assigned reviewer before Qua
       [id(36), 'aceitar', 'Tentativa de outro gestor', []])), /outro gestor designado/i);
     await asUser(1, () => db.query('SELECT public.act_on_monitoria_as_support_manager($1,$2,$3,$4)',
       [id(36), 'aceitar', 'Parecer do gestor designado', []]));
-    assert.equal((await asUser(2, () => db.query('SELECT id FROM public.vw_monitorias_pj_reviewer WHERE id=$1', [id(36)]))).rows.length, 1);
-    assert.equal((await asUser(2, () => db.query('SELECT id FROM public.monitorias WHERE id=$1', [id(36)]))).rows.length, 0,
-      'reviewer view does not grant direct base-table access to PJ monitorias');
-    await asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)',
-      [id(36), 'rejected', 'Discordo do parecer PJ']));
     assert.equal((await db.query('SELECT status FROM public.monitorias WHERE id=$1', [id(36)])).rows[0].status,
       'aguardando_gestor_qualidade');
+    assert.equal((await asUser(2, () => db.query('SELECT id FROM public.vw_monitorias_pj_reviewer WHERE id=$1', [id(36)]))).rows.length, 0);
+    assert.equal((await asUser(2, () => db.query('SELECT id FROM public.monitorias WHERE id=$1', [id(36)]))).rows.length, 0,
+      'reviewer view does not grant direct base-table access to PJ monitorias');
+    await assert.rejects(asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)',
+      [id(36), 'rejected', 'Discordo do parecer PJ'])), /revisão de Victor foi encerrada/i);
   } finally {
     await db.close();
   }

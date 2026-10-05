@@ -15,7 +15,7 @@
 | PJ Bruno, PJ Duarte, PJ SumWise e PJ Trindade | Gestores PJ cadastrados | Uma equipe gestora principal para cada operação PJ. |
 | WebPosto | Gestões distribuídas pelas subequipes | Equipe principal CLT. Agentes ainda sem indicação operacional permanecem aqui até a atribuição no painel. |
 | Cliente Final, subequipe da WebPosto | Ana Karolina e Ricardo Fadini | Gestão dos agentes CLT designados para Cliente Final. |
-| Revenda, subequipe da WebPosto | Victor Ellyan Aguiar | Gestão dos agentes CLT designados para Revenda; Victor continua como revisor das monitorias PJ. |
+| Revenda, subequipe da WebPosto | Victor Ellyan Aguiar | Gestão dos agentes CLT designados para Revenda. |
 | Escala, subequipe da WebPosto | Victor Ellyan Aguiar | Gestão dos agentes CLT vinculados aos dois tipos de ticket ou a grupos de Escala/TEF. |
 | Fiscal, subequipe da WebPosto | Margareth | Acesso às monitorias dos próprios agentes. |
 | Contábil, subequipe da WebPosto | Maria Cicera | Acesso às monitorias dos próprios agentes. |
@@ -47,9 +47,9 @@ A prévia da base identificou gestores para WebPosto (Ana Karolina e Ricardo Fad
 
 ### Revisão das equipes PJ
 
-As equipes PJ Bruno, PJ Duarte, PJ SumWise e PJ Trindade usam `requires_pj_review = true`. Em **Configurações → Equipes**, o cartão **Fluxo das equipes PJ** mostra o revisor atual e permite que Admin ou Gestor da Qualidade altere esse responsável para um atendente ativo. A migração inicial configura Victor Ellyan Aguiar, quando sua conta ativa está presente. A mudança vale para novos encaminhamentos; os casos já atribuídos mantêm o revisor anterior.
+As equipes PJ Bruno, PJ Duarte, PJ SumWise e PJ Trindade usam `requires_pj_review = true`. Em **Configurações → Equipes**, o cartão **Fluxo das equipes PJ** resume a regra de encaminhamento direto à Qualidade. A antiga configuração de revisor permanece no banco apenas para preservar o histórico e não participa de novos encaminhamentos.
 
-Uma nova monitoria de agente PJ com nota **igual ou superior a 75%** é concluída diretamente, como as demais monitorias positivas. Com nota **inferior a 75%**, ela começa em **Pendente de revisão**. O gestor da equipe PJ envia aprovação ou contestação com justificativa. **Mesmo quando o gestor PJ aprova**, o parecer segue para Victor, que pode aprová-lo ou reprová-lo com justificativa. Ambos os resultados seguem para **Gestor da Qualidade**, responsável pela decisão final. O painel mostra as três etapas e os pareceres na linha do tempo. O prazo vencido continua visível, mas o cron não conclui automaticamente uma monitoria PJ em revisão. A macro do Zendesk só pode ser oferecida após o veredito final.
+Uma nova monitoria de agente PJ com nota **igual ou superior a 75%** é concluída diretamente, como as demais monitorias positivas. Com nota **inferior a 75%**, ela começa em **Pendente de revisão**. O gestor da equipe PJ envia aprovação ou contestação com justificativa diretamente para o **Gestor da Qualidade**, responsável pela decisão final. O painel mostra as duas etapas e os pareceres na linha do tempo. O prazo vencido continua visível, mas o cron não conclui automaticamente uma monitoria PJ em revisão. A macro do Zendesk só pode ser oferecida após o veredito final.
 
 Em **Configurações → Equipes**, use as abas internas **Equipes** e **Grupos do Zendesk**. Na primeira, abra o cartão de uma equipe para gerir seus gestores, agentes e grupos do Zendesk no mesmo painel. A aba **Grupos do Zendesk** permite sincronizar, converter cadastros antigos e editar o vínculo pelo lado do grupo. O vínculo grupo–equipe é muitos para muitos.
 

@@ -4,7 +4,7 @@
 
 O fluxo de monitoria é o core do QualiTrack. Cobre desde a criação até a conclusão, passando por contestações multi-nível, com prazos de ação automatizados.
 
-Nas equipes PJ, monitorias com nota igual ou superior a 75% são concluídas diretamente. Com nota inferior a 75%, o gestor PJ envia aprovação ou contestação com justificativa; Victor Ellyan Aguiar, revisor inicial configurado, aprova ou reprova o parecer e justifica; qualquer uma dessas decisões segue ao Gestor da Qualidade para decisão final. A interface exibe essas três etapas na ficha e destaca **Revisão PJ** na lista. A rota é aplicada pelo banco, inclusive quando alguém chama a API diretamente. Monitorias PJ em revisão não são concluídas pelo cron.
+Nas equipes PJ, monitorias com nota igual ou superior a 75% são concluídas diretamente. Com nota inferior a 75%, o gestor PJ envia aprovação ou contestação com justificativa diretamente ao Gestor da Qualidade, responsável pela decisão final. A interface exibe as duas etapas e registra os pareceres no histórico. A rota é aplicada pelo banco, inclusive quando alguém chama a API diretamente. Monitorias PJ em revisão não são concluídas pelo cron.
 
 ## Fluxo Completo
 

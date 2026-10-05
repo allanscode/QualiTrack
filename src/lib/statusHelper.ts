@@ -36,8 +36,8 @@ export const STATUS_CONFIGS: Record<MonitoriaStatus | 'expiradas_prazo', StatusC
     icon: Shield
   },
   aguardando_revisao_pj: {
-    label: 'Aguardando Victor Aguiar',
-    shortLabel: 'Revisão PJ',
+    label: 'Etapa antiga de revisão PJ',
+    shortLabel: 'Etapa antiga',
     variant: 'warning',
     icon: Clock
   },

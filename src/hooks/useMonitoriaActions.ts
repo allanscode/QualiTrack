@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase, mockDb, isMockMode } from '../lib/supabase';
+import { supabase, mockDb } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, User, ActionAttachment, Team } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
 import { resolveContestationResult } from '../lib/contestation';
@@ -17,8 +17,6 @@ export type ActionType =
   | 'editAdmin'
   | 'solicitar_reavaliacao'
   | 'recusar_agente'
-  | 'revisao_pj_aprovar'
-  | 'revisao_pj_reprovar'
   | 'reabrir'
   | 'alterar_etapa'
   | 'avancar_etapa'
@@ -35,8 +33,6 @@ const actionDescriptions: Record<string, string> = {
   'solicitar_reavaliacao': 'Reavaliação solicitada pelo Gestor',
   'devolver': 'Devolvido para reanálise da Qualidade',
   'recusar_agente': 'Contestação mantida pelo Agente (enviado ao Gestor)',
-  'revisao_pj_aprovar': 'Victor Aguiar aprovou o parecer PJ',
-  'revisao_pj_reprovar': 'Victor Aguiar reprovou o parecer PJ',
   'reabrir': 'Monitoria reaberta pelo Administrador',
   'alterar_etapa': 'Etapa alterada administrativamente',
   'avancar_etapa': 'Etapa avançada administrativamente',
@@ -47,13 +43,12 @@ export const STAGES_FLOW: { status: MonitoriaStatus; label: string; roleLabel: s
   { status: 'pendente_revisao', label: 'Pendente Revisão', roleLabel: 'Agente de Suporte' },
   { status: 'em_contestacao', label: 'Em Contestação', roleLabel: 'Monitor de Qualidade' },
   { status: 'aguardando_gestor_suporte', label: 'Gestão Suporte', roleLabel: 'Gestor de Suporte' },
-  { status: 'aguardando_revisao_pj', label: 'Revisão PJ', roleLabel: 'Victor Aguiar' },
   { status: 'aguardando_gestor_qualidade', label: 'Gestão Qualidade', roleLabel: 'Gestor de Qualidade' },
   { status: 'reavaliacao_solicitada', label: 'Reavaliação Solicitada', roleLabel: 'Auditor de Qualidade' },
   { status: 'concluida', label: 'Concluída / Finalizada', roleLabel: 'Processo Finalizado' },
 ];
 
-export function getPreviousStage(current: MonitoriaStatus, isPj = false): MonitoriaStatus | null {
+export function getPreviousStage(current: MonitoriaStatus): MonitoriaStatus | null {
   switch (current) {
     case 'concluida':
     case 'finalizada_alterada':
@@ -62,7 +57,7 @@ export function getPreviousStage(current: MonitoriaStatus, isPj = false): Monito
       return 'aguardando_gestor_qualidade';
     case 'reavaliacao_solicitada':
     case 'aguardando_gestor_qualidade':
-      return isPj ? 'aguardando_revisao_pj' : 'aguardando_gestor_suporte';
+      return 'aguardando_gestor_suporte';
     case 'aguardando_revisao_pj':
       return 'aguardando_gestor_suporte';
     case 'aguardando_gestor_suporte':
@@ -74,14 +69,14 @@ export function getPreviousStage(current: MonitoriaStatus, isPj = false): Monito
   }
 }
 
-export function getNextStage(current: MonitoriaStatus, isPj = false): MonitoriaStatus | null {
+export function getNextStage(current: MonitoriaStatus): MonitoriaStatus | null {
   switch (current) {
     case 'pendente_revisao':
       return 'em_contestacao';
     case 'em_contestacao':
       return 'aguardando_gestor_suporte';
     case 'aguardando_gestor_suporte':
-      return isPj ? 'aguardando_revisao_pj' : 'aguardando_gestor_qualidade';
+      return 'aguardando_gestor_qualidade';
     case 'aguardando_revisao_pj':
       return 'aguardando_gestor_qualidade';
     case 'aguardando_gestor_qualidade':
@@ -170,21 +165,12 @@ export function useMonitoriaActions(
     }
 
     const trimmedNote = actionNote.trim();
-    const isReviewerAction = type === 'revisao_pj_aprovar' || type === 'revisao_pj_reprovar';
     const isPj = Boolean(monitoria.pj_review_required || monitoria.pj_review_kind);
     const isPjManagerAction = isPj && user.role === 'gestor_suporte'
       && ['aceitar', 'aprovar', 'contestar', 'escalar'].includes(type);
 
-    if (isReviewerAction && (!['suporte', 'gestor_suporte'].includes(user.role)
-      || monitoria.status !== 'aguardando_revisao_pj'
-      || monitoria.pj_reviewer_id !== user.id || !trimmedNote)) {
-      toast.error('A revisão PJ exige o revisor designado e uma justificativa.');
-      setSubmitting(false);
-      return false;
-    }
-
     const approvingTeam = teams.find(team => team.id === monitoria.team_id);
-    if (!isReviewerAction && user.role === 'gestor_suporte' && approvingTeam?.approval_manager_id
+    if (user.role === 'gestor_suporte' && approvingTeam?.approval_manager_id
       && approvingTeam.approval_manager_id !== user.id
       && ['aceitar', 'aprovar', 'contestar', 'escalar'].includes(type)) {
       toast.error('Outro gestor foi designado para aprovar esta equipe.');
@@ -229,11 +215,10 @@ export function useMonitoriaActions(
     else if (type === 'manter') nextStatus = 'contestacao_negada';
     else if (type === 'recusar_agente') nextStatus = 'aguardando_gestor_suporte';
     else if (type === 'escalar') nextStatus = 'aguardando_gestor_qualidade';
-    else if (isReviewerAction) nextStatus = 'aguardando_gestor_qualidade';
     else if (type === 'solicitar_reavaliacao') nextStatus = 'reavaliacao_solicitada';
     else if (type === 'reabrir') nextStatus = reopenStatus;
     else if (isStepChange) nextStatus = targetStatus;
-    if (isPjManagerAction) nextStatus = 'aguardando_revisao_pj';
+    if (isPjManagerAction) nextStatus = 'aguardando_gestor_qualidade';
 
     const isAdvance = (STAGE_ORDER[nextStatus] ?? 0) >= (STAGE_ORDER[monitoria.status] ?? 0);
 
@@ -251,22 +236,11 @@ export function useMonitoriaActions(
 
     const entryAction = isPjManagerAction
       ? (type === 'contestar' || type === 'escalar'
-        ? 'Gestor PJ encaminhou contestação para Victor Aguiar'
-        : 'Gestor PJ encaminhou aprovação para Victor Aguiar')
+        ? 'Gestor PJ encaminhou contestação para a Gestão da Qualidade'
+        : 'Gestor PJ encaminhou aprovação para a Gestão da Qualidade')
       : isStepChange
       ? (isAdvance ? `Etapa avançada administrativamente (${monitoria.status} ➔ ${nextStatus})` : `Etapa revertida administrativamente (${monitoria.status} ➔ ${nextStatus})`)
       : (actionDescriptions[type] || 'Ação realizada');
-
-    let mockReviewerId: string | null = null;
-    if (isMockMode && isPjManagerAction) {
-      const { data: settings } = await mockDb.get('pj_review_settings');
-      mockReviewerId = settings?.[0]?.reviewer_id || null;
-      if (!mockReviewerId) {
-        toast.error('Configure Victor Aguiar como revisor PJ antes de encaminhar.');
-        setSubmitting(false);
-        return false;
-      }
-    }
 
     const historyEntry: MonitoriaHistoryEntry = {
       action: entryAction,
@@ -296,18 +270,14 @@ export function useMonitoriaActions(
         ...(type === 'contestar' || type === 'solicitar_reavaliacao' ? { contestation_reason: finalNote } : {}),
         ...(combinedAttachments.length > 0 ? { action_attachments: combinedAttachments } : {}),
         ...(isPjManagerAction ? {
-          pj_reviewer_id: mockReviewerId,
+          pj_reviewer_id: null,
           pj_review_kind: type === 'contestar' || type === 'escalar' ? 'contestation' : 'approval',
           pj_review_decision: null,
           pj_review_note: null,
           pj_reviewed_at: null,
+          ...(type === 'contestar' || type === 'escalar' ? { contestation_result: 'pending' } : {}),
         } : {}),
-        ...(isReviewerAction ? {
-          pj_review_decision: type === 'revisao_pj_aprovar' ? 'approved' : 'rejected',
-          pj_review_note: finalNote,
-          pj_reviewed_at: now,
-        } : {}),
-        ...(!isPjManagerAction && !isReviewerAction && resolveContestationResult(actionDescriptions[type] || '')
+        ...(!isPjManagerAction && resolveContestationResult(actionDescriptions[type] || '')
           ? { contestation_result: resolveContestationResult(actionDescriptions[type] || '') } : {}),
         ...(isPj && monitoria.pj_review_kind === 'contestation' && type === 'aprovar'
           ? { contestation_result: 'approved' } : {}),
@@ -316,13 +286,6 @@ export function useMonitoriaActions(
     try {
       if (!supabase) {
         await mockDb.update('monitorias', id, update);
-      } else if (isReviewerAction) {
-        const { error } = await supabase.rpc('review_pj_monitoria', {
-          p_monitoria_id: id,
-          p_decision: type === 'revisao_pj_aprovar' ? 'approved' : 'rejected',
-          p_note: finalNote,
-        });
-        if (error) throw error;
       } else if (user.role === 'suporte' && type === 'recusar_agente') {
         const { error } = await supabase.rpc('appeal_monitoria', {
           p_monitoria_id: id,

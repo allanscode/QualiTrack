@@ -26,7 +26,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
   const canActAsTeamManager = user?.role === 'gestor_suporte' && (!approvalManagerId || approvalManagerId === user.id);
   return (
     <div className="space-y-5">
-              {isPj && <PjReviewFlow monitoria={m} users={users} />}
+              {isPj && <PjReviewFlow monitoria={m} />}
               {m.history?.length > 0 && (
                 <div className="pb-4">
                   <p className="text-xs font-black uppercase text-brand-primary tracking-wider mb-3 ml-1 flex items-center gap-2">
@@ -207,7 +207,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                         onClick={() => setActionModal({ id: m.id, type: 'aceitar' })}
                         icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                       >
-                        {isPj ? 'Enviar aprovação a Victor' : 'Aprovar'}
+                        {isPj ? 'Enviar aprovação à Qualidade' : 'Aprovar'}
                       </Button>
                       {((isPj && m.score != null && m.score < 75)
                         || (!isPj && (m.score === undefined || m.score === null || m.score < 75))) && <Button
@@ -216,7 +216,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                         onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
                         icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                       >
-                        {isPj ? 'Enviar contestação a Victor' : 'Contestar'}
+                        {isPj ? 'Enviar contestação à Qualidade' : 'Contestar'}
                       </Button>}
                     </>
                   )}
@@ -236,7 +236,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                         onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
                         icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                       >
-                        {isPj ? 'Enviar aprovação a Victor' : 'Aprovar'}
+                        Aprovar
                       </Button>
                       <Button
                         variant="outline"
@@ -257,7 +257,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                         onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
                         icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                       >
-                        {isPj ? 'Enviar aprovação a Victor' : 'Aprovar'}
+                        {isPj ? 'Enviar aprovação à Qualidade' : 'Aprovar'}
                       </Button>
                       <Button
                         variant="outline"
@@ -265,23 +265,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                         onClick={() => setActionModal({ id: m.id, type: 'escalar' })}
                         icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-y-0.5" />}
                       >
-                        {isPj ? 'Enviar contestação a Victor' : 'Escalar'}
-                      </Button>
-                    </>
-                  )}
-
-                  {(user?.role === 'suporte' || user?.role === 'gestor_suporte') && m.status === 'aguardando_revisao_pj'
-                    && m.pj_reviewer_id === user.id && (
-                    <>
-                      <Button variant="secondary" size="sm"
-                        onClick={() => setActionModal({ id: m.id, type: 'revisao_pj_aprovar' })}
-                        icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
-                        Aprovar parecer
-                      </Button>
-                      <Button variant="outline" size="sm"
-                        onClick={() => setActionModal({ id: m.id, type: 'revisao_pj_reprovar' })}
-                        icon={<XCircle className="w-3.5 h-3.5" />}>
-                        Reprovar parecer
+                        {isPj ? 'Enviar contestação à Qualidade' : 'Escalar'}
                       </Button>
                     </>
                   )}
