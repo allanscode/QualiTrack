@@ -34,6 +34,8 @@ mudar, as monitorias existentes acompanham a nova equipe gestora.
 
 ## Personalização por cargo
 
+O dashboard e a prévia de personalização usam a mesma grade responsiva, mesmo sem configuração salva. A grade respeita a ordem configurada e encaixa cards pequenos nos espaços ao lado dos gráficos; gráficos comuns ocupam duas colunas e três linhas, enquanto gráficos amplos e tabelas ocupam a largura inteira. A quantidade de colunas depende da largura do painel: uma em telas estreitas, duas a partir de 640 px e quatro a partir de 1000 px. Itens ocultos não reservam espaço. A prévia usa valores simulados, mas preserva a mesma ordem e distribuição do dashboard real.
+
 Em **Customizar Dashboards**, o administrador seleciona um dos cinco cargos e define quais cards, gráficos e tabelas aparecem. Na própria prévia, cada card pode ser arrastado para outra posição ou movido e removido pelos botões da barra superior. A lista completa começa recolhida para deixar a prévia acessível e oferece as mesmas ações; itens retirados ficam em **Disponíveis para adicionar**. **Restaurar ordem** devolve a disposição original. A prévia e o dashboard real consomem a mesma configuração.
 
 Os gráficos de linha de **Performance Histórica** e **Evolução** acompanham a escala selecionada: Dia mostra pontos diários (30 dias), Mês mostra um ponto por mês (12 meses) e Ano mostra pontos anuais (5 anos), sempre até a data selecionada. Os filtros de equipe, agente, auditor, formulário, status e canal continuam aplicados. Performance Histórica mantém as séries de médias global, positivas (nota >= 75%) e negativas (nota < 75%); períodos sem uma categoria não exibem ponto naquela série.
