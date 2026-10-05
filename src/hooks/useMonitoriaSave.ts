@@ -30,7 +30,7 @@ interface SaveHookDeps {
   // Recebe o id da monitoria salva (criada ou atualizada), para que quem
   // chamou possa, por exemplo, abrir o preview de envio ao Zendesk sem
   // precisar buscar o registro de novo.
-  onSaved: (monitoriaId: string) => void;
+  onSaved: (monitoriaId: string, status: MonitoriaStatus) => void;
 }
 
 export function useMonitoriaSave(deps: SaveHookDeps) {
@@ -116,19 +116,25 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           historyNote = changes.length > 0 ? changes.join(' | ') : 'Edição administrativa';
         }
 
+        const evaluatedUser = deps.allUsers.find(u => u.id === deps.header.evaluated_id);
+        const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
+        const selectedTeam = deps.teams.find(t => t.id === managementTeamId);
+        const requiresPjReview = selectedTeam?.requires_pj_review === true
+          || deps.initialData?.pj_review_required === true;
         const isPositive = isEvaluationValid(deps.score);
         let nextStatus: MonitoriaStatus;
         if (deps.isAdminEdit) {
           nextStatus = deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao');
         } else {
-          nextStatus = isPositive ? 'concluida' : 'pendente_revisao';
+          nextStatus = requiresPjReview ? 'pendente_revisao' : (isPositive ? 'concluida' : 'pendente_revisao');
         }
 
         const historyAction = deps.isAdminEdit
           ? 'Edição pelo Administrador'
           : deps.isReevaluating
-            ? (isPositive ? 'Monitoria Reavaliada (Concluída)' : 'Monitoria Reavaliada (Procedente)')
-            : (isPositive ? 'Monitoria Criada e Concluída' : 'Monitoria Criada');
+            ? (requiresPjReview ? 'Monitoria Reavaliada (Aguardando gestor PJ)'
+              : (isPositive ? 'Monitoria Reavaliada (Concluída)' : 'Monitoria Reavaliada (Procedente)'))
+            : (nextStatus === 'concluida' ? 'Monitoria Criada e Concluída' : 'Monitoria Criada');
 
         const historyEntry: MonitoriaHistoryEntry = {
           action: historyAction,
@@ -155,10 +161,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           });
         }
 
-        const evaluatedUser = deps.allUsers.find(u => u.id === deps.header.evaluated_id);
-        const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
         const ticketGroupTeamId = deps.initialData?.ticket_group_team_id || deps.ticketGroupTeamId || deps.header.team_id;
-        const selectedTeam = deps.teams.find(t => t.id === managementTeamId);
         const selectedFormObj = deps.forms.find(f => f.id === deps.header.form_id);
 
         const payload = {
@@ -244,7 +247,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           backfillAgentTeam(deps.header.evaluated_id, deps.header.team_id);
         }
 
-        deps.onSaved(savedId);
+        deps.onSaved(savedId, nextStatus);
       } catch (e: any) {
         console.error('[Monitoria] Falha ao salvar:', e);
         toast.error(e?.message

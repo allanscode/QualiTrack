@@ -554,11 +554,12 @@ export default function MonitoriaForm({
     dissatisfactionFields,
     clientFieldsToShow,
     qualityFieldsToShow,
-    onSaved: (savedMonitoriaId: string) => {
+    onSaved: (savedMonitoriaId: string, savedStatus: MonitoriaStatus) => {
       clearDraft();
-      // Envio automático com a macro ao Zendesk na finalização da monitoria
+      // O parecer PJ e as demais revisões precisam terminar antes do envio.
       const ticketIdTrimmed = header.ticket_id?.trim() || '';
       const shouldAutoSend = /^\d+$/.test(ticketIdTrimmed)
+        && HELPDESK_ELIGIBLE_STATUSES.includes(savedStatus)
         && !isAdminEdit
         && !isReevaluating;
 
