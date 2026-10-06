@@ -7,9 +7,13 @@ export function childTicketForm(forms: EvaluationForm[]): EvaluationForm | undef
   return forms.find(form => form.id === CHILD_TICKET_FORM_ID && form.active !== false);
 }
 
+export function isChildTicketMonitoria(monitoria: Monitoria): boolean {
+  return monitoria.form_id === CHILD_TICKET_FORM_ID
+    || (monitoria.form_snapshot as EvaluationForm & { ticket_kind?: string } | undefined)?.ticket_kind === 'chamado_filho';
+}
+
 /** A ficha antiga fica no histórico; só a reavaliação muda de rubrica. */
 export function shouldUseChildFormForReevaluation(initialData: Monitoria | undefined): boolean {
   if (!initialData || !(initialData as Monitoria & { _reevaluate?: boolean })._reevaluate) return false;
-  return initialData.form_id === CHILD_TICKET_FORM_ID
-    || (initialData.form_snapshot as EvaluationForm & { ticket_kind?: string } | undefined)?.ticket_kind === 'chamado_filho';
+  return isChildTicketMonitoria(initialData);
 }

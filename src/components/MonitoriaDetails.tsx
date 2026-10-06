@@ -3,10 +3,11 @@ import { Monitoria, Team, User } from '../types';
 import { ActionType, getPreviousStage, getNextStage, getStageLabel } from '../hooks/useMonitoriaActions';
 import { getStatusConfig, getHistoryEventConfig, VARIANT_TEXT_CLASS } from '../lib/statusHelper';
 import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
-import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, History, Paperclip, ArrowLeftRight, ArrowLeft, ArrowRight, Clock } from 'lucide-react';
+import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, History, Paperclip, ArrowLeftRight, ArrowLeft, ArrowRight, Clock, Send } from 'lucide-react';
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 import Button from './ui/Button';
 import PjReviewFlow from './PjReviewFlow';
+import { isChildTicketMonitoria } from '../lib/childTicketForm';
 
 type Props = {
   monitoria: Monitoria;
@@ -15,9 +16,10 @@ type Props = {
   teams?: Team[];
   onView: (m: Monitoria) => void;
   onAction: (modal: { id: string; type: ActionType }) => void;
+  onSendToHelpdesk?: (m: Monitoria) => void;
 };
 
-export default function MonitoriaDetails({ monitoria: m, user, users, teams = [], onView, onAction }: Props) {
+export default function MonitoriaDetails({ monitoria: m, user, users, teams = [], onView, onAction, onSendToHelpdesk }: Props) {
   const staticData = { users };
   const setViewingMonitoria = onView;
   const setActionModal = onAction;
@@ -170,6 +172,14 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                   >
                     Visualizar Avaliação Completa
                   </Button>
+
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade')
+                    && m.status === 'concluida' && !isChildTicketMonitoria(m) && onSendToHelpdesk && (
+                    <Button variant="outline" size="sm" onClick={() => onSendToHelpdesk(m)}
+                      icon={<Send className="w-3.5 h-3.5" />}>
+                      Conferir envio ao Zendesk
+                    </Button>
+                  )}
 
                   {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && !['em_contestacao', 'reavaliacao_solicitada'].includes(m.status) && (
                     <Button

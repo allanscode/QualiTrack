@@ -138,6 +138,8 @@ Mapeia automaticamente classes `text-*` → `bg-icon-*`:
 > Todos os ícones: tamanho `w-5 h-5`. Container: `w-9 h-9 rounded-xl` com classe `bg-icon-*` derivada via `getIconBg()`. NUNCA usar `bg-brand-*` para fundo de ícone (mesma cor do texto = invisível).
 
 ## Lógica de Reavaliações (History-Based)
+
+No painel do monitor de qualidade, **Total Reav. Recebidas** conta as monitorias do auditor com contestação ou solicitação de reavaliação no histórico, mesmo que a decisão ainda esteja pendente. **Reav. Aprovadas** e **Reav. Recusadas** usam o desfecho final; quando a reavaliação registra `[DE x% PARA y%]`, a mudança de nota define se foi procedente. O aceite administrativo posterior do gestor não substitui esse desfecho. Falhas de modelos de IA recuperadas por fallback aparecem no filtro “Erro ou fallback” dos logs, com a sequência de tentativas e o modelo que concluiu a análise.
 Para garantir a precisão dos rankings de contestações, os widgets não dependem apenas do `status` atual da monitoria (que pode mudar), mas sim de uma varredura no `history` da monitoria em busca de termos chave:
 - **Aceitas/Procedentes:** Busca por "aceita", "procedente", "alterada".
 - **Recusadas/Improcedentes:** Busca por "negada", "recusada", "mantida", "improcedente".

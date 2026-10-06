@@ -39,6 +39,9 @@ import FeedbacksSubtabView from './feedback/FeedbacksSubtabView';
 import MonitoriaForm from './MonitoriaForm';
 import { MonitoriaRow } from './MonitoriaRow';
 import MonitoriaDetails from './MonitoriaDetails';
+import HelpdeskSendModal from './HelpdeskSendModal';
+import { publishEvaluationToHelpdesk } from '../lib/helpdesk';
+import { isChildTicketMonitoria } from '../lib/childTicketForm';
 
 type VirtualRowProps = {
   monitorias: Monitoria[];
@@ -118,6 +121,7 @@ export default function MonitoriaList({
   const detailCloseRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const [viewingMonitoria, setViewingMonitoria] = useState<Monitoria | null>(null);
+  const [helpdeskMonitoria, setHelpdeskMonitoria] = useState<Monitoria | null>(null);
 
   // Debounced search state
   const [searchInput, setSearchInput] = useState(filters.search);
@@ -704,7 +708,7 @@ export default function MonitoriaList({
                   <button ref={detailCloseRef} type="button" onClick={closeDetails} aria-label="Fechar detalhes" className="shrink-0 rounded-xl p-2 text-brand-primary hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-brand-accent"><X className="size-5" /></button>
                 </header>
                 <div className="min-h-0 overflow-y-auto p-4 sm:p-6 pb-safe">
-                  <MonitoriaDetails monitoria={m} user={user} users={staticData.users} teams={staticData.teams} onView={item => setViewingMonitoria(item)} onAction={modal => setActionModal(modal)} />
+                  <MonitoriaDetails monitoria={m} user={user} users={staticData.users} teams={staticData.teams} onView={item => setViewingMonitoria(item)} onAction={modal => setActionModal(modal)} onSendToHelpdesk={item => { closeDetails(); setHelpdeskMonitoria(item); }} />
                 </div>
               </>;
             })()}
@@ -927,6 +931,15 @@ export default function MonitoriaList({
                         </div>
                       )}
 
+                      {actionModal.type === 'aprovar' && (user?.role === 'gestor_qualidade' || user?.role === 'admin')
+                        && m && !isChildTicketMonitoria(m) && (
+                        <div className="mb-4 rounded-xl border border-brand-accent/30 bg-brand-accent/5 p-3 text-xs text-brand-primary">
+                          <p className="font-bold">Ao aprovar, o sistema enviará ao Zendesk como {m.score >= 75 ? 'Ticket Válido' : 'Ticket Invalidado'} se esta monitoria ainda não tiver sido publicada.</p>
+                          <p className="mt-2 font-semibold">Registro do Auditor</p>
+                          <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap">{m.evaluator_note || 'Sem registro preenchido.'}</p>
+                        </div>
+                      )}
+
                       {/* Suporte a Anexos (WQ-22) */}
                       <div className="mb-6">
                         <div className="flex items-center justify-between mb-2">
@@ -1002,9 +1015,21 @@ export default function MonitoriaList({
                           variant="primary"
                           className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest"
                           onClick={async () => {
+                            const approvedMonitoria = actionModal.type === 'aprovar'
+                              && (user?.role === 'gestor_qualidade' || user?.role === 'admin')
+                              && m && !isChildTicketMonitoria(m) ? m : null;
                             const success = await handleAction();
                             if (success) {
                               closeDetails();
+                              if (approvedMonitoria) {
+                                const result = await publishEvaluationToHelpdesk(approvedMonitoria.id);
+                                if (result?.success) {
+                                  toast.success(`Registro do Auditor enviado ao Zendesk no ticket #${approvedMonitoria.ticket_id}.`);
+                                } else if (result) {
+                                  toast.error(`Monitoria aprovada, mas o envio ao Zendesk falhou: ${result.error}`);
+                                  setHelpdeskMonitoria(approvedMonitoria);
+                                }
+                              }
                             }
                           }}
                           disabled={submitting || Boolean(isSameStage)}
@@ -1026,6 +1051,15 @@ export default function MonitoriaList({
           initialData={viewingMonitoria}
           onCancel={() => setViewingMonitoria(null)}
           onSaved={() => { setViewingMonitoria(null); load(); }}
+        />
+      )}
+
+      {helpdeskMonitoria && (
+        <HelpdeskSendModal
+          monitoriaId={helpdeskMonitoria.id}
+          ticketId={helpdeskMonitoria.ticket_id}
+          suggestedOutcome={helpdeskMonitoria.score >= 75 ? 'positiva' : 'negativa'}
+          onClose={() => setHelpdeskMonitoria(null)}
         />
       )}
     </div>

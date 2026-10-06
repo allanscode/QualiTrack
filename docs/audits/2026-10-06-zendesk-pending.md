@@ -13,6 +13,19 @@ Consulta somente leitura ao Supabase de produção, projeto `vpytvgpsqdapgouyjow
 
 A classificação de publicação usa a **nota final da monitoria**: pelo menos 75% = ticket válido; abaixo de 75% = invalidado. Um rascunho de IA não define o veredito final. O texto da macro é preparado a partir do registro do auditor e do retorno do cliente, com revisão e confirmação humana antes do envio.
 
+## Envios confirmados em 06/10/2026
+
+Após conferir os comentários existentes diretamente no Zendesk, foram enviados e registrados em `helpdesk_submissions`:
+
+| Ticket | Resultado | ID do comentário Zendesk |
+|---|---|---|
+| 177437 | Válido (83,75%, após reavaliação e aprovação da Qualidade) | `54289488993940` |
+| 178984 | Invalidado | `54289489312276` |
+| 178786 | Invalidado | `54289482653076` |
+| 178943 | Invalidado | `54289489821588` |
+
+Os três rascunhos de IA sem monitoria continuam sem envio. A rotina temporária usada para estes quatro envios foi removida do projeto Supabase após a conferência dos recibos.
+
 ## Chamados filhos
 
 O catálogo de filas contém 95 registros de filhos verificados desde 05/10/2026; 89 já tinham a tag `qwp_filho_avaliado` no retrato salvo e seis não tinham. Nenhum desses seis tinha monitoria ou job de IA de chamado filho. O catálogo é um retrato, não substitui uma leitura do ticket no Zendesk na hora do envio. A macro de filho mantém fluxo próprio de revisão, envio e marcação de saída da view.

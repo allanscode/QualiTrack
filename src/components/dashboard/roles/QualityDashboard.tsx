@@ -21,8 +21,9 @@ import {
   Award
 } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
-import { isApprovalAction, isRejectionAction, isContestationAction } from '../../../lib/contestation';
+import { isContestationAction, getContestationOutcome } from '../../../lib/contestation';
 import { chartColorMap, chartPalette, chartColorArray } from '../chartColors';
+import type { Monitoria } from '../../../types';
 
 // High-fidelity mock datasets for fallback and customization mode
 const mockTrendData = [
@@ -242,13 +243,7 @@ export default function QualityDashboard({
   // Reavaliações Aprovadas (Nota alterada — conta apenas pelo ÚLTIMO desfecho)
   const reavAcceptedList = useMemo(() => {
     if (useFallback) return [];
-    return contestedMyMonitorias.filter((m: any) => {
-      const resolutions = (m.history || []).filter((h: any) =>
-        isApprovalAction(h.action) || isRejectionAction(h.action)
-      );
-      if (resolutions.length === 0) return false;
-      return isApprovalAction(resolutions[resolutions.length - 1].action);
-    });
+    return contestedMyMonitorias.filter((m: Monitoria) => getContestationOutcome(m) === 'approved');
   }, [useFallback, contestedMyMonitorias]);
 
   const reavAccepted = useFallback ? 3 : reavAcceptedList.length;
@@ -256,13 +251,7 @@ export default function QualityDashboard({
   // Reavaliações Recusadas (Nota mantida — conta apenas pelo ÚLTIMO desfecho)
   const reavRejectedList = useMemo(() => {
     if (useFallback) return [];
-    return contestedMyMonitorias.filter((m: any) => {
-      const resolutions = (m.history || []).filter((h: any) =>
-        isApprovalAction(h.action) || isRejectionAction(h.action)
-      );
-      if (resolutions.length === 0) return false;
-      return isRejectionAction(resolutions[resolutions.length - 1].action);
-    });
+    return contestedMyMonitorias.filter((m: Monitoria) => getContestationOutcome(m) === 'rejected');
   }, [useFallback, contestedMyMonitorias]);
 
   const reavRejected = useFallback ? 5 : reavRejectedList.length;
@@ -591,7 +580,7 @@ export default function QualityDashboard({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Reav. Recebidas"
-          value={reavAccepted + reavRejected}
+          value={useFallback ? 8 : contestedMyMonitorias.length}
           sub="Volume de contestações"
           good={true}
           icon={<History className="w-5 h-5" />}

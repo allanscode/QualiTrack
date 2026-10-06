@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, User, ActionAttachment, Team } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
-import { resolveContestationResult } from '../lib/contestation';
+import { getContestationOutcome, isContestationAction, resolveContestationResult } from '../lib/contestation';
 import { toast } from 'sonner';
 
 export type ActionType =
@@ -256,6 +256,14 @@ export function useMonitoriaActions(
       ? [...existingAttachments, ...actionAttachments]
       : existingAttachments;
 
+    const finalQualityDecision = nextStatus === 'concluida'
+      && monitoria.status === 'aguardando_gestor_qualidade'
+      && (user.role === 'gestor_qualidade' || user.role === 'admin')
+      && monitoria.history?.some(entry => isContestationAction(entry.action));
+    const reevaluationOutcome = finalQualityDecision
+      ? getContestationOutcome({ ...monitoria, status: 'concluida' })
+      : null;
+
     const update: any = type === 'excluir'
       ? { active: false, history: [...(monitoria.history || []), historyEntry], updated_at: now }
       : {
@@ -281,6 +289,7 @@ export function useMonitoriaActions(
           ? { contestation_result: resolveContestationResult(actionDescriptions[type] || '') } : {}),
         ...(isPj && monitoria.pj_review_kind === 'contestation' && type === 'aprovar'
           ? { contestation_result: 'approved' } : {}),
+        ...(reevaluationOutcome ? { contestation_result: reevaluationOutcome } : {}),
       };
 
     try {

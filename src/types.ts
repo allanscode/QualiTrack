@@ -296,6 +296,20 @@ export interface AIEvaluationLog {
   error_stage?: string;
   status: 'success' | 'error';
   error_message?: string;
+  attempts?: {
+    provider: string;
+    model: string;
+    attempt: number;
+    status: 'success' | 'failed';
+    reason?: string;
+    message?: string;
+    httpStatus?: number;
+    durationMs?: number;
+    routedProvider?: string;
+    startedAt?: string;
+  }[];
+  fallback_used?: boolean;
+  job_id?: string;
   created_by?: string;
   created_at: string;
 }
