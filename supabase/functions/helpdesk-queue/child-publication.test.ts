@@ -27,5 +27,6 @@ describe('publicação de chamados filhos', () => {
     expect(childPublicationError({ ...saved, evaluator_note: '' }, '177882', 'auditor-1', 'qualidade')).toBeTruthy();
     expect(childPublicationError(saved, '177882', 'auditor-1', 'qualidade')).toBeNull();
     expect(childPublicationText(saved)).toContain(saved.evaluator_note!);
+    expect(childPublicationText(saved, true)).toContain('Retificação:');
   });
 });

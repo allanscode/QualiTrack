@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro } from './child-view';
+import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro, hasPublishedChildMacroForMonitoria, hasPublishedInvalidChildMacro } from './child-view';
 
 describe('exclusão de filhos avaliados na view do Zendesk', () => {
   it('preserva as condições existentes e acrescenta a exclusão em all', () => {
@@ -33,5 +33,14 @@ describe('exclusão de filhos avaliados na view do Zendesk', () => {
   it('reconhece a macro antiga para não postar outro comentário', () => {
     expect(hasPublishedChildMacro([{ body: 'Outro comentário' }, { body: '[QualidadeWP · Chamado filho VÁLIDO]\n\nParecer' }])).toBe(true);
     expect(hasPublishedChildMacro([{ body: 'Outro comentário' }])).toBe(false);
+  });
+
+  it('distingue a nota válida da monitoria atual do antigo parecer inválido', () => {
+    const invalid = { body: '[QualidadeWP · Chamado filho INVÁLIDO]\n\nParecer antigo' };
+    const current = { body: '[QualidadeWP · Chamado filho VÁLIDO]\n\nRegistro do Auditor da monitoria #m1:\nRetificação' };
+    expect(hasPublishedInvalidChildMacro([invalid])).toBe(true);
+    expect(hasPublishedChildMacroForMonitoria([invalid], 'm1')).toBe(false);
+    expect(hasPublishedChildMacroForMonitoria([invalid, current], 'm1')).toBe(true);
+    expect(hasPublishedChildMacroForMonitoria([invalid, current], 'm2')).toBe(false);
   });
 });

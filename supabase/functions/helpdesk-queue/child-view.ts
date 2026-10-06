@@ -26,3 +26,15 @@ export function hasPublishedChildMacro(comments: unknown): boolean {
   return Array.isArray(comments) && comments.some(comment =>
     typeof comment?.body === 'string' && comment.body.startsWith('[QualidadeWP · Chamado filho '));
 }
+
+export function hasPublishedChildMacroForMonitoria(comments: unknown, monitoriaId: string): boolean {
+  return Array.isArray(comments) && comments.some(comment =>
+    typeof comment?.body === 'string'
+    && comment.body.startsWith('[QualidadeWP · Chamado filho VÁLIDO]')
+    && comment.body.includes(`Registro do Auditor da monitoria #${monitoriaId}:`));
+}
+
+export function hasPublishedInvalidChildMacro(comments: unknown): boolean {
+  return Array.isArray(comments) && comments.some(comment =>
+    typeof comment?.body === 'string' && comment.body.startsWith('[QualidadeWP · Chamado filho INVÁLIDO]'));
+}

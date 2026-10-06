@@ -35,6 +35,9 @@ export function childPublicationError(
   return null;
 }
 
-export function childPublicationText(monitoria: ChildPublicationMonitoria): string {
-  return `Chamado filho válido.\n\nRegistro do Auditor da monitoria #${monitoria.id}:\n${monitoria.evaluator_note!.trim()}`;
+export function childPublicationText(monitoria: ChildPublicationMonitoria, correctsPreviousInvalid = false): string {
+  const correction = correctsPreviousInvalid
+    ? 'Retificação: a monitoria concluída considerou este chamado filho válido. O parecer anterior permanece no histórico do ticket.\n\n'
+    : 'Chamado filho válido.\n\n';
+  return `${correction}Registro do Auditor da monitoria #${monitoria.id}:\n${monitoria.evaluator_note!.trim()}`;
 }

@@ -8,23 +8,32 @@ const FIELD_CSAT_VAZIO = 47850817758484;            // "CSAT vazio" (macro Inval
 
 export function childMacroCustomFields(
   verdict: 'conforme' | 'nao_conforme',
-): { id: number; value: string | boolean }[] {
-  const fields: { id: number; value: string | boolean }[] = [
+  clearPreviousInvalid = false,
+): { id: number; value: string | boolean | null }[] {
+  const fields: { id: number; value: string | boolean | null }[] = [
     { id: FIELD_AVALIACAO_ATENDIMENTO, value: verdict === 'conforme' ? 'positiva' : 'negativa' },
     { id: FIELD_ANALISADO, value: true },
   ];
   if (verdict === 'nao_conforme') fields.push({ id: FIELD_CSAT_VAZIO, value: 'critico' });
+  if (verdict === 'conforme' && clearPreviousInvalid) fields.push({ id: FIELD_CSAT_VAZIO, value: null });
   return fields;
+}
+
+export function hasCriticalChildField(responseFields: unknown): boolean {
+  return Array.isArray(responseFields) && responseFields.some(field =>
+    field?.id === FIELD_CSAT_VAZIO && field.value === 'critico');
 }
 
 // Confere na resposta do PUT se o Zendesk realmente gravou os campos esperados.
 export function missingCustomFields(
   responseFields: unknown,
-  expected: { id: number; value: string | boolean }[],
+  expected: { id: number; value: string | boolean | null }[],
 ): number[] {
   const current = Array.isArray(responseFields) ? responseFields : [];
   return expected
-    .filter(field => !current.some((item: { id?: number; value?: unknown }) =>
-      item?.id === field.id && item.value === field.value))
+    .filter(field => {
+      const match = current.find((item: { id?: number }) => item?.id === field.id);
+      return field.value === null ? match?.value != null : match?.value !== field.value;
+    })
     .map(field => field.id);
 }

@@ -21,8 +21,8 @@ import { canReadMatchedTicketTeam, canReadQueueTicket, canRunQueueAction, should
 import { calculateCanonicalQualityScore } from './quality-score.ts';
 import { csatStatusToSatisfactionResult, satisfactionResponseTimestamp } from './satisfaction.ts';
 import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
-import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro } from './child-view.ts';
-import { childMacroCustomFields, missingCustomFields } from './child-macro-fields.ts';
+import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro, hasPublishedChildMacroForMonitoria, hasPublishedInvalidChildMacro } from './child-view.ts';
+import { childMacroCustomFields, hasCriticalChildField, missingCustomFields } from './child-macro-fields.ts';
 import { childPublicationError, childPublicationText, type ChildPublicationMonitoria } from './child-publication.ts';
 import { attachQueuePublicationState, type QueueMonitoriaState, type QueuePublicationTicket } from './queue-publication.ts';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
@@ -828,7 +828,6 @@ serve(async (req) => {
       if (latestMonitoria?.id !== monitoriaId) {
         return jsonResponse({ error: 'Existe uma monitoria mais recente para este ticket. Confira o resultado atual antes do envio.' }, 409);
       }
-      const comment_text = childPublicationText(savedMonitoria as ChildPublicationMonitoria);
       const child_verdict = 'conforme';
       const { data: catalog, error: catalogError } = await supabase.from('queue_ticket_catalog')
         .select('queue_type').eq('ticket_id', ticket_id).in('queue_type', ['filhos', 'filhos_invalidos']).limit(1);
@@ -871,7 +870,8 @@ serve(async (req) => {
 
       // A tag só tira o ticket da view se ambas as views a excluírem. Preserva
       // todos os filtros existentes e configura a exclusão uma única vez.
-      for (const viewId of new Set([CHILD_VIEW_ID, INVALID_CHILD_VIEW_ID].filter(Boolean))) {
+      for (const viewId of currentTags.includes(CHILD_AUDITED_TAG)
+        ? [] : new Set([CHILD_VIEW_ID, INVALID_CHILD_VIEW_ID].filter(Boolean))) {
         const viewUrl = `https://${subdomain}.zendesk.com/api/v2/views/${viewId}.json`;
         const viewResponse = await fetch(viewUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(10000) });
         if (!viewResponse.ok) return jsonResponse({ error: `Não foi possível conferir a view ${viewId} no Zendesk (${viewResponse.status}). Nenhuma macro foi enviada.` }, 502);
@@ -887,32 +887,30 @@ serve(async (req) => {
         if (!updateResponse.ok) return jsonResponse({ error: `Não foi possível configurar a saída da view ${viewId} (${updateResponse.status}). Nenhuma macro foi enviada.` }, 502);
       }
 
-      const macroFields = childMacroCustomFields(child_verdict === 'conforme' ? 'conforme' : 'nao_conforme');
-      if (currentTags.includes(CHILD_AUDITED_TAG)) {
-        const missing = missingCustomFields(ticketBody.ticket?.custom_fields, macroFields);
-        if (missing.length) {
-          return jsonResponse({ error: 'O chamado filho já possui a tag de macro enviada, mas os campos não correspondem ao veredito escolhido. Confira o histórico no Zendesk antes de alterar o resultado.' }, 409);
-        }
-        await syncCatalog();
-        return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: true }, 200);
-      }
-
-      // A versão antiga postava somente o comentário. Se ele já existe, faz
-      // apenas a marcação de saída; repetir a macro criaria comentário duplicado.
+      // Lê os comentários antes de decidir se deve postar. A tag antiga pode
+      // representar um parecer inválido que foi corrigido pela nova monitoria.
       const commentsResponse = await fetch(
         `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}/comments.json?sort_order=desc&per_page=100`,
         { headers: zendeskHeaders, signal: AbortSignal.timeout(10000) },
       );
       if (!commentsResponse.ok) return jsonResponse({ error: 'Não foi possível conferir envios anteriores no Zendesk. Nenhuma macro foi enviada.' }, 502);
       const commentsBody = await commentsResponse.json();
-      const previousMacro = hasPublishedChildMacro(commentsBody.comments);
+      const alreadySentForMonitoria = hasPublishedChildMacroForMonitoria(commentsBody.comments, monitoriaId);
+      const correctsPreviousInvalid = hasPublishedInvalidChildMacro(commentsBody.comments);
+      const macroFields = childMacroCustomFields('conforme', hasCriticalChildField(ticketBody.ticket?.custom_fields));
+      if (alreadySentForMonitoria && currentTags.includes(CHILD_AUDITED_TAG)
+        && missingCustomFields(ticketBody.ticket?.custom_fields, macroFields).length === 0) {
+        await syncCatalog();
+        return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: true }, 200);
+      }
+      const comment_text = childPublicationText(savedMonitoria as ChildPublicationMonitoria, correctsPreviousInvalid);
 
       const verdictLabel = child_verdict === 'conforme' ? 'VÁLIDO' : 'INVÁLIDO';
       // Espelha as ações da macro "QA | Ticket Válido/Invalidado" do Zendesk.
       const response = await fetch(ticketUrl, {
         method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(20000),
         body: JSON.stringify({ ticket: {
-          ...(previousMacro ? {} : { comment: {
+          ...(alreadySentForMonitoria ? {} : { comment: {
             body: `[QualidadeWP · Chamado filho ${verdictLabel}]\n\n${comment_text}`,
             public: false,
           } }),
@@ -944,6 +942,10 @@ serve(async (req) => {
       if (typeof confirmedStamp !== 'string' || !Array.isArray(confirmedTags)) {
         return jsonResponse({ error: 'Macro enviada, mas não foi possível confirmar as tags atuais do Zendesk.' }, 502);
       }
+      if (confirmedTags.includes(CHILD_AUDITED_TAG)) {
+        await syncCatalog(confirmedTags);
+        return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: alreadySentForMonitoria }, 200);
+      }
       const tagResponse = await fetch(ticketUrl, {
         method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(20000),
         body: JSON.stringify({ ticket: {
@@ -957,7 +959,7 @@ serve(async (req) => {
       }
 
       await syncCatalog(tagged.ticket.tags);
-      return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: previousMacro }, 200);
+      return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: alreadySentForMonitoria }, 200);
     }
 
     if (action === 'fetch_draft_statuses') {

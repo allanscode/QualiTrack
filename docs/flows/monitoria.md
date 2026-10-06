@@ -12,6 +12,8 @@ Na aprovação final pela Gestão da Qualidade, a tela mostra o veredito e o Reg
 
 O parecer da IA é uma sugestão. O monitor abre a ficha própria de chamado filho, responde os critérios e salva a monitoria no QWP. Se a nota final for de pelo menos 75% e o status for `concluida`, o QWP tenta enviar ao Zendesk uma macro interna de **chamado filho válido** com o Registro do Auditor salvo. O endpoint exige o ID da monitoria, confere que ela é a ficha ativa e mais recente do mesmo ticket, e evita repetir o comentário quando a macro já está presente. Se a nota for inferior a 75%, a monitoria segue a revisão normal, sem macro de filho inválido. Falha de envio não desfaz a ficha; uma monitoria válida pode tentar novamente pelo detalhe.
 
+Se o Zendesk conservar uma macro antiga de filho inválido e a monitoria humana posterior concluir que ele é válido, a tentativa de envio publica uma nova nota interna de retificação vinculada ao ID da monitoria e atualiza os campos para o veredito válido. O comentário antigo permanece como histórico. Ao repetir a tentativa, o sistema identifica a nota desta monitoria e apenas completa campos ou tag que tenham ficado pendentes.
+
 Para recuperar um filho que tenha apenas parecer de IA, inclusive quando a tag de macro o retirou da fila, use **Nova Monitoria**, pesquise o ID e escolha **Recuperar chamado filho**. A ficha mostra o parecer persistido para conferência humana; não transforma os checks da IA em respostas humanas automaticamente.
 
 ## Fluxo Completo
