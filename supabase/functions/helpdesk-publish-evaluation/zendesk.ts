@@ -85,7 +85,31 @@ export class ZendeskProvider implements HelpdeskProvider {
     const notApplied = customFields.filter(field =>
       !returnedFields.some(item => item.id === field.id && item.value === field.value));
     if (notApplied.length) {
-      console.error('[helpdesk-publish-evaluation] Zendesk não gravou os campos da macro:', input.ticketId, notApplied);
+      // O comentário já foi aceito. Repetir o PUT original publicaria outro;
+      // a correção envia somente os campos da macro.
+      const updatedStamp = data?.ticket?.updated_at;
+      if (typeof updatedStamp !== 'string' || !updatedStamp) {
+        throw new Error('Comentário aceito, mas não foi possível conferir os campos da macro.');
+      }
+      const repairResponse = await fetch(url, {
+        method: 'PUT',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket: {
+          custom_fields: customFields, safe_update: true, updated_stamp: updatedStamp,
+        } }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!repairResponse.ok) {
+        throw new Error(`Comentário aceito, mas o Zendesk recusou os campos da macro (${repairResponse.status}).`);
+      }
+      const repaired = await repairResponse.json();
+      const stillMissing = customFields.filter(field =>
+        !Array.isArray(repaired?.ticket?.custom_fields) ||
+        !repaired.ticket.custom_fields.some((item: { id: number; value: unknown }) =>
+          item.id === field.id && item.value === field.value));
+      if (stillMissing.length) {
+        throw new Error(`Comentário aceito, mas o Zendesk não confirmou os campos da macro: ${stillMissing.map(field => field.id).join(', ')}.`);
+      }
     }
 
     const commentId = data?.audit?.events?.find((event: any) => event?.type === 'Comment')?.id;

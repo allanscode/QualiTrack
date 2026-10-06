@@ -71,6 +71,7 @@ describe('DashboardTileLayout', () => {
     expect(filledSlots.map(slot => slot.getAttribute('data-dashboard-kind'))).toEqual([
       'card', 'card', 'chart',
     ]);
+    expect(filledSlots[2].getAttribute('data-dashboard-compact')).toBe('true');
     expect(filledSlots.map(slot => slot.querySelector('[data-dashboard-tile-content]')?.textContent)).toEqual([
       'primeiro card', 'segundo card', 'gráfico seguinte',
     ]);

@@ -322,6 +322,10 @@ export interface AuditingQueueTicket {
   status: string;
   url?: string;
   already_audited?: boolean;
+  /** Monitoria existente para revisar o parecer antes de publicar no Zendesk. */
+  monitoria_id?: string;
+  monitoria_status?: MonitoriaStatus;
+  monitoria_score?: number | null;
   /** Rascunho de IA preservado no banco após o ticket sair da view do Zendesk. */
   saved_ai_draft?: boolean;
   /** Rascunho antigo sem retrato do ticket; dados devem ser conferidos. */

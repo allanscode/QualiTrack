@@ -206,7 +206,8 @@ export async function fetchQueueTickets(
       } else {
         tickets = (data.tickets as AuditingQueueTicket[]).map(t => ({
           ...t,
-          already_audited: auditedTicketIds.has(t.ticket_id.trim())
+          // O servidor inclui monitorias pendentes de publicação na fila negativa.
+          already_audited: t.already_audited ?? auditedTicketIds.has(t.ticket_id.trim())
         }));
         nextCursor = data.next_cursor || null;
         hasMore = !!data.has_more;
@@ -217,16 +218,21 @@ export async function fetchQueueTickets(
     }
   }
 
-  // Chamado que já virou monitoria de verdade (registro em `monitorias`,
-  // não só rascunho de IA) não deve mais aparecer em NENHUMA fila — a
-  // apuração/avaliação já foi concluída. Antes isso só valia pra Negativas
-  // (macro/tag do Zendesk + já auditado no QualiTrack); Positivas e
-  // Proativas ficavam mostrando o ticket com badge "Auditado" só depois de
-  // "Reavaliar"/"Avaliar com IA" de novo, mesmo já tendo monitoria salva —
-  // confuso e deixava a fila "suja" com trabalho já concluído.
+  if (isMockMode) {
+    tickets = tickets.map(ticket => {
+      const monitoria = existingMonitorias.find(item => item.active !== false && item.ticket_id?.trim() === ticket.ticket_id);
+      return monitoria ? {
+        ...ticket, already_audited: true, monitoria_id: monitoria.id,
+        monitoria_status: monitoria.status, monitoria_score: monitoria.score,
+      } : ticket;
+    });
+  }
+
+  // Negativas dependem também do recibo de publicação; filhos dependem da
+  // macro própria. Nas demais filas, a monitoria já encerra a triagem.
   // A view de CSAT vazio inclui tickets fechados: eles ainda podem receber
   // monitoria interna, embora o Zendesk não aceite novos comentários neles.
-  tickets = tickets.filter(t => !t.already_audited &&
+  tickets = tickets.filter(t => (type === 'negativas' || type === 'filhos' || type === 'filhos_invalidos' || !t.already_audited) &&
     t.status?.toLowerCase() !== 'archived' &&
     (type === 'proativas' || t.status?.toLowerCase() !== 'closed'));
 

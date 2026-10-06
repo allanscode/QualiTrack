@@ -76,6 +76,8 @@ function Slot({ item, index, count, registerSlot, editor }: {
   const autoHeight = item.type === 'RecentAuditsTable' || item.type === 'FeedbacksWidget'
     || item.type === 'QualityAchievementsWidget' || item.type === 'NegativeCallsTrainingAlert';
   const kind = item.type === 'StatCard' ? 'card' : autoHeight ? 'auto' : 'chart';
+  const compactChart = item.type === 'DistributionChart'
+    || (item.type === 'CustomChart' && ['Distribuição por Equipe', 'Curva de Qualidade'].includes(item.title));
   const wide = item.type === 'TrendChart' || item.type === 'OfensoresChart' || item.type === 'ComparativeBarChart'
     || autoHeight;
   return (
@@ -84,6 +86,7 @@ function Slot({ item, index, count, registerSlot, editor }: {
       data-dashboard-slot={item.id}
       data-dashboard-kind={kind}
       data-dashboard-wide={wide ? 'true' : undefined}
+      data-dashboard-compact={compactChart ? 'true' : undefined}
       draggable={Boolean(editor && !editor.saving)}
       className={`min-w-0 flex flex-col ${editor ? 'rounded-2xl transition-shadow cursor-grab active:cursor-grabbing' : ''} ${dropTarget ? 'ring-2 ring-brand-accent ring-offset-2 ring-offset-surface-bg' : ''} ${editor?.draggedId === item.id ? 'opacity-45' : ''}`}
     >

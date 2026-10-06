@@ -188,9 +188,16 @@ serve(async (req: Request) => {
     }
     const normalizedTicketId = ticketId.trim();
 
+    if (!['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(monitoria.status)) {
+      return failure('A monitoria ainda aguarda decisão final. Revise e conclua o fluxo antes de enviar ao Zendesk.', 'validation', 409);
+    }
+
     // 3b. Determinar desfecho (outcome) com base nas regras de domínio estritas (WQ-22)
     // score >= 75: positiva (Ticket Válido), score < 75: negativa (Ticket Invalidado)
     const rawScore = monitoria.score !== null && monitoria.score !== undefined ? Number(monitoria.score) : NaN;
+    if (!Number.isFinite(rawScore)) {
+      return failure('A monitoria não possui nota válida para definir o resultado da macro.', 'validation', 400);
+    }
     const domainOutcome: 'positiva' | 'negativa' = (!isNaN(rawScore) && rawScore >= 75) ? 'positiva' : 'negativa';
 
     if (outcome && outcome !== domainOutcome) {
@@ -297,7 +304,7 @@ serve(async (req: Request) => {
         200,
       );
     } catch (err: any) {
-      const errorMessage = 'Não foi possível confirmar o envio. Confira o ticket no helpdesk antes de tentar novamente.';
+      const errorMessage = 'O comentário pode ter sido enviado, mas os campos da macro não foram confirmados. Confira o ticket no Zendesk; não reenvie antes da conferência.';
       console.error('[helpdesk-publish-evaluation] Falha ao publicar no provider:', err);
 
       const { error: insertError } = await supabaseAdmin.rpc('finish_helpdesk_publication', {

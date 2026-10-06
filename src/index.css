@@ -7,7 +7,8 @@
 .dashboard-tile-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: minmax(128px, auto);
+  grid-auto-rows: auto;
+  grid-auto-flow: row dense;
   gap: 1.5rem;
 }
 
@@ -16,7 +17,12 @@
 }
 
 .dashboard-tile-grid > [data-dashboard-kind="chart"] {
-  grid-row: span 3;
+  align-self: start;
+  height: 380px;
+}
+
+.dashboard-tile-grid > [data-dashboard-compact="true"] {
+  height: 280px;
 }
 
 .dashboard-tile-grid > [data-dashboard-kind="auto"] {
@@ -31,10 +37,16 @@
 @container dashboard-tiles (min-width: 640px) {
   .dashboard-tile-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(128px, auto);
   }
 
   .dashboard-tile-grid > [data-dashboard-kind="chart"] {
     grid-column: span 2;
+    grid-row: span 3;
+  }
+
+  .dashboard-tile-grid > [data-dashboard-compact="true"] {
+    grid-row: span 2;
   }
 }
 

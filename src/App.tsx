@@ -2069,6 +2069,7 @@ function MainApp({
                   currentUserRole={userData?.role}
                   qualityMonitors={users.filter(u => u.role === 'qualidade' && u.active !== false)}
                   onStartAudit={handleStartAuditFromQueue}
+                  onOpenExistingMonitoria={id => setInPlaceMonitoriaId(id)}
                   onModalStateChange={setIsQueueModalOpen}
                   activeSubTab={activeQueueSubTab}
                   onSubTabChange={setActiveQueueSubTab}

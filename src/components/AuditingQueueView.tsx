@@ -69,7 +69,8 @@ import {
   MessageSquare,
   UserCog,
   Trash2,
-  Hash
+  Hash,
+  Send
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -98,6 +99,10 @@ import { calculateAIEvaluationScore } from '../utils/aiEvaluationScore';
 import { resolveTicketTeamId } from '../lib/ticketTeam';
 import { buildChildTicketMacro } from '../lib/childTicketMacro';
 import { canAuditTickets } from '../lib/auditPermissions';
+import { getEvaluationOutcome } from '../lib/domainRules';
+import HelpdeskSendModal from './HelpdeskSendModal';
+
+const FINAL_HELPDESK_STATUSES = new Set(['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada']);
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -131,6 +136,7 @@ interface AuditingQueueViewProps {
     dialogue?: TicketCommentMessage[];
     queue_assignment?: { ticket_id: string; queue_type: 'negativas' | 'filhos' };
   }) => void;
+  onOpenExistingMonitoria?: (monitoriaId: string) => void;
   onModalStateChange?: (isOpen: boolean) => void;
   activeSubTab?: QueueSubTab;
   onSubTabChange?: (tab: QueueSubTab) => void;
@@ -157,6 +163,7 @@ export default function AuditingQueueView({
   currentUserRole,
   qualityMonitors = [],
   onStartAudit,
+  onOpenExistingMonitoria,
   onModalStateChange,
   activeSubTab = 'negativas',
   onSubTabChange,
@@ -271,6 +278,7 @@ export default function AuditingQueueView({
 
   const [loading, setLoading] = useState(false);
   const [tickets, setTickets] = useState<AuditingQueueTicket[]>([]);
+  const [helpdeskTicket, setHelpdeskTicket] = useState<AuditingQueueTicket | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedAgentFilter, setSelectedAgentFilter] = useState('');
@@ -529,9 +537,9 @@ export default function AuditingQueueView({
   // Notifica o container pai (App.tsx) se algum modal de prévia está aberto,
   // para que a barra lateral se recolha automaticamente liberando espaço total da tela.
   useEffect(() => {
-    const isAnyModalOpen = Boolean(childPreviewTicket || guidelinePickerTicket || childGuidelineModalTicket || assignmentModalTicket);
+    const isAnyModalOpen = Boolean(childPreviewTicket || guidelinePickerTicket || childGuidelineModalTicket || assignmentModalTicket || helpdeskTicket);
     onModalStateChange?.(isAnyModalOpen);
-  }, [childPreviewTicket, guidelinePickerTicket, childGuidelineModalTicket, assignmentModalTicket, onModalStateChange]);
+  }, [childPreviewTicket, guidelinePickerTicket, childGuidelineModalTicket, assignmentModalTicket, helpdeskTicket, onModalStateChange]);
 
   // Paginação: 25 tickets por página (definido no backend). Views grandes
   // (Proativas chega a ter centenas de CSAT vazio) não cabem numa carga só
@@ -694,12 +702,26 @@ export default function AuditingQueueView({
   }, [activeQueue, currentSubTab]);
 
   useEffect(() => {
-    const audited = new Set(monitorias.map(m => m.ticket_id?.trim()).filter(Boolean));
+    const latest = new Map<string, Monitoria>();
+    for (const monitoria of monitorias) {
+      if (monitoria.active === false || !monitoria.ticket_id?.trim()) continue;
+      const ticketId = monitoria.ticket_id.trim();
+      const previous = latest.get(ticketId);
+      if (!previous || monitoria.created_at > previous.created_at) latest.set(ticketId, monitoria);
+    }
     setTickets(previous => {
-      const remaining = previous.filter(ticket => !audited.has(ticket.ticket_id));
-      return remaining.length === previous.length ? previous : remaining;
+      if (activeQueue === 'negativas' || activeQueue === 'filhos' || activeQueue === 'filhos_invalidos') {
+        return previous.map(ticket => {
+          const monitoria = latest.get(ticket.ticket_id);
+          return monitoria ? {
+            ...ticket, already_audited: true, monitoria_id: monitoria.id,
+            monitoria_status: monitoria.status, monitoria_score: monitoria.score,
+          } : ticket;
+        });
+      }
+      return previous.filter(ticket => !latest.has(ticket.ticket_id));
     });
-  }, [monitorias]);
+  }, [monitorias, activeQueue]);
 
   // Carrega os rascunhos de IA já prontos para os tickets da página atual —
   // agora ativo nas filas de Negativas, Positivas e Proativas.
@@ -760,10 +782,10 @@ export default function AuditingQueueView({
     return () => { cancelled = true; };
   }, [activeQueue, ticketIdsKey]);
 
-  // Contagem de negativas não auditadas
+  // Inclui negativas com monitoria que ainda aguardam publicação no Zendesk.
   const pendingNegativesCount = useMemo(() => {
     if (activeQueue === 'negativas') {
-      return tickets.filter(t => !t.already_audited).length;
+      return tickets.length;
     }
     return 0;
   }, [tickets, activeQueue]);
@@ -806,7 +828,8 @@ export default function AuditingQueueView({
     return tickets.filter(t => {
       if (isDistributedQueue(activeQueue)) {
         if (!assignmentsReady[activeQueue]) return false;
-        if (queueAssignments[activeQueue][t.ticket_id]?.status === 'completed') return false;
+        if (queueAssignments[activeQueue][t.ticket_id]?.status === 'completed'
+          && !(['negativas', 'filhos', 'filhos_invalidos'].includes(activeQueue) && t.already_audited)) return false;
       }
 
       const matchesSearch = !searchTerm ||
@@ -873,7 +896,7 @@ export default function AuditingQueueView({
   };
 
   const handleToggleSelectAllCurrentPage = () => {
-    const pageIds = paginatedTickets.map(t => t.ticket_id);
+    const pageIds = paginatedTickets.filter(ticket => !ticket.already_audited).map(ticket => ticket.ticket_id);
     const allSelected = pageIds.length > 0 && pageIds.every(id => selectedTicketIds.has(id));
 
     setSelectedTicketIds(prev => {
@@ -1587,6 +1610,27 @@ export default function AuditingQueueView({
   // diretamente o formulário oficial no fluxo das 4 etapas (1-2-3-4) para ir batendo os dados.
   // Se ainda não avaliado, o botão principal é "Avaliar com IA" (índigo/roxo) ou "Auditar Manual".
   const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
+    if (ticket.already_audited) {
+      const final = Boolean(ticket.monitoria_status && FINAL_HELPDESK_STATUSES.has(ticket.monitoria_status));
+      const owner = monitorias.find(monitoria => monitoria.id === ticket.monitoria_id)?.evaluator_id;
+      const mayPublish = currentUserRole === 'admin' || currentUserRole === 'gestor_qualidade'
+        || (currentUserRole === 'qualidade' && owner === currentUserId);
+      return <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={final ? 'warning' : 'neutral'} size="xs">
+          {final ? `Macro pendente · ${typeof ticket.monitoria_score === 'number' && Number.isFinite(ticket.monitoria_score)
+            ? getEvaluationOutcome(ticket.monitoria_score) === 'positiva' ? 'Válido' : 'Invalidado'
+            : 'Nota pendente'}` : 'Aguardando decisão final'}
+        </Badge>
+        {final && mayPublish && ticket.monitoria_id && typeof ticket.monitoria_score === 'number' && Number.isFinite(ticket.monitoria_score) &&
+          <Button size="sm" variant="primary" onClick={() => setHelpdeskTicket(ticket)}>
+            <Send className="w-3.5 h-3.5" /> Revisar macro
+          </Button>}
+        {ticket.monitoria_id && onOpenExistingMonitoria &&
+          <Button size="sm" variant="outline" onClick={() => onOpenExistingMonitoria(ticket.monitoria_id!)}>
+            <Eye className="w-3.5 h-3.5" /> Abrir monitoria
+          </Button>}
+      </div>;
+    }
     if (!canAudit) return null;
     const isEvaluating = isEvaluatingTicket(ticket.ticket_id);
 
@@ -2223,20 +2267,20 @@ export default function AuditingQueueView({
         {/* Ações da Toolbar */}
         <div className="flex items-center gap-2 shrink-0 ml-auto md:ml-0">
           {/* Seleção de tickets da página atual */}
-          {canAudit && paginatedTickets.length > 0 && (
+          {canAudit && paginatedTickets.some(ticket => !ticket.already_audited) && (
             <label
               className="h-9 inline-flex items-center gap-1.5 px-2.5 rounded-lg border border-surface-border bg-surface-subtle/40 hover:bg-surface-subtle text-xs font-medium text-brand-muted hover:text-brand-primary cursor-pointer transition-colors shrink-0 select-none"
-              title={paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar todos os chamados da página' : 'Selecionar todos os chamados da página'}
+              title={paginatedTickets.filter(t => !t.already_audited).every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar todos os chamados da página' : 'Selecionar todos os chamados da página'}
             >
               <input
                 type="checkbox"
-                checked={paginatedTickets.length > 0 && paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id))}
+                checked={paginatedTickets.filter(t => !t.already_audited).every(t => selectedTicketIds.has(t.ticket_id))}
                 onChange={handleToggleSelectAllCurrentPage}
                 disabled={batchRunning}
                 className="w-3.5 h-3.5 rounded text-brand-highlight focus:ring-brand-highlight border-surface-border cursor-pointer"
               />
               <span className="hidden sm:inline">
-                {paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar' : 'Selecionar'}
+                {paginatedTickets.filter(t => !t.already_audited).every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar' : 'Selecionar'}
               </span>
               {selectedTicketIds.size > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full bg-brand-highlight text-white text-[10px] font-bold">
@@ -2333,7 +2377,7 @@ export default function AuditingQueueView({
             {paginatedTickets.map(ticket => (
               <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
-                    {canAudit ? <input
+                    {canAudit && !ticket.already_audited ? <input
                       type="checkbox"
                       checked={selectedTicketIds.has(ticket.ticket_id)}
                       onChange={() => toggleTicketSelection(ticket.ticket_id)}
@@ -2360,11 +2404,7 @@ export default function AuditingQueueView({
                           <ExternalLink className="w-2.5 h-2.5" />
                           <span>Zendesk</span>
                         </a>
-                        {ticket.already_audited && (
-                          <Badge variant="success" size="xs" className="text-[9px]">
-                            Auditado
-                          </Badge>
-                        )}
+                        {ticket.already_audited && <Badge variant="warning" size="xs" className="text-[9px]">Macro pendente</Badge>}
                       </div>
                       <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
                         {ticket.subject}
@@ -2602,7 +2642,7 @@ export default function AuditingQueueView({
             <>
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
                 {paginatedTickets.map(ticket => {
-                  const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
+                  const isValidated = validatedChildTickets.has(ticket.ticket_id);
                   const evaluation = ticket.child_evaluation;
 
                   return (
@@ -2732,7 +2772,7 @@ export default function AuditingQueueView({
             <>
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
                 {paginatedTickets.map(ticket => {
-                  const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
+                  const isValidated = validatedChildTickets.has(ticket.ticket_id);
                   const evaluation = ticket.child_evaluation;
 
                   return (
@@ -4041,6 +4081,15 @@ export default function AuditingQueueView({
             setAssignmentModalTicket(null);
             toast.success('Monitor responsável alterado com sucesso.');
           }}
+        />
+      )}
+      {helpdeskTicket?.monitoria_id && typeof helpdeskTicket.monitoria_score === 'number' && Number.isFinite(helpdeskTicket.monitoria_score) && (
+        <HelpdeskSendModal
+          monitoriaId={helpdeskTicket.monitoria_id}
+          ticketId={helpdeskTicket.ticket_id}
+          suggestedOutcome={getEvaluationOutcome(helpdeskTicket.monitoria_score)}
+          onClose={() => setHelpdeskTicket(null)}
+          onSent={() => setTickets(previous => previous.filter(ticket => ticket.ticket_id !== helpdeskTicket.ticket_id))}
         />
       )}
     </div>

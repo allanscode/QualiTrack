@@ -23,6 +23,7 @@ interface HelpdeskSendModalProps {
   ticketId: string;
   suggestedOutcome: EvaluationOutcome;
   onClose: () => void;
+  onSent?: () => void;
   // true quando o modal abriu automaticamente logo após concluir a
   // monitoria (fluxo novo). Nesse caso a monitoria já está salva no banco
   // antes mesmo do modal aparecer, então os textos de saída precisam deixar
@@ -56,7 +57,7 @@ const OUTCOME_OPTIONS: { value: EvaluationOutcome; label: string; icon: typeof C
   { value: 'negativa', label: 'Ticket Invalidado', icon: XCircle },
 ];
 
-export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutcome, onClose, fromConclusion = false }: HelpdeskSendModalProps) {
+export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutcome, onClose, onSent, fromConclusion = false }: HelpdeskSendModalProps) {
   const [outcome, setOutcome] = useState<EvaluationOutcome>(suggestedOutcome);
   const [preview, setPreview] = useState<PreviewState>({ status: 'loading' });
   const [sendState, setSendState] = useState<SendState>({ status: 'idle' });
@@ -177,6 +178,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
         return;
       }
       setSendState({ status: 'sent', externalCommentId: result.external_comment_id });
+      onSent?.();
       toast.success('Comentário enviado ao Zendesk com sucesso!');
     } catch (e: any) {
       setSendState({ status: 'error', message: e?.message || 'Falha ao enviar ao Zendesk. Tente novamente.' });

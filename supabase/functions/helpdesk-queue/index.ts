@@ -23,6 +23,7 @@ import { satisfactionResponseTimestamp } from './satisfaction.ts';
 import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
 import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro } from './child-view.ts';
 import { childMacroCustomFields, missingCustomFields } from './child-macro-fields.ts';
+import { attachQueuePublicationState, type QueueMonitoriaState, type QueuePublicationTicket } from './queue-publication.ts';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
 import { previewWebpostoDivisions, type ZendeskMembership, type ZendeskMembershipGroup, type ZendeskMembershipUser } from './webposto-memberships.ts';
 
@@ -47,6 +48,25 @@ const MAX_REQUEST_BYTES = 1_000_000;
 // Sem a secret configurada, NÃO filtramos por tag nenhuma — um nome de tag
 // chutado poderia deixar passar negativas que na verdade não foram validadas.
 const VALIDATED_TAG = Deno.env.get('HELPDESK_VALIDATED_TAG') || '';
+
+async function withPublicationState<T extends QueuePublicationTicket>(
+  supabase: SupabaseClient, tickets: T[], queue: QueueType,
+): Promise<T[]> {
+  if (tickets.length === 0) return tickets;
+  const ids = [...new Set(tickets.map(ticket => ticket.ticket_id))];
+  const [monitoriaResult, submissionResult] = await Promise.all([
+    supabase.from('monitorias').select('id,ticket_id,status,score,active,created_at').in('ticket_id', ids),
+    queue === 'negativas'
+      ? supabase.from('helpdesk_submissions').select('external_ticket_id')
+        .eq('provider', 'zendesk').eq('status', 'sent').in('external_ticket_id', ids)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (monitoriaResult.error) throw new Error('Falha ao verificar monitorias da fila.');
+  if (submissionResult.error) throw new Error('Falha ao verificar os envios ao Zendesk.');
+  const sentTickets = new Set((submissionResult.data || []).map(row => row.external_ticket_id));
+  const rows = (monitoriaResult.data || []) as QueueMonitoriaState[];
+  return attachQueuePublicationState(tickets, queue, rows, sentTickets);
+}
 
 // IDs das views salvas do Zendesk (Admin Center > Views > abrir a view >
 // número no final da URL). Quando configuradas, cada fila busca exatamente
@@ -824,13 +844,13 @@ serve(async (req) => {
         return jsonResponse({ error: 'Zendesk não retornou as tags atuais do ticket. Atualize e tente novamente.' }, 502);
       }
       const currentTags: string[] = ticketBody.ticket.tags;
-      const syncCatalog = async () => {
+      const syncCatalog = async (confirmedTags?: string[]) => {
         const { data: catalogRows, error: catalogReadError } = await supabase.from('queue_ticket_catalog')
           .select('queue_type,ticket_snapshot').eq('ticket_id', ticket_id).in('queue_type', ['filhos', 'filhos_invalidos']);
         if (catalogReadError) console.error('[helpdesk-queue] Falha ao consultar catálogo após macro:', catalogReadError);
         for (const row of catalogRows || []) {
           const snapshot = row.ticket_snapshot && typeof row.ticket_snapshot === 'object' ? row.ticket_snapshot : {};
-          const tags = Array.isArray(snapshot.tags) ? snapshot.tags : currentTags;
+          const tags = confirmedTags || (Array.isArray(snapshot.tags) ? snapshot.tags : currentTags);
           const { error: catalogUpdateError } = await supabase.from('queue_ticket_catalog')
             .update({ ticket_snapshot: { ...snapshot, tags: [...new Set([...tags, CHILD_AUDITED_TAG])] } })
             .eq('ticket_id', ticket_id).eq('queue_type', row.queue_type);
@@ -860,7 +880,12 @@ serve(async (req) => {
         if (!updateResponse.ok) return jsonResponse({ error: `Não foi possível configurar a saída da view ${viewId} (${updateResponse.status}). Nenhuma macro foi enviada.` }, 502);
       }
 
+      const macroFields = childMacroCustomFields(child_verdict === 'conforme' ? 'conforme' : 'nao_conforme');
       if (currentTags.includes(CHILD_AUDITED_TAG)) {
+        const missing = missingCustomFields(ticketBody.ticket?.custom_fields, macroFields);
+        if (missing.length) {
+          return jsonResponse({ error: 'O chamado filho já possui a tag de macro enviada, mas os campos não correspondem ao veredito escolhido. Confira o histórico no Zendesk antes de alterar o resultado.' }, 409);
+        }
         await syncCatalog();
         return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: true }, 200);
       }
@@ -877,7 +902,6 @@ serve(async (req) => {
 
       const verdictLabel = child_verdict === 'conforme' ? 'VÁLIDO' : 'INVÁLIDO';
       // Espelha as ações da macro "QA | Ticket Válido/Invalidado" do Zendesk.
-      const macroFields = childMacroCustomFields(child_verdict === 'conforme' ? 'conforme' : 'nao_conforme');
       const response = await fetch(ticketUrl, {
         method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(20000),
         body: JSON.stringify({ ticket: {
@@ -886,18 +910,46 @@ serve(async (req) => {
             public: false,
           } }),
           custom_fields: macroFields,
-          tags: [...currentTags, CHILD_AUDITED_TAG], safe_update: true, updated_stamp: updatedStamp,
+          safe_update: true, updated_stamp: updatedStamp,
         } }),
       });
       if (response.status === 409) return jsonResponse({ error: 'O ticket mudou no Zendesk. Atualize a fila e tente novamente.' }, 409);
       if (!response.ok) return jsonResponse({ error: `Zendesk recusou a macro (${response.status}).` }, 502);
-      const updatedBody = await response.json().catch(() => null);
-      const missingFields = missingCustomFields(updatedBody?.ticket?.custom_fields, macroFields);
-      if (missingFields.length) {
-        console.error('[helpdesk-queue] Zendesk não gravou os campos da macro no ticket filho:', ticket_id, missingFields);
+      let updatedBody = await response.json().catch(() => null);
+      if (missingCustomFields(updatedBody?.ticket?.custom_fields, macroFields).length) {
+        const stamp = updatedBody?.ticket?.updated_at;
+        if (typeof stamp !== 'string' || !stamp) return jsonResponse({ error: 'Comentário enviado, mas os campos da macro não foram confirmados. Confira o Zendesk antes de repetir.' }, 502);
+        const repair = await fetch(ticketUrl, {
+          method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(20000),
+          body: JSON.stringify({ ticket: {
+            custom_fields: macroFields, safe_update: true, updated_stamp: stamp,
+          } }),
+        });
+        updatedBody = repair.ok ? await repair.json().catch(() => null) : null;
+        if (!repair.ok || missingCustomFields(updatedBody?.ticket?.custom_fields, macroFields).length) {
+          return jsonResponse({ error: 'Comentário enviado, mas os campos da macro não foram confirmados. O ticket permanece pendente; confira o Zendesk antes de repetir.' }, 502);
+        }
       }
 
-      await syncCatalog();
+      // Só remove o filho da view depois de confirmar os campos da macro.
+      const confirmedStamp = updatedBody?.ticket?.updated_at;
+      const confirmedTags = updatedBody?.ticket?.tags;
+      if (typeof confirmedStamp !== 'string' || !Array.isArray(confirmedTags)) {
+        return jsonResponse({ error: 'Macro enviada, mas não foi possível confirmar as tags atuais do Zendesk.' }, 502);
+      }
+      const tagResponse = await fetch(ticketUrl, {
+        method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(20000),
+        body: JSON.stringify({ ticket: {
+          tags: [...new Set([...confirmedTags, CHILD_AUDITED_TAG])],
+          safe_update: true, updated_stamp: confirmedStamp,
+        } }),
+      });
+      const tagged = tagResponse.ok ? await tagResponse.json().catch(() => null) : null;
+      if (!tagResponse.ok || !Array.isArray(tagged?.ticket?.tags) || !tagged.ticket.tags.includes(CHILD_AUDITED_TAG)) {
+        return jsonResponse({ error: 'Macro enviada, mas a tag de saída da view não foi confirmada. Atualize a fila e tente novamente sem criar outro comentário.' }, 502);
+      }
+
+      await syncCatalog(tagged.ticket.tags);
       return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: previousMacro }, 200);
     }
 
@@ -1387,13 +1439,7 @@ serve(async (req) => {
         };
       }));
 
-      const { data: auditedRows, error: auditedError } = mappedTickets.length > 0
-        ? await supabase.from('monitorias').select('ticket_id')
-          .in('ticket_id', mappedTickets.map(t => t.ticket_id))
-        : { data: [], error: null };
-      if (auditedError) throw new Error('Falha ao verificar tickets já avaliados.');
-      const auditedIds = new Set((auditedRows || []).map(row => row.ticket_id));
-      const queueTickets = mappedTickets.filter(t => !auditedIds.has(t.ticket_id));
+      const queueTickets = await withPublicationState(supabase, mappedTickets, queue_type);
 
       if (queueTickets.length > 0) {
         const { error: catalogError } = await supabase.from('queue_ticket_catalog').upsert(
@@ -1453,11 +1499,7 @@ serve(async (req) => {
           if (mergedIds.length === 0) {
             visibleTickets = [];
           } else {
-            const { data: completedRows, error: completedError } = await supabase.from('monitorias')
-              .select('ticket_id').in('ticket_id', mergedIds);
-            if (completedError) throw new Error('Falha ao validar o estado atual da fila.');
-            const completedIds = new Set((completedRows || []).map(row => row.ticket_id));
-            visibleTickets = [...merged.values()].filter(ticket => !completedIds.has(ticket.ticket_id));
+            visibleTickets = await withPublicationState(supabase, [...merged.values()], queue_type);
           }
         }
       }
