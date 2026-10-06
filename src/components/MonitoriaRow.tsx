@@ -6,6 +6,7 @@ import { Monitoria, Team } from '../types';
 import { getStatusConfig, VARIANT_ICON_CONTAINER } from '../lib/statusHelper';
 import Badge from './ui/Badge';
 import ActionDeadlineClock from './ui/ActionDeadlineClock';
+import { isChildTicketMonitoria } from '../lib/childTicketForm';
 
 type Props = {
   monitoria: Monitoria;
@@ -38,6 +39,11 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
               <span className="text-brand-muted">#{m.display_id || m.id.slice(0, 4)}</span>
               <span aria-hidden="true" className="text-brand-muted/60">&#183;</span>
               <span className="truncate font-mono">{m.ticket_id || 'S/N'}</span>
+              {isChildTicketMonitoria(m) && (
+                <Badge variant="info" size="xs" className="shrink-0 text-[8px] uppercase tracking-wide" title="Monitoria de ticket filho">
+                  Ticket filho
+                </Badge>
+              )}
             </span>
             <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[10.5px] font-medium text-brand-primary/75">
               <span className="inline-flex items-center gap-1">
