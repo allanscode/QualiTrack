@@ -254,6 +254,8 @@ export default function MonitoriaList({
       if (filters.teamFilter && m.team_id !== filters.teamFilter) return false;
       if (filters.suporteFilter && m.evaluated_id !== filters.suporteFilter) return false;
       if (filters.auditorFilter && m.evaluator_id !== filters.auditorFilter) return false;
+      if (filters.ticketKindFilter === 'child' && !isChildTicketMonitoria(m)) return false;
+      if (filters.ticketKindFilter === 'service' && isChildTicketMonitoria(m)) return false;
 
       if (filters.search) {
         const teamName = m.team_name || staticData.teams.find(t => t.id === m.team_id)?.name || '';
@@ -294,7 +296,7 @@ export default function MonitoriaList({
       const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
       return bTime - aTime;
     });
-  }, [monitorias, user, filters.tab, filters.search, filters.statusFilter, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.dateType, filters.startDate, filters.endDate]);
+  }, [monitorias, user, filters.tab, filters.search, filters.statusFilter, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.ticketKindFilter, filters.dateType, filters.startDate, filters.endDate]);
 
   const activeTeams = useMemo(() => {
     let filtered = staticData.teams.filter(t => t.active !== false);
@@ -497,6 +499,13 @@ export default function MonitoriaList({
                 />
               )}
 
+              <CustomSelect
+                value={filters.ticketKindFilter}
+                onChange={val => filters.setTicketKindFilter(val as 'all' | 'child' | 'service')}
+                options={[{ value: 'all', label: 'Todos os tickets' }, { value: 'child', label: 'Tickets filhos' }, { value: 'service', label: 'Atendimentos' }]}
+                size="sm"
+              />
+
               {/* Acompanha quem ganhou o poder de excluir logo abaixo: sem
                   isto, gestor_qualidade removeria uma monitoria e nunca mais
                   conseguiria vê-la na lista para conferir. Não existe ação de
@@ -593,6 +602,8 @@ export default function MonitoriaList({
                 if (filters.teamFilter && m.team_id !== filters.teamFilter) return false;
                 if (filters.suporteFilter && m.evaluated_id !== filters.suporteFilter) return false;
                 if (filters.auditorFilter && m.evaluator_id !== filters.auditorFilter) return false;
+                if (filters.ticketKindFilter === 'child' && !isChildTicketMonitoria(m)) return false;
+                if (filters.ticketKindFilter === 'service' && isChildTicketMonitoria(m)) return false;
 
                 const targetDate = filters.dateType === 'analysis' ? (m.analysis_date || m.created_at) : m.ticket_date;
                 if (filters.startDate && targetDate < filters.startDate) return false;
@@ -605,7 +616,7 @@ export default function MonitoriaList({
                 <button
                   key={t}
                   onClick={() => filters.setTab(t as any)}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 flex-shrink-0 whitespace-nowrap cursor-pointer active:scale-[0.98] ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap cursor-pointer active:scale-[0.98] ${
                     filters.tab === t
                       ? 'bg-brand-primary text-brand-on-primary shadow-xs ring-1 ring-brand-primary font-black'
                       : 'bg-surface-subtle/80 text-brand-primary/80 hover:text-brand-primary hover:bg-surface-card hover:border-surface-border border border-surface-border/50'
@@ -614,7 +625,7 @@ export default function MonitoriaList({
                 >
                   <span className="whitespace-nowrap">{tabLabel}</span>
                   <span
-                    className={`px-1 py-0.5 rounded-full text-[8.5px] font-mono font-bold flex-shrink-0 min-w-3.5 text-center leading-none ${
+                    className={`px-1.5 py-1 rounded-full text-[11px] font-mono font-bold flex-shrink-0 min-w-[22px] text-center leading-none tabular-nums ${
                       filters.tab === t
                         ? 'bg-black/20 text-brand-on-primary'
                         : 'bg-surface-card text-brand-muted border border-surface-border/60'
@@ -637,7 +648,7 @@ export default function MonitoriaList({
               <List<VirtualRowProps>
                 rowComponent={VirtualMonitoriaRow}
                 rowCount={filtered.length}
-                rowHeight={48}
+                rowHeight={72}
                 rowProps={{ monitorias: filtered, teams: staticData.teams, getName, getLevelForScore, onOpen: openDetails }}
                 overscanCount={5}
                 style={{ height: 600, width: '100%' }}

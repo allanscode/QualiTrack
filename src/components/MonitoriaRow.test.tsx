@@ -27,4 +27,13 @@ describe('identificação de ticket filho na lista', () => {
     row({ ...monitoria, form_snapshot: { child_ai_evaluation: {} } as unknown as Monitoria['form_snapshot'] });
     expect(screen.queryByText('Ticket filho')).not.toBeInTheDocument();
   });
+
+  it('mostra a ação mais recente pela data do histórico, mesmo fora de ordem', () => {
+    row({ ...monitoria, history: [
+      { action: 'Aprovada pelo gestor', by_id: 'gestor', by_name: 'Gestor', at: '2026-10-06T13:00:00Z' },
+      { action: 'Contestada', by_id: 'agente', by_name: 'Agente', at: '2026-10-05T12:00:00Z' },
+    ] });
+    expect(screen.getByText('Aprovada pelo gestor')).toBeInTheDocument();
+    expect(screen.queryByText('Contestada')).not.toBeInTheDocument();
+  });
 });

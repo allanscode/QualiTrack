@@ -25,6 +25,8 @@ DashboardMain
 
 ## DashboardContext
 
+A tabela **Decisões dos Gestores de Atendimento** está disponível nos cinco perfis e em **Customizar Dashboards**. Ela usa os eventos do histórico de cada monitoria visível ao perfil para mostrar aprovações e contestações, com filtros por ticket/agente/equipe, tipo de decisão e gestor, além de paginação. A prévia de personalização usa duas decisões ilustrativas.
+
 Para monitorias, `team_id` representa a equipe principal do agente avaliado e
 determina o gestor de suporte que pode ver a monitoria e as metricas em que ela
 conta. `ticket_group_team_id` preserva o grupo original do ticket Zendesk. Assim,

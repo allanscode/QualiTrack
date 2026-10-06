@@ -9,6 +9,7 @@ export type DashboardWidgetType =
   | 'OfensoresChart'
   | 'ActionDeadlineWidget'
   | 'RecentAuditsTable'
+  | 'ManagerDecisionHistoryTable'
   | 'CustomChart'
   | 'FeedbacksWidget'
   | 'QualityAchievementsWidget'
@@ -37,13 +38,14 @@ function widget(type: DashboardWidgetType, title: string): DashboardWidgetDefini
     type,
     title,
     id: widgetId(type, title),
-    category: type === 'StatCard' ? 'card' : type === 'RecentAuditsTable' ? 'table' : 'chart',
+    category: type === 'StatCard' ? 'card' : type === 'RecentAuditsTable' || type === 'ManagerDecisionHistoryTable' ? 'table' : 'chart',
   };
 }
 
 const c = (title: string) => widget('StatCard', title);
 const chart = (type: Exclude<DashboardWidgetType, 'StatCard' | 'RecentAuditsTable'>, title: string) => widget(type, title);
 const table = (title: string) => widget('RecentAuditsTable', title);
+const managerHistory = widget('ManagerDecisionHistoryTable', 'Decisões dos Gestores de Atendimento');
 const custom = (title: string) => widget('CustomChart', title);
 
 export const DASHBOARD_WIDGETS: Record<DashboardRole, DashboardWidgetDefinition[]> = {
@@ -60,7 +62,7 @@ export const DASHBOARD_WIDGETS: Record<DashboardRole, DashboardWidgetDefinition[
     chart('RankingWidget', 'Melhores Suporte'), chart('RankingWidget', 'Maiores Ofensores'),
     chart('RankingWidget', 'Volume por Auditor'), chart('RankingWidget', 'Top Reav. Aceitas'),
     chart('RankingWidget', 'Top Reav. Recusadas'), chart('OfensoresChart', 'Maiores Ofensores'),
-    table('Últimas Auditorias do Sistema'),
+    table('Últimas Auditorias do Sistema'), managerHistory,
     widget('FeedbacksWidget', 'Feedbacks & Gestão de 1:1'),
   ],
   gestor_qualidade: [
@@ -76,7 +78,7 @@ export const DASHBOARD_WIDGETS: Record<DashboardRole, DashboardWidgetDefinition[
     chart('RankingWidget', 'Melhores Suporte'), chart('RankingWidget', 'Maiores Ofensores'),
     chart('RankingWidget', 'Volume por Auditor'), chart('RankingWidget', 'Top Reav. Aceitas'),
     chart('RankingWidget', 'Top Reav. Recusadas'), chart('OfensoresChart', 'Maiores Ofensores'),
-    table('Últimas Auditorias do Sistema'),
+    table('Últimas Auditorias do Sistema'), managerHistory,
   ],
   gestor_suporte: [
     c('Minhas Ações'), c('Média Geral'), c('Índice de Excelência'), c('Total'),
@@ -92,7 +94,7 @@ export const DASHBOARD_WIDGETS: Record<DashboardRole, DashboardWidgetDefinition[
     chart('DistributionChart', 'Insatisfação — Visão da Qualidade'),
     widget('FeedbacksWidget', 'Feedbacks & Gestão de 1:1'),
     widget('NegativeCallsTrainingAlert', 'Necessidade de treinamento'),
-    table('Monitorias Recentes'),
+    table('Monitorias Recentes'), managerHistory,
   ],
   qualidade: [
     c('Minhas Pendências'), c('Meu Volume'), c('Nota Média Individual'), c('Nota Média Geral'),
@@ -106,7 +108,7 @@ export const DASHBOARD_WIDGETS: Record<DashboardRole, DashboardWidgetDefinition[
     chart('DistributionChart', 'Precisão da Qualidade'),
     chart('DistributionChart', 'Insatisfação — Visão do Cliente'),
     chart('DistributionChart', 'Insatisfação — Visão da Qualidade'),
-    table('Minhas Auditorias Recentes'),
+    table('Minhas Auditorias Recentes'), managerHistory,
   ],
   suporte: [
     c('Minhas Pendências'), c('Meu Volume'), c('Minha Média'), c('Média Equipe'),
@@ -119,7 +121,7 @@ export const DASHBOARD_WIDGETS: Record<DashboardRole, DashboardWidgetDefinition[
     chart('DistributionChart', 'Minha Classificação por Faixas'),
     chart('DistributionChart', 'Insatisfação — Visão do Cliente'),
     chart('DistributionChart', 'Insatisfação — Visão da Qualidade'),
-    table('Minhas Auditorias Recentes'),
+    table('Minhas Auditorias Recentes'), managerHistory,
     widget('QualityAchievementsWidget', 'Minhas Conquistas & Gamificação'),
     widget('FeedbacksWidget', 'Meus Feedbacks & Planos 1:1'),
   ],

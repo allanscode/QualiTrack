@@ -73,7 +73,7 @@ function Slot({ item, index, count, registerSlot, editor }: {
     };
   }, [editor, item.id]);
 
-  const autoHeight = item.type === 'RecentAuditsTable' || item.type === 'FeedbacksWidget'
+  const autoHeight = item.type === 'RecentAuditsTable' || item.type === 'ManagerDecisionHistoryTable' || item.type === 'FeedbacksWidget'
     || item.type === 'QualityAchievementsWidget' || item.type === 'NegativeCallsTrainingAlert';
   const kind = item.type === 'StatCard' ? 'card' : autoHeight ? 'auto' : 'chart';
   const compactChart = item.type === 'DistributionChart'
