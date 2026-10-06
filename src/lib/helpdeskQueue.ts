@@ -130,13 +130,12 @@ export interface QueueTicketsPage {
 
 export async function publishChildTicketMacro(
   ticketId: string,
-  verdict: 'conforme' | 'nao_conforme',
-  commentText: string,
+  monitoriaId: string,
 ): Promise<void> {
   if (isMockMode) return;
   if (!supabase) throw new Error('Conexão com o Zendesk indisponível.');
   const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
-    body: { action: 'publish_child_macro', ticket_id: ticketId, child_verdict: verdict, comment_text: commentText },
+    body: { action: 'publish_child_macro', ticket_id: ticketId, monitoria_id: monitoriaId },
   });
   if (error) throw new Error(await extractFunctionErrorMessage(error, 'Não foi possível enviar a macro ao Zendesk.'));
   if (!data?.success) throw new Error(data?.error || 'O Zendesk não confirmou o envio da macro.');
@@ -714,6 +713,7 @@ export async function lookupTicketAgent(ticketId: string): Promise<TicketAgentLo
 
 export interface ZendeskTicketDetails {
   ticket_kind?: 'atendimento' | 'chamado_filho';
+  child_evaluation?: ChildTicketAiEvaluation | null;
   ticket_id: string;
   subject: string;
   description: string;

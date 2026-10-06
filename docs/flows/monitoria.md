@@ -8,6 +8,12 @@ Nas equipes PJ, monitorias com nota igual ou superior a 75% são concluídas dir
 
 Na aprovação final pela Gestão da Qualidade, a tela mostra o veredito e o Registro do Auditor antes da confirmação. Depois de salvar a decisão, publica a macro correspondente no Zendesk e grava o recibo. Uma publicação anterior da mesma monitoria é reconhecida para evitar duplicidade. Se o Zendesk falhar, a monitoria permanece concluída e a Gestão da Qualidade recebe o erro e pode conferir o envio no detalhe da monitoria.
 
+### Chamados filhos
+
+O parecer da IA é uma sugestão. O monitor abre a ficha própria de chamado filho, responde os critérios e salva a monitoria no QWP. Se a nota final for de pelo menos 75% e o status for `concluida`, o QWP tenta enviar ao Zendesk uma macro interna de **chamado filho válido** com o Registro do Auditor salvo. O endpoint exige o ID da monitoria, confere que ela é a ficha ativa e mais recente do mesmo ticket, e evita repetir o comentário quando a macro já está presente. Se a nota for inferior a 75%, a monitoria segue a revisão normal, sem macro de filho inválido. Falha de envio não desfaz a ficha; uma monitoria válida pode tentar novamente pelo detalhe.
+
+Para recuperar um filho que tenha apenas parecer de IA, inclusive quando a tag de macro o retirou da fila, use **Nova Monitoria**, pesquise o ID e escolha **Recuperar chamado filho**. A ficha mostra o parecer persistido para conferência humana; não transforma os checks da IA em respostas humanas automaticamente.
+
 ## Fluxo Completo
 
 ```mermaid

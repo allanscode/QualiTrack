@@ -65,6 +65,7 @@ import Select from './ui/Select';
 import CustomSelect from './ui/CustomSelect';
 import CustomDatepicker from './ui/CustomDatepicker';
 import HelpdeskSendModal from './HelpdeskSendModal';
+import ChildTicketPublishModal from './ChildTicketPublishModal';
 import TicketMessageBubble from './TicketMessageBubble';
 import { EvaluationOutcome, MonitoriaStatus } from '../types';
 
@@ -535,6 +536,7 @@ export default function MonitoriaForm({
   // o modal é mantido montado dentro do MonitoriaForm até esse momento, em
   // vez de o form fechar (e desmontar o modal) assim que o save termina.
   const [helpdeskModal, setHelpdeskModal] = useState<{ monitoriaId: string; fromConclusion: boolean } | null>(null);
+  const [childPublishModal, setChildPublishModal] = useState<{ monitoriaId: string; fromConclusion: boolean } | null>(null);
   const [generatingAuditorRecord, setGeneratingAuditorRecord] = useState(false);
 
   const canSendToHelpdesk = isViewOnly
@@ -542,6 +544,9 @@ export default function MonitoriaForm({
     && !!initialData?.status
     && HELPDESK_ELIGIBLE_STATUSES.includes(initialData.status)
     && !!header.ticket_id?.trim();
+  const canPublishChild = isViewOnly && isChildEvaluation
+    && initialData?.status === 'concluida' && (initialData.score ?? 0) >= 75
+    && ['admin', 'gestor_qualidade', 'qualidade'].includes(user?.role || '');
   // Sugestão de desfecho do preview baseada na regra de domínio estrita (WQ-22):
   // score >= 75% -> Válido (positiva), score < 75% -> Invalidado (negativa)
   const targetScore = isViewOnly ? (initialData?.score ?? 0) : score;
@@ -578,6 +583,10 @@ export default function MonitoriaForm({
     qualityFieldsToShow,
     onSaved: (savedMonitoriaId: string, savedStatus: MonitoriaStatus) => {
       clearDraft();
+      if (header.form_id === CHILD_TICKET_FORM_ID && savedStatus === 'concluida' && score >= 75) {
+        setChildPublishModal({ monitoriaId: savedMonitoriaId, fromConclusion: true });
+        return;
+      }
       // A macro de atendimento pode ser revista após salvar; filhos usam macro própria.
       const ticketIdTrimmed = header.ticket_id?.trim() || '';
       const shouldAutoSend = /^\d+$/.test(ticketIdTrimmed)
@@ -1942,6 +1951,11 @@ export default function MonitoriaForm({
                     Enviar ao Zendesk
                   </button>
                 )}
+                {canPublishChild && initialData && (
+                  <Button size="sm" onClick={() => setChildPublishModal({ monitoriaId: initialData.id, fromConclusion: false })} icon={<Send className="w-4 h-4" />}>
+                    Enviar macro do chamado filho
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -2128,6 +2142,17 @@ export default function MonitoriaForm({
           underReview={initialData?.status === 'pendente_revisao'}
           fromConclusion={helpdeskModal.fromConclusion}
           onClose={handleHelpdeskModalClose}
+        />
+      )}
+      {childPublishModal && (
+        <ChildTicketPublishModal
+          monitoriaId={childPublishModal.monitoriaId}
+          ticketId={header.ticket_id}
+          onClose={() => {
+            const saved = childPublishModal;
+            setChildPublishModal(null);
+            if (saved.fromConclusion) onSaved(saved.monitoriaId);
+          }}
         />
       )}
 

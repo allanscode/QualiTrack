@@ -23,6 +23,7 @@ import { satisfactionResponseTimestamp } from './satisfaction.ts';
 import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
 import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro } from './child-view.ts';
 import { childMacroCustomFields, missingCustomFields } from './child-macro-fields.ts';
+import { childPublicationError, childPublicationText, type ChildPublicationMonitoria } from './child-publication.ts';
 import { attachQueuePublicationState, type QueueMonitoriaState, type QueuePublicationTicket } from './queue-publication.ts';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
 import { previewWebpostoDivisions, type ZendeskMembership, type ZendeskMembershipGroup, type ZendeskMembershipUser } from './webposto-memberships.ts';
@@ -120,8 +121,7 @@ const RequestSchema = z.object({
   ]),
   queue_type: z.enum(['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos']).optional(),
   ticket_id: z.string().optional(),
-  child_verdict: z.enum(['conforme', 'nao_conforme']).optional(),
-  comment_text: z.string().trim().min(1).max(12000).optional(),
+  monitoria_id: z.string().uuid().optional(),
   ticket_ids: z.array(z.string().regex(/^\d+$/)).max(100).optional(),
   job_id: z.string().uuid().optional(),
   draft_meta: z.object({
@@ -809,24 +809,31 @@ serve(async (req) => {
     };
 
     if (action === 'publish_child_macro') {
-      const { child_verdict, comment_text } = parseResult.data;
-      if (!ticket_id || !child_verdict || !comment_text) {
-        return jsonResponse({ error: 'Ticket, veredito e texto da macro são obrigatórios.' }, 400);
+      const monitoriaId = parseResult.data.monitoria_id;
+      if (!ticket_id || !monitoriaId) {
+        return jsonResponse({ error: 'Ticket e monitoria salva são obrigatórios.' }, 400);
       }
+      const { data: savedMonitoria, error: monitoriaError } = await supabase.from('monitorias')
+        .select('id,ticket_id,form_id,score,status,active,evaluator_id,evaluator_note')
+        .eq('id', monitoriaId).maybeSingle();
+      if (monitoriaError) return jsonResponse({ error: 'Não foi possível conferir a monitoria salva.' }, 503);
+      const publicationError = childPublicationError(
+        savedMonitoria as ChildPublicationMonitoria | null, ticket_id, user.id, caller.role as string,
+      );
+      if (publicationError) return jsonResponse({ error: publicationError }, 403);
+      const { data: latestMonitoria, error: latestError } = await supabase.from('monitorias')
+        .select('id').eq('ticket_id', ticket_id).eq('active', true)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (latestError) return jsonResponse({ error: 'Não foi possível conferir a versão atual da monitoria.' }, 503);
+      if (latestMonitoria?.id !== monitoriaId) {
+        return jsonResponse({ error: 'Existe uma monitoria mais recente para este ticket. Confira o resultado atual antes do envio.' }, 409);
+      }
+      const comment_text = childPublicationText(savedMonitoria as ChildPublicationMonitoria);
+      const child_verdict = 'conforme';
       const { data: catalog, error: catalogError } = await supabase.from('queue_ticket_catalog')
-        .select('queue_type,verified_at').eq('ticket_id', ticket_id).maybeSingle();
-      const verifiedAt = Date.parse(catalog?.verified_at || '');
-      if (catalogError || !catalog || !['filhos', 'filhos_invalidos'].includes(catalog.queue_type)
-        || !Number.isFinite(verifiedAt) || verifiedAt < Date.now() - 2 * 60 * 60_000) {
-        return jsonResponse({ error: 'Chamado filho não verificado na fila. Atualize a fila e tente novamente.' }, 403);
-      }
-      if (caller.role === 'qualidade' && catalog.queue_type === 'filhos') {
-        const { data: assignment, error: assignmentError } = await supabase.from('queue_ticket_assignments')
-          .select('assigned_to').eq('ticket_id', ticket_id).eq('queue_type', 'filhos').maybeSingle();
-        if (assignmentError || assignment?.assigned_to !== user.id) {
-          return jsonResponse({ error: 'Este chamado filho não está atribuído a você.' }, 403);
-        }
-      }
+        .select('queue_type').eq('ticket_id', ticket_id).in('queue_type', ['filhos', 'filhos_invalidos']).limit(1);
+      if (catalogError) return jsonResponse({ error: 'Não foi possível conferir a origem do chamado filho.' }, 503);
+      if (!catalog?.length) return jsonResponse({ error: 'Chamado filho não encontrado no catálogo das filas.' }, 403);
       const rate = await supabase.rpc('consume_security_rate_limit', {
         bucket_key: `helpdesk-queue:publish-child:${user.id}`, max_requests: 5, window_seconds: 60,
       });
@@ -1877,9 +1884,11 @@ serve(async (req) => {
       const isNegative = csatScore === 'bad' || csatScore === 'bad_with_comment';
       const isPositive = csatScore === 'good' || csatScore === 'good_with_comment';
       const [knownQueue, childJob, childLog] = await Promise.all([
-        supabase.from('queue_ticket_catalog').select('queue_type').eq('ticket_id', ticket_id).maybeSingle(),
-        supabase.from('ai_evaluation_jobs').select('ticket_id').eq('ticket_id', ticket_id)
-          .eq('evaluation_type', 'chamado_filho').maybeSingle(),
+        supabase.from('queue_ticket_catalog').select('queue_type').eq('ticket_id', ticket_id)
+          .order('verified_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('ai_evaluation_jobs').select('ticket_id,status,result').eq('ticket_id', ticket_id)
+          .eq('evaluation_type', 'chamado_filho').eq('status', 'completed')
+          .order('started_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('ai_evaluation_logs').select('ticket_id').eq('ticket_id', ticket_id)
           .eq('evaluation_type', 'chamado_filho').limit(1).maybeSingle(),
       ]);
@@ -1893,7 +1902,7 @@ serve(async (req) => {
         : isNegative ? 'negativas' : isPositive ? 'positivas' : 'proativas';
 
       try {
-        await supabase.from('queue_ticket_catalog').upsert({
+        if (!(isChildTicket && knownQueue.data)) await supabase.from('queue_ticket_catalog').upsert({
           ticket_id: String(t.id),
           queue_type: queueTypeForCatalog,
           verified_at: new Date().toISOString(),
@@ -1916,6 +1925,7 @@ serve(async (req) => {
         ticket: {
           ticket_id: String(t.id),
           ticket_kind: isChildTicket ? 'chamado_filho' : 'atendimento',
+          child_evaluation: isChildTicket && childJob.data?.status === 'completed' ? childJob.data.result : null,
           subject: t.subject || '(Sem assunto)',
           description: t.description || '',
           status: t.status,

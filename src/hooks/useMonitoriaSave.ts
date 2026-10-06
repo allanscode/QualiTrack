@@ -103,6 +103,10 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
       toast.error('Informe a justificativa da reavaliação.');
       return;
     }
+    if (deps.header.form_id === CHILD_TICKET_FORM_ID && isEvaluationValid(deps.score) && !deps.header.evaluator_note?.trim()) {
+      toast.error('Preencha o Registro do Auditor antes de concluir um chamado filho válido.');
+      return;
+    }
 
     startTransition(async () => {
       try {

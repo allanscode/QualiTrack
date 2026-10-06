@@ -22,7 +22,6 @@ import {
   evaluateChildTicketWithAI,
   fetchTicketDialogue,
   normalizeChannel,
-  publishChildTicketMacro,
   csatStatusToSatisfactionResult,
   resolveCustomerType,
   resolveFormAndGuidelineForCustomerType,
@@ -65,7 +64,6 @@ import {
   ListChecks,
   CheckSquare,
   Eye,
-  Copy,
   MessageSquare,
   UserCog,
   Trash2,
@@ -97,7 +95,6 @@ import { usePresence } from '../providers/PresenceProvider';
 import { matchesAssignedMonitor } from '../lib/queueMonitorFilter';
 import { calculateAIEvaluationScore } from '../utils/aiEvaluationScore';
 import { resolveTicketTeamId } from '../lib/ticketTeam';
-import { buildChildTicketMacro } from '../lib/childTicketMacro';
 import { canAuditTickets } from '../lib/auditPermissions';
 import { getEvaluationOutcome } from '../lib/domainRules';
 import { childTicketForm } from '../lib/childTicketForm';
@@ -408,24 +405,6 @@ export default function AuditingQueueView({
   // Seleção de tickets individuais para avaliação em lote customizada
   const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
 
-  // Veredito e controle para chamados filhos (Válido / Inválido e cópia da macro)
-  const [childManualVerdict, setChildManualVerdict] = useState<'conforme' | 'nao_conforme' | null>(null);
-  const [copiedChildMacro, setCopiedChildMacro] = useState(false);
-  const [childCustomMacro, setChildCustomMacro] = useState<string>('');
-  const [publishingChildMacro, setPublishingChildMacro] = useState(false);
-  const [publishedChildMacroTickets, setPublishedChildMacroTickets] = useState<Set<string>>(new Set());
-
-  // Sincroniza o texto gerado da macro do chamado filho sempre que a avaliação da IA ou o veredito mudar
-  useEffect(() => {
-    if (!childPreviewTicket || !childAiEvaluation) {
-      setChildCustomMacro('');
-      return;
-    }
-    const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
-    setChildCustomMacro(buildChildTicketMacro(childAiEvaluation, currentVerdict));
-  }, [childPreviewTicket?.ticket_id, childAiEvaluation, childManualVerdict]);
-
-  // Estado para visualização do diálogo / conversa do chamado filho
   const [showChildDialogueModal, setShowChildDialogueModal] = useState(false);
   const [childDialogue, setChildDialogue] = useState<TicketCommentMessage[]>([]);
   const [parentDialogue, setParentDialogue] = useState<TicketCommentMessage[]>([]);
@@ -507,11 +486,9 @@ export default function AuditingQueueView({
   const handleCloseChildPreview = () => {
     if (loadingChildAi) return;
     setChildPreviewTicket(null);
-    setChildManualVerdict(null);
     setShowChildDialogueModal(false);
     setChildDialogue([]);
     setParentDialogue([]);
-    setChildCustomMacro('');
   };
 
   // Avaliação em lote: processa todos os tickets da página atual sequencialmente.
@@ -1611,6 +1588,18 @@ export default function AuditingQueueView({
   // Se ainda não avaliado, o botão principal é "Avaliar com IA" (índigo/roxo) ou "Auditar Manual".
   const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
     if (ticket.already_audited) {
+      if (activeQueue === 'filhos' || activeQueue === 'filhos_invalidos') {
+        const valid = ticket.monitoria_status === 'concluida' && (ticket.monitoria_score ?? 0) >= 75;
+        return <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={valid ? 'warning' : 'neutral'} size="xs">
+            {valid ? 'Macro do filho pendente' : 'Monitoria do filho em revisão'}
+          </Badge>
+          {ticket.monitoria_id && onOpenExistingMonitoria &&
+            <Button size="sm" variant="outline" onClick={() => onOpenExistingMonitoria(ticket.monitoria_id!)}>
+              <Eye className="w-3.5 h-3.5" /> Abrir monitoria
+            </Button>}
+        </div>;
+      }
       const publishable = Boolean(ticket.monitoria_status && PUBLISHABLE_HELPDESK_STATUSES.has(ticket.monitoria_status));
       const underReview = ticket.monitoria_status === 'pendente_revisao';
       const owner = monitorias.find(monitoria => monitoria.id === ticket.monitoria_id)?.evaluator_id;
@@ -3211,8 +3200,7 @@ export default function AuditingQueueView({
                 <div className="space-y-4">
                   {/* Status do Chamado Filho: VÁLIDO ou INVÁLIDO (sem score numérico de 1 a 100) */}
                   {(() => {
-                    const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
-                    const isValido = currentVerdict === 'conforme';
+                    const isValido = childAiEvaluation.status === 'conforme';
 
                     return (
                       <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
@@ -3228,7 +3216,7 @@ export default function AuditingQueueView({
                           </div>
                           <div>
                             <div className="text-xs font-black uppercase tracking-wider">
-                              {isValido ? 'Chamado Filho Válido' : 'Chamado Filho Inválido'}
+                              {isValido ? 'Sugestão da IA: válido' : 'Sugestão da IA: inválido'}
                             </div>
                             <div className="text-[11px] font-semibold text-brand-primary/90 mt-0.5">
                               Padrão: {childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : childAiEvaluation.detected_type === 'produtividade' ? 'Produtividade' : 'Escalonamento Interno'}
@@ -3236,33 +3224,6 @@ export default function AuditingQueueView({
                           </div>
                         </div>
 
-                        {/* Alternador Manual Válido / Inválido */}
-                        {canAudit && <div className="flex items-center gap-1.5 bg-surface-card/80 p-1 rounded-xl border border-surface-border self-start sm:self-auto">
-                          <button
-                            type="button"
-                            onClick={() => setChildManualVerdict('conforme')}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              isValido
-                                ? 'bg-functional-success text-white shadow-xs font-black'
-                                : 'text-brand-muted hover:text-brand-primary'
-                            }`}
-                          >
-                            <Check className="w-3 h-3" />
-                            <span>Válido</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setChildManualVerdict('nao_conforme')}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              !isValido
-                                ? 'bg-functional-error text-white shadow-xs font-black'
-                                : 'text-brand-muted hover:text-brand-primary'
-                            }`}
-                          >
-                            <X className="w-3 h-3" />
-                            <span>Inválido</span>
-                          </button>
-                        </div>}
                       </div>
                     );
                   })()}
@@ -3328,72 +3289,6 @@ export default function AuditingQueueView({
                     </div>
                   )}
 
-                  {/* Macro Pronta para o Zendesk */}
-                  {(() => {
-                    const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
-                    const macroText = buildChildTicketMacro(childAiEvaluation, currentVerdict);
-
-                    return (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
-                              Macro Formatada para o Zendesk
-                            </span>
-                            <span className="text-[10px] text-brand-muted font-medium">
-                              (Editável)
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setChildCustomMacro(macroText);
-                                toast.info('Macro restaurada para o padrão!');
-                              }}
-                              className="text-[10px] font-bold text-brand-muted hover:text-brand-primary underline cursor-pointer"
-                              title="Restaurar o texto sugerido original"
-                            >
-                              Restaurar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const textToCopy = childCustomMacro;
-                                navigator.clipboard.writeText(textToCopy);
-                                setCopiedChildMacro(true);
-                                toast.success('Macro do chamado filho copiada para colar no Zendesk!');
-                                setTimeout(() => setCopiedChildMacro(false), 2500);
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-highlight hover:underline cursor-pointer"
-                            >
-                              {copiedChildMacro ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5 text-functional-success" />
-                                  <span className="text-functional-success">Copiada!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3.5 h-3.5" />
-                                  <span>Copiar Macro</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                        <textarea
-                          value={childCustomMacro}
-                          onChange={e => setChildCustomMacro(e.target.value)}
-                          rows={6}
-                          className="w-full p-3 rounded-xl border border-surface-border bg-surface-subtle text-xs font-mono text-brand-primary leading-relaxed focus:outline-none focus:border-brand-highlight focus:ring-1 focus:ring-brand-highlight resize-y"
-                          placeholder="Texto da macro que será copiado para o Zendesk..."
-                        />
-                        <p className="text-[10px] text-brand-muted">
-                          Você pode editar o texto acima livremente. Ao clicar em <strong>Copiar Macro</strong>, o conteúdo exato deste campo será copiado para colar no Zendesk.
-                        </p>
-                      </div>
-                    );
-                  })()}
                 </div>
               )}
 
@@ -3402,7 +3297,7 @@ export default function AuditingQueueView({
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={loadingChildAi || publishingChildMacro}
+                  disabled={loadingChildAi}
                   className="disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   onClick={handleCloseChildPreview}
                 >
@@ -3424,33 +3319,14 @@ export default function AuditingQueueView({
                   <Button
                     variant="primary"
                     size="sm"
-                    disabled={loadingChildAi || !childAiEvaluation || publishingChildMacro || publishedChildMacroTickets.has(childPreviewTicket.ticket_id)}
-                    className="flex items-center gap-1.5 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                    onClick={async () => {
-                      if (loadingChildAi || !childAiEvaluation || publishingChildMacro) return;
-                      const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
-                      const isValido = currentVerdict === 'conforme';
-                      setPublishingChildMacro(true);
-                      try {
-                        await publishChildTicketMacro(childPreviewTicket.ticket_id, currentVerdict, childCustomMacro);
-                        childPreviewTicket.child_evaluation = {
-                          ...childAiEvaluation,
-                          status: currentVerdict,
-                        };
-                        setValidatedChildTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
-                        setPublishedChildMacroTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
-                        setTickets(prev => prev.filter(ticket => ticket.ticket_id !== childPreviewTicket.ticket_id));
-                        toast.success(`Macro de chamado filho ${isValido ? 'válido' : 'inválido'} enviada ao Zendesk.`);
-                        handleCloseChildPreview();
-                      } catch (error) {
-                        toast.error(error instanceof Error ? error.message : 'Falha ao enviar a macro ao Zendesk.');
-                      } finally {
-                        setPublishingChildMacro(false);
-                      }
+                    disabled={loadingChildAi || childPreviewTicket.already_audited}
+                    onClick={() => {
+                      const ticket = childPreviewTicket;
+                      void handleStartChildAudit(ticket);
                     }}
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>{publishingChildMacro ? 'Enviando...' : publishedChildMacroTickets.has(childPreviewTicket.ticket_id) ? 'Enviada ao Zendesk' : 'Enviar macro ao Zendesk'}</span>
+                    Abrir ficha de monitoria
                   </Button>
                 </div>}
               </div>

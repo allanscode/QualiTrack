@@ -189,6 +189,9 @@ export default function NewMonitoriaModal({
       satisfaction_record_text: ticketDetails.satisfaction_rating?.comment || '',
       customerType,
       isAiLocked: false,
+      ...(ticketDetails.ticket_kind === 'chamado_filho' && ticketDetails.child_evaluation
+        ? { child_evaluation: ticketDetails.child_evaluation }
+        : {}),
     });
 
     onClose();
@@ -595,9 +598,9 @@ export default function NewMonitoriaModal({
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {/* Opção 1: Avaliar com IA */}
+                  {/* Parecer recuperado ou nova análise */}
                   <div
-                    onClick={handleStartAI}
+                    onClick={ticketDetails.ticket_kind === 'chamado_filho' ? handleStartManual : handleStartAI}
                     className="p-4 rounded-2xl border-2 border-brand-accent/30 hover:border-brand-accent bg-surface-card hover:bg-brand-accent/5 transition-all cursor-pointer flex flex-col justify-between gap-3 shadow-xs group"
                   >
                     <div>
@@ -606,15 +609,17 @@ export default function NewMonitoriaModal({
                           <Sparkles className="w-5 h-5" />
                         </div>
                         <Badge variant={ticketDetails.ticket_kind === 'chamado_filho' ? 'warning' : 'success'} size="xs">
-                          {ticketDetails.ticket_kind === 'chamado_filho' ? 'Na fila de filhos' : 'Recomendado'}
+                          {ticketDetails.ticket_kind === 'chamado_filho' ? (ticketDetails.child_evaluation ? 'Parecer recuperado' : 'Ficha do filho') : 'Recomendado'}
                         </Badge>
                       </div>
                       <h5 className="text-sm font-black text-brand-primary group-hover:text-brand-accent transition-colors">
-                        Avaliar com IA
+                        {ticketDetails.ticket_kind === 'chamado_filho' ? 'Recuperar chamado filho' : 'Avaliar com IA'}
                       </h5>
                       <p className="text-xs text-brand-muted font-medium mt-1 leading-relaxed">
                         {ticketDetails.ticket_kind === 'chamado_filho'
-                          ? 'A análise por IA de tickets filhos está na fila Chamados Filhos. Aqui você pode abrir a ficha própria manualmente.'
+                          ? (ticketDetails.child_evaluation
+                            ? 'O parecer já registrado pela IA será mostrado na ficha própria. Confira os critérios e salve a avaliação humana no QWP.'
+                            : 'Abra a ficha própria para avaliar o chamado filho e salvar a monitoria no QWP.')
                           : 'A IA analisa a transcrição completa do diálogo no Zendesk e pré-preenche a ficha de critérios com notas e parecer fundamentado.'}
                       </p>
                     </div>
@@ -625,7 +630,7 @@ export default function NewMonitoriaModal({
                       className="w-full py-2 px-3 text-xs font-bold text-white bg-brand-accent hover:bg-brand-accent/90 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                     >
                       <Bot className="w-3.5 h-3.5" />
-                      <span>{ticketDetails.ticket_kind === 'chamado_filho' ? 'Usar fila de filhos' : 'Iniciar com IA'}</span>
+                      <span>{ticketDetails.ticket_kind === 'chamado_filho' ? 'Abrir ficha do filho' : 'Iniciar com IA'}</span>
                     </button>
                   </div>
 
