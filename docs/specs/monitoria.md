@@ -151,6 +151,7 @@ stateDiagram-v2
 - Revisão final antes de salvar
 - O auditor pode gerar sob demanda um novo `Registro do Auditor` por IA; a geração usa somente as respostas, observações e erros críticos atuais da etapa 2 e substitui o texto apenas após uma resposta válida
 - `form_snapshot` e `applied_config` salvos no momento da avaliação
+- Os campos visíveis do formulário Zendesk são salvos em `form_snapshot.ticket_fields` e aparecem na identificação e no registro/log da ficha salva. Monitorias antigas sem esse snapshot consultam os campos atuais do ticket, identificados como atuais porque podem ter mudado desde a avaliação.
 
 ## Cálculo de Score
 

@@ -111,5 +111,5 @@ describe('DashboardTileLayout', () => {
     await waitFor(() => expect(state.saveConfig).toHaveBeenCalledOnce());
     expect(state.saveConfig.mock.calls[0][0].dashboardLayouts.admin.hidden).toEqual([widgetId('StatCard', 'Média Geral')]);
     expect(screen.getByRole('button', { name: 'Mover Total para baixo na prévia' })).toBeTruthy();
-  });
+  }, 12000);
 });

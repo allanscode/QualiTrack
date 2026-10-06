@@ -25,7 +25,9 @@ DashboardMain
 
 ## DashboardContext
 
-A tabela **Decisões dos Gestores de Atendimento** está disponível nos cinco perfis e em **Customizar Dashboards**. Ela usa os eventos do histórico de cada monitoria visível ao perfil para mostrar aprovações e contestações, com filtros por ticket/agente/equipe, tipo de decisão e gestor, além de paginação. A prévia de personalização usa duas decisões ilustrativas.
+A tabela **Decisões dos Gestores de Atendimento** está disponível para administrador, gestor da qualidade, monitor da qualidade e gestor de atendimento, além de **Customizar Dashboards**. O gestor de atendimento vê apenas decisões das monitorias das equipes vinculadas a ele; os perfis da qualidade e o administrador veem o histórico geral. A restrição do gestor é aplicada na consulta, na tabela e na política de leitura do banco. A tabela filtra por ticket/agente/equipe, tipo de decisão e gestor, com paginação. Na prévia de personalização, o gestor vê uma amostra de uma equipe; os demais perfis veem duas decisões ilustrativas.
+
+A tabela **Erros Críticos por Agente** está disponível nesses mesmos perfis. Ela ordena agentes por quantidade de ocorrências nas monitorias filtradas, separa monitorias afetadas do total avaliado e permite filtrar por tipo de erro, buscar agente/ticket/erro e abrir cada avaliação. Conta questões críticas com resposta `NAO` e erros críticos selecionados separadamente, sem duplicar o mesmo ID na mesma monitoria. O texto é lido do `form_snapshot` quando disponível, preservando a descrição usada na avaliação. Nota zero por si só não é classificada como erro crítico. A prévia em **Customizar Dashboards** usa dados ilustrativos e mostra apenas uma equipe para o gestor de atendimento.
 
 Para monitorias, `team_id` representa a equipe principal do agente avaliado e
 determina o gestor de suporte que pode ver a monitoria e as metricas em que ela
@@ -111,6 +113,8 @@ interface DashboardFilters {
 | `RankingWidget` | Ranking de top/bottom performers | Por categoria | Via prop `accent` → `getIconBg()` |
 | `OfensoresChart` | Critérios mais descumpridos | `AlertOctagon` | `text-functional-error` |
 | `RecentAuditsTable` | Tabela de monitorias recentes | `ClipboardList` | `text-brand-muted` |
+| `ManagerDecisionHistoryTable` | Decisões de gestores, com acesso por equipe | `History` | `text-brand-highlight` |
+| `CriticalErrorsTable` | Ranking de agentes e avaliações com erro crítico | `AlertOctagon` | `text-functional-error` |
 | `ActionDeadlineWidget` | Status de prazo de ação | `Clock` | `text-functional-warning` |
 
 ### `getIconBg()` Map

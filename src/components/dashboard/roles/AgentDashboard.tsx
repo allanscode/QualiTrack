@@ -5,7 +5,6 @@ import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import ManagerDecisionHistoryTable from '../widgets/ManagerDecisionHistoryTable';
 import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import OfensoresChart from '../widgets/OfensoresChart';
 import SupportDrillDownModal from '../widgets/SupportDrillDownModal';
@@ -784,7 +783,6 @@ export default function AgentDashboard({
       </div>
 
       {/* LINHA 8 (grid-cols-1): Histórico Recente */}
-      <ManagerDecisionHistoryTable monitorias={maskedMonitorias} users={maskedUsers} profile="suporte" isCustomizing={isCustomizing} />
       <div className="overflow-hidden">
         <RecentAuditsTable 
           monitorias={maskedMonitorias} 

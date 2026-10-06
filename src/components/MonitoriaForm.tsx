@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { User, Monitoria, AIEvaluationResult, ChildTicketAiEvaluation, TicketCommentMessage } from '../types';
+import { User, Monitoria, AIEvaluationResult, ChildTicketAiEvaluation, TicketCommentMessage, ZendeskTicketField } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../providers/ThemeProvider';
 import {
@@ -57,6 +57,7 @@ import { useMonitoriaDraft } from '../hooks/useMonitoriaDraft';
 import { getEvaluationOutcome } from '../lib/domainRules';
 import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 import { isVerifiedTicketGroupPair } from '../lib/ticketTeam';
+import { getSavedZendeskTicketFields, normalizeZendeskTicketFields } from '../lib/monitoriaTicketFields';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -144,6 +145,14 @@ export default function MonitoriaForm({
     return normalizeTicketDialogue(raw, agentName);
   });
   const [loadingDialogue, setLoadingDialogue] = useState(false);
+  const [loadingTicketFields, setLoadingTicketFields] = useState(false);
+  const [ticketFieldsError, setTicketFieldsError] = useState(false);
+  const [ticketContextRetry, setTicketContextRetry] = useState(0);
+  const [ticketFieldContext, setTicketFieldContext] = useState<{ ticketId: string; fields: ZendeskTicketField[]; source: 'saved' | 'provided' | 'current' }>(() => ({
+    ticketId: initialData?.ticket_id?.trim() || '',
+    fields: getSavedZendeskTicketFields(initialData),
+    source: initialData?.form_snapshot?.ticket_fields ? 'saved' : 'provided',
+  }));
   const [showDialogueDrawer, setShowDialogueDrawer] = useState(false);
   const [dialogueSearch, setDialogueSearch] = useState('');
   const [dialogueFilter, setDialogueFilter] = useState<'all' | 'end_user' | 'agent' | 'system' | 'internal'>('all');
@@ -189,6 +198,8 @@ export default function MonitoriaForm({
     qualityFieldsToShow,
     handleCheckboxChange,
   } = useMonitoriaFormState(initialData, forms, dissatisfactionFields);
+  const ticketFields = ticketFieldContext.ticketId === header.ticket_id?.trim() ? ticketFieldContext.fields : [];
+  const ticketFieldSource = ticketFieldContext.ticketId === header.ticket_id?.trim() ? ticketFieldContext.source : 'current';
   const [lookedUpTicketGroup, setLookedUpTicketGroup] = useState<{
     ticketId: string; agentId: string; teamId: string; groupName?: string;
   } | null>(null);
@@ -285,28 +296,36 @@ export default function MonitoriaForm({
     ? `Resolvido por ${evaluatedAgent.name}${evaluatedTeam?.name ? ` da equipe ${evaluatedTeam.name}` : ''}`
     : '');
 
-  // Carregamento resiliente do diálogo: se o ticket_id existe mas ainda não temos mensagens, busca no Helpdesk
+  // Busca o contexto do ticket uma vez, inclusive quando o diálogo já veio da IA.
+  const fetchedTicketContextRef = useRef<string | null>(null);
   useEffect(() => {
     const ticketId = header.ticket_id?.trim();
-    if (!ticketId || dialogue.length > 0) return;
+    if (!ticketId || (dialogue.length > 0 && ticketFields.length > 0) || fetchedTicketContextRef.current === ticketId) return;
 
     let cancelled = false;
-    setLoadingDialogue(true);
+    fetchedTicketContextRef.current = ticketId;
+    if (dialogue.length === 0) setLoadingDialogue(true);
+    if (ticketFields.length === 0) { setLoadingTicketFields(true); setTicketFieldsError(false); }
     fetchTicketDialogue(ticketId)
       .then(res => {
-        if (!cancelled && res?.comments && res.comments.length > 0) {
+        if (cancelled) return;
+        if (dialogue.length === 0 && res?.comments && res.comments.length > 0) {
           setDialogue(normalizeTicketDialogue(res.comments, evaluatedAgent?.name));
+        }
+        if (ticketFields.length === 0) {
+          setTicketFieldContext({ ticketId, fields: normalizeZendeskTicketFields(res.ticketFields), source: 'current' });
         }
       })
       .catch(err => {
-        console.warn('[MonitoriaForm] Diálogo não carregado automaticamente:', err);
+        console.warn('[MonitoriaForm] Contexto Zendesk não carregado automaticamente:', err);
+        if (!cancelled && ticketFields.length === 0) setTicketFieldsError(true);
       })
       .finally(() => {
-        if (!cancelled) setLoadingDialogue(false);
+        if (!cancelled) { setLoadingDialogue(false); setLoadingTicketFields(false); }
       });
 
     return () => { cancelled = true; };
-  }, [header.ticket_id, dialogue.length, evaluatedAgent?.name]);
+  }, [header.ticket_id, dialogue.length, ticketFields.length, evaluatedAgent?.name, ticketContextRetry]);
 
   // Se o agente for selecionado ou alterado, revalida papéis no diálogo existente
   useEffect(() => {
@@ -549,6 +568,7 @@ export default function MonitoriaForm({
     dissatisfactionAnswers,
     score,
     selectedForm,
+    ticketFields,
     qualityConfig,
     allUsers,
     forms,
@@ -1029,19 +1049,19 @@ export default function MonitoriaForm({
               </div>
 
               {/* Campos do Formulário no Zendesk (exclusivamente campos do formulário ativo, sem campos ocultos) */}
-              {Array.isArray((initialData as any)?.ticket_fields) && (initialData as any).ticket_fields.length > 0 && (
+              {ticketFields.length > 0 && (
                 <div className="mt-8 pt-6 border-t border-surface-border/60 animate-fade-in">
                   <div className="flex items-center gap-2 mb-4">
                     <FileText className="w-4 h-4 text-brand-highlight" />
                     <h4 className="text-xs font-black uppercase text-brand-primary tracking-wider">
-                      Campos do Formulário no Zendesk ({(initialData as any).ticket_fields.length})
+                      Campos do Formulário no Zendesk ({ticketFields.length})
                     </h4>
                     <span className="text-[10px] text-brand-muted font-bold hidden sm:inline">
-                      · Dados reais preenchidos no chamado para validação
+                      · {ticketFieldSource === 'saved' ? 'Dados registrados na avaliação' : ticketFieldSource === 'current' ? 'Dados atuais do chamado; podem ter mudado desde a avaliação' : 'Dados do chamado para validação'}
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {(initialData as any).ticket_fields.map((field: { title: string; value: string }, idx: number) => (
+                    {ticketFields.map((field, idx) => (
                       <div key={idx} className="p-3 bg-surface-card border border-surface-border rounded-xl shadow-xs space-y-1">
                         <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted line-clamp-1" title={field.title}>
                           {field.title}
@@ -1723,24 +1743,27 @@ export default function MonitoriaForm({
                       </div>
                     )}
 
-                    {/* Contexto dos Campos do Ticket Utilizados no Confronto */}
-                    {Array.isArray((initialData as any)?.ticket_fields) && (initialData as any).ticket_fields.length > 0 && (
-                      <div className="pt-3 border-t border-surface-border">
-                        <details className="group/ticketFields">
-                          <summary className="text-[10px] font-black uppercase text-brand-muted tracking-wider cursor-pointer hover:text-brand-primary flex items-center gap-1">
-                            <span>Visualizar dados do formulário Zendesk confrontados ({ (initialData as any).ticket_fields.length } campos)</span>
-                          </summary>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 pt-2">
-                            {(initialData as any).ticket_fields.map((f: { title: string; value: string }, idx: number) => (
-                              <div key={idx} className="p-2 rounded bg-surface-subtle border border-surface-border text-xs">
-                                <span className="font-semibold text-brand-primary block text-[10px]">{f.title}:</span>
-                                <span className="text-brand-muted text-[11px]">{f.value || '—'}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </details>
+                  </div>
+                )}
+
+                {ticketFields.length > 0 && (
+                  <div className="rounded-2xl border border-surface-border bg-surface-card p-5 shadow-premium">
+                    <details className="group/ticketFields">
+                      <summary className="flex cursor-pointer items-center gap-2 text-xs font-black uppercase tracking-wider text-brand-primary hover:text-brand-highlight">
+                        <FileText className="size-4" />
+                        Campos do formulário Zendesk ({ticketFields.length})
+                      </summary>
+                      <p className="mt-2 text-[11px] text-brand-muted">{ticketFieldSource === 'saved' ? 'Dados registrados na avaliação.' : ticketFieldSource === 'current' ? 'Dados atuais do chamado; podem ter mudado desde a avaliação.' : 'Dados do chamado para validação.'}</p>
+                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {ticketFields.map((field, index) => <div key={`${field.title}-${index}`} className="rounded-lg border border-surface-border bg-surface-subtle p-3 text-xs"><span className="block text-[10px] font-bold uppercase text-brand-muted">{field.title}</span><span className="mt-1 block break-words font-medium text-brand-primary">{field.value || '—'}</span></div>)}
                       </div>
-                    )}
+                    </details>
+                  </div>
+                )}
+                {ticketFields.length === 0 && isViewOnly && header.ticket_id && (
+                  <div className="rounded-xl border border-surface-border bg-surface-subtle px-4 py-3 text-xs text-brand-muted">
+                    {loadingTicketFields ? 'Carregando campos do formulário Zendesk…' : ticketFieldsError ? 'Não foi possível carregar os campos atuais do Zendesk.' : 'Nenhum campo visível do formulário Zendesk foi encontrado para este ticket.'}
+                    {ticketFieldsError && <button type="button" onClick={() => { fetchedTicketContextRef.current = null; setTicketContextRetry(value => value + 1); }} className="ml-2 font-bold text-brand-highlight hover:underline focus-visible:ring-2 focus-visible:ring-brand-accent">Tentar novamente</button>}
                   </div>
                 )}
 

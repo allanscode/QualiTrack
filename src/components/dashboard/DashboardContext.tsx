@@ -166,8 +166,6 @@ export function DashboardProvider({
               } else {
                 monitoriasQuery = monitoriasQuery.eq('evaluated_id', currentUser.id);
               }
-            } else if (currentUser.role === 'qualidade') {
-              monitoriasQuery = monitoriasQuery.eq('evaluator_id', currentUser.id);
             } else if (currentUser.role === 'gestor_suporte') {
               if (myTeamIds.length > 0) {
                 monitoriasQuery = monitoriasQuery.in('team_id', myTeamIds);
@@ -259,8 +257,6 @@ export function DashboardProvider({
         }
 
         docs = docs.filter(m => m.evaluated_id === currentUser.id || (m.team_id && myTeamIds.includes(m.team_id)));
-      } else if (currentUser.role === 'qualidade') {
-        docs = docs.filter(m => m.evaluator_id === currentUser.id);
       } else if (currentUser.role === 'gestor_suporte') {
         const myTeamIds = currentUser.team_ids || [];
         docs = docs.filter(m => m.team_id && myTeamIds.includes(m.team_id));

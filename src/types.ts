@@ -80,6 +80,13 @@ export interface EvaluationForm {
   active: boolean;
   createdBy: string;
   created_at: string;
+  /** Snapshot dos campos visíveis do Zendesk no momento da avaliação. */
+  ticket_fields?: ZendeskTicketField[];
+}
+
+export interface ZendeskTicketField {
+  title: string;
+  value: string;
 }
 
 export type MonitoriaStatus =
@@ -149,6 +156,8 @@ export interface Monitoria {
   satisfaction_record_text?: string;
   selected_critical_errors?: string[];
   form_snapshot?: EvaluationForm;
+  /** Campos transitórios recebidos ao iniciar a avaliação pela fila. */
+  ticket_fields?: ZendeskTicketField[];
   active?: boolean;
   display_id?: number;
   history: MonitoriaHistoryEntry[];

@@ -7,6 +7,7 @@ import RankingWidget from '../widgets/RankingWidget';
 import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import ManagerDecisionHistoryTable from '../widgets/ManagerDecisionHistoryTable';
+import CriticalErrorsTable from '../widgets/CriticalErrorsTable';
 import OfensoresChart from '../widgets/OfensoresChart';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
@@ -1389,7 +1390,8 @@ export default function SupportManagerDashboard({
         monitorias={isCustomizing ? mockRecentMonitorias : myMonitorias}
         users={users}
       />
-      <ManagerDecisionHistoryTable monitorias={myMonitorias} users={users} profile="gestor_suporte" isCustomizing={isCustomizing} />
+      <ManagerDecisionHistoryTable monitorias={myMonitorias} users={users} profile="gestor_suporte" allowedTeamIds={myTeamIds} isCustomizing={isCustomizing} />
+      <CriticalErrorsTable monitorias={myMonitorias} forms={forms} users={users} profile="gestor_suporte" isCustomizing={isCustomizing} />
 
       {drillDown && (
         <SupportDrillDownModal

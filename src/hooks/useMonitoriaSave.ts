@@ -1,6 +1,6 @@
 import { useTransition } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
-import { User, Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, EvaluationForm, Team, DissatisfactionField } from '../types';
+import { User, Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, EvaluationForm, Team, DissatisfactionField, ZendeskTicketField } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
 import { isEvaluationValid } from '../lib/domainRules';
 import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
@@ -21,6 +21,7 @@ interface SaveHookDeps {
   dissatisfactionAnswers: Record<string, string[]>;
   score: number;
   selectedForm: EvaluationForm | undefined;
+  ticketFields: ZendeskTicketField[];
   qualityConfig: any;
   allUsers: User[];
   forms: EvaluationForm[];
@@ -196,6 +197,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           active: true,
           form_snapshot: {
             ...(deps.selectedForm as any),
+            ticket_fields: deps.ticketFields,
             ...(deps.header.form_id === CHILD_TICKET_FORM_ID ? { ticket_kind: 'chamado_filho' } : {}),
             ai_evaluation: deps.header.form_id === deps.initialData?.form_id
               ? ((deps.initialData as any)?.aiEvaluation || (deps.initialData as any)?.form_snapshot?.ai_evaluation)

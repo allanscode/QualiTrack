@@ -13,6 +13,7 @@ type Props = {
   users: User[];
   profile: string;
   isCustomizing?: boolean;
+  allowedTeamIds?: string[];
 };
 
 const previewDecisions: ManagerDecision[] = [
@@ -22,12 +23,17 @@ const previewDecisions: ManagerDecision[] = [
     entry: { action: 'Contestação realizada pelo Gestor de Suporte', by_id: 'preview-gestor', by_name: 'Gestor de Atendimento', at: '2026-10-05T12:00:00Z' }, kind: 'contestation' },
 ];
 
-export default function ManagerDecisionHistoryTable({ monitorias, users, profile, isCustomizing = false }: Props) {
+export default function ManagerDecisionHistoryTable({ monitorias, users, profile, isCustomizing = false, allowedTeamIds = [] }: Props) {
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<'all' | 'approval' | 'contestation'>('all');
   const [managerId, setManagerId] = useState('');
   const [page, setPage] = useState(0);
-  const preview = isCustomizing ? previewDecisions : getManagerDecisionHistory(monitorias, users);
+  const scopedMonitorias = profile === 'gestor_suporte'
+    ? monitorias.filter(item => !!item.team_id && allowedTeamIds.includes(item.team_id))
+    : monitorias;
+  const preview = isCustomizing
+    ? (profile === 'gestor_suporte' ? previewDecisions.slice(0, 1) : previewDecisions)
+    : getManagerDecisionHistory(scopedMonitorias, users);
   const managers = useMemo(() => [...new Map(preview.map(item => [item.entry.by_id, item.entry.by_name])).entries()], [preview]);
   const filtered = preview.filter(item => {
     const query = search.trim().toLocaleLowerCase('pt-BR');
@@ -48,7 +54,7 @@ export default function ManagerDecisionHistoryTable({ monitorias, users, profile
             <span className="flex size-9 items-center justify-center rounded-xl bg-surface-subtle text-brand-highlight"><History className="size-5" /></span>
             <div>
               <h3 className="text-sm font-black text-brand-primary">Decisões dos Gestores de Atendimento</h3>
-              <p className="text-xs text-brand-muted">{isCustomizing ? 'Prévia ilustrativa com filtros ativos' : `${filtered.length} decisões das monitorias filtradas`}</p>
+              <p className="text-xs text-brand-muted">{isCustomizing ? `Prévia ilustrativa${profile === 'gestor_suporte' ? ' · somente equipes do gestor' : ''}` : `${filtered.length} decisões das monitorias filtradas`}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
