@@ -19,6 +19,16 @@ const monitoria = {
   corrective_action: 'Feedback individual aplicado e alinhamento de conduta realizado.',
   history: [{ action: 'Criacao de Monitoria', by_id: auditor.id, by_name: auditor.name, at: '2026-09-25T15:05:00Z' }],
 } as Monitoria;
+if (params.get('timeline') === 'long') {
+  monitoria.status = 'contestacao_negada';
+  monitoria.created_at = '2026-10-06T11:17:00Z';
+  monitoria.updated_at = '2026-10-06T17:15:00Z';
+  monitoria.history = [
+    { action: 'Monitoria Criada', by_id: auditor.id, by_name: auditor.name, at: '2026-10-06T11:17:00Z' },
+    { action: 'Contestação do Gestor de Atendimento', by_id: manager.id, by_name: manager.name, at: '2026-10-06T16:47:00Z', note: 'Com certeza pode melhorar nessa questão de chamar o cliente de 10 em 10 minutos. Ele chamou de outra forma e o cliente sumiu e não respondeu a uma pergunta importante. A parte técnica e a investigação com as informações que o cliente passou foram cumpridas. O cliente deu nota baixa, pois o chamado foi fechado. Mas é aquela questão de ter que segurar a fila quando temos outros clientes esperando.' },
+    { action: 'Reavaliação da Qualidade', by_id: auditor.id, by_name: auditor.name, at: '2026-10-06T17:15:00Z', note: 'Entendo o ponto apresentado e reconheço que houve investigação técnica com base nas informações encaminhadas pelo cliente. Entretanto, a avaliação considera separadamente os critérios técnicos e procedimentais. Conforme o item do manual, o cliente deve receber uma atualização a cada 10 minutos, sendo admitido o intervalo máximo de 20 minutos quando o operador estiver em atuação técnica previamente informada. Nesse atendimento houve um intervalo de 30 minutos entre as mensagens, sem aviso prévio.' },
+  ];
+}
 if (isPj) {
   Object.assign(monitoria, {
     team_id: 'pj-bruno', team_name: 'PJ Bruno', pj_review_required: true,

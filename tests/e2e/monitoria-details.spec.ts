@@ -32,3 +32,22 @@ for (const width of [390, 1280]) {
     await expect(page.getByRole('button', { name: 'Enviar contestação a Victor' })).toHaveCount(0);
   });
 }
+
+for (const width of [390, 960]) {
+  test(`timeline long notes fit and expand at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 740 });
+    await page.goto('/tests/e2e/fixtures/monitoria-details.html?theme=dark&timeline=long');
+    const expand = page.getByRole('button', { name: 'Ler observação completa' }).first();
+    await expect(expand).toBeVisible();
+    const noteId = await expand.getAttribute('aria-controls');
+    const collapsedHeight = await page.evaluate(id => document.getElementById(id!)?.getBoundingClientRect().height ?? 0, noteId);
+    await expect(page.getByRole('dialog')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+    await page.screenshot({ path: `scratch/monitoria-timeline-${width}.png`, fullPage: true });
+    await expand.click();
+    await expect(page.getByRole('button', { name: 'Recolher observação' }).first()).toHaveAttribute('aria-expanded', 'true');
+    const expandedHeight = await page.evaluate(id => document.getElementById(id!)?.getBoundingClientRect().height ?? 0, noteId);
+    expect(expandedHeight).toBeGreaterThan(collapsedHeight);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  });
+}

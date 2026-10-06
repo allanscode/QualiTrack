@@ -1,10 +1,8 @@
-import React from 'react';
 import { Monitoria, Team, User } from '../types';
 import { ActionType, getPreviousStage, getNextStage, getStageLabel } from '../hooks/useMonitoriaActions';
-import { getStatusConfig, getHistoryEventConfig, VARIANT_TEXT_CLASS } from '../lib/statusHelper';
-import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
-import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, History, Paperclip, ArrowLeftRight, ArrowLeft, ArrowRight, Clock, Send } from 'lucide-react';
+import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, Paperclip, ArrowLeftRight, ArrowLeft, ArrowRight, Clock, Send } from 'lucide-react';
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
+import MonitoriaTimeline from './MonitoriaTimeline';
 import Button from './ui/Button';
 import PjReviewFlow from './PjReviewFlow';
 import { isChildTicketMonitoria } from '../lib/childTicketForm';
@@ -20,7 +18,6 @@ type Props = {
 };
 
 export default function MonitoriaDetails({ monitoria: m, user, users, teams = [], onView, onAction, onSendToHelpdesk }: Props) {
-  const staticData = { users };
   const setViewingMonitoria = onView;
   const setActionModal = onAction;
   const isPj = Boolean(m.pj_review_required || m.pj_review_kind);
@@ -29,78 +26,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
   return (
     <div className="space-y-5">
               {isPj && <PjReviewFlow monitoria={m} />}
-              {m.history?.length > 0 && (
-                <div className="pb-4">
-                  <p className="text-xs font-black uppercase text-brand-primary tracking-wider mb-3 ml-1 flex items-center gap-2">
-                    <History className="w-3.5 h-3.5 text-brand-highlight" /> Linha do Tempo
-                  </p>
-                  <div className="overflow-x-auto -mx-1 px-1 pb-1">
-                    <div className="flex items-start min-w-max">
-                      {m.history.map((h, i) => {
-                        const ev = getHistoryEventConfig(h.action);
-                        const EvIcon = ev.icon;
-                        const evColor = VARIANT_TEXT_CLASS[ev.variant];
-                        const actorName = (user?.role === 'suporte' || user?.role === 'gestor_suporte') && !staticData.users.some(actor => actor.id === h.by_id)
-                          ? 'Equipe de Qualidade'
-                          : resolveTimelineActor(h.by_id, h.by_name, staticData.users, user?.role);
-                        const eventDate = formatTimelineDateTime(h.at, m.created_at);
-                        return (
-                          <React.Fragment key={i}>
-                            {i > 0 && <div className="w-8 md:w-12 h-0.5 bg-surface-border/60 mt-[9px] flex-shrink-0" />}
-                            <div className="flex flex-col items-center text-center w-[150px] flex-shrink-0 px-1">
-                              <div className={`w-3 h-3 rounded-full bg-current border-2 border-surface-bg shadow-sm flex-shrink-0 ${evColor}`} />
-                              <span className="mt-2 text-[11px] font-bold text-brand-primary leading-tight flex items-center gap-1.5">
-                                <EvIcon className={`w-3 h-3 shrink-0 ${evColor}`} /> {h.action}
-                              </span>
-                              <span className="text-[9px] font-bold text-brand-primary/80 uppercase tracking-widest mt-1 opacity-70 leading-tight">
-                                {actorName}
-                              </span>
-                              <span className="text-[9px] font-medium text-brand-primary/80 mt-0.5 leading-tight">
-                                {eventDate}
-                              </span>
-                              {h.note && (
-                                <div className="mt-2 text-[10px] text-brand-primary/80 bg-surface-subtle/50 p-2 rounded-xl border border-surface-border/30 leading-snug">
-                                  {h.note}
-                                </div>
-                              )}
-                              {h.attachments && h.attachments.length > 0 && (
-                                <div className="mt-2 w-full">
-                                  <ActionAttachmentsViewer attachments={h.attachments} compact />
-                                </div>
-                              )}
-                            </div>
-                          </React.Fragment>
-                        );
-                      })}
-
-                      {/* Etapa atual — mesma regra do MonitoriaList */}
-                      {!['concluida', 'finalizada_alterada'].includes(m.status) && (() => {
-                        const cfg = getStatusConfig(m.status);
-                        const StepIcon = cfg.icon;
-                        const colorClass = VARIANT_TEXT_CLASS[cfg.variant];
-                        const currentStepDate = formatTimelineDateTime(m.updated_at, m.created_at);
-                        return (
-                          <React.Fragment>
-                            {m.history.length > 0 && <div className="w-8 md:w-12 h-0.5 bg-surface-border/60 mt-[9px] flex-shrink-0" />}
-                            <div className={`flex flex-col items-center text-center w-[150px] flex-shrink-0 px-1 ${colorClass}`}>
-                              <div className="w-3 h-3 rounded-full bg-surface-bg border-2 border-current animate-pulse flex-shrink-0" />
-                              <span className="mt-2 text-[11px] font-black leading-tight flex items-center gap-1.5">
-                                <StepIcon className="w-3 h-3 shrink-0" /> {cfg.label}
-                              </span>
-                              <span className="text-[9px] font-bold text-brand-primary/80 uppercase tracking-widest mt-1">
-                                Etapa atual
-                              </span>
-                              <span className="text-[9px] font-medium text-brand-primary/80 mt-0.5 leading-tight">
-                                {currentStepDate}
-                              </span>
-                            </div>
-                          </React.Fragment>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              )}
+              <MonitoriaTimeline monitoria={m} user={user} users={users} />
 
               <div className="space-y-4 pb-2">
                 <p className="text-xs font-black uppercase text-brand-primary tracking-wider ml-1">Observações da Qualidade</p>

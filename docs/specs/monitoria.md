@@ -13,6 +13,8 @@
 
 Na lista de monitorias, o selo **Ticket filho** e o filtro **Todos os tickets / Tickets filhos / Atendimentos** usam o mesmo identificador da ficha de ticket filho (`isChildTicketMonitoria`). Cada linha mostra a ação mais recente pelo horário do histórico, abaixo dos dados principais. As linhas virtualizadas têm altura suficiente para essa informação e os contadores de status usam fonte ampliada.
 
+Nos detalhes da monitoria, a linha do tempo apresenta os eventos em sequência vertical, com ação, responsável e data em linhas legíveis. Observações longas mostram duas linhas inicialmente e podem ser expandidas sem perder o texto completo; anexos permanecem associados ao evento. A etapa atual aparece ao fim do histórico quando a monitoria ainda não foi concluída.
+
 ### Fluxo de monitorias PJ
 
 Quando `teams.requires_pj_review` está ativo e a nota é inferior a 75%, a sequência obrigatória é **Gestor PJ → Gestor da Qualidade**. O gestor encaminha aprovação ou contestação justificada por `act_on_monitoria_as_support_manager`; o status passa diretamente a `aguardando_gestor_qualidade`. `pj_review_kind` registra o tipo de parecer. A Qualidade toma a decisão final e resolve `contestation_result` quando houver contestação. Os campos e a função do antigo revisor PJ permanecem apenas para preservar o histórico; novas monitorias não entram em `aguardando_revisao_pj`.
