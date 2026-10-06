@@ -1,17 +1,25 @@
 import { useId, useState } from 'react';
 import { History } from 'lucide-react';
 import type { Monitoria, User } from '../types';
-import { getHistoryEventConfig, getStatusConfig, VARIANT_TEXT_CLASS } from '../lib/statusHelper';
+import { getHistoryEventConfig, getStatusConfig, VARIANT_TEXT_CLASS, type StatusConfig } from '../lib/statusHelper';
 import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 
-function TimelineNote({ text }: { text: string }) {
+const NOTE_ACCENT_CLASS: Record<StatusConfig['variant'], string> = {
+  warning: 'border-amber-500/25 shadow-[0_8px_20px_-14px_rgba(245,158,11,0.35)]',
+  error: 'border-rose-500/25 shadow-[0_8px_20px_-14px_rgba(244,63,94,0.35)]',
+  info: 'border-sky-500/25 shadow-[0_8px_20px_-14px_rgba(14,165,233,0.35)]',
+  success: 'border-emerald-500/25 shadow-[0_8px_20px_-14px_rgba(16,185,129,0.35)]',
+  neutral: 'border-surface-border/50 shadow-[0_8px_20px_-14px_rgba(0,0,0,0.2)]',
+};
+
+function TimelineNote({ text, variant }: { text: string; variant: StatusConfig['variant'] }) {
   const [expanded, setExpanded] = useState(false);
   const noteId = useId();
   const isLong = text.length > 180;
 
   return (
-    <div className="mt-2 rounded-lg bg-surface-subtle/60 px-3 py-2.5">
+    <div className={`mt-2 rounded-lg border bg-surface-subtle/60 px-3 py-2.5 ${NOTE_ACCENT_CLASS[variant]}`}>
       <p id={noteId} className={`whitespace-pre-wrap break-words text-xs leading-relaxed text-brand-primary ${isLong && !expanded ? 'line-clamp-2' : ''}`}>
         {text}
       </p>
@@ -66,7 +74,7 @@ export default function MonitoriaTimeline({ monitoria, user, users }: Props) {
                   </time>
                 </div>
                 <p className="mt-1 pl-[22px] text-[11px] font-medium text-brand-muted">{actorName}</p>
-                {entry.note && <TimelineNote text={entry.note} />}
+                {entry.note && <TimelineNote text={entry.note} variant={event.variant} />}
                 {entry.attachments && entry.attachments.length > 0 && (
                   <div className="mt-2 min-w-0"><ActionAttachmentsViewer attachments={entry.attachments} compact /></div>
                 )}
