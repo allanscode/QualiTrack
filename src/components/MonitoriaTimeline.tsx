@@ -6,11 +6,11 @@ import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 
 const NOTE_ACCENT_CLASS: Record<StatusConfig['variant'], string> = {
-  warning: 'border-amber-500/25 shadow-[0_8px_20px_-14px_rgba(245,158,11,0.35)]',
-  error: 'border-rose-500/25 shadow-[0_8px_20px_-14px_rgba(244,63,94,0.35)]',
-  info: 'border-sky-500/25 shadow-[0_8px_20px_-14px_rgba(14,165,233,0.35)]',
-  success: 'border-emerald-500/25 shadow-[0_8px_20px_-14px_rgba(16,185,129,0.35)]',
-  neutral: 'border-surface-border/50 shadow-[0_8px_20px_-14px_rgba(0,0,0,0.2)]',
+  warning: 'border-amber-500/25',
+  error: 'border-rose-500/25',
+  info: 'border-sky-500/25',
+  success: 'border-emerald-500/25',
+  neutral: 'border-surface-border/50',
 };
 
 function TimelineNote({ text, variant }: { text: string; variant: StatusConfig['variant'] }) {
