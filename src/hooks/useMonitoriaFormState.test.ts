@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { EvaluationForm, Monitoria } from '../types';
 import { useMonitoriaFormState } from './useMonitoriaFormState';
+import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 
 describe('useMonitoriaFormState', () => {
   it('converte ticket_date ISO para YYYY-MM-DD no fuso de São Paulo', () => {
@@ -46,5 +47,20 @@ describe('useMonitoriaFormState', () => {
     expect(result.current.selectedForm?.id).toBe(oldForm.id);
     act(() => result.current.setHeader(previous => ({ ...previous, form_id: correctedForm.id })));
     expect(result.current.selectedForm?.id).toBe(correctedForm.id);
+  });
+
+  it('abre reavaliação de filho antigo na ficha própria sem reaproveitar respostas incompatíveis', () => {
+    const oldForm = { id: 'regular', title: 'Atendimento', sections: [] } as unknown as EvaluationForm;
+    const childForm = { id: CHILD_TICKET_FORM_ID, title: 'Ticket Filho', sections: [] } as unknown as EvaluationForm;
+    const initialData = {
+      form_id: oldForm.id,
+      form_snapshot: { ...oldForm, ticket_kind: 'chamado_filho' },
+      answers: { 'old-question': 'SIM' },
+      _reevaluate: true,
+    } as unknown as Monitoria;
+    const { result } = renderHook(() => useMonitoriaFormState(initialData, [oldForm, childForm], []));
+    expect(result.current.header.form_id).toBe(CHILD_TICKET_FORM_ID);
+    expect(result.current.selectedForm?.id).toBe(CHILD_TICKET_FORM_ID);
+    expect(result.current.scores).toEqual({});
   });
 });

@@ -17,6 +17,7 @@ import type { HelpdeskProvider, PublishResult } from './types.ts';
 import { buildEditedCommentHtml, buildEvaluationHtml } from './template.ts';
 import { ZendeskProvider } from './zendesk.ts';
 import { publicationAccess } from './access.ts';
+import { canPublishMonitoriaStatus } from './publication-status.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 
@@ -119,7 +120,7 @@ serve(async (req: Request) => {
     // 2. Buscar a monitoria por monitoria_id. 404 se não existir.
     const { data: monitoria, error: monitoriaError } = await supabaseAdmin
       .from('monitorias')
-      .select('id, active, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score')
+      .select('id, active, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score, form_id, form_snapshot')
       .eq('id', monitoria_id)
       .maybeSingle();
 
@@ -130,6 +131,10 @@ serve(async (req: Request) => {
 
     if (!monitoria) {
       return failure('Monitoria não encontrada', 'not_found', 404);
+    }
+    if (monitoria.form_id === '6c7d1e88-841b-4da9-9a66-9f1464ce896f'
+      || monitoria.form_snapshot?.ticket_kind === 'chamado_filho') {
+      return failure('Tickets filhos usam a macro própria da fila Chamados Filhos.', 'validation', 409);
     }
 
     // 2b. AUTORIZAR o chamador.
@@ -188,8 +193,8 @@ serve(async (req: Request) => {
     }
     const normalizedTicketId = ticketId.trim();
 
-    if (!['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'].includes(monitoria.status)) {
-      return failure('A monitoria ainda aguarda decisão final. Revise e conclua o fluxo antes de enviar ao Zendesk.', 'validation', 409);
+    if (!canPublishMonitoriaStatus(monitoria.status)) {
+      return failure('A monitoria está em contestação ou decisão de gestor. Aguarde a próxima versão da avaliação antes de publicar no Zendesk.', 'validation', 409);
     }
 
     // 3b. Determinar desfecho (outcome) com base nas regras de domínio estritas (WQ-22)

@@ -1,4 +1,5 @@
 import type { User, UserTeam, Team, TeamGroup, EvaluationForm, Monitoria, AccessRequest, DissatisfactionField, UserPreferences, AgentFeedback } from '../types';
+import { CHILD_TICKET_FORM_ID } from './childTicketForm';
 const DB_PREFIX = 'qualitrack_mock_';
 
 const generateId = (): string => {
@@ -138,6 +139,29 @@ const INITIAL_DATA: {
     { id: 'ut-5', user_id: PJ_AGENT_ID, team_id: 'team-pj-bruno', created_at: new Date().toISOString() }
   ],
   forms: [
+    {
+      id: CHILD_TICKET_FORM_ID,
+      title: 'Ficha de Monitoria de Ticket Filho',
+      description: 'Assunto, texto da macro e destinatário do ticket filho.',
+      team_id: '',
+      active: true,
+      createdBy: ADMIN_ID,
+      created_at: new Date().toISOString(),
+      sections: [
+        { id: 'child-subject', title: 'Assunto da abertura', weight: 35, questions: [
+          { id: 'child-subject-preserved', text: 'O assunto de abertura preservou o padrão da macro correspondente?', type: 'yes_no_na', is_critical: true },
+          { id: 'child-parent-linked', text: 'O chamado pai foi identificado e vinculado corretamente?', type: 'yes_no_na' },
+        ] },
+        { id: 'child-macro', title: 'Texto da macro e evidências', weight: 40, questions: [
+          { id: 'child-macro-preserved', text: 'O comentário manteve integralmente o texto-base da macro?', type: 'yes_no_na', is_critical: true },
+          { id: 'child-macro-enriched', text: 'Os detalhes técnicos complementares são suficientes para a equipe de destino?', type: 'yes_no_na' },
+        ] },
+        { id: 'child-routing', title: 'Destinatário (Para)', weight: 25, questions: [
+          { id: 'child-routing-correct', text: 'O campo Para aponta para o grupo ou analista previsto para esta macro?', type: 'yes_no_na' },
+        ] },
+      ],
+      critical_errors: [],
+    },
     {
       id: FORM_ID,
       title: 'Ficha de Atendimento Geral - Suporte',

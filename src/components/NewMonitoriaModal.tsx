@@ -38,6 +38,7 @@ import {
 } from '../lib/helpdeskQueue';
 import { fetchAIGuidelines } from '../lib/aiGuidelines';
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility';
+import { childTicketForm } from '../lib/childTicketForm';
 
 interface NewMonitoriaModalProps {
   isOpen: boolean;
@@ -167,11 +168,16 @@ export default function NewMonitoriaModal({
     // Resolver formulário baseado nas tags
     const customerType = resolveCustomerType(ticketDetails.tags, []);
     const { form: suggestedForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
+    const formToUse = ticketDetails.ticket_kind === 'chamado_filho' ? childTicketForm(forms) : suggestedForm;
+    if (!formToUse) {
+      toast.error('A ficha padrão para este tipo de ticket não está disponível.');
+      return;
+    }
 
     onStartAudit({
       ticket_id: ticketDetails.ticket_id,
       ticket_subject: ticketDetails.subject,
-      form_id: suggestedForm?.id || forms[0]?.id,
+      form_id: formToUse.id,
       evaluated_id: evaluatedId,
       team_id: teamId,
       ticket_group_team_id: ticketDetails.ticket_group_team_id || undefined,
@@ -191,6 +197,10 @@ export default function NewMonitoriaModal({
   // 2. Iniciar Avaliação com IA
   const handleStartAI = async () => {
     if (!ticketDetails || evaluatingAI) return;
+    if (ticketDetails.ticket_kind === 'chamado_filho') {
+      toast.info('A IA de tickets filhos está na fila Chamados Filhos. Você pode iniciar esta monitoria manualmente com a ficha própria.');
+      return;
+    }
 
     setEvaluatingAI(true);
     setAiProgressStage('Carregando transcrição e histórico do chamado...');
@@ -595,15 +605,17 @@ export default function NewMonitoriaModal({
                         <div className="w-9 h-9 rounded-xl bg-brand-accent/10 text-brand-accent flex items-center justify-center group-hover:scale-105 transition-transform">
                           <Sparkles className="w-5 h-5" />
                         </div>
-                        <Badge variant="success" size="xs">
-                          Recomendado
+                        <Badge variant={ticketDetails.ticket_kind === 'chamado_filho' ? 'warning' : 'success'} size="xs">
+                          {ticketDetails.ticket_kind === 'chamado_filho' ? 'Na fila de filhos' : 'Recomendado'}
                         </Badge>
                       </div>
                       <h5 className="text-sm font-black text-brand-primary group-hover:text-brand-accent transition-colors">
                         Avaliar com IA
                       </h5>
                       <p className="text-xs text-brand-muted font-medium mt-1 leading-relaxed">
-                        A IA analisa a transcrição completa do diálogo no Zendesk e pré-preenche a ficha de critérios com notas e parecer fundamentado.
+                        {ticketDetails.ticket_kind === 'chamado_filho'
+                          ? 'A análise por IA de tickets filhos está na fila Chamados Filhos. Aqui você pode abrir a ficha própria manualmente.'
+                          : 'A IA analisa a transcrição completa do diálogo no Zendesk e pré-preenche a ficha de critérios com notas e parecer fundamentado.'}
                       </p>
                     </div>
 
@@ -613,7 +625,7 @@ export default function NewMonitoriaModal({
                       className="w-full py-2 px-3 text-xs font-bold text-white bg-brand-accent hover:bg-brand-accent/90 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                     >
                       <Bot className="w-3.5 h-3.5" />
-                      <span>Iniciar com IA</span>
+                      <span>{ticketDetails.ticket_kind === 'chamado_filho' ? 'Usar fila de filhos' : 'Iniciar com IA'}</span>
                     </button>
                   </div>
 

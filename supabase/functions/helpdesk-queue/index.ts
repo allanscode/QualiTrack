@@ -55,7 +55,7 @@ async function withPublicationState<T extends QueuePublicationTicket>(
   if (tickets.length === 0) return tickets;
   const ids = [...new Set(tickets.map(ticket => ticket.ticket_id))];
   const [monitoriaResult, submissionResult] = await Promise.all([
-    supabase.from('monitorias').select('id,ticket_id,status,score,active,created_at').in('ticket_id', ids),
+    supabase.from('monitorias').select('id,ticket_id,status,score,active,created_at,form_id,form_snapshot').in('ticket_id', ids),
     queue === 'negativas'
       ? supabase.from('helpdesk_submissions').select('external_ticket_id')
         .eq('provider', 'zendesk').eq('status', 'sent').in('external_ticket_id', ids)
@@ -1876,7 +1876,21 @@ serve(async (req) => {
       const csatScore = t.satisfaction_rating?.score;
       const isNegative = csatScore === 'bad' || csatScore === 'bad_with_comment';
       const isPositive = csatScore === 'good' || csatScore === 'good_with_comment';
-      const queueTypeForCatalog = isNegative ? 'negativas' : isPositive ? 'positivas' : 'proativas';
+      const [knownQueue, childJob, childLog] = await Promise.all([
+        supabase.from('queue_ticket_catalog').select('queue_type').eq('ticket_id', ticket_id).maybeSingle(),
+        supabase.from('ai_evaluation_jobs').select('ticket_id').eq('ticket_id', ticket_id)
+          .eq('evaluation_type', 'chamado_filho').maybeSingle(),
+        supabase.from('ai_evaluation_logs').select('ticket_id').eq('ticket_id', ticket_id)
+          .eq('evaluation_type', 'chamado_filho').limit(1).maybeSingle(),
+      ]);
+      if (knownQueue.error || childJob.error || childLog.error) {
+        return jsonResponse({ error: 'Não foi possível identificar o tipo de ficha deste ticket.' }, 503);
+      }
+      const isChildTicket = ['filhos', 'filhos_invalidos'].includes(knownQueue.data?.queue_type || '')
+        || Boolean(childJob.data || childLog.data);
+      const queueTypeForCatalog = isChildTicket
+        ? (knownQueue.data?.queue_type === 'filhos_invalidos' ? 'filhos_invalidos' : 'filhos')
+        : isNegative ? 'negativas' : isPositive ? 'positivas' : 'proativas';
 
       try {
         await supabase.from('queue_ticket_catalog').upsert({
@@ -1901,6 +1915,7 @@ serve(async (req) => {
         found: true,
         ticket: {
           ticket_id: String(t.id),
+          ticket_kind: isChildTicket ? 'chamado_filho' : 'atendimento',
           subject: t.subject || '(Sem assunto)',
           description: t.description || '',
           status: t.status,

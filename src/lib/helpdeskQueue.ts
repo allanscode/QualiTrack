@@ -713,6 +713,7 @@ export async function lookupTicketAgent(ticketId: string): Promise<TicketAgentLo
 }
 
 export interface ZendeskTicketDetails {
+  ticket_kind?: 'atendimento' | 'chamado_filho';
   ticket_id: string;
   subject: string;
   description: string;

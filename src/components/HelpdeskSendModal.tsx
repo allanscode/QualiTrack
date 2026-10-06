@@ -24,6 +24,7 @@ interface HelpdeskSendModalProps {
   suggestedOutcome: EvaluationOutcome;
   onClose: () => void;
   onSent?: () => void;
+  underReview?: boolean;
   // true quando o modal abriu automaticamente logo após concluir a
   // monitoria (fluxo novo). Nesse caso a monitoria já está salva no banco
   // antes mesmo do modal aparecer, então os textos de saída precisam deixar
@@ -57,7 +58,7 @@ const OUTCOME_OPTIONS: { value: EvaluationOutcome; label: string; icon: typeof C
   { value: 'negativa', label: 'Ticket Invalidado', icon: XCircle },
 ];
 
-export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutcome, onClose, onSent, fromConclusion = false }: HelpdeskSendModalProps) {
+export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutcome, onClose, onSent, underReview = false, fromConclusion = false }: HelpdeskSendModalProps) {
   const [outcome, setOutcome] = useState<EvaluationOutcome>(suggestedOutcome);
   const [preview, setPreview] = useState<PreviewState>({ status: 'loading' });
   const [sendState, setSendState] = useState<SendState>({ status: 'idle' });
@@ -208,6 +209,11 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
         </header>
 
         <div className="flex-1 overflow-y-auto space-y-5 no-scrollbar">
+          {(underReview || fromConclusion) && !isSent && (
+            <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-brand-primary">
+              A monitoria ainda pode ser aceita ou contestada. Confira o resultado e o texto antes de publicar a macro no Zendesk.
+            </div>
+          )}
           {!checkingHistory && previousSubmission && !isSent && (
             <div className="flex items-start gap-3 bg-warning/10 border border-warning/30 rounded-xl p-4">
               <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />

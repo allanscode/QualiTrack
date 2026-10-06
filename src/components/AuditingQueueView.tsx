@@ -100,9 +100,10 @@ import { resolveTicketTeamId } from '../lib/ticketTeam';
 import { buildChildTicketMacro } from '../lib/childTicketMacro';
 import { canAuditTickets } from '../lib/auditPermissions';
 import { getEvaluationOutcome } from '../lib/domainRules';
+import { childTicketForm } from '../lib/childTicketForm';
 import HelpdeskSendModal from './HelpdeskSendModal';
 
-const FINAL_HELPDESK_STATUSES = new Set(['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada']);
+const PUBLISHABLE_HELPDESK_STATUSES = new Set(['pendente_revisao', 'concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada']);
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -1402,7 +1403,6 @@ export default function AuditingQueueView({
       isAiLocked: true,
       customerType,
       specializedTeamLabel: specInfo.label || undefined,
-      child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
       dialogue: draft.result?.dialogue || ticket.dialogue,
       queue_assignment: queueAssignment,
     });
@@ -1611,17 +1611,18 @@ export default function AuditingQueueView({
   // Se ainda não avaliado, o botão principal é "Avaliar com IA" (índigo/roxo) ou "Auditar Manual".
   const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
     if (ticket.already_audited) {
-      const final = Boolean(ticket.monitoria_status && FINAL_HELPDESK_STATUSES.has(ticket.monitoria_status));
+      const publishable = Boolean(ticket.monitoria_status && PUBLISHABLE_HELPDESK_STATUSES.has(ticket.monitoria_status));
+      const underReview = ticket.monitoria_status === 'pendente_revisao';
       const owner = monitorias.find(monitoria => monitoria.id === ticket.monitoria_id)?.evaluator_id;
       const mayPublish = currentUserRole === 'admin' || currentUserRole === 'gestor_qualidade'
         || (currentUserRole === 'qualidade' && owner === currentUserId);
       return <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={final ? 'warning' : 'neutral'} size="xs">
-          {final ? `Macro pendente · ${typeof ticket.monitoria_score === 'number' && Number.isFinite(ticket.monitoria_score)
+        <Badge variant={publishable ? 'warning' : 'neutral'} size="xs">
+          {publishable ? `${underReview ? 'Em revisão' : 'Macro pendente'} · ${typeof ticket.monitoria_score === 'number' && Number.isFinite(ticket.monitoria_score)
             ? getEvaluationOutcome(ticket.monitoria_score) === 'positiva' ? 'Válido' : 'Invalidado'
-            : 'Nota pendente'}` : 'Aguardando decisão final'}
+            : 'Nota pendente'}` : 'Aguardando decisão da contestação'}
         </Badge>
-        {final && mayPublish && ticket.monitoria_id && typeof ticket.monitoria_score === 'number' && Number.isFinite(ticket.monitoria_score) &&
+        {publishable && mayPublish && ticket.monitoria_id && typeof ticket.monitoria_score === 'number' && Number.isFinite(ticket.monitoria_score) &&
           <Button size="sm" variant="primary" onClick={() => setHelpdeskTicket(ticket)}>
             <Send className="w-3.5 h-3.5" /> Revisar macro
           </Button>}
@@ -1793,6 +1794,11 @@ export default function AuditingQueueView({
 
   const handleStartChildAudit = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
+    const selectedChildForm = childTicketForm(forms);
+    if (!selectedChildForm) {
+      toast.error('A ficha padrão de tickets filhos não está disponível. Avise a Gestão da Qualidade.');
+      return;
+    }
     let queueAssignment;
     try {
       queueAssignment = await beginAssignedWork(ticket);
@@ -1804,13 +1810,10 @@ export default function AuditingQueueView({
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
       (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
     );
-    const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
-    const { form: autoForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
-
     onStartAudit({
       ticket_id: ticket.ticket_id,
       ticket_subject: ticket.subject,
-      form_id: autoForm?.id,
+      form_id: selectedChildForm.id,
       evaluated_id: ticket.agent_id || matchedAgent?.id,
       team_id: resolveTicketTeamId(ticket, matchedAgent),
       ticket_group_team_id: ticket.ticket_group_team_id,
@@ -1819,9 +1822,8 @@ export default function AuditingQueueView({
       ticket_date: toTicketDateInput(ticket.ticket_date),
       satisfaction_result: 'Sem pesquisa',
       isAiLocked: true,
-      customerType,
       ticket_fields: ticket.ticket_fields,
-      child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
+      child_evaluation: ticket.child_evaluation || (childPreviewTicket?.ticket_id === ticket.ticket_id ? childAiEvaluation : undefined) || undefined,
       dialogue: ticket.dialogue,
       queue_assignment: queueAssignment,
     });
@@ -4088,6 +4090,7 @@ export default function AuditingQueueView({
           monitoriaId={helpdeskTicket.monitoria_id}
           ticketId={helpdeskTicket.ticket_id}
           suggestedOutcome={getEvaluationOutcome(helpdeskTicket.monitoria_score)}
+          underReview={helpdeskTicket.monitoria_status === 'pendente_revisao'}
           onClose={() => setHelpdeskTicket(null)}
           onSent={() => setTickets(previous => previous.filter(ticket => ticket.ticket_id !== helpdeskTicket.ticket_id))}
         />

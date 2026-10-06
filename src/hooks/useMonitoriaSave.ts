@@ -3,6 +3,7 @@ import { supabase, mockDb } from '../lib/supabase';
 import { User, Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, EvaluationForm, Team, DissatisfactionField } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
 import { isEvaluationValid } from '../lib/domainRules';
+import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 import { backfillAgentTeam } from '../lib/helpdeskQueue';
 import { toast } from 'sonner';
 
@@ -195,10 +196,14 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           active: true,
           form_snapshot: {
             ...(deps.selectedForm as any),
+            ...(deps.header.form_id === CHILD_TICKET_FORM_ID ? { ticket_kind: 'chamado_filho' } : {}),
             ai_evaluation: deps.header.form_id === deps.initialData?.form_id
               ? ((deps.initialData as any)?.aiEvaluation || (deps.initialData as any)?.form_snapshot?.ai_evaluation)
               : undefined,
-            child_ai_evaluation: (deps.initialData as any)?.childAiEvaluation || (deps.initialData as any)?.form_snapshot?.child_ai_evaluation,
+            ...(deps.header.form_id === CHILD_TICKET_FORM_ID ? {
+              child_ai_evaluation: (deps.initialData as any)?.childAiEvaluation
+                || (deps.initialData as any)?.form_snapshot?.child_ai_evaluation,
+            } : {}),
           },
           history: [...(deps.initialData?.history || []), historyEntry],
           action_deadline_at: nextStatus === 'concluida'

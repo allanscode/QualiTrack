@@ -7,6 +7,8 @@ export interface QueueMonitoriaState {
   score: number | null;
   active: boolean | null;
   created_at: string;
+  form_id?: string | null;
+  form_snapshot?: { ticket_kind?: string } | null;
 }
 
 export interface QueuePublicationTicket {
@@ -32,6 +34,10 @@ export function attachQueuePublicationState<T extends QueuePublicationTicket>(
   }
   return tickets.flatMap(ticket => {
     const monitoria = latestByTicket.get(ticket.ticket_id);
+    if (queue === 'negativas' && monitoria && (
+      monitoria.form_id === '6c7d1e88-841b-4da9-9a66-9f1464ce896f'
+      || monitoria.form_snapshot?.ticket_kind === 'chamado_filho'
+    )) return [];
     if (queue === 'negativas' && sentTicketIds.has(ticket.ticket_id)) return [];
     if (queue !== 'negativas' && queue !== 'filhos' && queue !== 'filhos_invalidos' && monitoria) return [];
     return [{

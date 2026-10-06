@@ -101,6 +101,12 @@ flowchart TD
 
 ## 3. Matriz de Pontuação e Status do Parecer (QualiTrack)
 
+### Ficha padrão no QualiTrack
+
+A ficha **Ficha de Monitoria de Ticket Filho** é selecionada automaticamente na fila de Chamados Filhos e na abertura manual quando o ticket já foi identificado como filho. Ela usa os três pilares deste manual, com pesos de 35% para assunto, 40% para texto da macro e 25% para direcionamento. A seção de assunto também confere o vínculo com o ticket pai; a seção de texto distingue preservação do modelo e qualidade do complemento técnico.
+
+Falhas na preservação do assunto ou do texto-base são críticas. A avaliação da IA é apenas apoio: o auditor preenche e confirma cada resposta da ficha antes de salvar. Em monitorias antigas, a ficha originalmente usada permanece no histórico; quando a origem do ticket filho está registrada no job ou log de IA, a reavaliação abre a ficha própria com respostas novas, sem copiar respostas de critérios de atendimento.
+
 O sistema de auditoria inteligente considera apenas os três quesitos abaixo. Tags do Zendesk não compõem o parecer nem a nota.
 
 | Quesito Auditado | Impacto no Status Geral |

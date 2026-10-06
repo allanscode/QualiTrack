@@ -55,6 +55,7 @@ import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import { useMonitoriaDraft } from '../hooks/useMonitoriaDraft';
 import { getEvaluationOutcome } from '../lib/domainRules';
+import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 import { isVerifiedTicketGroupPair } from '../lib/ticketTeam';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -68,12 +69,10 @@ import { EvaluationOutcome, MonitoriaStatus } from '../types';
 
 const CHANNELS = ['Chat', 'Email', 'Telefone', 'WhatsApp'] as const;
 
-// Estados considerados "concluídos" para fins de envio ao helpdesk — a
-// monitoria já tem um veredito final, mesmo que tenha passado por
-// contestação. Estados intermediários (pendente_revisao, em_contestacao,
-// aguardando_gestor_*, reavaliacao_solicitada) ainda podem mudar de
-// resultado, então não fazem sentido enviar ainda.
+// A revisão humana da macro pode acontecer logo após salvar a monitoria.
+// Durante contestação ou decisão de gestor, o envio aguarda a nova versão.
 const HELPDESK_ELIGIBLE_STATUSES: MonitoriaStatus[] = [
+  'pendente_revisao',
   'concluida',
   'contestacao_aceita',
   'contestacao_negada',
@@ -107,9 +106,11 @@ export default function MonitoriaForm({
     (initialData as any)?.aiEvaluation ||
     (initialData as any)?.form_snapshot?.ai_evaluation;
 
-  const childAiEval: ChildTicketAiEvaluation | undefined =
-    (initialData as any)?.childAiEvaluation ||
-    (initialData as any)?.form_snapshot?.child_ai_evaluation;
+  const isChildEvaluation = initialData?.form_id === CHILD_TICKET_FORM_ID
+    || (initialData?.form_snapshot as { ticket_kind?: string } | undefined)?.ticket_kind === 'chamado_filho';
+  const childAiEval: ChildTicketAiEvaluation | undefined = isChildEvaluation
+    ? ((initialData as any)?.childAiEvaluation || (initialData as any)?.form_snapshot?.child_ai_evaluation)
+    : undefined;
 
   const shouldReduceMotion = useReducedMotion();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -518,6 +519,7 @@ export default function MonitoriaForm({
   const [generatingAuditorRecord, setGeneratingAuditorRecord] = useState(false);
 
   const canSendToHelpdesk = isViewOnly
+    && !isChildEvaluation
     && !!initialData?.status
     && HELPDESK_ELIGIBLE_STATUSES.includes(initialData.status)
     && !!header.ticket_id?.trim();
@@ -556,9 +558,10 @@ export default function MonitoriaForm({
     qualityFieldsToShow,
     onSaved: (savedMonitoriaId: string, savedStatus: MonitoriaStatus) => {
       clearDraft();
-      // O parecer PJ e as demais revisões precisam terminar antes do envio.
+      // A macro de atendimento pode ser revista após salvar; filhos usam macro própria.
       const ticketIdTrimmed = header.ticket_id?.trim() || '';
       const shouldAutoSend = /^\d+$/.test(ticketIdTrimmed)
+        && header.form_id !== CHILD_TICKET_FORM_ID
         && HELPDESK_ELIGIBLE_STATUSES.includes(savedStatus)
         && !isAdminEdit
         && !isReevaluating;
@@ -2099,6 +2102,7 @@ export default function MonitoriaForm({
           monitoriaId={helpdeskModal.monitoriaId}
           ticketId={header.ticket_id}
           suggestedOutcome={suggestedOutcome}
+          underReview={initialData?.status === 'pendente_revisao'}
           fromConclusion={helpdeskModal.fromConclusion}
           onClose={handleHelpdeskModalClose}
         />

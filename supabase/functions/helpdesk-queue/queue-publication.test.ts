@@ -24,6 +24,14 @@ describe('estado de publicação nas filas Zendesk', () => {
       .toEqual([]);
   });
 
+  it('não oferece macro de atendimento para uma monitoria identificada como filho', () => {
+    const child = { ...monitoria('child', '173388'), form_snapshot: { ticket_kind: 'chamado_filho' } };
+    expect(attachQueuePublicationState([{ ticket_id: '173388' }], 'negativas', [child], new Set()))
+      .toEqual([]);
+    expect(attachQueuePublicationState([{ ticket_id: '173388' }], 'filhos', [child], new Set()))
+      .toHaveLength(1);
+  });
+
   it('escolhe a monitoria ativa mais recente para revisão', () => {
     const older = monitoria('old', '179150', 'pendente_revisao');
     older.created_at = '2026-10-05T12:00:00Z';
