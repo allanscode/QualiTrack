@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { buildFreshSql, discoverFreshMigrations } from './prepare-supabase.mjs';
 
 const id = n => `10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-test('clean Supabase install: exact generated SQL, no demo data, platform fixtures only', async t => {
+test('clean Supabase install: exact generated SQL, no demo data, approved system form only', async t => {
   const db = new PGlite();
   try {
     // Emulate ONLY managed Supabase objects. Application tables come exclusively
@@ -52,7 +52,7 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       assert.deepEqual(rows, []);
       assert.equal((await db.query("SELECT has_function_privilege('authenticated','public.acknowledge_agent_feedback(uuid,text)','EXECUTE') AS allowed")).rows[0].allowed, true);
     });
-    await t.test('all application tables empty and RLS enabled; no password/demo seed', async () => {
+    await t.test('application tables contain only the approved child-ticket form and enforce RLS', async () => {
       const { rows } = await db.query("SELECT relname,relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND relkind='r'");
       assert.ok(rows.length >= 20, `expected baseline and incremental tables, got ${rows.length}`);
       assert.ok(rows.some(row => row.relname === 'queue_ticket_assignments'));
@@ -60,8 +60,17 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       assert.deepEqual(migrations.map(m => m.name), [...new Set(migrations.map(m => m.name))].sort());
       for (const row of rows) {
         assert.equal(row.relrowsecurity,true,row.relname);
+        if (row.relname === 'forms') continue;
         assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.${row.relname}`)).rows[0].n,0,row.relname);
       }
+      assert.deepEqual((await db.query(`SELECT id::text, title, created_by, active,
+        jsonb_array_length(sections) AS section_count FROM public.forms`)).rows, [{
+        id: '6c7d1e88-841b-4da9-9a66-9f1464ce896f',
+        title: 'Ficha de Monitoria de Ticket Filho',
+        created_by: null,
+        active: true,
+        section_count: 3,
+      }]);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM auth.users')).rows[0].n,0);
       assert.equal((await db.query("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name IN ('password','reset_token','team_ids','team_id')")).rows[0].n,0);
       assert.ok(manifest.every(x => /^[a-f0-9]{64}$/.test(x.sha256)));
