@@ -19,7 +19,7 @@ function TimelineNote({ text, variant }: { text: string; variant: StatusConfig['
   const isLong = text.length > 180;
 
   return (
-    <div className={`mt-2 rounded-lg border bg-surface-subtle/60 px-3 py-2.5 ${NOTE_ACCENT_CLASS[variant]}`}>
+    <div className={`mt-2 rounded-lg border-[1.5px] bg-surface-subtle/60 px-3 py-2.5 ${NOTE_ACCENT_CLASS[variant]}`}>
       <p id={noteId} className={`whitespace-pre-wrap break-words text-xs leading-relaxed text-brand-primary ${isLong && !expanded ? 'line-clamp-2' : ''}`}>
         {text}
       </p>
