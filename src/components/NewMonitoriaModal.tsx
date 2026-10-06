@@ -82,6 +82,7 @@ export default function NewMonitoriaModal({
   const [searchedId, setSearchedId] = useState<string | null>(null);
   const [ticketDetails, setTicketDetails] = useState<ZendeskTicketDetails | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [lookupFailed, setLookupFailed] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Controle de permissão para nova avaliação quando já existe
@@ -98,6 +99,7 @@ export default function NewMonitoriaModal({
       setSearchedId(null);
       setTicketDetails(null);
       setNotFound(false);
+      setLookupFailed(false);
       setErrorMessage(null);
       setForceAllowNew(false);
       setEvaluatingAI(false);
@@ -129,6 +131,7 @@ export default function NewMonitoriaModal({
     setSearchedId(cleanId);
     setTicketDetails(null);
     setNotFound(false);
+    setLookupFailed(false);
     setErrorMessage(null);
     setForceAllowNew(false);
 
@@ -138,10 +141,12 @@ export default function NewMonitoriaModal({
         setTicketDetails(res.ticket);
       } else {
         setNotFound(true);
+        setLookupFailed(Boolean(res.error));
         setErrorMessage(res.message || 'Chamado não encontrado no Zendesk.');
       }
     } catch (err: any) {
       setNotFound(true);
+      setLookupFailed(true);
       setErrorMessage(err?.message || 'Erro ao consultar o helpdesk.');
     } finally {
       setSearching(false);
@@ -474,7 +479,7 @@ export default function NewMonitoriaModal({
               </div>
               <div>
                 <h4 className="text-xs sm:text-sm font-black text-brand-primary">
-                  Chamado #{searchedId} não localizado no Zendesk
+                  {lookupFailed ? `Falha ao consultar o chamado #${searchedId}` : `Chamado #${searchedId} não localizado no Zendesk`}
                 </h4>
                 <p className="text-xs text-brand-muted mt-1 max-w-md mx-auto">
                   {errorMessage || 'O chamado não foi encontrado na base de dados do helpdesk. Verifique se digitou os números corretamente.'}

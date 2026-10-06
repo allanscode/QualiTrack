@@ -19,7 +19,7 @@ import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS, OPENROUTE
 import { retryAt } from './ai-retry.ts';
 import { canReadMatchedTicketTeam, canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
-import { satisfactionResponseTimestamp } from './satisfaction.ts';
+import { csatStatusToSatisfactionResult, satisfactionResponseTimestamp } from './satisfaction.ts';
 import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
 import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro } from './child-view.ts';
 import { childMacroCustomFields, missingCustomFields } from './child-macro-fields.ts';

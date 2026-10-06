@@ -753,6 +753,7 @@ export interface LookupTicketResult {
   found: boolean;
   ticket?: ZendeskTicketDetails;
   message?: string;
+  error?: boolean;
 }
 
 /**
@@ -810,7 +811,7 @@ export async function lookupTicketFromHelpdesk(ticketId: string): Promise<Lookup
 
     if (error) {
       const msg = await extractFunctionErrorMessage(error, 'Falha ao consultar chamado no Zendesk.');
-      return { found: false, message: msg };
+      return { found: false, message: msg, error: true };
     }
 
     if (!data?.found || !data?.ticket) {
@@ -823,6 +824,6 @@ export async function lookupTicketFromHelpdesk(ticketId: string): Promise<Lookup
     };
   } catch (err: any) {
     console.error('[HelpdeskQueue] Erro ao buscar chamado no Zendesk:', err);
-    return { found: false, message: err?.message || 'Erro de conexão com o helpdesk.' };
+    return { found: false, message: err?.message || 'Erro de conexão com o helpdesk.', error: true };
   }
 }
