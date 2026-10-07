@@ -1,4 +1,5 @@
-import type { User, UserTeam, Team, EvaluationForm, Monitoria, AccessRequest, DissatisfactionField, UserPreferences, AgentFeedback } from '../types';
+import type { User, UserTeam, Team, TeamGroup, EvaluationForm, Monitoria, AccessRequest, DissatisfactionField, UserPreferences, AgentFeedback } from '../types';
+import { CHILD_TICKET_FORM_ID } from './childTicketForm';
 const DB_PREFIX = 'qualitrack_mock_';
 
 const generateId = (): string => {
@@ -19,6 +20,9 @@ const AGENT_ID = 'user-agent-id';
 const EVALUATOR_ID = 'user-evaluator-id';
 const SUPPORT_MANAGER_ID = 'user-support-manager-id';
 const QUALITY_MANAGER_ID = 'user-quality-manager-id';
+const VICTOR_ID = 'user-victor-aguiar-id';
+const PJ_MANAGER_ID = 'user-pj-manager-id';
+const PJ_AGENT_ID = 'user-pj-agent-id';
 
 const FORM_ID = 'form-suporte-geral';
 
@@ -42,6 +46,7 @@ const INITIAL_DATA: {
   user_teams: UserTeam[];
   forms: EvaluationForm[];
   teams: Team[];
+  team_groups: TeamGroup[];
   monitorias: Monitoria[];
   access_requests: AccessRequest[];
   quality_configs: any[];
@@ -50,6 +55,7 @@ const INITIAL_DATA: {
   holidays: Array<{ id: string; holiday_date: string; description: string }>;
   user_preferences: Array<{ user_id: string; preferences: UserPreferences; updated_at: string }>;
   agent_feedbacks: AgentFeedback[];
+  pj_review_settings: Array<{ id: string; reviewer_id: string }>;
 } = {
   users: [
     {
@@ -103,17 +109,59 @@ const INITIAL_DATA: {
       team_ids: [],
       active: true,
       created_at: new Date().toISOString()
-    }
+    },
+    { id: VICTOR_ID, name: 'Victor Ellyan Aguiar', email: 'victor.aguiar@webposto.com.br',
+      password: MOCK_PASSWORD, role: 'suporte', team_ids: ['team-alpha'], primary_team_id: 'team-alpha',
+      active: true, created_at: new Date().toISOString() },
+    { id: PJ_MANAGER_ID, name: 'Gestor PJ Bruno', email: 'gestor.pj@teste.com',
+      password: MOCK_PASSWORD, role: 'gestor_suporte', team_ids: ['team-pj-bruno'], primary_team_id: 'team-pj-bruno',
+      active: true, created_at: new Date().toISOString() },
+    { id: PJ_AGENT_ID, name: 'Agente PJ', email: 'agente.pj@teste.com',
+      password: MOCK_PASSWORD, role: 'suporte', team_ids: ['team-pj-bruno'], primary_team_id: 'team-pj-bruno',
+      active: true, created_at: new Date().toISOString() }
   ],
   teams: [
     { id: 'team-alpha', name: 'Equipe Alpha', sigla: 'ALF', active: true, description: 'Equipe de atendimento Alpha' },
     { id: 'team-beta', name: 'Equipe Beta', sigla: 'BET', active: true, description: 'Equipe de atendimento Beta' },
+    { id: 'team-pj-bruno', name: 'PJ Bruno', sigla: 'PJ', kind: 'team', requires_pj_review: true,
+      active: true, description: 'Equipe de atendimento PJ' },
+    { id: 'group-cliente-final', name: 'Cliente Final', kind: 'group', zendesk_group_id: 1, active: true },
+  ],
+  team_groups: [
+    { team_id: 'team-alpha', group_id: 'group-cliente-final' },
+    { team_id: 'team-beta', group_id: 'group-cliente-final' },
   ],
   user_teams: [
     { id: 'ut-1', user_id: AGENT_ID, team_id: 'team-alpha', created_at: new Date().toISOString() },
-    { id: 'ut-2', user_id: SUPPORT_MANAGER_ID, team_id: 'team-alpha', created_at: new Date().toISOString() }
+    { id: 'ut-2', user_id: SUPPORT_MANAGER_ID, team_id: 'team-alpha', created_at: new Date().toISOString() },
+    { id: 'ut-3', user_id: VICTOR_ID, team_id: 'team-alpha', created_at: new Date().toISOString() },
+    { id: 'ut-4', user_id: PJ_MANAGER_ID, team_id: 'team-pj-bruno', created_at: new Date().toISOString() },
+    { id: 'ut-5', user_id: PJ_AGENT_ID, team_id: 'team-pj-bruno', created_at: new Date().toISOString() }
   ],
   forms: [
+    {
+      id: CHILD_TICKET_FORM_ID,
+      title: 'Ficha de Monitoria de Ticket Filho',
+      description: 'Assunto, texto da macro e destinatário do ticket filho.',
+      team_id: '',
+      active: true,
+      createdBy: ADMIN_ID,
+      created_at: new Date().toISOString(),
+      sections: [
+        { id: 'child-subject', title: 'Assunto da abertura', weight: 35, questions: [
+          { id: 'child-subject-preserved', text: 'O assunto de abertura preservou o padrão da macro correspondente?', type: 'yes_no_na', is_critical: true },
+          { id: 'child-parent-linked', text: 'O chamado pai foi identificado e vinculado corretamente?', type: 'yes_no_na' },
+        ] },
+        { id: 'child-macro', title: 'Texto da macro e evidências', weight: 40, questions: [
+          { id: 'child-macro-preserved', text: 'O comentário manteve integralmente o texto-base da macro?', type: 'yes_no_na', is_critical: true },
+          { id: 'child-macro-enriched', text: 'Os detalhes técnicos complementares são suficientes para a equipe de destino?', type: 'yes_no_na' },
+        ] },
+        { id: 'child-routing', title: 'Destinatário (Para)', weight: 25, questions: [
+          { id: 'child-routing-correct', text: 'O campo Para aponta para o grupo ou analista previsto para esta macro?', type: 'yes_no_na' },
+        ] },
+      ],
+      critical_errors: [],
+    },
     {
       id: FORM_ID,
       title: 'Ficha de Atendimento Geral - Suporte',
@@ -258,9 +306,23 @@ const INITIAL_DATA: {
       ],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
+    },
+    {
+      id: 'mon-pj-review-demo', form_id: FORM_ID, evaluator_id: EVALUATOR_ID,
+      evaluated_id: PJ_AGENT_ID, evaluated_name: 'Agente PJ', evaluator_name: 'Maria Auditora',
+      team_id: 'team-pj-bruno', team_name: 'PJ Bruno', form_name: 'Ficha de Atendimento Geral - Suporte',
+      ticket_id: 'PJ-2026-01', channel: 'Chat',
+      satisfaction_result: 'Sem pesquisa', satisfaction_has_record: false,
+      ticket_date: new Date().toISOString().slice(0, 10),
+      analysis_date: new Date().toISOString().slice(0, 10),
+      score: 62, status: 'pendente_revisao', pj_review_required: true, answers: {},
+      history: [{ action: 'Monitoria Criada', by_id: EVALUATOR_ID,
+        by_name: 'Maria Auditora', at: new Date().toISOString() }],
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString()
     }
   ],
   access_requests: [],
+  pj_review_settings: [{ id: 'pj', reviewer_id: VICTOR_ID }],
   quality_configs: [],
   dissatisfaction_fields: [
     {
@@ -352,6 +414,7 @@ if (typeof window !== 'undefined' && !import.meta.env.VITE_SUPABASE_URL) {
       monitorias = monitorias.map(m => {
         if (
           m.active !== false && 
+          !m.pj_review_required &&
           m.status !== 'concluida' && 
           m.action_deadline_at && 
           m.action_deadline_at < nowStr

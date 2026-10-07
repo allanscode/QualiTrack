@@ -8,6 +8,7 @@ import {
   getContestedMonitorias,
   getLastResolution,
   countContestationOutcomes,
+  getContestationOutcome,
 } from '../lib/contestation';
 import { Monitoria, MonitoriaHistoryEntry } from '../types';
 
@@ -41,6 +42,21 @@ const createHistoryEntry = (overrides: Partial<MonitoriaHistoryEntry> = {}): Mon
 });
 
 describe('contestation', () => {
+  it('conta a reavaliação PJ do ticket 177437 como procedente após a aprovação final', () => {
+    const monitoria = createMockMonitoria({
+      status: 'concluida', score: 83.75, contestation_result: 'pending',
+      history: [
+        createHistoryEntry({ action: 'Gestor PJ encaminhou contestação para a Gestão da Qualidade' }),
+        createHistoryEntry({ action: 'Reavaliação solicitada pelo Gestor' }),
+        createHistoryEntry({ action: 'Monitoria Reavaliada (Aguardando gestor PJ)', note: '[DE 63.75% PARA 83.75%] Reavaliação acatada' }),
+        createHistoryEntry({ action: 'Gestor PJ encaminhou aprovação para a Gestão da Qualidade' }),
+        createHistoryEntry({ action: 'Monitoria aprovada pelo Gestor' }),
+      ],
+    });
+    expect(isContestationAction(monitoria.history[0].action)).toBe(true);
+    expect(getContestationOutcome(monitoria)).toBe('approved');
+    expect(countContestationOutcomes([monitoria])).toEqual({ accepted: 1, rejected: 0, total: 1 });
+  });
   describe('isApprovalAction', () => {
     it('deve detectar "procedente" (case insensitive)', () => {
       expect(isApprovalAction('Contestação Procedente')).toBe(true);
@@ -112,7 +128,7 @@ describe('contestation', () => {
   describe('isContestationAction', () => {
     it('deve detectar "Contestação" (case sensitive)', () => {
       expect(isContestationAction('Contestação Solicitada')).toBe(true);
-      expect(isContestationAction('contestação')).toBe(false); // case sensitive!
+      expect(isContestationAction('contestação')).toBe(true);
     });
 
     it('deve detectar "contestou" (lowercase)', () => {

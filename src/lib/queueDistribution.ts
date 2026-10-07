@@ -80,6 +80,16 @@ function normalizeAssignment(row: QueueAssignment): QueueAssignment {
   };
 }
 
+/** Explicitly starts another child evaluation while preserving the previous monitoria. */
+export async function startChildTicketNewEvaluation(ticketId: string): Promise<QueueAssignment> {
+  if (isMockMode || !supabase) return startQueueTicketAssignment(ticketId, 'filhos');
+  const { data, error } = await supabase.rpc('start_child_ticket_new_evaluation', { p_ticket_id: ticketId });
+  if (error) throw new Error(error.message || 'Não foi possível abrir a nova ficha.');
+  const row = (data || [])[0] as QueueAssignment | undefined;
+  if (!row) throw new Error('A atribuição do ticket não foi encontrada.');
+  return normalizeAssignment(row);
+}
+
 /** Marca atomicamente que o monitor responsável iniciou o trabalho. */
 export async function startQueueTicketAssignment(
   ticketId: string,

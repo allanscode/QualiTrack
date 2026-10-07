@@ -6,8 +6,11 @@ import type { Monitoria, User } from '../types';
 
 vi.unmock('motion/react');
 
-const { updateMonitoria } = vi.hoisted(() => ({ updateMonitoria: vi.fn() }));
+const { updateMonitoria, publishEvaluation, fixture } = vi.hoisted(() => ({
+  updateMonitoria: vi.fn(), publishEvaluation: vi.fn(), fixture: { status: 'em_contestacao' },
+}));
 vi.mock('../lib/supabase', () => ({ supabase: null, isMockMode: true, mockDb: { update: updateMonitoria } }));
+vi.mock('../lib/helpdesk', () => ({ publishEvaluationToHelpdesk: publishEvaluation, getLatestHelpdeskSubmission: vi.fn() }));
 vi.mock('../lib/StaticDataContext', () => ({
   useStaticData: () => ({ users: [], teams: [], forms: [] }),
 }));
@@ -19,7 +22,7 @@ vi.mock('../lib/useQualityConfig', () => ({
 }));
 vi.mock('../hooks/useMonitoriaData', () => ({
   useMonitoriaData: () => ({ monitorias: [{
-    id: 'monitoria-1', display_id: 5786, ticket_id: '167240', status: 'em_contestacao',
+    id: 'monitoria-1', display_id: 5786, ticket_id: '167240', status: fixture.status,
     active: true, created_at: '2026-09-22T11:14:00.000Z', updated_at: '2026-09-25T15:21:00.000Z',
     evaluator_id: 'auditor-1', evaluated_id: 'agente-1', score: 50,
     history: [{ action: 'Contestação realizada', by_id: 'admin-1', by_name: 'Administrador', at: '2026-09-25T15:21:00.000Z' }],
@@ -39,8 +42,31 @@ function ListWithSelectedMonitoria() {
 
 describe('MonitoriaList actions', () => {
   beforeEach(() => {
+    fixture.status = 'em_contestacao';
     updateMonitoria.mockReset();
     updateMonitoria.mockResolvedValue({ data: null });
+    publishEvaluation.mockReset();
+    publishEvaluation.mockResolvedValue({ success: true });
+  });
+
+  it('envia o registro ao Zendesk depois da aprovação final pela Qualidade', async () => {
+    fixture.status = 'aguardando_gestor_qualidade';
+    render(<ListWithSelectedMonitoria />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Aprovar' }));
+    expect(await screen.findByText('Registro do Auditor')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Ação' }));
+    await waitFor(() => expect(updateMonitoria).toHaveBeenCalledWith(
+      'monitorias', 'monitoria-1', expect.objectContaining({ status: 'concluida' })
+    ));
+    await waitFor(() => expect(publishEvaluation).toHaveBeenCalledWith('monitoria-1'));
+  });
+
+  it('permite conferir o envio de uma monitoria já concluída', async () => {
+    fixture.status = 'concluida';
+    render(<ListWithSelectedMonitoria />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Conferir envio ao Zendesk' }));
+    expect(await screen.findByText('Enviar ao Zendesk')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /Monitoria/ })).not.toBeInTheDocument();
   });
 
   it.each([

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODEL } from './openrouter-client';
+import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS } from './openrouter-client';
 import { runAIModelChain } from './ai-fallback';
 
 const testKey = 'test-key-not-real';
@@ -13,7 +13,7 @@ const success = (provider = 'DeepInfra') => Response.json({
 });
 
 describe('requisição OpenRouter', () => {
-  it('usa apenas GLM 5.3 Flash, JSON Schema e provider failover; chave somente no header', async () => {
+  it('usa GLM pago, schema no prompt e failover de provider; chave somente no header', async () => {
     const fetcher = vi.fn(async () => success());
     const result = await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, maxTokens: 700, fetcher });
     expect(result).toMatchObject({ text: '{"score":90}', routedProvider: 'DeepInfra', routerAttempt: 2 });
@@ -26,14 +26,15 @@ describe('requisição OpenRouter', () => {
     expect(body.model).toBe('z-ai/glm-5.3-flash');
     expect(body.models).toBeUndefined();
     expect(body.max_tokens).toBe(700);
-    expect(body.provider).toEqual({ allow_fallbacks: true, require_parameters: true });
-    expect(body.response_format).toEqual({ type: 'json_schema', json_schema: { name: 'wp_quality_evaluation', strict: true, schema: responseSchema } });
+    expect(body.provider).toEqual({ allow_fallbacks: true });
+    expect(body.response_format).toBeUndefined();
+    expect(body.messages[0].content).toContain(JSON.stringify(responseSchema));
   });
 
   it.each([429, 500, 503])('repete HTTP %i e conclui no mesmo modelo', async status => {
     const fetcher = vi.fn().mockResolvedValueOnce(new Response('erro privado', { status })).mockResolvedValueOnce(success('Fireworks'));
     const result = await runAIModelChain({
-      targets: [{ provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4 }, { provider: 'openrouter', model: OPENROUTER_FALLBACK_MODEL, maxAttempts: 3 }],
+      targets: [{ provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 2 }, { provider: 'openrouter', model: OPENROUTER_FALLBACK_MODELS[0], maxAttempts: 2 }],
       execute: async () => {
         const response = await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, fetcher });
         return { value: response.text, routedProvider: response.routedProvider, routerAttempt: response.routerAttempt };
@@ -49,7 +50,7 @@ describe('requisição OpenRouter', () => {
   it('não repete 401 nem expõe detalhes do provedor', async () => {
     const fetcher = vi.fn(async () => new Response('informação privada', { status: 401 }));
     await expect(runAIModelChain({
-      targets: [{ provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4 }, { provider: 'openrouter', model: OPENROUTER_FALLBACK_MODEL, maxAttempts: 3 }],
+      targets: [{ provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 2 }, { provider: 'openrouter', model: OPENROUTER_FALLBACK_MODELS[0], maxAttempts: 2 }],
       execute: async () => ({ value: await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, fetcher }) }),
       sleep: async () => undefined,
     })).rejects.toMatchObject({ reason: 'credentials_error' });
@@ -62,16 +63,16 @@ describe('requisição OpenRouter', () => {
       .rejects.toMatchObject({ reason: 'request_configuration_error' });
   });
 
-  it('envia Gemini pago pela mesma API e captura metadados de consumo', async () => {
+  it('envia o fallback pago pela mesma API e captura metadados de consumo', async () => {
     const fetcher = vi.fn(async () => Response.json({
-      id: 'gen-test', model: OPENROUTER_FALLBACK_MODEL,
+      id: 'gen-test', model: OPENROUTER_FALLBACK_MODELS[0],
       choices: [{ message: { content: '{"score":90}' } }],
       usage: { prompt_tokens: 100, completion_tokens: 20, cost: 0.001 },
     }));
-    const result = await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, model: OPENROUTER_FALLBACK_MODEL, fetcher });
+    const result = await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, model: OPENROUTER_FALLBACK_MODELS[0], fetcher });
     expect(result).toMatchObject({ requestId: 'gen-test', promptTokens: 100, completionTokens: 20, cost: 0.001 });
     const body = JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
-    expect(body.model).toBe(OPENROUTER_FALLBACK_MODEL);
+    expect(body.model).toBe(OPENROUTER_FALLBACK_MODELS[0]);
     expect(body.model).not.toContain(':free');
     expect(body.provider.allow_fallbacks).toBe(true);
   });

@@ -1,11 +1,12 @@
 import type { CSSProperties } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronRight, ExternalLink, Shield, Tag, User as UserIcon } from 'lucide-react';
+import { ChevronRight, ExternalLink, History, Shield, Tag, User as UserIcon } from 'lucide-react';
 import { Monitoria, Team } from '../types';
 import { getStatusConfig, VARIANT_ICON_CONTAINER } from '../lib/statusHelper';
 import Badge from './ui/Badge';
 import ActionDeadlineClock from './ui/ActionDeadlineClock';
+import { isChildTicketMonitoria } from '../lib/childTicketForm';
 
 type Props = {
   monitoria: Monitoria;
@@ -21,9 +22,13 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
   const level = getLevelForScore(m.score || 0);
   const scoreColor = m.score !== undefined ? level.color : 'text-brand-muted';
   const expired = m.status === 'concluida' && m.resolution_type === 'automatic';
+  const latestAction = [...(m.history || [])]
+    .filter(entry => entry.action && !Number.isNaN(Date.parse(entry.at)))
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+  const lastUpdatedAt = !Number.isNaN(Date.parse(m.updated_at)) ? m.updated_at : latestAction?.at || m.created_at;
   return (
     <div style={style} id={`monitoria-${m.id}`} className="border-b border-surface-border/50 last:border-b-0">
-      <div className="flex min-h-[46px] sm:min-h-[50px] items-center gap-2 p-1.5 sm:gap-3 sm:px-4 sm:py-2 hover:bg-surface-subtle/60 transition-colors">
+      <div className="flex min-h-[68px] sm:min-h-[72px] items-center gap-2 p-2 sm:gap-3 sm:px-4 sm:py-2.5 hover:bg-surface-subtle/60 transition-colors">
         <button
           type="button"
           onClick={() => onOpen(m.id)}
@@ -38,6 +43,11 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
               <span className="text-brand-muted">#{m.display_id || m.id.slice(0, 4)}</span>
               <span aria-hidden="true" className="text-brand-muted/60">&#183;</span>
               <span className="truncate font-mono">{m.ticket_id || 'S/N'}</span>
+              {isChildTicketMonitoria(m) && (
+                <Badge variant="info" size="xs" className="shrink-0 text-[8px] uppercase tracking-wide" title="Monitoria de ticket filho">
+                  Ticket filho
+                </Badge>
+              )}
             </span>
             <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[10.5px] font-medium text-brand-primary/75">
               <span className="inline-flex items-center gap-1">
@@ -52,6 +62,11 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
                 <Shield className="size-3 text-brand-highlight" />
                 {getName(m.evaluator_id, true, m.evaluator_name)}
               </span>
+            </span>
+            <span className="mt-1 flex min-w-0 items-center gap-1 text-[9px] sm:text-[10px] text-brand-muted" title={latestAction ? `${latestAction.action} · ${latestAction.by_name} · ${format(new Date(latestAction.at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}` : undefined}>
+              <History className="size-3 shrink-0" aria-hidden="true" />
+              <span className="shrink-0 font-semibold">Atualizado {format(new Date(lastUpdatedAt), 'dd/MM HH:mm', { locale: ptBR })} ·</span>
+              <span className="truncate">{latestAction?.action || 'Sem ação registrada'}</span>
             </span>
             {/* Status chip visível no mobile */}
             <span className="flex sm:hidden items-center gap-1.5 mt-0.5">

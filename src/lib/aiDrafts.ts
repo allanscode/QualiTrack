@@ -1,5 +1,6 @@
 import { supabase, isMockMode } from './supabase';
 import { AIEvaluationResult, AuditingQueueTicket, AuditingQueueType } from '../types';
+import { extractFunctionErrorMessage } from './helpdeskQueue';
 
 const MOCK_DRAFTS_KEY = 'qualitrack-ai-drafts';
 
@@ -11,6 +12,7 @@ function readMockDrafts(): Record<string, AIEvaluationDraft> {
 export interface AIEvaluationDraft {
   id: string;
   ticket_id: string;
+  created_by?: string;
   form_id?: string;
   agent_name?: string;
   agent_email?: string;
@@ -56,7 +58,9 @@ export async function fetchAIDrafts(ticketIds: string[]): Promise<Record<string,
 /** Loads drafts independently of the current Zendesk view; database RLS limits visibility. */
 export async function fetchOpenAIDrafts(queue: AuditingQueueType): Promise<AIEvaluationDraft[]> {
   if (queue !== 'negativas' && queue !== 'proativas' && queue !== 'positivas') return [];
-  if (isMockMode || !supabase) return Object.values(readMockDrafts()).filter(d => d.source_queue === queue || (queue === 'proativas' && !d.source_queue));
+  if (isMockMode || !supabase) return Object.values(readMockDrafts()).filter(d =>
+    (d.source_queue === queue || (queue === 'proativas' && !d.source_queue))
+    && !['closed', 'archived'].includes(d.ticket_snapshot?.status?.toLowerCase() || ''));
 
   const drafts: AIEvaluationDraft[] = [];
   for (let from = 0; ; from += 500) {
@@ -69,7 +73,30 @@ export async function fetchOpenAIDrafts(queue: AuditingQueueType): Promise<AIEva
     drafts.push(...(data || []) as AIEvaluationDraft[]);
     if (!data || data.length < 500) break;
   }
-  return drafts;
+  if (drafts.length === 0) return [];
+
+  // O snapshot pode ter sido salvo antes de o Zendesk fechar o ticket.
+  // Confere o estado atual em lotes para não reoferecer avaliações impossíveis.
+  const statuses: Record<string, string> = {};
+  for (let from = 0; from < drafts.length; from += 100) {
+    const ids = drafts.slice(from, from + 100).map(draft => draft.ticket_id);
+    const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+      body: { action: 'fetch_draft_statuses', ticket_ids: ids },
+    });
+    if (error || !data?.statuses) {
+      throw new Error(data?.error || await extractFunctionErrorMessage(error, 'Falha ao conferir o estado dos rascunhos no Zendesk.'));
+    }
+    Object.assign(statuses, data.statuses);
+  }
+  return drafts.filter(draft => {
+    const status = statuses[draft.ticket_id]?.toLowerCase();
+    return status && status !== 'closed' && status !== 'archived';
+  }).map(draft => ({
+    ...draft,
+    ticket_snapshot: draft.ticket_snapshot
+      ? { ...draft.ticket_snapshot, status: statuses[draft.ticket_id] }
+      : undefined,
+  }));
 }
 
 /**
@@ -97,6 +124,7 @@ export async function saveAIDraft(params: {
     const now = new Date().toISOString();
     saved[params.ticketId] = {
       id: saved[params.ticketId]?.id || params.ticketId,
+      created_by: params.createdBy,
       ticket_id: params.ticketId, form_id: params.formId, agent_name: params.agentName,
       agent_email: params.agentEmail, agent_id: params.agentId, team_id: params.teamId,
       channel: params.channel, satisfaction_comment: params.satisfactionComment,
@@ -146,4 +174,19 @@ export async function deleteAIDraft(ticketId: string): Promise<void> {
   }
   const { error } = await supabase.from('ai_evaluation_drafts').delete().eq('ticket_id', ticketId);
   if (error) console.warn('[AIDrafts] Falha ao remover rascunho:', error.message);
+}
+
+/** Explicit user action: report denied or missing deletes instead of silently hiding the draft. */
+export async function removeAIDraft(ticketId: string): Promise<boolean> {
+  if (isMockMode || !supabase) {
+    const saved = readMockDrafts();
+    if (!saved[ticketId]) return false;
+    delete saved[ticketId];
+    localStorage.setItem(MOCK_DRAFTS_KEY, JSON.stringify(saved));
+    return true;
+  }
+  const { data, error } = await supabase.from('ai_evaluation_drafts')
+    .delete().eq('ticket_id', ticketId).select('id');
+  if (error) throw new Error(error.message || 'Falha ao excluir o rascunho.');
+  return (data?.length || 0) > 0;
 }

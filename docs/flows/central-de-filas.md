@@ -46,7 +46,7 @@ Vínculo agente↔conta feito por **e-mail**, não por lista local. Ver `resolve
 
 Uma linha por `ticket_id` (UNIQUE), sobrescrita a cada reavaliação. A conclusão da IA salva o resultado atomicamente no banco. Um trigger copia a fila de origem e o retrato verificado do ticket de `queue_ticket_catalog` para `ai_evaluation_drafts`. A Central de Filas lê esses rascunhos independentemente da view atual do Zendesk e mantém o ticket na fila de origem, com o botão **Verificar Avaliação**, mesmo depois que ele deixa a view. Ao salvar uma monitoria ativa para o ticket, outro trigger remove o rascunho. No modo mock, os rascunhos são guardados em `localStorage`. Rascunhos legados sem origem ou retrato aparecem em Proativas como recuperados, com aviso para conferir os dados do ticket.
 
-A fila Proativa solicita à view do Zendesk os tickets por data de criação decrescente em todas as páginas. Ao combinar a página com rascunhos recuperados, a interface mantém os itens visíveis do mais recente para o mais antigo.
+A fila Proativa solicita à view do Zendesk os tickets por data de criação decrescente em todas as páginas. Ao combinar a página com rascunhos recuperados, a interface mantém os itens visíveis do mais recente para o mais antigo. Tickets `closed` continuam elegíveis para monitoria interna, pois a view de CSAT vazio contém tickets fechados; tickets `archived` são excluídos. O Zendesk não aceita publicar comentários em tickets fechados. A busca alternativa usa o filtro oficial de satisfação para tickets fechados.
 
 As filas carregam ao abrir, trocar de fila, buscar, paginar ou clicar em **Atualizar**. Enquanto a tela permanece aberta, uma consulta leve a cada 3 minutos compara apenas os IDs da primeira página da view e mostra um aviso se houver novidades; ela não substitui os cards nem muda a página atual. O progresso de IA e as atribuições continuam chegando por Realtime. Ao salvar uma monitoria, o ticket concluído sai da lista local sem recarregar a fila inteira.
 
@@ -60,12 +60,13 @@ As filas carregam ao abrir, trocar de fila, buscar, paginar ou clicar em **Atual
 | `lookup_ticket_agent` | idem | Só leitura, usado no `MonitoriaForm` manual |
 | `resolve_agent` | admin, gestor_qualidade, qualidade | Cadastro de agente durante a criação de monitoria |
 | `sync_zendesk_groups` | **admin apenas** | Importa grupos do Zendesk como `public.teams` (não duplica por nome) |
+| `preview_webposto_memberships` | **admin apenas** | Consulta vínculos de agentes aos grupos do Zendesk e retorna sugestões de divisão CLT/PJ sem alterar usuários |
 
 `ticket_id`, quando presente, é validado como `/^\d+$/` **antes** de qualquer dispatch — interpolado cru numa URL do Zendesk, um valor não numérico permitiria path traversal para outro endpoint da API usando o `ZENDESK_API_TOKEN` privilegiado (achado corrigido em revisão de segurança, 25/08).
 
 ## Modelo de IA
 
-`OPENROUTER_MODEL` aceita lista separada por vírgula — o parâmetro `models` (não `model`) do OpenRouter tenta em cadeia. Ordem atual prioriza confiabilidade sobre velocidade: só `nvidia/nemotron-3-super-120b-a12b:free` foi confirmado respeitando o `json_schema` com fidelidade nos campos; outros modelos gratuitos testados (`minimax-*`, `dots-studio-*`) ignoravam o schema e devolviam `200 OK` com campos inventados.
+A cadeia de análise é fixada no backend como `z-ai/glm-5.3-flash` → `google/gemma-4-31b-it` → `google/gemini-3.8-flash`, todos pagos pelo OpenRouter e sem sufixo `:free`. Cada modelo pode ser tentado até duas vezes antes do próximo. O JSON Schema é incluído no prompt; o backend valida a resposta antes de concluir o job. A chamada atual não envia `response_format: json_schema` nem `require_parameters: true`. Falhas transitórias após a cadeia entram na fila de reprocessamento.
 
 **Ordem das propriedades no `responseSchema` importa**: `answers` vem antes de `score`/`summary` — testado que, na ordem inversa, o modelo "reservava" `score: 0` e `summary: ""` antes de avaliar qualquer critério (typeof correto, valor semanticamente vazio). A validação pós-parse rejeita isso explicitamente (`score > 0`, `summary.trim().length > 0`), não só `typeof`.
 
@@ -81,7 +82,7 @@ Ver [`docs/database/schema.md`](../database/schema.md#ai_evaluation_guidelines) 
 | `HELPDESK_NEGATIVE_VIEW_ID` / `HELPDESK_POSITIVE_VIEW_ID` | Não (fallback: Search API) | View salva por fila |
 | `HELPDESK_VALIDATED_TAG` | Não | Exclui negativas já validadas por tag/macro |
 | `OPENROUTER_API_KEY` | Sim (para `evaluate_ai`) | Chave da IA |
-| `OPENROUTER_MODEL` | Não (default hardcoded) | Lista de modelos com fallback |
+| `AI_PRIMARY_TIMEOUT_MS` | Não (padrão 120000 ms) | Janela de tentativas por modelo |
 
 ## Divergência do Plano Original
 

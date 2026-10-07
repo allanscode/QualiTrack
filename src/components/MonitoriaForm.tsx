@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { User, Monitoria, AIEvaluationResult, ChildTicketAiEvaluation, TicketCommentMessage } from '../types';
+import { User, Monitoria, AIEvaluationResult, ChildTicketAiEvaluation, TicketCommentMessage, ZendeskTicketField } from '../types';
 import { useStaticData } from '../lib/StaticDataContext';
 import { useTheme } from '../providers/ThemeProvider';
 import {
@@ -55,6 +55,9 @@ import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import { useMonitoriaDraft } from '../hooks/useMonitoriaDraft';
 import { getEvaluationOutcome } from '../lib/domainRules';
+import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
+import { isVerifiedTicketGroupPair } from '../lib/ticketTeam';
+import { getSavedZendeskTicketFields, normalizeZendeskTicketFields } from '../lib/monitoriaTicketFields';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -62,17 +65,16 @@ import Select from './ui/Select';
 import CustomSelect from './ui/CustomSelect';
 import CustomDatepicker from './ui/CustomDatepicker';
 import HelpdeskSendModal from './HelpdeskSendModal';
+import ChildTicketPublishModal from './ChildTicketPublishModal';
 import TicketMessageBubble from './TicketMessageBubble';
 import { EvaluationOutcome, MonitoriaStatus } from '../types';
 
 const CHANNELS = ['Chat', 'Email', 'Telefone', 'WhatsApp'] as const;
 
-// Estados considerados "concluídos" para fins de envio ao helpdesk — a
-// monitoria já tem um veredito final, mesmo que tenha passado por
-// contestação. Estados intermediários (pendente_revisao, em_contestacao,
-// aguardando_gestor_*, reavaliacao_solicitada) ainda podem mudar de
-// resultado, então não fazem sentido enviar ainda.
+// A revisão humana da macro pode acontecer logo após salvar a monitoria.
+// Durante contestação ou decisão de gestor, o envio aguarda a nova versão.
 const HELPDESK_ELIGIBLE_STATUSES: MonitoriaStatus[] = [
+  'pendente_revisao',
   'concluida',
   'contestacao_aceita',
   'contestacao_negada',
@@ -102,13 +104,15 @@ export default function MonitoriaForm({
   const isReevaluating = !!(initialData as any)?._reevaluate;
   const isAdminEdit = !!(initialData as any)?._adminEdit || isEditModeOverride;
 
-  const aiEval: AIEvaluationResult | undefined =
+  const initialAiEval: AIEvaluationResult | undefined =
     (initialData as any)?.aiEvaluation ||
     (initialData as any)?.form_snapshot?.ai_evaluation;
 
-  const childAiEval: ChildTicketAiEvaluation | undefined =
-    (initialData as any)?.childAiEvaluation ||
-    (initialData as any)?.form_snapshot?.child_ai_evaluation;
+  const isChildEvaluation = initialData?.form_id === CHILD_TICKET_FORM_ID
+    || (initialData?.form_snapshot as { ticket_kind?: string } | undefined)?.ticket_kind === 'chamado_filho';
+  const childAiEval: ChildTicketAiEvaluation | undefined = isChildEvaluation
+    ? ((initialData as any)?.childAiEvaluation || (initialData as any)?.form_snapshot?.child_ai_evaluation)
+    : undefined;
 
   const shouldReduceMotion = useReducedMotion();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -142,6 +146,14 @@ export default function MonitoriaForm({
     return normalizeTicketDialogue(raw, agentName);
   });
   const [loadingDialogue, setLoadingDialogue] = useState(false);
+  const [loadingTicketFields, setLoadingTicketFields] = useState(false);
+  const [ticketFieldsError, setTicketFieldsError] = useState(false);
+  const [ticketContextRetry, setTicketContextRetry] = useState(0);
+  const [ticketFieldContext, setTicketFieldContext] = useState<{ ticketId: string; fields: ZendeskTicketField[]; source: 'saved' | 'provided' | 'current' }>(() => ({
+    ticketId: initialData?.ticket_id?.trim() || '',
+    fields: getSavedZendeskTicketFields(initialData),
+    source: initialData?.form_snapshot?.ticket_fields ? 'saved' : 'provided',
+  }));
   const [showDialogueDrawer, setShowDialogueDrawer] = useState(false);
   const [dialogueSearch, setDialogueSearch] = useState('');
   const [dialogueFilter, setDialogueFilter] = useState<'all' | 'end_user' | 'agent' | 'system' | 'internal'>('all');
@@ -180,23 +192,67 @@ export default function MonitoriaForm({
     observations, setObservations,
     criticalErrors, setCriticalErrors,
     criticalErrorObservations, setCriticalErrorObservations,
-    dissatisfactionAnswers,
+    dissatisfactionAnswers, setDissatisfactionAnswers,
     selectedForm,
     score,
     clientFieldsToShow,
     qualityFieldsToShow,
     handleCheckboxChange,
   } = useMonitoriaFormState(initialData, forms, dissatisfactionFields);
+  const ticketFields = ticketFieldContext.ticketId === header.ticket_id?.trim() ? ticketFieldContext.fields : [];
+  const ticketFieldSource = ticketFieldContext.ticketId === header.ticket_id?.trim() ? ticketFieldContext.source : 'current';
+  const [lookedUpTicketGroup, setLookedUpTicketGroup] = useState<{
+    ticketId: string; agentId: string; teamId: string; groupName?: string;
+  } | null>(null);
+  const activeLookedUpGroup = lookedUpTicketGroup?.ticketId === header.ticket_id?.trim() ? lookedUpTicketGroup : null;
+  const ticketGroupTeamId = (initialData as Monitoria & { ticket_group_team_id?: string } | undefined)?.ticket_group_team_id
+    || activeLookedUpGroup?.teamId;
+  const isTicketGroupPair = (agentId: string | undefined, teamId: string | undefined) =>
+    teams.some(team => team.id === ticketGroupTeamId) &&
+    isVerifiedTicketGroupPair(
+      header.ticket_id,
+      initialData?.ticket_id || activeLookedUpGroup?.ticketId,
+      agentId,
+      initialData?.evaluated_id || activeLookedUpGroup?.agentId,
+      teamId,
+      ticketGroupTeamId,
+    );
+  const aiEval = header.form_id === initialData?.form_id ? initialAiEval : undefined;
+  const aiFormChanged = !!initialAiEval && header.form_id !== initialData?.form_id;
+
+  const handleFormChange = (formId: string) => {
+    if (formId === header.form_id) return;
+    setHeader(previous => ({
+      ...previous,
+      form_id: formId,
+      evaluator_note: previous.evaluator_note === initialAiEval?.summary ? '' : previous.evaluator_note,
+    }));
+    setScores({});
+    setObservations({});
+    setCriticalErrors({});
+    setCriticalErrorObservations({});
+    setDissatisfactionAnswers({});
+    if (initialAiEval) toast.info('Ficha alterada. As respostas da IA para a ficha anterior foram limpas; avalie os critérios da nova ficha.');
+  };
 
   const handleRestoreDraft = React.useCallback((draft: any) => {
-    if (draft.header) setHeader(prev => ({ ...prev, ...draft.header }));
-    if (draft.scores) setScores(draft.scores);
-    if (draft.observations) setObservations(draft.observations);
-    if (draft.criticalErrors) setCriticalErrors(draft.criticalErrors);
-    if (draft.criticalErrorObservations) setCriticalErrorObservations(draft.criticalErrorObservations);
-    if (draft.step) setStep(draft.step);
-    toast.success('Rascunho da avaliação recuperado!');
-  }, [setHeader, setScores, setObservations, setCriticalErrors, setCriticalErrorObservations, setStep]);
+    const incompatibleAiForm = !!initialAiEval && !!draft.header?.form_id && draft.header.form_id !== header.form_id;
+    if (draft.header) setHeader(prev => ({
+      ...prev,
+      ...draft.header,
+      ...(initialData?.ticket_id ? { ticket_id: initialData.ticket_id } : {}),
+      ...(incompatibleAiForm ? { form_id: prev.form_id, evaluator_note: prev.evaluator_note } : {}),
+    }));
+    if (!incompatibleAiForm) {
+      if (draft.scores) setScores(draft.scores);
+      if (draft.observations) setObservations(draft.observations);
+      if (draft.criticalErrors) setCriticalErrors(draft.criticalErrors);
+      if (draft.criticalErrorObservations) setCriticalErrorObservations(draft.criticalErrorObservations);
+      if (draft.step) setStep(draft.step);
+    }
+    if (incompatibleAiForm) toast.warning('Rascunho local de outra ficha: a ficha e as respostas atuais foram preservadas.');
+    else toast.success('Rascunho da avaliação recuperado!');
+  }, [initialAiEval, initialData?.ticket_id, header.form_id, setHeader, setScores, setObservations, setCriticalErrors, setCriticalErrorObservations, setStep]);
 
   const {
     hasDraft,
@@ -236,32 +292,41 @@ export default function MonitoriaForm({
     if (/\btef\b/i.test(teamName)) return 'TEF';
     return null;
   }, [initialData, evaluatedTeam]);
-  const headerSubtitle = evaluatedAgent?.name
+  const ticketSubject = (initialData as any)?.ticket_subject?.trim();
+  const headerSubtitle = ticketSubject || (evaluatedAgent?.name
     ? `Resolvido por ${evaluatedAgent.name}${evaluatedTeam?.name ? ` da equipe ${evaluatedTeam.name}` : ''}`
-    : ((initialData as any)?.ticket_subject || '');
+    : '');
 
-  // Carregamento resiliente do diálogo: se o ticket_id existe mas ainda não temos mensagens, busca no Helpdesk
+  // Busca o contexto do ticket uma vez, inclusive quando o diálogo já veio da IA.
+  const fetchedTicketContextRef = useRef<string | null>(null);
   useEffect(() => {
     const ticketId = header.ticket_id?.trim();
-    if (!ticketId || dialogue.length > 0) return;
+    if (!ticketId || (dialogue.length > 0 && ticketFields.length > 0) || fetchedTicketContextRef.current === ticketId) return;
 
     let cancelled = false;
-    setLoadingDialogue(true);
+    fetchedTicketContextRef.current = ticketId;
+    if (dialogue.length === 0) setLoadingDialogue(true);
+    if (ticketFields.length === 0) { setLoadingTicketFields(true); setTicketFieldsError(false); }
     fetchTicketDialogue(ticketId)
       .then(res => {
-        if (!cancelled && res?.comments && res.comments.length > 0) {
+        if (cancelled) return;
+        if (dialogue.length === 0 && res?.comments && res.comments.length > 0) {
           setDialogue(normalizeTicketDialogue(res.comments, evaluatedAgent?.name));
+        }
+        if (ticketFields.length === 0) {
+          setTicketFieldContext({ ticketId, fields: normalizeZendeskTicketFields(res.ticketFields), source: 'current' });
         }
       })
       .catch(err => {
-        console.warn('[MonitoriaForm] Diálogo não carregado automaticamente:', err);
+        console.warn('[MonitoriaForm] Contexto Zendesk não carregado automaticamente:', err);
+        if (!cancelled && ticketFields.length === 0) setTicketFieldsError(true);
       })
       .finally(() => {
-        if (!cancelled) setLoadingDialogue(false);
+        if (!cancelled) { setLoadingDialogue(false); setLoadingTicketFields(false); }
       });
 
     return () => { cancelled = true; };
-  }, [header.ticket_id, dialogue.length, evaluatedAgent?.name]);
+  }, [header.ticket_id, dialogue.length, ticketFields.length, evaluatedAgent?.name, ticketContextRetry]);
 
   // Se o agente for selecionado ou alterado, revalida papéis no diálogo existente
   useEffect(() => {
@@ -435,26 +500,23 @@ export default function MonitoriaForm({
       if (!found || header.evaluated_id) return;
 
       if (found.existing_id) {
+        if (found.ticket_group_team_id) {
+          setLookedUpTicketGroup({
+            ticketId, agentId: found.existing_id, teamId: found.ticket_group_team_id,
+            groupName: found.team_name,
+          });
+        }
         // Agente já cadastrado — preenche a ficha automaticamente, igual já
         // acontece vindo da Central de Filas.
         setHeader(prev => (prev.evaluated_id || prev.ticket_id?.trim() !== ticketId) ? prev : ({
           ...prev,
           evaluated_id: found.existing_id!,
-          team_id: prev.team_id || found.existing_team_id || prev.team_id,
+          team_id: found.existing_team_id || prev.team_id || '',
         }));
         setUnregisteredAgentPreview(null);
       } else {
         setUnregisteredAgentPreview(found);
-        // Atendente ainda não cadastrado, mas o grupo dele no Zendesk (ex.:
-        // "Suporte Interno") já existe como Equipe no QualiTrack (importado
-        // via Admin > Equipes > Importar do Zendesk) — casa por nome e
-        // pré-seleciona, pra não depender do monitor escolher certo na mão.
-        if (found.team_name && !header.team_id) {
-          const matchedTeam = teams.find(t => t.name.trim().toLowerCase() === found.team_name!.trim().toLowerCase());
-          if (matchedTeam) {
-            setHeader(prev => (prev.team_id || prev.ticket_id?.trim() !== ticketId) ? prev : ({ ...prev, team_id: matchedTeam.id }));
-          }
-        }
+        // O grupo Zendesk não define a equipe gestora de um novo agente.
       }
     }, 700);
 
@@ -474,12 +536,17 @@ export default function MonitoriaForm({
   // o modal é mantido montado dentro do MonitoriaForm até esse momento, em
   // vez de o form fechar (e desmontar o modal) assim que o save termina.
   const [helpdeskModal, setHelpdeskModal] = useState<{ monitoriaId: string; fromConclusion: boolean } | null>(null);
+  const [childPublishModal, setChildPublishModal] = useState<{ monitoriaId: string; fromConclusion: boolean } | null>(null);
   const [generatingAuditorRecord, setGeneratingAuditorRecord] = useState(false);
 
   const canSendToHelpdesk = isViewOnly
+    && !isChildEvaluation
     && !!initialData?.status
     && HELPDESK_ELIGIBLE_STATUSES.includes(initialData.status)
     && !!header.ticket_id?.trim();
+  const canPublishChild = isViewOnly && isChildEvaluation
+    && initialData?.status === 'concluida' && (initialData.score ?? 0) >= 75
+    && ['admin', 'gestor_qualidade', 'qualidade'].includes(user?.role || '');
   // Sugestão de desfecho do preview baseada na regra de domínio estrita (WQ-22):
   // score >= 75% -> Válido (positiva), score < 75% -> Invalidado (negativa)
   const targetScore = isViewOnly ? (initialData?.score ?? 0) : score;
@@ -493,6 +560,7 @@ export default function MonitoriaForm({
   };
 
   const { isPending, validateStep, handleSave } = useMonitoriaSave({
+    ticketGroupTeamId,
     user,
     initialData,
     isReevaluating,
@@ -505,6 +573,7 @@ export default function MonitoriaForm({
     dissatisfactionAnswers,
     score,
     selectedForm,
+    ticketFields,
     qualityConfig,
     allUsers,
     forms,
@@ -512,11 +581,17 @@ export default function MonitoriaForm({
     dissatisfactionFields,
     clientFieldsToShow,
     qualityFieldsToShow,
-    onSaved: (savedMonitoriaId: string) => {
+    onSaved: (savedMonitoriaId: string, savedStatus: MonitoriaStatus) => {
       clearDraft();
-      // Envio automático com a macro ao Zendesk na finalização da monitoria
+      if (header.form_id === CHILD_TICKET_FORM_ID && savedStatus === 'concluida' && score >= 75) {
+        setChildPublishModal({ monitoriaId: savedMonitoriaId, fromConclusion: true });
+        return;
+      }
+      // A macro de atendimento pode ser revista após salvar; filhos usam macro própria.
       const ticketIdTrimmed = header.ticket_id?.trim() || '';
       const shouldAutoSend = /^\d+$/.test(ticketIdTrimmed)
+        && header.form_id !== CHILD_TICKET_FORM_ID
+        && HELPDESK_ELIGIBLE_STATUSES.includes(savedStatus)
         && !isAdminEdit
         && !isReevaluating;
 
@@ -783,19 +858,19 @@ export default function MonitoriaForm({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between ml-1">
                     <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Ficha de Avaliação *</label>
-                    {((initialData as any)?.isAiLocked || (initialData as any)?.aiEvaluation) && (
+                    {initialAiEval && (
                       <span className="flex items-center gap-1 text-[10px] font-black text-brand-highlight">
-                        <Lock className="w-3 h-3" />
-                        <span>Definida pela IA ({(initialData as any)?.customerType === 'revenda' ? 'Revenda' : 'Cliente Final'})</span>
+                        {aiFormChanged ? <Pencil className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
+                        <span>{aiFormChanged ? 'Ficha corrigida pelo monitor' : 'Ficha usada no rascunho da IA'}</span>
                       </span>
                     )}
                   </div>
                   <CustomSelect
                     value={header.form_id}
-                    onChange={val => setHeader({...header, form_id: val})}
+                    onChange={handleFormChange}
                     options={[{ value: '', label: 'Selecione a ficha...' }, ...forms.map(f => ({ value: f.id, label: f.title }))]}
                     className="w-full"
-                    disabled={isViewOnly || isReevaluating || !!((initialData as any)?.isAiLocked || (initialData as any)?.aiEvaluation)}
+                    disabled={isViewOnly || isReevaluating}
                   />
                 </div>
 
@@ -833,7 +908,9 @@ export default function MonitoriaForm({
                           ? selectedAgent.team_ids
                           : (selectedAgent.primary_team_id ? [selectedAgent.primary_team_id] : []);
 
-                        if (agentTeams.length === 1) {
+                        if (isTicketGroupPair(val, header.team_id)) {
+                          autoTeamId = header.team_id;
+                        } else if (agentTeams.length === 1) {
                           autoTeamId = agentTeams[0];
                         } else if (selectedAgent.primary_team_id && agentTeams.includes(selectedAgent.primary_team_id)) {
                           autoTeamId = selectedAgent.primary_team_id;
@@ -849,7 +926,7 @@ export default function MonitoriaForm({
                       { value: '', label: 'Selecione o agente...' },
                       ...agents
                         .filter(a => {
-                          if (!header.team_id) return true;
+                          if (!header.team_id || isTicketGroupPair(a.id, header.team_id)) return true;
                           const agentTeams = a.team_ids?.length
                             ? a.team_ids
                             : (a.primary_team_id ? [a.primary_team_id] : []);
@@ -884,7 +961,8 @@ export default function MonitoriaForm({
                         const agentTeams = currentAgent?.team_ids?.length
                           ? currentAgent.team_ids
                           : (currentAgent?.primary_team_id ? [currentAgent.primary_team_id] : []);
-                        if (agentTeams.length > 0 && !agentTeams.includes(val)) {
+                        if (agentTeams.length > 0 && !agentTeams.includes(val)
+                          && !isTicketGroupPair(header.evaluated_id, val)) {
                           toast.info('Remova o agente antes de trocar para uma equipe diferente.');
                           return;
                         }
@@ -895,7 +973,7 @@ export default function MonitoriaForm({
                       { value: '', label: 'Selecione a equipe...' },
                       ...teams
                         .filter(t => {
-                          if (!header.evaluated_id) return true;
+                          if (!header.evaluated_id || isTicketGroupPair(header.evaluated_id, t.id)) return true;
                           const agent = agents.find(a => a.id === header.evaluated_id);
                           const agentTeams = agent?.team_ids?.length
                             ? agent.team_ids
@@ -909,6 +987,12 @@ export default function MonitoriaForm({
                     className="w-full"
                     disabled={isViewOnly || isReevaluating}
                   />
+                  {ticketGroupTeamId && (
+                    <p className="ml-1 text-[10px] font-medium text-brand-muted">
+                      Grupo do ticket no Zendesk: {(initialData as Monitoria & { group_name?: string } | undefined)?.group_name || activeLookedUpGroup?.groupName || teams.find(team => team.id === ticketGroupTeamId)?.name || 'Grupo não identificado'}.
+                      {' '}A monitoria pertence à equipe principal do agente.
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -933,7 +1017,7 @@ export default function MonitoriaForm({
                       type="text"
                       value={header.ticket_id}
                       onChange={e => setHeader({...header, ticket_id: e.target.value})}
-                      disabled={isViewOnly || isReevaluating}
+                      disabled={isViewOnly || isReevaluating || !!initialData?.ticket_id}
                       className="w-full bg-surface-subtle border border-surface-border rounded-xl pl-11 pr-4 h-10 text-xs font-bold text-brand-primary placeholder:text-brand-muted/40 focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/5 transition-all outline-none"
                       placeholder="Digite o número do ticket"
                     />
@@ -974,19 +1058,19 @@ export default function MonitoriaForm({
               </div>
 
               {/* Campos do Formulário no Zendesk (exclusivamente campos do formulário ativo, sem campos ocultos) */}
-              {Array.isArray((initialData as any)?.ticket_fields) && (initialData as any).ticket_fields.length > 0 && (
+              {ticketFields.length > 0 && (
                 <div className="mt-8 pt-6 border-t border-surface-border/60 animate-fade-in">
                   <div className="flex items-center gap-2 mb-4">
                     <FileText className="w-4 h-4 text-brand-highlight" />
                     <h4 className="text-xs font-black uppercase text-brand-primary tracking-wider">
-                      Campos do Formulário no Zendesk ({(initialData as any).ticket_fields.length})
+                      Campos do Formulário no Zendesk ({ticketFields.length})
                     </h4>
                     <span className="text-[10px] text-brand-muted font-bold hidden sm:inline">
-                      · Dados reais preenchidos no chamado para validação
+                      · {ticketFieldSource === 'saved' ? 'Dados registrados na avaliação' : ticketFieldSource === 'current' ? 'Dados atuais do chamado; podem ter mudado desde a avaliação' : 'Dados do chamado para validação'}
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {(initialData as any).ticket_fields.map((field: { title: string; value: string }, idx: number) => (
+                    {ticketFields.map((field, idx) => (
                       <div key={idx} className="p-3 bg-surface-card border border-surface-border rounded-xl shadow-xs space-y-1">
                         <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted line-clamp-1" title={field.title}>
                           {field.title}
@@ -1668,24 +1752,27 @@ export default function MonitoriaForm({
                       </div>
                     )}
 
-                    {/* Contexto dos Campos do Ticket Utilizados no Confronto */}
-                    {Array.isArray((initialData as any)?.ticket_fields) && (initialData as any).ticket_fields.length > 0 && (
-                      <div className="pt-3 border-t border-surface-border">
-                        <details className="group/ticketFields">
-                          <summary className="text-[10px] font-black uppercase text-brand-muted tracking-wider cursor-pointer hover:text-brand-primary flex items-center gap-1">
-                            <span>Visualizar dados do formulário Zendesk confrontados ({ (initialData as any).ticket_fields.length } campos)</span>
-                          </summary>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 pt-2">
-                            {(initialData as any).ticket_fields.map((f: { title: string; value: string }, idx: number) => (
-                              <div key={idx} className="p-2 rounded bg-surface-subtle border border-surface-border text-xs">
-                                <span className="font-semibold text-brand-primary block text-[10px]">{f.title}:</span>
-                                <span className="text-brand-muted text-[11px]">{f.value || '—'}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </details>
+                  </div>
+                )}
+
+                {ticketFields.length > 0 && (
+                  <div className="rounded-2xl border border-surface-border bg-surface-card p-5 shadow-premium">
+                    <details className="group/ticketFields">
+                      <summary className="flex cursor-pointer items-center gap-2 text-xs font-black uppercase tracking-wider text-brand-primary hover:text-brand-highlight">
+                        <FileText className="size-4" />
+                        Campos do formulário Zendesk ({ticketFields.length})
+                      </summary>
+                      <p className="mt-2 text-[11px] text-brand-muted">{ticketFieldSource === 'saved' ? 'Dados registrados na avaliação.' : ticketFieldSource === 'current' ? 'Dados atuais do chamado; podem ter mudado desde a avaliação.' : 'Dados do chamado para validação.'}</p>
+                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {ticketFields.map((field, index) => <div key={`${field.title}-${index}`} className="rounded-lg border border-surface-border bg-surface-subtle p-3 text-xs"><span className="block text-[10px] font-bold uppercase text-brand-muted">{field.title}</span><span className="mt-1 block break-words font-medium text-brand-primary">{field.value || '—'}</span></div>)}
                       </div>
-                    )}
+                    </details>
+                  </div>
+                )}
+                {ticketFields.length === 0 && isViewOnly && header.ticket_id && (
+                  <div className="rounded-xl border border-surface-border bg-surface-subtle px-4 py-3 text-xs text-brand-muted">
+                    {loadingTicketFields ? 'Carregando campos do formulário Zendesk…' : ticketFieldsError ? 'Não foi possível carregar os campos atuais do Zendesk.' : 'Nenhum campo visível do formulário Zendesk foi encontrado para este ticket.'}
+                    {ticketFieldsError && <button type="button" onClick={() => { fetchedTicketContextRef.current = null; setTicketContextRetry(value => value + 1); }} className="ml-2 font-bold text-brand-highlight hover:underline focus-visible:ring-2 focus-visible:ring-brand-accent">Tentar novamente</button>}
                   </div>
                 )}
 
@@ -1863,6 +1950,11 @@ export default function MonitoriaForm({
                     <Send className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
                     Enviar ao Zendesk
                   </button>
+                )}
+                {canPublishChild && initialData && (
+                  <Button size="sm" onClick={() => setChildPublishModal({ monitoriaId: initialData.id, fromConclusion: false })} icon={<Send className="w-4 h-4" />}>
+                    Enviar macro do chamado filho
+                  </Button>
                 )}
                 <Button
                   variant="outline"
@@ -2047,8 +2139,20 @@ export default function MonitoriaForm({
           monitoriaId={helpdeskModal.monitoriaId}
           ticketId={header.ticket_id}
           suggestedOutcome={suggestedOutcome}
+          underReview={initialData?.status === 'pendente_revisao'}
           fromConclusion={helpdeskModal.fromConclusion}
           onClose={handleHelpdeskModalClose}
+        />
+      )}
+      {childPublishModal && (
+        <ChildTicketPublishModal
+          monitoriaId={childPublishModal.monitoriaId}
+          ticketId={header.ticket_id}
+          onClose={() => {
+            const saved = childPublishModal;
+            setChildPublishModal(null);
+            if (saved.fromConclusion) onSaved(saved.monitoriaId);
+          }}
         />
       )}
 

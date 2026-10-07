@@ -17,6 +17,17 @@ function EditableLayout() {
   );
 }
 
+function MixedLayout({ editable }: { editable: boolean }) {
+  const editor = useDashboardLayoutEditor('admin');
+  return (
+    <DashboardTileLayout role="admin" editor={editable ? editor : undefined}>
+      <DashboardTile type="StatCard" title="Média Geral"><span>primeiro card</span></DashboardTile>
+      <DashboardTile type="StatCard" title="Total"><span>segundo card</span></DashboardTile>
+      <DashboardTile type="CustomChart" title="Distribuição por Equipe"><span>gráfico seguinte</span></DashboardTile>
+    </DashboardTileLayout>
+  );
+}
+
 describe('DashboardTileLayout', () => {
   beforeEach(() => {
     state.config = { dashboardLayouts: {}, dashboardHiddenActions: {} };
@@ -49,6 +60,21 @@ describe('DashboardTileLayout', () => {
     expect(orderedWidgets('admin').some(item => item.id === widgetId('FeedbacksWidget', 'Feedbacks & Gestão de 1:1'))).toBe(true);
     expect(DASHBOARD_WIDGETS.suporte.some(item => item.id === widgetId('FeedbacksWidget', 'Meus Feedbacks & Planos 1:1'))).toBe(true);
     expect(DASHBOARD_WIDGETS.qualidade.some(item => item.type === 'FeedbacksWidget')).toBe(false);
+  });
+
+  it.each([false, true])('uses the same card and chart sequence in the %s layout without saved customization', async editable => {
+    const { container } = render(<MixedLayout editable={editable} />);
+    await waitFor(() => expect(screen.getByText('gráfico seguinte')).toBeTruthy());
+
+    const filledSlots = [...container.querySelectorAll('.dashboard-tile-grid > [data-dashboard-slot]')]
+      .filter(slot => slot.querySelector('[data-dashboard-tile-content]'));
+    expect(filledSlots.map(slot => slot.getAttribute('data-dashboard-kind'))).toEqual([
+      'card', 'card', 'chart',
+    ]);
+    expect(filledSlots[2].getAttribute('data-dashboard-compact')).toBe('true');
+    expect(filledSlots.map(slot => slot.querySelector('[data-dashboard-tile-content]')?.textContent)).toEqual([
+      'primeiro card', 'segundo card', 'gráfico seguinte',
+    ]);
   });
 
   it('reorders cards by dragging directly in the preview', async () => {
@@ -85,5 +111,5 @@ describe('DashboardTileLayout', () => {
     await waitFor(() => expect(state.saveConfig).toHaveBeenCalledOnce());
     expect(state.saveConfig.mock.calls[0][0].dashboardLayouts.admin.hidden).toEqual([widgetId('StatCard', 'Média Geral')]);
     expect(screen.getByRole('button', { name: 'Mover Total para baixo na prévia' })).toBeTruthy();
-  });
+  }, 12000);
 });

@@ -197,7 +197,7 @@ export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPa
           transition={{ duration: 0.2 }}
         >
           {activeSubTab === 'users' && <UsersManagement users={staticData.users} teams={staticData.teams} loadData={loadAllData} />}
-          {activeSubTab === 'teams' && <TeamsManagement teams={staticData.teams} users={staticData.users} loadData={loadAllData} currentUser={currentUser} />}
+          {activeSubTab === 'teams' && <TeamsManagement teams={staticData.teams} groups={staticData.groups} teamGroups={staticData.teamGroups} users={staticData.users} loadData={loadAllData} currentUser={currentUser} />}
           {activeSubTab === 'forms' && <FormsManagement currentUser={currentUser} teams={staticData.teams} loadData={loadAllData} />}
           {activeSubTab === 'requests' && <RequestsManagement requests={requests} users={staticData.users} teams={staticData.teams} loadData={loadAllData} />}
           {activeSubTab === 'operacao' && <QualityConfigManagement mode="operacao" />}

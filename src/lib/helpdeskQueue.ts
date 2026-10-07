@@ -128,6 +128,19 @@ export interface QueueTicketsPage {
   hasMore: boolean;
 }
 
+export async function publishChildTicketMacro(
+  ticketId: string,
+  monitoriaId: string,
+): Promise<void> {
+  if (isMockMode) return;
+  if (!supabase) throw new Error('Conexão com o Zendesk indisponível.');
+  const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+    body: { action: 'publish_child_macro', ticket_id: ticketId, monitoria_id: monitoriaId },
+  });
+  if (error) throw new Error(await extractFunctionErrorMessage(error, 'Não foi possível enviar a macro ao Zendesk.'));
+  if (!data?.success) throw new Error(data?.error || 'O Zendesk não confirmou o envio da macro.');
+}
+
 /** Consulta leve para avisar sobre mudanças sem recarregar os cards da fila. */
 export async function checkQueueUpdates(type: AuditingQueueType): Promise<string[]> {
   if (isMockMode || !supabase) {
@@ -192,7 +205,8 @@ export async function fetchQueueTickets(
       } else {
         tickets = (data.tickets as AuditingQueueTicket[]).map(t => ({
           ...t,
-          already_audited: auditedTicketIds.has(t.ticket_id.trim())
+          // O servidor inclui monitorias pendentes de publicação na fila negativa.
+          already_audited: t.already_audited ?? auditedTicketIds.has(t.ticket_id.trim())
         }));
         nextCursor = data.next_cursor || null;
         hasMore = !!data.has_more;
@@ -203,14 +217,23 @@ export async function fetchQueueTickets(
     }
   }
 
-  // Chamado que já virou monitoria de verdade (registro em `monitorias`,
-  // não só rascunho de IA) não deve mais aparecer em NENHUMA fila — a
-  // apuração/avaliação já foi concluída. Antes isso só valia pra Negativas
-  // (macro/tag do Zendesk + já auditado no QualiTrack); Positivas e
-  // Proativas ficavam mostrando o ticket com badge "Auditado" só depois de
-  // "Reavaliar"/"Avaliar com IA" de novo, mesmo já tendo monitoria salva —
-  // confuso e deixava a fila "suja" com trabalho já concluído.
-  tickets = tickets.filter(t => !t.already_audited);
+  if (isMockMode) {
+    tickets = tickets.map(ticket => {
+      const monitoria = existingMonitorias.find(item => item.active !== false && item.ticket_id?.trim() === ticket.ticket_id);
+      return monitoria ? {
+        ...ticket, already_audited: true, monitoria_id: monitoria.id,
+        monitoria_status: monitoria.status, monitoria_score: monitoria.score,
+      } : ticket;
+    });
+  }
+
+  // Negativas dependem também do recibo de publicação; filhos dependem da
+  // macro própria. Nas demais filas, a monitoria já encerra a triagem.
+  // A view de CSAT vazio inclui tickets fechados: eles ainda podem receber
+  // monitoria interna, embora o Zendesk não aceite novos comentários neles.
+  tickets = tickets.filter(t => (type === 'negativas' || type === 'filhos' || type === 'filhos_invalidos' || !t.already_audited) &&
+    t.status?.toLowerCase() !== 'archived' &&
+    (type === 'proativas' || t.status?.toLowerCase() !== 'closed'));
 
   // Fila de Positivas: trava de no máximo 2 avaliações por atendente no mês,
   // usando o e-mail como chave de identificação agnóstica de plataforma.
@@ -494,7 +517,12 @@ export async function evaluateTicketWithAI(
       throw new Error(data?.error || 'A IA não retornou resultado para este ticket');
     }
 
-    return data.result as AIEvaluationResult;
+    const result = data.result as AIEvaluationResult;
+    if (data?.technical) {
+      result.fallback_used = Boolean(data.technical.fallbackUsed);
+      result.model = data.technical.model;
+    }
+    return result;
   } catch (err: any) {
     console.error('[HelpdeskQueue] Erro ao chamar avaliação com IA:', err);
     throw err;
@@ -540,10 +568,10 @@ export async function evaluateChildTicketWithAI(
   ticketId: string,
   ticketSubject: string,
   dialogue?: TicketCommentMessage[],
-  tags?: string[],
   ticketFields?: { title: string; value: string }[],
   macroType?: ChildTicketMacroType,
   jobId?: string,
+  ticketStatus?: string,
 ): Promise<ChildTicketAiEvaluation | AIQueuedResult> {
   if (isMockMode || !supabase) {
     return getFallbackChildTicketEvaluation(ticketId, macroType);
@@ -555,8 +583,8 @@ export async function evaluateChildTicketWithAI(
         action: 'evaluate_child_ticket',
         ticket_id: ticketId,
         ticket_subject: ticketSubject,
+        ticket_status: ticketStatus,
         dialogue: dialogue || [],
-        tags: tags || [],
         ticket_fields: ticketFields,
         macro_type: macroType,
         job_id: jobId,
@@ -567,7 +595,12 @@ export async function evaluateChildTicketWithAI(
     if (data?.queued === true && typeof data.job_id === 'string') return { queued: true, job_id: data.job_id };
     if (!data?.result) throw new Error(data?.error || 'A IA não retornou resultado.');
 
-    return data.result as ChildTicketAiEvaluation;
+    const result = data.result as ChildTicketAiEvaluation;
+    if (data?.technical) {
+      result.fallback_used = Boolean(data.technical.fallbackUsed);
+      result.model = data.technical.model;
+    }
+    return result;
   } catch (err) {
     console.error('[HelpdeskQueue] Erro ao chamar avaliação de chamado filho com IA:', err);
     throw err;
@@ -581,10 +614,11 @@ function getFallbackChildTicketEvaluation(ticketId: string, macroType?: ChildTic
     score: 100,
     summary: `Conferência automática prévia para o chamado filho #${ticketId}. Os quesitos operacionais de assunto, texto da macro e direcionamento foram validados.`,
     checks: [
-      { rule: "Preservação do Assunto (Inalterabilidade)", passed: true, details: "O assunto original da macro não foi alterado, mantendo a integridade dos 5 gatilhos do Zendesk (DB-361)." },
-      { rule: "Preservação do Texto da Macro", passed: true, details: "O texto-base da macro foi mantido integralmente, complementado com as informações técnicas do atendimento." },
-      { rule: "Direcionamento Correto ('Para')", passed: true, details: "Encaminhado corretamente para o grupo técnico especialista / fila responsável." },
-      { rule: "Governança de Tags e Automação", passed: true, details: "Tags estruturais obrigatórias identificadas e preservadas no ticket." }
+      { question_id: 'child-subject-preserved', answer: 'SIM', rule: "Assunto da Abertura e Macro de Resolvido", passed: true, details: "O assunto da abertura é válido; alterações automáticas pela macro de resolvido também são aceitas." },
+      { question_id: 'child-parent-linked', answer: 'SIM', rule: 'Vínculo com o chamado pai', passed: true, details: 'Cenário de demonstração: chamado pai vinculado corretamente.' },
+      { question_id: 'child-macro-preserved', answer: 'SIM', rule: "Preservação do Texto da Macro", passed: true, details: "O texto-base da macro foi mantido integralmente, complementado com as informações técnicas do atendimento." },
+      { question_id: 'child-macro-enriched', answer: 'SIM', rule: 'Detalhes técnicos complementares', passed: true, details: 'Cenário de demonstração: testes e evidências técnicas registrados.' },
+      { question_id: 'child-routing-correct', answer: 'SIM', rule: "Direcionamento Correto ('Para')", passed: true, details: "Encaminhado corretamente para o grupo técnico especialista / fila responsável." }
     ],
     recommendations: ["Conferência preliminar aprovada. Revise os logs e evidências técnicas anexadas antes de concluir a validação."]
   };
@@ -652,6 +686,7 @@ export interface TicketAgentLookup {
   /** Se já existir uma conta com esse e-mail no QualiTrack, o id dela. */
   existing_id?: string | null;
   existing_team_id?: string | null;
+  ticket_group_team_id?: string | null;
 }
 
 /**
@@ -679,6 +714,8 @@ export async function lookupTicketAgent(ticketId: string): Promise<TicketAgentLo
 }
 
 export interface ZendeskTicketDetails {
+  ticket_kind?: 'atendimento' | 'chamado_filho';
+  child_evaluation?: ChildTicketAiEvaluation | null;
   ticket_id: string;
   subject: string;
   description: string;
@@ -703,6 +740,7 @@ export interface ZendeskTicketDetails {
   } | null;
   organization_name?: string | null;
   group_name?: string | null;
+  ticket_group_team_id?: string | null;
   matched_agent?: {
     id: string;
     name: string;
@@ -717,6 +755,7 @@ export interface LookupTicketResult {
   found: boolean;
   ticket?: ZendeskTicketDetails;
   message?: string;
+  error?: boolean;
 }
 
 /**
@@ -774,7 +813,7 @@ export async function lookupTicketFromHelpdesk(ticketId: string): Promise<Lookup
 
     if (error) {
       const msg = await extractFunctionErrorMessage(error, 'Falha ao consultar chamado no Zendesk.');
-      return { found: false, message: msg };
+      return { found: false, message: msg, error: true };
     }
 
     if (!data?.found || !data?.ticket) {
@@ -787,6 +826,6 @@ export async function lookupTicketFromHelpdesk(ticketId: string): Promise<Lookup
     };
   } catch (err: any) {
     console.error('[HelpdeskQueue] Erro ao buscar chamado no Zendesk:', err);
-    return { found: false, message: err?.message || 'Erro de conexão com o helpdesk.' };
+    return { found: false, message: err?.message || 'Erro de conexão com o helpdesk.', error: true };
   }
 }

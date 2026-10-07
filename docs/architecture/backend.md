@@ -4,6 +4,12 @@
 
 QualiTrack não possui servidor backend tradicional. Toda comunicação é feita diretamente do frontend para o **Supabase** (BaaS). Operações privilegiadas são delegadas a Edge Functions (Deno).
 
+## Limites da avaliação por IA
+
+A função `helpdesk-queue` usa a sequência GLM → Gemma → Gemini. `ai-targets.ts` define limites independentes: `AI_PRIMARY_TIMEOUT_MS` (60 segundos), `AI_GEMMA_TIMEOUT_MS` (40 segundos) e `AI_GEMINI_TIMEOUT_MS` (40 segundos). Cada limite é compartilhado entre até duas tentativas do respectivo modelo; ao esgotá-lo, a chamada é abortada e o próximo modelo é acionado. O limite do principal não se aplica aos fallbacks.
+
+Secrets configurados no Supabase prevalecem sobre os defaults. Ao atualizar esses limites, publique a função e atualize os três secrets; um valor antigo de `AI_PRIMARY_TIMEOUT_MS=30000` continuaria interrompendo o GLM aos 30 segundos. Os logs `attempts` registram o modelo, duração e motivo de cada falha para verificar o resultado em produção.
+
 ## Autenticação — Supabase Auth
 
 - **Método**: Email + Senha (`signInWithPassword`)

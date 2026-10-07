@@ -11,6 +11,24 @@
 
 ## Modelo de Dados (`Monitoria`)
 
+Na lista de monitorias, o selo **Ticket filho** e o filtro **Todos os tickets / Tickets filhos / Atendimentos** usam o mesmo identificador da ficha de ticket filho (`isChildTicketMonitoria`). Cada linha mostra a ação mais recente pelo horário do histórico, abaixo dos dados principais. As linhas virtualizadas têm altura suficiente para essa informação e os contadores de status usam fonte ampliada.
+
+Nos detalhes da monitoria, a linha do tempo apresenta os eventos em sequência vertical, com ação, responsável e data em linhas legíveis. Observações longas mostram duas linhas inicialmente e podem ser expandidas sem perder o texto completo; anexos permanecem associados ao evento. A etapa atual aparece ao fim do histórico quando a monitoria ainda não foi concluída.
+
+### Avaliação por IA de tickets filhos
+
+Tickets que já possuem monitoria salva exibem essa informação e a ação **Ver monitoria existente** nos cards e no parecer da IA. Quando existe um parecer de IA concluído, também oferecem **Abrir nova ficha com IA**: abre uma nova avaliação preenchida para revisão, preservando a anterior. A nova monitoria só é persistida ao salvar. Nas filas distribuídas, `start_child_ticket_new_evaluation` exige o monitor responsável ou gestão autorizada e um parecer concluído, reutiliza o bloqueio de trabalho e reabre a atribuição quando necessário. Nenhuma monitoria anterior é excluída ou alterada.
+
+As filas de filhos e filhos inválidos permitem avaliar em lote os tickets selecionados ou, sem seleção, os elegíveis da página. Tickets já avaliados, auditados ou com IA em execução são ignorados. A janela individual pode ser fechada e o progresso do lote pode ser minimizado sem cancelar a análise; os resultados continuam associados ao ticket e podem ser recuperados ao abrir o parecer.
+
+Ao lançar a monitoria, o parecer preenche as respostas, justificativas por critério e observação geral da ficha própria, preservando respostas humanas já existentes. Novas análises retornam os cinco critérios identificados por `question_id`; evidência insuficiente é indicada explicitamente por `NA`. Pareceres antigos com três verificações preenchem somente os critérios correspondentes, deixando os demais para revisão. O preenchimento não salva nem publica a monitoria automaticamente.
+
+### Fluxo de monitorias PJ
+
+Quando `teams.requires_pj_review` está ativo e a nota é inferior a 75%, a sequência obrigatória é **Gestor PJ → Gestor da Qualidade**. O gestor encaminha aprovação ou contestação justificada por `act_on_monitoria_as_support_manager`; o status passa diretamente a `aguardando_gestor_qualidade`. `pj_review_kind` registra o tipo de parecer. A Qualidade toma a decisão final e resolve `contestation_result` quando houver contestação. Os campos e a função do antigo revisor PJ permanecem apenas para preservar o histórico; novas monitorias não entram em `aguardando_revisao_pj`.
+
+O revisor, cujo papel no cadastro é `suporte`, lê apenas casos atribuídos a ele pela view `vw_monitorias_pj_reviewer`, que oculta a identidade do auditor. A view normal `vw_monitorias_suporte` continua limitada às monitorias do próprio atendente. A RLS e os triggers impedem mudanças diretas do parecer ou saltos entre etapas. `process_action_deadline_timeouts` ignora equipes PJ para não substituir as decisões humanas.
+
 ```typescript
 interface Monitoria {
   id: string;
@@ -143,6 +161,7 @@ stateDiagram-v2
 - Revisão final antes de salvar
 - O auditor pode gerar sob demanda um novo `Registro do Auditor` por IA; a geração usa somente as respostas, observações e erros críticos atuais da etapa 2 e substitui o texto apenas após uma resposta válida
 - `form_snapshot` e `applied_config` salvos no momento da avaliação
+- Os campos visíveis do formulário Zendesk são salvos em `form_snapshot.ticket_fields` e aparecem na identificação e no registro/log da ficha salva. Monitorias antigas sem esse snapshot consultam os campos atuais do ticket, identificados como atuais porque podem ter mudado desde a avaliação.
 
 ## Cálculo de Score
 

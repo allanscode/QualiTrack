@@ -7,7 +7,7 @@ import { ProtectedAuthForm } from './components/ui/ProtectedAuthForm';
 import React, { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
-import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck, Mail, MailOpen, BookOpen, Sparkles, Brain, Menu, MessageSquare, Award } from 'lucide-react';
+import { Layout, LayoutDashboard as DashboardIcon, ClipboardCheck, Settings, LogOut, ChevronRight, ChevronLeft, ChevronDown, Search, Plus, User as UserIcon, Clock, Sun, Moon, Users, X, Monitor, AlertTriangle, BarChart3, Eye, EyeOff, Layers, Bell, CheckCheck, Mail, MailOpen, BookOpen, Sparkles, Brain, Menu, MessageSquare, Award, Trash2 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -21,6 +21,7 @@ import { PresenceProvider } from './providers/PresenceProvider';
 import { useSidebarManager } from './hooks/useSidebarManager';
 import { useMonitoriaData } from './hooks/useMonitoriaData';
 import { useFeedbacks } from './hooks/useFeedbacks';
+import { useQueueEventNotifications } from './hooks/useQueueEventNotifications';
 import { supabase } from './lib/supabase';
 import { fetchAIGuidelines } from './lib/aiGuidelines';
 import { releaseQueueTicketAssignment, canManageQueueAssignments } from './lib/queueDistribution';
@@ -414,6 +415,7 @@ function MainApp({
   const { users, teams, forms, refreshAll } = useStaticData();
   const { monitorias } = useMonitoriaData(userData, activeTab);
   const { feedbacks } = useFeedbacks(userData);
+  const queueEvents = useQueueEventNotifications(userData);
   const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
   const [isSettingsHovered, setIsSettingsHovered] = React.useState(false);
   const [focusMonitoriaTarget, setFocusMonitoriaTarget] = React.useState<{ monitoriaId?: string; ticketId?: string } | null>(null);
@@ -438,7 +440,7 @@ function MainApp({
     // Edge Function de triagem — se ainda não está no cache local de
     // usuários, atualiza para que o formulário já abra com o nome
     // preenchido no lugar de um seletor vazio.
-    if (prefill.evaluated_id && !users.some((u: User) => u.id === prefill.evaluated_id)) {
+    if (prefill.ticket_group_team_id || (prefill.evaluated_id && !users.some((u: User) => u.id === prefill.evaluated_id))) {
       refreshAll();
     }
 
@@ -448,6 +450,8 @@ function MainApp({
       form_id: prefill.form_id,
       evaluated_id: prefill.evaluated_id,
       team_id: prefill.team_id,
+      ticket_group_team_id: prefill.ticket_group_team_id,
+      group_name: prefill.group_name,
       channel: prefill.channel,
       ticket_date: prefill.ticket_date,
       satisfaction_result: prefill.satisfaction_result,
@@ -502,6 +506,7 @@ function MainApp({
   const [showTeamList, setShowTeamList] = React.useState(false);
   const [showNotifications, setShowNotifications] = React.useState(false);
   const notificationsStorageKey = userData?.id ? `qualitrack_read_notifications_${userData.id}` : 'qualitrack_read_notifications';
+  const dismissedStorageKey = userData?.id ? `qualitrack_dismissed_notifications_${userData.id}` : 'qualitrack_dismissed_notifications';
   const [readNotificationIds, setReadNotificationIds] = React.useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem(notificationsStorageKey);
@@ -510,6 +515,27 @@ function MainApp({
       return new Set();
     }
   });
+
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem(notificationsStorageKey);
+      setReadNotificationIds(saved ? new Set(JSON.parse(saved)) : new Set());
+    } catch {
+      setReadNotificationIds(new Set());
+    }
+  }, [notificationsStorageKey]);
+  const [dismissedNotificationIds, setDismissedNotificationIds] = React.useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(dismissedStorageKey);
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
+    } catch { return new Set(); }
+  });
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem(dismissedStorageKey);
+      setDismissedNotificationIds(saved ? new Set(JSON.parse(saved) as string[]) : new Set());
+    } catch { setDismissedNotificationIds(new Set()); }
+  }, [dismissedStorageKey]);
 
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | null>(null);
   const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
@@ -552,7 +578,6 @@ function MainApp({
     }
   }, [activeTab]);
 
-  const [sessionStartTime] = React.useState(() => new Date());
   const [guidelines, setGuidelines] = React.useState<AIEvaluationGuideline[]>([]);
   const [adminSubTab, setAdminSubTab] = React.useState<AdminSubTab | undefined>(undefined);
 
@@ -684,7 +709,7 @@ function MainApp({
         const latest = myMonitorias[0];
         const timeStr = latest.created_at
           ? formatDate(new Date(latest.created_at), "dd/MM 'às' HH:mm")
-          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+          : 'Data não informada';
         list.push({
           id: `eval-${latest.id}`,
           title: 'Nova Avaliação Disponível',
@@ -710,7 +735,7 @@ function MainApp({
         const notifId = `feedback-pending-${fb.id}`;
         const timeStr = fb.created_at
           ? formatDate(new Date(fb.created_at), "dd/MM 'às' HH:mm")
-          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+          : 'Data não informada';
         list.push({
           id: notifId,
           title: 'Feedback 1:1 Aguardando Ciência',
@@ -734,7 +759,7 @@ function MainApp({
         const notifId = `feedback-ack-${fb.id}`;
         const timeStr = fb.agent_acknowledged_at
           ? formatDate(new Date(fb.agent_acknowledged_at), "dd/MM 'às' HH:mm")
-          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+          : 'Data não informada';
         list.push({
           id: notifId,
           title: 'Ciência de Feedback Confirmada',
@@ -776,24 +801,23 @@ function MainApp({
       });
     });
 
-    // Notificações de Filas para Qualidade / Gestores / Admin (WQ-25)
-    if (userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') {
-      const negativeMsg = pendingNegativesCount > 0
-        ? `${pendingNegativesCount} chamado(s) com CSAT Ruim aguardando triagem na Fila CSAT Negativas.`
-        : 'Chamados com CSAT Ruim e avaliações pendentes disponíveis para auditoria com IA.';
+    queueEvents.forEach(event => {
+      const isNegative = event.event_type === 'csat_bad';
+      const notifId = `queue-event-${event.id}`;
       list.push({
-        id: 'queue-csat-negativas',
-        title: 'Fila CSAT Negativas',
-        message: negativeMsg,
-        time: `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`,
+        id: notifId,
+        title: isNegative ? 'Novo CSAT Ruim' : 'Novo Chamado Filho',
+        message: `O ticket #${event.ticket_id} entrou na fila ${isNegative ? 'CSAT Negativas' : 'Chamados Filhos'}.`,
+        time: formatDate(new Date(event.occurred_at), "dd/MM 'às' HH:mm"),
         type: 'fila',
         iconBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
         icon: <Layers className="w-3.5 h-3.5" />,
         targetTab: 'filas',
-        targetQueueSubTab: 'negativas',
-        read: readNotificationIds.has('queue-csat-negativas')
+        targetQueueSubTab: isNegative ? 'negativas' : 'filhos',
+        ticketId: event.ticket_id,
+        read: readNotificationIds.has(notifId),
       });
-    }
+    });
 
     // Notificações de Manuais para Administrador (Propostas de Atualização Pendentes)
     if (userData?.role === 'admin') {
@@ -805,7 +829,7 @@ function MainApp({
         const itemDate = g.pending_modified_at || g.updated_at;
         const timeStr = itemDate
           ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
-          : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+          : 'Data não informada';
         // Sem fallback para Date.now(): um id baseado no relógio local mudaria a
         // cada re-render (recomputa o useMemo), fazendo a mesma proposta pendente
         // — já lida — voltar a aparecer como não lida a qualquer atualização de
@@ -842,7 +866,7 @@ function MainApp({
           const itemDate = approvedEntry?.created_at || g.updated_at;
           const timeStr = itemDate
             ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
-            : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+            : 'Data não informada';
           const notifId = `guideline-approved-${g.id}-v${versionNum}`;
           const approverName = approvedEntry?.approved_by_name || 'Administrador';
 
@@ -866,7 +890,7 @@ function MainApp({
           const itemDate = latestEntry.created_at;
           const timeStr = itemDate
             ? formatDate(new Date(itemDate), "dd/MM 'às' HH:mm")
-            : `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`;
+            : 'Data não informada';
           const notifId = `guideline-rejected-${g.id}-${new Date(itemDate).getTime()}`;
 
           list.push({
@@ -886,32 +910,29 @@ function MainApp({
       });
     }
 
-    // Notificação do sistema: status de conexão e IA (exclusivo para Administrador)
-    if (userData?.role === 'admin') {
-      list.push({
-        id: 'system-status-ok',
-        title: 'Sistema QualidadeWP Conectado',
-        message: 'Integração Zendesk API e IA OpenRouter sincronizadas em tempo real.',
-        time: `Hoje às ${formatDate(sessionStartTime, 'HH:mm')}`,
-        type: 'sistema',
-        iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-        icon: <Clock className="w-3.5 h-3.5" />,
-        read: readNotificationIds.has('system-status-ok')
-      });
-    }
-
     return list;
-  }, [userData, monitorias, readNotificationIds, sessionStartTime, guidelines, feedbacks]);
+  }, [userData, monitorias, readNotificationIds, guidelines, feedbacks, queueEvents]);
 
-  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+  const visibleNotifications = React.useMemo(
+    () => notifications.filter(notification => !dismissedNotificationIds.has(notification.id)),
+    [notifications, dismissedNotificationIds],
+  );
+  const unreadNotificationsCount = visibleNotifications.filter(n => !n.read).length;
 
   const markAllNotificationsAsRead = () => {
-    const allIds = new Set(notifications.map(n => n.id));
+    const allIds = new Set([...readNotificationIds, ...visibleNotifications.map(n => n.id)]);
     setReadNotificationIds(allIds);
     try {
       localStorage.setItem(notificationsStorageKey, JSON.stringify(Array.from(allIds)));
     } catch {}
     toast.success('Todas as notificações foram marcadas como lidas.', { duration: 1500 });
+  };
+
+  const clearNotifications = () => {
+    const next = new Set([...dismissedNotificationIds, ...visibleNotifications.map(notification => notification.id)]);
+    setDismissedNotificationIds(next);
+    try { localStorage.setItem(dismissedStorageKey, JSON.stringify(Array.from(next))); } catch {}
+    toast.success('Histórico de notificações limpo neste navegador.', { duration: 1500 });
   };
 
   const handleNotificationClick = (item: any) => {
@@ -1768,7 +1789,7 @@ function MainApp({
                     className="absolute -right-12 sm:right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-surface-card border border-surface-border rounded-2xl shadow-premium z-50 text-brand-primary notifications-popover overflow-hidden"
                   >
                     {/* Header do Menu */}
-                    <div className="p-3.5 border-b border-surface-border bg-surface-subtle/40 flex items-center justify-between">
+                    <div className="p-3.5 border-b border-surface-border bg-surface-subtle/40 flex flex-col gap-2">
                       <div className="flex items-center gap-2">
                         {unreadNotificationsCount > 0 ? (
                           <div className="w-7 h-7 rounded-lg bg-brand-highlight/15 text-brand-highlight flex items-center justify-center">
@@ -1789,7 +1810,7 @@ function MainApp({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center justify-end gap-1.5">
                         {unreadNotificationsCount > 0 && (
                           <button
                             onClick={markAllNotificationsAsRead}
@@ -1798,6 +1819,16 @@ function MainApp({
                           >
                             <CheckCheck className="w-3.5 h-3.5" />
                             <span>Marcar lidas</span>
+                          </button>
+                        )}
+                        {visibleNotifications.length > 0 && (
+                          <button
+                            onClick={clearNotifications}
+                            className="text-[10px] font-bold text-brand-muted hover:text-brand-primary hover:bg-surface-subtle px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all border border-surface-border"
+                            title="Limpar o histórico de notificações neste navegador"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Limpar</span>
                           </button>
                         )}
                         <button
@@ -1812,14 +1843,14 @@ function MainApp({
 
                     {/* Lista do Histórico */}
                     <div className="max-h-80 overflow-y-auto divide-y divide-surface-border/50 no-scrollbar">
-                      {notifications.length === 0 ? (
+                      {visibleNotifications.length === 0 ? (
                         <div className="p-8 text-center text-brand-muted">
                           <MailOpen className="w-8 h-8 opacity-35 mx-auto mb-2 text-brand-muted" />
                           <p className="text-xs font-semibold">Caixa de entrada limpa!</p>
                           <p className="text-[10px]">Nenhuma nova notificação pendente.</p>
                         </div>
                       ) : (
-                        notifications.map(item => (
+                        visibleNotifications.map(item => (
                           <div
                             key={item.id}
                             onClick={() => handleNotificationClick(item)}
@@ -1850,7 +1881,7 @@ function MainApp({
 
                     {/* Rodapé com status do envelope */}
                     <div className="p-2.5 border-t border-surface-border bg-surface-subtle/20 flex items-center justify-between text-[10px] text-brand-muted">
-                      <span>{notifications.length} evento(s) no histórico</span>
+                      <span>{visibleNotifications.length} evento(s) no histórico</span>
                       {unreadNotificationsCount === 0 && (
                         <span className="inline-flex items-center gap-1 text-functional-success font-bold">
                           <CheckCheck className="w-3 h-3" /> Em dia
@@ -2038,6 +2069,7 @@ function MainApp({
                   currentUserRole={userData?.role}
                   qualityMonitors={users.filter(u => u.role === 'qualidade' && u.active !== false)}
                   onStartAudit={handleStartAuditFromQueue}
+                  onOpenExistingMonitoria={id => setInPlaceMonitoriaId(id)}
                   onModalStateChange={setIsQueueModalOpen}
                   activeSubTab={activeQueueSubTab}
                   onSubTabChange={setActiveQueueSubTab}

@@ -10,7 +10,9 @@ senhas, monitorias, solicitações, arquivos ou histórico do banco de testes.
 - O baseline cria 15 tabelas da aplicação; incrementais posteriores adicionam as estruturas
   atuais, seus relacionamentos, índices, RLS e helpers privados. A cadeia final inclui feedbacks,
   fila/IA, presença, anexos e os limites de publicação atuais.
-- Nenhum usuário, senha padrão, equipe, formulário ou monitoria é inserido.
+- Nenhum usuário, senha padrão, equipe ou monitoria é inserido. A migração
+  `20261006000001_child_ticket_evaluation_form.sql` instala somente a ficha de
+  sistema para tickets filhos, sem dados de atendimento ou avaliação.
   Horários comerciais, feriados e configurações funcionais também começam vazios.
 - Cron e primeiro administrador têm procedimentos separados, de ativação explícita.
 - A instalação usa uma transação e recusa projetos com tabelas/views/sequências da
@@ -35,7 +37,8 @@ npm.cmd run prepare:supabase
 ```
 
 Os testes aplicam o baseline e todos os incrementais gerados em PostgreSQL/PGlite,
-em ordem, com fixtures **apenas da plataforma Supabase**. Validam criação vazia,
+em ordem, com fixtures da plataforma Supabase e a ficha de sistema de tickets filhos.
+Validam ausência de dados de demonstração,
 recusa de reinstalação, RLS com dados sintéticos, anonimato na tabela/view,
 trigger Auth, primeiro administrador, Storage e regras de prazo. PGlite não carrega
 os binários gerenciados `pg_cron`/`pg_net`; somente seus comandos de provisionamento

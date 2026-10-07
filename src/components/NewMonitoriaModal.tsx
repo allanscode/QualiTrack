@@ -38,6 +38,7 @@ import {
 } from '../lib/helpdeskQueue';
 import { fetchAIGuidelines } from '../lib/aiGuidelines';
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility';
+import { childTicketForm } from '../lib/childTicketForm';
 
 interface NewMonitoriaModalProps {
   isOpen: boolean;
@@ -81,6 +82,7 @@ export default function NewMonitoriaModal({
   const [searchedId, setSearchedId] = useState<string | null>(null);
   const [ticketDetails, setTicketDetails] = useState<ZendeskTicketDetails | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [lookupFailed, setLookupFailed] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Controle de permissão para nova avaliação quando já existe
@@ -97,6 +99,7 @@ export default function NewMonitoriaModal({
       setSearchedId(null);
       setTicketDetails(null);
       setNotFound(false);
+      setLookupFailed(false);
       setErrorMessage(null);
       setForceAllowNew(false);
       setEvaluatingAI(false);
@@ -128,6 +131,7 @@ export default function NewMonitoriaModal({
     setSearchedId(cleanId);
     setTicketDetails(null);
     setNotFound(false);
+    setLookupFailed(false);
     setErrorMessage(null);
     setForceAllowNew(false);
 
@@ -137,10 +141,12 @@ export default function NewMonitoriaModal({
         setTicketDetails(res.ticket);
       } else {
         setNotFound(true);
+        setLookupFailed(Boolean(res.error));
         setErrorMessage(res.message || 'Chamado não encontrado no Zendesk.');
       }
     } catch (err: any) {
       setNotFound(true);
+      setLookupFailed(true);
       setErrorMessage(err?.message || 'Erro ao consultar o helpdesk.');
     } finally {
       setSearching(false);
@@ -167,13 +173,20 @@ export default function NewMonitoriaModal({
     // Resolver formulário baseado nas tags
     const customerType = resolveCustomerType(ticketDetails.tags, []);
     const { form: suggestedForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
+    const formToUse = ticketDetails.ticket_kind === 'chamado_filho' ? childTicketForm(forms) : suggestedForm;
+    if (!formToUse) {
+      toast.error('A ficha padrão para este tipo de ticket não está disponível.');
+      return;
+    }
 
     onStartAudit({
       ticket_id: ticketDetails.ticket_id,
       ticket_subject: ticketDetails.subject,
-      form_id: suggestedForm?.id || forms[0]?.id,
+      form_id: formToUse.id,
       evaluated_id: evaluatedId,
       team_id: teamId,
+      ticket_group_team_id: ticketDetails.ticket_group_team_id || undefined,
+      group_name: ticketDetails.group_name || undefined,
       channel: normalizeChannel(ticketDetails.channel),
       ticket_date: ticketDetails.created_at ? ticketDetails.created_at.split('T')[0] : undefined,
       satisfaction_result: ticketDetails.satisfaction_result,
@@ -181,6 +194,9 @@ export default function NewMonitoriaModal({
       satisfaction_record_text: ticketDetails.satisfaction_rating?.comment || '',
       customerType,
       isAiLocked: false,
+      ...(ticketDetails.ticket_kind === 'chamado_filho' && ticketDetails.child_evaluation
+        ? { child_evaluation: ticketDetails.child_evaluation }
+        : {}),
     });
 
     onClose();
@@ -189,6 +205,10 @@ export default function NewMonitoriaModal({
   // 2. Iniciar Avaliação com IA
   const handleStartAI = async () => {
     if (!ticketDetails || evaluatingAI) return;
+    if (ticketDetails.ticket_kind === 'chamado_filho') {
+      toast.info('A IA de tickets filhos está na fila Chamados Filhos. Você pode iniciar esta monitoria manualmente com a ficha própria.');
+      return;
+    }
 
     setEvaluatingAI(true);
     setAiProgressStage('Carregando transcrição e histórico do chamado...');
@@ -245,6 +265,8 @@ export default function NewMonitoriaModal({
         form_id: formToUse.id,
         evaluated_id: matchedAgent?.id,
         team_id: teamId,
+        ticket_group_team_id: ticketDetails.ticket_group_team_id || undefined,
+        group_name: ticketDetails.group_name || undefined,
         channel: normalizeChannel(ticketDetails.channel),
         ticket_date: ticketDetails.created_at ? ticketDetails.created_at.split('T')[0] : undefined,
         satisfaction_result: ticketDetails.satisfaction_result,
@@ -457,7 +479,7 @@ export default function NewMonitoriaModal({
               </div>
               <div>
                 <h4 className="text-xs sm:text-sm font-black text-brand-primary">
-                  Chamado #{searchedId} não localizado no Zendesk
+                  {lookupFailed ? `Falha ao consultar o chamado #${searchedId}` : `Chamado #${searchedId} não localizado no Zendesk`}
                 </h4>
                 <p className="text-xs text-brand-muted mt-1 max-w-md mx-auto">
                   {errorMessage || 'O chamado não foi encontrado na base de dados do helpdesk. Verifique se digitou os números corretamente.'}
@@ -581,9 +603,9 @@ export default function NewMonitoriaModal({
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {/* Opção 1: Avaliar com IA */}
+                  {/* Parecer recuperado ou nova análise */}
                   <div
-                    onClick={handleStartAI}
+                    onClick={ticketDetails.ticket_kind === 'chamado_filho' ? handleStartManual : handleStartAI}
                     className="p-4 rounded-2xl border-2 border-brand-accent/30 hover:border-brand-accent bg-surface-card hover:bg-brand-accent/5 transition-all cursor-pointer flex flex-col justify-between gap-3 shadow-xs group"
                   >
                     <div>
@@ -591,15 +613,19 @@ export default function NewMonitoriaModal({
                         <div className="w-9 h-9 rounded-xl bg-brand-accent/10 text-brand-accent flex items-center justify-center group-hover:scale-105 transition-transform">
                           <Sparkles className="w-5 h-5" />
                         </div>
-                        <Badge variant="success" size="xs">
-                          Recomendado
+                        <Badge variant={ticketDetails.ticket_kind === 'chamado_filho' ? 'warning' : 'success'} size="xs">
+                          {ticketDetails.ticket_kind === 'chamado_filho' ? (ticketDetails.child_evaluation ? 'Parecer recuperado' : 'Ficha do filho') : 'Recomendado'}
                         </Badge>
                       </div>
                       <h5 className="text-sm font-black text-brand-primary group-hover:text-brand-accent transition-colors">
-                        Avaliar com IA
+                        {ticketDetails.ticket_kind === 'chamado_filho' ? 'Recuperar chamado filho' : 'Avaliar com IA'}
                       </h5>
                       <p className="text-xs text-brand-muted font-medium mt-1 leading-relaxed">
-                        A IA analisa a transcrição completa do diálogo no Zendesk e pré-preenche a ficha de critérios com notas e parecer fundamentado.
+                        {ticketDetails.ticket_kind === 'chamado_filho'
+                          ? (ticketDetails.child_evaluation
+                            ? 'A IA preenche as respostas e observações dos critérios já analisados. Revise a ficha, complete os critérios pendentes e salve a avaliação no QWP.'
+                            : 'Abra a ficha própria para avaliar o chamado filho e salvar a monitoria no QWP.')
+                          : 'A IA analisa a transcrição completa do diálogo no Zendesk e pré-preenche a ficha de critérios com notas e parecer fundamentado.'}
                       </p>
                     </div>
 
@@ -609,7 +635,7 @@ export default function NewMonitoriaModal({
                       className="w-full py-2 px-3 text-xs font-bold text-white bg-brand-accent hover:bg-brand-accent/90 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                     >
                       <Bot className="w-3.5 h-3.5" />
-                      <span>Iniciar com IA</span>
+                      <span>{ticketDetails.ticket_kind === 'chamado_filho' ? 'Abrir ficha do filho' : 'Iniciar com IA'}</span>
                     </button>
                   </div>
 

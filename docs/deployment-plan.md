@@ -82,7 +82,7 @@ npx supabase login
 npx supabase link --project-ref <seu-project-ref>
 
 # Configurar secrets
-npx supabase secrets set FRONTEND_URL=https://qualitrack.seudominio.com
+npx supabase secrets set FRONTEND_URL=https://qwp.qualityautomacao.com.br
 npx supabase secrets set SMTP_USERNAME=seu-email@gmail.com
 npx supabase secrets set SMTP_PASSWORD=sua-senha-de-app
 ```

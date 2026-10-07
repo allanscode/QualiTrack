@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { literalSearchTerm, ticketMatchesQueue } from './queue-search';
+import { literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search';
 import { shouldMergeRecentQueueSnapshot, trustedZendeskCursor } from './access';
 
 describe('queue search boundaries', () => {
@@ -13,12 +13,24 @@ describe('queue search boundaries', () => {
     expect(ticketMatchesQueue({ satisfaction_rating: { score: 'bad' }, tags: ['validado'] }, 'negativas', 'validado')).toBe(false);
     expect(ticketMatchesQueue({ satisfaction_rating: { score: 'bad' } }, 'proativas', '')).toBe(false);
     expect(ticketMatchesQueue({ tags: ['existe_ticket_filho'] }, 'filhos', '')).toBe(true);
+    expect(ticketMatchesQueue({ tags: ['existe_ticket_filho', 'qwp_filho_avaliado'] }, 'filhos', '')).toBe(false);
+    expect(ticketCanReceiveEvaluation({ status: 'solved', tags: ['qwp_filho_avaliado'] }, 'filhos_invalidos')).toBe(false);
     expect(ticketMatchesQueue({ tags: [] }, 'filhos', '')).toBe(false);
+    expect(ticketMatchesQueue({ status: 'closed', satisfaction_rating: { score: 'bad' } }, 'negativas', '')).toBe(false);
+    expect(ticketMatchesQueue({ status: 'closed', satisfaction_rating: { score: 'unoffered' } }, 'proativas', '')).toBe(true);
+    expect(ticketCanReceiveEvaluation({ status: 'closed' })).toBe(false);
+    expect(ticketCanReceiveEvaluation({ status: 'closed' }, 'proativas')).toBe(true);
+    expect(ticketCanReceiveEvaluation({ status: 'solved' })).toBe(true);
   });
   it('does not mix unrelated cached assignments into search results', () => {
     expect(shouldMergeRecentQueueSnapshot('negativas', null, '123')).toBe(false);
     expect(shouldMergeRecentQueueSnapshot('filhos', null, 'falha')).toBe(false);
     expect(shouldMergeRecentQueueSnapshot('negativas', null)).toBe(true);
+  });
+  it('uses supported Zendesk search terms and excludes closed tickets', () => {
+    expect(queueSearchQuery('negativas', 'validado')).toBe('type:ticket status<closed satisfaction:bad -tags:validado');
+    expect(queueSearchQuery('positivas', '')).toBe('type:ticket status<closed satisfaction:good');
+    expect(queueSearchQuery('proativas', '')).toBe('type:ticket status:closed satisfaction:unoffered');
   });
   it('binds offset pagination to the original search and bounded page size', () => {
     const url = 'https://example.zendesk.com/api/v2/search.json?query=type%3Aticket&per_page=25&page=2';

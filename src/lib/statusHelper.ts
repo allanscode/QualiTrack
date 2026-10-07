@@ -35,6 +35,12 @@ export const STATUS_CONFIGS: Record<MonitoriaStatus | 'expiradas_prazo', StatusC
     variant: 'info',
     icon: Shield
   },
+  aguardando_revisao_pj: {
+    label: 'Etapa antiga de revisão PJ',
+    shortLabel: 'Etapa antiga',
+    variant: 'warning',
+    icon: Clock
+  },
   aguardando_gestor_qualidade: {
     label: 'Aguardando Qualidade',
     shortLabel: 'Gestão Qual.',
@@ -91,10 +97,10 @@ export const STATUS_CONFIGS: Record<MonitoriaStatus | 'expiradas_prazo', StatusC
 export function getHistoryEventConfig(action: string): { variant: StatusConfig['variant']; icon: LucideIcon } {
   const a = (action || '').toLowerCase();
 
-  if (/negad|removid|recusad|improcedente/.test(a)) {
+  if (/negad|removid|recusad|reprovad|reprovou|improcedente/.test(a)) {
     return { variant: 'error', icon: XCircle };
   }
-  if (/aceit|aprovad|procedente|conclu/.test(a)) {
+  if (/aceit|aprovad|aprovou|procedente|conclu/.test(a)) {
     return { variant: 'success', icon: CheckCircle2 };
   }
   if (/contesta|escalad|devolvid|solicitad|mantid|reabert|reavalia/.test(a)) {

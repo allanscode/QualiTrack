@@ -80,12 +80,20 @@ export interface EvaluationForm {
   active: boolean;
   createdBy: string;
   created_at: string;
+  /** Snapshot dos campos visíveis do Zendesk no momento da avaliação. */
+  ticket_fields?: ZendeskTicketField[];
+}
+
+export interface ZendeskTicketField {
+  title: string;
+  value: string;
 }
 
 export type MonitoriaStatus =
   | 'pendente_revisao'
   | 'em_contestacao'
   | 'aguardando_gestor_suporte'
+  | 'aguardando_revisao_pj'
   | 'aguardando_gestor_qualidade'
   | 'concluida'
   | 'contestacao_aceita'
@@ -137,9 +145,19 @@ export interface Monitoria {
   question_observations?: Record<string, string>;
   critical_error_observations?: Record<string, string>;
   team_id?: string;
+  /** Grupo original do ticket; team_id identifica a equipe gestora. */
+  ticket_group_team_id?: string;
+  pj_reviewer_id?: string | null;
+  pj_review_kind?: 'approval' | 'contestation' | null;
+  pj_review_decision?: 'approved' | 'rejected' | null;
+  pj_review_note?: string | null;
+  pj_reviewed_at?: string | null;
+  pj_review_required?: boolean;
   satisfaction_record_text?: string;
   selected_critical_errors?: string[];
   form_snapshot?: EvaluationForm;
+  /** Campos transitórios recebidos ao iniciar a avaliação pela fila. */
+  ticket_fields?: ZendeskTicketField[];
   active?: boolean;
   display_id?: number;
   history: MonitoriaHistoryEntry[];
@@ -166,6 +184,20 @@ export interface Team {
   description?: string;
   sigla?: string;
   icon?: string;
+  /** Equipes gerem pessoas; grupos identificam a origem do ticket Zendesk. */
+  kind?: 'team' | 'group';
+  zendesk_group_id?: number | null;
+  /** Organiza subequipes no painel sem ampliar as permissões dos gestores. */
+  parent_team_id?: string | null;
+  /** Exige parecer do revisor PJ antes da decisão final da Qualidade. */
+  requires_pj_review?: boolean;
+  /** Gestor designado para aprovar monitorias desta equipe; null permite os gestores vinculados. */
+  approval_manager_id?: string | null;
+}
+
+export interface TeamGroup {
+  team_id: string;
+  group_id: string;
 }
 
 export interface AccessRequest {
@@ -229,6 +261,8 @@ export type QueueSubTab = AuditingQueueType | 'monitores';
 export type ChildTicketMacroType = 'nova_demanda' | 'analise_tecnica' | 'apoio_tecnico' | 'produtividade';
 
 export interface ChildTicketCheckResult {
+  question_id?: string;
+  answer?: 'SIM' | 'NAO' | 'NA';
   rule: string;
   passed: boolean;
   details: string;
@@ -241,6 +275,8 @@ export interface ChildTicketAiEvaluation {
   summary: string;
   checks: ChildTicketCheckResult[];
   recommendations: string[];
+  fallback_used?: boolean;
+  model?: string;
 }
 
 export interface AIEvaluationLog {
@@ -271,6 +307,20 @@ export interface AIEvaluationLog {
   error_stage?: string;
   status: 'success' | 'error';
   error_message?: string;
+  attempts?: {
+    provider: string;
+    model: string;
+    attempt: number;
+    status: 'success' | 'failed';
+    reason?: string;
+    message?: string;
+    httpStatus?: number;
+    durationMs?: number;
+    routedProvider?: string;
+    startedAt?: string;
+  }[];
+  fallback_used?: boolean;
+  job_id?: string;
   created_by?: string;
   created_at: string;
 }
@@ -283,15 +333,24 @@ export interface AuditingQueueTicket {
   agent_email?: string;
   agent_id?: string;
   team_id?: string;
+  /** Equipe que corresponde ao grupo atribuído ao ticket no Zendesk, mesmo se não for equipe principal do agente. */
+  ticket_group_team_id?: string;
+  group_name?: string;
   csat_status: 'bad' | 'good' | 'unrated' | 'offered';
   csat_comment?: string;
   /** Momento em que o cliente enviou a avaliação CSAT no Zendesk. */
   csat_rated_at?: string;
+  /** Momento da resolução atual no Zendesk; não substitui ticket_date na ficha. */
+  solved_at?: string;
   channel?: string;
   ticket_date: string;
   status: string;
   url?: string;
   already_audited?: boolean;
+  /** Monitoria existente para revisar o parecer antes de publicar no Zendesk. */
+  monitoria_id?: string;
+  monitoria_status?: MonitoriaStatus;
+  monitoria_score?: number | null;
   /** Rascunho de IA preservado no banco após o ticket sair da view do Zendesk. */
   saved_ai_draft?: boolean;
   /** Rascunho antigo sem retrato do ticket; dados devem ser conferidos. */
@@ -309,6 +368,8 @@ export interface AuditingQueueTicket {
   child_macro_type?: ChildTicketMacroType;
   child_evaluation?: ChildTicketAiEvaluation;
   dialogue?: TicketCommentMessage[];
+  fallback_used?: boolean;
+  model?: string;
 }
 
 export interface AgentQueueSummary {
@@ -378,6 +439,8 @@ export interface AIEvaluationResult {
   suggested_critical_errors: Record<string, boolean>;
   ticket_fields?: { title: string; value: string }[];
   dialogue?: TicketCommentMessage[];
+  fallback_used?: boolean;
+  model?: string;
 }
 
 export type FeedbackStatus = 'pendente_ciencia' | 'ciente' | 'concluido';

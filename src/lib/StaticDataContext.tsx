@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useCallback, useMemo, ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { User, Team, EvaluationForm, DissatisfactionField, UserTeam, UserPreferences } from '../types';
+import { User, Team, TeamGroup, EvaluationForm, DissatisfactionField, UserTeam, UserPreferences } from '../types';
 import { supabase, mockDb, isMockMode } from './supabase';
 import { toast } from 'sonner';
 
 interface StaticDataContextType {
   users: User[];
   teams: Team[];
+  groups: Team[];
+  teamGroups: TeamGroup[];
   forms: EvaluationForm[];
   dissatisfactionFields: DissatisfactionField[];
   userTeams: UserTeam[];
@@ -25,20 +27,21 @@ function enrichUsersWithTeams(usersList: User[], userTeamDocs: UserTeam[], prefs
   });
   return usersList.map(u => ({
     ...u,
-    team_ids: u.team_ids?.length ? u.team_ids : (teamIdsByUser[u.id] || []),
+    team_ids: teamIdsByUser[u.id] || [],
     preferences: prefsMap[u.id] || u.preferences
   }));
 }
 
 async function fetchAllStaticData() {
   if (isMockMode) {
-    const [uRes, tRes, fRes, dfRes, utRes, upRes] = await Promise.all([
+    const [uRes, tRes, fRes, dfRes, utRes, upRes, tgRes] = await Promise.all([
       mockDb.get('users'),
       mockDb.get('teams'),
       mockDb.get('forms'),
       mockDb.get('dissatisfaction_fields'),
       mockDb.get('user_teams'),
-      mockDb.get('user_preferences')
+      mockDb.get('user_preferences'),
+      mockDb.get('team_groups')
     ]);
     const prefsMap: Record<string, UserPreferences> = {};
     (upRes.data || []).forEach((row: any) => {
@@ -53,7 +56,9 @@ async function fetchAllStaticData() {
     );
     return {
       users: enrichedUsers,
-      teams: (tRes.data || []) as Team[],
+      teams: ((tRes.data || []) as Team[]).filter(t => t.kind !== 'group'),
+      groups: ((tRes.data || []) as Team[]).filter(t => t.kind === 'group'),
+      teamGroups: (tgRes.data || []) as TeamGroup[],
       forms: (fRes.data || []) as EvaluationForm[],
       dissatisfactionFields: (dfRes.data || []) as DissatisfactionField[],
       userTeams: (utRes.data || []) as UserTeam[],
@@ -72,7 +77,8 @@ async function fetchAllStaticData() {
           sb.from('forms').select('*').abortSignal(controller.signal),
           sb.from('dissatisfaction_fields').select('*').abortSignal(controller.signal),
           sb.from('user_teams').select('*').abortSignal(controller.signal),
-          sb.from('user_preferences').select('*').abortSignal(controller.signal)
+          sb.from('user_preferences').select('*').abortSignal(controller.signal),
+          sb.from('team_groups').select('*').abortSignal(controller.signal)
         ]);
 
         const timeoutPromise = new Promise((_, reject) => {
@@ -80,7 +86,7 @@ async function fetchAllStaticData() {
         });
 
         const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
-        const [uRes, tRes, fRes, dfRes, utRes, upRes] = results;
+        const [uRes, tRes, fRes, dfRes, utRes, upRes, tgRes] = results;
 
         const prefsMap: Record<string, UserPreferences> = {};
         (upRes.data || []).forEach((row: any) => {
@@ -95,7 +101,9 @@ async function fetchAllStaticData() {
         );
         return {
           users: enrichedUsers,
-          teams: (tRes.data || []) as Team[],
+          teams: ((tRes.data || []) as Team[]).filter(t => t.kind !== 'group'),
+          groups: ((tRes.data || []) as Team[]).filter(t => t.kind === 'group'),
+          teamGroups: (tgRes.data || []) as TeamGroup[],
           forms: (fRes.data || []) as EvaluationForm[],
           dissatisfactionFields: (dfRes.data || []) as DissatisfactionField[],
           userTeams: (utRes.data || []) as UserTeam[],
@@ -134,6 +142,8 @@ export function StaticDataProvider({ children }: { children: ReactNode }) {
   const contextValue = useMemo(() => ({
     users: data?.users || [],
     teams: data?.teams || [],
+    groups: data?.groups || [],
+    teamGroups: data?.teamGroups || [],
     forms: data?.forms || [],
     dissatisfactionFields: data?.dissatisfactionFields || [],
     userTeams: data?.userTeams || [],

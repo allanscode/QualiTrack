@@ -7,7 +7,7 @@ export default defineConfig({
   fullyParallel: false,
   reporter: 'line',
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://qualitrack.vercel.app',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://qwp.qualityautomacao.com.br',
     headless: true,
     trace: 'retain-on-failure',
   },

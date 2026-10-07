@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { buildEvaluationHtml, escapeHtml } from './template';
+import { buildEditedCommentHtml, buildEvaluationHtml, escapeHtml } from './template';
+
+describe('buildEditedCommentHtml', () => {
+  it('preserva o texto editado e escapa HTML antes da publicação', () => {
+    expect(buildEditedCommentHtml('  Revisão <script>\nLinha 2 & fim  '))
+      .toBe('<p>Revisão &lt;script&gt;<br>Linha 2 &amp; fim</p>');
+  });
+});
 
 describe('buildEvaluationHtml', () => {
   it('monta o template de outcome positiva com o cabeçalho de ticket validado', () => {

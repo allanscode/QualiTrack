@@ -1,14 +1,16 @@
 import { useTransition } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
-import { User, Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, EvaluationForm, Team, DissatisfactionField } from '../types';
+import { User, Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, EvaluationForm, Team, DissatisfactionField, ZendeskTicketField } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
 import { isEvaluationValid } from '../lib/domainRules';
+import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 import { backfillAgentTeam } from '../lib/helpdeskQueue';
 import { toast } from 'sonner';
 
 interface SaveHookDeps {
   user: User | null;
   initialData: Monitoria | undefined;
+  ticketGroupTeamId?: string;
   isReevaluating: boolean;
   isAdminEdit: boolean;
   header: Record<string, any>;
@@ -19,6 +21,7 @@ interface SaveHookDeps {
   dissatisfactionAnswers: Record<string, string[]>;
   score: number;
   selectedForm: EvaluationForm | undefined;
+  ticketFields: ZendeskTicketField[];
   qualityConfig: any;
   allUsers: User[];
   forms: EvaluationForm[];
@@ -29,7 +32,7 @@ interface SaveHookDeps {
   // Recebe o id da monitoria salva (criada ou atualizada), para que quem
   // chamou possa, por exemplo, abrir o preview de envio ao Zendesk sem
   // precisar buscar o registro de novo.
-  onSaved: (monitoriaId: string) => void;
+  onSaved: (monitoriaId: string, status: MonitoriaStatus) => void;
 }
 
 export function useMonitoriaSave(deps: SaveHookDeps) {
@@ -100,6 +103,10 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
       toast.error('Informe a justificativa da reavaliação.');
       return;
     }
+    if (deps.header.form_id === CHILD_TICKET_FORM_ID && isEvaluationValid(deps.score) && !deps.header.evaluator_note?.trim()) {
+      toast.error('Preencha o Registro do Auditor antes de concluir um chamado filho válido.');
+      return;
+    }
 
     startTransition(async () => {
       try {
@@ -115,19 +122,28 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           historyNote = changes.length > 0 ? changes.join(' | ') : 'Edição administrativa';
         }
 
+        const evaluatedUser = deps.allUsers.find(u => u.id === deps.header.evaluated_id);
+        const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
+        const selectedTeam = deps.teams.find(t => t.id === managementTeamId);
         const isPositive = isEvaluationValid(deps.score);
+        const requiresPjReview = deps.initialData?.pj_review_required === true
+          || (selectedTeam?.requires_pj_review === true && !isPositive);
+        const reopensPjReview = deps.isAdminEdit && deps.initialData?.status === 'concluida'
+          && deps.initialData.pj_review_required !== true && requiresPjReview;
         let nextStatus: MonitoriaStatus;
         if (deps.isAdminEdit) {
-          nextStatus = deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao');
+          nextStatus = reopensPjReview ? 'pendente_revisao'
+            : (deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao'));
         } else {
-          nextStatus = isPositive ? 'concluida' : 'pendente_revisao';
+          nextStatus = requiresPjReview ? 'pendente_revisao' : (isPositive ? 'concluida' : 'pendente_revisao');
         }
 
         const historyAction = deps.isAdminEdit
           ? 'Edição pelo Administrador'
           : deps.isReevaluating
-            ? (isPositive ? 'Monitoria Reavaliada (Concluída)' : 'Monitoria Reavaliada (Procedente)')
-            : (isPositive ? 'Monitoria Criada e Concluída' : 'Monitoria Criada');
+            ? (requiresPjReview ? 'Monitoria Reavaliada (Aguardando gestor PJ)'
+              : (isPositive ? 'Monitoria Reavaliada (Concluída)' : 'Monitoria Reavaliada (Procedente)'))
+            : (nextStatus === 'concluida' ? 'Monitoria Criada e Concluída' : 'Monitoria Criada');
 
         const historyEntry: MonitoriaHistoryEntry = {
           action: historyAction,
@@ -154,15 +170,15 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           });
         }
 
-        const evaluatedUser = deps.allUsers.find(u => u.id === deps.header.evaluated_id);
-        const selectedTeam = deps.teams.find(t => t.id === (deps.header.team_id || evaluatedUser?.team_ids?.[0]));
+        const ticketGroupTeamId = deps.initialData?.ticket_group_team_id || deps.ticketGroupTeamId || deps.header.team_id;
         const selectedFormObj = deps.forms.find(f => f.id === deps.header.form_id);
 
         const payload = {
           form_id: deps.header.form_id,
           evaluator_id: deps.initialData?.evaluator_id || currentUser.id,
           evaluated_id: deps.header.evaluated_id,
-          team_id: deps.header.team_id || null,
+          team_id: managementTeamId || null,
+          ticket_group_team_id: ticketGroupTeamId || null,
           ticket_id: deps.header.ticket_id,
           channel: deps.header.channel,
           ticket_date: deps.header.ticket_date,
@@ -176,15 +192,24 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           selected_critical_errors: Object.keys(deps.criticalErrors).filter(id => deps.criticalErrors[id]),
           score: deps.score,
           status: nextStatus,
-          resolution_type: nextStatus === 'concluida' ? 'human' : (deps.initialData?.resolution_type || null),
+          pj_review_required: requiresPjReview,
+          resolution_type: nextStatus === 'concluida' ? 'human'
+            : (reopensPjReview ? null : (deps.initialData?.resolution_type || null)),
           evaluator_note: deps.header.evaluator_note,
           client_contact_log: deps.header.satisfaction_result === 'Negativa' ? deps.header.client_contact_log : '',
           client_contact_channel: deps.header.satisfaction_result === 'Negativa' ? (deps.header.client_contact_channel || []) : [],
           active: true,
           form_snapshot: {
             ...(deps.selectedForm as any),
-            ai_evaluation: (deps.initialData as any)?.aiEvaluation || (deps.initialData as any)?.form_snapshot?.ai_evaluation,
-            child_ai_evaluation: (deps.initialData as any)?.childAiEvaluation || (deps.initialData as any)?.form_snapshot?.child_ai_evaluation,
+            ticket_fields: deps.ticketFields,
+            ...(deps.header.form_id === CHILD_TICKET_FORM_ID ? { ticket_kind: 'chamado_filho' } : {}),
+            ai_evaluation: deps.header.form_id === deps.initialData?.form_id
+              ? ((deps.initialData as any)?.aiEvaluation || (deps.initialData as any)?.form_snapshot?.ai_evaluation)
+              : undefined,
+            ...(deps.header.form_id === CHILD_TICKET_FORM_ID ? {
+              child_ai_evaluation: (deps.initialData as any)?.childAiEvaluation
+                || (deps.initialData as any)?.form_snapshot?.child_ai_evaluation,
+            } : {}),
           },
           history: [...(deps.initialData?.history || []), historyEntry],
           action_deadline_at: nextStatus === 'concluida'
@@ -238,7 +263,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           backfillAgentTeam(deps.header.evaluated_id, deps.header.team_id);
         }
 
-        deps.onSaved(savedId);
+        deps.onSaved(savedId, nextStatus);
       } catch (e: any) {
         console.error('[Monitoria] Falha ao salvar:', e);
         toast.error(e?.message

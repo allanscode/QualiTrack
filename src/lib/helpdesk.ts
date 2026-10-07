@@ -1,9 +1,11 @@
 import { supabase, isMockMode, requireAccessToken } from './supabase';
 import { EvaluationOutcome, HelpdeskSubmission, PublishResult } from '../types';
+import { extractFunctionErrorMessage } from './helpdeskQueue';
 
 export interface PublishHelpdeskOptions {
   outcome?: EvaluationOutcome;
   force?: boolean;
+  commentText?: string;
 }
 
 /**
@@ -28,17 +30,20 @@ export async function publishEvaluationToHelpdesk(
     const accessToken = await requireAccessToken();
     const { data, error } = await supabase.functions.invoke('helpdesk-publish-evaluation', {
       headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(35000),
       body: {
         monitoria_id: monitoriaId,
         outcome: options.outcome,
         force: options.force ?? false,
+        comment_text: options.commentText,
         dry_run: false,
       },
     });
 
     if (error) {
       console.error('[Helpdesk Publish] Erro na Edge Function:', error);
-      return { success: false, error: error.message, stage: 'provider' };
+      return { success: false, error: await extractFunctionErrorMessage(error,
+        'Não foi possível confirmar o envio. Confira o ticket no Zendesk antes de tentar novamente.'), stage: 'provider' };
     }
 
     return data as PublishResult;
@@ -46,7 +51,9 @@ export async function publishEvaluationToHelpdesk(
     console.error('[Helpdesk Publish] Falha na chamada da Edge Function:', err);
     return {
       success: false,
-      error: err?.message || 'Falha ao conectar com o serviço de helpdesk',
+      error: err?.name === 'TimeoutError'
+        ? 'O envio demorou demais. Confira o ticket no Zendesk antes de tentar novamente.'
+        : err?.message || 'Falha ao conectar com o serviço de helpdesk',
       stage: 'provider',
     };
   }

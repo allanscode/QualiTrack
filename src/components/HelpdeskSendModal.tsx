@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { supabase, isMockMode, requireAccessToken } from '../lib/supabase';
 import { EvaluationOutcome, HelpdeskSubmission, PublishResult } from '../types';
 import { getLatestHelpdeskSubmission, publishEvaluationToHelpdesk } from '../lib/helpdesk';
+import { extractFunctionErrorMessage } from '../lib/helpdeskQueue';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import DOMPurify from 'dompurify';
@@ -22,6 +23,8 @@ interface HelpdeskSendModalProps {
   ticketId: string;
   suggestedOutcome: EvaluationOutcome;
   onClose: () => void;
+  onSent?: () => void;
+  underReview?: boolean;
   // true quando o modal abriu automaticamente logo após concluir a
   // monitoria (fluxo novo). Nesse caso a monitoria já está salva no banco
   // antes mesmo do modal aparecer, então os textos de saída precisam deixar
@@ -42,16 +45,27 @@ type SendState =
   | { status: 'sent'; externalCommentId?: string }
   | { status: 'error'; message: string };
 
+function htmlToPlainText(html: string): string {
+  const element = document.createElement('div');
+  element.innerHTML = DOMPurify.sanitize(html);
+  element.querySelectorAll('br').forEach(node => node.replaceWith(document.createTextNode('\n')));
+  element.querySelectorAll('p, div').forEach(node => node.after(document.createTextNode('\n\n')));
+  return (element.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 const OUTCOME_OPTIONS: { value: EvaluationOutcome; label: string; icon: typeof CheckCircle2 }[] = [
   { value: 'positiva', label: 'Ticket Válido', icon: CheckCircle2 },
   { value: 'negativa', label: 'Ticket Invalidado', icon: XCircle },
 ];
 
-export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutcome, onClose, fromConclusion = false }: HelpdeskSendModalProps) {
+export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutcome, onClose, onSent, underReview = false, fromConclusion = false }: HelpdeskSendModalProps) {
   const [outcome, setOutcome] = useState<EvaluationOutcome>(suggestedOutcome);
   const [preview, setPreview] = useState<PreviewState>({ status: 'loading' });
   const [sendState, setSendState] = useState<SendState>({ status: 'idle' });
   const [copiedMacro, setCopiedMacro] = useState(false);
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [generatedText, setGeneratedText] = useState('');
+  const [editedText, setEditedText] = useState('');
 
   // Histórico de envios já bem-sucedidos para esta monitoria. Um segundo
   // envio posta um SEGUNDO comentário no ticket real do cliente, então
@@ -62,11 +76,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
 
   const handleCopyText = () => {
     if (preview.status !== 'ready') return;
-    const cleanHtml = DOMPurify.sanitize(preview.html);
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = cleanHtml;
-    const text = tempDiv.innerText || tempDiv.textContent || '';
-    navigator.clipboard.writeText(text.trim());
+    navigator.clipboard.writeText(isEditingText ? editedText.trim() : generatedText);
     setCopiedMacro(true);
     toast.success('Texto da macro copiado para a área de transferência!');
     setTimeout(() => setCopiedMacro(false), 2500);
@@ -76,16 +86,21 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
   // sobrescreva o preview de uma seleção mais recente.
   const requestSeq = useRef(0);
 
+  const showPreview = useCallback((html: string) => {
+    const text = htmlToPlainText(html);
+    setGeneratedText(text);
+    setEditedText(text);
+    setIsEditingText(false);
+    setPreview({ status: 'ready', html });
+  }, []);
+
   const fetchPreview = useCallback(async (chosenOutcome: EvaluationOutcome) => {
     const seq = ++requestSeq.current;
     setPreview({ status: 'loading' });
 
     if (isMockMode || !supabase) {
       // Mock mode: preview estático instantâneo
-      setPreview({
-        status: 'ready',
-        html: `<div style="font-family:sans-serif;padding:12px;border:1px solid #e5e7eb;border-radius:8px;"><strong>Parecer da Qualidade (Demonstração)</strong><p>Resultado: <strong>${chosenOutcome === 'positiva' ? 'Ticket Válido' : 'Ticket Invalidado'}</strong></p></div>`
-      });
+      showPreview(`<div style="font-family:sans-serif;padding:12px;border:1px solid #e5e7eb;border-radius:8px;"><strong>Parecer da Qualidade (Demonstração)</strong><p>Resultado: <strong>${chosenOutcome === 'positiva' ? 'Ticket Válido' : 'Ticket Invalidado'}</strong></p></div>`);
       return;
     }
 
@@ -93,15 +108,16 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
       const accessToken = await requireAccessToken();
       const { data, error } = await supabase.functions.invoke('helpdesk-publish-evaluation', {
         headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(20000),
         body: { monitoria_id: monitoriaId, outcome: chosenOutcome, dry_run: true }
       });
-      if (error) throw error;
+      if (error) throw new Error(await extractFunctionErrorMessage(error, 'Falha ao gerar o preview.'));
 
       const result = data as PublishResult;
       if (seq !== requestSeq.current) return;
 
       if (result.success && 'preview_html' in result) {
-        setPreview({ status: 'ready', html: result.preview_html });
+        showPreview(result.preview_html);
       } else {
         setPreview({ status: 'error', message: (result as any)?.error || 'Falha ao gerar o preview.' });
       }
@@ -109,7 +125,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
       if (seq !== requestSeq.current) return;
       setPreview({ status: 'error', message: e?.message || 'Falha ao carregar o preview do comentário.' });
     }
-  }, [monitoriaId]);
+  }, [monitoriaId, showPreview]);
 
   // Carrega o histórico de envios (para o aviso de reenvio) e o preview
   // inicial assim que o modal abre.
@@ -134,9 +150,15 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
   }, [outcome, fetchPreview]);
 
   const handleConfirm = async () => {
+    if (checkingHistory) return;
     if (sendState.status === 'sending' || sendState.status === 'sent') return; // trava contra duplo clique
     if (previousSubmission && !acknowledgedResend) {
       toast.warning('Confirme que deseja reenviar antes de continuar.');
+      return;
+    }
+    if (preview.status !== 'ready') return;
+    if (isEditingText && (!editedText.trim() || editedText.length > 12000)) {
+      toast.error('O texto do comentário deve ter entre 1 e 12.000 caracteres.');
       return;
     }
     if (isMockMode || !supabase) {
@@ -147,12 +169,17 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
 
     setSendState({ status: 'sending' });
     try {
-      const result = await publishEvaluationToHelpdesk(monitoriaId, { outcome, force: true });
+      const result = await publishEvaluationToHelpdesk(monitoriaId, {
+        outcome,
+        force: Boolean(previousSubmission && acknowledgedResend),
+        commentText: isEditingText && editedText !== generatedText ? editedText.trim() : undefined,
+      });
       if (!result?.success) {
         setSendState({ status: 'error', message: result?.error || 'Falha ao enviar ao Zendesk.' });
         return;
       }
       setSendState({ status: 'sent', externalCommentId: result.external_comment_id });
+      onSent?.();
       toast.success('Comentário enviado ao Zendesk com sucesso!');
     } catch (e: any) {
       setSendState({ status: 'error', message: e?.message || 'Falha ao enviar ao Zendesk. Tente novamente.' });
@@ -171,8 +198,8 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
             <h3 className="text-xl font-black text-brand-primary tracking-tight uppercase">Enviar ao Zendesk</h3>
             <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mt-1">Ticket #{ticketId}</p>
             {fromConclusion && (
-              <p className="text-[10px] font-bold text-success uppercase tracking-widest mt-1">
-                Monitoria salva ✓ — o envio abaixo é opcional agora
+              <p className="text-[10px] font-bold text-warning uppercase tracking-widest mt-1">
+                Monitoria salva no QualidadeWP. Envio ao Zendesk pendente.
               </p>
             )}
           </div>
@@ -182,6 +209,11 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
         </header>
 
         <div className="flex-1 overflow-y-auto space-y-5 no-scrollbar">
+          {(underReview || fromConclusion) && !isSent && (
+            <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-brand-primary">
+              A monitoria ainda pode ser aceita ou contestada. Confira o resultado e o texto antes de publicar a macro no Zendesk.
+            </div>
+          )}
           {!checkingHistory && previousSubmission && !isSent && (
             <div className="flex items-start gap-3 bg-warning/10 border border-warning/30 rounded-xl p-4">
               <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
@@ -245,7 +277,18 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest ml-1">Preview do comentário</p>
-              {preview.status === 'ready' && (
+              {preview.status === 'ready' && <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEditingText) setEditedText(generatedText);
+                    setIsEditingText(!isEditingText);
+                  }}
+                  disabled={isSending || isSent}
+                  className="text-[11px] font-bold text-brand-highlight hover:underline disabled:opacity-50"
+                >
+                  {isEditingText ? 'Restaurar texto sugerido' : 'Editar texto'}
+                </button>
                 <button
                   type="button"
                   onClick={handleCopyText}
@@ -264,7 +307,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
                     </>
                   )}
                 </button>
-              )}
+              </div>}
             </div>
 
             {preview.status === 'loading' && (
@@ -277,13 +320,30 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
             {preview.status === 'error' && (
               <div className="flex flex-col items-center gap-3 py-8 border border-error/30 rounded-xl bg-error/5 px-4">
                 <p className="text-xs font-bold text-error text-center">{preview.message}</p>
+                {fromConclusion && <p className="text-xs text-brand-primary text-center">A monitoria já foi salva. Nenhuma macro foi enviada nesta etapa.</p>}
                 <Button variant="outline" size="sm" onClick={() => fetchPreview(outcome)} icon={<RotateCcw className="w-3.5 h-3.5" />}>
                   Tentar novamente
                 </Button>
               </div>
             )}
 
-            {preview.status === 'ready' && (
+            {preview.status === 'ready' && isEditingText && (
+              <label className="block space-y-1">
+                <span className="text-[11px] text-brand-muted">Texto que será enviado como comentário interno no Zendesk</span>
+                <textarea
+                  value={editedText}
+                  onChange={event => setEditedText(event.target.value)}
+                  disabled={isSending || isSent}
+                  maxLength={12000}
+                  rows={12}
+                  className="w-full rounded-xl border border-surface-border bg-surface-card p-3 text-sm text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-highlight disabled:opacity-60"
+                  aria-label="Editar comentário para o Zendesk"
+                />
+                <span className="block text-right text-[10px] text-brand-muted">{editedText.length}/12.000</span>
+              </label>
+            )}
+
+            {preview.status === 'ready' && !isEditingText && (
               // O HTML vem inteiramente do servidor (Edge Function), montado a
               // partir de um template fixo com os campos do usuário já
               // escapados — não é conteúdo arbitrário digitado pelo usuário
@@ -311,6 +371,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
               <div>
                 <p className="text-xs font-bold text-error uppercase tracking-wide">Falha ao enviar</p>
                 <p className="text-[11px] font-medium text-brand-primary mt-1">{sendState.message}</p>
+                {fromConclusion && <p className="text-[11px] font-medium text-brand-primary mt-1">A monitoria permanece salva. Você pode retomar o envio ao abrir a avaliação em Monitorias.</p>}
               </div>
             </div>
           )}
@@ -338,7 +399,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
               <button
                 type="button"
                 onClick={handleConfirm}
-                disabled={isSending || preview.status !== 'ready' || (!!previousSubmission && !acknowledgedResend)}
+                disabled={checkingHistory || isSending || preview.status !== 'ready' || (isEditingText && !editedText.trim()) || (!!previousSubmission && !acknowledgedResend)}
                 className="action-primary group flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />}

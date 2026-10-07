@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { satisfactionResponseTimestamp } from './satisfaction';
+import { csatStatusToSatisfactionResult, satisfactionResponseTimestamp } from './satisfaction';
+
+describe('lookup_ticket CSAT conversion', () => {
+  it('converts Zendesk scores in the Edge Function', () => {
+    expect(csatStatusToSatisfactionResult('good')).toBe('Positiva');
+    expect(csatStatusToSatisfactionResult('bad_with_comment')).toBe('Negativa');
+    expect(csatStatusToSatisfactionResult('unoffered')).toBe('Sem pesquisa');
+  });
+});
 
 describe('satisfactionResponseTimestamp', () => {
   it('uses created_at as the moment the customer submitted the rating', () => {

@@ -27,6 +27,11 @@ export function escapeHtml(text: string): string {
     .replace(/\n/g, '<br>');
 }
 
+/** Texto editado pelo auditor vira HTML seguro sem aceitar marcação arbitrária. */
+export function buildEditedCommentHtml(text: string): string {
+  return `<p>${escapeHtml(text.trim())}</p>`;
+}
+
 // HTML das macros, copiado byte a byte do Zendesk (fonte da verdade do
 // template — ver SPEC-integracao-helpdesk.md). Os `<p>&nbsp;</p>` logo
 // após cada rótulo são as lacunas que o analista preenchia à mão; é ali

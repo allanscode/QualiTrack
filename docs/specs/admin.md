@@ -1,7 +1,7 @@
 # SPEC: Módulo Admin
 
 ## Arquivo Principal
-- `src/components/AdminPanel.tsx` (222 linhas, 6 sub-tabs)
+- `src/components/AdminPanel.tsx` (9 subabas)
 
 ## Sub-módulos (Tabs Internas)
 
@@ -11,8 +11,11 @@
 | 2 | `teams` | Equipes | `Shield` | `TeamsManagement` |
 | 3 | `forms` | Formulários | `ClipboardList` | `FormsManagement` |
 | 4 | `requests` | Solicitações | `UserPlus` | `RequestsManagement` |
-| 5 | `qualidade` | Configurações | `BarChart3` | `QualityConfigManagement` |
-| 6 | `campos_extras` | Campos Extras | `Sliders` | `DissatisfactionFieldsManagement` |
+| 5 | `operacao` | Operação | `Calendar` | `QualityConfigManagement` |
+| 6 | `metas` | Metas | `Target` | `QualityConfigManagement` |
+| 7 | `campos_extras` | Campos Extras | `Sliders` | `DissatisfactionFieldsManagement` |
+| 8 | `ia_hub` | Inteligência Artificial | `Brain` | `AIHubManagement` |
+| 9 | `emails` | E-mails & Disparos | `Mail` | `EmailConfigManagement` |
 
 > Tab bar: pill buttons em `bg-surface-card` container com `rounded-2xl`. Conteúdo: `AnimatePresence mode="wait"` + `motion.div` (fade + y-slide, 0.2s).
 
@@ -46,6 +49,9 @@
 
 ## Gestão de Equipes (`TeamsManagement.tsx`)
 
+O modelo atual distingue equipes de pessoas e grupos de tickets do Zendesk. Veja [Equipes e grupos de tickets](equipes-e-grupos.md) para regras de vínculo, conversão de cadastros antigos e visibilidade de gestores.
+O painel de Equipes possui abas internas **Equipes** e **Grupos do Zendesk**.
+
 ### Modelo
 ```typescript
 interface Team {
@@ -55,10 +61,14 @@ interface Team {
   description?: string;
   sigla?: string;
   icon?: string;
+  kind?: 'team' | 'group';
+  zendesk_group_id?: number | null;
 }
 ```
-- CRUD simples
-- Soft-delete (toggle `active`)
+- CRUD de equipes reais; grupos sincronizados pelo ID do Zendesk
+- Vínculo N:N entre equipes e grupos via `team_groups`
+- Conversão segura de um cadastro antigo em grupo via `convert_team_to_group`
+- Soft-delete (toggle `active`) apenas após remover pessoas e grupos vinculados
 
 ## Editor de Formulários (`FormsManagement.tsx`)
 

@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { buildFreshSql, discoverFreshMigrations } from './prepare-supabase.mjs';
 
 const id = n => `10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-test('clean Supabase install: exact generated SQL, no demo data, platform fixtures only', async t => {
+test('clean Supabase install: exact generated SQL, no demo data, approved system form only', async t => {
   const db = new PGlite();
   try {
     // Emulate ONLY managed Supabase objects. Application tables come exclusively
@@ -52,7 +52,7 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       assert.deepEqual(rows, []);
       assert.equal((await db.query("SELECT has_function_privilege('authenticated','public.acknowledge_agent_feedback(uuid,text)','EXECUTE') AS allowed")).rows[0].allowed, true);
     });
-    await t.test('all application tables empty and RLS enabled; no password/demo seed', async () => {
+    await t.test('application tables contain only the approved child-ticket form and enforce RLS', async () => {
       const { rows } = await db.query("SELECT relname,relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND relkind='r'");
       assert.ok(rows.length >= 20, `expected baseline and incremental tables, got ${rows.length}`);
       assert.ok(rows.some(row => row.relname === 'queue_ticket_assignments'));
@@ -60,8 +60,17 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       assert.deepEqual(migrations.map(m => m.name), [...new Set(migrations.map(m => m.name))].sort());
       for (const row of rows) {
         assert.equal(row.relrowsecurity,true,row.relname);
+        if (row.relname === 'forms') continue;
         assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.${row.relname}`)).rows[0].n,0,row.relname);
       }
+      assert.deepEqual((await db.query(`SELECT id::text, title, created_by, active,
+        jsonb_array_length(sections) AS section_count FROM public.forms`)).rows, [{
+        id: '6c7d1e88-841b-4da9-9a66-9f1464ce896f',
+        title: 'Ficha de Monitoria de Ticket Filho',
+        created_by: null,
+        active: true,
+        section_count: 3,
+      }]);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM auth.users')).rows[0].n,0);
       assert.equal((await db.query("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name IN ('password','reset_token','team_ids','team_id')")).rows[0].n,0);
       assert.ok(manifest.every(x => /^[a-f0-9]{64}$/.test(x.sha256)));
@@ -99,6 +108,7 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       assert.equal((await asUser(1,() => db.query('SELECT * FROM monitorias'))).rows.length,2);
       assert.equal((await asUser(3,() => db.query('SELECT * FROM monitorias'))).rows.length,1);
       assert.equal((await asUser(4,() => db.query('SELECT * FROM monitorias'))).rows.length,2);
+      assert.equal((await db.query('SELECT ticket_group_team_id FROM monitorias WHERE id=$1',[id(30)])).rows[0].ticket_group_team_id,null);
       assert.equal((await asUser(2,() => db.query('SELECT * FROM user_teams'))).rows.length,1);
       assert.equal((await asUser(3,() => db.query('SELECT * FROM user_teams'))).rows.length,2);
       const supportView = await asUser(2,() => db.query('SELECT evaluator_id,evaluator_name FROM vw_monitorias_suporte'));
@@ -106,6 +116,51 @@ test('clean Supabase install: exact generated SQL, no demo data, platform fixtur
       assert.equal(supportView.rows[0].evaluator_id,null);
       assert.equal(supportView.rows[0].evaluator_name,null);
       await assert.rejects(asUser(2,() => db.exec(`INSERT INTO monitorias(evaluated_id,score) VALUES ('${id(2)}',100)`)),/row-level security/);
+    });
+    await t.test('PJ evaluation belongs to the agent primary team despite the ticket group', async () => {
+      await db.exec(`INSERT INTO users(id,email,name,role,active) VALUES ('${id(6)}','manager-b@example.invalid','Manager B','gestor_suporte',true);
+        UPDATE teams SET zendesk_group_id=50800061906068 WHERE id='${id(11)}';
+        INSERT INTO user_teams(user_id,team_id) VALUES ('${id(6)}','${id(11)}'),('${id(2)}','${id(11)}');
+        UPDATE users SET primary_team_id='${id(10)}' WHERE id='${id(2)}';
+        INSERT INTO monitorias(id,form_id,evaluated_id,evaluator_id,team_id,score,question_observations,form_snapshot,applied_config)
+          VALUES ('${id(32)}','${id(20)}','${id(2)}','${id(4)}','${id(11)}',85,'{}','{}','{}');`);
+      const evaluation = (await db.query('SELECT team_id,team_name,ticket_group_team_id FROM monitorias WHERE id=$1',[id(32)])).rows[0];
+      assert.equal(evaluation.team_id,id(10));
+      assert.equal(evaluation.team_name,'Team A');
+      assert.equal(evaluation.ticket_group_team_id,id(11));
+      assert.equal((await asUser(3,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,1);
+      assert.equal((await asUser(6,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,0);
+      await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[id(1)]);
+      await db.exec(`UPDATE users SET primary_team_id='${id(11)}' WHERE id='${id(2)}'`);
+      assert.equal((await asUser(3,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,0);
+      assert.equal((await asUser(6,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,1);
+    });
+    await t.test('converting a legacy Zendesk group transfers ownership and manager visibility', async () => {
+      await db.exec(`INSERT INTO teams(id,name) VALUES ('${id(12)}','Team C');`);
+      await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[id(1)]);
+      await assert.rejects(db.query('SELECT convert_team_to_group($1,$2)',[id(11),id(12)]),/Defina a equipe principal/);
+      await db.exec(`INSERT INTO user_teams(user_id,team_id) VALUES
+        ('${id(2)}','${id(12)}'),('${id(5)}','${id(12)}'),('${id(6)}','${id(12)}');
+        UPDATE users SET primary_team_id='${id(12)}' WHERE id IN ('${id(2)}','${id(5)}');`);
+      await db.query('SELECT convert_team_to_group($1,$2)',[id(11),id(12)]);
+      const agent = (await db.query('SELECT primary_team_id FROM users WHERE id=$1',[id(2)])).rows[0];
+      assert.equal(agent.primary_team_id,id(12));
+      const oldLinks = (await db.query('SELECT count(*)::int AS count FROM user_teams WHERE team_id=$1',[id(11)])).rows[0];
+      assert.equal(oldLinks.count,0);
+      const managerLink = (await db.query('SELECT count(*)::int AS count FROM user_teams WHERE user_id=$1 AND team_id=$2',[id(6),id(12)])).rows[0];
+      assert.equal(managerLink.count,1);
+      const evaluation = (await db.query('SELECT team_id,ticket_group_team_id FROM monitorias WHERE id=$1',[id(32)])).rows[0];
+      assert.equal(evaluation.team_id,id(12));
+      assert.equal(evaluation.ticket_group_team_id,id(11));
+      assert.equal((await asUser(3,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,0);
+      assert.equal((await asUser(6,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,1);
+      await db.query('INSERT INTO team_groups(team_id,group_id) VALUES ($1,$2)',[id(10),id(11)]);
+      const links = (await db.query('SELECT team_id FROM team_groups WHERE group_id=$1',[id(11)])).rows;
+      assert.deepEqual(links.map(link => link.team_id).sort(),[id(10),id(12)]);
+      assert.equal((await asUser(3,() => db.query('SELECT id FROM teams WHERE id=$1',[id(11)]))).rows.length,1);
+      assert.equal((await asUser(3,() => db.query('SELECT id FROM monitorias WHERE id=$1',[id(32)]))).rows.length,0);
+      await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[id(1)]);
+      await assert.rejects(db.query('INSERT INTO user_teams(user_id,team_id) VALUES ($1,$2)',[id(3),id(11)]),/Pessoas só podem/);
     });
     await t.test('AI draft keeps its original queue snapshot until a monitoria is saved', async () => {
       const snapshot = { ticket_id: '12345', subject: 'Proactive ticket', csat_status: 'unrated', ticket_date: '2026-09-28', status: 'open' };

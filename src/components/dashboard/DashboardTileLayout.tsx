@@ -10,7 +10,6 @@ import type { DashboardLayoutEditor } from '../../hooks/useDashboardLayoutEditor
 
 interface LayoutContextValue {
   role: DashboardRole;
-  arranged: boolean;
   slots: Record<string, HTMLDivElement>;
   registerSlot: (id: string, node: HTMLDivElement | null) => void;
 }
@@ -74,19 +73,22 @@ function Slot({ item, index, count, registerSlot, editor }: {
     };
   }, [editor, item.id]);
 
-  const size = item.type === 'StatCard'
-    ? 'min-h-32'
-    : item.type === 'RecentAuditsTable' || item.type === 'FeedbacksWidget' || item.type === 'QualityAchievementsWidget' || item.type === 'NegativeCallsTrainingAlert'
-      ? 'sm:col-span-2 xl:col-span-4'
-      : item.type === 'TrendChart' || item.type === 'OfensoresChart' || item.type === 'ComparativeBarChart'
-        ? 'sm:col-span-2 xl:col-span-4 h-[380px]'
-        : 'sm:col-span-2 h-[360px]';
+  const autoHeight = item.type === 'RecentAuditsTable' || item.type === 'ManagerDecisionHistoryTable' || item.type === 'CriticalErrorsTable' || item.type === 'FeedbacksWidget'
+    || item.type === 'QualityAchievementsWidget' || item.type === 'NegativeCallsTrainingAlert';
+  const kind = item.type === 'StatCard' ? 'card' : autoHeight ? 'auto' : 'chart';
+  const compactChart = item.type === 'DistributionChart'
+    || (item.type === 'CustomChart' && ['Distribuição por Equipe', 'Curva de Qualidade'].includes(item.title));
+  const wide = item.type === 'TrendChart' || item.type === 'OfensoresChart' || item.type === 'ComparativeBarChart'
+    || autoHeight;
   return (
     <div
       ref={rootRef}
       data-dashboard-slot={item.id}
+      data-dashboard-kind={kind}
+      data-dashboard-wide={wide ? 'true' : undefined}
+      data-dashboard-compact={compactChart ? 'true' : undefined}
       draggable={Boolean(editor && !editor.saving)}
-      className={`min-w-0 flex flex-col ${size} ${editor ? 'rounded-2xl transition-shadow cursor-grab active:cursor-grabbing' : ''} ${dropTarget ? 'ring-2 ring-brand-accent ring-offset-2 ring-offset-surface-bg' : ''} ${editor?.draggedId === item.id ? 'opacity-45' : ''}`}
+      className={`min-w-0 flex flex-col ${editor ? 'rounded-2xl transition-shadow cursor-grab active:cursor-grabbing' : ''} ${dropTarget ? 'ring-2 ring-brand-accent ring-offset-2 ring-offset-surface-bg' : ''} ${editor?.draggedId === item.id ? 'opacity-45' : ''}`}
     >
       {editor && (
         <div className="mb-2 flex min-h-9 items-center gap-1 rounded-xl border border-surface-border bg-surface-card px-2 text-brand-muted shadow-sm">
@@ -105,7 +107,6 @@ function Slot({ item, index, count, registerSlot, editor }: {
 export function DashboardTileLayout({ role, children, editor }: { role: DashboardRole; children: ReactNode; editor?: DashboardLayoutEditor }) {
   const { config } = useQualityConfig();
   const layout = config.dashboardLayouts?.[role];
-  const arranged = Boolean(editor || layout?.order?.length);
   const [slots, setSlots] = useState<Record<string, HTMLDivElement>>({});
   const registerSlot = useCallback((id: string, node: HTMLDivElement | null) => {
     setSlots(current => {
@@ -117,17 +118,17 @@ export function DashboardTileLayout({ role, children, editor }: { role: Dashboar
       return next;
     });
   }, []);
-  const context = useMemo(() => ({ role, arranged, slots, registerSlot }), [role, arranged, slots, registerSlot]);
+  const context = useMemo(() => ({ role, slots, registerSlot }), [role, slots, registerSlot]);
   const visibleWidgets = editor?.visible || orderedWidgets(role, layout).filter(item => !layout?.hidden?.includes(item.id));
 
   return (
     <LayoutContext value={context}>
-      {arranged && (
-        <div className="dashboard-tile-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6" aria-label="Indicadores do dashboard">
+      <div className="dashboard-tile-container">
+        <div className={`dashboard-tile-grid ${editor ? 'dashboard-tile-grid--editing' : ''}`} aria-label="Indicadores do dashboard">
           {visibleWidgets.map((item, index) => <Slot key={item.id} item={item} index={index} count={visibleWidgets.length} registerSlot={registerSlot} editor={editor} />)}
         </div>
-      )}
-      <div className={arranged ? 'dashboard-tile-source' : ''}>{children}</div>
+      </div>
+      <div className="dashboard-tile-source">{children}</div>
     </LayoutContext>
   );
 }
@@ -144,7 +145,7 @@ export function DashboardTile({ type, title, profile, children }: TileProps & { 
     const role = layoutContext?.role || (profile as DashboardRole | undefined) || dashboardState?.dashboardRole;
     const id = widgetId(type, title);
     if (role && config.dashboardLayouts?.[role]?.hidden?.includes(id)) return null;
-    if (layoutContext?.arranged && DASHBOARD_WIDGETS[layoutContext.role].some(item => item.id === id)) {
+    if (layoutContext && DASHBOARD_WIDGETS[layoutContext.role].some(item => item.id === id)) {
       const slot = layoutContext.slots[id];
       return slot ? createPortal(<div data-dashboard-tile-content className="h-full min-h-0">{children}</div>, slot) : null;
     }

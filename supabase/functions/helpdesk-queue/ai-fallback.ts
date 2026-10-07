@@ -127,9 +127,7 @@ export interface RunAIModelChainOptions<T> {
 }
 
 export async function runAIModelChain<T>(options: RunAIModelChainOptions<T>): Promise<AIChainResult<T>> {
-  if (options.targets.length !== 2 || options.targets.some(target => target.provider !== 'openrouter')
-    || options.targets[0].model !== 'z-ai/glm-5.3-flash'
-    || options.targets[1].model !== 'google/gemini-3.8-flash') {
+  if (options.targets.length === 0 || options.targets.some(target => target.provider !== 'openrouter')) {
     throw new AIModelError('Cadeia de IA inválida.', 'request_configuration_error', false, 'global');
   }
 

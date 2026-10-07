@@ -1,3 +1,4 @@
+import { CHILD_QUESTION_IDS, validateChildEvaluationResponse } from './child-evaluation.ts';
 import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
 import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -15,20 +16,29 @@ import {
   type AIAttemptRecord,
   type AIModelTarget,
 } from './ai-fallback.ts';
-import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODEL } from './openrouter-client.ts';
+import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS } from './openrouter-client.ts';
+import { buildAITargets } from './ai-targets.ts';
 import { retryAt } from './ai-retry.ts';
-import { canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
+import { canReadMatchedTicketTeam, canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
-import { satisfactionResponseTimestamp } from './satisfaction.ts';
-import { literalSearchTerm, ticketMatchesQueue } from './queue-search.ts';
+import { csatStatusToSatisfactionResult, satisfactionResponseTimestamp } from './satisfaction.ts';
+import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
+import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro, hasPublishedChildMacroForMonitoria, hasPublishedInvalidChildMacro } from './child-view.ts';
+import { childMacroCustomFields, hasCriticalChildField, missingCustomFields } from './child-macro-fields.ts';
+import { childPublicationError, childPublicationText, type ChildPublicationMonitoria } from './child-publication.ts';
+import { attachQueuePublicationState, type QueueMonitoriaState, type QueuePublicationTicket } from './queue-publication.ts';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
+import { previewWebpostoDivisions, type ZendeskMembership, type ZendeskMembershipGroup, type ZendeskMembershipUser } from './webposto-memberships.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
-const AI_PRIMARY_TIMEOUT_MS = Math.min(120_000, Math.max(1_000, Number(Deno.env.get('AI_PRIMARY_TIMEOUT_MS') || '30000') || 30000));
-const AI_TARGETS: AIModelTarget[] = [
-  { provider: 'openrouter', model: OPENROUTER_MODEL, maxAttempts: 4, timeoutMs: AI_PRIMARY_TIMEOUT_MS },
-  { provider: 'openrouter', model: OPENROUTER_FALLBACK_MODEL, maxAttempts: 3, timeoutMs: 45_000 },
-];
+// GLM pago primeiro; Gemma e Gemini pagos entram em sequência se necessário.
+const AI_TARGETS: AIModelTarget[] = buildAITargets(name => Deno.env.get(name));
+
+function phaseForAIModel(model: string): 'running_glm' | 'running_gemma' | 'fallback_gemini' {
+  if (model === OPENROUTER_MODEL) return 'running_glm';
+  if (model === OPENROUTER_FALLBACK_MODELS[0]) return 'running_gemma';
+  return 'fallback_gemini';
+}
 
 
 const MAX_REQUEST_BYTES = 1_000_000;
@@ -39,19 +49,38 @@ const MAX_REQUEST_BYTES = 1_000_000;
 // chutado poderia deixar passar negativas que na verdade não foram validadas.
 const VALIDATED_TAG = Deno.env.get('HELPDESK_VALIDATED_TAG') || '';
 
+async function withPublicationState<T extends QueuePublicationTicket>(
+  supabase: SupabaseClient, tickets: T[], queue: QueueType,
+): Promise<T[]> {
+  if (tickets.length === 0) return tickets;
+  const ids = [...new Set(tickets.map(ticket => ticket.ticket_id))];
+  const [monitoriaResult, submissionResult] = await Promise.all([
+    supabase.from('monitorias').select('id,ticket_id,status,score,active,created_at,form_id,form_snapshot').in('ticket_id', ids),
+    queue === 'negativas'
+      ? supabase.from('helpdesk_submissions').select('external_ticket_id')
+        .eq('provider', 'zendesk').eq('status', 'sent').in('external_ticket_id', ids)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (monitoriaResult.error) throw new Error('Falha ao verificar monitorias da fila.');
+  if (submissionResult.error) throw new Error('Falha ao verificar os envios ao Zendesk.');
+  const sentTickets = new Set((submissionResult.data || []).map(row => row.external_ticket_id));
+  const rows = (monitoriaResult.data || []) as QueueMonitoriaState[];
+  return attachQueuePublicationState(tickets, queue, rows, sentTickets);
+}
+
 // IDs das views salvas do Zendesk (Admin Center > Views > abrir a view >
 // número no final da URL). Quando configuradas, cada fila busca exatamente
 // os tickets da view correspondente — já filtrados pela lógica que a
 // qualidade mantém lá dentro (ex.: negativas ainda não validadas) — em vez
 // de reconstruir o filtro via Search API e arriscar divergir da contagem
 // real que a equipe vê no Zendesk.
-const NEGATIVE_VIEW_ID = Deno.env.get('HELPDESK_NEGATIVE_VIEW_ID') || '';
-const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '';
+const NEGATIVE_VIEW_ID = Deno.env.get('HELPDESK_NEGATIVE_VIEW_ID') || '47295789542804';
+const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '48318855861396';
 // Proativas: view real do Zendesk com os tickets de CSAT vazio/não avaliado
 // (ex.: 808 pesquisas vazias na view configurada) — antes essa fila não
 // buscava ticket nenhum do Zendesk, só sorteava um número de ticket
 // FICTÍCIO pra abrir a ficha. Agora usa tickets reais, igual as outras duas.
-const PROACTIVE_VIEW_ID = Deno.env.get('HELPDESK_PROACTIVE_VIEW_ID') || '';
+const PROACTIVE_VIEW_ID = Deno.env.get('HELPDESK_PROACTIVE_VIEW_ID') || '47851284392724';
 const CHILD_VIEW_ID = Deno.env.get('HELPDESK_CHILD_VIEW_ID') || '47405806430228';
 const INVALID_CHILD_VIEW_ID = Deno.env.get('HELPDESK_INVALID_CHILD_VIEW_ID') || '47656856998292';
 
@@ -74,6 +103,7 @@ function viewIdForQueue(queueType: QueueType): string {
 const RequestSchema = z.object({
   action: z.enum([
     'fetch_queue',
+    'fetch_draft_statuses',
     'check_queue_updates',
     'fetch_dialogue',
     'evaluate_ai',
@@ -83,11 +113,15 @@ const RequestSchema = z.object({
     'resolve_agent',
     'lookup_ticket_agent',
     'lookup_ticket',
+    'publish_child_macro',
     'sync_zendesk_groups',
+    'preview_webposto_memberships',
     'backfill_agent_team'
   ]),
   queue_type: z.enum(['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos']).optional(),
   ticket_id: z.string().optional(),
+  monitoria_id: z.string().uuid().optional(),
+  ticket_ids: z.array(z.string().regex(/^\d+$/)).max(100).optional(),
   job_id: z.string().uuid().optional(),
   draft_meta: z.object({
     source_queue: z.enum(['negativas', 'proativas', 'positivas']).optional(),
@@ -115,6 +149,7 @@ const RequestSchema = z.object({
     }).optional(),
   }).optional(),
   ticket_subject: z.string().max(500).optional(),
+  ticket_status: z.string().max(40).optional(),
   search_term: z.string().max(200).optional(),
   // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
   // de fetch_queue. Ausente/null = primeira página.
@@ -156,6 +191,97 @@ const RequestSchema = z.object({
   team_id: z.string().optional(),
   evaluated_id: z.string().optional(),
 });
+
+async function buildWebpostoMembershipPreview(
+  supabase: SupabaseClient, subdomain: string, zendeskHeaders: HeadersInit,
+): Promise<Response> {
+      const { data: managementTeams, error: managementError } = await supabase.from('teams')
+        .select('id,name,kind,parent_team_id').eq('kind', 'team');
+      if (managementError) throw managementError;
+      const webPosto = managementTeams?.find(team => team.name === 'WebPosto' && !team.parent_team_id)
+        || managementTeams?.find(team => team.name.toLowerCase() === 'cliente final' && !team.parent_team_id);
+      if (!webPosto) return jsonResponse({ error: 'Equipe WebPosto não encontrada.' }, 409);
+      const relevantTeams = (managementTeams || []).filter(team => team.id === webPosto.id
+        || team.parent_team_id === webPosto.id || /^PJ\s/i.test(team.name));
+      const { data: localAgents, error: agentsError } = await supabase.from('users')
+        .select('id,name,email,role,primary_team_id,external_id,source_system')
+        .eq('active', true).eq('role', 'suporte')
+        .in('primary_team_id', relevantTeams.map(team => team.id));
+      if (agentsError) throw agentsError;
+
+      const origin = `https://${subdomain}.zendesk.com`;
+      const memberships: ZendeskMembership[] = [];
+      const zendeskUsers = new Map<number, ZendeskMembershipUser>();
+      const zendeskGroups = new Map<number, ZendeskMembershipGroup>();
+      let nextUrl: string | null = `${origin}/api/v2/group_memberships.json?include=users,groups&per_page=100`;
+      let pages = 0;
+      while (nextUrl) {
+        if (++pages > 50) return jsonResponse({ error: 'Há mais de 5.000 vínculos; consulta incompleta. Nenhuma sugestão foi aplicada.' }, 503);
+        const parsedUrl = new URL(nextUrl);
+        if (parsedUrl.origin !== origin || !['/api/v2/group_memberships', '/api/v2/group_memberships.json'].includes(parsedUrl.pathname)
+          || parsedUrl.username || parsedUrl.password || parsedUrl.hash) {
+          return jsonResponse({ error: 'Paginação de grupos inválida.' }, 502);
+        }
+        const response = await fetch(parsedUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(15000) });
+        if (!response.ok) return jsonResponse({ error: `Zendesk Group Memberships API falhou (${response.status}).` }, 502);
+        const data = await response.json();
+        if (!Array.isArray(data.group_memberships)) return jsonResponse({ error: 'Resposta de vínculos inválida.' }, 502);
+        memberships.push(...data.group_memberships);
+        for (const item of Array.isArray(data.users) ? data.users : []) {
+          if (Number.isSafeInteger(item.id)) zendeskUsers.set(item.id, {
+            id: item.id, email: item.email,
+            user_fields: item.user_fields && typeof item.user_fields === 'object' && !Array.isArray(item.user_fields)
+              ? item.user_fields : null,
+          });
+        }
+        for (const item of Array.isArray(data.groups) ? data.groups : []) {
+          if (Number.isSafeInteger(item.id) && typeof item.name === 'string') zendeskGroups.set(item.id, { id: item.id, name: item.name });
+        }
+        nextUrl = typeof data.next_page === 'string' ? data.next_page : null;
+      }
+      if (memberships.length > 0 && (zendeskUsers.size === 0 || zendeskGroups.size === 0)) {
+        return jsonResponse({ error: 'O Zendesk não retornou usuários e grupos associados aos vínculos.' }, 502);
+      }
+
+      // Sideloaded users omit custom profile fields on some Zendesk plans.
+      // Read complete profiles only for agents already present in QualiTrack.
+      const zendeskIdByEmail = new Map([...zendeskUsers.values()]
+        .filter(user => typeof user.email === 'string' && user.email.trim())
+        .map(user => [user.email!.toLowerCase().trim(), user.id]));
+      const matchedZendeskIds = [...new Set((localAgents || []).flatMap(agent => {
+        const byId = agent.source_system === 'zendesk' && /^\d+$/.test(agent.external_id || '')
+          ? Number(agent.external_id) : null;
+        const byEmail = zendeskIdByEmail.get(agent.email.toLowerCase().trim());
+        return [byId, byEmail].filter((id): id is number => id !== null && id !== undefined && Number.isSafeInteger(id));
+      }))];
+      for (let offset = 0; offset < matchedZendeskIds.length; offset += 100) {
+        const ids = matchedZendeskIds.slice(offset, offset + 100);
+        const response = await fetch(`${origin}/api/v2/users/show_many.json?ids=${ids.join(',')}`, {
+          headers: zendeskHeaders, signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) return jsonResponse({ error: `Zendesk Users API falhou (${response.status}).` }, 502);
+        const data = await response.json();
+        if (!Array.isArray(data.users)) return jsonResponse({ error: 'Resposta de perfis Zendesk inválida.' }, 502);
+        for (const item of data.users) {
+          if (Number.isSafeInteger(item.id)) zendeskUsers.set(item.id, {
+            id: item.id, email: item.email,
+            user_fields: item.user_fields && typeof item.user_fields === 'object' && !Array.isArray(item.user_fields)
+              ? item.user_fields : null,
+          });
+        }
+      }
+
+      const rows = previewWebpostoDivisions({
+        localUsers: localAgents || [],
+        teams: relevantTeams,
+        memberships,
+        zendeskUsers: [...zendeskUsers.values()],
+        zendeskGroups: [...zendeskGroups.values()],
+        webPostoTeamId: webPosto.id,
+      });
+      return jsonResponse({ success: true, checked_at: new Date().toISOString(), scanned_memberships: memberships.length,
+        scanned_pages: pages, rows }, 200);
+}
 
 function jsonResponse(body: any, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -210,6 +336,45 @@ async function backfillAgentTeamIfMissing(
  * (sem senha, sem convite) que é herdada automaticamente quando ele concluir
  * o onboarding formal com o mesmo e-mail (trigger `handle_new_user`).
  */
+/** Vincula um novo agente à equipe gestora, nunca ao grupo do ticket. */
+async function ensureAgentTeamMembership(supabase: SupabaseClient, userId: string, teamId: string): Promise<void> {
+  // Apenas operadores (role 'suporte') recebem vínculos automáticos.
+  // Para gestores, auditores e admins, user_teams define seus escopos de supervisão e permissão,
+  // controlados exclusivamente no painel de administração.
+  const { data: user } = await supabase.from('users').select('role').eq('id', userId).maybeSingle();
+  if (user && user.role !== 'suporte') {
+    return;
+  }
+
+  const { error } = await supabase.from('user_teams')
+    .upsert({ user_id: userId, team_id: teamId }, { onConflict: 'user_id,team_id', ignoreDuplicates: true });
+  if (error) throw new Error(`Não foi possível vincular o agente à equipe: ${error.message}`);
+}
+
+async function resolveZendeskTicketGroup(
+  supabase: SupabaseClient,
+  zendeskGroupId?: number,
+  groupName?: string,
+): Promise<{ id: string; team_id?: string } | null> {
+  let row: { id: string; kind?: string } | null = null;
+  if (zendeskGroupId) {
+    const result = await supabase.from('teams')
+      .select('id, kind').eq('zendesk_group_id', zendeskGroupId).maybeSingle();
+    row = result.data;
+  }
+  if (!row && groupName) {
+    const result = await supabase.from('teams')
+      .select('id, kind').eq('kind', 'group').ilike('name', groupName.trim()).limit(1);
+    row = result.data?.[0] || null;
+  }
+  if (!row) return null;
+  if (row.kind !== 'group') return { id: row.id, team_id: row.id };
+  const { data: links, error } = await supabase.from('team_groups')
+    .select('team_id').eq('group_id', row.id).limit(2);
+  if (error) throw error;
+  return { id: row.id, team_id: links?.length === 1 ? links[0].team_id : undefined };
+}
+
 async function resolveOrCreateAgent(
   supabase: SupabaseClient,
   email: string | undefined,
@@ -219,8 +384,10 @@ async function resolveOrCreateAgent(
   teamName: string | undefined,
   // Quando o chamador já sabe o team_id exato (ex.: monitor selecionou a
   // equipe na própria ficha), pula o match por nome e usa direto.
-  explicitTeamId?: string
-): Promise<{ id?: string; team_id?: string } | null> {
+  explicitTeamId?: string,
+  backfillExisting = true,
+  zendeskGroupId?: number,
+): Promise<{ id?: string; team_id?: string; ticket_group_team_id?: string } | null> {
   if (!email) return null;
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -229,32 +396,26 @@ async function resolveOrCreateAgent(
   // a equipe principal de exibição.
   const { data: existing } = await supabase
     .from('users')
-    .select('id, primary_team_id')
+    .select('id, role, primary_team_id')
     .eq('email', normalizedEmail)
     .maybeSingle();
 
-  // Tenta casar a equipe pelo nome do grupo/time do helpdesk (best-effort),
-  // a menos que o chamador já tenha passado o team_id explicitamente. Feito
-  // ANTES do "if (existing)" abaixo porque agora serve tanto pra criar um
-  // agente novo quanto pra completar o vínculo de um que já existe.
+  // Um grupo do Zendesk identifica o ticket. Só sua equipe responsável pode
+  // tornar-se equipe principal do agente e dona da monitoria.
   let teamId: string | undefined = explicitTeamId;
-  if (!teamId && teamName) {
-    const { data: team } = await supabase
-      .from('teams')
-      .select('id')
-      .ilike('name', teamName)
-      .maybeSingle();
-    teamId = team?.id as string | undefined;
+  let ticketGroupTeamId: string | undefined;
+  if (sourceSystem === 'zendesk' && (zendeskGroupId || teamName)) {
+    const group = await resolveZendeskTicketGroup(supabase, zendeskGroupId, teamName);
+    ticketGroupTeamId = group?.id;
+    teamId = group?.team_id || teamId;
   }
 
   if (existing) {
-    const resolvedTeamId = await backfillAgentTeamIfMissing(
-      supabase,
-      existing.id as string,
-      existing.primary_team_id as string | null | undefined,
-      teamId
-    );
-    return { id: existing.id as string, team_id: resolvedTeamId };
+    const resolvedTeamId = (backfillExisting && existing.role === 'suporte')
+      ? await backfillAgentTeamIfMissing(supabase, existing.id as string,
+        existing.primary_team_id as string | null | undefined, teamId)
+      : ((existing.primary_team_id as string | undefined) || teamId);
+    return { id: existing.id as string, team_id: resolvedTeamId, ticket_group_team_id: ticketGroupTeamId };
   }
 
   // public.users.id não tem DEFAULT (normalmente é preenchido com o id do
@@ -280,20 +441,137 @@ async function resolveOrCreateAgent(
 
   if (createError) {
     console.error('[helpdesk-queue] Falha ao criar agente provisório:', createError.message);
-    return teamId ? { team_id: teamId } : null;
+    return teamId || ticketGroupTeamId ? { team_id: teamId, ticket_group_team_id: ticketGroupTeamId } : null;
   }
 
   // Espelha o vínculo em user_teams (fonte de verdade para multi-equipe).
   if (teamId) {
-    const { error: userTeamError } = await supabase
-      .from('user_teams')
-      .insert({ user_id: created.id, team_id: teamId });
-    if (userTeamError) {
-      console.error('[helpdesk-queue] Falha ao vincular agente provisório à equipe:', userTeamError.message);
-    }
+    await ensureAgentTeamMembership(supabase, created.id, teamId);
   }
 
-  return { id: created.id as string, team_id: teamId };
+  return { id: created.id as string, team_id: teamId, ticket_group_team_id: ticketGroupTeamId };
+}
+
+async function reconcilePublishedChildMacros(supabase: SupabaseClient): Promise<Response> {
+  const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
+  const email = Deno.env.get('ZENDESK_EMAIL');
+  const token = Deno.env.get('ZENDESK_API_TOKEN');
+  if (!subdomain || !email || !token) return jsonResponse({ error: 'Zendesk não configurado.' }, 500);
+  const headers = {
+    Authorization: `Basic ${btoa(`${email}/token:${token}`)}`,
+    'Content-Type': 'application/json', Accept: 'application/json',
+  };
+  const base = `https://${subdomain}.zendesk.com/api/v2`;
+  const ticketIds = new Set<string>();
+  let truncated = false;
+
+  for (const viewId of new Set([CHILD_VIEW_ID, INVALID_CHILD_VIEW_ID].filter(Boolean))) {
+    const viewUrl = `${base}/views/${viewId}.json`;
+    const viewResponse = await fetch(viewUrl, { headers, signal: AbortSignal.timeout(10000) });
+    if (!viewResponse.ok) return jsonResponse({ error: `Falha ao ler a view ${viewId} (${viewResponse.status}).` }, 502);
+    const view = (await viewResponse.json()).view;
+    let conditions: ReturnType<typeof childViewConditionsWithAuditExclusion>;
+    try { conditions = childViewConditionsWithAuditExclusion(view); }
+    catch { return jsonResponse({ error: `Condições incompletas na view ${viewId}.` }, 502); }
+    if (conditions) {
+      const update = await fetch(viewUrl, {
+        method: 'PUT', headers, signal: AbortSignal.timeout(10000),
+        body: JSON.stringify({ view: conditions }),
+      });
+      if (!update.ok) return jsonResponse({ error: `Falha ao atualizar a view ${viewId} (${update.status}).` }, 502);
+    }
+
+    let next: string | null = `${base}/views/${viewId}/tickets.json?page[size]=25`;
+    for (let page = 0; next && page < 4; page++) {
+      const response = await fetch(next, { headers, signal: AbortSignal.timeout(15000) });
+      if (!response.ok) return jsonResponse({ error: `Falha ao listar a view ${viewId} (${response.status}).` }, 502);
+      const body = await response.json();
+      for (const ticket of body.tickets || []) if (ticket.id) ticketIds.add(String(ticket.id));
+      const candidate = body.meta?.has_more ? body.links?.next : null;
+      if (candidate && !String(candidate).startsWith(`${base}/views/${viewId}/tickets.json`)) {
+        return jsonResponse({ error: `Paginação inesperada na view ${viewId}.` }, 502);
+      }
+      next = candidate || null;
+    }
+    if (next) truncated = true;
+  }
+
+  const updated: string[] = [];
+  const alreadyMarked: string[] = [];
+  const withoutMacro: string[] = [];
+  const errors: string[] = [];
+  for (const id of ticketIds) {
+    try {
+      const ticketUrl = `${base}/tickets/${id}.json`;
+      const ticketResponse = await fetch(ticketUrl, { headers, signal: AbortSignal.timeout(10000) });
+      if (!ticketResponse.ok) throw new Error(`ticket ${ticketResponse.status}`);
+      const ticket = (await ticketResponse.json()).ticket;
+      if (!Array.isArray(ticket?.tags) || typeof ticket.updated_at !== 'string') throw new Error('ticket incompleto');
+      if (ticket.tags.includes(CHILD_AUDITED_TAG)) { alreadyMarked.push(id); continue; }
+      const commentsResponse = await fetch(`${base}/tickets/${id}/comments.json?sort_order=desc&per_page=100`, {
+        headers, signal: AbortSignal.timeout(10000),
+      });
+      if (!commentsResponse.ok) throw new Error(`comentários ${commentsResponse.status}`);
+      if (!hasPublishedChildMacro((await commentsResponse.json()).comments)) { withoutMacro.push(id); continue; }
+      const update = await fetch(ticketUrl, {
+        method: 'PUT', headers, signal: AbortSignal.timeout(20000),
+        body: JSON.stringify({ ticket: {
+          tags: [...ticket.tags, CHILD_AUDITED_TAG], safe_update: true, updated_stamp: ticket.updated_at,
+        } }),
+      });
+      if (!update.ok) throw new Error(`atualização ${update.status}`);
+      const { data: rows, error: readError } = await supabase.from('queue_ticket_catalog')
+        .select('queue_type,ticket_snapshot').eq('ticket_id', id).in('queue_type', ['filhos', 'filhos_invalidos']);
+      if (readError) throw new Error('catálogo não consultado');
+      for (const row of rows || []) {
+        const snapshot = row.ticket_snapshot && typeof row.ticket_snapshot === 'object' ? row.ticket_snapshot : {};
+        const tags = Array.isArray(snapshot.tags) ? snapshot.tags : ticket.tags;
+        const { error } = await supabase.from('queue_ticket_catalog')
+          .update({ ticket_snapshot: { ...snapshot, tags: [...new Set([...tags, CHILD_AUDITED_TAG])] } })
+          .eq('ticket_id', id).eq('queue_type', row.queue_type);
+        if (error) throw new Error('catálogo não atualizado');
+      }
+      updated.push(id);
+    } catch (error) {
+      errors.push(`${id}: ${error instanceof Error ? error.message : 'erro desconhecido'}`);
+    }
+  }
+  return jsonResponse({ success: errors.length === 0 && !truncated, scanned: ticketIds.size,
+    updated, already_marked: alreadyMarked, without_macro: withoutMacro, errors, truncated }, 200);
+}
+
+// Correção pontual: aplica só os campos da macro QA Válido/Invalidado em um
+// chamado filho cujo comentário já foi publicado sem os campos. Não posta
+// comentário nem mexe em tags.
+async function applyChildMacroFields(ticketId: string, verdict: 'conforme' | 'nao_conforme'): Promise<Response> {
+  const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
+  const email = Deno.env.get('ZENDESK_EMAIL');
+  const token = Deno.env.get('ZENDESK_API_TOKEN');
+  if (!subdomain || !email || !token) return jsonResponse({ error: 'Zendesk não configurado.' }, 500);
+  if (!/^\d+$/.test(ticketId)) return jsonResponse({ error: 'ticket_id inválido.' }, 400);
+  const headers = {
+    Authorization: `Basic ${btoa(`${email}/token:${token}`)}`,
+    'Content-Type': 'application/json', Accept: 'application/json',
+  };
+  const ticketUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticketId}.json`;
+  const current = await fetch(ticketUrl, { headers, signal: AbortSignal.timeout(10000) });
+  if (!current.ok) return jsonResponse({ error: `Zendesk não encontrou o ticket (${current.status}).` }, 502);
+  const ticket = (await current.json()).ticket;
+  if (typeof ticket?.updated_at !== 'string') return jsonResponse({ error: 'Versão do ticket indisponível.' }, 502);
+  const commentsResponse = await fetch(`${ticketUrl.replace('.json', '')}/comments.json?sort_order=desc&per_page=100`, {
+    headers, signal: AbortSignal.timeout(10000),
+  });
+  if (!commentsResponse.ok || !hasPublishedChildMacro((await commentsResponse.json()).comments)) {
+    return jsonResponse({ error: 'O ticket não tem a macro de chamado filho publicada; nada foi alterado.' }, 409);
+  }
+  const fields = childMacroCustomFields(verdict);
+  const update = await fetch(ticketUrl, {
+    method: 'PUT', headers, signal: AbortSignal.timeout(20000),
+    body: JSON.stringify({ ticket: { custom_fields: fields, safe_update: true, updated_stamp: ticket.updated_at } }),
+  });
+  if (!update.ok) return jsonResponse({ error: `Zendesk recusou a atualização (${update.status}).` }, 502);
+  const missing = missingCustomFields((await update.json().catch(() => null))?.ticket?.custom_fields, fields);
+  return jsonResponse({ success: missing.length === 0, ticket_id: ticketId, verdict, missing_fields: missing }, 200);
 }
 
 serve(async (req) => {
@@ -316,6 +594,33 @@ serve(async (req) => {
       }
       const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
       return await processAIRetries(workerClient);
+    }
+    if (workerBody?.action === 'reconcile_child_macros') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
+      return await reconcilePublishedChildMacros(workerClient);
+    }
+    if (workerBody?.action === 'apply_child_macro_fields') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      if (!['conforme', 'nao_conforme'].includes(workerBody.verdict)) {
+        return jsonResponse({ error: 'verdict deve ser conforme ou nao_conforme.' }, 400);
+      }
+      return await applyChildMacroFields(String(workerBody.ticket_id ?? ''), workerBody.verdict);
+    }
+    if (workerBody?.action === 'preview_webposto_memberships' && req.headers.get('apikey') === secretApiKey()) {
+      const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
+      const email = Deno.env.get('ZENDESK_EMAIL');
+      const apiToken = Deno.env.get('ZENDESK_API_TOKEN');
+      if (!subdomain || !email || !apiToken) return jsonResponse({ error: 'Zendesk não configurado.' }, 500);
+      const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
+      return await buildWebpostoMembershipPreview(workerClient, subdomain, {
+        Authorization: `Basic ${btoa(`${email}/token:${apiToken}`)}`,
+        Accept: 'application/json',
+      });
     }
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -351,6 +656,13 @@ serve(async (req) => {
     const allowedRoles = ['admin', 'gestor_qualidade', 'qualidade', 'gestor_suporte'];
     if (callerError || !caller?.active || !allowedRoles.includes(caller.role as string)) {
       return jsonResponse({ error: 'Sem permissão para acessar a Central de Filas.' }, 403);
+    }
+    const managerTeamIds: string[] = [];
+    if (caller.role === 'gestor_suporte') {
+      const { data: memberships, error: membershipsError } = await supabase.from('user_teams')
+        .select('team_id').eq('user_id', user.id);
+      if (membershipsError) return jsonResponse({ error: 'Falha ao verificar equipes do gestor.' }, 503);
+      managerTeamIds.push(...(memberships || []).map(item => item.team_id));
     }
 
     const parseResult = RequestSchema.safeParse(workerBody || {});
@@ -418,7 +730,7 @@ serve(async (req) => {
       if (!started) return jsonResponse({ error: 'Este job de IA já está em execução ou não pertence ao usuário.' }, 409);
     }
 
-    // 3. Avaliação com IA: GLM pago primeiro, Gemini pago somente após esgotar GLM.
+    // 3. Avaliação com IA: GLM, Gemma e Gemini pagos, nessa ordem.
     if (action === 'evaluate_ai') {
       return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
         signal => handleEvaluateAI(parseResult.data, supabase, user.id, signal));
@@ -495,6 +807,186 @@ serve(async (req) => {
       Accept: 'application/json',
     };
 
+    if (action === 'publish_child_macro') {
+      const monitoriaId = parseResult.data.monitoria_id;
+      if (!ticket_id || !monitoriaId) {
+        return jsonResponse({ error: 'Ticket e monitoria salva são obrigatórios.' }, 400);
+      }
+      const { data: savedMonitoria, error: monitoriaError } = await supabase.from('monitorias')
+        .select('id,ticket_id,form_id,score,status,active,evaluator_id,evaluator_note')
+        .eq('id', monitoriaId).maybeSingle();
+      if (monitoriaError) return jsonResponse({ error: 'Não foi possível conferir a monitoria salva.' }, 503);
+      const publicationError = childPublicationError(
+        savedMonitoria as ChildPublicationMonitoria | null, ticket_id, user.id, caller.role as string,
+      );
+      if (publicationError) return jsonResponse({ error: publicationError }, 403);
+      const { data: latestMonitoria, error: latestError } = await supabase.from('monitorias')
+        .select('id').eq('ticket_id', ticket_id).eq('active', true)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (latestError) return jsonResponse({ error: 'Não foi possível conferir a versão atual da monitoria.' }, 503);
+      if (latestMonitoria?.id !== monitoriaId) {
+        return jsonResponse({ error: 'Existe uma monitoria mais recente para este ticket. Confira o resultado atual antes do envio.' }, 409);
+      }
+      const child_verdict = 'conforme';
+      const { data: catalog, error: catalogError } = await supabase.from('queue_ticket_catalog')
+        .select('queue_type').eq('ticket_id', ticket_id).in('queue_type', ['filhos', 'filhos_invalidos']).limit(1);
+      if (catalogError) return jsonResponse({ error: 'Não foi possível conferir a origem do chamado filho.' }, 503);
+      if (!catalog?.length) return jsonResponse({ error: 'Chamado filho não encontrado no catálogo das filas.' }, 403);
+      const rate = await supabase.rpc('consume_security_rate_limit', {
+        bucket_key: `helpdesk-queue:publish-child:${user.id}`, max_requests: 5, window_seconds: 60,
+      });
+      if (rate.error || !rate.data) return jsonResponse({ error: 'Aguarde antes de publicar outra macro.' }, 429);
+
+      const ticketUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}.json`;
+      const ticketResponse = await fetch(ticketUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(10000) });
+      if (!ticketResponse.ok) return jsonResponse({ error: `Zendesk não encontrou o ticket (${ticketResponse.status}).` }, 502);
+      const ticketBody = await ticketResponse.json();
+      if (['closed', 'archived'].includes(String(ticketBody.ticket?.status || '').toLowerCase())) {
+        return jsonResponse({ error: 'O ticket está fechado no Zendesk e não aceita comentários.' }, 409);
+      }
+
+      if (!Array.isArray(ticketBody.ticket?.tags)) {
+        return jsonResponse({ error: 'Zendesk não retornou as tags atuais do ticket. Atualize e tente novamente.' }, 502);
+      }
+      const currentTags: string[] = ticketBody.ticket.tags;
+      const syncCatalog = async (confirmedTags?: string[]) => {
+        const { data: catalogRows, error: catalogReadError } = await supabase.from('queue_ticket_catalog')
+          .select('queue_type,ticket_snapshot').eq('ticket_id', ticket_id).in('queue_type', ['filhos', 'filhos_invalidos']);
+        if (catalogReadError) console.error('[helpdesk-queue] Falha ao consultar catálogo após macro:', catalogReadError);
+        for (const row of catalogRows || []) {
+          const snapshot = row.ticket_snapshot && typeof row.ticket_snapshot === 'object' ? row.ticket_snapshot : {};
+          const tags = confirmedTags || (Array.isArray(snapshot.tags) ? snapshot.tags : currentTags);
+          const { error: catalogUpdateError } = await supabase.from('queue_ticket_catalog')
+            .update({ ticket_snapshot: { ...snapshot, tags: [...new Set([...tags, CHILD_AUDITED_TAG])] } })
+            .eq('ticket_id', ticket_id).eq('queue_type', row.queue_type);
+          if (catalogUpdateError) console.error('[helpdesk-queue] Falha ao atualizar catálogo após macro:', catalogUpdateError);
+        }
+      };
+      const updatedStamp = ticketBody.ticket?.updated_at;
+      if (typeof updatedStamp !== 'string' || !updatedStamp) {
+        return jsonResponse({ error: 'Zendesk não retornou a versão atual do ticket. Atualize e tente novamente.' }, 502);
+      }
+
+      // A tag só tira o ticket da view se ambas as views a excluírem. Preserva
+      // todos os filtros existentes e configura a exclusão uma única vez.
+      for (const viewId of currentTags.includes(CHILD_AUDITED_TAG)
+        ? [] : new Set([CHILD_VIEW_ID, INVALID_CHILD_VIEW_ID].filter(Boolean))) {
+        const viewUrl = `https://${subdomain}.zendesk.com/api/v2/views/${viewId}.json`;
+        const viewResponse = await fetch(viewUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(10000) });
+        if (!viewResponse.ok) return jsonResponse({ error: `Não foi possível conferir a view ${viewId} no Zendesk (${viewResponse.status}). Nenhuma macro foi enviada.` }, 502);
+        const viewBody = await viewResponse.json();
+        let conditions: ReturnType<typeof childViewConditionsWithAuditExclusion>;
+        try { conditions = childViewConditionsWithAuditExclusion(viewBody.view); }
+        catch { return jsonResponse({ error: `A view ${viewId} não retornou filtros completos. Nenhuma macro foi enviada.` }, 502); }
+        if (!conditions) continue;
+        const updateResponse = await fetch(viewUrl, {
+          method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(10000),
+          body: JSON.stringify({ view: conditions }),
+        });
+        if (!updateResponse.ok) return jsonResponse({ error: `Não foi possível configurar a saída da view ${viewId} (${updateResponse.status}). Nenhuma macro foi enviada.` }, 502);
+      }
+
+      // Lê os comentários antes de decidir se deve postar. A tag antiga pode
+      // representar um parecer inválido que foi corrigido pela nova monitoria.
+      const commentsResponse = await fetch(
+        `https://${subdomain}.zendesk.com/api/v2/tickets/${ticket_id}/comments.json?sort_order=desc&per_page=100`,
+        { headers: zendeskHeaders, signal: AbortSignal.timeout(10000) },
+      );
+      if (!commentsResponse.ok) return jsonResponse({ error: 'Não foi possível conferir envios anteriores no Zendesk. Nenhuma macro foi enviada.' }, 502);
+      const commentsBody = await commentsResponse.json();
+      const alreadySentForMonitoria = hasPublishedChildMacroForMonitoria(commentsBody.comments, monitoriaId);
+      const correctsPreviousInvalid = hasPublishedInvalidChildMacro(commentsBody.comments);
+      const macroFields = childMacroCustomFields('conforme', hasCriticalChildField(ticketBody.ticket?.custom_fields));
+      if (alreadySentForMonitoria && currentTags.includes(CHILD_AUDITED_TAG)
+        && missingCustomFields(ticketBody.ticket?.custom_fields, macroFields).length === 0) {
+        await syncCatalog();
+        return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: true }, 200);
+      }
+      const comment_text = childPublicationText(savedMonitoria as ChildPublicationMonitoria, correctsPreviousInvalid);
+
+      const verdictLabel = child_verdict === 'conforme' ? 'VÁLIDO' : 'INVÁLIDO';
+      // Espelha as ações da macro "QA | Ticket Válido/Invalidado" do Zendesk.
+      const response = await fetch(ticketUrl, {
+        method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(20000),
+        body: JSON.stringify({ ticket: {
+          ...(alreadySentForMonitoria ? {} : { comment: {
+            body: `[QualidadeWP · Chamado filho ${verdictLabel}]\n\n${comment_text}`,
+            public: false,
+          } }),
+          custom_fields: macroFields,
+          safe_update: true, updated_stamp: updatedStamp,
+        } }),
+      });
+      if (response.status === 409) return jsonResponse({ error: 'O ticket mudou no Zendesk. Atualize a fila e tente novamente.' }, 409);
+      if (!response.ok) return jsonResponse({ error: `Zendesk recusou a macro (${response.status}).` }, 502);
+      let updatedBody = await response.json().catch(() => null);
+      if (missingCustomFields(updatedBody?.ticket?.custom_fields, macroFields).length) {
+        const stamp = updatedBody?.ticket?.updated_at;
+        if (typeof stamp !== 'string' || !stamp) return jsonResponse({ error: 'Comentário enviado, mas os campos da macro não foram confirmados. Confira o Zendesk antes de repetir.' }, 502);
+        const repair = await fetch(ticketUrl, {
+          method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(20000),
+          body: JSON.stringify({ ticket: {
+            custom_fields: macroFields, safe_update: true, updated_stamp: stamp,
+          } }),
+        });
+        updatedBody = repair.ok ? await repair.json().catch(() => null) : null;
+        if (!repair.ok || missingCustomFields(updatedBody?.ticket?.custom_fields, macroFields).length) {
+          return jsonResponse({ error: 'Comentário enviado, mas os campos da macro não foram confirmados. O ticket permanece pendente; confira o Zendesk antes de repetir.' }, 502);
+        }
+      }
+
+      // Só remove o filho da view depois de confirmar os campos da macro.
+      const confirmedStamp = updatedBody?.ticket?.updated_at;
+      const confirmedTags = updatedBody?.ticket?.tags;
+      if (typeof confirmedStamp !== 'string' || !Array.isArray(confirmedTags)) {
+        return jsonResponse({ error: 'Macro enviada, mas não foi possível confirmar as tags atuais do Zendesk.' }, 502);
+      }
+      if (confirmedTags.includes(CHILD_AUDITED_TAG)) {
+        await syncCatalog(confirmedTags);
+        return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: alreadySentForMonitoria }, 200);
+      }
+      const tagResponse = await fetch(ticketUrl, {
+        method: 'PUT', headers: zendeskHeaders, signal: AbortSignal.timeout(20000),
+        body: JSON.stringify({ ticket: {
+          tags: [...new Set([...confirmedTags, CHILD_AUDITED_TAG])],
+          safe_update: true, updated_stamp: confirmedStamp,
+        } }),
+      });
+      const tagged = tagResponse.ok ? await tagResponse.json().catch(() => null) : null;
+      if (!tagResponse.ok || !Array.isArray(tagged?.ticket?.tags) || !tagged.ticket.tags.includes(CHILD_AUDITED_TAG)) {
+        return jsonResponse({ error: 'Macro enviada, mas a tag de saída da view não foi confirmada. Atualize a fila e tente novamente sem criar outro comentário.' }, 502);
+      }
+
+      await syncCatalog(tagged.ticket.tags);
+      return jsonResponse({ success: true, ticket_id, verdict: child_verdict, already_sent: alreadySentForMonitoria }, 200);
+    }
+
+    if (action === 'fetch_draft_statuses') {
+      let ids = parseResult.data.ticket_ids;
+      if (!ids?.length) return jsonResponse({ error: 'IDs de tickets obrigatórios.' }, 400);
+      if (caller.role === 'gestor_suporte') {
+        const { data: catalog, error: catalogError } = await supabase.from('queue_ticket_catalog')
+          .select('ticket_id,ticket_snapshot').in('ticket_id', ids);
+        if (catalogError) return jsonResponse({ error: 'Falha ao verificar equipes dos tickets.' }, 503);
+        const allowedIds = new Set((catalog || []).filter(row =>
+          canReadMatchedTicketTeam(caller.role as string,
+            typeof row.ticket_snapshot?.team_id === 'string' ? row.ticket_snapshot.team_id : null,
+            managerTeamIds)).map(row => row.ticket_id));
+        ids = ids.filter(ticketId => allowedIds.has(ticketId));
+        if (ids.length === 0) return jsonResponse({ statuses: {} }, 200);
+      }
+      const response = await fetch(
+        `https://${subdomain}.zendesk.com/api/v2/tickets/show_many?ids=${ids.join(',')}`,
+        { headers: zendeskHeaders, signal: AbortSignal.timeout(15000) },
+      );
+      if (!response.ok) return jsonResponse({ error: `Zendesk falhou (${response.status}).` }, 502);
+      const body = await response.json();
+      const statuses = Object.fromEntries((body.tickets || [])
+        .filter((ticket: { id: number; status?: string }) => ids.includes(String(ticket.id)))
+        .map((ticket: { id: number; status?: string }) => [String(ticket.id), ticket.status || 'unknown']));
+      return jsonResponse({ statuses }, 200);
+    }
+
     // Consulta somente IDs da primeira página. Não cria agentes, não altera
     // atribuições e não troca os cards que o usuário está analisando.
     if (action === 'check_queue_updates') {
@@ -508,19 +1000,7 @@ serve(async (req) => {
         const sortBy = queue_type === 'proativas' ? 'created' : 'updated';
         url = `https://${subdomain}.zendesk.com/api/v2/views/${viewId}/tickets.json?page[size]=${PAGE_SIZE}&sort_by=${sortBy}&sort_order=desc`;
       } else {
-        let query = 'type:ticket';
-        if (queue_type === 'negativas') {
-          query += ' satisfaction_score:bad satisfaction_score:bad_with_comment';
-          if (VALIDATED_TAG) query += ` -tags:${VALIDATED_TAG}`;
-        } else if (queue_type === 'positivas') {
-          query += ' satisfaction_score:good satisfaction_score:good_with_comment';
-        } else if (queue_type === 'filhos') {
-          query += ' tags:existe_ticket_filho';
-        } else if (queue_type === 'filhos_invalidos') {
-          query += ' tags:ticket_filho_invalido';
-        } else {
-          query += ' satisfaction_score:unoffered';
-        }
+        const query = queueSearchQuery(queue_type, VALIDATED_TAG);
         const sortBy = queue_type === 'proativas' ? 'created_at' : 'updated_at';
         url = `https://${subdomain}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(query)}&sort_by=${sortBy}&sort_order=desc&per_page=${PAGE_SIZE}`;
       }
@@ -528,7 +1008,9 @@ serve(async (req) => {
       if (!response.ok) return jsonResponse({ error: `Zendesk falhou (${response.status}).` }, 502);
       const body = await response.json();
       const rows = viewId ? body.tickets : body.results;
-      let ids: string[] = (Array.isArray(rows) ? rows : []).map((ticket: { id: number }) => String(ticket.id));
+      let ids: string[] = (Array.isArray(rows) ? rows : [])
+        .filter((ticket: any) => ticketCanReceiveEvaluation(ticket, queue_type))
+        .map((ticket: { id: number }) => String(ticket.id));
       if (ids.length > 0) {
         const { data: completed, error: completedError } = await supabase.from('monitorias')
           .select('ticket_id').in('ticket_id', ids);
@@ -543,6 +1025,16 @@ serve(async (req) => {
           ids = ids.filter(id => assignedIds.has(id));
         }
       }
+      if (caller.role === 'gestor_suporte' && ids.length > 0) {
+        const { data: catalog, error: catalogError } = await supabase.from('queue_ticket_catalog')
+          .select('ticket_id,ticket_snapshot').in('ticket_id', ids);
+        if (catalogError) return jsonResponse({ error: 'Falha ao verificar equipes dos tickets.' }, 503);
+        const allowedIds = new Set((catalog || []).filter(row =>
+          canReadMatchedTicketTeam(caller.role as string,
+            typeof row.ticket_snapshot?.team_id === 'string' ? row.ticket_snapshot.team_id : null,
+            managerTeamIds)).map(row => row.ticket_id));
+        ids = ids.filter(ticketId => allowedIds.has(ticketId));
+      }
       return jsonResponse({ ticket_ids: ids }, 200);
     }
 
@@ -550,9 +1042,9 @@ serve(async (req) => {
       if (caller.role === 'admin' || caller.role === 'gestor_qualidade') return true;
       const cutoff = new Date(Date.now() - 15 * 60_000).toISOString();
       const [{ data: direct, error: directError }, { data: children, error: childrenError }] = await Promise.all([
-        supabase.from('queue_ticket_catalog').select('ticket_id,queue_type')
+        supabase.from('queue_ticket_catalog').select('ticket_id,queue_type,ticket_snapshot')
           .eq('ticket_id', requestedId).gte('verified_at', cutoff),
-        supabase.from('queue_ticket_catalog').select('ticket_id,queue_type')
+        supabase.from('queue_ticket_catalog').select('ticket_id,queue_type,ticket_snapshot')
           .eq('parent_ticket_id', requestedId).eq('queue_type', 'filhos').gte('verified_at', cutoff),
       ]);
       if (directError || childrenError) throw new Error('Falha ao verificar o catálogo da fila.');
@@ -565,12 +1057,22 @@ serve(async (req) => {
       if (assignmentsError) throw new Error('Falha ao verificar responsável pelo ticket.');
       return candidates.some(c => {
         const owner = (assignments || []).find(a => a.ticket_id === c.ticket_id && a.queue_type === c.queue_type)?.assigned_to || null;
-        return canReadQueueTicket(caller.role as string, user.id, c.queue_type as QueueType, owner);
+        return canReadQueueTicket(caller.role as string, user.id, c.queue_type as QueueType, owner)
+          && (caller.role !== 'gestor_suporte' || canReadMatchedTicketTeam(caller.role,
+            typeof c.ticket_snapshot?.team_id === 'string' ? c.ticket_snapshot.team_id : null,
+            managerTeamIds));
       });
     };
 
-    // 6. Importa os grupos (equipes) do Zendesk como Teams do QualiTrack —
-    // cria só os que ainda não existem (casados por nome, sem duplicar).
+    // Read-only comparison of Zendesk membership with current CLT/PJ ownership.
+    // The Zendesk token and unmatched Zendesk identities never leave the server.
+    if (action === 'preview_webposto_memberships') {
+      if (caller.role !== 'admin') return jsonResponse({ error: 'Apenas administradores podem consultar os vínculos de agentes.' }, 403);
+      return await buildWebpostoMembershipPreview(supabase, subdomain, zendeskHeaders);
+    }
+
+    // 6. Sincroniza a identidade dos grupos do Zendesk. Equipes gestoras
+    // com o mesmo nome continuam separadas dos grupos de ticket.
     // Restrito a admin: criar Team usa a mesma regra de RLS de
     // TeamsManagement (só admin escreve em public.teams), e aqui a Edge
     // Function usa service role (ignora RLS), então a checagem é manual.
@@ -579,36 +1081,57 @@ serve(async (req) => {
         return jsonResponse({ error: 'Apenas administradores podem sincronizar equipes do Zendesk.' }, 403);
       }
 
-      const groupsResp = await fetch(`https://${subdomain}.zendesk.com/api/v2/groups.json`, { headers: zendeskHeaders });
-      if (!groupsResp.ok) {
-        throw new Error(`Zendesk Groups API falhou (${groupsResp.status}).`);
+      const zendeskGroups: { id: number; name: string }[] = [];
+      const origin = `https://${subdomain}.zendesk.com`;
+      let nextUrl: string | null = `${origin}/api/v2/groups.json?per_page=100`;
+      while (nextUrl) {
+        const groupsResp = await fetch(nextUrl, { headers: zendeskHeaders });
+        if (!groupsResp.ok) throw new Error(`Zendesk Groups API falhou (${groupsResp.status}).`);
+        const groupsData = await groupsResp.json();
+        zendeskGroups.push(...(groupsData.groups || []));
+        const candidate = groupsData.next_page as string | null;
+        if (candidate && new URL(candidate).origin !== origin) throw new Error('Paginação Zendesk inválida.');
+        nextUrl = candidate;
       }
-      const groupsData = await groupsResp.json();
-      const zendeskGroups: { id: number; name: string }[] = groupsData.groups || [];
 
-      const { data: existingTeams } = await supabase.from('teams').select('name');
-      const existingNames = new Set((existingTeams || []).map((t: any) => (t.name as string).trim().toLowerCase()));
+      const { data: existingTeams, error: teamError } = await supabase
+        .from('teams').select('id, name, kind, zendesk_group_id');
+      if (teamError) throw teamError;
+      const knownTeams = existingTeams || [];
 
       const created: string[] = [];
-      const skipped: string[] = [];
-
       for (const g of zendeskGroups) {
         const name = (g.name || '').trim();
         if (!name) continue;
-        if (existingNames.has(name.toLowerCase())) {
-          skipped.push(name);
+        // O antigo "Grupo WebPosto" virou a equipe principal. Não recriar
+        // esse marcador organizacional como grupo de tickets.
+        if (name.toLowerCase() === 'grupo webposto' || name.toLowerCase() === 'webposto') continue;
+        const match = knownTeams.find(t => t.kind === 'group' && t.zendesk_group_id === g.id)
+          || knownTeams.find(t => t.kind === 'group' && !t.zendesk_group_id && t.name.trim().toLowerCase() === name.toLowerCase());
+        if (match) {
+          if (match.zendesk_group_id !== g.id) {
+            const { error: linkError } = await supabase.from('teams')
+              .update({ zendesk_group_id: g.id }).eq('id', match.id);
+            if (linkError) throw linkError;
+            match.zendesk_group_id = g.id;
+          }
+          if (match.name !== name) {
+            const { error: renameError } = await supabase.from('teams')
+              .update({ name }).eq('id', match.id);
+            if (renameError) throw renameError;
+            match.name = name;
+          }
           continue;
         }
-        const { error: insertError } = await supabase.from('teams').insert({ name, active: true });
+        const { error: insertError } = await supabase.from('teams')
+          .insert({ name, active: true, kind: 'group', zendesk_group_id: g.id });
         if (insertError) {
-          console.error(`[helpdesk-queue] Falha ao criar equipe "${name}":`, insertError.message);
-          continue;
+          throw insertError;
         }
-        existingNames.add(name.toLowerCase());
         created.push(name);
       }
 
-      return jsonResponse({ success: true, created, skipped }, 200);
+      return jsonResponse({ success: true, created, pending: [] }, 200);
     }
 
     // 1. Busca de Fila de Chamados — sempre UMA página por chamada (25
@@ -659,19 +1182,7 @@ serve(async (req) => {
           nextCursor = null;
         } else {
           // Busca textual na base do Zendesk usando Search API
-          let searchQuery = 'type:ticket';
-          if (queue_type === 'negativas') {
-            searchQuery += ' satisfaction_score:bad satisfaction_score:bad_with_comment';
-            if (VALIDATED_TAG) searchQuery += ` -tags:${VALIDATED_TAG}`;
-          } else if (queue_type === 'positivas') {
-            searchQuery += ' satisfaction_score:good satisfaction_score:good_with_comment';
-          } else if (queue_type === 'filhos') {
-            searchQuery += ' tags:existe_ticket_filho';
-          } else if (queue_type === 'filhos_invalidos') {
-            searchQuery += ' tags:ticket_filho_invalido';
-          } else {
-            searchQuery += ' satisfaction_score:unoffered';
-          }
+          let searchQuery = queueSearchQuery(queue_type, VALIDATED_TAG);
           try {
             searchQuery += ` ${literalSearchTerm(searchTerm)}`;
           } catch {
@@ -727,17 +1238,17 @@ serve(async (req) => {
           hasMore = !!viewData.meta?.has_more;
           nextCursor = hasMore ? (viewData.links?.next || null) : null;
         } else {
-          let searchQuery = 'type:ticket';
+          let searchQuery = 'type:ticket status<closed';
 
           if (queue_type === 'negativas') {
-            searchQuery += ' satisfaction_score:bad satisfaction_score:bad_with_comment';
+            searchQuery += ' satisfaction:bad';
             // Chamados já apurados/validados pela qualidade (tag aplicada via
             // macro) saem da fila — só filtra se a tag real estiver configurada.
             if (VALIDATED_TAG) {
               searchQuery += ` -tags:${VALIDATED_TAG}`;
             }
           } else if (queue_type === 'positivas') {
-            searchQuery += ' satisfaction_score:good satisfaction_score:good_with_comment';
+            searchQuery += ' satisfaction:good';
           } else if (queue_type === 'filhos') {
             searchQuery += ' tags:existe_ticket_filho';
           } else if (queue_type === 'filhos_invalidos') {
@@ -746,7 +1257,7 @@ serve(async (req) => {
             // Proativas: CSAT nunca respondido pelo cliente (não é "sem
             // filtro nenhum" como antes — isso trazia qualquer ticket
             // solved/closed, sem relação com equidade de monitoria).
-            searchQuery += ' satisfaction_score:unoffered';
+            searchQuery += ' satisfaction:unoffered';
           }
 
           // Sideload de usuários, grupos e organizações para resolver o atendente (nome/e-mail),
@@ -773,10 +1284,13 @@ serve(async (req) => {
         }
       }
 
+      results = results.filter((ticket: any) => ticketCanReceiveEvaluation(ticket, queue_type));
+
       // O ticket embute score/comentário, mas não o instante da resposta.
       // Reaproveita primeiro o snapshot recente e só busca ratings ainda sem
       // horário, em lotes pequenos e com timeout, para preservar a cota da API.
       const satisfactionRatedAt = new Map<string, string>();
+      const solvedAt = new Map<string, string>();
       const resultTicketIds = results.map((ticket: any) => String(ticket.id));
       if (resultTicketIds.length > 0) {
         const { data: cachedTickets, error: cachedTicketsError } = await supabase
@@ -788,8 +1302,38 @@ serve(async (req) => {
         for (const cached of cachedTickets || []) {
           const timestamp = cached.ticket_snapshot?.csat_rated_at;
           if (typeof timestamp === 'string' && timestamp) satisfactionRatedAt.set(cached.ticket_id, timestamp);
+          const current = results.find((ticket: { id: number; status?: string; updated_at?: string }) =>
+            String(ticket.id) === cached.ticket_id);
+          const resolved = cached.ticket_snapshot?.solved_at;
+          if (current?.status === 'solved' && typeof current.updated_at === 'string'
+            && current.updated_at === cached.ticket_snapshot?.zendesk_updated_at
+            && typeof resolved === 'string' && resolved) solvedAt.set(cached.ticket_id, resolved);
         }
       }
+      const solvedLookup = (async () => {
+        const pending = results.filter((ticket: { id: number; status?: string }) =>
+          ticket.status === 'solved' && !solvedAt.has(String(ticket.id)));
+        const deadline = Date.now() + 8_000;
+        for (let offset = 0; offset < pending.length; offset += 5) {
+          const remainingMs = deadline - Date.now();
+          if (remainingMs <= 0) break;
+          await Promise.all(pending.slice(offset, offset + 5).map(async (ticket: { id: number }) => {
+            try {
+              const response = await fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticket.id}/metrics`, {
+                headers: zendeskHeaders, signal: AbortSignal.timeout(remainingMs),
+              });
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const body = await response.json() as {
+                ticket_metric?: { solved_at?: string | null } | Array<{ solved_at?: string | null }>;
+              };
+              const metric = Array.isArray(body.ticket_metric) ? body.ticket_metric[0] : body.ticket_metric;
+              if (metric?.solved_at) solvedAt.set(String(ticket.id), metric.solved_at);
+            } catch (error) {
+              console.warn(`[helpdesk-queue] Não foi possível obter a resolução do ticket ${ticket.id}:`, error);
+            }
+          }));
+        }
+      })();
       const ratedTickets = results.filter((ticket: any) =>
         ticket.satisfaction_rating?.id && ['bad', 'bad_with_comment', 'good', 'good_with_comment'].includes(ticket.satisfaction_rating?.score)
         && !satisfactionRatedAt.has(String(ticket.id))
@@ -812,6 +1356,7 @@ serve(async (req) => {
           }
         }));
       }
+      await solvedLookup;
 
       // Resolve/garante o vínculo do agente no QualiTrack pelo e-mail (chave
       // universal), criando conta provisória quando necessário. Só roda
@@ -834,7 +1379,10 @@ serve(async (req) => {
           assignee?.name,
           assignee?.id,
           'zendesk',
-          group?.name
+          group?.name,
+          undefined,
+          false,
+          group?.id,
         );
 
         let childMacroType: 'nova_demanda' | 'analise_tecnica' | 'apoio_tecnico' | 'produtividade' | undefined;
@@ -879,13 +1427,17 @@ serve(async (req) => {
           csat_status: csatStatus,
           csat_comment: t.satisfaction_rating?.comment || undefined,
           csat_rated_at: satisfactionRatedAt.get(String(t.id)) || undefined,
+          solved_at: solvedAt.get(String(t.id)) || undefined,
           ticket_date: t.created_at || null,
+          zendesk_updated_at: t.updated_at || null,
           status: t.status || 'solved',
           url: `https://${subdomain}.zendesk.com/agent/tickets/${t.id}`,
           agent_name: assignee?.name,
           agent_email: assignee?.email,
           agent_id: agentLink?.id,
           team_id: agentLink?.team_id,
+          ticket_group_team_id: agentLink?.ticket_group_team_id,
+          group_name: group?.name,
           tags: Array.isArray(t.tags) ? t.tags : [],
           organization_id: t.organization_id,
           organization_name: org?.name,
@@ -895,13 +1447,7 @@ serve(async (req) => {
         };
       }));
 
-      const { data: auditedRows, error: auditedError } = mappedTickets.length > 0
-        ? await supabase.from('monitorias').select('ticket_id')
-          .in('ticket_id', mappedTickets.map(t => t.ticket_id))
-        : { data: [], error: null };
-      if (auditedError) throw new Error('Falha ao verificar tickets já avaliados.');
-      const auditedIds = new Set((auditedRows || []).map(row => row.ticket_id));
-      const queueTickets = mappedTickets.filter(t => !auditedIds.has(t.ticket_id));
+      const queueTickets = await withPublicationState(supabase, mappedTickets, queue_type);
 
       if (queueTickets.length > 0) {
         const { error: catalogError } = await supabase.from('queue_ticket_catalog').upsert(
@@ -952,7 +1498,8 @@ serve(async (req) => {
           const allowedIds = new Set((assignedRows || []).map(row => row.ticket_id));
           const merged = new Map(visibleTickets.map(ticket => [ticket.ticket_id, ticket]));
           for (const row of catalogRows || []) {
-            if (allowedIds.has(row.ticket_id) && row.ticket_snapshot && typeof row.ticket_snapshot === 'object') {
+            if (allowedIds.has(row.ticket_id) && row.ticket_snapshot && typeof row.ticket_snapshot === 'object'
+              && ticketCanReceiveEvaluation(row.ticket_snapshot, queue_type)) {
               merged.set(row.ticket_id, row.ticket_snapshot);
             }
           }
@@ -960,15 +1507,16 @@ serve(async (req) => {
           if (mergedIds.length === 0) {
             visibleTickets = [];
           } else {
-            const { data: completedRows, error: completedError } = await supabase.from('monitorias')
-              .select('ticket_id').in('ticket_id', mergedIds);
-            if (completedError) throw new Error('Falha ao validar o estado atual da fila.');
-            const completedIds = new Set((completedRows || []).map(row => row.ticket_id));
-            visibleTickets = [...merged.values()].filter(ticket => !completedIds.has(ticket.ticket_id));
+            visibleTickets = await withPublicationState(supabase, [...merged.values()], queue_type);
           }
         }
       }
 
+      if (caller.role === 'gestor_suporte') {
+        visibleTickets = visibleTickets.filter(ticket =>
+          canReadMatchedTicketTeam(caller.role as string,
+            typeof ticket.team_id === 'string' ? ticket.team_id : null, managerTeamIds));
+      }
       return jsonResponse({ success: true, tickets: visibleTickets, next_cursor: nextCursor, has_more: hasMore }, 200);
     }
 
@@ -1259,9 +1807,11 @@ serve(async (req) => {
 
       const { data: existing } = await supabase
         .from('users')
-        .select('id, name, primary_team_id')
+        .select('id, name, role, primary_team_id')
         .eq('email', assignee.email.trim().toLowerCase())
         .maybeSingle();
+      const groupLink = await resolveZendeskTicketGroup(supabase, group?.id, group?.name);
+      const ticketGroupTeamId = groupLink?.id || null;
 
       return jsonResponse({
         success: true,
@@ -1271,7 +1821,8 @@ serve(async (req) => {
           team_name: group?.name,
           channel: t?.via?.channel,
           existing_id: existing?.id || null,
-          existing_team_id: existing?.primary_team_id || null,
+          existing_team_id: existing?.primary_team_id || groupLink?.team_id || null,
+          ticket_group_team_id: ticketGroupTeamId,
         },
       }, 200);
     }
@@ -1315,29 +1866,44 @@ serve(async (req) => {
       if (assignee?.email) {
         const { data: foundUser } = await supabase
           .from('users')
-          .select('id, name, email, primary_team_id, team_ids, active')
+          .select('id, name, email, role, primary_team_id, active')
           .eq('email', assignee.email.trim().toLowerCase())
           .maybeSingle();
         existingAgent = foundUser;
       }
 
-      let matchedTeamId: string | null = existingAgent?.primary_team_id || existingAgent?.team_ids?.[0] || null;
-      if (!matchedTeamId && group?.name) {
-        const { data: foundTeam } = await supabase
-          .from('teams')
-          .select('id, name')
-          .ilike('name', group.name.trim())
-          .maybeSingle();
-        if (foundTeam) matchedTeamId = foundTeam.id;
+      const groupLink = await resolveZendeskTicketGroup(supabase, group?.id, group?.name);
+      const ticketGroupTeamId = groupLink?.id || null;
+      const matchedTeamId = existingAgent?.primary_team_id || groupLink?.team_id || null;
+      if (caller.role === 'gestor_suporte') {
+        if (!canReadMatchedTicketTeam(caller.role, matchedTeamId, managerTeamIds)) {
+          return jsonResponse({ error: 'Ticket fora das equipes deste gestor.' }, 403);
+        }
       }
 
       const csatScore = t.satisfaction_rating?.score;
       const isNegative = csatScore === 'bad' || csatScore === 'bad_with_comment';
       const isPositive = csatScore === 'good' || csatScore === 'good_with_comment';
-      const queueTypeForCatalog = isNegative ? 'negativas' : isPositive ? 'positivas' : 'proativas';
+      const [knownQueue, childJob, childLog] = await Promise.all([
+        supabase.from('queue_ticket_catalog').select('queue_type').eq('ticket_id', ticket_id)
+          .order('verified_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('ai_evaluation_jobs').select('ticket_id,status,result').eq('ticket_id', ticket_id)
+          .eq('evaluation_type', 'chamado_filho').eq('status', 'completed')
+          .order('started_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('ai_evaluation_logs').select('ticket_id').eq('ticket_id', ticket_id)
+          .eq('evaluation_type', 'chamado_filho').limit(1).maybeSingle(),
+      ]);
+      if (knownQueue.error || childJob.error || childLog.error) {
+        return jsonResponse({ error: 'Não foi possível identificar o tipo de ficha deste ticket.' }, 503);
+      }
+      const isChildTicket = ['filhos', 'filhos_invalidos'].includes(knownQueue.data?.queue_type || '')
+        || Boolean(childJob.data || childLog.data);
+      const queueTypeForCatalog = isChildTicket
+        ? (knownQueue.data?.queue_type === 'filhos_invalidos' ? 'filhos_invalidos' : 'filhos')
+        : isNegative ? 'negativas' : isPositive ? 'positivas' : 'proativas';
 
       try {
-        await supabase.from('queue_ticket_catalog').upsert({
+        if (!(isChildTicket && knownQueue.data)) await supabase.from('queue_ticket_catalog').upsert({
           ticket_id: String(t.id),
           queue_type: queueTypeForCatalog,
           verified_at: new Date().toISOString(),
@@ -1359,6 +1925,8 @@ serve(async (req) => {
         found: true,
         ticket: {
           ticket_id: String(t.id),
+          ticket_kind: isChildTicket ? 'chamado_filho' : 'atendimento',
+          child_evaluation: isChildTicket && childJob.data?.status === 'completed' ? childJob.data.result : null,
           subject: t.subject || '(Sem assunto)',
           description: t.description || '',
           status: t.status,
@@ -1382,12 +1950,13 @@ serve(async (req) => {
           } : null,
           organization_name: org?.name || null,
           group_name: group?.name || null,
+          ticket_group_team_id: ticketGroupTeamId,
           matched_agent: existingAgent ? {
             id: existingAgent.id,
             name: existingAgent.name,
             email: existingAgent.email,
             primary_team_id: existingAgent.primary_team_id,
-            team_ids: existingAgent.team_ids,
+            team_ids: existingAgent.primary_team_id ? [existingAgent.primary_team_id] : [],
           } : null,
           matched_team_id: matchedTeamId,
         }
@@ -1527,24 +2096,6 @@ function validateEvaluationResponse(value: unknown, questionRequired: string[], 
   return parsed;
 }
 
-function validateChildEvaluationResponse(value: unknown): any {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) incompleteResponse('O parecer do chamado filho não é um objeto JSON.');
-  const parsed = value as Record<string, any>;
-  if (!['nova_demanda', 'analise_tecnica', 'apoio_tecnico', 'produtividade', 'desconhecido'].includes(parsed.detected_type)) {
-    incompleteResponse('O parecer não contém detected_type válido.');
-  }
-  if (!['conforme', 'nao_conforme', 'atencao'].includes(parsed.status)) incompleteResponse('O parecer não contém status válido.');
-  if (!Number.isFinite(parsed.score) || parsed.score < 0 || parsed.score > 100) incompleteResponse('O parecer não contém score válido.');
-  if (typeof parsed.summary !== 'string' || !parsed.summary.trim()) incompleteResponse('O parecer não contém summary válido.');
-  if (!Array.isArray(parsed.checks) || parsed.checks.length < 4 || !parsed.checks.every((check: any) =>
-    check && typeof check.rule === 'string' && typeof check.passed === 'boolean' && typeof check.details === 'string')) {
-    incompleteResponse('O parecer não contém os quatro checks obrigatórios completos.');
-  }
-  if (!Array.isArray(parsed.recommendations) || !parsed.recommendations.every((item: unknown) => typeof item === 'string')) {
-    incompleteResponse('O parecer não contém recommendations válido.');
-  }
-  return parsed;
-}
 
 function payloadForRetry(payload: z.infer<typeof RequestSchema>): Record<string, unknown> {
   const { dialogue, ...rest } = payload;
@@ -1569,7 +2120,7 @@ async function cancelledAIJob(supabase: SupabaseClient, jobId: string): Promise<
   return data?.status === 'cancelled';
 }
 
-async function setAIPhase(supabase: SupabaseClient, jobId: string, phase: 'running_glm' | 'fallback_gemini' | 'retry_pending'): Promise<void> {
+async function setAIPhase(supabase: SupabaseClient, jobId: string, phase: 'running_gemma' | 'running_glm' | 'fallback_gemini' | 'retry_pending'): Promise<void> {
   const { data, error } = await supabase.rpc('set_ai_evaluation_phase', { p_job_id: jobId, p_phase: phase });
   if (error) throw new Error('Falha ao atualizar etapa do job de IA.');
   if (!data) throw new AIModelError('Análise interrompida.', 'cancelled', false, 'global');
@@ -2046,7 +2597,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
     const chain = await runAIModelChain({
       targets: aiTargets,
       signal,
-      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, target.model === OPENROUTER_MODEL ? 'running_glm' : 'fallback_gemini'),
+      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, phaseForAIModel(target.model)),
       execute: async (target, _attempt, attemptSignal) => {
         const modelStarted = Date.now();
         const response = await callOpenRouter({
@@ -2173,7 +2724,7 @@ async function handleEvaluateChildTicket(
   callerId?: string,
   signal?: AbortSignal,
 ): Promise<Response> {
-  const { ticket_id, ticket_subject, dialogue, ticket_fields, tags, macro_type } = payload;
+  const { ticket_id, ticket_subject, ticket_status, dialogue, ticket_fields, macro_type } = payload;
 
   if (!ticket_id) {
     return jsonResponse({ error: 'ticket_id é obrigatório para evaluate_child_ticket' }, 400);
@@ -2187,7 +2738,6 @@ async function handleEvaluateChildTicket(
 
   const dialogueText = payload.dialogue_text || sanitizeDialogue(dialogue || []);
   const ticketFieldsText = (ticket_fields || []).map((f: any) => `- ${sanitizeMessageBody(f.title)}: ${sanitizeMessageBody(f.value)}`).join('\n');
-  const tagsText = (tags || []).map((tag: string) => sanitizeMessageBody(tag)).join(', ');
 
   const responseSchema = {
     type: 'object',
@@ -2212,14 +2762,18 @@ async function handleEvaluateChildTicket(
       },
       checks: {
         type: 'array',
+        minItems: 5,
+        maxItems: 5,
         items: {
           type: 'object',
           properties: {
+            question_id: { type: 'string', enum: CHILD_QUESTION_IDS },
+            answer: { type: 'string', enum: ['SIM', 'NAO', 'NA'], description: 'SIM: conforme; NAO: falha comprovada; NA: não aplicável ou evidência insuficiente, explicada em details' },
             rule: { type: 'string', description: 'Nome da regra validada' },
             passed: { type: 'boolean', description: 'Se a regra foi cumprida' },
-            details: { type: 'string', description: 'Justificativa objetiva citando os campos ou tags' }
+            details: { type: 'string', description: 'Justificativa objetiva baseada no assunto, texto e direcionamento' }
           },
-          required: ['rule', 'passed', 'details'],
+          required: ['question_id', 'answer', 'rule', 'passed', 'details'],
           additionalProperties: false
         }
       },
@@ -2239,7 +2793,7 @@ Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base n
 O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentais:
 
 =============================================================================
-1. PRESERVAÇÃO DO ASSUNTO (INALTERABILIDADE - REGRA CRÍTICA):
+1. ASSUNTO DA ABERTURA E ALTERAÇÃO AUTOMÁTICA NA RESOLUÇÃO:
 =============================================================================
 - O assunto do ticket filho DEVE conter o nome da macro padrão homologada.
 - O Zendesk e as automações frequentemente adicionam:
@@ -2255,7 +2809,8 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
   * "Encaminhado para Análise Técnica - Correções" (ou "Encaminhado para Análise de Correções")
   * "Encaminhado para Desenvolvimento"
   * "Apoio Análise Técnica"
-- QUANDO DEVE FALHAR (passed: false): APENAS se o assunto foi totalmente descaracterizado e substituído por texto livre que não contém nenhuma das macros homologadas acima (ex: "Erro no PDV", "Cliente com dúvida", "Impressora travada").
+- EXCEÇÃO OBRIGATÓRIA: A macro de resolvido do Zendesk altera automaticamente o assunto depois da abertura. Se o ticket estiver resolvido e o assunto atual não contiver mais o nome da macro de abertura, considere o quesito do assunto CONFORME (passed: true), salvo se houver evidência clara de que o analista alterou manualmente o assunto antes da resolução. Não reprove nem reduza a nota somente por essa alteração automática. Explique no check que o título atual reflete a macro de resolvido.
+- QUANDO DEVE FALHAR (passed: false): Se não houver indicação de resolução e o assunto da abertura tiver sido descaracterizado manualmente e substituído por texto livre sem nenhuma macro homologada (ex: "Erro no PDV", "Cliente com dúvida", "Impressora travada").
 
 =============================================================================
 2. PRESERVAÇÃO DO TEXTO DA MACRO COM ENRIQUECIMENTO TÉCNICO:
@@ -2280,18 +2835,11 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
   * Direcionamento ao Grupo Mais Pagamentos (ID 50800061906068) / marca dedicada.
 - Check "Direcionamento Correto ('Para')" deve validar essa correspondência com rigor.
 
-=============================================================================
-4. GOVERNANÇA DE TAGS E AUTOMAÇÃO:
-=============================================================================
-- Nova Demanda: Presença obrigatória das tags 'existe_ticket_filho' e 'existe_nova_demanda' (ou 'maispag_nova_demanda').
-- Análise Técnica: Presença de 'transferencia_analise', 'transferencia_analise_fiscal', 'transferencia_analise_contabil', etc.
-- Uso de current_tags (adicionar) e não remoção de tags de auditoria.
-
 DADOS DO CHAMADO FILHO SOB AUDITORIA:
 - Ticket: #${ticket_id}
 - Assunto Registrado: ${sanitizeMessageBody(ticket_subject || 'Não informado')}
+- Status Atual do Ticket: ${sanitizeMessageBody(ticket_status || 'Não informado')}
 - Tipo Sugerido/Macro: ${macro_type || 'Detectar automaticamente'}
-- Tags do Chamado: ${tagsText || '(sem tags)'}
 - Campos do Ticket:
 ${ticketFieldsText || '(nenhum campo extra)'}
 
@@ -2299,10 +2847,15 @@ CONTEÚDO / DESCRIÇÃO / COMENTÁRIOS DO TICKET FILHO:
 ${dialogueText || '(sem texto registrado)'}
 
 CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
-1. rule: "Preservação do Assunto (Inalterabilidade)"
-2. rule: "Preservação do Texto da Macro"
-3. rule: "Direcionamento Correto ('Para')"
-4. rule: "Governança de Tags e Automação"
+1. question_id: "child-subject-preserved", rule: "Assunto da Abertura e Macro de Resolvido" — aplique as regras do assunto acima.
+2. question_id: "child-parent-linked", rule: "Vínculo com o Chamado Pai" — verifique se o chamado pai foi identificado e vinculado corretamente nos dados disponíveis. Não deduza vínculo somente por ser um ticket filho.
+3. question_id: "child-macro-preserved", rule: "Preservação do Texto da Macro" — aplique as regras do texto-base acima.
+4. question_id: "child-macro-enriched", rule: "Detalhamento Técnico Complementar" — avalie separadamente se as informações complementares são suficientes para a equipe de destino, considerando a demanda concreta. Preservar o texto-base não prova suficiência técnica.
+5. question_id: "child-routing-correct", rule: "Direcionamento Correto ('Para')" — aplique as regras de direcionamento acima.
+
+Retorne exatamente um check para cada question_id, com answer e details fundamentados. Use answer "SIM" para conformidade demonstrada, "NAO" para falha demonstrada e "NA" quando não aplicável ou quando os dados não permitirem verificar, explicando expressamente o motivo. Nunca invente evidências ou marque falha por falta de dados. passed deve ser true apenas para answer "SIM", e false para "NAO" ou "NA". Critérios "NA" não reduzem a nota; havendo evidência insuficiente, sinalize status "atencao" se não houver falha comprovada.
+
+Não avalie a presença, ausência ou preservação de tags. Elas são geridas pela automação do Zendesk e não compõem o parecer de qualidade.
 
 Analise os dados reais do ticket contra essas regras operacionais e gere o parecer estritamente no JSON do schema.`;
 
@@ -2319,7 +2872,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
     const chain = await runAIModelChain({
       targets: aiTargets,
       signal,
-      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, target.model === OPENROUTER_MODEL ? 'running_glm' : 'fallback_gemini'),
+      onTargetStart: async target => setAIPhase(supabase, payload.job_id!, phaseForAIModel(target.model)),
       execute: async (target, _attempt, attemptSignal) => {
         const modelStarted = Date.now();
         const response = await callOpenRouter({

@@ -57,3 +57,9 @@ entrypoint = "./functions/public-access/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/helpdesk-queue/index.ts"
+
+[functions.helpdesk-webhook]
+enabled = true
+# Zendesk authenticates with HELPDESK_WEBHOOK_SECRET inside the function.
+verify_jwt = false
+entrypoint = "./functions/helpdesk-webhook/index.ts"

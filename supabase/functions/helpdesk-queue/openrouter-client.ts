@@ -1,7 +1,15 @@
 import { AIModelError, httpAIError, normalizeAIError } from './ai-fallback.ts';
 
+// Cadeia paga em ordem de custo/capacidade para prompts longos de tickets.
 export const OPENROUTER_MODEL = 'z-ai/glm-5.3-flash';
-export const OPENROUTER_FALLBACK_MODEL = 'google/gemini-3.8-flash';
+export const OPENROUTER_FALLBACK_MODELS = [
+  'google/gemma-4-31b-it',
+  'google/gemini-3.8-flash',
+] as const;
+export const OPENROUTER_FALLBACK_MODEL = OPENROUTER_FALLBACK_MODELS[0];
+export const OPENROUTER_ALLOWED_MODELS: readonly string[] = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS];
+// Guarda contra requisição pendurada: só estoura se a IA realmente não retornar.
+export const OPENROUTER_HANG_GUARD_MS = 120_000;
 
 interface OpenRouterResponse {
   id?: string;
@@ -25,7 +33,7 @@ export async function callOpenRouter(options: {
 }): Promise<{ text: string; routedProvider?: string; routerAttempt?: number; requestId?: string; promptTokens?: number; completionTokens?: number; cost?: number }> {
   const { prompt, responseSchema, apiKey, model = OPENROUTER_MODEL, maxTokens, signal, fetcher = fetch } = options;
   if (!apiKey) throw new AIModelError('OPENROUTER_API_KEY não configurada.', 'credentials_error', false, 'provider');
-  if (model !== OPENROUTER_MODEL && model !== OPENROUTER_FALLBACK_MODEL)
+  if (!OPENROUTER_ALLOWED_MODELS.includes(model))
     throw new AIModelError('Modelo não permitido.', 'request_configuration_error', false, 'global');
 
   const response = await fetcher('https://openrouter.ai/api/v1/chat/completions', {
@@ -39,15 +47,18 @@ export async function callOpenRouter(options: {
     },
     body: JSON.stringify({
       model,
-      messages: [{ role: 'user', content: prompt }],
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'wp_quality_evaluation', strict: true, schema: responseSchema },
-      },
+      // O schema no prompt é validado após a resposta pela aplicação.
+      messages: [{
+        role: 'user',
+        content: `${prompt}
+
+Responda SOMENTE com um objeto JSON válido (sem markdown, sem texto extra) que siga exatamente este JSON Schema:
+${JSON.stringify(responseSchema)}`,
+      }],
       ...(maxTokens ? { max_tokens: maxTokens } : {}),
-      provider: { allow_fallbacks: true, require_parameters: true },
+      provider: { allow_fallbacks: true },
     }),
-    signal: signal || AbortSignal.timeout(30000),
+    signal: signal || AbortSignal.timeout(OPENROUTER_HANG_GUARD_MS),
   });
   if (!response.ok) throw await httpAIError('openrouter', model, response);
 

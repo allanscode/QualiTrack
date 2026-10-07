@@ -1,6 +1,6 @@
 # Ficha Técnica — WP Qualidade
 
-> Levantamento funcional iniciado em 22/09/2026 e atualizado em 23/09/2026. Nome exibido na aplicação: **WP Qualidade** (também apresentado como **QualidadeWP**). Esta ficha descreve a experiência e as regras operacionais observadas; não substitui a documentação do código-fonte.
+> Levantamento funcional iniciado em 22/09/2026 e atualizado em 29/09/2026. Nome exibido na aplicação: **WP Qualidade** (também apresentado como **QualidadeWP**). Esta ficha descreve a experiência e as regras operacionais observadas; não substitui a documentação do código-fonte.
 
 ## Resumo executivo
 
@@ -24,7 +24,7 @@ O sistema **não substitui o Zendesk** como origem do atendimento. A distribuiç
 
 | Destino | Link / referência | Alcance da verificação |
 |---|---|---|
-| Aplicação web (Vercel) | [qualitrack.vercel.app](https://qualitrack.vercel.app/) | Respondeu HTTP 200 em 23/09/2026; autenticação e versão ativa não foram conferidas. |
+| Aplicação web (Vercel) | [qwp.qualityautomacao.com.br](https://qwp.qualityautomacao.com.br/) | Domínio de produção; respondeu HTTP 200 em 29/09/2026. Autenticação e versão ativa não foram conferidas. |
 | Painel Vercel | [Dashboard Vercel](https://vercel.com/dashboard) — projeto local `qualitrack`, ID `prj_kPEZmA7hbCxGMdueKYX4dtQ5YNTU` | O vínculo do projeto consta em `.vercel/project.json`; o acesso ao painel exige conta autorizada. Não foi identificado um deep link de equipe confiável. |
 | Projeto Jira | [Board WQ](https://qualityautomacao.atlassian.net/jira/software/projects/WQ/boards/896) e [cartão do projeto WQ-2](https://qualityautomacao.atlassian.net/browse/WQ-2) | Board e cartão confirmados via API do Jira. |
 | Código-fonte | [QualiTrack no GitHub](https://github.com/allanscode/QualiTrack) | Remoto `origin` do repositório local; referência publicada desta ficha: commit `c3af434`. |
@@ -59,6 +59,18 @@ Recursos transversais incluem convite e recuperação de acesso, preferências d
 | **Agente de Atendimento** | Consulta as monitorias de seus atendimentos, toma ciência, aceita ou contesta resultados e acompanha seus prazos. Não vê a Central de Filas nem as Configurações. A identidade do monitor é ocultada na visualização destinada ao suporte. |
 
 A visibilidade dos dados também é limitada pelo perfil e pelas equipes vinculadas; a apresentação da interface não é a única barreira de acesso.
+
+### Equipe principal e visibilidade por perfil (verificação do código em 29/09/2026)
+
+Um usuário pode estar vinculado a várias equipes pela tabela `user_teams`. A coluna `users.primary_team_id` escolhe uma delas como **equipe principal**: ela aparece como badge na lista de usuários e é sugerida como equipe inicial ao selecionar o agente na ficha de monitoria. A equipe efetivamente avaliada fica registrada em `monitorias.team_id` e pode ser outra equipe vinculada ao agente. Assim, é possível marcar “Atendentes PJ” como principal e manter vínculos com “Cliente Final” e “Retaguarda”; o auditor deve conferir a equipe do ticket antes de salvar a monitoria.
+
+| Área | Regra de visibilidade atual |
+|---|---|
+| Monitorias do Supervisor de Atendimento (`gestor_suporte`) | Vê monitorias de **todas as equipes vinculadas** ao seu usuário em `user_teams`, não apenas da equipe principal. |
+| Monitorias do Agente de Atendimento (`suporte`) | Vê **somente as próprias monitorias** (`evaluated_id` igual ao seu usuário), mesmo que colegas pertençam à mesma equipe. A visualização destinada ao agente oculta a identidade do monitor. |
+| Central de Filas para Supervisor de Atendimento | Pode consultar os tickets retornados pelas filas **sem filtro por suas equipes vinculadas** na implementação atual; não recebe permissão para executar auditoria. Esta abrangência é diferente da regra de suas monitorias. |
+
+Fontes desta verificação: [`useMonitoriaData`](src/hooks/useMonitoriaData.ts), [política de leitura e view do suporte](supabase/migrations/20260922000019_anonymous_support_boundary.sql), [filtro da Central de Filas](supabase/functions/helpdesk-queue/index.ts) e [cadastro de usuários](src/components/admin/UsersManagement.tsx).
 
 ## 5. Central de Filas & Triagem
 
@@ -108,11 +120,11 @@ A IA analisa o conteúdo pertinente do atendimento, os critérios da ficha, camp
 
 Manuais podem ser cadastrados a partir de arquivos de texto, PDF ou documento do Word, com visualização do conteúdo extraído. Isso fornece referência normativa à análise, sem transformar o documento em decisão automática.
 
-A cadeia implementada em `c3af434` começa obrigatoriamente com **`z-ai/glm-5.3-flash` pago via OpenRouter**, com até quatro tentativas dentro de uma janela total de 30 segundos. Se falhar ou expirar, passa para **`google/gemini-3.8-flash` pago via OpenRouter**, com até três tentativas. O roteamento do OpenRouter permite failover entre providers do mesmo modelo. Não há modelo `:free`, API direta do Google nem fallback para OpenAI nesse fluxo. A chave `OPENROUTER_API_KEY` é lida apenas pela Edge Function; o frontend não seleciona modelo nem recebe a chave.
+A análise usa apenas **`google/gemma-4-31b-it` pelo OpenRouter**, com até quatro tentativas dentro de uma janela total de 30 segundos. O roteamento do OpenRouter permite alternar providers do mesmo modelo. Não há variante `:free`, API direta do Google nem fallback para outro modelo nesse fluxo. A chave `OPENROUTER_API_KEY` é lida apenas pela Edge Function; o frontend não seleciona modelo nem recebe a chave.
 
-Timeout, 429, falha 5xx, resposta vazia, JSON inválido, erro de parsing ou resposta incompleta podem levar a nova tentativa com backoff. Erros definitivos de credencial/configuração não são repetidos como falhas transitórias. A resposta estruturada é validada antes do salvamento. Se ambos os modelos falharem de forma recuperável, o **mesmo job permanece pendente na fila automática de reprocessamento**; não é perdido nem duplicado. O cancelamento manual é diferente do timeout: marca `cancelled`, interrompe a tentativa quando possível, bloqueia retries e Gemini, descarta resposta tardia e só permite novo job após o worker confirmar a parada. Logs técnicos registram job, modelo, provider quando disponível, tentativa, duração, status, tokens, custo e ID de geração sem registrar a chave ou o prompt integral.
+Timeout, 429, falha 5xx, resposta vazia, JSON inválido, erro de parsing ou resposta incompleta podem levar a nova tentativa com backoff no mesmo modelo. Erros definitivos de credencial/configuração não são repetidos como falhas transitórias. A resposta estruturada é validada antes do salvamento. Se as tentativas falharem de forma recuperável, o **mesmo job permanece pendente na fila automática de reprocessamento**; não é perdido nem duplicado. O cancelamento manual é diferente do timeout: marca `cancelled`, interrompe a tentativa quando possível, bloqueia retries, descarta resposta tardia e só permite novo job após o worker confirmar a parada. Logs técnicos registram job, modelo, provider quando disponível, tentativa, duração, status, tokens, custo e ID de geração sem registrar a chave ou o prompt integral.
 
-**Limite de confirmação:** testes locais cobriram falhas e cancelamento simulados, mas a chamada paga real, o consumo exibido na conta OpenRouter e o failover entre providers reais ainda exigem um ambiente E2E isolado; não são afirmados como comprovados em produção.
+**Limite de confirmação:** uma chamada curta com dados sintéticos confirmou o Gemma 4 e o JSON Schema na conta OpenRouter. O fluxo completo com ticket real e o failover entre providers ainda exigem um ambiente E2E isolado.
 
 ## 10. Leitura e normalização do atendimento
 

@@ -30,7 +30,7 @@ import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChat
 import { formatTicketDateTime, toTicketDateInput } from '../lib/ticketDateTime';
 import { useQueueUpdateNotice } from '../hooks/useQueueUpdateNotice';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
-import { fetchAIDrafts, fetchOpenAIDrafts, saveAIDraft, deleteAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
+import { fetchAIDrafts, fetchOpenAIDrafts, saveAIDraft, deleteAIDraft, removeAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import { claimAIJob, completeAIJob, failAIJob, cancelAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
 import {
   AlertTriangle,
@@ -64,10 +64,11 @@ import {
   ListChecks,
   CheckSquare,
   Eye,
-  Copy,
   MessageSquare,
   UserCog,
-  Hash
+  Trash2,
+  Hash,
+  Send
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -89,11 +90,19 @@ import {
   reassignQueueTicket,
   releaseQueueTicketAssignment,
   startQueueTicketAssignment,
+  startChildTicketNewEvaluation,
 } from '../lib/queueDistribution';
 import { usePresence } from '../providers/PresenceProvider';
 import { matchesAssignedMonitor } from '../lib/queueMonitorFilter';
 import { calculateAIEvaluationScore } from '../utils/aiEvaluationScore';
+import { resolveTicketTeamId } from '../lib/ticketTeam';
 import { canAuditTickets } from '../lib/auditPermissions';
+import { getEvaluationOutcome } from '../lib/domainRules';
+import { childTicketForm } from '../lib/childTicketForm';
+import HelpdeskSendModal from './HelpdeskSendModal';
+import ChildTicketMonitoriaAction from './ChildTicketMonitoriaAction';
+
+const PUBLISHABLE_HELPDESK_STATUSES = new Set(['pendente_revisao', 'concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada']);
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -111,6 +120,8 @@ interface AuditingQueueViewProps {
     form_id?: string;
     evaluated_id?: string;
     team_id?: string;
+    ticket_group_team_id?: string;
+    group_name?: string;
     channel?: string;
     ticket_date?: string;
     satisfaction_result?: string;
@@ -125,6 +136,7 @@ interface AuditingQueueViewProps {
     dialogue?: TicketCommentMessage[];
     queue_assignment?: { ticket_id: string; queue_type: 'negativas' | 'filhos' };
   }) => void;
+  onOpenExistingMonitoria?: (monitoriaId: string) => void;
   onModalStateChange?: (isOpen: boolean) => void;
   activeSubTab?: QueueSubTab;
   onSubTabChange?: (tab: QueueSubTab) => void;
@@ -151,6 +163,7 @@ export default function AuditingQueueView({
   currentUserRole,
   qualityMonitors = [],
   onStartAudit,
+  onOpenExistingMonitoria,
   onModalStateChange,
   activeSubTab = 'negativas',
   onSubTabChange,
@@ -204,6 +217,7 @@ export default function AuditingQueueView({
     filhos_invalidos: {},
   });
   const [assignmentModalTicket, setAssignmentModalTicket] = useState<AuditingQueueTicket | null>(null);
+  const notifiedFallbacksRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -232,6 +246,14 @@ export default function AuditingQueueView({
         const job = payload.new as AIEvaluationJob | undefined;
         if (!job?.ticket_id) return;
         setAIJobs(previous => ({ ...previous, [job.ticket_id]: job }));
+
+        if (job.status === 'running' && (job.phase === 'running_gemma' || job.phase === 'fallback_gemini')) {
+          const toastKey = `ai-fallback-${job.job_id || job.ticket_id}`;
+          if (!notifiedFallbacksRef.current.has(toastKey)) {
+            notifiedFallbacksRef.current.add(toastKey);
+            toast.warning(`Chamado #${job.ticket_id}: o modelo primário oscilou ou falhou. Tentando análise com IA de contingência...`, { id: toastKey, duration: 6000 });
+          }
+        }
         if (job.status === 'completed' && job.evaluation_type === 'chamado_filho' && job.result) {
           setTickets(previous => previous.map(ticket => ticket.ticket_id === job.ticket_id
             ? { ...ticket, child_evaluation: job.result as ChildTicketAiEvaluation } : ticket));
@@ -256,6 +278,7 @@ export default function AuditingQueueView({
 
   const [loading, setLoading] = useState(false);
   const [tickets, setTickets] = useState<AuditingQueueTicket[]>([]);
+  const [helpdeskTicket, setHelpdeskTicket] = useState<AuditingQueueTicket | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedAgentFilter, setSelectedAgentFilter] = useState('');
@@ -332,8 +355,8 @@ export default function AuditingQueueView({
 
   // Estado para auditoria de conformidade de chamados filhos
   const [childPreviewTicket, setChildPreviewTicket] = useState<AuditingQueueTicket | null>(null);
-  const [childAiEvaluation, setChildAiEvaluation] = useState<ChildTicketAiEvaluation | null>(null);
-  const [loadingChildAi, setLoadingChildAi] = useState(false);
+  const childPreviewRef = useRef<AuditingQueueTicket | null>(null);
+  childPreviewRef.current = childPreviewTicket;
   const [validatedChildTickets, setValidatedChildTickets] = useState<Set<string>>(new Set());
 
   // Popup de seleção do manual antes de avaliar com IA: deixa o monitor
@@ -352,7 +375,15 @@ export default function AuditingQueueView({
   // Rascunhos de avaliação da IA já prontos (persistidos), por ticket_id —
   // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
   const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>({});
+  const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
   const [aiJobs, setAIJobs] = useState<Record<string, AIEvaluationJob>>({});
+  const childResultFor = (ticket: AuditingQueueTicket): ChildTicketAiEvaluation | undefined => {
+    const job = aiJobs[ticket.ticket_id];
+    return job?.status === 'completed' && job.evaluation_type === 'chamado_filho' && job.result
+      ? job.result as ChildTicketAiEvaluation : ticket.child_evaluation;
+  };
+  const childAiEvaluation = childPreviewTicket ? childResultFor(childPreviewTicket) : undefined;
+  const loadingChildAi = Boolean(childPreviewTicket && isEvaluatingTicket(childPreviewTicket.ticket_id));
 
   // Filtro de rascunhos feitos pela IA (Todos | Com Rascunho IA | Sem Rascunho IA)
   const [aiDraftFilter, setAiDraftFilter] = useState<'all' | 'with_draft' | 'without_draft'>('all');
@@ -383,42 +414,6 @@ export default function AuditingQueueView({
   // Seleção de tickets individuais para avaliação em lote customizada
   const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
 
-  // Veredito e controle para chamados filhos (Válido / Inválido e cópia da macro)
-  const [childManualVerdict, setChildManualVerdict] = useState<'conforme' | 'nao_conforme' | null>(null);
-  const [copiedChildMacro, setCopiedChildMacro] = useState(false);
-  const [childCustomMacro, setChildCustomMacro] = useState<string>('');
-
-  // Sincroniza o texto gerado da macro do chamado filho sempre que a avaliação da IA ou o veredito mudar
-  useEffect(() => {
-    if (!childPreviewTicket || !childAiEvaluation) {
-      setChildCustomMacro('');
-      return;
-    }
-    const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
-    const isValido = currentVerdict === 'conforme';
-    const typeLabel = childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : 'Escalonamento Interno';
-    const checksSummary = (childAiEvaluation.checks || [])
-      .map(c => `• ${c.rule}: ${c.passed ? 'OK' : 'NÃO CONFORME'} (${c.details})`)
-      .join('\n');
-    const recs = childAiEvaluation.recommendations?.length
-      ? `\n\nRecomendações:\n${childAiEvaluation.recommendations.map(r => `• ${r}`).join('\n')}`
-      : '';
-
-    const defaultMacro = `${isValido ? '✅ Auditoria de Chamado Filho — VÁLIDO' : '❌ Auditoria de Chamado Filho — INVÁLIDO'} (#${childPreviewTicket.ticket_id})
-
-Tipo Identificado: ${typeLabel}
-Assunto: ${childPreviewTicket.subject}
-
-Parecer da Qualidade:
-${childAiEvaluation.summary}
-
-Checklist de Conformidade (POP v1.1):
-${checksSummary}${recs}`;
-
-    setChildCustomMacro(defaultMacro);
-  }, [childPreviewTicket?.ticket_id, childAiEvaluation, childManualVerdict]);
-
-  // Estado para visualização do diálogo / conversa do chamado filho
   const [showChildDialogueModal, setShowChildDialogueModal] = useState(false);
   const [childDialogue, setChildDialogue] = useState<TicketCommentMessage[]>([]);
   const [parentDialogue, setParentDialogue] = useState<TicketCommentMessage[]>([]);
@@ -450,12 +445,12 @@ ${checksSummary}${recs}`;
         const res = await fetchTicketDialogue(childPreviewTicket.ticket_id);
         const normalized = normalizeTicketDialogue(res.comments || [], childPreviewTicket.agent_name, childPreviewTicket.requester_name);
         childPreviewTicket.dialogue = normalized;
-        setChildDialogue(normalized);
+        if (childPreviewRef.current?.ticket_id === childPreviewTicket.ticket_id) setChildDialogue(normalized);
       } catch (e) {
         console.error('Erro ao buscar conversa do chamado filho:', e);
         toast.error('Não foi possível carregar as mensagens do chamado filho.');
       } finally {
-        setLoadingChildDialogue(false);
+        if (childPreviewRef.current?.ticket_id === childPreviewTicket.ticket_id) setLoadingChildDialogue(false);
       }
     } else {
       if (parentDialogue.length > 0) return;
@@ -464,12 +459,12 @@ ${checksSummary}${recs}`;
       try {
         const res = await fetchTicketDialogue(childPreviewTicket.parent_ticket_id);
         const normalized = normalizeTicketDialogue(res.comments || []);
-        setParentDialogue(normalized);
+        if (childPreviewRef.current?.ticket_id === childPreviewTicket.ticket_id) setParentDialogue(normalized);
       } catch (e) {
         console.error('Erro ao buscar conversa do chamado pai:', e);
         toast.error('Não foi possível carregar as mensagens do chamado pai.');
       } finally {
-        setLoadingChildDialogue(false);
+        if (childPreviewRef.current?.ticket_id === childPreviewTicket.ticket_id) setLoadingChildDialogue(false);
       }
     }
   };
@@ -494,17 +489,16 @@ ${checksSummary}${recs}`;
       setChildDialogue([]);
     }
     setParentDialogue([]);
+    setLoadingChildDialogue(false);
     setShowChildDialogueModal(false);
   }, [childPreviewTicket?.ticket_id]);
 
   const handleCloseChildPreview = () => {
-    if (loadingChildAi) return;
+    childPreviewRef.current = null;
     setChildPreviewTicket(null);
-    setChildManualVerdict(null);
     setShowChildDialogueModal(false);
     setChildDialogue([]);
     setParentDialogue([]);
-    setChildCustomMacro('');
   };
 
   // Avaliação em lote: processa todos os tickets da página atual sequencialmente.
@@ -516,6 +510,8 @@ ${checksSummary}${recs}`;
   }
 
   const [batchRunning, setBatchRunning] = useState(false);
+  const [batchMinimized, setBatchMinimized] = useState(false);
+  const batchStartingRef = useRef(false);
   const [batchProgress, setBatchProgress] = useState<{
     done: number;
     queued: number;
@@ -528,12 +524,27 @@ ${checksSummary}${recs}`;
   } | null>(null);
   const batchCancelRef = useRef(false);
 
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (showChildDialogueModal) {
+        setShowChildDialogueModal(false);
+      } else if (childPreviewTicket) {
+        setChildPreviewTicket(null);
+      } else if (batchRunning) {
+        setBatchMinimized(true);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [batchRunning, childPreviewTicket, showChildDialogueModal]);
+
   // Notifica o container pai (App.tsx) se algum modal de prévia está aberto,
   // para que a barra lateral se recolha automaticamente liberando espaço total da tela.
   useEffect(() => {
-    const isAnyModalOpen = Boolean(childPreviewTicket || guidelinePickerTicket || childGuidelineModalTicket || assignmentModalTicket);
+    const isAnyModalOpen = Boolean(childPreviewTicket || guidelinePickerTicket || childGuidelineModalTicket || assignmentModalTicket || helpdeskTicket);
     onModalStateChange?.(isAnyModalOpen);
-  }, [childPreviewTicket, guidelinePickerTicket, childGuidelineModalTicket, assignmentModalTicket, onModalStateChange]);
+  }, [childPreviewTicket, guidelinePickerTicket, childGuidelineModalTicket, assignmentModalTicket, helpdeskTicket, onModalStateChange]);
 
   // Paginação: 25 tickets por página (definido no backend). Views grandes
   // (Proativas chega a ter centenas de CSAT vazio) não cabem numa carga só
@@ -696,12 +707,26 @@ ${checksSummary}${recs}`;
   }, [activeQueue, currentSubTab]);
 
   useEffect(() => {
-    const audited = new Set(monitorias.map(m => m.ticket_id?.trim()).filter(Boolean));
+    const latest = new Map<string, Monitoria>();
+    for (const monitoria of monitorias) {
+      if (monitoria.active === false || !monitoria.ticket_id?.trim()) continue;
+      const ticketId = monitoria.ticket_id.trim();
+      const previous = latest.get(ticketId);
+      if (!previous || monitoria.created_at > previous.created_at) latest.set(ticketId, monitoria);
+    }
     setTickets(previous => {
-      const remaining = previous.filter(ticket => !audited.has(ticket.ticket_id));
-      return remaining.length === previous.length ? previous : remaining;
+      if (activeQueue === 'negativas' || activeQueue === 'filhos' || activeQueue === 'filhos_invalidos') {
+        return previous.map(ticket => {
+          const monitoria = latest.get(ticket.ticket_id);
+          return monitoria ? {
+            ...ticket, already_audited: true, monitoria_id: monitoria.id,
+            monitoria_status: monitoria.status, monitoria_score: monitoria.score,
+          } : ticket;
+        });
+      }
+      return previous.filter(ticket => !latest.has(ticket.ticket_id));
     });
-  }, [monitorias]);
+  }, [monitorias, activeQueue]);
 
   // Carrega os rascunhos de IA já prontos para os tickets da página atual —
   // agora ativo nas filas de Negativas, Positivas e Proativas.
@@ -726,7 +751,21 @@ ${checksSummary}${recs}`;
           stillPending[t.ticket_id] = draft;
         }
       });
-      setDrafts(stillPending);
+      setDrafts(previous => {
+        const next: Record<string, AIEvaluationDraft> = {};
+        tickets.forEach(ticket => {
+          if (ticket.already_audited) return;
+          const loadedDraft = stillPending[ticket.ticket_id];
+          const currentDraft = previous[ticket.ticket_id];
+          if (loadedDraft && currentDraft) {
+            next[ticket.ticket_id] = Date.parse(currentDraft.updated_at) > Date.parse(loadedDraft.updated_at)
+              ? currentDraft : loadedDraft;
+          } else if (loadedDraft || currentDraft) {
+            next[ticket.ticket_id] = loadedDraft || currentDraft;
+          }
+        });
+        return next;
+      });
     });
     return () => { cancelled = true; };
   }, [activeQueue, tickets]);
@@ -748,10 +787,10 @@ ${checksSummary}${recs}`;
     return () => { cancelled = true; };
   }, [activeQueue, ticketIdsKey]);
 
-  // Contagem de negativas não auditadas
+  // Inclui negativas com monitoria que ainda aguardam publicação no Zendesk.
   const pendingNegativesCount = useMemo(() => {
     if (activeQueue === 'negativas') {
-      return tickets.filter(t => !t.already_audited).length;
+      return tickets.length;
     }
     return 0;
   }, [tickets, activeQueue]);
@@ -792,6 +831,12 @@ ${checksSummary}${recs}`;
   // Filtro de busca na lista de tickets com suporte a filtro de rascunhos da IA
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
+      if (isDistributedQueue(activeQueue)) {
+        if (!assignmentsReady[activeQueue]) return false;
+        if (queueAssignments[activeQueue][t.ticket_id]?.status === 'completed'
+          && !(['negativas', 'filhos', 'filhos_invalidos'].includes(activeQueue) && t.already_audited)) return false;
+      }
+
       const matchesSearch = !searchTerm ||
         t.ticket_id.includes(searchTerm) ||
         t.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -840,8 +885,10 @@ ${checksSummary}${recs}`;
   }, [filteredTickets, startIndex, endIndex]);
 
   const evaluableTicketsCount = useMemo(() => {
-    return paginatedTickets.filter(t => !t.saved_ai_draft && !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached).length;
-  }, [paginatedTickets, drafts]);
+    return paginatedTickets.filter(t => !t.saved_ai_draft && !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached
+      && !globalEvaluatingTickets.has(t.ticket_id) && aiJobs[t.ticket_id]?.status !== 'running'
+      && !((activeQueue === 'filhos' || activeQueue === 'filhos_invalidos') && (t.child_evaluation || aiJobs[t.ticket_id]?.status === 'completed'))).length;
+  }, [paginatedTickets, drafts, aiJobs, activeQueue]);
 
   const toggleTicketSelection = (ticketId: string) => {
     setSelectedTicketIds(prev => {
@@ -856,7 +903,7 @@ ${checksSummary}${recs}`;
   };
 
   const handleToggleSelectAllCurrentPage = () => {
-    const pageIds = paginatedTickets.map(t => t.ticket_id);
+    const pageIds = paginatedTickets.filter(ticket => !ticket.already_audited).map(ticket => ticket.ticket_id);
     const allSelected = pageIds.length > 0 && pageIds.every(id => selectedTicketIds.has(id));
 
     setSelectedTicketIds(prev => {
@@ -870,16 +917,21 @@ ${checksSummary}${recs}`;
     });
   };
 
-  const beginAssignedWork = async (ticket: AuditingQueueTicket) => {
+  const beginAssignedWork = async (ticket: AuditingQueueTicket, newChildEvaluation = false) => {
     if (!isDistributedQueue(activeQueue)) return undefined;
     const queueType = activeQueue;
     const assignment = queueAssignments[queueType][ticket.ticket_id];
     const canOverrideAssignment = canManageQueueAssignments(currentUserRole);
     const isResponsibleMonitor = currentUserRole === 'qualidade' && assignment?.assigned_to === currentUserId;
-    if (!assignment || !currentUserId || (!canOverrideAssignment && !isResponsibleMonitor)) {
+    if (!assignment) {
+      throw new Error('Este ticket ainda não foi atribuído a um monitor. Aguarde a distribuição da fila.');
+    }
+    if (!currentUserId || (!canOverrideAssignment && !isResponsibleMonitor)) {
       throw new Error('Somente o monitor responsável pode iniciar a avaliação deste ticket.');
     }
-    const started = await startQueueTicketAssignment(ticket.ticket_id, queueType);
+    const started = newChildEvaluation && queueType === 'filhos'
+      ? await startChildTicketNewEvaluation(ticket.ticket_id)
+      : await startQueueTicketAssignment(ticket.ticket_id, queueType);
     setQueueAssignments(prev => ({
       ...prev,
       [queueType]: { ...prev[queueType], [ticket.ticket_id]: started },
@@ -909,7 +961,7 @@ ${checksSummary}${recs}`;
   // de ficha e manual baseada no tipo de cliente (organização no Zendesk).
   const openGuidelinePicker = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
-    if (ticket.positive_cap_reached) {
+    if (ticket.positive_cap_reached && !drafts[ticket.ticket_id]) {
       toast.warning('Este atendente já atingiu o máximo de 2 avaliações positivas no mês.');
       return;
     }
@@ -966,7 +1018,7 @@ ${checksSummary}${recs}`;
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
       (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
     );
-    const teamId = matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0] || ticket.team_id;
+    const teamId = resolveTicketTeamId(ticket, matchedAgent);
     const agentId = ticket.agent_id || matchedAgent?.id;
     const draftMeta = {
       source_queue: activeQueue,
@@ -1017,6 +1069,10 @@ ${checksSummary}${recs}`;
 
       aiResult.ticket_fields = ticketFields;
       aiResult.dialogue = dialogue;
+
+      if (aiResult.fallback_used) {
+        toast.info(`Chamado #${ticket.ticket_id}: análise concluída via IA de contingência (${aiResult.model || "modelo alternativo"}).`, { id: `ai-completed-fallback-${ticket.ticket_id}`, duration: 5000 });
+      }
 
       setTicketProgress(ticket.ticket_id, 3);
       // A resposta já foi persistida pelo backend; esta curta permanência
@@ -1083,12 +1139,14 @@ ${checksSummary}${recs}`;
   // Avaliação em LOTE — se houver tickets selecionados via checkbox, avalia apenas eles.
   // Caso contrário, avalia todos os tickets elegíveis visíveis da página atual.
   const handleBatchEvaluate = async () => {
-    if (!canAudit) return;
+    if (!canAudit || batchStartingRef.current) return;
+    const isChildBatch = activeQueue === 'filhos' || activeQueue === 'filhos_invalidos';
     const candidateTickets = selectedTicketIds.size > 0
       ? paginatedTickets.filter(t => selectedTicketIds.has(t.ticket_id))
       : paginatedTickets;
 
     const pending = candidateTickets.filter(t => {
+      if (isEvaluatingTicket(t.ticket_id) || (isChildBatch && childResultFor(t))) return false;
       if (t.saved_ai_draft || drafts[t.ticket_id] || t.already_audited || t.positive_cap_reached) return false;
       return true;
     });
@@ -1100,7 +1158,10 @@ ${checksSummary}${recs}`;
       return;
     }
 
-    const allGuidelines = await fetchAIGuidelines().catch(() => [] as AIEvaluationGuideline[]);
+    batchStartingRef.current = true;
+    setBatchRunning(true);
+    setBatchMinimized(false);
+    const allGuidelines = isChildBatch ? [] : await fetchAIGuidelines().catch(() => [] as AIEvaluationGuideline[]);
     const activeGuidelineIds = allGuidelines.filter(g => g.active).map(g => g.id);
 
     const initialItems: BatchItemStatus[] = pending.map(p => ({
@@ -1137,7 +1198,7 @@ ${checksSummary}${recs}`;
         forms,
         allGuidelines
       );
-      if (!autoForm) {
+      if (!autoForm && !isChildBatch) {
         errors++;
         initialItems[i].status = 'error';
         setBatchProgress(prev => prev ? { ...prev, errors, items: [...initialItems] } : null);
@@ -1146,12 +1207,12 @@ ${checksSummary}${recs}`;
       const guidelineIds = autoGuideline ? [autoGuideline.id] : activeGuidelineIds;
       const batchSelectionContext = {
         detected_customer_type: customerType,
-        suggested_form_id: autoForm.id,
-        suggested_form_title: autoForm.title,
+        suggested_form_id: autoForm?.id,
+        suggested_form_title: autoForm?.title,
         suggested_guideline_ids: guidelineIds,
         suggested_guideline_titles: allGuidelines.filter(guideline => guidelineIds.includes(guideline.id)).map(guideline => guideline.title),
-        selected_form_id: autoForm.id,
-        selected_form_title: autoForm.title,
+        selected_form_id: autoForm?.id,
+        selected_form_title: autoForm?.title,
         selected_guideline_ids: guidelineIds,
         selected_guideline_titles: allGuidelines.filter(guideline => guidelineIds.includes(guideline.id)).map(guideline => guideline.title),
         overridden: false,
@@ -1172,7 +1233,9 @@ ${checksSummary}${recs}`;
       });
 
       try {
-        const outcome = await handleEvaluateWithAI(ticket, autoForm, guidelineIds, true, batchSelectionContext);
+        const outcome = isChildBatch
+          ? await handleEvaluateChildTicket(ticket, true)
+          : await handleEvaluateWithAI(ticket, autoForm!, guidelineIds, true, batchSelectionContext);
         if (outcome === 'queued') {
           queued++;
           initialItems[i].status = 'queued';
@@ -1197,6 +1260,7 @@ ${checksSummary}${recs}`;
       } : null);
     }
 
+    batchStartingRef.current = false;
     setBatchRunning(false);
     const cancelled = batchCancelRef.current;
     batchCancelRef.current = false;
@@ -1214,14 +1278,20 @@ ${checksSummary}${recs}`;
   };
 
   // Avaliação de conformidade com IA para tickets filhos
-  const handleEvaluateChildTicket = async (ticket: AuditingQueueTicket) => {
-    if (!canAudit) return;
+  const handleEvaluateChildTicket = async (ticket: AuditingQueueTicket, silent = false): Promise<'completed' | 'queued' | 'cancelled'> => {
+    if (!canAudit) return 'cancelled';
+    if (globalEvaluatingTickets.has(ticket.ticket_id)) return 'queued';
+    globalEvaluatingTickets.add(ticket.ticket_id);
+    notifyGlobalEvaluating();
+    if (!silent) setChildPreviewTicket(ticket);
     let jobId: string;
     try {
       const job = await claimAIJob(ticket.ticket_id, 'chamado_filho', currentUserId);
       if (!job.claimed) {
         toast.info(`O chamado filho #${ticket.ticket_id} já está em análise com IA.`);
-        return;
+        globalEvaluatingTickets.delete(ticket.ticket_id);
+        notifyGlobalEvaluating();
+        return 'queued';
       }
       jobId = job.jobId;
       setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
@@ -1230,65 +1300,97 @@ ${checksSummary}${recs}`;
       } }));
     } catch (error) {
       setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'Não foi possível iniciar esta análise.' }));
-      return;
+      globalEvaluatingTickets.delete(ticket.ticket_id);
+      notifyGlobalEvaluating();
+      if (silent) throw error;
+      return 'cancelled';
     }
-    setChildPreviewTicket(ticket);
-    setLoadingChildAi(true);
-    setChildAiEvaluation(ticket.child_evaluation || null);
     setTicketProgress(ticket.ticket_id, 1);
     setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: '' }));
 
     try {
-      const { comments, ticketFields, tags } = await fetchTicketDialogue(ticket.ticket_id);
-      if (cancelledAIJobIds.has(jobId)) return;
+      const { comments, ticketFields } = await fetchTicketDialogue(ticket.ticket_id);
+      if (cancelledAIJobIds.has(jobId)) return 'cancelled';
       const normalizedComments = normalizeTicketDialogue(comments || [], ticket.agent_name, ticket.requester_name);
       ticket.dialogue = normalizedComments;
-      setChildDialogue(normalizedComments);
+      if (childPreviewRef.current?.ticket_id === ticket.ticket_id) setChildDialogue(normalizedComments);
+      ticket.ticket_fields = ticketFields;
       setTicketProgress(ticket.ticket_id, 2);
 
       const result = await evaluateChildTicketWithAI(
         ticket.ticket_id,
         ticket.subject,
         comments,
-        tags || ticket.tags,
         ticketFields,
         ticket.child_macro_type,
-        jobId
+        jobId,
+        ticket.status
       );
-      if (cancelledAIJobIds.has(jobId)) return;
+      if (cancelledAIJobIds.has(jobId)) return 'cancelled';
 
       if ('queued' in result) {
         setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'Pendente · Nova tentativa automática agendada.' }));
-        return;
+        return 'queued';
       }
 
       setTicketProgress(ticket.ticket_id, 3);
       await new Promise(resolve => setTimeout(resolve, 350));
+      if (cancelledAIJobIds.has(jobId)) return 'cancelled';
       if (isMockMode) await completeAIJob(ticket.ticket_id, jobId, result);
       setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
         ...previous[ticket.ticket_id], status: 'completed', result,
       } }));
-      setChildAiEvaluation(result);
+      setTickets(previous => previous.map(item => item.ticket_id === ticket.ticket_id
+        ? { ...item, child_evaluation: result, dialogue: normalizedComments, ticket_fields: ticketFields } : item));
       ticket.child_evaluation = result;
+      if (result.fallback_used) {
+        toast.info(`Chamado filho #${ticket.ticket_id}: análise concluída via IA de contingência (${result.model || "modelo alternativo"}).`, { id: `ai-completed-fallback-${ticket.ticket_id}`, duration: 5000 });
+      }
       setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: '' }));
-    } catch (err: any) {
-      if (cancelledAIJobIds.has(jobId)) return;
+      return 'completed';
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Falha na análise';
+      if (cancelledAIJobIds.has(jobId)) return 'cancelled';
       console.error('Erro ao auditar chamado filho:', err);
-      await failAIJob(ticket.ticket_id, jobId, err?.message || 'Falha na análise').catch(jobError => {
+      await failAIJob(ticket.ticket_id, jobId, message).catch(jobError => {
         console.error('[AuditingQueue] Falha ao registrar erro do job de IA:', jobError);
       });
-      if (isMockMode) setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
+      setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
         ...previous[ticket.ticket_id], status: 'failed',
       } }));
       setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'A análise falhou. Tente novamente neste ticket.' }));
+      if (silent) throw err;
+      return 'cancelled';
     } finally {
-      setLoadingChildAi(false);
+      globalEvaluatingTickets.delete(ticket.ticket_id);
+      notifyGlobalEvaluating();
       clearTicketProgress(ticket.ticket_id);
     }
   };
 
   // Abre a ficha de monitoria com o rascunho da IA já salvo pra esse
   // ticket — com o form_id bloqueado para alteração manual.
+  const handleRemoveDraft = async (ticket: AuditingQueueTicket) => {
+    if (!canAudit || deletingDraftId || !drafts[ticket.ticket_id]) return;
+    if (!window.confirm(`Excluir o rascunho de IA do ticket #${ticket.ticket_id}? Esta ação não exclui o ticket nem uma monitoria salva.`)) return;
+    setDeletingDraftId(ticket.ticket_id);
+    try {
+      const deleted = await removeAIDraft(ticket.ticket_id);
+      if (!deleted) throw new Error('Rascunho não encontrado ou sem permissão para excluir.');
+      setDrafts(previous => {
+        const next = { ...previous };
+        delete next[ticket.ticket_id];
+        return next;
+      });
+      setTickets(previous => previous.filter(item => item.ticket_id !== ticket.ticket_id || !item.saved_ai_draft));
+      toast.success(`Rascunho de IA do ticket #${ticket.ticket_id} excluído.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível excluir o rascunho.');
+    } finally {
+      setDeletingDraftId(null);
+    }
+  };
+
   const handleLaunchMonitoria = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
     const draft = drafts[ticket.ticket_id];
@@ -1315,7 +1417,12 @@ ${checksSummary}${recs}`;
       ticket_subject: ticket.subject,
       form_id: draft.form_id,
       evaluated_id: draft.agent_id,
-      team_id: draft.team_id,
+      team_id: resolveTicketTeamId(
+        { ticket_group_team_id: ticket.ticket_group_team_id, team_id: draft.team_id },
+        agents.find(agent => agent.id === draft.agent_id),
+      ),
+      ticket_group_team_id: ticket.ticket_group_team_id,
+      group_name: ticket.group_name,
       channel: normalizeChannel(draft.channel),
       ticket_date: toTicketDateInput(ticket.ticket_date),
       satisfaction_result: csatStatusToSatisfactionResult(ticket.csat_status),
@@ -1326,7 +1433,6 @@ ${checksSummary}${recs}`;
       isAiLocked: true,
       customerType,
       specializedTeamLabel: specInfo.label || undefined,
-      child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
       dialogue: draft.result?.dialogue || ticket.dialogue,
       queue_assignment: queueAssignment,
     });
@@ -1355,7 +1461,9 @@ ${checksSummary}${recs}`;
       ticket_subject: ticket.subject,
       form_id: autoForm?.id,
       evaluated_id: ticket.agent_id || matchedAgent?.id,
-      team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
+      team_id: resolveTicketTeamId(ticket, matchedAgent),
+      ticket_group_team_id: ticket.ticket_group_team_id,
+      group_name: ticket.group_name,
       channel: normalizeChannel(ticket.channel),
       // O Zendesk devolve o timestamp de criação. O datepicker recebe apenas
       // yyyy-MM-dd no fuso de São Paulo para não reinterpretar o dia pela timezone do navegador.
@@ -1392,6 +1500,7 @@ ${checksSummary}${recs}`;
     return (
       <span className="inline-flex items-center gap-1.5 flex-wrap">
         {ticket.saved_ai_draft && <Badge variant="warning" size="xs">{ticket.draft_metadata_incomplete ? 'Rascunho recuperado · conferir dados' : 'Rascunho IA salvo'}</Badge>}
+        <Badge variant="neutral" size="xs">Ficha: {selectedForm?.title || 'não encontrada'}</Badge>
         <span
           title="Nota calculada pelas respostas da IA usando os pesos da ficha"
           className="inline-flex items-center px-2.5 py-1 rounded-lg bg-functional-success text-functional-success text-xs font-mono font-black flex-shrink-0"
@@ -1477,6 +1586,23 @@ ${checksSummary}${recs}`;
     );
   };
 
+  const renderTicketResolution = (ticket: AuditingQueueTicket) => {
+    const resolvedAt = ticket.status?.toLowerCase() === 'solved'
+      ? formatTicketDateTime(ticket.solved_at)
+      : '—';
+    const label = resolvedAt !== '—'
+      ? `Resolvido: ${resolvedAt}`
+      : ticket.status?.toLowerCase() === 'solved' ? 'Resolução indisponível' : 'Ainda não resolvido';
+    const details = [`Criado: ${formatTicketDateTime(ticket.ticket_date)}`];
+    if (ticket.csat_rated_at) details.push(`Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}`);
+    return (
+      <span className="flex items-center gap-1" title={details.join(' | ')}>
+        <Clock className="w-3 h-3 opacity-60" />
+        {label}
+      </span>
+    );
+  };
+
   // Selo "Atribuído a" da distribuição 1-para-1, visível só para Supervisor
   // de Qualidade e Admin (o monitor comum já só enxerga os seus na lista).
   const renderAssignedMonitorBadge = (ticket: AuditingQueueTicket) => {
@@ -1514,6 +1640,40 @@ ${checksSummary}${recs}`;
   // diretamente o formulário oficial no fluxo das 4 etapas (1-2-3-4) para ir batendo os dados.
   // Se ainda não avaliado, o botão principal é "Avaliar com IA" (índigo/roxo) ou "Auditar Manual".
   const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
+    if (ticket.already_audited) {
+      if (activeQueue === 'filhos' || activeQueue === 'filhos_invalidos') {
+        const valid = ticket.monitoria_status === 'concluida' && (ticket.monitoria_score ?? 0) >= 75;
+        return <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={valid ? 'warning' : 'neutral'} size="xs">
+            {valid ? 'Macro do filho pendente' : 'Monitoria do filho em revisão'}
+          </Badge>
+          {ticket.monitoria_id && onOpenExistingMonitoria &&
+            <Button size="sm" variant="outline" onClick={() => onOpenExistingMonitoria(ticket.monitoria_id!)}>
+              <Eye className="w-3.5 h-3.5" /> Abrir monitoria
+            </Button>}
+        </div>;
+      }
+      const publishable = Boolean(ticket.monitoria_status && PUBLISHABLE_HELPDESK_STATUSES.has(ticket.monitoria_status));
+      const underReview = ticket.monitoria_status === 'pendente_revisao';
+      const owner = monitorias.find(monitoria => monitoria.id === ticket.monitoria_id)?.evaluator_id;
+      const mayPublish = currentUserRole === 'admin' || currentUserRole === 'gestor_qualidade'
+        || (currentUserRole === 'qualidade' && owner === currentUserId);
+      return <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={publishable ? 'warning' : 'neutral'} size="xs">
+          {publishable ? `${underReview ? 'Em revisão' : 'Macro pendente'} · ${typeof ticket.monitoria_score === 'number' && Number.isFinite(ticket.monitoria_score)
+            ? getEvaluationOutcome(ticket.monitoria_score) === 'positiva' ? 'Válido' : 'Invalidado'
+            : 'Nota pendente'}` : 'Aguardando decisão da contestação'}
+        </Badge>
+        {publishable && mayPublish && ticket.monitoria_id && typeof ticket.monitoria_score === 'number' && Number.isFinite(ticket.monitoria_score) &&
+          <Button size="sm" variant="primary" onClick={() => setHelpdeskTicket(ticket)}>
+            <Send className="w-3.5 h-3.5" /> Revisar macro
+          </Button>}
+        {ticket.monitoria_id && onOpenExistingMonitoria &&
+          <Button size="sm" variant="outline" onClick={() => onOpenExistingMonitoria(ticket.monitoria_id!)}>
+            <Eye className="w-3.5 h-3.5" /> Abrir monitoria
+          </Button>}
+      </div>;
+    }
     if (!canAudit) return null;
     const isEvaluating = isEvaluatingTicket(ticket.ticket_id);
 
@@ -1528,7 +1688,7 @@ ${checksSummary}${recs}`;
             disabled={true}
             className="flex min-w-0 items-center justify-center gap-1.5 bg-indigo-600/80 text-white font-semibold shadow-xs cursor-not-allowed"
           >
-            <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} />
+            <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
           </Button>
           {renderCancelAIAction(ticket.ticket_id)}
         </div>
@@ -1536,6 +1696,26 @@ ${checksSummary}${recs}`;
     }
 
     const draft = drafts[ticket.ticket_id];
+
+    if (isDistributedQueue(activeQueue) && !queueAssignments[activeQueue][ticket.ticket_id]) {
+      return (
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          <Badge variant="warning" size="xs">Aguardando atribuição a um monitor</Badge>
+          {draft && canManageQueueAssignments(currentUserRole) && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={deletingDraftId === ticket.ticket_id}
+              onClick={() => void handleRemoveDraft(ticket)}
+              aria-label={`Excluir rascunho de IA do ticket #${ticket.ticket_id}`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Excluir rascunho</span>
+            </Button>
+          )}
+        </div>
+      );
+    }
 
     if (ticket.saved_ai_draft && !draft) {
       return <Badge variant="warning" size="xs">Carregando rascunho IA...</Badge>;
@@ -1554,14 +1734,26 @@ ${checksSummary}${recs}`;
             <CheckSquare className="w-3.5 h-3.5" />
             <span>Verificar Avaliação</span>
           </Button>
-          {!ticket.positive_cap_reached && !ticket.saved_ai_draft && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={deletingDraftId === ticket.ticket_id}
+            onClick={() => void handleRemoveDraft(ticket)}
+            className="flex items-center gap-1.5 border-functional-error/30 text-functional-error hover:bg-functional-error/10"
+            title="Excluir somente o rascunho de IA deste ticket"
+            aria-label={`Excluir rascunho de IA do ticket #${ticket.ticket_id}`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Excluir rascunho</span>
+          </Button>
+          {!ticket.positive_cap_reached && (
             <Button
               size="sm"
               variant="outline"
               disabled={isEvaluating}
               onClick={() => openGuidelinePicker(ticket)}
               className="flex items-center gap-1 border-amber-400 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-[11px] font-medium"
-              title="Roda a IA de novo e sobrescreve este rascunho"
+              title="Escolher outra ficha ou manual e gerar um novo rascunho"
             >
               <Bot className={`w-3 h-3 ${isEvaluating ? 'animate-spin' : ''}`} />
               <span>Reavaliar</span>
@@ -1644,9 +1836,14 @@ ${checksSummary}${recs}`;
 
   const handleStartChildAudit = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
+    const selectedChildForm = childTicketForm(forms);
+    if (!selectedChildForm) {
+      toast.error('A ficha padrão de tickets filhos não está disponível. Avise a Gestão da Qualidade.');
+      return;
+    }
     let queueAssignment;
     try {
-      queueAssignment = await beginAssignedWork(ticket);
+      queueAssignment = await beginAssignedWork(ticket, Boolean(ticket.already_audited || ticket.monitoria_id));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Não foi possível abrir esta avaliação.');
       return;
@@ -1655,22 +1852,21 @@ ${checksSummary}${recs}`;
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
       (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
     );
-    const customerType = resolveCustomerType(ticket.tags, ticket.organization_tags);
-    const { form: autoForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
-
+    handleCloseChildPreview();
     onStartAudit({
       ticket_id: ticket.ticket_id,
       ticket_subject: ticket.subject,
-      form_id: autoForm?.id,
+      form_id: selectedChildForm.id,
       evaluated_id: ticket.agent_id || matchedAgent?.id,
-      team_id: ticket.team_id || matchedAgent?.primary_team_id || matchedAgent?.team_ids?.[0],
+      team_id: resolveTicketTeamId(ticket, matchedAgent),
+      ticket_group_team_id: ticket.ticket_group_team_id,
+      group_name: ticket.group_name,
       channel: normalizeChannel(ticket.channel),
       ticket_date: toTicketDateInput(ticket.ticket_date),
       satisfaction_result: 'Sem pesquisa',
       isAiLocked: true,
-      customerType,
       ticket_fields: ticket.ticket_fields,
-      child_evaluation: ticket.child_evaluation || childAiEvaluation || undefined,
+      child_evaluation: childResultFor(ticket),
       dialogue: ticket.dialogue,
       queue_assignment: queueAssignment,
     });
@@ -1678,7 +1874,7 @@ ${checksSummary}${recs}`;
 
   // Controles de paginação com seletor de itens por página (5, 10, 15, 20) — padrão 10
   const renderPagination = () => {
-    if (totalItems === 0 && !(selectedMonitorFilter && isDistributedQueue(activeQueue) && (hasMore || prevCursors.length > 0))) return null;
+    if (totalItems === 0 && !hasMore && prevCursors.length === 0) return null;
 
     const canGoPrev = validCurrentPage > 1 || prevCursors.length > 0;
     const canGoNext = validCurrentPage < totalLocalPages || hasMore;
@@ -1700,7 +1896,7 @@ ${checksSummary}${recs}`;
     };
 
     return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-surface-border mt-4">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 py-3 border border-surface-border rounded-xl bg-surface-card shadow-premium-sm">
         <div className="flex flex-wrap items-center gap-3 text-xs text-brand-muted">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-medium text-brand-muted">Exibir:</span>
@@ -1787,7 +1983,9 @@ ${checksSummary}${recs}`;
   );
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className={currentSubTab === 'monitores'
+      ? 'space-y-6 animate-fade-in'
+      : 'flex min-h-[calc(100dvh-11rem)] md:min-h-[calc(100dvh-8.5rem)] flex-col gap-6 animate-fade-in'}>
       {currentSubTab === 'monitores' ? (
         !isSupervisorView ? (
           <Card className="p-8 text-center border-amber-500/20 bg-amber-500/5 rounded-2xl">
@@ -1987,7 +2185,7 @@ ${checksSummary}${recs}`;
         <>
 
       {/* 2. Barra Superior da Fila — Toolbar Compacta e Coesa */}
-      <div className="relative flex flex-wrap md:flex-nowrap items-center gap-2 p-2 rounded-xl bg-surface-card/60 backdrop-blur-sm border border-surface-border/60 transition-all">
+      <div className="sticky top-0 z-30 flex flex-wrap md:flex-nowrap items-center gap-2 p-2 rounded-xl bg-surface-card/95 backdrop-blur-md border border-surface-border shadow-premium-sm transition-all">
         {/* Campo de Busca (elemento de maior largura) */}
         <div className="relative flex-1 min-w-[200px] max-w-none sm:max-w-md">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
@@ -2114,20 +2312,20 @@ ${checksSummary}${recs}`;
         {/* Ações da Toolbar */}
         <div className="flex items-center gap-2 shrink-0 ml-auto md:ml-0">
           {/* Seleção de tickets da página atual */}
-          {canAudit && paginatedTickets.length > 0 && (
+          {canAudit && paginatedTickets.some(ticket => !ticket.already_audited) && (
             <label
               className="h-9 inline-flex items-center gap-1.5 px-2.5 rounded-lg border border-surface-border bg-surface-subtle/40 hover:bg-surface-subtle text-xs font-medium text-brand-muted hover:text-brand-primary cursor-pointer transition-colors shrink-0 select-none"
-              title={paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar todos os chamados da página' : 'Selecionar todos os chamados da página'}
+              title={paginatedTickets.filter(t => !t.already_audited).every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar todos os chamados da página' : 'Selecionar todos os chamados da página'}
             >
               <input
                 type="checkbox"
-                checked={paginatedTickets.length > 0 && paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id))}
+                checked={paginatedTickets.filter(t => !t.already_audited).every(t => selectedTicketIds.has(t.ticket_id))}
                 onChange={handleToggleSelectAllCurrentPage}
                 disabled={batchRunning}
                 className="w-3.5 h-3.5 rounded text-brand-highlight focus:ring-brand-highlight border-surface-border cursor-pointer"
               />
               <span className="hidden sm:inline">
-                {paginatedTickets.every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar' : 'Selecionar'}
+                {paginatedTickets.filter(t => !t.already_audited).every(t => selectedTicketIds.has(t.ticket_id)) ? 'Desmarcar' : 'Selecionar'}
               </span>
               {selectedTicketIds.size > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full bg-brand-highlight text-white text-[10px] font-bold">
@@ -2138,7 +2336,7 @@ ${checksSummary}${recs}`;
           )}
 
           {/* Botão Avaliar Página / Selecionados */}
-          {canAudit && (activeQueue === 'positivas' || activeQueue === 'proativas' || activeQueue === 'negativas') && (
+          {canAudit && (activeQueue === 'positivas' || activeQueue === 'proativas' || activeQueue === 'negativas' || activeQueue === 'filhos' || activeQueue === 'filhos_invalidos') && (
             <button
               type="button"
               onClick={handleBatchEvaluate}
@@ -2204,7 +2402,7 @@ ${checksSummary}${recs}`;
 
       {/* Conteúdo da Fila: NEGATIVAS */}
       {activeQueue === 'negativas' && (
-        <div className="space-y-4">
+        <div className="flex flex-1 flex-col gap-4">
           {loading && paginatedTickets.length === 0 ? (
             renderSkeletonGrid()
           ) : paginatedTickets.length === 0 ? (
@@ -2222,9 +2420,9 @@ ${checksSummary}${recs}`;
               {/* Lista de Tickets Negativos */}
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
             {paginatedTickets.map(ticket => (
-              <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
+              <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
-                    {canAudit ? <input
+                    {canAudit && !ticket.already_audited ? <input
                       type="checkbox"
                       checked={selectedTicketIds.has(ticket.ticket_id)}
                       onChange={() => toggleTicketSelection(ticket.ticket_id)}
@@ -2251,11 +2449,7 @@ ${checksSummary}${recs}`;
                           <ExternalLink className="w-2.5 h-2.5" />
                           <span>Zendesk</span>
                         </a>
-                        {ticket.already_audited && (
-                          <Badge variant="success" size="xs" className="text-[9px]">
-                            Auditado
-                          </Badge>
-                        )}
+                        {ticket.already_audited && <Badge variant="warning" size="xs" className="text-[9px]">Macro pendente</Badge>}
                       </div>
                       <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
                         {ticket.subject}
@@ -2270,25 +2464,17 @@ ${checksSummary}${recs}`;
                   </div>
                 </div>
 
-                {ticket.csat_comment && (
-                  <div className="p-2.5 rounded-xl bg-functional-error/5 border border-functional-error/15 text-[11px] font-medium text-brand-primary italic">
-                    "{ticket.csat_comment}"
-                  </div>
-                )}
+                <div aria-label="Comentário de satisfação do cliente" className="p-2.5 rounded-xl bg-functional-error/5 border border-functional-error/15 text-[11px] font-medium text-brand-primary italic">
+                  "{ticket.csat_comment?.trim() || ''}"
+                </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                  <div className="flex items-center gap-3">
+                <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                     {renderAgentInfo(ticket)}
-                    <span
-                      className="flex items-center gap-1"
-                      title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
-                    >
-                      <Clock className="w-3 h-3 opacity-60" />
-                      {formatTicketDateTime(ticket.ticket_date)}
-                    </span>
+                    {renderTicketResolution(ticket)}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {renderAiActions(ticket, 'action-primary')}
                   </div>
                 </div>
@@ -2303,7 +2489,7 @@ ${checksSummary}${recs}`;
 
       {/* Conteúdo da Fila: PROATIVAS (Amostragem Justa) */}
       {activeQueue === 'proativas' && (
-        <div className="space-y-4">
+        <div className="flex flex-1 flex-col gap-4">
           {loading && paginatedTickets.length === 0 ? (
             renderSkeletonGrid()
           ) : paginatedTickets.length === 0 ? (
@@ -2318,7 +2504,7 @@ ${checksSummary}${recs}`;
                 {paginatedTickets.map(ticket => {
                   const isPriority = ticket.agent_email && topPriorityEmails.has(ticket.agent_email.toLowerCase());
                   return (
-                    <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-info/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-info/40 border-info/50 bg-info/3' : ''}`}>
+                    <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-info/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-info/40 border-info/50 bg-info/3' : ''}`}>
                       <div className="flex items-start justify-between gap-2.5">
                         <div className="flex items-start gap-2.5 flex-1 min-w-0">
                           {canAudit ? <input
@@ -2372,19 +2558,13 @@ ${checksSummary}${recs}`;
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                        <div className="flex items-center gap-3">
+                      <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                           {renderAgentInfo(ticket)}
-                          <span
-                            className="flex items-center gap-1"
-                            title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
-                          >
-                            <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.ticket_date)}
-                          </span>
+                          {renderTicketResolution(ticket)}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {renderAiActions(ticket, 'bg-gradient-to-r from-info to-info/80')}
                         </div>
                       </div>
@@ -2395,12 +2575,13 @@ ${checksSummary}${recs}`;
               {renderPagination()}
             </>
           )}
+          {!loading && paginatedTickets.length === 0 && renderPagination()}
         </div>
       )}
 
       {/* Conteúdo da Fila: POSITIVAS (+ IA Copilot) */}
       {activeQueue === 'positivas' && (
-        <div className="space-y-4">
+        <div className="flex flex-1 flex-col gap-4">
           {loading && paginatedTickets.length === 0 ? (
             renderSkeletonGrid()
           ) : paginatedTickets.length === 0 ? (
@@ -2413,9 +2594,9 @@ ${checksSummary}${recs}`;
               {/* Lista de Chamados Positivos */}
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
                 {paginatedTickets.map(ticket => (
-                  <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-functional-success/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-emerald-500/40 border-emerald-500/50 bg-emerald-500/3' : ''}`}>
-                    <div className="flex items-start justify-between gap-2.5">
-                      <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                  <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-functional-success/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-emerald-500/40 border-emerald-500/50 bg-emerald-500/3' : ''}`}>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-start gap-2.5 min-w-0">
                         {canAudit ? <input
                           type="checkbox"
                           checked={selectedTicketIds.has(ticket.ticket_id)}
@@ -2454,7 +2635,7 @@ ${checksSummary}${recs}`;
                           </h4>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5 pl-[26px]">
                         {renderScoreBadge(ticket)}
                         <Badge variant="success" size="xs" className="uppercase font-black tracking-widest flex-shrink-0">
                           CSAT Bom
@@ -2462,25 +2643,17 @@ ${checksSummary}${recs}`;
                       </div>
                     </div>
 
-                    {ticket.csat_comment && (
-                      <div className="p-2.5 rounded-xl bg-functional-success/5 border border-functional-success/15 text-[11px] font-medium text-brand-primary italic">
-                        "{ticket.csat_comment}"
-                      </div>
-                    )}
+                    <div aria-label="Comentário de satisfação do cliente" className="p-2.5 rounded-xl bg-functional-success/5 border border-functional-success/15 text-[11px] font-medium text-brand-primary italic">
+                      "{ticket.csat_comment?.trim() || ''}"
+                    </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                      <div className="flex items-center gap-3">
+                    <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                         {renderAgentInfo(ticket)}
-                        <span
-                          className="flex items-center gap-1"
-                          title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
-                        >
-                          <Clock className="w-3 h-3 opacity-60" />
-                          {formatTicketDateTime(ticket.ticket_date)}
-                        </span>
+                        {renderTicketResolution(ticket)}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {renderAiActions(ticket, 'bg-gradient-to-r from-emerald-600 to-teal-600')}
                       </div>
                     </div>
@@ -2490,12 +2663,13 @@ ${checksSummary}${recs}`;
               {renderPagination()}
             </>
           )}
+          {!loading && paginatedTickets.length === 0 && renderPagination()}
         </div>
       )}
 
       {/* Conteúdo da Fila: CHAMADOS FILHOS */}
       {activeQueue === 'filhos' && (
-        <div className="space-y-4">
+        <div className="flex flex-1 flex-col gap-4">
 
           {loading && paginatedTickets.length === 0 ? (
             renderSkeletonGrid()
@@ -2513,11 +2687,11 @@ ${checksSummary}${recs}`;
             <>
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
                 {paginatedTickets.map(ticket => {
-                  const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
-                  const evaluation = ticket.child_evaluation;
+                  const isValidated = validatedChildTickets.has(ticket.ticket_id);
+                  const evaluation = childResultFor(ticket);
 
                   return (
-                    <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
+                    <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
                           {canAudit ? <input
                             type="checkbox"
@@ -2569,27 +2743,25 @@ ${checksSummary}${recs}`;
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                        <div className="flex items-center gap-3">
+                      <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                           {renderAgentInfo(ticket)}
-                          <span
-                            className="flex items-center gap-1"
-                            title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
-                          >
-                            <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.ticket_date)}
-                          </span>
+                          {renderTicketResolution(ticket)}
                         </div>
 
                         <div className="flex min-w-0 flex-col items-end gap-1.5" role="status" aria-live="polite">
+                          <ChildTicketMonitoriaAction
+                            ticket={{ ...ticket, child_evaluation: evaluation }}
+                            onOpen={onOpenExistingMonitoria}
+                            onStart={canAudit && evaluation ? () => { void handleStartChildAudit(ticket); } : undefined}
+                            loading={isEvaluatingTicket(ticket.ticket_id)}
+                          />
                           {(canAudit || evaluation) && <Button
                             size="sm"
                             variant={isValidated ? "outline" : "primary"}
-                            disabled={isEvaluatingTicket(ticket.ticket_id)}
                             onClick={() => {
-                              if (evaluation) {
+                              if (evaluation || isEvaluatingTicket(ticket.ticket_id)) {
                                 setChildPreviewTicket(ticket);
-                                setChildAiEvaluation(evaluation);
                               } else {
                                 setChildGuidelineModalTicket(ticket);
                               }
@@ -2597,7 +2769,7 @@ ${checksSummary}${recs}`;
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
                             {isEvaluatingTicket(ticket.ticket_id) ? (
-                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} />
+                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
                             ) : (
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}
@@ -2618,7 +2790,7 @@ ${checksSummary}${recs}`;
 
       {/* Conteúdo da Fila: FILHOS INVÁLIDOS */}
       {activeQueue === 'filhos_invalidos' && (
-        <div className="space-y-4">
+        <div className="flex flex-1 flex-col gap-4">
           <div className="p-4 rounded-2xl bg-functional-error/10 border border-functional-error/25 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-functional-error text-white flex items-center justify-center flex-shrink-0 shadow-sm">
@@ -2629,7 +2801,7 @@ ${checksSummary}${recs}`;
                   Fila de Chamados Filhos Inválidos
                 </h3>
                 <p className="text-[11px] font-semibold text-brand-primary/80">
-                  Chamados abertos fora do padrão ou com inconsistências (falta de tags obrigatórias, destinatário incorreto, falta de detalhamento).
+                  Chamados abertos fora do padrão ou com inconsistências de destinatário ou detalhamento.
                 </p>
               </div>
             </div>
@@ -2649,11 +2821,11 @@ ${checksSummary}${recs}`;
             <>
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
                 {paginatedTickets.map(ticket => {
-                  const isValidated = validatedChildTickets.has(ticket.ticket_id) || ticket.already_audited;
-                  const evaluation = ticket.child_evaluation;
+                  const isValidated = validatedChildTickets.has(ticket.ticket_id);
+                  const evaluation = childResultFor(ticket);
 
                   return (
-                    <Card key={ticket.ticket_id} className={`p-4 space-y-3 hover:border-functional-error/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-functional-error/40 border-functional-error/50 bg-functional-error/3' : ''}`}>
+                    <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-functional-error/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-functional-error/40 border-functional-error/50 bg-functional-error/3' : ''}`}>
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
                           {canAudit ? <input
                             type="checkbox"
@@ -2703,27 +2875,25 @@ ${checksSummary}${recs}`;
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-brand-muted pt-2.5 border-t border-surface-border">
-                        <div className="flex items-center gap-3">
+                      <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                           {renderAgentInfo(ticket)}
-                          <span
-                            className="flex items-center gap-1"
-                            title={ticket.csat_rated_at ? `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)} | Avaliação CSAT: ${formatTicketDateTime(ticket.csat_rated_at)}` : `Data do ticket: ${formatTicketDateTime(ticket.ticket_date)}`}
-                          >
-                            <Clock className="w-3 h-3 opacity-60" />
-                            {formatTicketDateTime(ticket.ticket_date)}
-                          </span>
+                          {renderTicketResolution(ticket)}
                         </div>
 
                         <div className="flex min-w-0 flex-col items-end gap-1.5" role="status" aria-live="polite">
+                          <ChildTicketMonitoriaAction
+                            ticket={{ ...ticket, child_evaluation: evaluation }}
+                            onOpen={onOpenExistingMonitoria}
+                            onStart={canAudit && evaluation ? () => { void handleStartChildAudit(ticket); } : undefined}
+                            loading={isEvaluatingTicket(ticket.ticket_id)}
+                          />
                           {(canAudit || evaluation) && <Button
                             size="sm"
                             variant="outline"
-                            disabled={isEvaluatingTicket(ticket.ticket_id)}
                             onClick={() => {
-                              if (evaluation) {
+                              if (evaluation || isEvaluatingTicket(ticket.ticket_id)) {
                                 setChildPreviewTicket(ticket);
-                                setChildAiEvaluation(evaluation);
                               } else {
                                 setChildGuidelineModalTicket(ticket);
                               }
@@ -2731,7 +2901,7 @@ ${checksSummary}${recs}`;
                             className="flex items-center gap-1.5 text-xs font-bold"
                           >
                             {isEvaluatingTicket(ticket.ticket_id) ? (
-                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} />
+                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
                             ) : (
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}
@@ -2747,13 +2917,21 @@ ${checksSummary}${recs}`;
               {renderPagination()}
             </>
           )}
+          {!loading && paginatedTickets.length === 0 && renderPagination()}
         </div>
       )}
       </>
       )}
 
+      {batchRunning && batchProgress && batchMinimized && (
+        <div className="fixed bottom-4 right-4 z-50 rounded-xl border border-surface-border bg-surface-card p-3 shadow-lg" role="status" aria-live="polite">
+          <Button variant="ghost" size="sm" onClick={() => setBatchMinimized(false)}>
+            <Bot className="h-4 w-4" /> Lote em andamento · {batchProgress.done + batchProgress.queued + batchProgress.errors}/{batchProgress.total} · Ver progresso
+          </Button>
+        </div>
+      )}
       {/* Modal Central de Processamento em Lote com IA */}
-      {batchRunning && batchProgress && createPortal(
+      {batchRunning && batchProgress && !batchMinimized && createPortal(
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-fade-in">
           <Card className="w-full max-w-lg p-6 space-y-5 shadow-2xl border border-surface-border bg-surface-card overflow-hidden relative">
             {/* Linha superior com gradiente de destaque */}
@@ -2782,6 +2960,8 @@ ${checksSummary}${recs}`;
                 </div>
               </div>
             </div>
+
+            <Button variant="ghost" size="sm" onClick={() => setBatchMinimized(true)}>Continuar em segundo plano</Button>
 
             {/* Card Central Integrado (Substitui o toast flutuante no topo direito) */}
             <div className="p-4 rounded-2xl bg-gradient-to-br from-surface-subtle to-surface-subtle/40 border border-brand-highlight/25 space-y-2.5 relative overflow-hidden shadow-sm">
@@ -2831,33 +3011,33 @@ ${checksSummary}${recs}`;
               </div>
 
               <div className="grid grid-cols-5 gap-2 pt-1">
-                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
-                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Avaliados</div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center min-w-0 overflow-hidden">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-tight truncate" title="Avaliados">Avaliados</div>
                   <div className="text-sm font-black text-functional-success font-mono flex items-center justify-center gap-1 mt-0.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     {batchProgress.done}
                   </div>
                 </div>
-                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
-                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Reprocessamento</div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center min-w-0 overflow-hidden">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-tight truncate" title="Reprocessamento">Reprocesso</div>
                   <div className="text-sm font-black text-brand-highlight font-mono mt-0.5">{batchProgress.queued}</div>
                 </div>
-                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
-                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Falhas</div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center min-w-0 overflow-hidden">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-tight truncate" title="Falhas">Falhas</div>
                   <div className="text-sm font-black text-functional-error font-mono flex items-center justify-center gap-1 mt-0.5">
-                    <XCircle className="w-3.5 h-3.5" />
+                    <XCircle className="w-3.5 h-3.5 shrink-0" />
                     {batchProgress.errors}
                   </div>
                 </div>
-                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
-                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Restantes</div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center min-w-0 overflow-hidden">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-tight truncate" title="Restantes">Restantes</div>
                   <div className="text-sm font-black text-brand-primary font-mono flex items-center justify-center gap-1 mt-0.5">
-                    <Clock className="w-3.5 h-3.5 text-brand-muted" />
+                    <Clock className="w-3.5 h-3.5 text-brand-muted shrink-0" />
                     {Math.max(0, batchProgress.total - batchProgress.done - batchProgress.queued - batchProgress.errors)}
                   </div>
                 </div>
-                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center">
-                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-wider">Total do Lote</div>
+                <div className="p-2 rounded-xl bg-surface-subtle/80 border border-surface-border text-center min-w-0 overflow-hidden">
+                  <div className="text-[9px] text-brand-muted font-bold uppercase tracking-tight truncate" title="Total do Lote">Total Lote</div>
                   <div className="text-sm font-black text-brand-primary font-mono mt-0.5">
                     {batchProgress.total}
                   </div>
@@ -2912,17 +3092,17 @@ ${checksSummary}${recs}`;
 
             {/* Rodapé Seguro com Botão de Interrupção */}
             <div className="flex items-center justify-between pt-3 border-t border-surface-border">
-              <div className="flex items-center gap-2 text-[11px] text-brand-muted">
+              <div className="flex items-center gap-2 text-[11px] text-brand-muted min-w-0 pr-2">
                 <Lock className="w-3.5 h-3.5 text-brand-muted shrink-0" />
-                <span>Navegação segura protegida contra duplo clique</span>
+                <span className="truncate">Você pode sair desta janela enquanto a IA avalia</span>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => { batchCancelRef.current = true; }}
-                className="text-functional-error hover:bg-functional-error/10 font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
+                className="text-functional-error hover:bg-functional-error/10 font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap shrink-0"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 shrink-0" />
                 <span>Interromper Lote</span>
               </Button>
             </div>
@@ -2960,7 +3140,7 @@ ${checksSummary}${recs}`;
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={loadingChildAi}
+                  aria-label="Fechar avaliação e continuar em segundo plano"
                   onClick={handleCloseChildPreview}
                 >
                   <X className="w-4 h-4" />
@@ -3072,10 +3252,9 @@ ${checksSummary}${recs}`;
                     <div className="h-4 w-48 rounded bg-surface-border/50 animate-pulse" />
                     <div className="space-y-1.5 pt-1">
                       {[
-                        'Verificando inalterabilidade do assunto da macro homologada...',
+                        'Verificando assunto de abertura e alterações da macro de resolvido...',
                         'Conferindo preservação do texto estrutural e enriquecimento técnico...',
-                        'Validando direcionamento ("Para") ao grupo especialista correto...',
-                        'Checando governança de tags nativas de automação...'
+                        'Validando direcionamento ("Para") ao grupo especialista correto...'
                       ].map((stepLabel, idx) => (
                         <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-surface-subtle/50 text-[11px] text-brand-muted">
                           <RefreshCw className="w-3 h-3 animate-spin text-brand-highlight flex-shrink-0" />
@@ -3092,8 +3271,7 @@ ${checksSummary}${recs}`;
                 <div className="space-y-4">
                   {/* Status do Chamado Filho: VÁLIDO ou INVÁLIDO (sem score numérico de 1 a 100) */}
                   {(() => {
-                    const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
-                    const isValido = currentVerdict === 'conforme';
+                    const isValido = childAiEvaluation.status === 'conforme';
 
                     return (
                       <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
@@ -3109,7 +3287,7 @@ ${checksSummary}${recs}`;
                           </div>
                           <div>
                             <div className="text-xs font-black uppercase tracking-wider">
-                              {isValido ? 'Chamado Filho Válido' : 'Chamado Filho Inválido'}
+                              {isValido ? 'Sugestão da IA: válido' : 'Sugestão da IA: inválido'}
                             </div>
                             <div className="text-[11px] font-semibold text-brand-primary/90 mt-0.5">
                               Padrão: {childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : childAiEvaluation.detected_type === 'produtividade' ? 'Produtividade' : 'Escalonamento Interno'}
@@ -3117,33 +3295,6 @@ ${checksSummary}${recs}`;
                           </div>
                         </div>
 
-                        {/* Alternador Manual Válido / Inválido */}
-                        {canAudit && <div className="flex items-center gap-1.5 bg-surface-card/80 p-1 rounded-xl border border-surface-border self-start sm:self-auto">
-                          <button
-                            type="button"
-                            onClick={() => setChildManualVerdict('conforme')}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              isValido
-                                ? 'bg-functional-success text-white shadow-xs font-black'
-                                : 'text-brand-muted hover:text-brand-primary'
-                            }`}
-                          >
-                            <Check className="w-3 h-3" />
-                            <span>Válido</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setChildManualVerdict('nao_conforme')}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              !isValido
-                                ? 'bg-functional-error text-white shadow-xs font-black'
-                                : 'text-brand-muted hover:text-brand-primary'
-                            }`}
-                          >
-                            <X className="w-3 h-3" />
-                            <span>Inválido</span>
-                          </button>
-                        </div>}
                       </div>
                     );
                   })()}
@@ -3164,12 +3315,14 @@ ${checksSummary}${recs}`;
                         <div
                           key={idx}
                           className={`p-3 rounded-xl border flex items-start gap-2.5 ${
-                            chk.passed
+                            chk.answer === 'NA' ? 'bg-surface-subtle border-surface-border' : chk.passed
                               ? 'bg-functional-success/5 border-functional-success/20'
                               : 'bg-functional-error/5 border-functional-error/20'
                           }`}
                         >
-                          {chk.passed ? (
+                          {chk.answer === 'NA' ? (
+                            <Clock className="w-4 h-4 text-brand-muted flex-shrink-0 mt-0.5" />
+                          ) : chk.passed ? (
                             <CheckCircle2 className="w-4 h-4 text-functional-success flex-shrink-0 mt-0.5" />
                           ) : (
                             <XCircle className="w-4 h-4 text-functional-error flex-shrink-0 mt-0.5" />
@@ -3177,8 +3330,8 @@ ${checksSummary}${recs}`;
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-xs font-bold text-brand-primary">{chk.rule}</span>
-                              <Badge variant={chk.passed ? 'success' : 'error'} size="xs" className="text-[9px] font-bold">
-                                {chk.passed ? 'Atendido' : 'Não Conforme'}
+                              <Badge variant={chk.answer === 'NA' ? 'neutral' : chk.passed ? 'success' : 'error'} size="xs" className="text-[9px] font-bold">
+                                {chk.answer === 'NA' ? 'Não verificado' : chk.passed ? 'Atendido' : 'Não Conforme'}
                               </Badge>
                             </div>
                             {chk.details && (
@@ -3209,106 +3362,21 @@ ${checksSummary}${recs}`;
                     </div>
                   )}
 
-                  {/* Macro Pronta para o Zendesk */}
-                  {(() => {
-                    const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
-                    const isValido = currentVerdict === 'conforme';
-                    const typeLabel = childAiEvaluation.detected_type === 'nova_demanda' ? 'Nova Demanda' : childAiEvaluation.detected_type === 'analise_tecnica' ? 'Análise Técnica N2' : childAiEvaluation.detected_type === 'apoio_tecnico' ? 'Apoio Técnico N2' : 'Escalonamento Interno';
-                    const checksSummary = (childAiEvaluation.checks || [])
-                      .map(c => `• ${c.rule}: ${c.passed ? 'OK' : 'NÃO CONFORME'} (${c.details})`)
-                      .join('\n');
-                    const recs = childAiEvaluation.recommendations?.length
-                      ? `\n\nRecomendações:\n${childAiEvaluation.recommendations.map(r => `• ${r}`).join('\n')}`
-                      : '';
-
-                    const macroText = `${isValido ? '✅ Auditoria de Chamado Filho — VÁLIDO' : '❌ Auditoria de Chamado Filho — INVÁLIDO'} (#${childPreviewTicket.ticket_id})
-
-Tipo Identificado: ${typeLabel}
-Assunto: ${childPreviewTicket.subject}
-
-Parecer da Qualidade:
-${childAiEvaluation.summary}
-
-Checklist de Conformidade (POP v1.1):
-${checksSummary}${recs}`;
-
-                    return (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
-                              Macro Formatada para o Zendesk
-                            </span>
-                            <span className="text-[10px] text-brand-muted font-medium">
-                              (Editável)
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setChildCustomMacro(macroText);
-                                toast.info('Macro restaurada para o padrão!');
-                              }}
-                              className="text-[10px] font-bold text-brand-muted hover:text-brand-primary underline cursor-pointer"
-                              title="Restaurar o texto sugerido original"
-                            >
-                              Restaurar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const textToCopy = childCustomMacro || macroText;
-                                navigator.clipboard.writeText(textToCopy);
-                                setCopiedChildMacro(true);
-                                toast.success('Macro do chamado filho copiada para colar no Zendesk!');
-                                setTimeout(() => setCopiedChildMacro(false), 2500);
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-highlight hover:underline cursor-pointer"
-                            >
-                              {copiedChildMacro ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5 text-functional-success" />
-                                  <span className="text-functional-success">Copiada!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3.5 h-3.5" />
-                                  <span>Copiar Macro</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                        <textarea
-                          value={childCustomMacro || macroText}
-                          onChange={e => setChildCustomMacro(e.target.value)}
-                          rows={6}
-                          className="w-full p-3 rounded-xl border border-surface-border bg-surface-subtle text-xs font-mono text-brand-primary leading-relaxed focus:outline-none focus:border-brand-highlight focus:ring-1 focus:ring-brand-highlight resize-y"
-                          placeholder="Texto da macro que será copiado para o Zendesk..."
-                        />
-                        <p className="text-[10px] text-brand-muted">
-                          Você pode editar o texto acima livremente. Ao clicar em <strong>Copiar Macro</strong>, o conteúdo exato deste campo será copiado para colar no Zendesk.
-                        </p>
-                      </div>
-                    );
-                  })()}
                 </div>
               )}
 
               {/* Modal Footer */}
-              <div className="flex items-center justify-between pt-3 border-t border-surface-border">
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-surface-border">
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={loadingChildAi}
-                  className="disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="cursor-pointer"
                   onClick={handleCloseChildPreview}
                 >
-                  Fechar
+                  {loadingChildAi ? 'Continuar em segundo plano' : 'Fechar'}
                 </Button>
 
-                {canAudit && <div className="flex items-center gap-2">
+                {canAudit && <div className="flex flex-wrap items-center justify-end gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -3320,28 +3388,15 @@ ${checksSummary}${recs}`;
                     <span>Reanalisar</span>
                   </Button>
 
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={loadingChildAi || !childAiEvaluation}
-                    className="flex items-center gap-1.5 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                    onClick={() => {
-                      if (loadingChildAi || !childAiEvaluation) return;
-                      const currentVerdict = childManualVerdict || (childAiEvaluation.status === 'conforme' ? 'conforme' : 'nao_conforme');
-                      const isValido = currentVerdict === 'conforme';
-
-                      childPreviewTicket.child_evaluation = {
-                        ...childAiEvaluation,
-                        status: isValido ? 'conforme' : 'nao_conforme',
-                      };
-                      setValidatedChildTickets(prev => new Set(prev).add(childPreviewTicket.ticket_id));
-                      toast.success(`Chamado filho #${childPreviewTicket.ticket_id} salvo como ${isValido ? 'Válido' : 'Inválido'} no QualidadeWP!`);
+                  <ChildTicketMonitoriaAction
+                    ticket={{ ...childPreviewTicket, child_evaluation: childAiEvaluation }}
+                    loading={loadingChildAi}
+                    onStart={() => { void handleStartChildAudit(childPreviewTicket); }}
+                    onOpen={onOpenExistingMonitoria ? id => {
                       handleCloseChildPreview();
-                    }}
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Salvar Monitoria</span>
-                  </Button>
+                      onOpenExistingMonitoria(id);
+                    } : undefined}
+                  />
                 </div>}
               </div>
             </Card>
@@ -3554,6 +3609,12 @@ ${checksSummary}${recs}`;
           forms,
           guidelineOptions
         );
+        const effectiveForm = selectionOverrideEnabled
+          ? forms.find(form => form.id === selectedOverrideFormId)
+          : autoForm;
+        const effectiveGuideline = selectionOverrideEnabled
+          ? guidelineOptions.find(guideline => guideline.id === selectedOverrideGuidelineIds[0])
+          : autoGuideline;
 
         return createPortal(
           <div
@@ -3662,13 +3723,13 @@ ${checksSummary}${recs}`;
                         <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
                           Ficha de Monitoria
                         </span>
-                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">Sugestão</Badge>
+                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">{selectionOverrideEnabled ? 'Selecionada' : 'Sugestão'}</Badge>
                       </div>
                       <div className="text-xs font-black text-brand-primary mt-0.5">
-                        {autoForm?.title || 'Ficha de Atendimento Geral'}
+                        {effectiveForm?.title || 'Selecione uma ficha'}
                       </div>
                       <p className="text-[10px] font-medium text-brand-muted mt-0.5">
-                        Definida com base no tipo de cliente ({detectedCustomerType === 'cliente_final' ? 'Cliente Final' : 'Revenda'})
+                        {selectionOverrideEnabled ? `Sugestão automática: ${autoForm?.title || 'nenhuma'}` : `Definida com base no tipo de cliente (${detectedCustomerType === 'cliente_final' ? 'Cliente Final' : 'Revenda'})`}
                       </p>
                     </div>
                   </div>
@@ -3683,13 +3744,13 @@ ${checksSummary}${recs}`;
                         <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
                           Manual de Atendimento
                         </span>
-                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">Sugestão</Badge>
+                        <Badge variant="neutral" size="xs" className="text-[9px] font-bold">{selectionOverrideEnabled ? 'Selecionado' : 'Sugestão'}</Badge>
                       </div>
                       <div className="text-xs font-black text-brand-primary mt-0.5">
-                        {autoGuideline?.title || 'Critérios padrão da ficha'}
+                        {effectiveGuideline?.title || 'Critérios padrão da ficha'}
                       </div>
                       <p className="text-[10px] font-medium text-brand-muted mt-0.5 line-clamp-1">
-                        {autoGuideline?.content ? autoGuideline.content.slice(0, 100) + '...' : 'Diretrizes operacionais alinhadas à organização do chamado.'}
+                        {effectiveGuideline?.content ? effectiveGuideline.content.slice(0, 100) + '...' : 'Avaliação sem manual adicional.'}
                       </p>
                     </div>
                   </div>
@@ -3759,12 +3820,11 @@ ${checksSummary}${recs}`;
                     variant="primary"
                     size="sm"
                     className="flex items-center gap-1.5"
-                    disabled={!autoForm || evaluatingTicketId === guidelinePickerTicket.ticket_id || (selectionOverrideEnabled && (!selectedOverrideFormId || !selectionOverrideReason.trim()))}
+                    disabled={!effectiveForm || evaluatingTicketId === guidelinePickerTicket.ticket_id || (selectionOverrideEnabled && !selectionOverrideReason.trim())}
                     onClick={() => {
                       const ticket = guidelinePickerTicket;
-                      const formToUse = selectionOverrideEnabled
-                        ? forms.find(form => form.id === selectedOverrideFormId) || autoForm!
-                        : autoForm!;
+                      if (!effectiveForm) return;
+                      const formToUse = effectiveForm;
                       const guidelineIds = selectionOverrideEnabled
                         ? selectedOverrideGuidelineIds
                         : (autoGuideline ? [autoGuideline.id] : []);
@@ -3874,12 +3934,12 @@ ${checksSummary}${recs}`;
                   A IA auditará a abertura deste chamado baseando-se estritamente nas 4 regras de conformidade:
                 </div>
 
-                {/* As 4 Regras de Ouro */}
+                {/* As 3 Regras de Ouro */}
                 <div className="space-y-1.5 text-[10px]">
                   <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
                     <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">1</span>
                     <div>
-                      <strong className="text-brand-primary">Preservação do Assunto:</strong> Inalterabilidade da macro base. Aceita identificador do chamado pai e prefixos (ex: <code>"Ticket Nova Demanda do #169238"</code>).
+                      <strong className="text-brand-primary">Assunto da Abertura:</strong> Aceita identificador do chamado pai, prefixos (ex: <code>"Ticket Nova Demanda do #169238"</code>) e alterações automáticas pela macro de resolvido.
                     </div>
                   </div>
                   <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
@@ -3892,12 +3952,6 @@ ${checksSummary}${recs}`;
                     <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">3</span>
                     <div>
                       <strong className="text-brand-primary">Direcionamento ("Para"):</strong> Destinatário correto (Grupo para Análise Técnica; Próprio analista para Nova Demanda; Analista N2 nominal para Apoio Técnico).
-                    </div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
-                    <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">4</span>
-                    <div>
-                      <strong className="text-brand-primary">Governança de Tags:</strong> Preservação das tags nativas da macro (<code>existe_ticket_filho</code>, <code>transferencia_analise</code>, etc.).
                     </div>
                   </div>
                 </div>
@@ -3974,6 +4028,16 @@ ${checksSummary}${recs}`;
             setAssignmentModalTicket(null);
             toast.success('Monitor responsável alterado com sucesso.');
           }}
+        />
+      )}
+      {helpdeskTicket?.monitoria_id && typeof helpdeskTicket.monitoria_score === 'number' && Number.isFinite(helpdeskTicket.monitoria_score) && (
+        <HelpdeskSendModal
+          monitoriaId={helpdeskTicket.monitoria_id}
+          ticketId={helpdeskTicket.ticket_id}
+          suggestedOutcome={getEvaluationOutcome(helpdeskTicket.monitoria_score)}
+          underReview={helpdeskTicket.monitoria_status === 'pendente_revisao'}
+          onClose={() => setHelpdeskTicket(null)}
+          onSent={() => setTickets(previous => previous.filter(ticket => ticket.ticket_id !== helpdeskTicket.ticket_id))}
         />
       )}
     </div>

@@ -2,8 +2,8 @@ import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
 import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 // Orquestra a publicação de uma avaliação de qualidade no helpdesk:
 // autentica o chamador, busca a monitoria, monta o HTML do comentário
-// (sempre no servidor — o frontend nunca envia HTML, só pede o preview
-// com dry_run: true), escolhe o provider e registra o resultado.
+// (sempre no servidor — o frontend pode enviar texto simples editado,
+// nunca HTML), escolhe o provider e registra o resultado.
 //
 // Trocar de helpdesk = trocar o `switch` abaixo por outra implementação de
 // HelpdeskProvider (ver types.ts). Nada de Zendesk deve aparecer aqui além
@@ -14,9 +14,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 import type { HelpdeskProvider, PublishResult } from './types.ts';
-import { buildEvaluationHtml } from './template.ts';
+import { buildEditedCommentHtml, buildEvaluationHtml } from './template.ts';
 import { ZendeskProvider } from './zendesk.ts';
 import { publicationAccess } from './access.ts';
+import { canPublishMonitoriaStatus } from './publication-status.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 
@@ -26,6 +27,7 @@ const PublishSchema = z.object({
   outcome: z.enum(['positiva', 'negativa']).optional(),
   dry_run: z.boolean().optional(),
   force: z.boolean().optional(),
+  comment_text: z.string().trim().min(1).max(12000).optional(),
 });
 
 function jsonResponse(body: PublishResult, status: number): Response {
@@ -105,7 +107,7 @@ serve(async (req: Request) => {
       );
     }
 
-    const { monitoria_id, outcome, dry_run, force } = parsed.data;
+    const { monitoria_id, outcome, dry_run, force, comment_text } = parsed.data;
 
     // Client com service role: a busca/gravação da monitoria e do envio
     // acontece independentemente das políticas de RLS do usuário chamador
@@ -118,7 +120,7 @@ serve(async (req: Request) => {
     // 2. Buscar a monitoria por monitoria_id. 404 se não existir.
     const { data: monitoria, error: monitoriaError } = await supabaseAdmin
       .from('monitorias')
-      .select('id, active, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score')
+      .select('id, active, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score, form_id, form_snapshot')
       .eq('id', monitoria_id)
       .maybeSingle();
 
@@ -129,6 +131,10 @@ serve(async (req: Request) => {
 
     if (!monitoria) {
       return failure('Monitoria não encontrada', 'not_found', 404);
+    }
+    if (monitoria.form_id === '6c7d1e88-841b-4da9-9a66-9f1464ce896f'
+      || monitoria.form_snapshot?.ticket_kind === 'chamado_filho') {
+      return failure('Tickets filhos usam a macro própria da fila Chamados Filhos.', 'validation', 409);
     }
 
     // 2b. AUTORIZAR o chamador.
@@ -187,9 +193,16 @@ serve(async (req: Request) => {
     }
     const normalizedTicketId = ticketId.trim();
 
+    if (!canPublishMonitoriaStatus(monitoria.status)) {
+      return failure('A monitoria está em contestação ou decisão de gestor. Aguarde a próxima versão da avaliação antes de publicar no Zendesk.', 'validation', 409);
+    }
+
     // 3b. Determinar desfecho (outcome) com base nas regras de domínio estritas (WQ-22)
     // score >= 75: positiva (Ticket Válido), score < 75: negativa (Ticket Invalidado)
     const rawScore = monitoria.score !== null && monitoria.score !== undefined ? Number(monitoria.score) : NaN;
+    if (!Number.isFinite(rawScore)) {
+      return failure('A monitoria não possui nota válida para definir o resultado da macro.', 'validation', 400);
+    }
     const domainOutcome: 'positiva' | 'negativa' = (!isNaN(rawScore) && rawScore >= 75) ? 'positiva' : 'negativa';
 
     if (outcome && outcome !== domainOutcome) {
@@ -227,13 +240,14 @@ serve(async (req: Request) => {
     }
 
     // 4. Montar o HTML a partir do template + campos.
-    const previewHtml = buildEvaluationHtml({
+    const generatedHtml = buildEvaluationHtml({
       outcome: resolvedOutcome,
       evaluatorNote: monitoria.evaluator_note ?? null,
       satisfactionRecordText: monitoria.satisfaction_has_record
         ? monitoria.satisfaction_record_text ?? null
         : null,
     });
+    const previewHtml = comment_text === undefined ? generatedHtml : buildEditedCommentHtml(comment_text);
 
     // 5. Se dry_run, devolver o HTML e parar — nenhuma escrita.
     if (dry_run) {
@@ -250,6 +264,16 @@ serve(async (req: Request) => {
     } catch (err: any) {
       console.error('[helpdesk-publish-evaluation] Provider não configurado:', err);
       return failure('Integração de helpdesk indisponível.', 'provider', 503);
+    }
+
+    try {
+      const eligibility = await provider.checkPublicationEligibility(normalizedTicketId);
+      if (!eligibility.eligible) {
+        return failure(eligibility.reason || 'Este ticket não aceita publicações.', 'validation', 409);
+      }
+    } catch (error) {
+      console.error('[helpdesk-publish-evaluation] Falha ao conferir status do ticket:', error);
+      return failure('Não foi possível conferir o estado do ticket no helpdesk. Tente novamente mais tarde.', 'provider', 502);
     }
 
     const { data: claimId, error: claimError } = await supabaseAdmin.rpc('claim_helpdesk_publication', {
@@ -285,7 +309,7 @@ serve(async (req: Request) => {
         200,
       );
     } catch (err: any) {
-      const errorMessage = 'Não foi possível confirmar o envio. Confira o ticket no helpdesk antes de tentar novamente.';
+      const errorMessage = 'O comentário pode ter sido enviado, mas os campos da macro não foram confirmados. Confira o ticket no Zendesk; não reenvie antes da conferência.';
       console.error('[helpdesk-publish-evaluation] Falha ao publicar no provider:', err);
 
       const { error: insertError } = await supabaseAdmin.rpc('finish_helpdesk_publication', {

@@ -51,15 +51,17 @@ describe('Reestruturação da navegação das Filas de Triagem', () => {
     expect(QUEUE_TITLES[notificationConfig.targetQueueSubTab]).toBe('CSAT Negativas');
   });
 
-  it('fetchQueueTickets filtra tickets pelo termo de busca e exclui tickets já avaliados', async () => {
+  it('fetchQueueTickets mantém negativas avaliadas sem macro para revisão e filtra a busca', async () => {
     const { fetchQueueTickets } = await import('../lib/helpdeskQueue');
     const mockMonitorias = [
-      { id: 'm1', ticket_id: '900001', score: 95 } as any
+      { id: 'm1', ticket_id: '900001', status: 'concluida', score: 95 } as any
     ];
 
-    // Busca sem filtro: 900001 deve ser excluído por já estar avaliado
+    // A monitoria existe, mas ainda não há confirmação de envio da macro.
     const resultAll = await fetchQueueTickets('negativas', mockMonitorias, null);
-    expect(resultAll.tickets.some(t => t.ticket_id === '900001')).toBe(false);
+    expect(resultAll.tickets.find(t => t.ticket_id === '900001')).toMatchObject({
+      already_audited: true, monitoria_id: 'm1', monitoria_score: 95,
+    });
 
     // Busca com termo específico '900002'
     const resultSearch = await fetchQueueTickets('negativas', mockMonitorias, null, '900002');

@@ -25,7 +25,20 @@ DashboardMain
 
 ## DashboardContext
 
+A tabela **Decisões dos Gestores de Atendimento** está disponível para administrador, gestor da qualidade, monitor da qualidade e gestor de atendimento, além de **Customizar Dashboards**. O gestor de atendimento vê apenas decisões das monitorias das equipes vinculadas a ele; os perfis da qualidade e o administrador veem o histórico geral. A restrição do gestor é aplicada na consulta, na tabela e na política de leitura do banco. A tabela filtra por ticket/agente/equipe, tipo de decisão e gestor, com paginação. Na prévia de personalização, o gestor vê uma amostra de uma equipe; os demais perfis veem duas decisões ilustrativas.
+
+A tabela **Erros Críticos por Agente** está disponível nesses mesmos perfis. Ela ordena agentes por quantidade de ocorrências nas monitorias filtradas, separa monitorias afetadas do total avaliado e permite filtrar por tipo de erro, buscar agente/ticket/erro e abrir cada avaliação. Conta questões críticas com resposta `NAO` e erros críticos selecionados separadamente, sem duplicar o mesmo ID na mesma monitoria. O texto é lido do `form_snapshot` quando disponível, preservando a descrição usada na avaliação. Nota zero por si só não é classificada como erro crítico. A prévia em **Customizar Dashboards** usa dados ilustrativos e mostra apenas uma equipe para o gestor de atendimento.
+
+Para monitorias, `team_id` representa a equipe principal do agente avaliado e
+determina o gestor de suporte que pode ver a monitoria e as metricas em que ela
+conta. `ticket_group_team_id` preserva o grupo original do ticket Zendesk. Assim,
+um agente da equipe PJ atendendo um ticket de Escala conta para PJ e permanece
+visivel apenas aos gestores vinculados a PJ. Se a equipe principal do agente
+mudar, as monitorias existentes acompanham a nova equipe gestora.
+
 ## Personalização por cargo
+
+O dashboard e a prévia de personalização usam a mesma grade responsiva, mesmo sem configuração salva. A grade respeita a ordem configurada e encaixa cards pequenos nos espaços ao lado dos gráficos. Gráficos de distribuição e rosca usam dois módulos de altura (280 px); gráficos de linha, barras e listas usam três (380 px). Gráficos comuns ocupam duas colunas, enquanto gráficos amplos e tabelas ocupam a largura inteira. A quantidade de colunas depende da largura do painel: uma em telas estreitas, duas a partir de 640 px e quatro a partir de 1000 px. Itens ocultos não reservam espaço. A prévia usa valores simulados, mas preserva a mesma ordem e distribuição do dashboard real.
 
 Em **Customizar Dashboards**, o administrador seleciona um dos cinco cargos e define quais cards, gráficos e tabelas aparecem. Na própria prévia, cada card pode ser arrastado para outra posição ou movido e removido pelos botões da barra superior. A lista completa começa recolhida para deixar a prévia acessível e oferece as mesmas ações; itens retirados ficam em **Disponíveis para adicionar**. **Restaurar ordem** devolve a disposição original. A prévia e o dashboard real consomem a mesma configuração.
 
@@ -100,6 +113,8 @@ interface DashboardFilters {
 | `RankingWidget` | Ranking de top/bottom performers | Por categoria | Via prop `accent` → `getIconBg()` |
 | `OfensoresChart` | Critérios mais descumpridos | `AlertOctagon` | `text-functional-error` |
 | `RecentAuditsTable` | Tabela de monitorias recentes | `ClipboardList` | `text-brand-muted` |
+| `ManagerDecisionHistoryTable` | Decisões de gestores, com acesso por equipe | `History` | `text-brand-highlight` |
+| `CriticalErrorsTable` | Ranking de agentes e avaliações com erro crítico | `AlertOctagon` | `text-functional-error` |
 | `ActionDeadlineWidget` | Status de prazo de ação | `Clock` | `text-functional-warning` |
 
 ### `getIconBg()` Map
@@ -129,6 +144,8 @@ Mapeia automaticamente classes `text-*` → `bg-icon-*`:
 > Todos os ícones: tamanho `w-5 h-5`. Container: `w-9 h-9 rounded-xl` com classe `bg-icon-*` derivada via `getIconBg()`. NUNCA usar `bg-brand-*` para fundo de ícone (mesma cor do texto = invisível).
 
 ## Lógica de Reavaliações (History-Based)
+
+No painel do monitor de qualidade, **Total Reav. Recebidas** conta as monitorias do auditor com contestação ou solicitação de reavaliação no histórico, mesmo que a decisão ainda esteja pendente. **Reav. Aprovadas** e **Reav. Recusadas** usam o desfecho final; quando a reavaliação registra `[DE x% PARA y%]`, a mudança de nota define se foi procedente. O aceite administrativo posterior do gestor não substitui esse desfecho. Falhas de modelos de IA recuperadas por fallback aparecem no filtro “Erro ou fallback” dos logs, com a sequência de tentativas e o modelo que concluiu a análise.
 Para garantir a precisão dos rankings de contestações, os widgets não dependem apenas do `status` atual da monitoria (que pode mudar), mas sim de uma varredura no `history` da monitoria em busca de termos chave:
 - **Aceitas/Procedentes:** Busca por "aceita", "procedente", "alterada".
 - **Recusadas/Improcedentes:** Busca por "negada", "recusada", "mantida", "improcedente".

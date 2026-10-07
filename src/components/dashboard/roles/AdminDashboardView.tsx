@@ -7,6 +7,8 @@ import RankingWidget from '../widgets/RankingWidget';
 import SupportDrillDownModal from '../widgets/SupportDrillDownModal';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
+import ManagerDecisionHistoryTable from '../widgets/ManagerDecisionHistoryTable';
+import CriticalErrorsTable from '../widgets/CriticalErrorsTable';
 import DistributionChart from '../widgets/DistributionChart';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
@@ -1628,6 +1630,8 @@ export default function AdminDashboardView({
         users={isCustomizing ? mockUsersList : users}
         title="Últimas Auditorias do Sistema"
       />
+      <ManagerDecisionHistoryTable monitorias={monitorias} users={users} profile="admin" isCustomizing={isCustomizing} />
+      <CriticalErrorsTable monitorias={monitorias} forms={forms} users={users} profile="admin" isCustomizing={isCustomizing} />
 
       {drillDown && (
         <SupportDrillDownModal

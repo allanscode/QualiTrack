@@ -39,6 +39,9 @@ import FeedbacksSubtabView from './feedback/FeedbacksSubtabView';
 import MonitoriaForm from './MonitoriaForm';
 import { MonitoriaRow } from './MonitoriaRow';
 import MonitoriaDetails from './MonitoriaDetails';
+import HelpdeskSendModal from './HelpdeskSendModal';
+import { publishEvaluationToHelpdesk } from '../lib/helpdesk';
+import { isChildTicketMonitoria } from '../lib/childTicketForm';
 
 type VirtualRowProps = {
   monitorias: Monitoria[];
@@ -111,13 +114,14 @@ export default function MonitoriaList({
     targetStatus, setTargetStatus,
     submitting,
     handleAction,
-  } = useMonitoriaActions(user, monitorias, qualityConfig, load);
+  } = useMonitoriaActions(user, monitorias, qualityConfig, load, staticData.teams);
 
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const detailCloseRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const [viewingMonitoria, setViewingMonitoria] = useState<Monitoria | null>(null);
+  const [helpdeskMonitoria, setHelpdeskMonitoria] = useState<Monitoria | null>(null);
 
   // Debounced search state
   const [searchInput, setSearchInput] = useState(filters.search);
@@ -225,11 +229,12 @@ export default function MonitoriaList({
       if (filters.statusFilter === 'active' && m.active === false) return false;
       if (filters.statusFilter === 'removed' && m.active !== false) return false;
 
-      if (user?.role === 'suporte' && m.evaluated_id !== user.id) return false;
+      if (user?.role === 'suporte' && m.evaluated_id !== user.id && m.pj_reviewer_id !== user.id) return false;
 
       if (user?.role === 'gestor_suporte') {
-        if (user.team_ids?.length && m.team_id && !user.team_ids.includes(m.team_id)) return false;
-        else if (!user.team_ids?.length) return false;
+        const ownsTeam = Boolean(m.team_id && user.team_ids?.includes(m.team_id));
+        const isAssignedReviewer = m.pj_reviewer_id === user.id;
+        if (!ownsTeam && !isAssignedReviewer) return false;
       }
 
       if (filters.tab !== 'todas') {
@@ -249,6 +254,8 @@ export default function MonitoriaList({
       if (filters.teamFilter && m.team_id !== filters.teamFilter) return false;
       if (filters.suporteFilter && m.evaluated_id !== filters.suporteFilter) return false;
       if (filters.auditorFilter && m.evaluator_id !== filters.auditorFilter) return false;
+      if (filters.ticketKindFilter === 'child' && !isChildTicketMonitoria(m)) return false;
+      if (filters.ticketKindFilter === 'service' && isChildTicketMonitoria(m)) return false;
 
       if (filters.search) {
         const teamName = m.team_name || staticData.teams.find(t => t.id === m.team_id)?.name || '';
@@ -289,7 +296,7 @@ export default function MonitoriaList({
       const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
       return bTime - aTime;
     });
-  }, [monitorias, user, filters.tab, filters.search, filters.statusFilter, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.dateType, filters.startDate, filters.endDate]);
+  }, [monitorias, user, filters.tab, filters.search, filters.statusFilter, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.ticketKindFilter, filters.dateType, filters.startDate, filters.endDate]);
 
   const activeTeams = useMemo(() => {
     let filtered = staticData.teams.filter(t => t.active !== false);
@@ -302,7 +309,9 @@ export default function MonitoriaList({
   const activeSuportes = useMemo(() => {
     let filtered = staticData.users.filter(u => u.role === 'suporte' && u.active !== false);
     if (user?.role === 'gestor_suporte' && user.team_ids?.length) {
-      filtered = filtered.filter(u => u.team_ids?.some(tid => user.team_ids!.includes(tid)));
+      filtered = filtered.filter(u => u.primary_team_id
+        ? user.team_ids!.includes(u.primary_team_id)
+        : u.team_ids?.some(tid => user.team_ids!.includes(tid)));
     }
     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [staticData.users, user]);
@@ -490,6 +499,13 @@ export default function MonitoriaList({
                 />
               )}
 
+              <CustomSelect
+                value={filters.ticketKindFilter}
+                onChange={val => filters.setTicketKindFilter(val as 'all' | 'child' | 'service')}
+                options={[{ value: 'all', label: 'Todos os tickets' }, { value: 'child', label: 'Tickets filhos' }, { value: 'service', label: 'Atendimentos' }]}
+                size="sm"
+              />
+
               {/* Acompanha quem ganhou o poder de excluir logo abaixo: sem
                   isto, gestor_qualidade removeria uma monitoria e nunca mais
                   conseguiria vê-la na lista para conferir. Não existe ação de
@@ -576,15 +592,18 @@ export default function MonitoriaList({
 
                 if (!matchesActiveStatus || !matchesTab) return false;
 
-                if (user?.role === 'suporte' && m.evaluated_id !== user.id) return false;
+                if (user?.role === 'suporte' && m.evaluated_id !== user.id && m.pj_reviewer_id !== user.id) return false;
                 if (user?.role === 'gestor_suporte') {
-                  if (user.team_ids?.length && m.team_id && !user.team_ids.includes(m.team_id)) return false;
-                  else if (!user.team_ids?.length) return false;
+                  const ownsTeam = Boolean(m.team_id && user.team_ids?.includes(m.team_id));
+                  const isAssignedReviewer = m.pj_reviewer_id === user.id;
+                  if (!ownsTeam && !isAssignedReviewer) return false;
                 }
 
                 if (filters.teamFilter && m.team_id !== filters.teamFilter) return false;
                 if (filters.suporteFilter && m.evaluated_id !== filters.suporteFilter) return false;
                 if (filters.auditorFilter && m.evaluator_id !== filters.auditorFilter) return false;
+                if (filters.ticketKindFilter === 'child' && !isChildTicketMonitoria(m)) return false;
+                if (filters.ticketKindFilter === 'service' && isChildTicketMonitoria(m)) return false;
 
                 const targetDate = filters.dateType === 'analysis' ? (m.analysis_date || m.created_at) : m.ticket_date;
                 if (filters.startDate && targetDate < filters.startDate) return false;
@@ -597,7 +616,7 @@ export default function MonitoriaList({
                 <button
                   key={t}
                   onClick={() => filters.setTab(t as any)}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 flex-shrink-0 whitespace-nowrap cursor-pointer active:scale-[0.98] ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap cursor-pointer active:scale-[0.98] ${
                     filters.tab === t
                       ? 'bg-brand-primary text-brand-on-primary shadow-xs ring-1 ring-brand-primary font-black'
                       : 'bg-surface-subtle/80 text-brand-primary/80 hover:text-brand-primary hover:bg-surface-card hover:border-surface-border border border-surface-border/50'
@@ -606,7 +625,7 @@ export default function MonitoriaList({
                 >
                   <span className="whitespace-nowrap">{tabLabel}</span>
                   <span
-                    className={`px-1 py-0.5 rounded-full text-[8.5px] font-mono font-bold flex-shrink-0 min-w-3.5 text-center leading-none ${
+                    className={`px-1.5 py-1 rounded-full text-[11px] font-mono font-bold flex-shrink-0 min-w-[22px] text-center leading-none tabular-nums ${
                       filters.tab === t
                         ? 'bg-black/20 text-brand-on-primary'
                         : 'bg-surface-card text-brand-muted border border-surface-border/60'
@@ -629,7 +648,7 @@ export default function MonitoriaList({
               <List<VirtualRowProps>
                 rowComponent={VirtualMonitoriaRow}
                 rowCount={filtered.length}
-                rowHeight={48}
+                rowHeight={72}
                 rowProps={{ monitorias: filtered, teams: staticData.teams, getName, getLevelForScore, onOpen: openDetails }}
                 overscanCount={5}
                 style={{ height: 600, width: '100%' }}
@@ -700,7 +719,7 @@ export default function MonitoriaList({
                   <button ref={detailCloseRef} type="button" onClick={closeDetails} aria-label="Fechar detalhes" className="shrink-0 rounded-xl p-2 text-brand-primary hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-brand-accent"><X className="size-5" /></button>
                 </header>
                 <div className="min-h-0 overflow-y-auto p-4 sm:p-6 pb-safe">
-                  <MonitoriaDetails monitoria={m} user={user} users={staticData.users} onView={item => setViewingMonitoria(item)} onAction={modal => setActionModal(modal)} />
+                  <MonitoriaDetails monitoria={m} user={user} users={staticData.users} teams={staticData.teams} onView={item => setViewingMonitoria(item)} onAction={modal => setActionModal(modal)} onSendToHelpdesk={item => { closeDetails(); setHelpdeskMonitoria(item); }} />
                 </div>
               </>;
             })()}
@@ -715,6 +734,7 @@ export default function MonitoriaList({
                 {(() => {
                   const m = monitorias.find(item => item.id === actionModal.id);
                   const currentSt = m?.status || 'pendente_revisao';
+                  const isPjAction = Boolean(m?.pj_review_required || m?.pj_review_kind);
                   const isStepChange = actionModal.type === 'alterar_etapa' || actionModal.type === 'avancar_etapa' || actionModal.type === 'retroceder_etapa';
                   const prev = getPreviousStage(currentSt);
                   const next = getNextStage(currentSt);
@@ -729,7 +749,7 @@ export default function MonitoriaList({
                     actionModal.type === 'contestar' ? 'Contestar Avaliação' :
                     actionModal.type === 'solicitar_reavaliacao' ? 'Solicitar Reavaliação' :
                     actionModal.type === 'manter' ? 'Recusar Reavaliação' :
-                    actionModal.type === 'escalar' ? 'Escalar para Gestão Qualidade' :
+                    actionModal.type === 'escalar' ? (isPjAction ? 'Enviar contestação à Qualidade' : 'Escalar para Gestão Qualidade') :
                     actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
                     actionModal.type === 'excluir' ? 'Excluir Monitoria' :
                     'Confirmar Ação';
@@ -792,7 +812,7 @@ export default function MonitoriaList({
                             {modalTitle}
                           </h3>
                           <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">
-                            Protocolo #{m?.display_id || '---'} · Ticket #{m?.ticket_id || 'S/N'}
+                            Monitoria #{m?.display_id || m?.id.slice(0, 8) || 'S/N'} · Ticket #{m?.ticket_id || 'S/N'}
                           </p>
                         </div>
                       </div>
@@ -922,6 +942,15 @@ export default function MonitoriaList({
                         </div>
                       )}
 
+                      {actionModal.type === 'aprovar' && (user?.role === 'gestor_qualidade' || user?.role === 'admin')
+                        && m && !isChildTicketMonitoria(m) && (
+                        <div className="mb-4 rounded-xl border border-brand-accent/30 bg-brand-accent/5 p-3 text-xs text-brand-primary">
+                          <p className="font-bold">Ao aprovar, o sistema enviará ao Zendesk como {m.score >= 75 ? 'Ticket Válido' : 'Ticket Invalidado'} se esta monitoria ainda não tiver sido publicada.</p>
+                          <p className="mt-2 font-semibold">Registro do Auditor</p>
+                          <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap">{m.evaluator_note || 'Sem registro preenchido.'}</p>
+                        </div>
+                      )}
+
                       {/* Suporte a Anexos (WQ-22) */}
                       <div className="mb-6">
                         <div className="flex items-center justify-between mb-2">
@@ -997,9 +1026,21 @@ export default function MonitoriaList({
                           variant="primary"
                           className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest"
                           onClick={async () => {
+                            const approvedMonitoria = actionModal.type === 'aprovar'
+                              && (user?.role === 'gestor_qualidade' || user?.role === 'admin')
+                              && m && !isChildTicketMonitoria(m) ? m : null;
                             const success = await handleAction();
                             if (success) {
                               closeDetails();
+                              if (approvedMonitoria) {
+                                const result = await publishEvaluationToHelpdesk(approvedMonitoria.id);
+                                if (result?.success) {
+                                  toast.success(`Registro do Auditor enviado ao Zendesk no ticket #${approvedMonitoria.ticket_id}.`);
+                                } else if (result) {
+                                  toast.error(`Monitoria aprovada, mas o envio ao Zendesk falhou: ${result.error}`);
+                                  setHelpdeskMonitoria(approvedMonitoria);
+                                }
+                              }
                             }
                           }}
                           disabled={submitting || Boolean(isSameStage)}
@@ -1021,6 +1062,15 @@ export default function MonitoriaList({
           initialData={viewingMonitoria}
           onCancel={() => setViewingMonitoria(null)}
           onSaved={() => { setViewingMonitoria(null); load(); }}
+        />
+      )}
+
+      {helpdeskMonitoria && (
+        <HelpdeskSendModal
+          monitoriaId={helpdeskMonitoria.id}
+          ticketId={helpdeskMonitoria.ticket_id}
+          suggestedOutcome={helpdeskMonitoria.score >= 75 ? 'positiva' : 'negativa'}
+          onClose={() => setHelpdeskMonitoria(null)}
         />
       )}
     </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../lib/supabase';
 import { AIEvaluationLog, User } from '../../types';
+import { getAiLogSummary, matchesAiLogStatus } from '../../lib/aiLogSummary';
 import {
   RefreshCw,
   Search,
@@ -59,11 +60,7 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
         .from('ai_evaluation_logs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (filterStatus !== 'all') {
-        query = query.eq('status', filterStatus);
-      }
+        .limit(300);
       if (filterType !== 'all') {
         query = query.eq('evaluation_type', filterType);
       }
@@ -81,15 +78,17 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
 
   useEffect(() => {
     fetchLogs();
-  }, [filterStatus, filterType]);
+  }, [filterType]);
 
   const filteredLogs = logs.filter(log => {
+    if (!matchesAiLogStatus(log, filterStatus)) return false;
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
       log.ticket_id.toLowerCase().includes(term) ||
       (log.ticket_subject && log.ticket_subject.toLowerCase().includes(term)) ||
-      log.model.toLowerCase().includes(term)
+      log.model.toLowerCase().includes(term) ||
+      log.attempts?.some(attempt => attempt.model.toLowerCase().includes(term) || attempt.reason?.toLowerCase().includes(term))
     );
   });
 
@@ -147,7 +146,7 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
           >
             <option value="all">Todos os Status</option>
             <option value="success">Sucesso</option>
-            <option value="error">Erro</option>
+            <option value="error">Erro ou fallback</option>
           </select>
         </div>
 
@@ -196,7 +195,9 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-border/50">
-                {filteredLogs.map(log => (
+                {filteredLogs.map(log => {
+                  const summary = getAiLogSummary(log);
+                  return (
                   <tr key={log.id} className="hover:bg-surface-subtle/40 transition-colors">
                     <td className="py-3 px-4 font-mono font-bold text-brand-primary">
                       #{log.ticket_id}
@@ -224,12 +225,28 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                         <span className="font-bold text-brand-primary uppercase">{log.provider}</span>
                         <span className="text-brand-muted">({log.model})</span>
                       </div>
+                      {summary.fallbackUsed && (
+                        <span className="mt-1 block text-[10px] font-bold text-functional-warning">
+                          Fallback: {summary.finalModel}
+                        </span>
+                      )}
+                      {summary.failedAttempts.length > 0 && (
+                        <span className="mt-0.5 block text-[10px] text-functional-warning">
+                          {summary.failedAttempts.length} tentativa(s) com falha: {summary.failedAttempts.map(attempt => attempt.model).join(', ')}
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4 font-mono text-brand-muted">
                       {log.duration_ms ? `${(log.duration_ms / 1000).toFixed(2)}s` : '--'}
                     </td>
                     <td className="py-3 px-4">
-                      {log.status === 'success' ? (
+                      {summary.hadRecoverableError ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-functional-warning"
+                          title={summary.failedAttempts.map(attempt => `${attempt.model}: ${attempt.message || attempt.reason || 'falha'}`).join('; ')}>
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          {summary.fallbackUsed ? 'Sucesso após fallback' : 'Sucesso após retry'}
+                        </span>
+                      ) : log.status === 'success' ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold text-functional-success">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           Sucesso
@@ -256,7 +273,8 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                       </Button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -429,6 +447,43 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                       </p>
                     </Card>
                   </div>
+
+                  {selectedLog.attempts && selectedLog.attempts.length > 0 && (
+                    <Card className="space-y-3 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold text-brand-primary">Tentativas dos modelos</span>
+                        {getAiLogSummary(selectedLog).fallbackUsed && (
+                          <Badge variant="warning" size="xs">Fallback usado: {getAiLogSummary(selectedLog).finalModel}</Badge>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        {selectedLog.attempts.map((attempt, index) => (
+                          <div key={`${attempt.model}-${attempt.attempt}-${index}`}
+                            className={`rounded-lg border p-3 ${attempt.status === 'failed'
+                              ? 'border-functional-warning/30 bg-functional-warning/10'
+                              : 'border-functional-success/30 bg-functional-success/10'}`}>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-mono font-bold text-brand-primary">{index + 1}. {attempt.model}</span>
+                              <span className={attempt.status === 'failed' ? 'font-bold text-functional-warning' : 'font-bold text-functional-success'}>
+                                {attempt.status === 'failed' ? 'Falha' : 'Sucesso'}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-[11px] text-brand-muted">
+                              {attempt.provider}{attempt.routedProvider ? ` / ${attempt.routedProvider}` : ''}
+                              {attempt.durationMs != null ? ` • ${(attempt.durationMs / 1000).toFixed(2)}s` : ''}
+                              {attempt.httpStatus ? ` • HTTP ${attempt.httpStatus}` : ''}
+                            </p>
+                            {attempt.status === 'failed' && (
+                              <p className="mt-1 text-[11px] text-functional-warning">
+                                {attempt.message || attempt.reason || 'Falha sem detalhe'}
+                                {attempt.reason && attempt.message ? ` (${attempt.reason})` : ''}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  )}
 
                   {selectedLog.selection_context && (
                     <Card className="space-y-3 p-4">

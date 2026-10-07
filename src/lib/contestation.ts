@@ -25,12 +25,12 @@ export function isRejectionAction(action: string): boolean {
 
 export function isContestationAction(action: string): boolean {
   const lower = action.toLowerCase();
-  return action.includes('Contestação') || lower.includes('contestou') || lower.includes('solicitou reavaliação');
+  return /contest(a|o)/.test(lower) || lower.includes('reavaliação solicitada') || lower.includes('solicitou reavaliação');
 }
 
 export function isResolutionAction(action: string): boolean {
   // Excluir notas de reavaliação que contêm keywords mas não são resoluções formais
-  if (action.startsWith('Monitoria Reavaliada') || action.startsWith('Reavaliação:')) return false;
+  if (action.startsWith('Monitoria Reavaliada') || action.startsWith('Reavaliação:') || action.startsWith('Gestor PJ encaminhou')) return false;
   return isApprovalAction(action) || isRejectionAction(action);
 }
 
@@ -54,17 +54,34 @@ export function getLastResolution(history: Monitoria['history']): { action: stri
   return resolutions[resolutions.length - 1];
 }
 
+/** O parecer final de uma reavaliação é a mudança de nota, não o aceite administrativo posterior. */
+export function getContestationOutcome(monitoria: Monitoria): 'approved' | 'rejected' | null {
+  if (monitoria.contestation_result === 'approved' || monitoria.contestation_result === 'rejected') {
+    return monitoria.contestation_result;
+  }
+  if (monitoria.status === 'concluida' || monitoria.status === 'finalizada_alterada') {
+    const reevaluation = [...(monitoria.history || [])].reverse().find(entry =>
+      entry.action.toLowerCase().includes('monitoria reavaliada'));
+    const scoreChange = reevaluation?.note?.match(/\[DE\s+([\d.,]+)%?\s+PARA\s+([\d.,]+)%?\]/i);
+    if (scoreChange) {
+      const before = Number(scoreChange[1].replace(',', '.'));
+      const after = Number(scoreChange[2].replace(',', '.'));
+      if (Number.isFinite(before) && Number.isFinite(after)) return before === after ? 'rejected' : 'approved';
+    }
+  }
+  const last = getLastResolution(monitoria.history);
+  if (!last) return null;
+  return isRejectionAction(last.action) ? 'rejected' : 'approved';
+}
+
 export function countContestationOutcomes(monitorias: Monitoria[]): { accepted: number; rejected: number; total: number } {
   const contested = getContestedMonitorias(monitorias);
   let accepted = 0;
   let rejected = 0;
   contested.forEach(m => {
-    if (m.contestation_result === 'approved') { accepted++; return; }
-    if (m.contestation_result === 'rejected') { rejected++; return; }
-    const last = getLastResolution(m.history);
-    if (!last) return;
-    if (isApprovalAction(last.action)) accepted++;
-    else if (isRejectionAction(last.action)) rejected++;
+    const outcome = getContestationOutcome(m);
+    if (outcome === 'approved') accepted++;
+    else if (outcome === 'rejected') rejected++;
   });
   return { accepted, rejected, total: contested.length };
 }

@@ -1,44 +1,54 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AIModelError, httpAIError, runAIModelChain, type AIModelTarget } from './ai-fallback';
+import { OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS } from './openrouter-client';
 
-const targets: AIModelTarget[] = [
-  { provider: 'openrouter', model: 'z-ai/glm-5.3-flash', maxAttempts: 4, timeoutMs: 30_000 },
-  { provider: 'openrouter', model: 'google/gemini-3.8-flash', maxAttempts: 3, timeoutMs: 45_000 },
-];
+const targets: AIModelTarget[] = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS].map(model => ({
+  provider: 'openrouter', model, maxAttempts: 2, timeoutMs: 30_000,
+}));
 const noSleep = async () => undefined;
 
-describe('GLM pago primeiro; Gemini pago somente como contingência', () => {
-  it('começa e termina no GLM quando ele responde, mantendo failover de provider', async () => {
+describe('cadeia paga GLM, Gemma e Gemini', () => {
+  it('começa e termina no GLM quando ele responde', async () => {
     const execute = vi.fn(async (_target: AIModelTarget) => ({ value: 'válida', routedProvider: 'outro provider', routerAttempt: 2 }));
     const result = await runAIModelChain({ targets, execute, sleep: noSleep });
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(execute.mock.calls[0][0].model).toBe('z-ai/glm-5.3-flash');
-    expect(result).toMatchObject({ model: 'z-ai/glm-5.3-flash', fallbackUsed: false, routerAttempt: 2 });
+    expect(execute.mock.calls[0][0].model).toBe(OPENROUTER_MODEL);
+    expect(result).toMatchObject({ model: OPENROUTER_MODEL, fallbackUsed: false, routerAttempt: 2 });
   });
 
-  it.each([429, 500, 503])('faz retry do GLM em HTTP %i antes de usar Gemini', async status => {
+  it.each([429, 500, 503])('repete o GLM em HTTP %i antes de trocar de modelo', async status => {
     const execute = vi.fn(async (target: AIModelTarget, attempt: number) => {
-      if (target.model === targets[0].model && attempt < 4)
+      if (target.model === targets[0].model && attempt === 1)
         throw new AIModelError('falha', status === 429 ? 'rate_limit' : 'server_error', true, 'attempt', status);
       return { value: 'válida' };
     });
     const result = await runAIModelChain({ targets, execute, sleep: noSleep });
     expect(result.model).toBe(targets[0].model);
     expect(result.fallbackUsed).toBe(false);
-    expect(execute).toHaveBeenCalledTimes(4);
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
-  it('usa Gemini após esgotar retries do GLM e conclui com um único resultado', async () => {
+  it('usa Gemma após esgotar o GLM e registra a sequência', async () => {
     const execute = vi.fn(async (target: AIModelTarget) => {
       if (target.model === targets[0].model) throw new AIModelError('500', 'server_error', true, 'attempt', 500);
-      return { value: { summary: 'Gemini concluiu' } };
+      return { value: { summary: 'Gemma concluiu' } };
     });
     const result = await runAIModelChain({ targets, execute, sleep: noSleep });
-    expect(result.value).toEqual({ summary: 'Gemini concluiu' });
+    expect(result.value).toEqual({ summary: 'Gemma concluiu' });
     expect(result.model).toBe(targets[1].model);
     expect(result.fallbackUsed).toBe(true);
+    expect(result.attempts.map(attempt => attempt.model)).toEqual([targets[0].model, targets[0].model, targets[1].model]);
+  });
+
+  it('usa Gemini somente após GLM e Gemma falharem', async () => {
+    const execute = vi.fn(async (target: AIModelTarget) => {
+      if (target.model !== targets[2].model) throw new AIModelError('500', 'server_error', true, 'attempt', 500);
+      return { value: 'Gemini concluiu' };
+    });
+    const result = await runAIModelChain({ targets, execute, sleep: noSleep });
+    expect(result.model).toBe(targets[2].model);
     expect(result.attempts.map(attempt => attempt.model)).toEqual([
-      targets[0].model, targets[0].model, targets[0].model, targets[0].model, targets[1].model,
+      targets[0].model, targets[0].model, targets[1].model, targets[1].model, targets[2].model,
     ]);
   });
 
@@ -47,15 +57,15 @@ describe('GLM pago primeiro; Gemini pago somente como contingência', () => {
     const shortTargets = [{ ...targets[0], maxAttempts: 1, timeoutMs: 15 }, targets[1]];
     const execute = vi.fn((target: AIModelTarget) => target.model === targets[0].model
       ? new Promise<{ value: string }>(resolve => { finishLate = resolve; })
-      : Promise.resolve({ value: 'Gemini venceu' }));
+      : Promise.resolve({ value: 'Gemma venceu' }));
     const result = await runAIModelChain({ targets: shortTargets, execute, sleep: noSleep });
     finishLate({ value: 'GLM atrasado' });
-    expect(result.value).toBe('Gemini venceu');
+    expect(result.value).toBe('Gemma venceu');
     expect(result.attempts[0].reason).toBe('timeout');
     expect(result.attempts[1].model).toBe(targets[1].model);
   });
 
-  it('cancelamento manual aborta sem retry nem Gemini', async () => {
+  it('cancelamento manual aborta a cadeia', async () => {
     const controller = new AbortController();
     const execute = vi.fn((_target: AIModelTarget, _attempt: number, signal: AbortSignal) =>
       new Promise<{ value: string }>((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('abort')), { once: true })));
@@ -66,14 +76,14 @@ describe('GLM pago primeiro; Gemini pago somente como contingência', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
-  it('ambos falham e preserva histórico das sete tentativas para reprocessamento', async () => {
+  it('preserva o histórico das seis tentativas quando todos falham', async () => {
     const execute = vi.fn(async () => { throw new AIModelError('429', 'rate_limit', true, 'attempt', 429); });
     await expect(runAIModelChain({ targets, execute, sleep: noSleep }))
-      .rejects.toMatchObject({ reason: 'rate_limit', attempts: expect.arrayContaining([expect.objectContaining({ model: targets[1].model, attempt: 3 })]) });
-    expect(execute).toHaveBeenCalledTimes(7);
+      .rejects.toMatchObject({ reason: 'rate_limit', attempts: expect.arrayContaining([expect.objectContaining({ model: targets[2].model, attempt: 2 })]) });
+    expect(execute).toHaveBeenCalledTimes(6);
   });
 
-  it.each([400, 401, 403])('erro global HTTP %i não chama Gemini', async status => {
+  it.each([400, 401, 403])('erro global HTTP %i interrompe a cadeia', async status => {
     const error = await httpAIError('openrouter', targets[0].model, new Response('segredo', { status }));
     const execute = vi.fn(async () => { throw error; });
     await expect(runAIModelChain({ targets, execute, sleep: noSleep })).rejects.toMatchObject({ httpStatus: status });
@@ -81,9 +91,9 @@ describe('GLM pago primeiro; Gemini pago somente como contingência', () => {
     expect(error.message).not.toContain('segredo');
   });
 
-  it('recusa modelo gratuito ou ordem invertida', async () => {
+  it('recusa cadeia vazia', async () => {
     const execute = vi.fn();
-    await expect(runAIModelChain({ targets: [{ ...targets[0], model: `${targets[0].model}:free` }, targets[1]], execute }))
+    await expect(runAIModelChain({ targets: [], execute }))
       .rejects.toMatchObject({ reason: 'request_configuration_error' });
     expect(execute).not.toHaveBeenCalled();
   });

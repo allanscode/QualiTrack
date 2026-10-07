@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { EvaluationForm, Monitoria, DissatisfactionField } from '../types';
+import { ChildTicketAiEvaluation, EvaluationForm, Monitoria, DissatisfactionField } from '../types';
 import { calculateQualityScore } from '../utils/qualityMath';
 import { toTicketDateInput } from '../lib/ticketDateTime';
+import { CHILD_TICKET_FORM_ID, childEvaluationFormPrefill, shouldUseChildFormForReevaluation } from '../lib/childTicketForm';
 
 const DEFAULT_HEADER = (initialData?: Monitoria) => {
   const today = new Date().toISOString().split('T')[0];
@@ -29,18 +30,33 @@ export function useMonitoriaFormState(
   forms: EvaluationForm[],
   dissatisfactionFields: DissatisfactionField[]
 ) {
+  const childEvaluation = (initialData as Monitoria & { childAiEvaluation?: ChildTicketAiEvaluation } | undefined)?.childAiEvaluation;
+  const childPrefill = initialData?.form_id === CHILD_TICKET_FORM_ID && !initialData.id && childEvaluation
+    ? childEvaluationFormPrefill(childEvaluation) : undefined;
+  const reevalChildWithWrongForm = shouldUseChildFormForReevaluation(initialData)
+    && initialData?.form_id !== CHILD_TICKET_FORM_ID;
+  const reevaluationFormId = shouldUseChildFormForReevaluation(initialData)
+    ? CHILD_TICKET_FORM_ID : undefined;
   const [step, setStep] = useState(1);
   const [dissatisfactionAnswers, setDissatisfactionAnswers] = useState<Record<string, string[]>>(initialData?.dissatisfaction_answers || {});
-  const [header, setHeader] = useState(() => DEFAULT_HEADER(initialData));
-  const [scores, setScores] = useState<Record<string, 'SIM' | 'NAO' | 'NA'>>(initialData?.answers || {});
-  const [observations, setObservations] = useState<Record<string, string>>(initialData?.question_observations || {});
-  const [criticalErrorObservations, setCriticalErrorObservations] = useState<Record<string, string>>(initialData?.critical_error_observations || {});
+  const [header, setHeader] = useState(() => ({
+    ...DEFAULT_HEADER(initialData),
+    ...(childPrefill && !initialData?.evaluator_note ? { evaluator_note: childPrefill.evaluator_note } : {}),
+    ...(reevaluationFormId ? { form_id: reevaluationFormId } : {}),
+  }));
+  const [scores, setScores] = useState<Record<string, 'SIM' | 'NAO' | 'NA'>>(
+    reevalChildWithWrongForm ? {} : { ...childPrefill?.answers, ...initialData?.answers });
+  const [observations, setObservations] = useState<Record<string, string>>(
+    reevalChildWithWrongForm ? {} : { ...childPrefill?.question_observations, ...initialData?.question_observations });
+  const [criticalErrorObservations, setCriticalErrorObservations] = useState<Record<string, string>>(
+    reevalChildWithWrongForm ? {} : initialData?.critical_error_observations || {});
   const [criticalErrors, setCriticalErrors] = useState<Record<string, boolean>>(
-    (initialData?.selected_critical_errors || []).reduce((acc: any, id: string) => ({ ...acc, [id]: true }), {})
+    (reevalChildWithWrongForm ? [] : initialData?.selected_critical_errors || [])
+      .reduce((acc: Record<string, boolean>, id: string) => ({ ...acc, [id]: true }), {})
   );
 
   const selectedForm = useMemo(() => {
-    if (initialData?.form_snapshot) return initialData.form_snapshot;
+    if (initialData?.form_snapshot && initialData.form_id === header.form_id) return initialData.form_snapshot;
     return forms.find(f => f.id === header.form_id);
   }, [initialData, forms, header.form_id]);
 
