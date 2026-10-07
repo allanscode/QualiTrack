@@ -1,3 +1,5 @@
+import { buildSupportRanking, compareSupportRanking, selectRankingBaseline } from '../../../lib/supportRanking';
+import type { Monitoria } from '../../../types';
 import React, { useMemo, useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { usePresence } from '../../../providers/PresenceProvider';
@@ -491,24 +493,8 @@ export default function SupportManagerDashboard({
   // Rankings
   const agentRanking = useMemo(() => {
     if (isCustomizing) return [];
-    const map: Record<string, { total: number; count: number; monitorias: any[] }> = {};
-    scoredMonitorias.forEach((m: any) => {
-      const id = m.evaluated_id;
-      if (!map[id]) map[id] = { total: 0, count: 0, monitorias: [] };
-      map[id].total += m.score || 0;
-      map[id].count++;
-      map[id].monitorias.push(m);
-    });
-    return Object.entries(map)
-      .map(([id, s]) => ({
-        id,
-        name: users.find((u: any) => u.id === id)?.name || id,
-        score: Math.round((s.total / s.count) * 100) / 100,
-        count: s.count,
-        monitorias: s.monitorias
-      }))
-      .sort((a, b) => b.score - a.score);
-  }, [isCustomizing, scoredMonitorias, users]);
+    return buildSupportRanking(scoredMonitorias, selectRankingBaseline(allMonitorias.filter((m: Monitoria) => myTeamIds.includes(m.team_id ?? '')), filters), users);
+  }, [isCustomizing, scoredMonitorias, allMonitorias, filters, users, myTeamIds]);
 
   // Melhores Suporte
   const topAgents = useMemo(() => {
@@ -521,7 +507,7 @@ export default function SupportManagerDashboard({
     if (isCustomizing) return mockBottomAgents;
     return agentRanking
       .filter(a => a.score < config.targetScore)
-      .sort((a, b) => a.score - b.score)
+      .sort((a, b) => compareSupportRanking(a, b, true))
       .slice(0, 5);
   }, [isCustomizing, agentRanking, config.targetScore]);
 
@@ -1253,7 +1239,7 @@ export default function SupportManagerDashboard({
         <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Melhores Suporte"
-            subtitle={`Agentes acima da meta (${config.targetScore}%)`}
+            subtitle={`Nota ajustada acima da meta (${config.targetScore}%)`}
             data={topAgents}
             isCustomizing={isCustomizing}
             profile="gestor_suporte"
@@ -1261,7 +1247,7 @@ export default function SupportManagerDashboard({
             setActiveEditingId={setActiveEditingId}
             onItemClick={(item) => setDrillDown({
               title: `Melhores Suporte · ${item.name}`,
-              subtitle: `Monitorias avaliadas do atendente no período selecionado (Média: ${(item.score ?? 0).toFixed(1)}%)`,
+              subtitle: `Monitorias avaliadas do atendente no período selecionado (Média: ${(item.rawScore ?? item.score ?? 0).toFixed(1)}%)`,
               monitorias: item.monitorias || myMonitorias.filter((m: any) => m.evaluated_id === item.id),
             })}
           />
@@ -1269,7 +1255,7 @@ export default function SupportManagerDashboard({
         <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Maiores Ofensores"
-            subtitle={`Agentes abaixo da meta (${config.targetScore}%)`}
+            subtitle={`Nota ajustada abaixo da meta (${config.targetScore}%)`}
             data={bottomAgents}
             icon={<Target className="w-5 h-5" />}
             accent="text-functional-warning"
@@ -1279,7 +1265,7 @@ export default function SupportManagerDashboard({
             setActiveEditingId={setActiveEditingId}
             onItemClick={(item) => setDrillDown({
               title: `Maiores Ofensores · ${item.name}`,
-              subtitle: `Monitorias com oportunidades de melhoria do atendente no período (Média: ${(item.score ?? 0).toFixed(1)}%)`,
+              subtitle: `Monitorias com oportunidades de melhoria do atendente no período (Média: ${(item.rawScore ?? item.score ?? 0).toFixed(1)}%)`,
               monitorias: item.monitorias || myMonitorias.filter((m: any) => m.evaluated_id === item.id),
             })}
           />

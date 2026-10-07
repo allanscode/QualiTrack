@@ -11,6 +11,7 @@ export interface RankingItem {
   id: string;
   name: string;
   score?: number;
+  rawScore?: number;
   count: number;
   monitorias?: any[];
 }
@@ -257,7 +258,9 @@ function RankingWidget({
                     const isReav = title.toLowerCase().includes('reav');
                     const isCrit = title.toLowerCase().includes('crit') || title.toLowerCase().includes('ofensor');
                     if (type === 'score') {
-                      return `Score Médio: ${(item.score ?? 0).toFixed(1)}% | Total: ${item.count} mon.`;
+                      return item.rawScore !== undefined
+                        ? `Nota ajustada: ${(item.score ?? 0).toFixed(1)}% | Média: ${item.rawScore.toFixed(1)}%`
+                        : `Score Médio: ${(item.score ?? 0).toFixed(1)}% | Total: ${item.count} mon.`;
                     } else if (isReav) {
                       return `Reavaliações: ${item.count} Vol.`;
                     } else if (isCrit) {
@@ -292,7 +295,7 @@ function RankingWidget({
                 </p>
                 {!isCount && (
                   <p className="text-[9px] font-semibold text-slate-800 dark:text-slate-400 mt-0.5 truncate">
-                    {item.count} mon.
+                    {item.count} mon.{item.rawScore !== undefined && ` · Média ${item.rawScore.toFixed(1)}%`}
                   </p>
                 )}
               </div>
@@ -302,6 +305,7 @@ function RankingWidget({
                 <div className="text-right">
                   <div className={`text-xs font-bold ${isCount ? 'text-brand-primary' : level.color}`}>
                     {isCount ? `${item.count} Vol.` : `${(item.score ?? 0).toFixed(1)}%`}
+                    {item.rawScore !== undefined && <span className="block text-[9px] font-medium text-brand-muted">ajustada</span>}
                   </div>
                 </div>
                 {onItemClick && (

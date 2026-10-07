@@ -1,3 +1,4 @@
+import { buildSupportRanking, compareSupportRanking, selectRankingBaseline } from '../../../lib/supportRanking';
 import React, { useMemo, useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { usePresence } from '../../../providers/PresenceProvider';
@@ -530,24 +531,8 @@ export default function AdminDashboardView({
 
   const agentRanking = useMemo(() => {
     if (isCustomizing) return [];
-    const map: Record<string, { total: number; count: number; monitorias: any[] }> = {};
-    scoredMonitorias.forEach((m: any) => {
-      const id = m.evaluated_id;
-      if (!map[id]) map[id] = { total: 0, count: 0, monitorias: [] };
-      map[id].total += m.score || 0;
-      map[id].count++;
-      map[id].monitorias.push(m);
-    });
-    return Object.entries(map)
-      .map(([id, s]) => ({
-        id,
-        name: users.find((u: any) => u.id === id)?.name || id,
-        score: Math.round((s.total / s.count) * 100) / 100,
-        count: s.count,
-        monitorias: s.monitorias
-      }))
-      .sort((a, b) => b.score - a.score);
-  }, [isCustomizing, scoredMonitorias, users]);
+    return buildSupportRanking(scoredMonitorias, selectRankingBaseline(allMonitorias, filters), users);
+  }, [isCustomizing, scoredMonitorias, allMonitorias, filters, users]);
 
   const topAgents = useMemo(() => {
     if (isCustomizing) return mockTopAgents;
@@ -558,7 +543,7 @@ export default function AdminDashboardView({
     if (isCustomizing) return mockBottomAgents;
     return agentRanking
       .filter((a: any) => a.score < config.targetScore)
-      .sort((a: any, b: any) => a.score - b.score)
+      .sort((a, b) => compareSupportRanking(a, b, true))
       .slice(0, 5);
   }, [isCustomizing, agentRanking, config.targetScore]);
 
@@ -1508,7 +1493,7 @@ export default function AdminDashboardView({
         <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Melhores Suporte"
-            subtitle="Top 5 por score médio"
+            subtitle="Top 5 por nota ajustada"
             data={topAgents}
             type="score"
             isCustomizing={isCustomizing}
@@ -1517,7 +1502,7 @@ export default function AdminDashboardView({
             setActiveEditingId={setActiveEditingId}
             onItemClick={(item) => setDrillDown({
               title: `Melhores Suporte · ${item.name}`,
-              subtitle: `Monitorias avaliadas do atendente no período selecionado (Média: ${(item.score ?? 0).toFixed(1)}%)`,
+              subtitle: `Monitorias avaliadas do atendente no período selecionado (Média: ${(item.rawScore ?? item.score ?? 0).toFixed(1)}%)`,
               monitorias: item.monitorias || monitorias.filter((m: any) => m.evaluated_id === item.id),
             })}
           />
@@ -1525,7 +1510,7 @@ export default function AdminDashboardView({
         <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Maiores Ofensores"
-            subtitle="Pontos de melhoria"
+            subtitle="Menores notas ajustadas"
             data={bottomAgents}
             type="score"
             icon={<AlertTriangle className="w-5 h-5" />}
@@ -1536,7 +1521,7 @@ export default function AdminDashboardView({
             setActiveEditingId={setActiveEditingId}
             onItemClick={(item) => setDrillDown({
               title: `Maiores Ofensores · ${item.name}`,
-              subtitle: `Monitorias com oportunidades de melhoria ou desvios do atendente no período (Média: ${(item.score ?? 0).toFixed(1)}%)`,
+              subtitle: `Monitorias com oportunidades de melhoria ou desvios do atendente no período (Média: ${(item.rawScore ?? item.score ?? 0).toFixed(1)}%)`,
               monitorias: item.monitorias || monitorias.filter((m: any) => m.evaluated_id === item.id),
             })}
           />

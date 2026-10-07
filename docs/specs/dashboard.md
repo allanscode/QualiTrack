@@ -11,6 +11,26 @@
 
 ## Arquitetura
 
+### Ranking de suporte: média ajustada
+
+Os rankings **Melhores Suporte** e **Maiores Ofensores**, nos painéis de administrador,
+gestor da qualidade e gestor de suporte, usam `(n × média real + 5 × média da equipe) / (n + 5)`.
+O peso fixo 5 reduz a influência de amostras pequenas. A nota ajustada ordena o ranking
+e determina o corte da meta configurada; média real e quantidade continuam visíveis.
+Nenhuma nota original é alterada no banco. Agentes sem monitorias com nota ficam fora;
+zero é uma nota válida. Monitorias inativas e notas ausentes ou não finitas não contam.
+
+A média da equipe usa somente dados já autorizados por RBAC, com os mesmos filtros
+de período, equipe, auditor, formulário, status e canal. O filtro de agente restringe
+os participantes exibidos, mas não a média de referência da equipe. Um agente com
+monitorias em várias equipes recebe a média de referência ponderada pela quantidade
+de suas monitorias em cada equipe; monitorias sem equipe formam um grupo separado.
+Empates usam maior quantidade de monitorias, nome e ID, nessa ordem. A ordenação
+usa a precisão integral; o arredondamento ocorre apenas na apresentação.
+
+O cálculo compartilhado está em `src/lib/supportRanking.ts` e funciona igualmente
+com dados Supabase e MockDb, sem consultas adicionais nem alteração das notas salvas.
+
 ```
 DashboardMain
 ├── DashboardProvider (Context + Realtime)
