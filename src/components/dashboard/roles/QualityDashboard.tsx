@@ -5,6 +5,7 @@ import DistributionChart from '../widgets/DistributionChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import ManagerDecisionHistoryTable from '../widgets/ManagerDecisionHistoryTable';
 import CriticalErrorsTable from '../widgets/CriticalErrorsTable';
+import AgentEvaluationVolumeTable from '../widgets/AgentEvaluationVolumeTable';
 import ActionDeadlineWidget from '../widgets/ActionDeadlineWidget';
 import ComparativeBarChart from '../widgets/ComparativeBarChart';
 import OfensoresChart from '../widgets/OfensoresChart';
@@ -786,6 +787,7 @@ export default function QualityDashboard({
       {/* LINHA 8 (Tabela Base - grid-cols-1) */}
       <ManagerDecisionHistoryTable monitorias={monitorias} users={users} profile="qualidade" isCustomizing={isCustomizing} />
       <CriticalErrorsTable monitorias={monitorias} forms={forms} users={users} profile="qualidade" isCustomizing={isCustomizing} />
+      <AgentEvaluationVolumeTable monitorias={myMonitorias} users={users} profile="qualidade" isCustomizing={isCustomizing} />
       <div className="overflow-hidden">
         <RecentAuditsTable 
           monitorias={useFallback ? mockRecentMonitorias : myMonitorias} 

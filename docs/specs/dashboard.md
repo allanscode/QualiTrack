@@ -11,6 +11,26 @@
 
 ## Arquitetura
 
+### Volume de avaliações por agente
+
+A tabela **Avaliações por Agente** está disponível para administrador, gestores de
+qualidade e suporte e monitores de qualidade, inclusive em Customizar Dashboards.
+Usa as monitorias já filtradas e autorizadas de cada painel: o gestor de suporte
+vê suas equipes e o monitor de qualidade suas próprias avaliações.
+
+As categorias seguem as filas: pesquisa `Positiva`, `Negativa` e `Sem pesquisa`
+(proativa), independentemente da nota. Chamados filhos e registros sem classificação
+ficam em **Outras**, exibida quando necessária. O total soma todas essas categorias.
+Conta cada monitoria salva, ativa e com nota válida uma vez, inclusive nota zero;
+rascunhos de IA e agentes sem monitorias não entram.
+
+O seletor ordena por positivas, negativas, proativas ou total (padrão), com botão
+para alternar maior/menor primeiro. Empates usam total decrescente, nome e ID. A
+busca por agente/equipe preserva a posição no ranking; há dez agentes por página,
+e o rodapé soma todos os agentes encontrados, não apenas a página visível.
+Não há consultas extras nem alteração dos dados salvos; Supabase e MockDb usam
+o mesmo cálculo em `src/lib/agentEvaluationVolume.ts`.
+
 ### Ranking de suporte: média ajustada
 
 Os rankings **Melhores Suporte** e **Maiores Ofensores**, nos painéis de administrador,

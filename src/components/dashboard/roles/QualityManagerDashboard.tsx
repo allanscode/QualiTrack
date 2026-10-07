@@ -10,6 +10,7 @@ import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import ManagerDecisionHistoryTable from '../widgets/ManagerDecisionHistoryTable';
 import CriticalErrorsTable from '../widgets/CriticalErrorsTable';
+import AgentEvaluationVolumeTable from '../widgets/AgentEvaluationVolumeTable';
 import DistributionChart from '../widgets/DistributionChart';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
@@ -1637,6 +1638,7 @@ export default function QualityManagerDashboard({
       />
       <ManagerDecisionHistoryTable monitorias={monitorias} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />
       <CriticalErrorsTable monitorias={monitorias} forms={forms} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />
+      <AgentEvaluationVolumeTable monitorias={monitorias} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />
 
       {drillDown && (
         <SupportDrillDownModal
