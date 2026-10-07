@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AIEvaluationResult, EvaluationForm } from '../types';
-import { calculateAIEvaluationScore } from './aiEvaluationScore';
+import { calculateAIEvaluationScore, describeAICriticalScore } from './aiEvaluationScore';
 
 const form: EvaluationForm = {
   id: 'form-1', title: 'Ficha principal', description: '', team_id: '', active: true,
@@ -23,6 +23,13 @@ const evaluation = {
 } satisfies AIEvaluationResult;
 
 describe('calculateAIEvaluationScore', () => {
+  it('explains a zero caused by critical errors without replacing the official grade', () => {
+    const criticalForm = { ...form, critical_errors: [{ id: 'critical', text: 'Registro da solução', type: 'yes_no_na' as const, is_critical: true }] };
+    const result = { ...evaluation, suggested_critical_errors: { critical: true }, suggested_observations: { critical: 'Descrição insuficiente' } };
+    expect(calculateAIEvaluationScore(result, criticalForm)).toBe(0);
+    expect(describeAICriticalScore(result, criticalForm)).toEqual({ criteriaScore: 70, reasons: ['Descrição insuficiente'] });
+    expect(describeAICriticalScore(evaluation, form)).toBeUndefined();
+  });
   it('uses the same weighted calculation as the official form', () => {
     expect(calculateAIEvaluationScore(evaluation, form)).toBe(70);
   });

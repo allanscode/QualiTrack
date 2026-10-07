@@ -4,7 +4,6 @@ import { AIModelError, httpAIError, normalizeAIError } from './ai-fallback.ts';
 export const OPENROUTER_MODEL = 'z-ai/glm-5.3-flash';
 export const OPENROUTER_FALLBACK_MODELS = [
   'google/gemma-4-31b-it',
-  'google/gemini-3.8-flash',
 ] as const;
 export const OPENROUTER_FALLBACK_MODEL = OPENROUTER_FALLBACK_MODELS[0];
 export const OPENROUTER_ALLOWED_MODELS: readonly string[] = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS];

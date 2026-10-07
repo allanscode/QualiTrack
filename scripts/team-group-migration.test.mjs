@@ -124,6 +124,33 @@ test('imported Zendesk groups become children of management teams', async () => 
     };
     assert.equal(await visibleEvaluations(1), 1, 'WebPosto manager sees own agent');
     assert.equal(await visibleEvaluations(3), 0, 'PJ manager does not see CLT agent through shared group');
+
+    // Regression: agents without a primary team use the ticket's Zendesk group.
+    // The previous trigger evaluated min(uuid), which PostgreSQL cannot execute.
+    await db.exec("SELECT set_config('request.jwt.claim.sub','',false)");
+    await db.query("INSERT INTO public.users(id,email,name,role,active) VALUES ($1,'unmapped@example.invalid','Sem equipe principal','suporte',true)", [id(30)]);
+    const singleGroup = oldGroupId('Zendesk adicional 1');
+    const insertFromGroup = (agent, group) => db.query(`INSERT INTO public.monitorias
+      (form_id,evaluated_id,team_id,ticket_group_team_id,score,status,satisfaction_result)
+      VALUES ($1,$2,$3,$3,100,'concluida','Sem pesquisa') RETURNING team_id,ticket_group_team_id,team_name`,
+      [id(300), agent, group]);
+    await assert.rejects(insertFromGroup(id(30), singleGroup), error => error.code === '42883' && /min\(uuid\)/.test(error.message));
+    const uuidFix = migrations.find(migration => migration.name === '20261007000007_fix_monitoria_group_uuid_aggregate.sql');
+    assert.ok(uuidFix, 'the UUID aggregate fix is included in the deployment chain');
+    await db.exec(uuidFix.sql);
+    assert.deepEqual((await insertFromGroup(id(30), singleGroup)).rows[0], {
+      team_id: webId, ticket_group_team_id: singleGroup, team_name: 'WebPosto',
+    }, 'one mapped team permits saving the monitoria and retains its Zendesk group');
+    assert.deepEqual((await insertFromGroup(id(30), oldGroupId('Cliente Final'))).rows[0], {
+      team_id: null, ticket_group_team_id: oldGroupId('Cliente Final'), team_name: null,
+    }, 'shared group does not invent a management team');
+    await db.query("INSERT INTO public.teams(id,name,kind) VALUES ($1,'Grupo sem vínculo','group')", [id(600)]);
+    assert.deepEqual((await insertFromGroup(id(30), id(600))).rows[0], {
+      team_id: null, ticket_group_team_id: id(600), team_name: null,
+    }, 'unmapped group remains unresolved without blocking the save');
+    assert.deepEqual((await insertFromGroup(id(2), id(600))).rows[0], {
+      team_id: webId, ticket_group_team_id: id(600), team_name: 'WebPosto',
+    }, 'the agent primary team remains authoritative');
   } finally {
     await db.close();
   }

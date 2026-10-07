@@ -55,6 +55,7 @@ import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import { useMonitoriaDraft } from '../hooks/useMonitoriaDraft';
 import { getEvaluationOutcome } from '../lib/domainRules';
+import { awaitsFinalPositiveDecision, canPublishSavedMonitoria } from '../lib/helpdeskPublicationGate';
 import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 import { isVerifiedTicketGroupPair } from '../lib/ticketTeam';
 import { getSavedZendeskTicketFields, normalizeZendeskTicketFields } from '../lib/monitoriaTicketFields';
@@ -71,15 +72,6 @@ import { EvaluationOutcome, MonitoriaStatus } from '../types';
 
 const CHANNELS = ['Chat', 'Email', 'Telefone', 'WhatsApp'] as const;
 
-// A revisão humana da macro pode acontecer logo após salvar a monitoria.
-// Durante contestação ou decisão de gestor, o envio aguarda a nova versão.
-const HELPDESK_ELIGIBLE_STATUSES: MonitoriaStatus[] = [
-  'pendente_revisao',
-  'concluida',
-  'contestacao_aceita',
-  'contestacao_negada',
-  'finalizada_alterada',
-];
 
 export default function MonitoriaForm({
   user,
@@ -542,7 +534,7 @@ export default function MonitoriaForm({
   const canSendToHelpdesk = isViewOnly
     && !isChildEvaluation
     && !!initialData?.status
-    && HELPDESK_ELIGIBLE_STATUSES.includes(initialData.status)
+    && canPublishSavedMonitoria(initialData)
     && !!header.ticket_id?.trim();
   const canPublishChild = isViewOnly && isChildEvaluation
     && initialData?.status === 'concluida' && (initialData.score ?? 0) >= 75
@@ -589,15 +581,20 @@ export default function MonitoriaForm({
       }
       // A macro de atendimento pode ser revista após salvar; filhos usam macro própria.
       const ticketIdTrimmed = header.ticket_id?.trim() || '';
+      const publicationContext={status:savedStatus,score,satisfaction_result:header.satisfaction_result};
+      const awaitsFinal=awaitsFinalPositiveDecision(publicationContext);
       const shouldAutoSend = /^\d+$/.test(ticketIdTrimmed)
         && header.form_id !== CHILD_TICKET_FORM_ID
-        && HELPDESK_ELIGIBLE_STATUSES.includes(savedStatus)
+        && canPublishSavedMonitoria(publicationContext)
         && !isAdminEdit
         && !isReevaluating;
 
       if (shouldAutoSend) {
         setHelpdeskModal({ monitoriaId: savedMonitoriaId, fromConclusion: true });
       } else {
+        if (awaitsFinal && header.form_id!==CHILD_TICKET_FORM_ID) {
+          toast.info('Monitoria salva. A invalidação no Zendesk aguarda a conclusão das revisões e contestações.');
+        }
         onSaved(savedMonitoriaId);
       }
     },
@@ -1940,7 +1937,10 @@ export default function MonitoriaForm({
                 {isViewOnly ? 'Próximo' : 'Continuar'}
               </Button>
             ) : isViewOnly ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {!isChildEvaluation && initialData && awaitsFinalPositiveDecision(initialData) && (
+                  <span className="max-w-sm text-right text-xs text-brand-muted">A atualização do Zendesk aguarda a conclusão das revisões e contestações.</span>
+                )}
                 {canSendToHelpdesk && (
                   <button
                     type="button"

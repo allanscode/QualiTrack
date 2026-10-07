@@ -33,4 +33,15 @@ describe('rascunhos de IA na fila', () => {
     expect((await fetchOpenAIDrafts('proativas')).map(draft => draft.ticket_id)).toEqual(['999']);
     expect(await fetchOpenAIDrafts('negativas')).toEqual([]);
   });
+
+  it.each(['closed', 'archived'])('preserva a revisão positiva quando o ticket fica %s', async status => {
+    await saveAIDraft({
+      ticketId: '321', sourceQueue: 'positivas',
+      ticketSnapshot: { ticket_id: '321', subject: 'Revisar atendimento', csat_status: 'good', ticket_date: '2026-10-07', status },
+      result: { score: 60, summary: 'Revisão necessária' } as never, guidelineIds: [],
+    });
+    expect((await fetchOpenAIDrafts('positivas')).map(draft => draft.ticket_id)).toEqual(['321']);
+    await deleteAIDraft('321');
+    expect(await fetchOpenAIDrafts('positivas')).toEqual([]);
+  });
 });

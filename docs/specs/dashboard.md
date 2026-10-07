@@ -19,8 +19,9 @@ Usa as monitorias já filtradas e autorizadas de cada painel: o gestor de suport
 vê suas equipes e o monitor de qualidade suas próprias avaliações.
 
 As categorias seguem as filas: pesquisa `Positiva`, `Negativa` e `Sem pesquisa`
-(proativa), independentemente da nota. Chamados filhos e registros sem classificação
-ficam em **Outras**, exibida quando necessária. O total soma todas essas categorias.
+(proativa), independentemente da nota. Chamados filhos ficam em **Tickets filhos**;
+registros sem categoria ficam em **Sem classificação**, exibida quando necessária.
+O total soma todas essas categorias.
 Conta cada monitoria salva, ativa e com nota válida uma vez, inclusive nota zero;
 rascunhos de IA e agentes sem monitorias não entram.
 
@@ -30,6 +31,46 @@ busca por agente/equipe preserva a posição no ranking; há dez agentes por pá
 e o rodapé soma todos os agentes encontrados, não apenas a página visível.
 Não há consultas extras nem alteração dos dados salvos; Supabase e MockDb usam
 o mesmo cálculo em `src/lib/agentEvaluationVolume.ts`.
+
+### Histórico de produção por monitor
+
+A tabela **Monitorias por Monitor** conta fichas persistidas por `evaluator_id`,
+com nome atual do cadastro ou nome histórico salvo. Aparece nos painéis de
+administrador e gestor de qualidade com os registros autorizados pelos filtros;
+no painel de qualidade recebe apenas as monitorias do próprio monitor.
+Não aparece nos painéis de suporte ou gestor de suporte para preservar a identidade
+do auditor nesses contextos.
+
+Conta registros ativos uma vez por ID, independentemente da nota ou do andamento:
+nota zero, nota ausente e monitorias pendentes continuam representando fichas criadas.
+Rascunhos de IA não entram. Os filtros atuais de período, equipe, agente, auditor e
+status do dashboard delimitam o histórico; a tabela não limita os dados aos registros recentes.
+
+As colunas **Manuais**, **Por IA** e **Total** distinguem a criação automática
+atribuída ao responsável das fichas criadas manualmente. A identificação por IA usa
+`form_snapshot.automation = positive_csat` ou `ai_evaluation.automatic_positive`;
+conclusão automática por SLA não é confundida com criação por IA. Ordena por total,
+permite inverter a ordem e buscar nome, mantendo o total geral dos filtros no rodapé.
+Supabase e MockDb compartilham o cálculo em `src/lib/auditorEvaluationVolume.ts`,
+sem novas consultas nem alterações nas monitorias salvas.
+
+### Positivas com nota baixa e zeradas por erro crítico
+
+Somente administrador e gestor de qualidade dispõem dos painéis **CSAT positivo ·
+nota abaixo de 75%** e **CSAT positivo · zero por erro crítico**, inclusive no catálogo
+de customização. Recebem as monitorias salvas já autorizadas e filtradas pelo dashboard;
+não consultam rascunhos de IA nem a fila automática. Registros inativos, notas ausentes,
+inválidas ou pesquisas diferentes de `Positiva` ficam fora.
+
+O primeiro lista notas de zero até abaixo de 75%; exatamente 75% não entra. O segundo
+é um subconjunto: nota exatamente zero **e** erro crítico selecionado, flag crítica
+verdadeira no parecer de IA salvo ou pergunta crítica respondida `NAO`. Nota zero sozinha
+não comprova erro crítico. A definição histórica da ficha prevalece sobre a ficha atual.
+
+Cada painel mostra quantidade de tickets e monitorias, agente, nota, motivo crítico e
+observação quando disponíveis, situação real da monitoria e data de criação. Busca por
+ticket/agente/erro e paginação de dez registros não alteram os filtros globais. **Ver
+monitoria** usa o evento interno `qualitrack:focus_monitoria`, sem publicar no Zendesk.
 
 ### Ranking de suporte: média ajustada
 

@@ -14,9 +14,9 @@ const options: { value: EvaluationVolumeSort; label: string }[] = [
   { value: 'positive', label: 'Positivas' }, { value: 'proactive', label: 'Proativas' },
 ];
 const preview: AgentEvaluationVolume[] = [
-  { id: 'example-a', name: 'Agente exemplo A', teams: ['Equipe A'], positive: 4, negative: 6, proactive: 2, other: 0, total: 12 },
-  { id: 'example-b', name: 'Agente exemplo B', teams: ['Equipe A'], positive: 7, negative: 1, proactive: 3, other: 0, total: 11 },
-  { id: 'example-c', name: 'Agente exemplo C', teams: ['Equipe B'], positive: 1, negative: 2, proactive: 5, other: 0, total: 8 },
+  { id: 'example-a', name: 'Agente exemplo A', teams: ['Equipe A'], positive: 4, negative: 6, proactive: 2, child: 0, other: 0, total: 12 },
+  { id: 'example-b', name: 'Agente exemplo B', teams: ['Equipe A'], positive: 7, negative: 1, proactive: 3, child: 0, other: 0, total: 11 },
+  { id: 'example-c', name: 'Agente exemplo C', teams: ['Equipe B'], positive: 1, negative: 2, proactive: 5, child: 0, other: 0, total: 8 },
 ];
 const pageSize = 10;
 
@@ -36,12 +36,12 @@ export default function AgentEvaluationVolumeTable({ monitorias, users, profile,
   const currentPage = Math.min(page, pageCount - 1);
   const visible = filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const totals = filtered.reduce((sum, agent) => ({ positive: sum.positive + agent.positive, negative: sum.negative + agent.negative,
-    proactive: sum.proactive + agent.proactive, other: sum.other + agent.other, total: sum.total + agent.total }),
-  { positive: 0, negative: 0, proactive: 0, other: 0, total: 0 });
+    proactive: sum.proactive + agent.proactive, child: sum.child + agent.child, other: sum.other + agent.other, total: sum.total + agent.total }),
+  { positive: 0, negative: 0, proactive: 0, child: 0, other: 0, total: 0 });
   const showOther = totals.other > 0;
-  const columns: { field: EvaluationVolumeSort | 'other'; label: string }[] = [
+  const columns: { field: EvaluationVolumeSort | 'other' | 'child'; label: string }[] = [
     { field: 'positive', label: 'Positivas' }, { field: 'negative', label: 'Negativas' },
-    { field: 'proactive', label: 'Proativas' }, ...(showOther ? [{ field: 'other' as const, label: 'Outras' }] : []), { field: 'total', label: 'Total' },
+    { field: 'proactive', label: 'Proativas' }, ...(totals.child > 0 ? [{ field: 'child' as const, label: 'Tickets filhos' }] : []), ...(showOther ? [{ field: 'other' as const, label: 'Sem classificação' }] : []), { field: 'total', label: 'Total' },
   ];
 
   return <DashboardTile type="AgentEvaluationVolumeTable" title="Avaliações por Agente" profile={profile}>
@@ -92,7 +92,7 @@ export default function AgentEvaluationVolumeTable({ monitorias, users, profile,
         {!visible.length && <p className="px-5 py-8 text-center text-sm text-brand-muted">Nenhuma avaliação encontrada. Ajuste os filtros ou a busca.</p>}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-border px-5 py-3">
-        <p className="max-w-2xl text-xs text-brand-muted">Positivas e negativas: pesquisa do cliente. Proativas: sem pesquisa.{showOther && ' Outras: chamados filhos ou registros sem classificação.'}</p>
+        <p className="max-w-2xl text-xs text-brand-muted">Positivas e negativas: pesquisa do cliente. Proativas: sem pesquisa.{totals.child > 0 && ' Tickets filhos: avaliações de chamados filhos.'}{showOther && ' Sem classificação: registros sem categoria de pesquisa identificada.'}</p>
         {pageCount > 1 && <div className="flex items-center gap-2 text-xs text-brand-muted">
           <Button type="button" size="sm" variant="ghost" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Anterior</Button>
           <span aria-live="polite">{currentPage + 1} / {pageCount}</span>

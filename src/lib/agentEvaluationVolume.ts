@@ -11,6 +11,7 @@ export interface AgentEvaluationVolume {
   positive: number;
   negative: number;
   proactive: number;
+  child: number;
   other: number;
   total: number;
 }
@@ -25,12 +26,12 @@ export function getAgentEvaluationVolumes(rows: readonly VolumeMonitoria[], user
     seen.add(row.id);
     const agent = agents.get(row.evaluated_id) ?? {
       id: row.evaluated_id, name: names.get(row.evaluated_id) || row.evaluated_name || 'Agente não identificado',
-      teams: [], positive: 0, negative: 0, proactive: 0, other: 0, total: 0,
+      teams: [], positive: 0, negative: 0, proactive: 0, child: 0, other: 0, total: 0,
     };
     if (row.team_name && !agent.teams.includes(row.team_name)) agent.teams.push(row.team_name);
     const snapshot = row.form_snapshot as (Monitoria['form_snapshot'] & { ticket_kind?: string });
     const child = row.form_id === CHILD_TICKET_FORM_ID || snapshot?.ticket_kind === 'chamado_filho';
-    if (child) agent.other++;
+    if (child) agent.child++;
     else if (row.satisfaction_result === 'Positiva') agent.positive++;
     else if (row.satisfaction_result === 'Negativa') agent.negative++;
     else if (row.satisfaction_result === 'Sem pesquisa') agent.proactive++;

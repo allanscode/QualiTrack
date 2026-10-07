@@ -19,6 +19,9 @@ import {
 import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS } from './openrouter-client.ts';
 import { buildAITargets } from './ai-targets.ts';
 import { retryAt } from './ai-retry.ts';
+import { processPositiveAI } from './positive-automation.ts';
+import { processChildAI } from './child-automation.ts';
+import { processFinalPositiveInvalidation } from './final-invalidation.ts';
 import { canReadMatchedTicketTeam, canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
 import { csatStatusToSatisfactionResult, satisfactionResponseTimestamp } from './satisfaction.ts';
@@ -34,10 +37,10 @@ const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 // GLM pago primeiro; Gemma e Gemini pagos entram em sequência se necessário.
 const AI_TARGETS: AIModelTarget[] = buildAITargets(name => Deno.env.get(name));
 
-function phaseForAIModel(model: string): 'running_glm' | 'running_gemma' | 'fallback_gemini' {
+function phaseForAIModel(model: string): 'running_glm' | 'running_gemma' {
   if (model === OPENROUTER_MODEL) return 'running_glm';
   if (model === OPENROUTER_FALLBACK_MODELS[0]) return 'running_gemma';
-  return 'fallback_gemini';
+  throw new Error('Modelo de IA fora da cadeia configurada.');
 }
 
 
@@ -124,7 +127,7 @@ const RequestSchema = z.object({
   ticket_ids: z.array(z.string().regex(/^\d+$/)).max(100).optional(),
   job_id: z.string().uuid().optional(),
   draft_meta: z.object({
-    source_queue: z.enum(['negativas', 'proativas', 'positivas']).optional(),
+    source_queue: z.enum(['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos']).optional(),
     form_id: z.string().uuid().nullable().optional(),
     agent_name: z.string().nullable().optional(),
     agent_email: z.string().nullable().optional(),
@@ -217,14 +220,14 @@ async function buildWebpostoMembershipPreview(
       let pages = 0;
       while (nextUrl) {
         if (++pages > 50) return jsonResponse({ error: 'Há mais de 5.000 vínculos; consulta incompleta. Nenhuma sugestão foi aplicada.' }, 503);
-        const parsedUrl = new URL(nextUrl);
+        const parsedUrl: URL = new URL(nextUrl);
         if (parsedUrl.origin !== origin || !['/api/v2/group_memberships', '/api/v2/group_memberships.json'].includes(parsedUrl.pathname)
           || parsedUrl.username || parsedUrl.password || parsedUrl.hash) {
           return jsonResponse({ error: 'Paginação de grupos inválida.' }, 502);
         }
-        const response = await fetch(parsedUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(15000) });
+        const response: Response = await fetch(parsedUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(15000) });
         if (!response.ok) return jsonResponse({ error: `Zendesk Group Memberships API falhou (${response.status}).` }, 502);
-        const data = await response.json();
+        const data: { group_memberships?: ZendeskMembership[]; users?: ZendeskMembershipUser[]; groups?: ZendeskMembershipGroup[]; next_page?: string | null } = await response.json();
         if (!Array.isArray(data.group_memberships)) return jsonResponse({ error: 'Resposta de vínculos inválida.' }, 502);
         memberships.push(...data.group_memberships);
         for (const item of Array.isArray(data.users) ? data.users : []) {
@@ -483,11 +486,11 @@ async function reconcilePublishedChildMacros(supabase: SupabaseClient): Promise<
 
     let next: string | null = `${base}/views/${viewId}/tickets.json?page[size]=25`;
     for (let page = 0; next && page < 4; page++) {
-      const response = await fetch(next, { headers, signal: AbortSignal.timeout(15000) });
+      const response: Response = await fetch(next, { headers, signal: AbortSignal.timeout(15000) });
       if (!response.ok) return jsonResponse({ error: `Falha ao listar a view ${viewId} (${response.status}).` }, 502);
-      const body = await response.json();
+      const body: { tickets?: Array<{ id?: number }>; meta?: { has_more?: boolean }; links?: { next?: string | null } } = await response.json();
       for (const ticket of body.tickets || []) if (ticket.id) ticketIds.add(String(ticket.id));
-      const candidate = body.meta?.has_more ? body.links?.next : null;
+      const candidate: string | null | undefined = body.meta?.has_more ? body.links?.next : null;
       if (candidate && !String(candidate).startsWith(`${base}/views/${viewId}/tickets.json`)) {
         return jsonResponse({ error: `Paginação inesperada na view ${viewId}.` }, 502);
       }
@@ -588,6 +591,37 @@ serve(async (req) => {
     if (new TextEncoder().encode(rawText).length > MAX_REQUEST_BYTES)
       return jsonResponse({ error: 'Payload muito grande.' }, 413);
     const workerBody = (() => { try { return JSON.parse(rawText); } catch { return null; } })();
+    if (workerBody?.action === 'process_final_positive_invalidation') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
+      return jsonResponse(await processFinalPositiveInvalidation(workerClient,key=>Deno.env.get(key)),200);
+    }
+    if (workerBody?.action === 'process_positive_ai') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
+      const result = await processPositiveAI(workerClient, key => Deno.env.get(key), async (raw, auditorId) => {
+        const payload = RequestSchema.parse(raw);
+        return await executeAndPersistAIJob(payload, workerClient, auditorId,
+          signal => handleEvaluateAI(payload, workerClient, auditorId, signal));
+      });
+      return jsonResponse(result, 200);
+    }
+    if (workerBody?.action === 'process_child_ai') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
+      const result = await processChildAI(workerClient, key => Deno.env.get(key), async (raw, auditorId) => {
+        const payload = RequestSchema.parse(raw);
+        return await executeAndPersistAIJob(payload, workerClient, auditorId,
+          signal => handleEvaluateChildTicket(payload, workerClient, auditorId, signal));
+      });
+      return jsonResponse(result, 200);
+    }
     if (workerBody?.action === 'process_ai_retries') {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
@@ -730,7 +764,7 @@ serve(async (req) => {
       if (!started) return jsonResponse({ error: 'Este job de IA já está em execução ou não pertence ao usuário.' }, 409);
     }
 
-    // 3. Avaliação com IA: GLM, Gemma e Gemini pagos, nessa ordem.
+    // 3. Avaliação com IA: GLM e Gemma pagos, nessa ordem.
     if (action === 'evaluate_ai') {
       return await executeAndPersistAIJob(parseResult.data, supabase, user.id,
         signal => handleEvaluateAI(parseResult.data, supabase, user.id, signal));
@@ -2093,6 +2127,11 @@ function validateEvaluationResponse(value: unknown, questionRequired: string[], 
   if (!Array.isArray(parsed.improvements) || !parsed.improvements.every((item: unknown) => typeof item === 'string')) {
     incompleteResponse('A resposta não contém improvements válido.');
   }
+  if (typeof parsed.requires_human_review !== 'boolean' || !Array.isArray(parsed.review_reasons)
+    || !parsed.review_reasons.every((item: unknown) => typeof item === 'string' && item.trim())
+    || (parsed.requires_human_review && parsed.review_reasons.length === 0)) {
+    incompleteResponse('A resposta não informou as limitações de evidência para revisão humana.');
+  }
   return parsed;
 }
 
@@ -2120,7 +2159,7 @@ async function cancelledAIJob(supabase: SupabaseClient, jobId: string): Promise<
   return data?.status === 'cancelled';
 }
 
-async function setAIPhase(supabase: SupabaseClient, jobId: string, phase: 'running_gemma' | 'running_glm' | 'fallback_gemini' | 'retry_pending'): Promise<void> {
+async function setAIPhase(supabase: SupabaseClient, jobId: string, phase: 'running_gemma' | 'running_glm' | 'retry_pending'): Promise<void> {
   const { data, error } = await supabase.rpc('set_ai_evaluation_phase', { p_job_id: jobId, p_phase: phase });
   if (error) throw new Error('Falha ao atualizar etapa do job de IA.');
   if (!data) throw new AIModelError('Análise interrompida.', 'cancelled', false, 'global');
@@ -2491,6 +2530,23 @@ async function handleEvaluateAI(
     }
   }
 
+  // Standalone critical errors are part of the form too. Omitting them can
+  // wrongly approve a fully populated regular rubric despite a disqualifying event.
+  for (const critical of form_criteria.critical_errors || []) {
+    if (questionProperties[critical.id]) {
+      return jsonResponse({ error: 'A ficha possui IDs de critérios duplicados.' }, 400);
+    }
+    questionProperties[critical.id] = {
+      type: 'object', properties: {
+        answer: { type: 'string', enum: ['SIM', 'NAO', 'NA'], description: 'SIM se o atendimento evitou o erro; NAO se o erro ocorreu; NA se não aplicável.' },
+        justification: { type: 'string', description: 'Justificativa apoiada em trecho da transcrição.' },
+        critical_error: { type: 'boolean', description: 'true SOMENTE se este erro crítico ocorreu no atendimento.' },
+      }, required: ['answer', 'justification', 'critical_error'], additionalProperties: false,
+    };
+    questionRequired.push(critical.id);
+    criticalQuestions.add(critical.id);
+  }
+
   // A ORDEM das propriedades importa de verdade: no modo de geração
   // estruturada, o modelo preenche os campos na ordem em que aparecem no
   // schema. Com score/summary vindo ANTES de answers, testes reais mostraram
@@ -2505,10 +2561,12 @@ async function handleEvaluateAI(
       answers: { type: 'object', properties: questionProperties, required: questionRequired, additionalProperties: false },
       strengths: { type: 'array', items: { type: 'string' }, description: 'Pontos fortes observados, com base nas respostas acima.' },
       improvements: { type: 'array', items: { type: 'string' }, description: 'Oportunidades de melhoria, com base nas respostas acima.' },
+      requires_human_review: { type: 'boolean', description: 'true se uma regra obrigatória depende de evidência externa ou informação não fornecida; não presuma ausência de ticket filho, aprovação ou vínculo externo.' },
+      review_reasons: { type: 'array', items: { type: 'string' }, description: 'Informações que o monitor precisa conferir; vazio quando todas as evidências necessárias estão disponíveis.' },
       summary: { type: 'string', description: 'Resumo executivo do atendimento, escrito por último, com base em tudo já respondido.' },
       score: { type: 'number', description: 'Nota geral de 0 a 100, calculada por último a partir das respostas de "answers".' },
     },
-    required: ['answers', 'strengths', 'improvements', 'summary', 'score'],
+    required: ['answers', 'strengths', 'improvements', 'requires_human_review', 'review_reasons', 'summary', 'score'],
     additionalProperties: false,
   };
 
@@ -2517,7 +2575,8 @@ async function handleEvaluateAI(
 
   const criteriaText = form_criteria.sections
     .map((s: any) => `Seção "${s.title}":\n${(s.questions || []).map((q: any) => `- [${q.id}] ${q.text}${q.is_critical ? ' (ERRO CRÍTICO)' : ''}`).join('\n')}`)
-    .join('\n\n');
+    .join('\n\n') + ((form_criteria.critical_errors || []).length
+      ? `\n\nERROS CRÍTICOS INDEPENDENTES (verifique cada um; critical_error=true quando o evento descrito ocorreu):\n${form_criteria.critical_errors!.map(q => `- [${q.id}] ${q.text}`).join('\n')}` : '');
 
   // Manual de padrões de atendimento (cadastrado em Admin > Manual da IA):
   // ampliado para 40.000 caracteres para suportar o manual completo sem truncamento.
@@ -2572,6 +2631,13 @@ ${criteriaText}
 
 TRANSCRIÇÃO COMPLETA DO ATENDIMENTO:
 ${dialogueText || '(sem mensagens registradas)'}
+
+LIMITES DE EVIDÊNCIA:
+Os vínculos completos de tickets filhos, QPs e aprovações externas NÃO foram consultados nesta requisição.
+Não conclua que um ticket filho, vínculo ou aprovação não existe apenas porque não aparece na transcrição.
+Se uma regra obrigatória depender dessa conferência, marque requires_human_review=true, explique em review_reasons
+e não marque critical_error=true com base apenas nessa ausência de informação. Erros críticos exigem evidência
+do descumprimento, não suposição. Para registros de solução presentes, cite literalmente o conteúdo que fundamenta o parecer.
 
 Siga esta ORDEM de raciocínio, sem pular etapas:
 1. Para cada critério da ficha, responda SIM, NAO ou NA e justifique citando um trecho literal do diálogo
@@ -2674,6 +2740,8 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
         suggested_answers,
         suggested_observations,
         suggested_critical_errors,
+        requires_human_review: parsed.requires_human_review,
+        review_reasons: parsed.review_reasons,
       },
     }, 200);
   } catch (error: any) {

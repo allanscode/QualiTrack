@@ -12,8 +12,8 @@ describe('agent evaluation volume', () => {
       evaluation('3', 'Ana', 'Sem pesquisa'), evaluation('4', 'Ana', null),
       { ...evaluation('5', 'Ana', 'Sem pesquisa'), form_id: CHILD_TICKET_FORM_ID }];
     const [agent] = getAgentEvaluationVolumes([...rows, rows[0]], []);
-    expect(agent).toMatchObject({ positive: 1, negative: 1, proactive: 1, other: 2, total: 5 });
-    expect(agent.total).toBe(agent.positive + agent.negative + agent.proactive + agent.other);
+    expect(agent).toMatchObject({ positive: 1, negative: 1, proactive: 1, child: 1, other: 1, total: 5 });
+    expect(agent.total).toBe(agent.positive + agent.negative + agent.proactive + agent.child + agent.other);
   });
 
   it('excludes inactive, missing and nonfinite scores, but includes zero and pending saved evaluations', () => {
@@ -33,9 +33,9 @@ describe('agent evaluation volume', () => {
 
   it('orders by all four measures and reverses direction without mutating input', () => {
     const agents = [
-      { id: 'A', name: 'Ana', teams: [], positive: 4, negative: 0, proactive: 0, other: 0, total: 4 },
-      { id: 'B', name: 'Bruno', teams: [], positive: 0, negative: 5, proactive: 0, other: 0, total: 5 },
-      { id: 'C', name: 'Caio', teams: [], positive: 0, negative: 0, proactive: 6, other: 0, total: 6 },
+      { id: 'A', name: 'Ana', teams: [], positive: 4, negative: 0, proactive: 0, child: 0, other: 0, total: 4 },
+      { id: 'B', name: 'Bruno', teams: [], positive: 0, negative: 5, proactive: 0, child: 0, other: 0, total: 5 },
+      { id: 'C', name: 'Caio', teams: [], positive: 0, negative: 0, proactive: 6, child: 0, other: 0, total: 6 },
     ];
     expect(sortAgentEvaluationVolumes(agents, 'total')[0].id).toBe('C');
     expect(sortAgentEvaluationVolumes(agents, 'negative')[0].id).toBe('B');

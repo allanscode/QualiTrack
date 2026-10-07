@@ -11,6 +11,8 @@ import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import ManagerDecisionHistoryTable from '../widgets/ManagerDecisionHistoryTable';
 import CriticalErrorsTable from '../widgets/CriticalErrorsTable';
 import AgentEvaluationVolumeTable from '../widgets/AgentEvaluationVolumeTable';
+import AuditorEvaluationVolumeTable from '../widgets/AuditorEvaluationVolumeTable';
+import PositiveEvaluationExceptionsTable from '../widgets/PositiveEvaluationExceptionsTable';
 import DistributionChart from '../widgets/DistributionChart';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
@@ -1639,6 +1641,9 @@ export default function QualityManagerDashboard({
       <ManagerDecisionHistoryTable monitorias={monitorias} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />
       <CriticalErrorsTable monitorias={monitorias} forms={forms} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />
       <AgentEvaluationVolumeTable monitorias={monitorias} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />
+      <AuditorEvaluationVolumeTable monitorias={monitorias} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />
+      <PositiveEvaluationExceptionsTable monitorias={monitorias} forms={forms} users={users} kind="below_threshold" profile="gestor_qualidade" isCustomizing={isCustomizing} />
+      <PositiveEvaluationExceptionsTable monitorias={monitorias} forms={forms} users={users} kind="critical_zero" profile="gestor_qualidade" isCustomizing={isCustomizing} />
 
       {drillDown && (
         <SupportDrillDownModal

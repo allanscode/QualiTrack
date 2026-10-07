@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Monitoria } from '../../../types';
+import { CHILD_TICKET_FORM_ID } from '../../../lib/childTicketForm';
 import AgentEvaluationVolumeTable from './AgentEvaluationVolumeTable';
 
 vi.mock('../DashboardTileLayout', () => ({ DashboardTile: ({ children }: { children: React.ReactNode }) => children }));
@@ -10,6 +11,13 @@ const rows = (agent: string, result: Monitoria['satisfaction_result'], count: nu
 const data = [...rows('Ana', 'Positiva', 4), ...rows('Bruno', 'Negativa', 5), ...rows('Caio', 'Sem pesquisa', 6)];
 
 describe('AgentEvaluationVolumeTable', () => {
+  it('identifies child tickets separately from unclassified records', () => {
+    const child = { ...rows('Ana', null, 1)[0], form_id: CHILD_TICKET_FORM_ID };
+    render(<AgentEvaluationVolumeTable monitorias={[child]} users={[]} profile="admin" />);
+    expect(screen.getByRole('columnheader', { name: 'Tickets filhos' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Sem classificação' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Outras' })).not.toBeInTheDocument();
+  });
   it('changes the ranking through every sort control and reverses direction', () => {
     const { container } = render(<AgentEvaluationVolumeTable monitorias={data} users={[]} profile="admin" />);
     const first = () => container.querySelector('tbody tr');
@@ -38,7 +46,7 @@ describe('AgentEvaluationVolumeTable', () => {
   it('paginates all agents and keeps totals across pages, with unclassified records visible', () => {
     const many = Array.from({ length: 12 }, (_, i) => rows(`Agente ${String(i).padStart(2, '0')}`, null, 1)).flat();
     render(<AgentEvaluationVolumeTable monitorias={many} users={[]} profile="admin" />);
-    expect(screen.getByRole('columnheader', { name: 'Outras' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Sem classificação' })).toBeInTheDocument();
     expect(screen.getByText(/12 agentes · 12 avaliações/)).toBeInTheDocument();
     expect(screen.queryByText('Agente 11')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Próxima' }));

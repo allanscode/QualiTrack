@@ -7,11 +7,11 @@ afterEach(() => vi.useRealTimers());
 describe('limites independentes da cadeia de IA', () => {
   it('não propaga o limite principal aos fallbacks', () => {
     const settings: Record<string, string> = { AI_PRIMARY_TIMEOUT_MS: '90000', AI_GEMMA_TIMEOUT_MS: '45000' };
-    expect(buildAITargets(name => settings[name]).map(target => target.timeoutMs)).toEqual([90_000, 45_000, 40_000]);
+    expect(buildAITargets(name => settings[name]).map(target => target.timeoutMs)).toEqual([90_000, 45_000]);
   });
 
   it.each(['', 'NaN', 'Infinity', '-1', '0'])('usa defaults seguros para configuração inválida %s', value => {
-    expect(buildAITargets(() => value).map(target => target.timeoutMs)).toEqual([60_000, 40_000, 40_000]);
+    expect(buildAITargets(() => value).map(target => target.timeoutMs)).toEqual([60_000, 40_000]);
   });
 
   it('aceita resposta do GLM após 30 segundos sem iniciar fallback', async () => {

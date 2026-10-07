@@ -12,6 +12,9 @@ export type DashboardWidgetType =
   | 'ManagerDecisionHistoryTable'
   | 'CriticalErrorsTable'
   | 'AgentEvaluationVolumeTable'
+  | 'AuditorEvaluationVolumeTable'
+  | 'PositiveLowScoreTable'
+  | 'PositiveCriticalZeroTable'
   | 'CustomChart'
   | 'FeedbacksWidget'
   | 'QualityAchievementsWidget'
@@ -40,7 +43,7 @@ function widget(type: DashboardWidgetType, title: string): DashboardWidgetDefini
     type,
     title,
     id: widgetId(type, title),
-    category: type === 'StatCard' ? 'card' : type === 'RecentAuditsTable' || type === 'ManagerDecisionHistoryTable' || type === 'CriticalErrorsTable' || type === 'AgentEvaluationVolumeTable' ? 'table' : 'chart',
+    category: type === 'StatCard' ? 'card' : type === 'RecentAuditsTable' || type === 'ManagerDecisionHistoryTable' || type === 'CriticalErrorsTable' || type === 'AgentEvaluationVolumeTable' || type === 'AuditorEvaluationVolumeTable' || type === 'PositiveLowScoreTable' || type === 'PositiveCriticalZeroTable' ? 'table' : 'chart',
   };
 }
 
@@ -50,6 +53,9 @@ const table = (title: string) => widget('RecentAuditsTable', title);
 const managerHistory = widget('ManagerDecisionHistoryTable', 'Decisões dos Gestores de Atendimento');
 const criticalErrors = widget('CriticalErrorsTable', 'Erros Críticos por Agente');
 const evaluationVolume = widget('AgentEvaluationVolumeTable', 'Avalia\u00e7\u00f5es por Agente');
+const auditorVolume = widget('AuditorEvaluationVolumeTable', 'Monitorias por Monitor');
+const positiveLow = widget('PositiveLowScoreTable', 'CSAT positivo · nota abaixo de 75%');
+const positiveCritical = widget('PositiveCriticalZeroTable', 'CSAT positivo · zero por erro crítico');
 const custom = (title: string) => widget('CustomChart', title);
 
 export const DASHBOARD_WIDGETS: Record<DashboardRole, DashboardWidgetDefinition[]> = {
@@ -66,7 +72,7 @@ export const DASHBOARD_WIDGETS: Record<DashboardRole, DashboardWidgetDefinition[
     chart('RankingWidget', 'Melhores Suporte'), chart('RankingWidget', 'Maiores Ofensores'),
     chart('RankingWidget', 'Volume por Auditor'), chart('RankingWidget', 'Top Reav. Aceitas'),
     chart('RankingWidget', 'Top Reav. Recusadas'), chart('OfensoresChart', 'Maiores Ofensores'),
-    table('Últimas Auditorias do Sistema'), managerHistory, criticalErrors, evaluationVolume,
+    table('Últimas Auditorias do Sistema'), managerHistory, criticalErrors, evaluationVolume, auditorVolume, positiveLow, positiveCritical,
     widget('FeedbacksWidget', 'Feedbacks & Gestão de 1:1'),
   ],
   gestor_qualidade: [
@@ -82,7 +88,7 @@ export const DASHBOARD_WIDGETS: Record<DashboardRole, DashboardWidgetDefinition[
     chart('RankingWidget', 'Melhores Suporte'), chart('RankingWidget', 'Maiores Ofensores'),
     chart('RankingWidget', 'Volume por Auditor'), chart('RankingWidget', 'Top Reav. Aceitas'),
     chart('RankingWidget', 'Top Reav. Recusadas'), chart('OfensoresChart', 'Maiores Ofensores'),
-    table('Últimas Auditorias do Sistema'), managerHistory, criticalErrors, evaluationVolume,
+    table('Últimas Auditorias do Sistema'), managerHistory, criticalErrors, evaluationVolume, auditorVolume, positiveLow, positiveCritical,
   ],
   gestor_suporte: [
     c('Minhas Ações'), c('Média Geral'), c('Índice de Excelência'), c('Total'),
@@ -112,7 +118,7 @@ export const DASHBOARD_WIDGETS: Record<DashboardRole, DashboardWidgetDefinition[
     chart('DistributionChart', 'Precisão da Qualidade'),
     chart('DistributionChart', 'Insatisfação — Visão do Cliente'),
     chart('DistributionChart', 'Insatisfação — Visão da Qualidade'),
-    table('Minhas Auditorias Recentes'), managerHistory, criticalErrors, evaluationVolume,
+    table('Minhas Auditorias Recentes'), managerHistory, criticalErrors, evaluationVolume, auditorVolume,
   ],
   suporte: [
     c('Minhas Pendências'), c('Meu Volume'), c('Minha Média'), c('Média Equipe'),

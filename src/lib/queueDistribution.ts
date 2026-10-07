@@ -53,9 +53,14 @@ export async function setMonitorEligibility(userId: string, enabled: boolean): P
 /** Busca as atribuições já existentes para um conjunto de tickets de uma fila distribuída. */
 export async function fetchQueueAssignments(
   queueType: DistributedQueueType,
-  ticketIds: string[]
+  ticketIds: string[],
+  prepareRetainedReviews = false,
 ): Promise<Record<string, QueueAssignment>> {
   if (isMockMode || !supabase || ticketIds.length === 0) return {};
+  if (queueType === 'filhos' && prepareRetainedReviews) {
+    const { error } = await supabase.rpc('assign_retained_child_ai_tickets');
+    if (error) throw new Error(error.message || 'Falha ao distribuir as revisões salvas de chamados filhos.');
+  }
   const { data, error } = await supabase
     .from('queue_ticket_assignments')
     .select('ticket_id, queue_type, assigned_to, status, assignment_source, started_at, started_by')

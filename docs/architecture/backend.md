@@ -6,9 +6,17 @@ QualiTrack não possui servidor backend tradicional. Toda comunicação é feita
 
 ## Limites da avaliação por IA
 
-A função `helpdesk-queue` usa a sequência GLM → Gemma → Gemini. `ai-targets.ts` define limites independentes: `AI_PRIMARY_TIMEOUT_MS` (60 segundos), `AI_GEMMA_TIMEOUT_MS` (40 segundos) e `AI_GEMINI_TIMEOUT_MS` (40 segundos). Cada limite é compartilhado entre até duas tentativas do respectivo modelo; ao esgotá-lo, a chamada é abortada e o próximo modelo é acionado. O limite do principal não se aplica aos fallbacks.
+A função `helpdesk-queue` usa a sequência GLM → Gemma. `ai-targets.ts` define limites independentes: `AI_PRIMARY_TIMEOUT_MS` (60 segundos), `AI_GEMMA_TIMEOUT_MS` (40 segundos). Cada limite é compartilhado entre até duas tentativas do respectivo modelo; ao esgotá-lo, a chamada é abortada e o próximo modelo é acionado. O limite do principal não se aplica ao fallback.
 
-Secrets configurados no Supabase prevalecem sobre os defaults. Ao atualizar esses limites, publique a função e atualize os três secrets; um valor antigo de `AI_PRIMARY_TIMEOUT_MS=30000` continuaria interrompendo o GLM aos 30 segundos. Os logs `attempts` registram o modelo, duração e motivo de cada falha para verificar o resultado em produção.
+Secrets configurados no Supabase prevalecem sobre os defaults. Ao atualizar esses limites, publique a função e atualize os dois secrets; um valor antigo de `AI_PRIMARY_TIMEOUT_MS=30000` continuaria interrompendo o GLM aos 30 segundos. Os logs `attempts` registram o modelo, duração e motivo de cada falha para verificar o resultado em produção.
+
+## Automação de positivas
+
+`positive-automation.ts` captura uma página da view por execução e preserva o cursor. A tabela `positive_ai_queue` mantém o ticket, a ficha e o contexto necessário mesmo após a saída da view. As reservas no banco impedem execuções concorrentes do mesmo item. O worker privado `process_positive_ai` reutiliza a fila de retentativas existente.
+
+A conclusão de `ai_evaluation_jobs` aciona `finish_positive_ai_job`: valida respostas e erros críticos, recalcula a nota pela ficha congelada, reconfere o limite mensal e conclui a monitoria interna a partir de 75%. Notas inferiores e pendências de evidência permanecem como rascunhos para revisão. A captura e a avaliação fazem somente leituras no Zendesk.
+
+Para ativação por ambiente, configure o auditor em `positive_ai_config`, os secrets Zendesk/OpenRouter e, no Vault, `positive_ai_project_url`/`positive_ai_service_key` e `ai_retry_project_url`/`ai_retry_service_key`. As URLs e chaves devem pertencer ao próprio ambiente. Os agendamentos são `qwp-positive-ai` e `wp-quality-ai-retries`. `enabled=false` impede novos jobs automáticos; o limite opcional total pausa automaticamente ao atingir `max_evaluations`.
 
 ## Autenticação — Supabase Auth
 

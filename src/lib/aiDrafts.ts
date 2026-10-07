@@ -57,10 +57,10 @@ export async function fetchAIDrafts(ticketIds: string[]): Promise<Record<string,
 
 /** Loads drafts independently of the current Zendesk view; database RLS limits visibility. */
 export async function fetchOpenAIDrafts(queue: AuditingQueueType): Promise<AIEvaluationDraft[]> {
-  if (queue !== 'negativas' && queue !== 'proativas' && queue !== 'positivas') return [];
+  if (queue !== 'negativas' && queue !== 'proativas' && queue !== 'positivas' && queue !== 'filhos') return [];
   if (isMockMode || !supabase) return Object.values(readMockDrafts()).filter(d =>
     (d.source_queue === queue || (queue === 'proativas' && !d.source_queue))
-    && !['closed', 'archived'].includes(d.ticket_snapshot?.status?.toLowerCase() || ''));
+    && (queue === 'positivas' || queue === 'filhos' || !['closed', 'archived'].includes(d.ticket_snapshot?.status?.toLowerCase() || '')));
 
   const drafts: AIEvaluationDraft[] = [];
   for (let from = 0; ; from += 500) {
@@ -74,6 +74,9 @@ export async function fetchOpenAIDrafts(queue: AuditingQueueType): Promise<AIEva
     if (!data || data.length < 500) break;
   }
   if (drafts.length === 0) return [];
+  // Positive reviews are durable work items: closing a Zendesk ticket must not
+  // discard the AI findings or prevent the monitor from opening its saved form.
+  if (queue === 'positivas' || queue === 'filhos') return drafts;
 
   // O snapshot pode ter sido salvo antes de o Zendesk fechar o ticket.
   // Confere o estado atual em lotes para não reoferecer avaliações impossíveis.

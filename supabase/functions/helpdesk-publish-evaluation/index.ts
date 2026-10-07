@@ -120,7 +120,7 @@ serve(async (req: Request) => {
     // 2. Buscar a monitoria por monitoria_id. 404 se não existir.
     const { data: monitoria, error: monitoriaError } = await supabaseAdmin
       .from('monitorias')
-      .select('id, active, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score, form_id, form_snapshot')
+      .select('id, active, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_result, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score, form_id, form_snapshot')
       .eq('id', monitoria_id)
       .maybeSingle();
 
@@ -193,15 +193,16 @@ serve(async (req: Request) => {
     }
     const normalizedTicketId = ticketId.trim();
 
-    if (!canPublishMonitoriaStatus(monitoria.status)) {
-      return failure('A monitoria está em contestação ou decisão de gestor. Aguarde a próxima versão da avaliação antes de publicar no Zendesk.', 'validation', 409);
-    }
-
     // 3b. Determinar desfecho (outcome) com base nas regras de domínio estritas (WQ-22)
     // score >= 75: positiva (Ticket Válido), score < 75: negativa (Ticket Invalidado)
     const rawScore = monitoria.score !== null && monitoria.score !== undefined ? Number(monitoria.score) : NaN;
-    if (!Number.isFinite(rawScore)) {
+    if (!Number.isFinite(rawScore) || rawScore<0 || rawScore>100) {
       return failure('A monitoria não possui nota válida para definir o resultado da macro.', 'validation', 400);
+    }
+    if (!canPublishMonitoriaStatus(monitoria.status,{satisfaction_result:monitoria.satisfaction_result,score:rawScore})) {
+      return failure(monitoria.satisfaction_result==='Positiva' && rawScore<75
+        ? 'Pesquisa positiva com nota abaixo de 75%: aguarde a conclusão das revisões e contestações antes de invalidar no Zendesk.'
+        : 'A monitoria está em contestação ou decisão de gestor. Aguarde a próxima versão da avaliação antes de publicar no Zendesk.', 'validation',409);
     }
     const domainOutcome: 'positiva' | 'negativa' = (!isNaN(rawScore) && rawScore >= 75) ? 'positiva' : 'negativa';
 

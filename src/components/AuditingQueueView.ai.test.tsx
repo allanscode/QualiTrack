@@ -6,11 +6,13 @@ import type { ComponentProps } from 'react';
 import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import type { EvaluationForm, Monitoria } from '../types';
+import type { AIEvaluationDraft } from '../lib/aiDrafts';
 
 const mocks = vi.hoisted(() => ({
   fetchQueueTickets: vi.fn(), evaluateChildTicketWithAI: vi.fn(), completeAIJob: vi.fn(),
   claimAIJob: vi.fn(), cancelAIJob: vi.fn(),
   startNewChild: vi.fn(),
+  fetchOpenAIDrafts: vi.fn(), fetchAIDrafts: vi.fn(),
 }));
 vi.mock('../lib/queueDistribution', async importOriginal => ({
   ...await importOriginal<typeof import('../lib/queueDistribution')>(),
@@ -29,7 +31,7 @@ vi.mock('../lib/helpdeskQueue', async importOriginal => ({
   fetchTicketDialogue: vi.fn().mockResolvedValue({ comments: [], ticketFields: [] }),
 }));
 vi.mock('../lib/aiDrafts', () => ({
-  fetchOpenAIDrafts: vi.fn().mockResolvedValue([]), fetchAIDrafts: vi.fn().mockResolvedValue({}),
+  fetchOpenAIDrafts: mocks.fetchOpenAIDrafts, fetchAIDrafts: mocks.fetchAIDrafts,
   saveAIDraft: vi.fn(), deleteAIDraft: vi.fn(), removeAIDraft: vi.fn(),
 }));
 vi.mock('../lib/aiJobs', () => ({
@@ -57,6 +59,8 @@ function renderQueue(props: Partial<ComponentProps<typeof AuditingQueueView>> = 
 describe('IA de chamados filhos', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.fetchOpenAIDrafts.mockResolvedValue([]);
+    mocks.fetchAIDrafts.mockResolvedValue({});
     mocks.fetchQueueTickets.mockResolvedValue({ tickets: [ticket('101'), ticket('102')], nextCursor: null, hasMore: false });
     mocks.claimAIJob.mockImplementation(async (id: string) => ({ claimed: true, jobId: `job-${id}` }));
     mocks.completeAIJob.mockResolvedValue(undefined);
@@ -149,5 +153,88 @@ describe('IA de chamados filhos', () => {
     expect(mocks.evaluateChildTicketWithAI).toHaveBeenCalledTimes(2);
     expect(await screen.findAllByRole('button', { name: 'Ver Parecer IA' })).toHaveLength(2);
     expect(mocks.cancelAIJob).not.toHaveBeenCalled();
+  });
+});
+
+describe('revisão persistida das positivas', () => {
+  const positiveDraft: AIEvaluationDraft = {
+    id: 'draft-positive', ticket_id: '765', created_by: 'gabriel', source_queue: 'positivas',
+    form_id: 'positive-form', agent_id: 'agent', channel: 'email', guideline_ids: [],
+    created_at: '2026-10-07T10:00:00Z', updated_at: '2026-10-07T10:00:00Z',
+    ticket_snapshot: { ...ticket('765'), subject: 'Positiva fechada com falha no atendimento', csat_status: 'good', status: 'closed' },
+    result: { score: 74.9, summary: 'Atendimento precisa de revisão.', strengths: [], improvements: [],
+      suggested_answers: {}, suggested_observations: {}, suggested_critical_errors: {}, dialogue: [] },
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.fetchQueueTickets.mockResolvedValue({ tickets: [], nextCursor: null, hasMore: false });
+    mocks.fetchOpenAIDrafts.mockResolvedValue([positiveDraft]);
+    mocks.fetchAIDrafts.mockResolvedValue({ '765': positiveDraft });
+  });
+  afterEach(cleanup);
+
+  it.each([false, true])('recupera a positiva fechada e abre a ficha salva (Zendesk indisponível: %s)', async unavailable => {
+    if (unavailable) mocks.fetchQueueTickets.mockRejectedValue(new Error('Zendesk indisponível'));
+    const onStartAudit = vi.fn();
+    renderQueue({ activeSubTab: 'positivas', currentUserId: 'gabriel', currentUserRole: 'qualidade', onStartAudit });
+    expect(await screen.findByText('Revisão necessária · abaixo de 75%')).toBeInTheDocument();
+    expect(screen.getByText('74,9%')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar Avaliação' }));
+    await waitFor(() => expect(onStartAudit).toHaveBeenCalledTimes(1));
+    expect(onStartAudit).toHaveBeenCalledWith(expect.objectContaining({
+      ticket_id: '765', form_id: 'positive-form', evaluated_id: 'agent',
+      satisfaction_result: 'Positiva', aiEvaluation: positiveDraft.result, dialogue: [],
+    }));
+    expect(mocks.claimAIJob).not.toHaveBeenCalled();
+    expect(mocks.startNewChild).not.toHaveBeenCalled();
+  });
+});
+
+describe('revisão automática persistida dos filhos', () => {
+  const childResult: ChildTicketAiEvaluation = {
+    ...result, score: 0, status: 'nao_conforme', checks: [{ question_id: 'child-subject-preserved', rule: 'Assunto',
+      answer: 'NAO', passed: false, details: 'Assunto alterado.' }],
+  };
+  const childDraft: AIEvaluationDraft = {
+    id: 'child-draft', ticket_id: '777', created_by: 'gabriel', source_queue: 'filhos',
+    form_id: CHILD_TICKET_FORM_ID, agent_id: 'agent', team_id: 'team', channel: 'email', guideline_ids: [],
+    created_at: '2026-10-07T10:00:00Z', updated_at: '2026-10-07T10:00:00Z',
+    ticket_snapshot: { ...ticket('777'), status: 'closed' },
+    result: { score: 0, summary: 'Conferir filho.', strengths: [], improvements: [],
+      suggested_answers: { 'child-subject-preserved': 'NAO' }, suggested_observations: {}, suggested_critical_errors: {},
+      child_evaluation: childResult, automatic_child: true, dialogue: [] },
+  };
+  const childForm: EvaluationForm = {
+    id: CHILD_TICKET_FORM_ID, title: 'Filhos', description: '', team_id: '', active: true,
+    sections: [{ id: 'section', title: 'Assunto', weight: 100, questions: [{ id: 'child-subject-preserved', text: 'Assunto preservado?', type: 'yes_no_na' }] }],
+    createdBy: 'admin', created_at: '2026-10-07T00:00:00Z',
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.fetchQueueTickets.mockRejectedValue(new Error('Zendesk indisponível'));
+    mocks.fetchOpenAIDrafts.mockResolvedValue([childDraft]);
+    mocks.fetchAIDrafts.mockResolvedValue({ '777': childDraft });
+  });
+  afterEach(cleanup);
+
+  it('abre o filho fechado com a ficha preenchida mesmo sem job/live view', async () => {
+    const onStartAudit = vi.fn();
+    renderQueue({ activeSubTab: 'filhos', currentUserId: 'admin', currentUserRole: 'qualidade', forms: [childForm], onStartAudit });
+    expect(await screen.findByText('Revisão necessária · abaixo de 75%')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir ficha de monitoria' }));
+    await waitFor(() => expect(onStartAudit).toHaveBeenCalledTimes(1));
+    const prefill = onStartAudit.mock.calls[0][0];
+    expect(prefill).toMatchObject({ ticket_id: '777', form_id: CHILD_TICKET_FORM_ID, evaluated_id: 'agent',
+      team_id: 'team', satisfaction_result: 'Sem pesquisa', child_evaluation: childResult, dialogue: [] });
+    const { result: state } = renderHook(() => useMonitoriaFormState({ ...prefill, childAiEvaluation: prefill.child_evaluation } as Monitoria, [childForm], []));
+    expect(state.current.scores['child-subject-preserved']).toBe('NAO');
+    expect(state.current.observations['child-subject-preserved']).toBe('Assunto alterado.');
+    expect(mocks.claimAIJob).not.toHaveBeenCalled();
+  });
+
+  it('não oferece a revisão salva para monitor que não é o responsável', async () => {
+    renderQueue({ activeSubTab: 'filhos', currentUserId: 'other-monitor', currentUserRole: 'qualidade', forms: [childForm] });
+    await waitFor(() => expect(mocks.fetchOpenAIDrafts).toHaveBeenCalledWith('filhos'));
+    expect(screen.queryByRole('button', { name: 'Abrir ficha de monitoria' })).not.toBeInTheDocument();
   });
 });

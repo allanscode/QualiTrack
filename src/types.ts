@@ -357,6 +357,15 @@ export interface AuditingQueueTicket {
   draft_metadata_incomplete?: boolean;
   /** true = atendente já atingiu o máximo de 2 avaliações positivas no mês. */
   positive_cap_reached?: boolean;
+  /** Estado da captura persistente, independente da view do Zendesk. */
+  positive_automation?: {
+    status: 'pending' | 'preparing' | 'evaluating' | 'review_required' | 'blocked';
+    last_error?: string;
+  };
+  child_automation?: {
+    status: 'pending' | 'preparing' | 'evaluating' | 'review_required' | 'blocked';
+    last_error?: string;
+  };
   tags?: string[];
   organization_id?: number | string;
   organization_name?: string;
@@ -430,6 +439,10 @@ export interface AIEvaluationGuideline {
 }
 
 export interface AIEvaluationResult {
+  child_evaluation?: ChildTicketAiEvaluation;
+  automatic_child?: boolean;
+  automatic_positive?: boolean;
+  automation_review_reason?: string | null;
   score: number;
   summary: string;
   strengths: string[];

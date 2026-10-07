@@ -198,7 +198,42 @@ Se qualquer erro_critico marcado → Score Final = 0
 - **Rejeitadas**: "negada", "recusada", "mantida", "improcedente"
 - Usa **última resolução** apenas para evitar contagem dupla
 
+## Avaliação automática de pesquisas positivas
+
+A automação captura os tickets da view de pesquisas positivas em uma fila persistente no banco. A saída da view ou o fechamento do ticket não apaga o resultado nem a revisão pendente. A execução ocorre no servidor, independentemente da tela aberta pelo monitor.
+
+- Nota inferior a 75%: mantém o rascunho preenchido com o indicativo **Revisão necessária · abaixo de 75%** na fila Positivas.
+- Nota igual ou superior a 75%: conclui a monitoria interna quando ficha, respostas e vínculo do agente são válidos, respeitando o limite mensal de positivas.
+- Dados insuficientes ou inconsistentes: impede a conclusão automática e preserva os dados para conferência.
+- A nota é calculada pelas respostas e pelos pesos da ficha; o valor declarado pelo modelo não autoriza a conclusão sozinho.
+- O auditor é configurado no ambiente. O histórico identifica explicitamente a execução automática pela IA.
+- O processamento é independente da publicação de comentários no Zendesk.
+
+A configuração inicial permanece desabilitada até a definição do auditor e das credenciais do ambiente. No staging, o responsável escolhido é Gabriel Dias Di Napoli, com perfil de Qualidade. Os rascunhos positivos salvos continuam acessíveis mesmo quando o Zendesk está indisponível.
+
+O teto opcional `positive_ai_config.max_evaluations` limita o total de jobs iniciados no ambiente. A reserva incrementa `executions_started` na mesma transação que cria o job; ao atingir o teto, `enabled` passa a `false`. Jobs já iniciados podem terminar usando o mesmo identificador. O staging usa teto de cinco, independente do limite mensal por agente. Produção pode deixar esse teto de teste nulo.
+
+Um erro crítico confirmado zera a nota final, conforme a regra da ficha. A fila mostra também a pontuação ponderada dos critérios antes da invalidação e a justificativa do erro crítico apontado pela IA. Ausência de evidência sobre tickets filhos, QPs ou aprovações externas exige conferência humana; não autoriza concluir a monitoria nem inventar uma infração.
+
 ## Prazo de Ação / Deadlines
+
+O ambiente clonado precisa manter o job `process-action-deadline-timeouts` no `pg_cron`, executando `SELECT public.process_action_deadline_timeouts()` a cada cinco minutos. A migração `20261007000005` garante a coluna `concluded_at` também nos bancos legados. Monitorias PJ continuam seguindo a aprovação específica, sem conclusão pelo cron comum.
+
+## Positivas invalidadas e Zendesk
+
+Uma pesquisa originalmente positiva com nota inferior a 75% aguarda a conclusão definitiva da revisão/contestação antes de permitir publicação no Zendesk. O formulário continua sendo salvo normalmente durante a revisão.
+
+A migração `20261007000004` registra as próximas decisões finais em uma fila de sincronização. O worker confere novamente a decisão vigente e atualiza somente os três campos oficiais de invalidação, com controle de concorrência e tentativas. Não altera a pesquisa original do cliente e não cria comentários. Tickets fechados/arquivados ficam com pendência explícita. Não há reprocessamento retroativo.
+
+No staging, a sincronização externa fica desligada por `final_positive_invalidation_config.enabled` e `ZENDESK_FINAL_SYNC_ENABLED`, pois a integração aponta para o Zendesk real.
+
+## Automação de chamados filhos
+
+`child_ai_queue` preserva tickets e pareceres independentemente da view do Zendesk. A ficha fixa de filhos recebe os cinco critérios do parecer; a nota é recalculada a partir dos pesos da ficha. Notas abaixo de 75%, erros críticos ou evidências insuficientes ficam para revisão. Notas a partir de 75% com dados completos geram monitoria concluída em nome do auditor configurado, com histórico explícito de autoria automática.
+
+A automação de filhos começa desativada e compartilha o teto de execuções do ambiente com a automação de positivas. O limite de cinco testes já consumido não é reiniciado. A distribuição das revisões mantém as regras de atribuição da fila de filhos.
+
+## Indicadores de prazo
 
 - Cada transição de status recalcula o deadline
 - Prazo calculado com `addBusinessHours()` de `businessHours.ts`

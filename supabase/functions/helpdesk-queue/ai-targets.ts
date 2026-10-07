@@ -14,7 +14,6 @@ export function buildAITargets(readSetting: ReadSetting): AIModelTarget[] {
   const budgets = [
     timeoutMs(readSetting('AI_PRIMARY_TIMEOUT_MS'), 60_000),
     timeoutMs(readSetting('AI_GEMMA_TIMEOUT_MS'), 40_000),
-    timeoutMs(readSetting('AI_GEMINI_TIMEOUT_MS'), 40_000),
   ];
   return [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS].map((model, index) => ({
     provider: 'openrouter', model, maxAttempts: 2, timeoutMs: budgets[index],

@@ -32,6 +32,7 @@ import { useQueueUpdateNotice } from '../hooks/useQueueUpdateNotice';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
 import { fetchAIDrafts, fetchOpenAIDrafts, saveAIDraft, deleteAIDraft, removeAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import { claimAIJob, completeAIJob, failAIJob, cancelAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
+import { fetchPositiveAutomation, mergePositiveAutomation, positiveAutomationLabel } from '../lib/positiveAutomation';
 import {
   AlertTriangle,
   Sparkles,
@@ -94,7 +95,7 @@ import {
 } from '../lib/queueDistribution';
 import { usePresence } from '../providers/PresenceProvider';
 import { matchesAssignedMonitor } from '../lib/queueMonitorFilter';
-import { calculateAIEvaluationScore } from '../utils/aiEvaluationScore';
+import { calculateAIEvaluationScore, describeAICriticalScore } from '../utils/aiEvaluationScore';
 import { resolveTicketTeamId } from '../lib/ticketTeam';
 import { canAuditTickets } from '../lib/auditPermissions';
 import { getEvaluationOutcome } from '../lib/domainRules';
@@ -266,6 +267,12 @@ export default function AuditingQueueView({
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_evaluation_drafts' }, (payload: any) => {
         const draft = payload.new as AIEvaluationDraft | undefined;
+        if (payload.eventType === 'DELETE') {
+          const removed = payload.old as Partial<AIEvaluationDraft>;
+          setDrafts(previous => Object.fromEntries(Object.entries(previous)
+            .filter(([ticketId, entry]) => ticketId !== removed.ticket_id && entry.id !== removed.id)));
+          return;
+        }
         if (draft?.ticket_id) setDrafts(previous => ({ ...previous, [draft.ticket_id]: draft }));
       })
       .subscribe();
@@ -375,12 +382,24 @@ export default function AuditingQueueView({
   // Rascunhos de avaliação da IA já prontos (persistidos), por ticket_id —
   // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
   const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>({});
+  useEffect(() => {
+    if (activeQueue !== 'positivas' && activeQueue !== 'filhos') return;
+    const audited = new Set(monitorias.map(monitoria => monitoria.ticket_id?.trim()));
+    setTickets(previous => {
+      const retained = previous.filter(ticket => !ticket.saved_ai_draft || (drafts[ticket.ticket_id] && !audited.has(ticket.ticket_id)));
+      const existing = new Set(retained.map(ticket => ticket.ticket_id));
+      const arrived = Object.values(drafts).filter(draft => draft.source_queue === activeQueue
+        && draft.ticket_snapshot && !existing.has(draft.ticket_id) && !audited.has(draft.ticket_id))
+        .map(draft => ({ ...draft.ticket_snapshot!, ticket_id: draft.ticket_id, saved_ai_draft: true }));
+      return arrived.length || retained.length !== previous.length ? [...arrived, ...retained] : previous;
+    });
+  }, [activeQueue, drafts, monitorias]);
   const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
   const [aiJobs, setAIJobs] = useState<Record<string, AIEvaluationJob>>({});
   const childResultFor = (ticket: AuditingQueueTicket): ChildTicketAiEvaluation | undefined => {
     const job = aiJobs[ticket.ticket_id];
     return job?.status === 'completed' && job.evaluation_type === 'chamado_filho' && job.result
-      ? job.result as ChildTicketAiEvaluation : ticket.child_evaluation;
+      ? job.result as ChildTicketAiEvaluation : drafts[ticket.ticket_id]?.result.child_evaluation || ticket.child_evaluation;
   };
   const childAiEvaluation = childPreviewTicket ? childResultFor(childPreviewTicket) : undefined;
   const loadingChildAi = Boolean(childPreviewTicket && isEvaluatingTicket(childPreviewTicket.ticket_id));
@@ -589,13 +608,19 @@ export default function AuditingQueueView({
 
     setLoading(true);
     try {
-      const [pageResult, savedResult] = await Promise.allSettled([
+      const [pageResult, savedResult, automationResult] = await Promise.allSettled([
         fetchQueueTickets(queueAtCallTime, monitorias, targetCursor, activeSearch || undefined),
         targetCursor === null ? fetchOpenAIDrafts(queueAtCallTime) : Promise.resolve([]),
+        (queueAtCallTime === 'positivas' || queueAtCallTime === 'filhos') && targetCursor === null && canAudit ? fetchPositiveAutomation(queueAtCallTime) : Promise.resolve([]),
       ]);
-      if (pageResult.status === 'rejected') throw pageResult.reason;
-      const { tickets: data, nextCursor, hasMore: more } = pageResult.value;
+      if (pageResult.status === 'rejected' && (!['positivas', 'filhos'].includes(queueAtCallTime) || targetCursor !== null
+        || (savedResult.status === 'rejected' && automationResult.status === 'rejected'))) throw pageResult.reason;
+      const { tickets: data, nextCursor, hasMore: more } = pageResult.status === 'fulfilled'
+        ? pageResult.value
+        : { tickets: [], nextCursor: null, hasMore: false };
+      if (pageResult.status === 'rejected') toast.error('Zendesk indisponível. Exibindo as avaliações salvas para revisão.');
       if (savedResult.status === 'rejected') console.error('Erro ao carregar rascunhos da fila:', savedResult.reason);
+      if (automationResult.status === 'rejected') console.error('Erro ao carregar automações positivas:', automationResult.reason);
       const saved = savedResult.status === 'fulfilled' ? savedResult.value : [];
       const auditedIds = new Set(monitorias.map(m => m.ticket_id?.trim()).filter(Boolean));
       const existingIds = new Set(data.map(ticket => ticket.ticket_id));
@@ -611,7 +636,7 @@ export default function AuditingQueueView({
             agent_id: draft.agent_id,
             team_id: draft.team_id,
             channel: draft.channel,
-            csat_status: 'unrated' as const,
+            csat_status: queueAtCallTime === 'positivas' ? 'good' as const : 'unrated' as const,
             ticket_date: draft.created_at,
             status: 'archived',
           }),
@@ -628,7 +653,9 @@ export default function AuditingQueueView({
       if (saved.length > 0) {
         setDrafts(previous => ({ ...previous, ...Object.fromEntries(saved.map(draft => [draft.ticket_id, draft])) }));
       }
-      const mergedTickets = [...retained, ...data];
+      const mergedTickets = (queueAtCallTime === 'positivas' || queueAtCallTime === 'filhos') && automationResult.status === 'fulfilled'
+        ? mergePositiveAutomation([...retained, ...data], automationResult.value, auditedIds, activeSearch, queueAtCallTime)
+        : [...retained, ...data];
       if (queueAtCallTime === 'proativas') {
         mergedTickets.sort((a, b) =>
           (Date.parse(b.ticket_date || '') || 0) - (Date.parse(a.ticket_date || '') || 0));
@@ -644,6 +671,21 @@ export default function AuditingQueueView({
       if (seq === loadSeqRef.current) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if ((activeQueue !== 'positivas' && activeQueue !== 'filhos') || pageNumber !== 1 || !canAudit) return;
+    let cancelled=false;
+    const refresh = async () => {
+      try {
+        const rows=await fetchPositiveAutomation(activeQueue);
+        if (cancelled) return;
+        const audited=new Set(monitorias.filter(m=>m.active!==false).map(m=>m.ticket_id?.trim()));
+        setTickets(previous=>mergePositiveAutomation(previous,rows,audited,debouncedSearch,activeQueue));
+      } catch (error) { console.warn('Falha ao atualizar automações positivas:',error); }
+    };
+    const interval=window.setInterval(()=>void refresh(),30_000);
+    return()=>{cancelled=true;window.clearInterval(interval);};
+  }, [activeQueue,pageNumber,canAudit,monitorias,debouncedSearch]);
 
   const goToNextPage = () => {
     if (!hasMore || !cursor) return;
@@ -731,7 +773,7 @@ export default function AuditingQueueView({
   // Carrega os rascunhos de IA já prontos para os tickets da página atual —
   // agora ativo nas filas de Negativas, Positivas e Proativas.
   useEffect(() => {
-    if ((activeQueue !== 'positivas' && activeQueue !== 'proativas' && activeQueue !== 'negativas') || tickets.length === 0) {
+    if (!['positivas', 'proativas', 'negativas', 'filhos'].includes(activeQueue) || tickets.length === 0) {
       setDrafts({});
       return;
     }
@@ -804,6 +846,9 @@ export default function AuditingQueueView({
   // Distribuição 1-para-1: sempre que a fila de Negativas ou Filhos carrega
   // tickets novos, sincroniza as atribuições já existentes e distribui os
   // que ainda não têm dono entre os monitores online.
+  const retainedChildReviewKey = activeQueue === 'filhos'
+    ? Object.values(drafts).filter(draft => draft.source_queue === 'filhos').map(draft => draft.ticket_id).sort().join(',')
+    : '';
   useEffect(() => {
     if (!isDistributedQueue(activeQueue) || tickets.length === 0) return;
     let cancelled = false;
@@ -811,7 +856,7 @@ export default function AuditingQueueView({
     const ticketIds = tickets.map(t => t.ticket_id);
     setAssignmentsReady(prev => ({ ...prev, [queueType]: false }));
 
-    fetchQueueAssignments(queueType, ticketIds)
+    fetchQueueAssignments(queueType, ticketIds, canAudit)
       .then(assignments => {
         if (cancelled) return;
         setQueueAssignments(prev => ({ ...prev, [queueType]: assignments }));
@@ -826,7 +871,7 @@ export default function AuditingQueueView({
       });
 
     return () => { cancelled = true; };
-  }, [ticketIdsKey, activeQueue, onlineMonitorKey]);
+  }, [ticketIdsKey, activeQueue, onlineMonitorKey, retainedChildReviewKey, canAudit]);
 
   // Filtro de busca na lista de tickets com suporte a filtro de rascunhos da IA
   const filteredTickets = useMemo(() => {
@@ -1492,21 +1537,39 @@ export default function AuditingQueueView({
   // "xs" comum pra ficar legível de relance no card.
   const renderScoreBadge = (ticket: AuditingQueueTicket) => {
     const draft = drafts[ticket.ticket_id];
-    if (!draft) return null;
+    const automation = ticket.positive_automation || ticket.child_automation;
+    if (!draft) return automation ? (
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <Badge variant={automation.status === 'blocked' ? 'warning' : 'info'} size="sm">
+          {positiveAutomationLabel(automation.status)}
+        </Badge>
+        {automation.last_error && <span className="text-xs text-brand-muted">{automation.last_error}</span>}
+      </span>
+    ) : null;
 
     const selectedForm = forms.find(form => form.id === draft.form_id);
     const calculatedScore = calculateAIEvaluationScore(draft.result, selectedForm);
+    const criticalScore = describeAICriticalScore(draft.result, selectedForm);
+    const needsPositiveReview = (activeQueue === 'positivas' || activeQueue === 'filhos') && Number.isFinite(calculatedScore) && calculatedScore < 75;
+    const reviewReason = (activeQueue === 'positivas' || activeQueue === 'filhos') && 'automation_review_reason' in draft.result
+      && typeof draft.result.automation_review_reason === 'string' ? draft.result.automation_review_reason : undefined;
 
     return (
       <span className="inline-flex items-center gap-1.5 flex-wrap">
+        {needsPositiveReview && <Badge variant="warning" size="sm" title="Avaliação preservada mesmo se o ticket sair da view do Zendesk">Revisão necessária · abaixo de 75%</Badge>}
+        {reviewReason && !needsPositiveReview && <Badge variant="warning" size="sm" title={reviewReason}>Conferência necessária</Badge>}
         {ticket.saved_ai_draft && <Badge variant="warning" size="xs">{ticket.draft_metadata_incomplete ? 'Rascunho recuperado · conferir dados' : 'Rascunho IA salvo'}</Badge>}
         <Badge variant="neutral" size="xs">Ficha: {selectedForm?.title || 'não encontrada'}</Badge>
         <span
           title="Nota calculada pelas respostas da IA usando os pesos da ficha"
-          className="inline-flex items-center px-2.5 py-1 rounded-lg bg-functional-success text-functional-success text-xs font-mono font-black flex-shrink-0"
+          className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono font-black flex-shrink-0 ${needsPositiveReview ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'bg-functional-success text-functional-success'}`}
         >
-          {Math.round(calculatedScore)}%
+          {Number.isFinite(calculatedScore) ? `${calculatedScore.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%` : 'Nota indisponível'}
         </span>
+        {criticalScore && <span className="w-full text-xs text-brand-muted">
+          <span className="font-semibold">Critérios: {criticalScore.criteriaScore.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% · Nota final zerada por erro crítico apontado pela IA.</span>
+          {criticalScore.reasons.map((reason, index) => <span key={index} className="mt-1 block">{reason}</span>)}
+        </span>}
       </span>
     );
   };
@@ -1836,6 +1899,7 @@ export default function AuditingQueueView({
 
   const handleStartChildAudit = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
+    const savedDraft = drafts[ticket.ticket_id];
     const selectedChildForm = childTicketForm(forms);
     if (!selectedChildForm) {
       toast.error('A ficha padrão de tickets filhos não está disponível. Avise a Gestão da Qualidade.');
@@ -1849,6 +1913,7 @@ export default function AuditingQueueView({
       return;
     }
     const matchedAgent = agents.find(a =>
+      a.id === (ticket.agent_id || savedDraft?.agent_id) ||
       (ticket.agent_email && a.email.toLowerCase() === ticket.agent_email.toLowerCase()) ||
       (ticket.agent_name && a.name.toLowerCase() === ticket.agent_name.toLowerCase())
     );
@@ -1857,17 +1922,17 @@ export default function AuditingQueueView({
       ticket_id: ticket.ticket_id,
       ticket_subject: ticket.subject,
       form_id: selectedChildForm.id,
-      evaluated_id: ticket.agent_id || matchedAgent?.id,
-      team_id: resolveTicketTeamId(ticket, matchedAgent),
+      evaluated_id: ticket.agent_id || savedDraft?.agent_id || matchedAgent?.id,
+      team_id: resolveTicketTeamId({ ...ticket, team_id: ticket.team_id || savedDraft?.team_id }, matchedAgent),
       ticket_group_team_id: ticket.ticket_group_team_id,
       group_name: ticket.group_name,
-      channel: normalizeChannel(ticket.channel),
+      channel: normalizeChannel(ticket.channel || savedDraft?.channel),
       ticket_date: toTicketDateInput(ticket.ticket_date),
       satisfaction_result: 'Sem pesquisa',
       isAiLocked: true,
-      ticket_fields: ticket.ticket_fields,
+      ticket_fields: savedDraft?.result.ticket_fields || ticket.ticket_fields,
       child_evaluation: childResultFor(ticket),
-      dialogue: ticket.dialogue,
+      dialogue: savedDraft?.result.dialogue || ticket.dialogue,
       queue_assignment: queueAssignment,
     });
   };
@@ -2740,6 +2805,7 @@ export default function AuditingQueueView({
                           {renderAssignedMonitorBadge(ticket)}
                           {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
                           {evaluation && getChildStatusBadge(evaluation.status)}
+                          {renderScoreBadge(ticket)}
                         </div>
                       </div>
 

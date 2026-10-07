@@ -7,7 +7,7 @@ const targets: AIModelTarget[] = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODEL
 }));
 const noSleep = async () => undefined;
 
-describe('cadeia paga GLM, Gemma e Gemini', () => {
+describe('cadeia paga GLM e Gemma', () => {
   it('começa e termina no GLM quando ele responde', async () => {
     const execute = vi.fn(async (_target: AIModelTarget) => ({ value: 'válida', routedProvider: 'outro provider', routerAttempt: 2 }));
     const result = await runAIModelChain({ targets, execute, sleep: noSleep });
@@ -40,15 +40,13 @@ describe('cadeia paga GLM, Gemma e Gemini', () => {
     expect(result.attempts.map(attempt => attempt.model)).toEqual([targets[0].model, targets[0].model, targets[1].model]);
   });
 
-  it('usa Gemini somente após GLM e Gemma falharem', async () => {
-    const execute = vi.fn(async (target: AIModelTarget) => {
-      if (target.model !== targets[2].model) throw new AIModelError('500', 'server_error', true, 'attempt', 500);
-      return { value: 'Gemini concluiu' };
+  it('encerra após GLM e Gemma falharem sem chamar Gemini', async () => {
+    const execute = vi.fn(async (_target: AIModelTarget) => {
+      throw new AIModelError('500', 'server_error', true, 'attempt', 500);
     });
-    const result = await runAIModelChain({ targets, execute, sleep: noSleep });
-    expect(result.model).toBe(targets[2].model);
-    expect(result.attempts.map(attempt => attempt.model)).toEqual([
-      targets[0].model, targets[0].model, targets[1].model, targets[1].model, targets[2].model,
+    await expect(runAIModelChain({ targets, execute, sleep: noSleep })).rejects.toMatchObject({ reason: 'server_error' });
+    expect(execute.mock.calls.map(([target]) => target.model)).toEqual([
+      'z-ai/glm-5.3-flash', 'z-ai/glm-5.3-flash', 'google/gemma-4-31b-it', 'google/gemma-4-31b-it',
     ]);
   });
 
@@ -76,11 +74,11 @@ describe('cadeia paga GLM, Gemma e Gemini', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
-  it('preserva o histórico das seis tentativas quando todos falham', async () => {
+  it('preserva o histórico das quatro tentativas quando todos falham', async () => {
     const execute = vi.fn(async () => { throw new AIModelError('429', 'rate_limit', true, 'attempt', 429); });
     await expect(runAIModelChain({ targets, execute, sleep: noSleep }))
-      .rejects.toMatchObject({ reason: 'rate_limit', attempts: expect.arrayContaining([expect.objectContaining({ model: targets[2].model, attempt: 2 })]) });
-    expect(execute).toHaveBeenCalledTimes(6);
+      .rejects.toMatchObject({ reason: 'rate_limit', attempts: expect.arrayContaining([expect.objectContaining({ model: targets[1].model, attempt: 2 })]) });
+    expect(execute).toHaveBeenCalledTimes(4);
   });
 
   it.each([400, 401, 403])('erro global HTTP %i interrompe a cadeia', async status => {
