@@ -17,7 +17,11 @@ describe('staging external action guard', () => {
     const guarded = guardedExternalFetch(fetcher, staging);
     await guarded('https://example.zendesk.com/api/v2/tickets/1.json');
     await guarded('https://openrouter.ai/api/v1/chat/completions', { method: 'POST' });
-    expect(() => guarded('https://example.zendesk.com/api/v2/tickets/1.json', { method: 'PUT' }))
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      expect(() => guarded('https://example.zendesk.com/api/v2/tickets/1.json', { method }))
+        .toThrow(/bloqueada/);
+    }
+    expect(() => guarded('http://example.zendesk.com/api/v2/tickets/1.json', { method: 'PUT' }))
       .toThrow(/bloqueada/);
     expect(() => guarded(new Request('https://example.zendesk.com/api/v2/tickets/1.json', { method: 'POST' })))
       .toThrow(/bloqueada/);
