@@ -2,7 +2,7 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.
 import type { HelpdeskProvider } from './types.ts';
 import { buildEvaluationHtml } from './template.ts';
 
-type Publication = { monitoria_id: string; ticket_id: string; lease_id: string };
+type Publication = { monitoria_id: string; ticket_id: string; lease_id: string; source: 'positive_csat' | 'final_decision' };
 type Monitoria = {
   id: string; ticket_id: string; active: boolean; status: string; score: number;
   evaluator_id: string; evaluator_note: string | null; satisfaction_result: string | null;
@@ -16,6 +16,7 @@ export async function processPositiveAutoPublication(db: SupabaseClient, provide
   if (claimError) throw claimError;
   const work = (rows || [])[0] as Publication | undefined;
   if (!work) return { processed: 0 };
+  const finalDecision = work.source === 'final_decision';
   const finish = async (status: 'sent' | 'retry' | 'skipped' | 'uncertain', error?: string) => {
     const result = await db.rpc('finish_positive_auto_publication', {
       p_monitoria_id: work.monitoria_id, p_lease_id: work.lease_id,
@@ -32,8 +33,9 @@ export async function processPositiveAutoPublication(db: SupabaseClient, provide
     const monitoria = data as Monitoria | null;
     if (!monitoria || !monitoria.active || monitoria.status !== 'concluida'
       || monitoria.score < 75 || monitoria.score > 100 || monitoria.satisfaction_result !== 'Positiva'
-      || monitoria.form_snapshot?.automation !== 'positive_csat'
-      || monitoria.ticket_id !== work.ticket_id) {
+      || (finalDecision ? monitoria.form_snapshot?.automation === 'positive_csat'
+        : monitoria.form_snapshot?.automation !== 'positive_csat')
+      || monitoria.ticket_id?.trim() !== work.ticket_id) {
       await finish('skipped','A monitoria deixou de ser uma positiva concluída válida.');
       return { processed: 1, status: 'skipped', ticket_id: work.ticket_id };
     }
@@ -42,8 +44,17 @@ export async function processPositiveAutoPublication(db: SupabaseClient, provide
       await finish('skipped',eligibility.reason || 'Ticket indisponível para publicação no Zendesk.');
       return { processed: 1, status: 'skipped', ticket_id: work.ticket_id };
     }
+    const { data: lastSent, error: receiptError } = await db.from('helpdesk_submissions')
+      .select('outcome').eq('monitoria_id',monitoria.id).eq('status','sent')
+      .order('created_at',{ ascending: false }).limit(1).maybeSingle();
+    if (receiptError) throw receiptError;
+    if (lastSent?.outcome === 'positiva') {
+      await finish('sent');
+      return { processed: 1, status: 'sent', ticket_id: work.ticket_id };
+    }
     const claimed = await db.rpc('claim_helpdesk_publication', {
-      p_monitoria: monitoria.id, p_caller: monitoria.evaluator_id, p_force: false,
+      p_monitoria: monitoria.id, p_caller: monitoria.evaluator_id,
+      p_force: finalDecision && lastSent?.outcome === 'negativa',
     });
     if (claimed.error) {
       await finish('uncertain','Envio anterior ou concorrente: confira o ticket no Zendesk.');
@@ -55,11 +66,14 @@ export async function processPositiveAutoPublication(db: SupabaseClient, provide
     }
     publicationClaim = claimed.data as string;
     const htmlBody = buildEvaluationHtml({
-      outcome: 'positiva', evaluatorNote: monitoria.evaluator_note,
+      outcome: 'positiva', evaluatorNote: finalDecision
+        ? `Após reavaliação, a monitoria foi concluída com nota ${monitoria.score.toFixed(2).replace('.', ',')}%. O ticket foi validado; esta decisão substitui o apontamento anterior.`
+        : monitoria.evaluator_note,
       satisfactionRecordText: monitoria.satisfaction_has_record ? monitoria.satisfaction_record_text : null,
     });
     const { externalCommentId } = await provider.publishEvaluation({
       ticketId: work.ticket_id, outcome: 'positiva', htmlBody,
+      clearPreviousInvalid: finalDecision,
     });
     const receipt = await db.rpc('finish_helpdesk_publication', {
       p_monitoria: monitoria.id, p_claim: publicationClaim, p_provider: provider.name,

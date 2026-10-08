@@ -230,6 +230,11 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
             await mockDb.update('monitorias', deps.initialData.id, payload);
             savedId = deps.initialData.id;
           } else {
+            const { data: existing } = await mockDb.get('monitorias');
+            if ((existing as Monitoria[] | null)?.some(m =>
+              m.active !== false && m.ticket_id?.trim() === deps.header.ticket_id?.trim())) {
+              throw new Error(`O ticket #${deps.header.ticket_id.trim()} já possui monitoria ativa. Abra a monitoria existente para continuar.`);
+            }
             const { data, error } = await mockDb.insert('monitorias', payload);
             if (error) throw error;
             savedId = data.id;
@@ -266,6 +271,10 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
         deps.onSaved(savedId, nextStatus);
       } catch (e: any) {
         console.error('[Monitoria] Falha ao salvar:', e);
+        if (e?.code === '23505' && String(e.message).includes('monitorias_one_active_per_ticket_idx')) {
+          toast.error(`O ticket #${deps.header.ticket_id?.trim()} já possui monitoria ativa. Abra a monitoria existente para continuar.`);
+          return;
+        }
         toast.error(e?.message
           ? `Não foi possível salvar a monitoria: ${e.message}`
           : 'Não foi possível salvar a monitoria. Tente novamente.');

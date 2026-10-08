@@ -9,18 +9,20 @@ const monitoria = {
   satisfaction_result: 'Positiva', satisfaction_has_record: true,
   satisfaction_record_text: 'Cliente satisfeito', form_snapshot: { automation: 'positive_csat' },
 };
-const work = { monitoria_id: monitoria.id, ticket_id: monitoria.ticket_id, lease_id: 'lease-1' };
+const work = { monitoria_id: monitoria.id, ticket_id: monitoria.ticket_id, lease_id: 'lease-1', source: 'positive_csat' };
 
 function setup(options: {
   publicationClaim?: string | null;
   receiptError?: Error;
   monitoriaError?: Error;
+  finalDecision?: boolean;
+  lastSentOutcome?: 'positiva' | 'negativa';
 } = {}) {
   const calls: Array<{ name: string; args?: Record<string, unknown> }> = [];
   const rpc = vi.fn(async (name: string, args?: Record<string, unknown>) => {
     calls.push({ name, args });
     switch (name) {
-      case 'claim_positive_auto_publication': return { data: [work], error: null };
+      case 'claim_positive_auto_publication': return { data: [{ ...work, source: options.finalDecision ? 'final_decision' : 'positive_csat' }], error: null };
       case 'claim_helpdesk_publication': return { data: options.publicationClaim === undefined ? 'claim-1' : options.publicationClaim, error: null };
       case 'finish_helpdesk_publication': return { data: null, error: options.receiptError ?? null };
       case 'finish_positive_auto_publication': return { data: null, error: null };
@@ -28,12 +30,19 @@ function setup(options: {
     }
   });
   const query = {
-    select: vi.fn(() => query), eq: vi.fn(() => query),
-    maybeSingle: vi.fn(async () => ({ data: options.monitoriaError ? null : monitoria, error: options.monitoriaError ?? null })),
+    select: vi.fn(() => query), eq: vi.fn(() => query), order: vi.fn(() => query), limit: vi.fn(() => query),
+    maybeSingle: vi.fn(async () => ({ data: options.monitoriaError ? null : {
+      ...monitoria, form_snapshot: options.finalDecision ? {} : monitoria.form_snapshot,
+    }, error: options.monitoriaError ?? null })),
+  };
+  const receiptQuery = {
+    select: vi.fn(() => receiptQuery), eq: vi.fn(() => receiptQuery), order: vi.fn(() => receiptQuery), limit: vi.fn(() => receiptQuery),
+    maybeSingle: vi.fn(async () => ({ data: options.lastSentOutcome ? { outcome: options.lastSentOutcome } : null, error: null })),
   };
   const from = vi.fn((table: string) => {
-    expect(table).toBe('monitorias');
-    return query;
+    if (table === 'monitorias') return query;
+    if (table === 'helpdesk_submissions') return receiptQuery;
+    throw new Error(`Unexpected table: ${table}`);
   });
   const provider: HelpdeskProvider = {
     name: 'zendesk',
@@ -56,6 +65,7 @@ describe('positive auto-publication', () => {
     expect(state.provider.checkPublicationEligibility).toHaveBeenCalledWith(work.ticket_id);
     expect(state.provider.publishEvaluation).toHaveBeenCalledWith({
       ticketId: work.ticket_id, outcome: 'positiva', htmlBody: expect.stringContaining('Atendimento correto'),
+      clearPreviousInvalid: false,
     });
     expect(call(state.calls, 'claim_helpdesk_publication')).toEqual({
       p_monitoria: monitoria.id, p_caller: monitoria.evaluator_id, p_force: false,
@@ -74,14 +84,25 @@ describe('positive auto-publication', () => {
   });
 
   it('treats an existing sent publication as success without posting a duplicate comment', async () => {
-    const state = setup({ publicationClaim: null });
+    const state = setup({ lastSentOutcome: 'positiva' });
 
     expect(await processPositiveAutoPublication(state.db, state.provider))
       .toMatchObject({ processed: 1, status: 'sent' });
     expect(state.provider.publishEvaluation).not.toHaveBeenCalled();
     expect(state.calls.map(entry => entry.name)).toEqual([
-      'claim_positive_auto_publication', 'claim_helpdesk_publication', 'finish_positive_auto_publication',
+      'claim_positive_auto_publication', 'finish_positive_auto_publication',
     ]);
+  });
+
+  it('publishes the final positive reevaluation and clears an earlier invalidation', async () => {
+    const state = setup({ finalDecision: true, lastSentOutcome: 'negativa' });
+    expect(await processPositiveAutoPublication(state.db, state.provider))
+      .toMatchObject({ processed: 1, status: 'sent' });
+    expect(call(state.calls, 'claim_helpdesk_publication')).toMatchObject({ p_force: true });
+    expect(state.provider.publishEvaluation).toHaveBeenCalledWith({
+      ticketId: work.ticket_id, outcome: 'positiva',
+      htmlBody: expect.stringContaining('93,75%'), clearPreviousInvalid: true,
+    });
   });
 
   it('skips a closed ticket without claiming or posting', async () => {
