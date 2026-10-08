@@ -1161,7 +1161,11 @@ export default function AuditingQueueView({
       if (isMockMode) setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
         ...previous[ticket.ticket_id], status: 'failed',
       } }));
-      setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'A análise falhou. Tente novamente neste ticket.' }));
+      const feedback = /HTTP 402|limite de créditos/i.test(err?.message || '')
+        ? 'IA indisponível: saldo do OpenRouter insuficiente. Avise o administrador.'
+        : (err?.message || 'A análise falhou. Tente novamente neste ticket.');
+      setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: feedback }));
+      if (!silent) toast.error(feedback);
       throw err; // relança para o batch capturar individualmente
     } finally {
       globalEvaluatingTickets.delete(ticket.ticket_id);
@@ -1390,7 +1394,11 @@ export default function AuditingQueueView({
       setAIJobs(previous => ({ ...previous, [ticket.ticket_id]: {
         ...previous[ticket.ticket_id], status: 'failed',
       } }));
-      setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: 'A análise falhou. Tente novamente neste ticket.' }));
+      const feedback = /HTTP 402|limite de créditos/i.test(message)
+        ? 'IA indisponível: saldo do OpenRouter insuficiente. Avise o administrador.'
+        : message;
+      setAiFeedback(previous => ({ ...previous, [ticket.ticket_id]: feedback }));
+      if (!silent) toast.error(feedback);
       if (silent) throw err;
       return 'cancelled';
     } finally {
@@ -3896,7 +3904,7 @@ export default function AuditingQueueView({
                         source: selectionOverrideEnabled ? 'manual_override' : (autoForm ? 'automatic' : 'manual_no_suggestion'),
                       };
                       setGuidelinePickerTicket(null);
-                      handleEvaluateWithAI(ticket, formToUse, guidelineIds, false, selectionContext);
+                      void handleEvaluateWithAI(ticket, formToUse, guidelineIds, false, selectionContext).catch(() => undefined);
                     }}
                   >
                     <Bot className="w-3.5 h-3.5" />

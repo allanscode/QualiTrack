@@ -12,7 +12,7 @@ import { m, AnimatePresence } from 'motion/react';
 import { format as formatDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Toaster, toast } from 'sonner';
-import { User, ROLE_LABELS, UserRole, AIEvaluationGuideline, QueueSubTab } from './types';
+import { User, ROLE_LABELS, UserRole, AIEvaluationGuideline, QueueSubTab, AuditingQueueType } from './types';
 import { QualityConfigProvider } from './lib/useQualityConfig';
 import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
 import { ThemeProvider, useTheme, resolveSystemTheme, applyThemeToDOM, type Theme } from './providers/ThemeProvider';
@@ -24,6 +24,7 @@ import { useFeedbacks } from './hooks/useFeedbacks';
 import { useQueueEventNotifications } from './hooks/useQueueEventNotifications';
 import { supabase } from './lib/supabase';
 import { fetchAIGuidelines } from './lib/aiGuidelines';
+import { fetchQueuePendingCounts, type QueuePendingCounts } from './lib/helpdeskQueue';
 import { releaseQueueTicketAssignment, canManageQueueAssignments } from './lib/queueDistribution';
 import { getContestationNotifications } from './lib/contestationNotifications';
 import { canAuditTickets } from './lib/auditPermissions';
@@ -45,6 +46,10 @@ export const QUEUE_SUBTITLES: Record<QueueSubTab, string> = {
   filhos: 'Auditoria de tickets vinculados e demandas de apoio entre equipes',
   filhos_invalidos: 'Validação e saneamento de chamados filhos fora do padrão',
   monitores: 'Gestão de presença, elegibilidade e distribuição de chamados da equipe',
+};
+
+const EMPTY_QUEUE_COUNTS: QueuePendingCounts = {
+  negativas: null, proativas: null, positivas: null, filhos: null, filhos_invalidos: null,
 };
 
 import { lazyWithRetry } from './utils/lazyWithRetry';
@@ -553,12 +558,33 @@ function MainApp({
   });
   const [isQueueMenuOpen, setIsQueueMenuOpen] = React.useState(activeTab === 'filas');
   const [isQueueHovered, setIsQueueHovered] = React.useState(false);
-  const [pendingNegativesCount, setPendingNegativesCount] = React.useState(0);
+  const [queueCounts, setQueueCounts] = React.useState<QueuePendingCounts>(EMPTY_QUEUE_COUNTS);
+  const pendingQueueTotal = Object.values(queueCounts).reduce((total: number, count) => total + (count || 0), 0);
+  const queueBadge = (queue: AuditingQueueType) => (queueCounts[queue] || 0) > 0 ? queueCounts[queue]! : undefined;
+  const updatePendingNegativesCount = React.useCallback((count: number) => {
+    setQueueCounts(previous => previous.negativas === count ? previous : { ...previous, negativas: count });
+  }, []);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [activeTab, isFormOpen]);
+
+  React.useEffect(() => {
+    if (!userData?.id || userData.role === 'suporte') return;
+    let active = true;
+    const refreshCounts = async () => {
+      try {
+        const counts = await fetchQueuePendingCounts();
+        if (active) setQueueCounts(counts);
+      } catch (error) {
+        console.warn('[App] Falha ao atualizar contadores das filas:', error);
+      }
+    };
+    void refreshCounts();
+    const timer = window.setInterval(() => void refreshCounts(), 120_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [userData?.id, userData?.role]);
 
   React.useEffect(() => {
     try {
@@ -1228,9 +1254,9 @@ function MainApp({
                           Filas de Triagem
                         </span>
                         <div className="flex items-center gap-1.5">
-                          {pendingNegativesCount > 0 && !isQueueMenuOpen && (
+                          {pendingQueueTotal > 0 && !isQueueMenuOpen && (
                             <span className="px-1.5 py-0.5 text-[9px] font-black bg-rose-500 text-white rounded-full">
-                              {pendingNegativesCount}
+                              {pendingQueueTotal}
                             </span>
                           )}
                           <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isQueueMenuOpen ? 'rotate-180' : ''}`} />
@@ -1264,7 +1290,7 @@ function MainApp({
                             isOpen={true}
                             isDark={sidebarIsDark}
                             colorType="negativas"
-                            badge={pendingNegativesCount > 0 ? pendingNegativesCount : undefined}
+                            badge={queueBadge('negativas')}
                           />
                           <QueueSubNavItem
                             label="Fila Proativa"
@@ -1273,6 +1299,7 @@ function MainApp({
                             isOpen={true}
                             isDark={sidebarIsDark}
                             colorType="proativas"
+                            badge={queueBadge('proativas')}
                           />
                           <QueueSubNavItem
                             label="CSAT Positivas"
@@ -1281,6 +1308,7 @@ function MainApp({
                             isOpen={true}
                             isDark={sidebarIsDark}
                             colorType="positivas"
+                            badge={queueBadge('positivas')}
                           />
                           <QueueSubNavItem
                             label="Chamados Filhos"
@@ -1289,6 +1317,7 @@ function MainApp({
                             isOpen={true}
                             isDark={sidebarIsDark}
                             colorType="filhos"
+                            badge={queueBadge('filhos')}
                           />
                           <QueueSubNavItem
                             label="Filhos Inválidos"
@@ -1297,6 +1326,7 @@ function MainApp({
                             isOpen={true}
                             isDark={sidebarIsDark}
                             colorType="filhos_invalidos"
+                            badge={queueBadge('filhos_invalidos')}
                           />
                         </m.div>
                       )}
@@ -1489,9 +1519,9 @@ function MainApp({
                     Filas de Triagem
                   </span>
                   <div className="flex items-center gap-1.5">
-                    {pendingNegativesCount > 0 && !isQueueMenuOpen && (
+                    {pendingQueueTotal > 0 && !isQueueMenuOpen && (
                       <span className="px-1.5 py-0.5 text-[9px] font-black bg-rose-500 text-white rounded-full">
-                        {pendingNegativesCount}
+                        {pendingQueueTotal}
                       </span>
                     )}
                     <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isQueueMenuOpen ? 'rotate-180' : ''}`} />
@@ -1525,7 +1555,7 @@ function MainApp({
                       isOpen={sidebarTextVisible}
                       isDark={sidebarIsDark}
                       colorType="negativas"
-                      badge={pendingNegativesCount > 0 ? pendingNegativesCount : undefined}
+                      badge={queueBadge('negativas')}
                     />
                     <QueueSubNavItem
                       label="Fila Proativa"
@@ -1534,6 +1564,7 @@ function MainApp({
                       isOpen={sidebarTextVisible}
                       isDark={sidebarIsDark}
                       colorType="proativas"
+                      badge={queueBadge('proativas')}
                     />
                     <QueueSubNavItem
                       label="CSAT Positivas"
@@ -1542,6 +1573,7 @@ function MainApp({
                       isOpen={sidebarTextVisible}
                       isDark={sidebarIsDark}
                       colorType="positivas"
+                      badge={queueBadge('positivas')}
                     />
                     <QueueSubNavItem
                       label="Chamados Filhos"
@@ -1550,6 +1582,7 @@ function MainApp({
                       isOpen={sidebarTextVisible}
                       isDark={sidebarIsDark}
                       colorType="filhos"
+                      badge={queueBadge('filhos')}
                     />
                     <QueueSubNavItem
                       label="Filhos Inválidos"
@@ -1558,6 +1591,7 @@ function MainApp({
                       isOpen={sidebarTextVisible}
                       isDark={sidebarIsDark}
                       colorType="filhos_invalidos"
+                      badge={queueBadge('filhos_invalidos')}
                     />
                   </m.div>
                 )}
@@ -2073,7 +2107,7 @@ function MainApp({
                   onModalStateChange={setIsQueueModalOpen}
                   activeSubTab={activeQueueSubTab}
                   onSubTabChange={setActiveQueueSubTab}
-                  onPendingNegativesCountChange={setPendingNegativesCount}
+                  onPendingNegativesCountChange={updatePendingNegativesCount}
                 />
               </div>
             )}
@@ -2146,9 +2180,9 @@ function MainApp({
               }`}
             >
               <AnimatedLayersIcon active={activeTab === 'filas'} className="w-5 h-5" />
-              {pendingNegativesCount > 0 && (
+              {pendingQueueTotal > 0 && (
                 <span className="absolute top-0 right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">
-                  {pendingNegativesCount}
+                  {pendingQueueTotal}
                 </span>
               )}
               <span className={`text-[10px] tracking-tight mt-1 ${activeTab === 'filas' ? 'font-black' : 'font-medium'}`}>

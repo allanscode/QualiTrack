@@ -93,6 +93,8 @@ const INVALID_CHILD_VIEW_ID = Deno.env.get('HELPDESK_INVALID_CHILD_VIEW_ID') || 
 // numa carga só. O front pede próxima página sob demanda (botão), passando
 // o `cursor` devolvido na resposta anterior.
 const PAGE_SIZE = 25;
+const COUNTED_QUEUES: QueueType[] = ['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos'];
+let viewCountsCache: { expiresAt: number; counts: Record<QueueType, number | null> } | null = null;
 
 function viewIdForQueue(queueType: QueueType): string {
   switch (queueType) {
@@ -109,6 +111,7 @@ const RequestSchema = z.object({
     'fetch_queue',
     'fetch_draft_statuses',
     'check_queue_updates',
+    'fetch_queue_counts',
     'fetch_dialogue',
     'evaluate_ai',
     'evaluate_child_ticket',
@@ -1027,6 +1030,57 @@ serve(async (req) => {
         .filter((ticket: { id: number; status?: string }) => ids.includes(String(ticket.id)))
         .map((ticket: { id: number; status?: string }) => [String(ticket.id), ticket.status || 'unknown']));
       return jsonResponse({ statuses }, 200);
+    }
+
+    if (action === 'fetch_queue_counts') {
+      const counts: Record<QueueType, number | null> = viewCountsCache && viewCountsCache.expiresAt > Date.now()
+        ? { ...viewCountsCache.counts }
+        : { negativas: null, proativas: null, positivas: null, filhos: null, filhos_invalidos: null };
+      if (!viewCountsCache || viewCountsCache.expiresAt <= Date.now()) {
+        const ids = COUNTED_QUEUES.map(viewIdForQueue);
+        const response = await fetch(
+          `https://${subdomain}.zendesk.com/api/v2/views/count_many?ids=${ids.join(',')}`,
+          { headers: zendeskHeaders, signal: AbortSignal.timeout(15_000) },
+        );
+        if (!response.ok) return jsonResponse({ error: `Falha ao consultar contadores do Zendesk (${response.status}).` }, 502);
+        const body = await response.json() as { view_counts?: Array<{ view_id?: number; value?: number | null }> };
+        for (const item of body.view_counts || []) {
+          const queue = COUNTED_QUEUES.find(type => viewIdForQueue(type) === String(item.view_id));
+          if (queue && Number.isInteger(item.value) && (item.value ?? -1) >= 0) counts[queue] = item.value!;
+        }
+        viewCountsCache = { expiresAt: Date.now() + 90_000, counts: { ...counts } };
+      }
+      if (caller.role === 'qualidade' || caller.role === 'gestor_qualidade' || caller.role === 'admin') {
+        let assignmentsQuery = supabase.from('queue_ticket_assignments')
+          .select('queue_type').eq('status', 'pending')
+          .in('queue_type', ['negativas', 'filhos']);
+        if (caller.role === 'qualidade') assignmentsQuery = assignmentsQuery.eq('assigned_to', user.id);
+        const { data: assignments, error } = await assignmentsQuery;
+        if (error) return jsonResponse({ error: 'Falha ao contar chamados atribuídos.' }, 503);
+        counts.negativas = (assignments || []).filter(row => row.queue_type === 'negativas').length;
+        counts.filhos = (assignments || []).filter(row => row.queue_type === 'filhos').length;
+      }
+      if (caller.role === 'gestor_suporte') {
+        const cutoff = new Date(Date.now() - 15 * 60_000).toISOString();
+        const { data: catalog, error } = await supabase.from('queue_ticket_catalog')
+          .select('ticket_id,queue_type,ticket_snapshot').gte('verified_at', cutoff)
+          .in('queue_type', ['proativas', 'positivas', 'filhos_invalidos']).limit(1000);
+        if (error) return jsonResponse({ error: 'Falha ao contar chamados das equipes.' }, 503);
+        const ticketIds = [...new Set((catalog || []).map(row => row.ticket_id))];
+        const { data: audited, error: auditedError } = ticketIds.length
+          ? await supabase.from('monitorias').select('ticket_id').eq('active', true).in('ticket_id', ticketIds)
+          : { data: [], error: null };
+        if (auditedError) return jsonResponse({ error: 'Falha ao conferir monitorias das equipes.' }, 503);
+        const auditedIds = new Set((audited || []).map(row => row.ticket_id));
+        for (const queue of COUNTED_QUEUES) counts[queue] = 0;
+        for (const row of catalog || []) {
+          const queue = row.queue_type as QueueType;
+          if (!auditedIds.has(row.ticket_id) && canReadMatchedTicketTeam(caller.role,
+            typeof row.ticket_snapshot?.team_id === 'string' ? row.ticket_snapshot.team_id : null,
+            managerTeamIds)) counts[queue] = (counts[queue] || 0) + 1;
+        }
+      }
+      return jsonResponse({ counts, approximate: true }, 200);
     }
 
     // Consulta somente IDs da primeira página. Não cria agentes, não altera

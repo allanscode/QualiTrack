@@ -155,6 +155,26 @@ export async function checkQueueUpdates(type: AuditingQueueType): Promise<string
   return data.ticket_ids.filter((id: unknown): id is string => typeof id === 'string');
 }
 
+export type QueuePendingCounts = Record<AuditingQueueType, number | null>;
+
+/** Contadores das cinco filas, respeitando a visibilidade do perfil no servidor. */
+export async function fetchQueuePendingCounts(): Promise<QueuePendingCounts> {
+  const types: AuditingQueueType[] = ['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos'];
+  if (isMockMode || !supabase) {
+    return Object.fromEntries(types.map(type => [type, getMockQueueTickets(type, new Set()).length])) as QueuePendingCounts;
+  }
+  const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+    body: { action: 'fetch_queue_counts' },
+  });
+  if (error || !data?.counts) {
+    throw new Error(data?.error || await extractFunctionErrorMessage(error, 'Falha ao consultar contadores das filas.'));
+  }
+  return Object.fromEntries(types.map(type => {
+    const value = data.counts[type];
+    return [type, typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null];
+  })) as QueuePendingCounts;
+}
+
 /**
  * Busca UMA página de tickets das filas do Zendesk (Negativas, Proativas ou
  * Positivas) — 25 por vez. Views grandes (Proativas: centenas de tickets de
@@ -509,7 +529,7 @@ export async function evaluateTicketWithAI(
     });
 
     if (error) {
-      throw new Error(error.message || 'Erro de comunicação com a IA');
+      throw new Error(await extractFunctionErrorMessage(error, 'Erro de comunicação com a IA'));
     }
 
     if (data?.queued === true && typeof data.job_id === 'string') return { queued: true, job_id: data.job_id };
@@ -591,7 +611,7 @@ export async function evaluateChildTicketWithAI(
       }
     });
 
-    if (error) throw new Error(data?.error || error.message || 'Falha de comunicação com a IA.');
+    if (error) throw new Error(data?.error || await extractFunctionErrorMessage(error, 'Falha de comunicação com a IA.'));
     if (data?.queued === true && typeof data.job_id === 'string') return { queued: true, job_id: data.job_id };
     if (!data?.result) throw new Error(data?.error || 'A IA não retornou resultado.');
 
