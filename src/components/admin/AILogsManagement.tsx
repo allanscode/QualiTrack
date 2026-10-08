@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../lib/supabase';
 import { AIEvaluationLog, User } from '../../types';
-import { getAiLogSummary, matchesAiLogStatus } from '../../lib/aiLogSummary';
+import { getAiLogSummary, getAiLogTokenUsage, matchesAiLogStatus } from '../../lib/aiLogSummary';
 import {
   RefreshCw,
   Search,
@@ -189,6 +189,7 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                   <th className="py-3 px-4">Tipo</th>
                   <th className="py-3 px-4">Provedor / Modelo</th>
                   <th className="py-3 px-4">Latência</th>
+                  <th className="py-3 px-4">Tokens (entrada / saída)</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Data/Hora</th>
                   <th className="py-3 px-4 text-right">Ações</th>
@@ -197,6 +198,7 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
               <tbody className="divide-y divide-surface-border/50">
                 {filteredLogs.map(log => {
                   const summary = getAiLogSummary(log);
+                  const tokenUsage = getAiLogTokenUsage(log);
                   return (
                   <tr key={log.id} className="hover:bg-surface-subtle/40 transition-colors">
                     <td className="py-3 px-4 font-mono font-bold text-brand-primary">
@@ -238,6 +240,11 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                     </td>
                     <td className="py-3 px-4 font-mono text-brand-muted">
                       {log.duration_ms ? `${(log.duration_ms / 1000).toFixed(2)}s` : '--'}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-brand-muted whitespace-nowrap" title="Contagem informada pelo provedor nas tentativas com resposta">
+                      {tokenUsage.input === null ? '--' : tokenUsage.input.toLocaleString('pt-BR')}
+                      {' / '}
+                      {tokenUsage.output === null ? '--' : tokenUsage.output.toLocaleString('pt-BR')}
                     </td>
                     <td className="py-3 px-4">
                       {summary.hadRecoverableError ? (
@@ -437,6 +444,14 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                       </p>
                     </Card>
                     <Card className="p-3 space-y-1">
+                      <span className="text-[11px] text-brand-muted font-bold">Tokens de entrada / saída</span>
+                      <p className="font-mono font-bold text-brand-primary">
+                        {getAiLogTokenUsage(selectedLog).input?.toLocaleString('pt-BR') ?? '--'}
+                        {' / '}
+                        {getAiLogTokenUsage(selectedLog).output?.toLocaleString('pt-BR') ?? '--'}
+                      </p>
+                    </Card>
+                    <Card className="p-3 space-y-1">
                       <span className="text-[11px] text-brand-muted font-bold">Tipo de Avaliação</span>
                       <p className="font-bold text-brand-primary uppercase">{selectedLog.evaluation_type}</p>
                     </Card>
@@ -472,6 +487,10 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                               {attempt.provider}{attempt.routedProvider ? ` / ${attempt.routedProvider}` : ''}
                               {attempt.durationMs != null ? ` • ${(attempt.durationMs / 1000).toFixed(2)}s` : ''}
                               {attempt.httpStatus ? ` • HTTP ${attempt.httpStatus}` : ''}
+                            </p>
+                            <p className="mt-1 text-[11px] text-brand-muted">
+                              Tokens: entrada {attempt.promptTokens?.toLocaleString('pt-BR') ?? '--'}
+                              {' · '}saída {attempt.completionTokens?.toLocaleString('pt-BR') ?? '--'}
                             </p>
                             {attempt.status === 'failed' && (
                               <p className="mt-1 text-[11px] text-functional-warning">

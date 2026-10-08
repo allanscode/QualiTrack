@@ -318,6 +318,9 @@ export interface AIEvaluationLog {
     durationMs?: number;
     routedProvider?: string;
     startedAt?: string;
+    promptTokens?: number;
+    completionTokens?: number;
+    cost?: number;
   }[];
   fallback_used?: boolean;
   job_id?: string;
