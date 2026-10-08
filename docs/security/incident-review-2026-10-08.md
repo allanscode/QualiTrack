@@ -6,7 +6,7 @@ O dashboard mantinha o toast `Recuperando dashboard...` depois de uma tentativa 
 
 Em verificações externas ao projeto de produção `vpytvgpsqdapgouyjowc`, uma consulta REST mínima não respondeu em 20 segundos; outra levou cerca de 11 segundos. Mais tarde, as mesmas rotas responderam em menos de um segundo. O episódio é compatível com lentidão transitória do acesso ao banco, mas os testes não identificam se a origem foi o Supabase, a rede ou um caminho intermediário. O logout relatado pelo usuário não teve mensagem; o código continha um `signOut()` automático quando a leitura do perfil retornava `PGRST116`, um caminho de logout silencioso que não deveria depender de uma única consulta.
 
-## Correção preparada
+## Correção aplicada
 
 - Fechar o toast do dashboard ao terminar o carregamento, com sucesso ou erro; evitar avisos de retry em atualizações de fundo com dados anteriores visíveis.
 - Aumentar para 30 segundos o prazo das leituras de monitorias e dashboard; cancelar os temporizadores após a resposta e retirar `auth.getSession()` dos retries.
@@ -22,4 +22,4 @@ Em verificações externas ao projeto de produção `vpytvgpsqdapgouyjowc`, uma 
 - Dashboard e app ainda carregam grandes conjuntos de monitorias em consultas independentes. Paginação e agregação no servidor devem ser priorizadas para reduzir a carga e melhorar a resposta quando a base crescer.
 - A causa exata de eventos `SIGNED_OUT` ainda exige telemetria de autenticação e logs do projeto de produção; este relatório não atribui o logout com certeza à lentidão do banco.
 
-Esta correção ainda precisa de aprovação final antes de publicação em produção, conforme `AGENTS.md`.
+Correção incorporada à `main` no PR #43 após autorização do usuário e validação das verificações automáticas.

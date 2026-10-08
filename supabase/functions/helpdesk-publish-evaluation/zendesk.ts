@@ -49,6 +49,8 @@ export class ZendeskProvider implements HelpdeskProvider {
     // Espelha exatamente a ação da macro oficial "❌ QA | Ticket Invalidado" (ID 47142387357076)
     if (input.outcome === 'negativa') {
       customFields.push({ id: FIELD_CSAT_VAZIO, value: 'critico' });
+    } else if (input.clearPreviousInvalid) {
+      customFields.push({ id: FIELD_CSAT_VAZIO, value: null });
     }
 
     const payload = {

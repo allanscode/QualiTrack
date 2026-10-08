@@ -32,6 +32,18 @@ describe('confirmação dos campos da macro', () => {
     { id: 47422901459476, value: true },
   ];
 
+  it('remove a marca crítica anterior quando a decisão final valida o ticket', async () => {
+    const finalFields = [...fields, { id: 47850817758484, value: null }];
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ticket: { custom_fields: finalFields }, audit: { events: [{ type: 'Comment', id: 92 }] },
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await provider.publishEvaluation({ ticketId: '180210', outcome: 'positiva',
+      htmlBody: '<p>Decisão final</p>', clearPreviousInvalid: true });
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sent.ticket.custom_fields).toEqual(finalFields);
+  });
+
   it('corrige somente os campos quando o primeiro PUT já publicou o comentário', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({

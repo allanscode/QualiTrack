@@ -47,6 +47,7 @@ export interface PublishEvaluationInput {
   ticketId: string;
   outcome: EvaluationOutcome;
   htmlBody: string;
+  clearPreviousInvalid?: boolean;
 }
 
 /**

@@ -131,7 +131,7 @@ serve(async (req: Request) => {
     // 2. Buscar a monitoria por monitoria_id. 404 se não existir.
     const { data: monitoria, error: monitoriaError } = await supabaseAdmin
       .from('monitorias')
-      .select('id, active, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_result, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score, form_id, form_snapshot')
+      .select('id, active, ticket_id, evaluator_id, evaluated_id, team_id, evaluator_note, satisfaction_result, satisfaction_has_record, satisfaction_record_text, selected_critical_errors, status, score, form_id, form_snapshot, history')
       .eq('id', monitoria_id)
       .maybeSingle();
 
@@ -228,17 +228,18 @@ serve(async (req: Request) => {
     const resolvedOutcome: 'positiva' | 'negativa' = domainOutcome;
 
     // 3c. Proteção contra duplicidade de postagem no Zendesk (se já enviado e não forçado)
+    let correctedOutcome = false;
     if (!dry_run && !force) {
       const { data: existing } = await supabaseAdmin
         .from('helpdesk_submissions')
-        .select('id, external_comment_id')
+        .select('id, external_comment_id, outcome')
         .eq('monitoria_id', monitoria_id)
         .eq('status', 'sent')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (existing) {
+      if (existing?.outcome === resolvedOutcome) {
         return jsonResponse(
           {
             success: true,
@@ -249,12 +250,20 @@ serve(async (req: Request) => {
           200,
         );
       }
+      correctedOutcome = !!existing && existing.outcome !== resolvedOutcome;
     }
 
     // 4. Montar o HTML a partir do template + campos.
+    const finalDecision = monitoria.status === 'concluida'
+      && monitoria.satisfaction_result === 'Positiva' && rawScore >= 75
+      && Array.isArray(monitoria.history)
+      && monitoria.history.some((entry: { action?: string }) =>
+        /Monitoria Reavaliada|Monitoria aprovada pelo Gestor/i.test(entry?.action || ''));
     const generatedHtml = buildEvaluationHtml({
       outcome: resolvedOutcome,
-      evaluatorNote: monitoria.evaluator_note ?? null,
+      evaluatorNote: finalDecision
+        ? `Após reavaliação, a monitoria foi concluída com nota ${rawScore.toFixed(2).replace('.', ',')}%. O ticket foi validado; esta decisão substitui o apontamento anterior.`
+        : monitoria.evaluator_note ?? null,
       satisfactionRecordText: monitoria.satisfaction_has_record
         ? monitoria.satisfaction_record_text ?? null
         : null,
@@ -289,7 +298,7 @@ serve(async (req: Request) => {
     }
 
     const { data: claimId, error: claimError } = await supabaseAdmin.rpc('claim_helpdesk_publication', {
-      p_monitoria: monitoria_id, p_caller: user.id, p_force: force ?? false,
+      p_monitoria: monitoria_id, p_caller: user.id, p_force: (force ?? false) || correctedOutcome,
     });
     if (claimError) return failure('Envio em andamento ou pendente de conferência. Atualize e confira o ticket antes de reenviar.', 'provider', 409);
     if (!claimId) return jsonResponse({ success: true, preview_html: previewHtml, ticket_id: normalizedTicketId }, 200);
@@ -298,6 +307,7 @@ serve(async (req: Request) => {
         ticketId: normalizedTicketId,
         outcome: resolvedOutcome,
         htmlBody: previewHtml,
+        clearPreviousInvalid: finalDecision || correctedOutcome,
       });
 
       // 7. Registrar o sucesso em helpdesk_submissions.

@@ -11,7 +11,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test": "vitest run",
-    "test:database": "node --test --test-concurrency=1 scripts/security-database.test.mjs scripts/security-hardening.test.mjs scripts/security-boundaries.test.mjs scripts/fresh-database.test.mjs scripts/deployment-security.test.mjs scripts/presence-distribution.test.mjs scripts/security-remediation.test.mjs scripts/user-teams-rls-recursion.test.mjs scripts/team-group-migration.test.mjs scripts/pj-review-flow.test.mjs scripts/positive-automation.test.mjs scripts/child-automation.test.mjs scripts/final-positive-invalidation.test.mjs",
+    "test:database": "node --test --test-concurrency=1 scripts/security-database.test.mjs scripts/security-hardening.test.mjs scripts/security-boundaries.test.mjs scripts/fresh-database.test.mjs scripts/deployment-security.test.mjs scripts/presence-distribution.test.mjs scripts/security-remediation.test.mjs scripts/user-teams-rls-recursion.test.mjs scripts/team-group-migration.test.mjs scripts/pj-review-flow.test.mjs scripts/positive-automation.test.mjs scripts/child-automation.test.mjs scripts/final-positive-invalidation.test.mjs scripts/monitoria-uniqueness.test.mjs scripts/final-positive-publication.test.mjs",
     "test:e2e": "playwright test",
     "prepare:supabase": "node scripts/prepare-supabase.mjs",
     "check:bundle": "node scripts/check-production-bundle.mjs",
