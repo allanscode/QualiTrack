@@ -60,11 +60,17 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
                 .abortSignal(controller.signal)] : []),
             ]);
 
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000)
-            );
+            let timeoutId: ReturnType<typeof setTimeout> | undefined;
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              timeoutId = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 30000);
+            });
 
-            const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+            let results: any[];
+            try {
+              results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+            } finally {
+              if (timeoutId) clearTimeout(timeoutId);
+            }
             const errorRes = results.find(r => r.error);
             if (errorRes) throw errorRes.error;
 
@@ -73,13 +79,16 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
             console.error(`[Monitorias] Erro na tentativa ${retryCount + 1}:`, err);
             if (retryCount < 4) {
               const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
-              toast.loading(`Recuperando monitorias... (${retryCount + 1}/5)`, { id: 'mon-retry' });
-              await supabase!.auth.getSession();
+              if (!hasLoadedOnce.current) {
+                toast.loading(`Recuperando monitorias... (${retryCount + 1}/5)`, { id: 'mon-retry' });
+              }
               await new Promise(res => setTimeout(res, waitTime));
               return executeWithRetry(retryCount + 1);
             }
             toast.dismiss('mon-retry');
-            toast.error('Não foi possível conectar ao servidor. Verifique sua internet.');
+            toast.error(hasLoadedOnce.current
+              ? 'Não foi possível atualizar as monitorias. Os dados anteriores continuam visíveis.'
+              : 'O servidor de dados não respondeu. Tente novamente em instantes.');
             throw err;
           }
         };
@@ -137,7 +146,6 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
   useEffect(() => {
     const handleReconnect = () => {
       console.log('[Monitorias] Reconexão detectada. Recarregando monitorias...');
-      hasLoadedOnce.current = false;
       loadRef.current();
     };
     window.addEventListener('qualitrack:reconnected', handleReconnect);

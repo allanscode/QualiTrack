@@ -177,7 +177,7 @@ export function DashboardProvider({
               const controller = new AbortController();
               let timeoutId: ReturnType<typeof setTimeout> | undefined;
               const timeoutPromise = new Promise<never>((_, reject) => {
-                timeoutId = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000);
+                timeoutId = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 30000);
               });
               let result;
               try {
@@ -195,13 +195,16 @@ export function DashboardProvider({
           console.error(`[Dashboard] Erro na tentativa ${retryCount + 1}:`, err);
           if (retryCount < 4) {
             const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
-            toast.loading(`Recuperando dashboard... (${retryCount + 1}/5)`, { id: 'dash-retry' });
-            await sb.auth.getSession();
+            if (!hasLoadedOnce.current) {
+              toast.loading(`Recuperando dashboard... (${retryCount + 1}/5)`, { id: 'dash-retry' });
+            }
             await new Promise(res => setTimeout(res, waitTime));
             return executeWithRetry(retryCount + 1);
           }
           toast.dismiss('dash-retry');
-          toast.error('Não foi possível conectar ao servidor. Verifique sua internet.');
+          toast.error(hasLoadedOnce.current
+            ? 'Não foi possível atualizar o dashboard. Os dados anteriores continuam visíveis.'
+            : 'O servidor de dados não respondeu. Tente novamente em instantes.');
           throw err;
         }
       };
@@ -308,6 +311,7 @@ export function DashboardProvider({
       setLoading(false);
       hasLoadedOnce.current = true;
       fetchingRef.current = false;
+      toast.dismiss('dash-retry');
     }
   }, [refreshTrigger]);
 
@@ -362,7 +366,6 @@ export function DashboardProvider({
   useEffect(() => {
     const handleReconnect = () => {
       console.log('[Dashboard] Reconexão detectada. Recarregando monitorias...');
-      hasLoadedOnce.current = false;
       loadDataRef.current();
     };
     window.addEventListener('qualitrack:reconnected', handleReconnect);

@@ -69,24 +69,31 @@ export function useSessionManager(opts: SessionManagerOptions) {
     const sb = supabase!;
     let reconnectInterval: ReturnType<typeof setInterval> | null = null;
     let wasOffline = false;
+    let pendingPing: Promise<boolean> | null = null;
 
-    const pingSupabase = async (): Promise<boolean> => {
-      try {
+    const pingSupabase = (): Promise<boolean> => {
+      if (pendingPing) return pendingPing;
+      pendingPing = (async () => {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        const { error } = await sb.from('users').select('id').limit(1).abortSignal(controller.signal);
-        clearTimeout(timeout);
+        const timeout = setTimeout(() => controller.abort(), 20000);
+        try {
+          const { error } = await sb.from('users').select('id').limit(1).abortSignal(controller.signal);
 
-        if (error && error.message !== 'JWT expired') {
-          console.warn('[System] Ping falhou, erro retornado pelo DB:', error);
-          if (error.code === 'PGRST301' || error.message.includes('auth')) return true;
-          throw error;
+          if (error && error.message !== 'JWT expired') {
+            console.warn('[System] Ping falhou, erro retornado pelo DB:', error);
+            if (error.code === 'PGRST301' || error.message.includes('auth')) return true;
+            throw error;
+          }
+          return true;
+        } catch (e: any) {
+          console.error('[System] Ping catch error:', e.message || e);
+          return false;
+        } finally {
+          clearTimeout(timeout);
         }
-        return true;
-      } catch (e: any) {
-        console.error('[System] Ping catch error:', e.message || e);
-        return false;
-      }
+      })();
+      void pendingPing.finally(() => { pendingPing = null; });
+      return pendingPing;
     };
 
     const handleOnlineStatusChange = async (online: boolean) => {
