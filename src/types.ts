@@ -234,7 +234,7 @@ export type EvaluationOutcome = 'positiva' | 'negativa';
 
 /** Retorno da Edge Function `helpdesk-publish-evaluation`, em dry_run ou não. */
 export type PublishResult =
-  | { success: true; preview_html: string; ticket_id: string; external_comment_id?: string }
+  | { success: true; preview_html: string; ticket_id: string; external_comment_id?: string; simulated?: boolean }
   | { success: false; error: string; stage: 'auth' | 'not_found' | 'provider' | 'validation' };
 
 /** Linha da tabela `helpdesk_submissions` — histórico de tentativas de envio. */

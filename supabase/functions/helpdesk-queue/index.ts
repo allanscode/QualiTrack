@@ -3,6 +3,7 @@ import {
   validateChildEvaluationResponse, type ChildCreationRoutingEvidence,
 } from './child-evaluation.ts';
 import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
+import { guardedExternalFetch, isProductionProject } from '../_shared/external-environment.ts';
 import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
@@ -38,6 +39,8 @@ import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-
 import { previewWebpostoDivisions, type ZendeskMembership, type ZendeskMembershipGroup, type ZendeskMembershipUser } from './webposto-memberships.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
+const productionProject = isProductionProject(Deno.env.get('SUPABASE_URL'));
+const fetch = guardedExternalFetch(globalThis.fetch.bind(globalThis), Deno.env.get('SUPABASE_URL'));
 // GLM pago primeiro; Gemma e Gemini pagos entram em sequência se necessário.
 const AI_TARGETS: AIModelTarget[] = buildAITargets(name => Deno.env.get(name));
 
@@ -636,13 +639,15 @@ serve(async (req) => {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
       }
+      if (!productionProject) return jsonResponse({ enabled: false, simulated: true, processed: 0 }, 200);
       const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
-      return jsonResponse(await processFinalPositiveInvalidation(workerClient,key=>Deno.env.get(key)),200);
+      return jsonResponse(await processFinalPositiveInvalidation(workerClient,key=>Deno.env.get(key),fetch),200);
     }
     if (workerBody?.action === 'process_positive_ai') {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
       }
+      if (!productionProject) return jsonResponse({ enabled: false, blocked: 'staging_manual_only', processed: 0 }, 200);
       const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
       const result = await processPositiveAI(workerClient, key => Deno.env.get(key), async (raw, auditorId) => {
         const payload = RequestSchema.parse(raw);
@@ -655,6 +660,7 @@ serve(async (req) => {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
       }
+      if (!productionProject) return jsonResponse({ enabled: false, blocked: 'staging_manual_only', processed: 0 }, 200);
       const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
       const result = await processChildAI(workerClient, key => Deno.env.get(key), async (raw, auditorId) => {
         const payload = RequestSchema.parse(raw);
@@ -667,13 +673,15 @@ serve(async (req) => {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
       }
+      if (!productionProject) return jsonResponse({ enabled: false, simulated: true, processed: 0 }, 200);
       const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
-      return jsonResponse(await processChildAutoPublication(workerClient,key=>Deno.env.get(key)),200);
+      return jsonResponse(await processChildAutoPublication(workerClient,key=>Deno.env.get(key),fetch),200);
     }
     if (workerBody?.action === 'process_ai_retries') {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
       }
+      if (!productionProject) return jsonResponse({ enabled: false, blocked: 'staging_manual_only', processed: 0 }, 200);
       const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
       return await processAIRetries(workerClient);
     }
@@ -681,6 +689,7 @@ serve(async (req) => {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
       }
+      if (!productionProject) return jsonResponse({ simulated: true, scanned: 0, updated: [] }, 200);
       const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
       return await reconcilePublishedChildMacros(workerClient);
     }
@@ -688,6 +697,7 @@ serve(async (req) => {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
       }
+      if (!productionProject) return jsonResponse({ simulated: true, ticket_id: workerBody.ticket_id }, 200);
       if (!['conforme', 'nao_conforme'].includes(workerBody.verdict)) {
         return jsonResponse({ error: 'verdict deve ser conforme ou nao_conforme.' }, 400);
       }
@@ -876,13 +886,13 @@ serve(async (req) => {
     const email = Deno.env.get('ZENDESK_EMAIL');
     const apiToken = Deno.env.get('ZENDESK_API_TOKEN');
 
-    if (!subdomain || !email || !apiToken) {
+    if ((!subdomain || !email || !apiToken) && (productionProject || action !== 'publish_child_macro')) {
       return jsonResponse({
         error: 'Credenciais do Zendesk não configuradas no Supabase Secrets'
       }, 500);
     }
 
-    const zendeskAuth = btoa(`${email}/token:${apiToken}`);
+    const zendeskAuth = btoa(`${email || ''}/token:${apiToken || ''}`);
     const zendeskHeaders = {
       Authorization: `Basic ${zendeskAuth}`,
       'Content-Type': 'application/json',
@@ -914,6 +924,10 @@ serve(async (req) => {
         .select('queue_type').eq('ticket_id', ticket_id).in('queue_type', ['filhos', 'filhos_invalidos']).limit(1);
       if (catalogError) return jsonResponse({ error: 'Não foi possível conferir a origem do chamado filho.' }, 503);
       if (!catalog?.length) return jsonResponse({ error: 'Chamado filho não encontrado no catálogo das filas.' }, 403);
+      if (!productionProject) {
+        return jsonResponse({ success: true, simulated: true, ticket_id, verdict: child_verdict,
+          message: 'Simulação no staging: monitoria salva no QWP; nenhuma macro ou tag enviada ao Zendesk.' }, 200);
+      }
       const rate = await supabase.rpc('consume_security_rate_limit', {
         bucket_key: `helpdesk-queue:publish-child:${user.id}`, max_requests: 5, window_seconds: 60,
       });

@@ -1,4 +1,5 @@
 import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
+import { guardedExternalFetch, isProductionProject } from '../_shared/external-environment.ts';
 import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 // Orquestra a publicação de uma avaliação de qualidade no helpdesk:
 // autentica o chamador, busca a monitoria, monta o HTML do comentário
@@ -21,6 +22,8 @@ import { canPublishMonitoriaStatus } from './publication-status.ts';
 import { processPositiveAutoPublication } from './positive-auto-publication.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
+const productionProject = isProductionProject(Deno.env.get('SUPABASE_URL'));
+const zendeskFetch = guardedExternalFetch(globalThis.fetch.bind(globalThis), Deno.env.get('SUPABASE_URL'));
 
 
 const PublishSchema = z.object({
@@ -62,7 +65,7 @@ function resolveProvider(): HelpdeskProvider {
         );
       }
 
-      return new ZendeskProvider({ subdomain, email, apiToken });
+      return new ZendeskProvider({ subdomain, email, apiToken }, zendeskFetch);
     }
     default:
       throw new Error(`HELPDESK_PROVIDER desconhecido: ${providerName}`);
@@ -80,6 +83,9 @@ serve(async (req: Request) => {
     if (req.method === 'POST' && req.headers.get('apikey') === secretApiKey()) {
       const workerBody = await req.clone().json().catch(() => null);
       if (workerBody?.action === 'process_positive_auto_publication') {
+        if (!productionProject) return new Response(JSON.stringify({ enabled: false, simulated: true, processed: 0 }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
         const workerClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', secretApiKey());
         const result = await processPositiveAutoPublication(workerClient, resolveProvider());
         return new Response(JSON.stringify(result), {
@@ -119,6 +125,7 @@ serve(async (req: Request) => {
     }
 
     const { monitoria_id, outcome, dry_run, force, comment_text } = parsed.data;
+    const simulated = !productionProject && !dry_run;
 
     // Client com service role: a busca/gravação da monitoria e do envio
     // acontece independentemente das políticas de RLS do usuário chamador
@@ -228,7 +235,7 @@ serve(async (req: Request) => {
     const resolvedOutcome: 'positiva' | 'negativa' = domainOutcome;
 
     // 3c. Proteção contra duplicidade de postagem no Zendesk (se já enviado e não forçado)
-    if (!dry_run && !force) {
+    if (!dry_run && !force && !simulated) {
       const { data: existing } = await supabaseAdmin
         .from('helpdesk_submissions')
         .select('id, external_comment_id')
@@ -262,9 +269,10 @@ serve(async (req: Request) => {
     const previewHtml = comment_text === undefined ? generatedHtml : buildEditedCommentHtml(comment_text);
 
     // 5. Se dry_run, devolver o HTML e parar — nenhuma escrita.
-    if (dry_run) {
+    if (dry_run || simulated) {
       return jsonResponse(
-        { success: true, preview_html: previewHtml, ticket_id: normalizedTicketId },
+        { success: true, preview_html: previewHtml, ticket_id: normalizedTicketId,
+          ...(simulated ? { simulated: true } : {}) },
         200,
       );
     }

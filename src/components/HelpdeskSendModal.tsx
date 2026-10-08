@@ -43,6 +43,7 @@ type SendState =
   | { status: 'idle' }
   | { status: 'sending' }
   | { status: 'sent'; externalCommentId?: string }
+  | { status: 'simulated' }
   | { status: 'error'; message: string };
 
 function htmlToPlainText(html: string): string {
@@ -151,7 +152,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
 
   const handleConfirm = async () => {
     if (checkingHistory) return;
-    if (sendState.status === 'sending' || sendState.status === 'sent') return; // trava contra duplo clique
+    if (sendState.status === 'sending' || sendState.status === 'sent' || sendState.status === 'simulated') return; // trava contra duplo clique
     if (previousSubmission && !acknowledgedResend) {
       toast.warning('Confirme que deseja reenviar antes de continuar.');
       return;
@@ -178,6 +179,11 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
         setSendState({ status: 'error', message: result?.error || 'Falha ao enviar ao Zendesk.' });
         return;
       }
+      if (result.simulated) {
+        setSendState({ status: 'simulated' });
+        toast.info('Simulação concluída no staging. Nada foi enviado ao Zendesk.');
+        return;
+      }
       setSendState({ status: 'sent', externalCommentId: result.external_comment_id });
       onSent?.();
       toast.success('Comentário enviado ao Zendesk com sucesso!');
@@ -187,7 +193,7 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
   };
 
   const isSending = sendState.status === 'sending';
-  const isSent = sendState.status === 'sent';
+  const isSent = sendState.status === 'sent' || sendState.status === 'simulated';
   const radiosDisabled = isSending || isSent;
 
   return (
@@ -362,6 +368,12 @@ export default function HelpdeskSendModal({ monitoriaId, ticketId, suggestedOutc
             <div className="flex items-center gap-3 bg-success/10 border border-success/30 rounded-xl p-4">
               <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0" />
               <p className="text-xs font-bold text-success uppercase tracking-wide">Enviado com sucesso ao Zendesk ✓</p>
+            </div>
+          )}
+          {sendState.status === 'simulated' && (
+            <div className="flex items-center gap-3 bg-success/10 border border-success/30 rounded-xl p-4">
+              <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0" />
+              <p className="text-xs font-bold text-success uppercase tracking-wide">Simulação concluída no QWP. Nada foi enviado ao Zendesk.</p>
             </div>
           )}
 

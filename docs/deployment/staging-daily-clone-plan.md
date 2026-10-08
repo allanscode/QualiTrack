@@ -2,6 +2,13 @@
 
 **Estado:** análise concluída; agendamento e cópia automática ainda não ativados.
 
+O código de simulação do staging já impede que workers de IA e publicação automática
+processem filas, mantém a avaliação manual via OpenRouter e bloqueia mutações no Zendesk.
+A publicação dessas proteções no projeto de teste depende de acesso às Edge Functions:
+a credencial de gestão disponível retorna HTTP 403 (`edge_functions_read`) para
+`secfejmccojxsvdntljx`. Até o deploy ser confirmado, o staging remoto não deve ser
+considerado protegido.
+
 O banco de produção tinha aproximadamente **55 MB em 08/10/2026**. Uma cópia lógica diária
 transferiria até cerca de **1,65 GB/mês de dados brutos** (55 MB × 30; compressão reduz o
 tráfego). O staging existente é `secfejmccojxsvdntljx`, mas a credencial de gestão atual
@@ -28,12 +35,15 @@ novo projeto é criado. A rotina segura precisa de cópia lógica com uma etapa 
 
 1. Produzir dump consistente e criptografado; validar checksum e manifest, sem chaves de API.
 2. Desativar no destino todos os jobs de cron, automações de IA, webhooks e outboxes antes
-   de tornar o staging acessível. Nunca copiar Edge Secrets de produção.
-3. Aplicar guardas de ambiente no código: em staging, proibir chamadas OpenRouter e toda
+   de tornar o staging acessível. Nunca copiar Edge Secrets de produção. O OpenRouter pode
+   ser configurado para avaliações **manuais**, iniciadas por um usuário, sem disparos automáticos.
+3. Aplicar guardas de ambiente no código: em staging, impedir os workers automáticos e toda
    mutação Zendesk (`POST`, `PUT`, `PATCH`, `DELETE`), mesmo se uma chave for inserida por engano.
+   A publicação manual deve retornar uma simulação identificada, sem recibo de envio real.
 4. Restaurar em staging, verificar contagens, RLS, autenticação, ausência de segredos e
    ausência de jobs/outboxes ativos. Só então trocar a base de teste em uso.
-5. Fazer um teste periódico de restauração e de bloqueio de chamadas externas; alertar se
+5. Fazer um teste periódico de restauração, avaliação manual com IA e bloqueio de mutações
+   externas; alertar se
    qualquer etapa falhar. Falha deve preservar o staging anterior e o último dump íntegro.
 
 Antes de implementar, confirmar acesso de gestão ao projeto de staging, cotas do plano,

@@ -131,14 +131,15 @@ export interface QueueTicketsPage {
 export async function publishChildTicketMacro(
   ticketId: string,
   monitoriaId: string,
-): Promise<void> {
-  if (isMockMode) return;
+): Promise<{ simulated: boolean }> {
+  if (isMockMode) return { simulated: true };
   if (!supabase) throw new Error('Conexão com o Zendesk indisponível.');
   const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
     body: { action: 'publish_child_macro', ticket_id: ticketId, monitoria_id: monitoriaId },
   });
   if (error) throw new Error(await extractFunctionErrorMessage(error, 'Não foi possível enviar a macro ao Zendesk.'));
   if (!data?.success) throw new Error(data?.error || 'O Zendesk não confirmou o envio da macro.');
+  return { simulated: data.simulated === true };
 }
 
 /** Consulta leve para avisar sobre mudanças sem recarregar os cards da fila. */

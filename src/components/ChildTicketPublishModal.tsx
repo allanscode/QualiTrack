@@ -10,7 +10,7 @@ interface Props {
   onClose: () => void;
 }
 
-type State = { kind: 'sending' } | { kind: 'sent' } | { kind: 'error'; message: string };
+type State = { kind: 'sending' } | { kind: 'sent' } | { kind: 'simulated' } | { kind: 'error'; message: string };
 
 export default function ChildTicketPublishModal({ ticketId, monitoriaId, onClose }: Props) {
   const [state, setState] = useState<State>({ kind: 'sending' });
@@ -19,8 +19,8 @@ export default function ChildTicketPublishModal({ ticketId, monitoriaId, onClose
   const publish = useCallback(async () => {
     setState({ kind: 'sending' });
     try {
-      await publishChildTicketMacro(ticketId, monitoriaId);
-      setState({ kind: 'sent' });
+      const result = await publishChildTicketMacro(ticketId, monitoriaId);
+      setState({ kind: result.simulated ? 'simulated' : 'sent' });
     } catch (error) {
       setState({ kind: 'error', message: error instanceof Error ? error.message : 'Falha ao enviar a macro ao Zendesk.' });
     }
@@ -38,13 +38,14 @@ export default function ChildTicketPublishModal({ ticketId, monitoriaId, onClose
       <Card className="space-y-4 p-6">
         <div className="flex items-center gap-3">
           {state.kind === 'sending' ? <Loader2 className="h-6 w-6 animate-spin text-brand-highlight" />
-            : state.kind === 'sent' ? <CheckCircle2 className="h-6 w-6 text-functional-success" />
+            : state.kind === 'sent' || state.kind === 'simulated' ? <CheckCircle2 className="h-6 w-6 text-functional-success" />
               : <AlertTriangle className="h-6 w-6 text-functional-warning" />}
           <h3 className="font-bold text-brand-primary">Chamado filho #{ticketId}</h3>
         </div>
         <p className="text-sm text-brand-muted">
           {state.kind === 'sending' ? 'Monitoria salva. Enviando o Registro do Auditor ao Zendesk...'
             : state.kind === 'sent' ? 'Monitoria salva e macro de chamado filho válido confirmada no Zendesk.'
+              : state.kind === 'simulated' ? 'Simulação concluída. A monitoria foi salva no QWP; nada foi enviado ao Zendesk.'
               : 'A monitoria foi salva no QWP. O envio ao Zendesk ficou pendente.'}
         </p>
         {state.kind === 'error' && <p role="alert" className="text-sm text-functional-error">{state.message}</p>}

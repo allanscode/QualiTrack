@@ -19,10 +19,10 @@ export interface ZendeskConfig {
 export class ZendeskProvider implements HelpdeskProvider {
   readonly name = 'zendesk';
 
-  constructor(private readonly config: ZendeskConfig) {}
+  constructor(private readonly config: ZendeskConfig, private readonly fetcher?: typeof fetch) {}
 
   async checkPublicationEligibility(ticketId: string): Promise<{ eligible: boolean; reason?: string }> {
-    const response = await fetch(`https://${this.config.subdomain}.zendesk.com/api/v2/tickets/${ticketId}.json`, {
+    const response = await (this.fetcher ?? fetch)(`https://${this.config.subdomain}.zendesk.com/api/v2/tickets/${ticketId}.json`, {
       headers: { Authorization: `Basic ${btoa(`${this.config.email}/token:${this.config.apiToken}`)}` },
       signal: AbortSignal.timeout(10000),
     });
@@ -61,7 +61,7 @@ export class ZendeskProvider implements HelpdeskProvider {
       },
     };
 
-    const response = await fetch(url, {
+    const response = await (this.fetcher ?? fetch)(url, {
       method: 'PUT',
       headers: {
         Authorization: `Basic ${auth}`,
@@ -91,7 +91,7 @@ export class ZendeskProvider implements HelpdeskProvider {
       if (typeof updatedStamp !== 'string' || !updatedStamp) {
         throw new Error('Comentário aceito, mas não foi possível conferir os campos da macro.');
       }
-      const repairResponse = await fetch(url, {
+      const repairResponse = await (this.fetcher ?? fetch)(url, {
         method: 'PUT',
         headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticket: {

@@ -28,6 +28,8 @@ export type PublishResult =
       ticket_id: string;
       /** Ausente quando a chamada foi dry_run. */
       external_comment_id?: string;
+      /** Ação exibida no staging, sem qualquer gravação no Zendesk. */
+      simulated?: boolean;
     }
   | {
       success: false;
