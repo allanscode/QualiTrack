@@ -59,7 +59,7 @@ Responda SOMENTE com um objeto JSON válido (sem markdown, sem texto extra) que 
 ${JSON.stringify(responseSchema)}`,
       }],
       ...(maxTokens ? { max_tokens: maxTokens } : {}),
-      provider: { allow_fallbacks: true },
+      provider: { allow_fallbacks: true, sort: 'throughput' },
     }),
     signal: signal || AbortSignal.timeout(OPENROUTER_HANG_GUARD_MS),
   });

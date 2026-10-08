@@ -187,6 +187,33 @@ test('clean Supabase install: exact generated SQL, no demo data, approved system
         VALUES ('12345',$1,$2,$3,$4,90)`, [id(4),id(2),id(10),id(20)]);
       assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.ai_evaluation_drafts WHERE ticket_id='12345'`)).rows[0].n, 0);
     });
+    await t.test('AI audit summary counts unique evaluated tickets and real outcomes', async () => {
+      await db.exec(`INSERT INTO ai_evaluation_logs(ticket_id,evaluation_type,provider,model,status) VALUES
+        ('12345','atendimento','openrouter','model','success'),
+        ('12345','atendimento','openrouter','model','success'),
+        ('23456','atendimento','openrouter','model','success'),
+        ('34567','chamado_filho','openrouter','model','success'),
+        ('45678','atendimento','openrouter','model','success'),
+        ('88888','atendimento','openrouter','model','error'),
+        ('77777','atendimento','zendesk_webhook','webhook-trigger','success'),
+        ('99999','registro_auditor','zendesk_webhook','webhook','success');
+        INSERT INTO ai_evaluation_drafts(ticket_id,result,created_by,source_queue)
+          VALUES ('23456','{"summary":"Needs review"}'::jsonb,'${id(4)}','proativas');
+        INSERT INTO monitorias(ticket_id,evaluator_id,evaluated_id,team_id,form_id,score,status)
+          VALUES ('34567','${id(4)}','${id(2)}','${id(10)}','${id(20)}',100,'concluida');
+        INSERT INTO monitorias(ticket_id,evaluator_id,evaluated_id,team_id,form_id,score,status,form_snapshot,created_at)
+          VALUES ('45678','${id(4)}','${id(2)}','${id(10)}','${id(20)}',100,'concluida',
+            '{"automation":"positive_csat"}'::jsonb,now()-interval '1 day');`);
+      const summary = (await asUser(1,() => db.query('SELECT * FROM get_ai_audit_summary()'))).rows[0];
+      assert.deepEqual(Object.fromEntries(Object.entries(summary).map(([key,value]) => [key,Number(value)])), {
+        evaluated_tickets: 4, generated_monitorias: 2, concluded_monitorias: 2, awaiting_review: 1,
+      });
+      await assert.rejects(asUser(4,() => db.query('SELECT * FROM get_ai_audit_summary()')),/gestão da qualidade/);
+      await assert.rejects(asUser(2,() => db.query('SELECT * FROM get_ai_audit_summary()')),/gestão da qualidade/);
+      await db.exec('SET ROLE anon');
+      try { await assert.rejects(db.query('SELECT * FROM get_ai_audit_summary()'),/permission denied/); }
+      finally { await db.exec('RESET ROLE'); }
+    });
     await t.test('anonymous and logged-in browsers cannot submit direct access requests or run scheduler', async () => {
       for (const role of ['anon','authenticated']) {
         await db.exec(`SET ROLE ${role}`);
@@ -215,6 +242,27 @@ test('clean Supabase install: exact generated SQL, no demo data, approved system
       const deadline = (await db.query("SELECT calculate_action_deadline('2026-09-18T19:00:00Z',2) AS result")).rows[0].result;
       assert.equal(new Date(deadline).toISOString(),'2026-09-21T12:00:00.000Z');
       assert.ok((await db.query("SELECT * FROM pg_publication_tables WHERE pubname='supabase_realtime' AND tablename='monitorias'")).rows.length);
+    });
+    await t.test('only the service can deactivate a linked Zendesk agent and revoke sessions once', async () => {
+      await db.exec(`CREATE TABLE auth.sessions(id uuid PRIMARY KEY, user_id uuid NOT NULL);
+        INSERT INTO auth.sessions(id,user_id) VALUES ('${id(90)}','${id(2)}');
+        UPDATE public.users SET source_system='zendesk',external_id='123456' WHERE id='${id(2)}';`);
+      await assert.rejects(asUser(1,() => db.query("SELECT * FROM deactivate_zendesk_agent('event-1','123456')")), /permission denied/);
+      await db.exec('SET ROLE service_role');
+      let result;
+      try {
+        result = (await db.query("SELECT * FROM deactivate_zendesk_agent('event-1','123456')")).rows[0];
+        assert.equal(result.user_id,id(2));
+        assert.equal(result.deactivated,true);
+        assert.equal(Number(result.revoked_sessions),1);
+        const retry = (await db.query("SELECT * FROM deactivate_zendesk_agent('event-1','123456')")).rows[0];
+        assert.deepEqual(retry,result);
+      } finally { await db.exec('RESET ROLE'); }
+      assert.equal((await db.query('SELECT active FROM users WHERE id=$1',[id(2)])).rows[0].active,false);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM auth.sessions')).rows[0].n,0);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM zendesk_agent_role_events')).rows[0].n,1);
+      assert.deepEqual((await db.query('SELECT target_user_id,requested_by FROM session_control_commands WHERE target_user_id=$1',[id(2)])).rows,
+        [{ target_user_id: id(2), requested_by: null }]);
     });
   } finally { await db.close(); }
 });

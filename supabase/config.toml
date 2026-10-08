@@ -63,3 +63,9 @@ enabled = true
 # Zendesk authenticates with HELPDESK_WEBHOOK_SECRET inside the function.
 verify_jwt = false
 entrypoint = "./functions/helpdesk-webhook/index.ts"
+
+[functions.zendesk-agent-webhook]
+enabled = true
+# Zendesk signs each raw request; the function verifies HMAC and rechecks the user role.
+verify_jwt = false
+entrypoint = "./functions/zendesk-agent-webhook/index.ts"

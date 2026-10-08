@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User } from '../../types';
 import AIGuidelinesManagement from './AIGuidelinesManagement';
 import AILogsManagement from './AILogsManagement';
+import AIAuditSummary from './AIAuditSummary';
 import AIPipelineView from './AIPipelineView';
 import AIAutomationsManagement from './AIAutomationsManagement';
 import { Brain, FileText, Activity, Sparkles, Power } from 'lucide-react';
@@ -87,7 +88,10 @@ export default function AIHubManagement({ currentUser }: AIHubManagementProps) {
       )}
 
       {activePanel === 'logs' && (
-        <AILogsManagement currentUser={currentUser} />
+        <>
+          {(currentUser?.role === 'admin' || currentUser?.role === 'gestor_qualidade') && <AIAuditSummary />}
+          <AILogsManagement currentUser={currentUser} />
+        </>
       )}
 
       {activePanel === 'pipeline' && (

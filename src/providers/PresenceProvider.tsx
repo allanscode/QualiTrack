@@ -84,8 +84,10 @@ export function PresenceProvider({ user, children }: { user: User | null; childr
         .on('postgres_changes', {
           event: 'INSERT', schema: 'public', table: 'session_control_commands',
           filter: `target_user_id=eq.${user.id}`,
-        }, async () => {
-          toast.info('Sua sessão foi encerrada por um administrador.');
+        }, async payload => {
+          toast.info(payload.new?.requested_by
+            ? 'Sua sessão foi encerrada por um administrador.'
+            : 'Seu acesso ao QWP foi desativado após mudança de perfil no Zendesk.');
           await realtimeClient.auth.signOut({ scope: 'global' });
         })
         .subscribe((status, error) => {

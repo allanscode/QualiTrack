@@ -26,7 +26,7 @@ describe('requisição OpenRouter', () => {
     expect(body.model).toBe('z-ai/glm-5.3-flash');
     expect(body.models).toBeUndefined();
     expect(body.max_tokens).toBe(700);
-    expect(body.provider).toEqual({ allow_fallbacks: true });
+    expect(body.provider).toEqual({ allow_fallbacks: true, sort: 'throughput' });
     expect(body.response_format).toBeUndefined();
     expect(body.messages[0].content).toContain(JSON.stringify(responseSchema));
   });
