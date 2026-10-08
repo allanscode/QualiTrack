@@ -9,6 +9,7 @@ export type AIFailureReason =
   | 'response_parse_error'
   | 'incomplete_response'
   | 'credentials_error'
+  | 'credit_limit'
   | 'model_not_found'
   | 'request_configuration_error'
   | 'network_error'
@@ -92,6 +93,9 @@ export async function httpAIError(provider: AIProvider, model: string, response:
   }
   if (response.status === 404) {
     return new AIModelError(detail, 'model_not_found', false, 'attempt', 404);
+  }
+  if (response.status === 402) {
+    return new AIModelError(`${detail} (limite de créditos para a saída solicitada)`, 'credit_limit', false, 'attempt', 402);
   }
   if (response.status === 400) {
     return new AIModelError(detail, 'request_configuration_error', false, 'provider', 400);

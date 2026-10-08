@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS } from './openrouter-client';
+import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS, OPENROUTER_EVALUATION_MAX_TOKENS } from './openrouter-client';
 import { runAIModelChain } from './ai-fallback';
 
 const testKey = 'test-key-not-real';
@@ -74,6 +74,7 @@ describe('requisição OpenRouter', () => {
     const body = JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
     expect(body.model).toBe(OPENROUTER_FALLBACK_MODELS[0]);
     expect(body.model).not.toContain(':free');
+    expect(body.max_tokens).toBe(OPENROUTER_EVALUATION_MAX_TOKENS);
     expect(body.provider.allow_fallbacks).toBe(true);
   });
 });

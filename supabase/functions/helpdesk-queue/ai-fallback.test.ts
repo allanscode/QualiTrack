@@ -89,6 +89,19 @@ describe('cadeia paga GLM e Gemma', () => {
     expect(error.message).not.toContain('segredo');
   });
 
+  it('classifica HTTP 402 como limite de créditos e usa o Gemma sem repetir GLM', async () => {
+    const error = await httpAIError('openrouter', targets[0].model, new Response('detalhe privado', { status: 402 }));
+    const execute = vi.fn(async (target: AIModelTarget) => {
+      if (target.model === targets[0].model) throw error;
+      return { value: 'Gemma concluiu' };
+    });
+    const result = await runAIModelChain({ targets, execute, sleep: noSleep });
+    expect(result.model).toBe(targets[1].model);
+    expect(result.attempts[0]).toMatchObject({ reason: 'credit_limit', httpStatus: 402 });
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(error.message).not.toContain('detalhe privado');
+  });
+
   it('recusa cadeia vazia', async () => {
     const execute = vi.fn();
     await expect(runAIModelChain({ targets: [], execute }))
