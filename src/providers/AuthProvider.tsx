@@ -244,7 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         const sb = supabase ?? assertSupabase();
-        const { data, error } = await sb.from('users').select('*').eq('email', user.email).single();
+        const { data, error } = await sb.from('users').select('*').eq('email', user.email).maybeSingle();
         if (data && data.active) {
           if (!canAccessApp(data.role)) {
             setAppReady(false);
@@ -283,15 +283,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now();
           localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
-        } else if (error && error.code === 'PGRST116') {
-          setAppReady(false);
-          await sb.auth.signOut();
-          setAuthView('login');
         } else if (error) {
           console.error('[AuthProvider] Erro crítico em handleUserSession:', error);
           toast.error('Erro de conexão ao carregar seu perfil. O sistema está tentando reconectar.');
         } else {
           setAppReady(false);
+          setCurrentUser(null);
+          setUserData(null);
           setAuthView('request-access');
           setRequestData({ name: user.name || '', email: user.email });
         }
