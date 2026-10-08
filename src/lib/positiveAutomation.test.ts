@@ -43,4 +43,11 @@ describe('durable positive automation queue',()=>{
     expect(children[0].positive_automation).toBeUndefined();
     expect(mergePositiveAutomation(children,[],new Set(),undefined,'filhos')).toEqual([]);
   });
+  it('keeps a child ticket awaiting review when it already has a monitoria',()=>{
+    const underReview={...row.ticket_snapshot,already_audited:true,monitoria_status:'pendente_revisao' as const};
+    expect(mergePositiveAutomation([underReview],[],new Set(['123']),undefined,'filhos'))
+      .toEqual([underReview]);
+    expect(mergePositiveAutomation([underReview],[],new Set(['123']),undefined,'positivas'))
+      .toEqual([]);
+  });
 });

@@ -750,12 +750,14 @@ export default function AuditingQueueView({
     }
     setTickets(previous => {
       if (activeQueue === 'negativas' || activeQueue === 'filhos' || activeQueue === 'filhos_invalidos') {
-        return previous.map(ticket => {
+        return previous.flatMap(ticket => {
           const monitoria = latest.get(ticket.ticket_id);
-          return monitoria ? {
+          if ((activeQueue === 'filhos' || activeQueue === 'filhos_invalidos')
+            && monitoria?.status === 'concluida' && monitoria.resolution_type === 'automatic') return [];
+          return [monitoria ? {
             ...ticket, already_audited: true, monitoria_id: monitoria.id,
             monitoria_status: monitoria.status, monitoria_score: monitoria.score,
-          } : ticket;
+          } : ticket];
         });
       }
       return previous.filter(ticket => !latest.has(ticket.ticket_id));

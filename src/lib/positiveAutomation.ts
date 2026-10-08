@@ -38,7 +38,11 @@ export function mergePositiveAutomation(
 ): AuditingQueueTicket[] {
   const metadata = queue === 'filhos' ? 'child_automation' : 'positive_automation';
   const visible = new Map(rows.filter(row => !auditedIds.has(row.ticket_id)).map(row=>[row.ticket_id,row]));
-  const merged = new Map(tickets.filter(ticket => !auditedIds.has(ticket.ticket_id)
+  // A fila de filhos continua exibindo monitorias humanas em revisão ou
+  // aguardando publicação. O servidor já retira as conclusões automáticas.
+  const merged = new Map(tickets.filter(ticket => (queue === 'filhos'
+      ? ticket.already_audited || !auditedIds.has(ticket.ticket_id)
+      : !auditedIds.has(ticket.ticket_id))
     && (!ticket[metadata] || visible.has(ticket.ticket_id) || ticket.saved_ai_draft))
     .map(ticket=>[ticket.ticket_id,ticket]));
   const term=search?.trim().toLocaleLowerCase('pt-BR');
