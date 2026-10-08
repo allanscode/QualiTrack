@@ -54,7 +54,8 @@ describe('child intake security and durability', () => {
     expect(fetcher).not.toHaveBeenCalled();expect(execute).not.toHaveBeenCalled();expect(state.rpc).not.toHaveBeenCalled();
   });
 
-  it.each([true, false])('prepares the fixed child form and only executes after a durable reservation: %s', async reserved => {
+  it.each([['api', true], ['side_conversation', true], ['side_conversation', false]] as const)
+    ('prepares the fixed child form for %s and only executes after a durable reservation: %s', async (sourceChannel, reserved) => {
     const payloads: Record<string, unknown>[] = [];
     const writes: Array<{ table: string; value: unknown }> = [];
     const rows: Record<string, unknown> = {
@@ -89,7 +90,7 @@ describe('child intake security and durability', () => {
       const body = url.includes('comments.json')
         ? { comments: [{ id: 1, author_id: 7, created_at: '2026-10-07T12:00:00Z', body: 'Opening macro evidence', public: false }] }
         : url.includes('ticket_fields.json') ? { ticket_fields: [] }
-        : { ticket: { id: 42, subject: 'Technical analysis', status: 'closed', created_at: '2026-10-07T12:00:00Z', assignee_id: 7, group_id: 8, problem_id: 10, via: { channel: 'api' } },
+        : { ticket: { id: 42, subject: 'Technical analysis', status: 'closed', created_at: '2026-10-07T12:00:00Z', assignee_id: 7, group_id: 8, problem_id: 10, via: { channel: sourceChannel } },
           users: [{ id: 7, name: 'Agent', email: 'agent@example.test', role: 'agent' }], groups: [{ id: 8, name: 'N2' }] };
       return new Response(JSON.stringify(body), { status: 200 });
     });

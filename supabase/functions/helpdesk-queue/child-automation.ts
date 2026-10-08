@@ -123,8 +123,10 @@ export async function processChildAI(
     if (!ticket.created_at || !/^\d{4}-\d{2}-\d{2}T/.test(ticket.created_at) || !Number.isFinite(Date.parse(ticket.created_at))) {
       throw new Error('Data do ticket inválida; revisão manual necessária.');
     }
-    // Child tickets created via API use the same Chat channel as the manual child form.
-    const channel = ticket.via?.channel === 'api' ? 'Chat' : positiveChannel(ticket.via?.channel);
+    // Zendesk reports generated child tickets as API or side conversations;
+    // both use the Chat channel of the dedicated child-ticket form.
+    const channel = ['api', 'side_conversation'].includes(ticket.via?.channel?.toLowerCase().trim() || '')
+      ? 'Chat' : positiveChannel(ticket.via?.channel);
     let agent = ticketBody.users?.find(user => user.id === ticket.assignee_id);
     if (!agent && ticket.assignee_id) agent = (await read(`${origin}/api/v2/users/${ticket.assignee_id}.json`)).user;
     if (!agent?.email) throw new Error('Atendente sem e-mail verificado no Zendesk; vincule o agente manualmente.');
