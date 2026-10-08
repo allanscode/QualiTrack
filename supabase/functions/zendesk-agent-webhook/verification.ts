@@ -15,7 +15,7 @@ export function parseZendeskDemotionEvent(value: unknown): ZendeskDemotionEvent 
   if (body?.type !== 'zen:event-type:user.role_changed'
     || event?.current !== 'end-user'
     || !['agent', 'admin'].includes(String(event?.previous))
-    || typeof detail.id !== 'string'
+    || typeof detail?.id !== 'string'
     || !/^\d+$/.test(detail.id)
     || body.subject !== `zen:user:${detail.id}`
     || typeof body.id !== 'string'

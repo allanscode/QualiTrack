@@ -11,6 +11,7 @@ describe('Zendesk agent demotion webhook', () => {
     expect(parseZendeskDemotionEvent(event)).toEqual({ eventId: 'event-123', userId: '12345' });
     expect(parseZendeskDemotionEvent({ ...event, event: { previous: 'end-user', current: 'agent' } })).toBeNull();
     expect(parseZendeskDemotionEvent({ ...event, subject: 'zen:user:99999' })).toBeNull();
+    expect(parseZendeskDemotionEvent({ ...event, detail: null })).toBeNull();
     // Zendesk's documented sample has a detail.role that differs from event.current.
     expect(parseZendeskDemotionEvent({ ...event, detail: { id: '12345', role: 'agent' } })).toEqual({ eventId: 'event-123', userId: '12345' });
   });
