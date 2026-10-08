@@ -1,4 +1,7 @@
-import { CHILD_QUESTION_IDS, validateChildEvaluationResponse } from './child-evaluation.ts';
+import {
+  CHILD_QUESTION_IDS, childCreationRoutingEvidence, reconcileNovaDemandaRouting,
+  validateChildEvaluationResponse, type ChildCreationRoutingEvidence,
+} from './child-evaluation.ts';
 import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
 import { corsFor, rejectRequest, configuredOrigin } from '../_shared/http.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -2915,6 +2918,24 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
   }
 }
 
+async function loadChildCreationRoutingEvidence(ticketId: string): Promise<ChildCreationRoutingEvidence | null> {
+  const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
+  const email = Deno.env.get('ZENDESK_EMAIL');
+  const token = Deno.env.get('ZENDESK_API_TOKEN');
+  if (!/^\d+$/.test(ticketId) || !subdomain || !/^[a-z0-9-]+$/i.test(subdomain) || !email || !token) return null;
+  try {
+    const response = await fetch(
+      `https://${subdomain}.zendesk.com/api/v2/tickets/${ticketId}/audits.json?sort=created_at&sort_order=asc&page%5Bsize%5D=1`,
+      { headers: { Authorization: `Basic ${btoa(`${email}/token:${token}`)}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(10_000) },
+    );
+    if (!response.ok) return null;
+    return childCreationRoutingEvidence(await response.json());
+  } catch {
+    return null;
+  }
+}
+
 async function handleEvaluateChildTicket(
   payload: z.infer<typeof RequestSchema>,
   supabase: SupabaseClient,
@@ -2935,6 +2956,10 @@ async function handleEvaluateChildTicket(
 
   const dialogueText = payload.dialogue_text || sanitizeDialogue(dialogue || []);
   const ticketFieldsText = (ticket_fields || []).map((f: any) => `- ${sanitizeMessageBody(f.title)}: ${sanitizeMessageBody(f.value)}`).join('\n');
+  const routingEvidence = await loadChildCreationRoutingEvidence(ticket_id);
+  const routingEvidenceText = routingEvidence
+    ? `Criador do chamado filho no histórico de abertura: Zendesk ID ${routingEvidence.creatorId}.\nDestinatário (Para) escolhido na abertura: Zendesk ID ${routingEvidence.initialAssigneeId}.\nGrupo associado ao destinatário na abertura: ${routingEvidence.initialGroupId ?? 'não informado'}.\nAutoatribuição na abertura: ${routingEvidence.selfAssigned ? 'SIM, IDs iguais' : 'NÃO, IDs diferentes'}.`
+    : 'Histórico de criação indisponível; não presuma que o grupo exibido ao lado do nome indique destinatário incorreto.';
 
   const responseSchema = {
     type: 'object',
@@ -3026,6 +3051,8 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
   * NUNCA PODE SER ATRIBUÍDO A UMA PESSOA FÍSICA / ANALISTA ESPECÍFICO.
 - "Registrar Nova Demanda" (Geral ou Mais Pagamentos):
   * O campo "Para" DEVE ser atribuído a SI MESMO (o próprio analista solicitante) para acompanhamento da resolução.
+  * O Zendesk exibe grupo e analista juntos ("Grupo / Nome"). O grupo é a equipe do analista; sua presença NÃO significa que o chamado foi atribuído ao grupo em vez da pessoa.
+  * Para verificar a autoatribuição, compare os IDs do criador e do destinatário no HISTÓRICO DE ABERTURA abaixo. Se forem iguais, marque o direcionamento SIM, independentemente do nome do grupo.
 - "Apoio Análise Técnica":
   * O campo "Para" DEVE ser atribuído nominalmente ao Analista Técnico N2 que prestou a consultoria pontual.
 - "Mais Pagamentos":
@@ -3039,6 +3066,9 @@ DADOS DO CHAMADO FILHO SOB AUDITORIA:
 - Tipo Sugerido/Macro: ${macro_type || 'Detectar automaticamente'}
 - Campos do Ticket:
 ${ticketFieldsText || '(nenhum campo extra)'}
+
+HISTÓRICO DE ABERTURA DO ZENDESK (FONTE PARA O DESTINATÁRIO INICIAL):
+${routingEvidenceText}
 
 CONTEÚDO / DESCRIÇÃO / COMENTÁRIOS DO TICKET FILHO:
 ${dialogueText || '(sem texto registrado)'}
@@ -3081,7 +3111,12 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
         });
         const providerMs = Date.now() - modelStarted;
         const parsingStarted = Date.now();
-        const value = validateChildEvaluationResponse(parseModelJSON(response.text));
+        const validated = validateChildEvaluationResponse(parseModelJSON(response.text));
+        const sections = payload.form_criteria?.sections.map(section => ({
+          weight: typeof section.weight === 'number' ? section.weight : 0,
+          questions: section.questions.map(question => ({ id: question.id, is_critical: question.is_critical })),
+        }));
+        const value = reconcileNovaDemandaRouting(validated, routingEvidence, sections);
         console.info(`[ai-timing] ${JSON.stringify({ job_id: payload.job_id, ticket_id, model: target.model, stage: 'provider_response_and_parse', provider_ms: providerMs, parsing_ms: Date.now() - parsingStarted })}`);
         return {
           value,
