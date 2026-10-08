@@ -12,6 +12,7 @@ export interface RankingItem {
   name: string;
   score?: number;
   rawScore?: number;
+  badness?: number;
   count: number;
   monitorias?: any[];
 }
@@ -69,6 +70,8 @@ function RankingWidget({
   const [tempSub, setTempSub] = useState('');
 
   const isMelhoresSuporte = title === 'Melhores Suporte';
+  const isSupportOffender = title === 'Maiores Ofensores';
+  const isSupportRanking = isMelhoresSuporte || isSupportOffender;
   const isTopReavRecusadas = title === 'Top Reav. Recusadas' || title === 'Top Reav. Aceitas';
 
   const tooltipPositionClass = isMelhoresSuporte
@@ -229,8 +232,9 @@ function RankingWidget({
 
       <div className="flex-1 space-y-1 overflow-visible pr-0.5 no-scrollbar">
         {data.map((item, index) => {
-          const level = item.score !== undefined ? getLevelForScore(item.score) : { color: 'text-brand-primary', label: '' };
+          const level = item.score !== undefined ? getLevelForScore(isSupportRanking ? (item.rawScore ?? item.score) : item.score) : { color: 'text-brand-primary', label: '' };
           const isCount = type === 'count';
+          const displayScore = isSupportOffender ? (item.badness ?? item.score ?? 0) : (item.score ?? 0);
 
           return (
         <div
@@ -259,7 +263,7 @@ function RankingWidget({
                     const isCrit = title.toLowerCase().includes('crit') || title.toLowerCase().includes('ofensor');
                     if (type === 'score') {
                       return item.rawScore !== undefined
-                        ? `Nota ajustada: ${(item.score ?? 0).toFixed(1)}% | Média: ${item.rawScore.toFixed(1)}%`
+                        ? `${isSupportOffender ? 'Índice de perdas' : 'Índice ponderado'}: ${displayScore.toFixed(1)}% | Média: ${item.rawScore.toFixed(1)}%`
                         : `Score Médio: ${(item.score ?? 0).toFixed(1)}% | Total: ${item.count} mon.`;
                     } else if (isReav) {
                       return `Reavaliações: ${item.count} Vol.`;
@@ -304,8 +308,8 @@ function RankingWidget({
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <div className="text-right">
                   <div className={`text-xs font-bold ${isCount ? 'text-brand-primary' : level.color}`}>
-                    {isCount ? `${item.count} Vol.` : `${(item.score ?? 0).toFixed(1)}%`}
-                    {item.rawScore !== undefined && <span className="block text-[9px] font-medium text-brand-muted">ajustada</span>}
+                    {isCount ? `${item.count} Vol.` : `${displayScore.toFixed(1)}%`}
+                    {item.rawScore !== undefined && <span className="block text-[9px] font-medium text-brand-muted">{isSupportOffender ? 'perdas' : 'índice'}</span>}
                   </div>
                 </div>
                 {onItemClick && (

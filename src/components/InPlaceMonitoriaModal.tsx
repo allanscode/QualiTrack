@@ -6,7 +6,7 @@ import { Monitoria, User, Team } from '../types';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import { getStatusConfig, VARIANT_ICON_CONTAINER } from '../lib/statusHelper';
-import { useMonitoriaActions, getPreviousStage, getNextStage, getStageLabel, STAGES_FLOW } from '../hooks/useMonitoriaActions';
+import { useMonitoriaActions, getPreviousStage, getNextStage, getStageLabel, getStagePendingAction, STAGES_FLOW } from '../hooks/useMonitoriaActions';
 import MonitoriaDetails from './MonitoriaDetails';
 import MonitoriaForm from './MonitoriaForm';
 import Badge from './ui/Badge';
@@ -340,11 +340,14 @@ export default function InPlaceMonitoriaModal({
                         {/* Bloco de Mudança de Etapa (Avançar / Retroceder / Alterar) */}
                         {isStepChange && (
                           <div className="p-4 rounded-2xl bg-surface-subtle border border-surface-border space-y-3">
-                            <div className="flex items-center justify-between text-xs">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                               <span className="font-bold text-brand-muted uppercase tracking-wider text-[10px]">Etapa Atual:</span>
-                              <Badge variant={getStatusConfig(currentSt).variant} size="xs">
-                                {getStatusConfig(currentSt).shortLabel}
-                              </Badge>
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                <Badge variant={getStatusConfig(currentSt).variant} size="xs">
+                                  {getStatusConfig(currentSt).shortLabel}
+                                </Badge>
+                                {getStagePendingAction(currentSt) && <span className="text-[11px] text-brand-muted">({getStagePendingAction(currentSt)})</span>}
+                              </div>
                             </div>
 
                             {/* Atalhos Rápidos com 1 clique */}

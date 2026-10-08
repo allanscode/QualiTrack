@@ -149,43 +149,48 @@ export function DashboardProvider({
         const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
           try {
             console.log(`[Dashboard] Carregando monitorias (Tentativa ${retryCount + 1})...`);
-            const controller = new AbortController();
-
-            // CORRECTION 4: Single query - select('*') contains all needed fields
+            // Fetch every page; the default Supabase row cap would distort the
+            // General ranking once the history grows beyond one page.
             // Use anonymized view for suporte to hide evaluator identity
             const isSuporte = currentUser.role === 'suporte';
             const source = isSuporte ? 'vw_monitorias_suporte' : 'monitorias';
-            let monitoriasQuery = sb.from(source).select('*').order('created_at', { ascending: false });
-
             const myTeamIds = currentUser.team_ids || [];
-
-            if (currentUser.role === 'suporte') {
-              if (myTeamIds.length > 0) {
-                const rbacFilter = `evaluated_id.eq.${currentUser.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`;
-                monitoriasQuery = monitoriasQuery.or(rbacFilter);
-              } else {
-                monitoriasQuery = monitoriasQuery.eq('evaluated_id', currentUser.id);
+            const pageSize = 500;
+            const rows: Monitoria[] = [];
+            for (let offset = 0; ; offset += pageSize) {
+              let query = sb.from(source).select('*')
+                .order('created_at', { ascending: false })
+                .order('id', { ascending: false })
+                .range(offset, offset + pageSize - 1);
+              if (currentUser.role === 'suporte') {
+                if (myTeamIds.length > 0) {
+                  const rbacFilter = `evaluated_id.eq.${currentUser.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`;
+                  query = query.or(rbacFilter);
+                } else {
+                  query = query.eq('evaluated_id', currentUser.id);
+                }
+              } else if (currentUser.role === 'gestor_suporte') {
+                query = myTeamIds.length > 0
+                  ? query.in('team_id', myTeamIds)
+                  : query.eq('team_id', '00000000-0000-0000-0000-000000000000');
               }
-            } else if (currentUser.role === 'gestor_suporte') {
-              if (myTeamIds.length > 0) {
-                monitoriasQuery = monitoriasQuery.in('team_id', myTeamIds);
-              } else {
-                monitoriasQuery = monitoriasQuery.eq('team_id', '00000000-0000-0000-0000-000000000000');
+              const controller = new AbortController();
+              let timeoutId: ReturnType<typeof setTimeout> | undefined;
+              const timeoutPromise = new Promise<never>((_, reject) => {
+                timeoutId = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000);
+              });
+              let result;
+              try {
+                result = await Promise.race([query.abortSignal(controller.signal), timeoutPromise]);
+              } finally {
+                if (timeoutId) clearTimeout(timeoutId);
               }
+              if (result.error) throw result.error;
+              const page = (result.data ?? []) as Monitoria[];
+              rows.push(...page);
+              if (page.length < pageSize) break;
             }
-
-            const fetchPromise = Promise.all([
-              monitoriasQuery.abortSignal(controller.signal),
-            ]);
-
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000));
-
-            const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
-
-            const errorRes = results.find((r: any) => r.error);
-            if (errorRes) throw errorRes.error;
-
-            return results;
+            return [{ data: rows }];
           } catch (err: any) {
           console.error(`[Dashboard] Erro na tentativa ${retryCount + 1}:`, err);
           if (retryCount < 4) {
@@ -209,14 +214,19 @@ export function DashboardProvider({
           scoreDocs = mRes.data as any[];
 
           if (docs.length > 0) {
+            const submissions: HelpdeskSubmission[] = [];
             const docIds = docs.map(d => d.id);
-            const { data: subData } = await sb
-              .from('helpdesk_submissions')
-              .select('*')
-              .in('monitoria_id', docIds)
-              .eq('status', 'sent')
-              .order('created_at', { ascending: false });
-            setHelpdeskSubmissions((subData as HelpdeskSubmission[]) || []);
+            for (let offset = 0; offset < docIds.length; offset += 150) {
+              const { data: subData, error: subError } = await sb
+                .from('helpdesk_submissions')
+                .select('*')
+                .in('monitoria_id', docIds.slice(offset, offset + 150))
+                .eq('status', 'sent')
+                .order('created_at', { ascending: false });
+              if (subError) throw subError;
+              submissions.push(...((subData as HelpdeskSubmission[]) || []));
+            }
+            setHelpdeskSubmissions(submissions);
           } else {
             setHelpdeskSubmissions([]);
           }
@@ -261,6 +271,10 @@ export function DashboardProvider({
         const myTeamIds = currentUser.team_ids || [];
         docs = docs.filter(m => m.team_id && myTeamIds.includes(m.team_id));
       } else if (currentUser.role === 'gestor_qualidade') {
+      }
+
+      if (currentUser.role === 'suporte' || currentUser.role === 'gestor_suporte') {
+        scoreDocs = docs;
       }
 
       setAllMonitorias(docs);

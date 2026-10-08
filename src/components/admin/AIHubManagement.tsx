@@ -3,14 +3,15 @@ import { User } from '../../types';
 import AIGuidelinesManagement from './AIGuidelinesManagement';
 import AILogsManagement from './AILogsManagement';
 import AIPipelineView from './AIPipelineView';
-import { Brain, FileText, Activity, Sparkles, ChevronDown } from 'lucide-react';
+import AIAutomationsManagement from './AIAutomationsManagement';
+import { Brain, FileText, Activity, Sparkles, Power } from 'lucide-react';
 
 interface AIHubManagementProps {
   currentUser: User | null;
 }
 
 export default function AIHubManagement({ currentUser }: AIHubManagementProps) {
-  const [activePanel, setActivePanel] = useState<'guidelines' | 'logs' | 'pipeline'>('guidelines');
+  const [activePanel, setActivePanel] = useState<'automations' | 'guidelines' | 'logs' | 'pipeline'>('automations');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -23,13 +24,24 @@ export default function AIHubManagement({ currentUser }: AIHubManagementProps) {
           <div>
             <h3 className="text-sm font-bold text-brand-primary">Central de Inteligência Artificial</h3>
             <p className="text-[11px] text-brand-muted">
-              Gerencie manuais normativos, audite prompts/respostas e entenda o pipeline de IA.
+              Controle as avaliações automáticas, consulte manuais e acompanhe a IA.
             </p>
           </div>
         </div>
 
         {/* Seletor Suspenso / Abas Rápidas */}
-        <div className="flex items-center gap-1.5 p-1 bg-surface-card rounded-xl border border-surface-border self-start sm:self-auto">
+        <div className="flex max-w-full items-center gap-1.5 overflow-x-auto p-1 bg-surface-card rounded-xl border border-surface-border self-start sm:self-auto">
+          <button
+            onClick={() => setActivePanel('automations')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activePanel === 'automations'
+                ? 'bg-brand-highlight text-white shadow-sm'
+                : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
+            }`}
+          >
+            <Power className="w-3.5 h-3.5" />
+            <span>Automações</span>
+          </button>
           <button
             onClick={() => setActivePanel('guidelines')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -69,6 +81,7 @@ export default function AIHubManagement({ currentUser }: AIHubManagementProps) {
       </div>
 
       {/* Conteúdo Dinâmico do Painel Selecionado */}
+      {activePanel === 'automations' && <AIAutomationsManagement currentUser={currentUser} />}
       {activePanel === 'guidelines' && (
         <AIGuidelinesManagement currentUser={currentUser} />
       )}

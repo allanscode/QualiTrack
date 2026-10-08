@@ -72,25 +72,23 @@ observação quando disponíveis, situação real da monitoria e data de criaç�
 ticket/agente/erro e paginação de dez registros não alteram os filtros globais. **Ver
 monitoria** usa o evento interno `qualitrack:focus_monitoria`, sem publicar no Zendesk.
 
-### Ranking de suporte: média ajustada
+### Ranking de suporte: participação e média
 
-Os rankings **Melhores Suporte** e **Maiores Ofensores**, nos painéis de administrador,
-gestor da qualidade e gestor de suporte, usam `(n × média real + 5 × média da equipe) / (n + 5)`.
-O peso fixo 5 reduz a influência de amostras pequenas. A nota ajustada ordena o ranking
-e determina o corte da meta configurada; média real e quantidade continuam visíveis.
-Nenhuma nota original é alterada no banco. Agentes sem monitorias com nota ficam fora;
-zero é uma nota válida. Monitorias inativas e notas ausentes ou não finitas não contam.
+Os rankings **Melhores Suporte** e **Maiores Ofensores** usam a participação do agente
+no total de monitorias do recorte: `índice positivo = (n do agente / n total) × média real`.
+Para os piores, `índice de perdas = (n do agente / n total) × (100 − média real)`;
+assim uma falha isolada não pesa mais do que falhas repetidas. A média real define
+quem está acima ou abaixo da meta, e o índice ordena cada grupo. Média e quantidade
+continuam visíveis; notas originais não são alteradas.
 
-A média da equipe usa somente dados já autorizados por RBAC, com os mesmos filtros
-de período, equipe, auditor, formulário, status e canal. O filtro de agente restringe
-os participantes exibidos, mas não a média de referência da equipe. Um agente com
-monitorias em várias equipes recebe a média de referência ponderada pela quantidade
-de suas monitorias em cada equipe; monitorias sem equipe formam um grupo separado.
-Empates usam maior quantidade de monitorias, nome e ID, nessa ordem. A ordenação
-usa a precisão integral; o arredondamento ocorre apenas na apresentação.
-
-O cálculo compartilhado está em `src/lib/supportRanking.ts` e funciona igualmente
-com dados Supabase e MockDb, sem consultas adicionais nem alteração das notas salvas.
+Ao selecionar uma equipe, o denominador contém apenas suas monitorias. No filtro
+**Geral**, inclui todas as equipes autorizadas ao perfil. O filtro de agente restringe
+quem aparece, sem reduzir o denominador; período, auditor, ficha, status e canal
+restringem ambos. O supervisor de atendimento usa somente as equipes vinculadas,
+também no filtro Geral. Monitorias inativas e notas ausentes ou não finitas não entram;
+zero é nota válida. Empates usam quantidade, nome e ID. O arredondamento ocorre só
+na apresentação. O dashboard busca todas as páginas do histórico para não truncar
+o denominador no limite padrão do Supabase.
 
 ```
 DashboardMain

@@ -156,6 +156,17 @@ Redireciona para `QualityConfigManagement.tsx` (ver SPEC: Quality Config).
 
 ## Permissões
 
+### Controles das avaliações automáticas
+
+Na aba **Inteligência Artificial → Automações**, admin e gestor de qualidade podem
+ligar ou desligar separadamente as filas Positivas e Chamados Filhos. Monitores de
+qualidade podem consultar o estado, sem alterá-lo. O comando usa RPC autenticada
+com checagem de papel ativo, compara o estado esperado para evitar sobrescrita entre
+operadores e registra usuário e horário da alteração. As tabelas de configuração
+continuam sem acesso direto pelo navegador. Ligar exige auditor ativo; no staging,
+o limite total de avaliações não é zerado nem contornado. Desligar interrompe novos
+jobs, preservando fila e avaliações já iniciadas. O MockDb mantém estado local.
+
 | Ação | Roles Permitidos |
 |---|---|
 | Ver Admin Panel | `admin` (Administrador) |

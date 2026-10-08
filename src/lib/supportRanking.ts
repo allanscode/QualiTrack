@@ -1,14 +1,12 @@
 import type { Monitoria, User } from '../types';
 import type { DashboardFilters } from '../components/dashboard/DashboardContext';
 
-export const SUPPORT_RANKING_PRIOR_WEIGHT = 5;
-
 export interface SupportRankingItem {
   id: string;
   name: string;
   score: number;
   rawScore: number;
-  teamScore: number;
+  badness: number;
   count: number;
   monitorias: Monitoria[];
 }
@@ -33,19 +31,20 @@ export function compareSupportRanking(a: SupportRankingItem, b: SupportRankingIt
     || b.count - a.count || a.name.localeCompare(b.name, 'pt-BR') || a.id.localeCompare(b.id);
 }
 
+export function compareSupportOffenders(a: SupportRankingItem, b: SupportRankingItem): number {
+  return b.badness - a.badness || b.count - a.count
+    || a.name.localeCompare(b.name, 'pt-BR') || a.id.localeCompare(b.id);
+}
+
 export function buildSupportRanking(
   rows: readonly Monitoria[],
   baseline: readonly Monitoria[],
   users: readonly Pick<User, 'id' | 'name'>[],
 ): SupportRankingItem[] {
   const valid = (row: Monitoria) => row.active !== false && Number.isFinite(row.score);
-  const teams = new Map<string | undefined, { total: number; count: number }>();
-  baseline.filter(valid).forEach(row => {
-    const team = teams.get(row.team_id) ?? { total: 0, count: 0 };
-    team.total += row.score;
-    team.count++;
-    teams.set(row.team_id, team);
-  });
+  // The denominator is the full authorized selection: one team when filtered,
+  // all visible teams in General. Never narrow it to the selected agent.
+  const evaluationCount = baseline.filter(valid).length;
   const agents = new Map<string, Monitoria[]>();
   rows.filter(valid).forEach(row => {
     if (!row.evaluated_id) return;
@@ -58,15 +57,11 @@ export function buildSupportRanking(
     const count = monitorias.length;
     const total = monitorias.reduce((sum, row) => sum + row.score, 0);
     const rawScore = total / count;
-    // For multiple teams, weight each team mean by the agent's evaluation distribution.
-    // Unassigned evaluations form their own cohort, never borrowing from another team.
-    const teamScore = monitorias.reduce((sum, row) => {
-      const team = teams.get(row.team_id);
-      return sum + (team ? team.total / team.count : rawScore);
-    }, 0) / count;
+    const denominator = evaluationCount || count;
+    const score = total / denominator; // (agent count / total count) × agent mean
+    const badness = (100 * count - total) / denominator;
     return {
-      id, name: names.get(id) ?? id, rawScore, teamScore, count, monitorias,
-      score: (total + SUPPORT_RANKING_PRIOR_WEIGHT * teamScore) / (count + SUPPORT_RANKING_PRIOR_WEIGHT),
+      id, name: names.get(id) ?? id, rawScore, badness, count, monitorias, score,
     };
   }).sort(compareSupportRanking);
 }

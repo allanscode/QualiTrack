@@ -84,8 +84,8 @@ Este guia explica o que significa cada número e gráfico que aparece no Dashboa
 | **Reav. Recusadas** | Nota mantida (history-based) | `XCircle` | `text-functional-error` |
 
 ### Rankings e Tabelas
-- **Top Melhores Notas**: `RankingWidget` — top 5 agentes com maiores médias
-- **Oportunidades de Melhoria**: `RankingWidget` — top 5 agentes com menores notas
+- **Top Melhores Notas**: `RankingWidget` — top 5 agentes por participação nas monitorias × média das notas
+- **Oportunidades de Melhoria**: `RankingWidget` — top 5 agentes por participação × pontos perdidos em relação a 100%
 - **Top Reav. Aceitas**: `RankingWidget` — top 5 agentes com mais contestações aprovadas
 - **Top Reav. Recusadas**: `RankingWidget` — top 5 agentes com mais contestações negadas
 - **Aguardando Minha Ação**: `PendingActionsTable` — monitorias que precisam de decisão
@@ -115,7 +115,7 @@ Este guia explica o que significa cada número e gráfico que aparece no Dashboa
 
 ### Rankings
 - **Ranking de Qualidade**: `RankingWidget` — produtividade dos monitores (quem auditou mais)
-- **Melhores/Oportunidades Suporte**: `RankingWidget` — top/bottom agentes global
+- **Melhores/Oportunidades Suporte**: `RankingWidget` — participação × média/pontos perdidos no conjunto autorizado, inclusive na visão geral
 - **Top Reav. Aceitas (Geral)**: `RankingWidget` — top 5 global
 - **Top Reav. Recusadas (Geral)**: `RankingWidget` — top 5 global
 

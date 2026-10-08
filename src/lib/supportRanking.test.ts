@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Monitoria } from '../types';
-import { buildSupportRanking, compareSupportRanking, selectRankingBaseline } from './supportRanking';
+import { buildSupportRanking, compareSupportOffenders, compareSupportRanking, selectRankingBaseline } from './supportRanking';
 
 const evaluation = (agent: string, score: number, team = 'team-a', overrides: Partial<Monitoria> = {}): Monitoria => ({
   id: `${agent}-${score}`, evaluated_id: agent, score, team_id: team,
@@ -8,23 +8,37 @@ const evaluation = (agent: string, score: number, team = 'team-a', overrides: Pa
 } as Monitoria);
 
 describe('support ranking', () => {
-  it('ranks sustained high performance above a single perfect evaluation', () => {
+  it('uses evaluation share times average, so six strong evaluations outrank one perfect evaluation', () => {
     const rows = [evaluation('one', 100), ...Array.from({ length: 6 }, () => evaluation('six', 95)),
-      ...Array.from({ length: 10 }, () => evaluation('others', 60))];
+      ...Array.from({ length: 4 }, () => evaluation('others', 60))];
     const ranking = buildSupportRanking(rows, rows, []);
-    expect(ranking.map(row => row.id)).toEqual(['six', 'one', 'others']);
+    expect(ranking.map(row => row.id)).toEqual(['six', 'others', 'one']);
     const one = ranking.find(row => row.id === 'one')!;
     expect(one.rawScore).toBe(100);
     expect(one.count).toBe(1);
-    expect(one.score).toBeCloseTo((100 + 5 * (1270 / 17)) / 6);
+    expect(one.score).toBeCloseTo(100 / 11);
+    expect(ranking.find(row => row.id === 'six')?.score).toBeCloseTo(570 / 11);
   });
 
-  it('uses each team baseline and weights multiple teams by the agent evaluation counts', () => {
-    const rows = [evaluation('multi', 100), evaluation('multi', 100), evaluation('multi', 0, 'team-b')];
-    const baseline = [...rows, evaluation('peer-a', 0), evaluation('peer-b', 100, 'team-b'), evaluation('unrelated', 100, 'team-c')];
-    const [agent] = buildSupportRanking(rows, baseline, []);
-    expect(agent.teamScore).toBeCloseTo(((200 / 3) * 2 + 50) / 3);
-    expect(agent.score).toBeCloseTo((200 + 5 * agent.teamScore) / 8);
+  it('uses all teams in General and only the selected team when filtered', () => {
+    const rows = [evaluation('one', 100, 'team-a'),
+      ...Array.from({ length: 6 }, () => evaluation('six', 95, 'team-a')),
+      evaluation('another', 100, 'team-b')];
+    const general = buildSupportRanking(rows, selectRankingBaseline(rows, { teamId: '' }), []);
+    expect(general.find(row => row.id === 'one')?.score).toBeCloseTo(100 / 8);
+    expect(general.find(row => row.id === 'six')?.score).toBeCloseTo(570 / 8);
+    expect(general.find(row => row.id === 'another')?.score).toBeCloseTo(100 / 8);
+    const selected = selectRankingBaseline(rows, { teamId: 'team-a' });
+    const team = buildSupportRanking(selected, selected, []);
+    expect(team.find(row => row.id === 'six')?.score).toBeCloseTo(570 / 7);
+    expect(team.some(row => row.id === 'another')).toBe(false);
+  });
+
+  it('ranks repeated low results by their share of points lost', () => {
+    const rows = [evaluation('one', 0), ...Array.from({ length: 6 }, () => evaluation('repeat', 60))];
+    const ranking = buildSupportRanking(rows, rows, []);
+    expect([...ranking].sort(compareSupportOffenders).map(row => row.id)).toEqual(['repeat', 'one']);
+    expect(ranking.find(row => row.id === 'repeat')?.badness).toBeCloseTo(240 / 7);
   });
 
   it('keeps zero scores, excludes missing/nonfinite/inactive scores and agents without evaluations', () => {
@@ -39,7 +53,7 @@ describe('support ranking', () => {
     const rows = [evaluation('b', 80), evaluation('a', 80), evaluation('many', 80), evaluation('many', 80)];
     const ranking = buildSupportRanking(rows, rows, []);
     expect(ranking.map(row => row.id)).toEqual(['many', 'a', 'b']);
-    expect([...ranking].sort((a, b) => compareSupportRanking(a, b, true)).map(row => row.id)).toEqual(['many', 'a', 'b']);
+    expect([...ranking].sort((a, b) => compareSupportRanking(a, b, true)).map(row => row.id)).toEqual(['a', 'b', 'many']);
     const close = [evaluation('a', 80), evaluation('z', 80.001)];
     expect(buildSupportRanking(close, close, [])[0].id).toBe('z');
   });
@@ -53,12 +67,10 @@ describe('support ranking', () => {
     const baseline = selectRankingBaseline(rows, { startDate: '2026-10-01', endDate: '2026-10-31', teamId: 'team-a',
       agentId: 'selected', auditorId: 'auditor', formId: 'form', status: 'concluida', channel: 'Chat' });
     expect(baseline).toEqual([base, peer]);
-    expect(buildSupportRanking([base], baseline, [])[0].score).toBeCloseTo(500 / 6);
+    expect(buildSupportRanking([base], baseline, [])[0].score).toBeCloseTo(100 / 2);
   });
 
-  it('returns no results for empty data and isolates unassigned teams', () => {
+  it('returns no results for empty data', () => {
     expect(buildSupportRanking([], [], [])).toEqual([]);
-    const row = evaluation('unassigned', 40, undefined, { team_id: undefined });
-    expect(buildSupportRanking([row], [row, evaluation('other', 100)], [])[0].score).toBe(40);
   });
 });

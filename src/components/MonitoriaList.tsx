@@ -33,7 +33,7 @@ import CustomDatepicker from './ui/CustomDatepicker';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import { useMonitoriaData } from '../hooks/useMonitoriaData';
 import { useMonitoriaFilters } from '../hooks/useMonitoriaFilters';
-import { useMonitoriaActions, getPreviousStage, getNextStage, getStageLabel, STAGES_FLOW } from '../hooks/useMonitoriaActions';
+import { useMonitoriaActions, getPreviousStage, getNextStage, getStageLabel, getStagePendingAction, STAGES_FLOW } from '../hooks/useMonitoriaActions';
 import { useFeedbacks } from '../hooks/useFeedbacks';
 import FeedbacksSubtabView from './feedback/FeedbacksSubtabView';
 import MonitoriaForm from './MonitoriaForm';
@@ -860,11 +860,14 @@ export default function MonitoriaList({
                       {/* Bloco de Mudança de Etapa (Avançar / Retroceder / Alterar) */}
                       {isStepChange && (
                         <div className="mb-5 p-4 rounded-2xl bg-surface-subtle border border-surface-border space-y-3">
-                          <div className="flex items-center justify-between text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                             <span className="font-bold text-brand-muted uppercase tracking-wider text-[10px]">Etapa Atual:</span>
-                            <Badge variant={getStatusConfig(currentSt).variant} size="xs">
-                              {getStatusConfig(currentSt).shortLabel}
-                            </Badge>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <Badge variant={getStatusConfig(currentSt).variant} size="xs">
+                                {getStatusConfig(currentSt).shortLabel}
+                              </Badge>
+                              {getStagePendingAction(currentSt) && <span className="text-[11px] text-brand-muted">({getStagePendingAction(currentSt)})</span>}
+                            </div>
                           </div>
 
                           {/* Atalhos Rápidos com 1 clique */}

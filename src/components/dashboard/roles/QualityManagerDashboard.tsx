@@ -1,4 +1,4 @@
-import { buildSupportRanking, compareSupportRanking, selectRankingBaseline } from '../../../lib/supportRanking';
+import { buildSupportRanking, compareSupportOffenders, selectRankingBaseline } from '../../../lib/supportRanking';
 import React, { useMemo, useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { usePresence } from '../../../providers/PresenceProvider';
@@ -544,14 +544,14 @@ export default function QualityManagerDashboard({
 
   const topAgents = useMemo(() => {
     if (isCustomizing) return mockTopAgents;
-    return agentRanking.filter((a: any) => a.score >= config.targetScore).slice(0, 5);
+    return agentRanking.filter((a: any) => a.rawScore >= config.targetScore).slice(0, 5);
   }, [isCustomizing, agentRanking, config.targetScore]);
 
   const bottomAgents = useMemo(() => {
     if (isCustomizing) return mockBottomAgents;
     return agentRanking
-      .filter((a: any) => a.score < config.targetScore)
-      .sort((a, b) => compareSupportRanking(a, b, true))
+      .filter((a: any) => a.rawScore < config.targetScore)
+      .sort(compareSupportOffenders)
       .slice(0, 5);
   }, [isCustomizing, agentRanking, config.targetScore]);
 
@@ -1530,7 +1530,7 @@ export default function QualityManagerDashboard({
         <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Melhores Suporte"
-            subtitle="Top 5 por nota ajustada"
+            subtitle="Participação × média da nota"
             data={topAgents}
             type="score"
             isCustomizing={isCustomizing}
@@ -1547,7 +1547,7 @@ export default function QualityManagerDashboard({
         <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Maiores Ofensores"
-            subtitle="Menores notas ajustadas"
+            subtitle="Participação × pontos perdidos"
             data={bottomAgents}
             type="score"
             icon={<AlertTriangle className="w-5 h-5" />}

@@ -93,6 +93,13 @@ export function getStageLabel(status: MonitoriaStatus | null | undefined): strin
   return item ? item.label : status;
 }
 
+export function getStagePendingAction(status: MonitoriaStatus | null | undefined): string | null {
+  if (!status || status === 'concluida') return null;
+  if (status === 'aguardando_revisao_pj') return 'Aguardando ação do Gestor de Suporte';
+  const stage = STAGES_FLOW.find(item => item.status === status);
+  return stage ? `Aguardando ação do ${stage.roleLabel}` : null;
+}
+
 const getDeadlineHours = (status: MonitoriaStatus, actionDeadline: any): number => {
   switch (status) {
     case 'pendente_revisao':

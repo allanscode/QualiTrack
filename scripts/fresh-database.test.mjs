@@ -117,6 +117,18 @@ test('clean Supabase install: exact generated SQL, no demo data, approved system
       assert.equal(supportView.rows[0].evaluator_name,null);
       await assert.rejects(asUser(2,() => db.exec(`INSERT INTO monitorias(evaluated_id,score) VALUES ('${id(2)}',100)`)),/row-level security/);
     });
+    await t.test('automation controls expose status to quality but only managers can change it', async () => {
+      await db.query('INSERT INTO positive_ai_config(id,enabled,auditor_id) VALUES (true,false,$1)',[id(1)]);
+      await db.query('INSERT INTO child_ai_config(id,enabled,auditor_id) VALUES (true,false,$1)',[id(1)]);
+      await assert.rejects(asUser(2,() => db.query('SELECT * FROM get_ai_automation_controls()')), /não autorizado/);
+      assert.equal((await asUser(4,() => db.query('SELECT * FROM get_ai_automation_controls()'))).rows.length,2);
+      await assert.rejects(asUser(4,() => db.query("SELECT set_ai_automation_enabled('positivas',true,false)")), /Apenas administradores/);
+      await assert.rejects(asUser(4,() => db.query('UPDATE positive_ai_config SET enabled=true')), /permission denied/);
+      assert.equal((await asUser(1,() => db.query("SELECT set_ai_automation_enabled('positivas',true,false) AS enabled"))).rows[0].enabled,true);
+      await assert.rejects(asUser(1,() => db.query("SELECT set_ai_automation_enabled('positivas',false,false)")), /estado mudou/);
+      assert.equal((await asUser(1,() => db.query("SELECT set_ai_automation_enabled('positivas',false,true) AS enabled"))).rows[0].enabled,false);
+      assert.equal((await db.query('SELECT changed_by FROM positive_ai_config WHERE id=true')).rows[0].changed_by,id(1));
+    });
     await t.test('PJ evaluation belongs to the agent primary team despite the ticket group', async () => {
       await db.exec(`INSERT INTO users(id,email,name,role,active) VALUES ('${id(6)}','manager-b@example.invalid','Manager B','gestor_suporte',true);
         UPDATE teams SET zendesk_group_id=50800061906068 WHERE id='${id(11)}';

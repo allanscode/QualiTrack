@@ -1,4 +1,4 @@
-import { buildSupportRanking, compareSupportRanking, selectRankingBaseline } from '../../../lib/supportRanking';
+import { buildSupportRanking, compareSupportOffenders, selectRankingBaseline } from '../../../lib/supportRanking';
 import type { Monitoria } from '../../../types';
 import React, { useMemo, useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
@@ -500,15 +500,15 @@ export default function SupportManagerDashboard({
   // Melhores Suporte
   const topAgents = useMemo(() => {
     if (isCustomizing) return mockTopAgents;
-    return agentRanking.filter(a => a.score >= config.targetScore).slice(0, 5);
+    return agentRanking.filter(a => a.rawScore >= config.targetScore).slice(0, 5);
   }, [isCustomizing, agentRanking, config.targetScore]);
 
   // Maiores Ofensores
   const bottomAgents = useMemo(() => {
     if (isCustomizing) return mockBottomAgents;
     return agentRanking
-      .filter(a => a.score < config.targetScore)
-      .sort((a, b) => compareSupportRanking(a, b, true))
+      .filter(a => a.rawScore < config.targetScore)
+      .sort(compareSupportOffenders)
       .slice(0, 5);
   }, [isCustomizing, agentRanking, config.targetScore]);
 
@@ -1240,7 +1240,7 @@ export default function SupportManagerDashboard({
         <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Melhores Suporte"
-            subtitle={`Nota ajustada acima da meta (${config.targetScore}%)`}
+            subtitle={`Média ≥ ${config.targetScore}% · ordem ponderada`}
             data={topAgents}
             isCustomizing={isCustomizing}
             profile="gestor_suporte"
@@ -1256,7 +1256,7 @@ export default function SupportManagerDashboard({
         <div className="min-h-[420px] h-full">
           <RankingWidget
             title="Maiores Ofensores"
-            subtitle={`Nota ajustada abaixo da meta (${config.targetScore}%)`}
+            subtitle={`Média < ${config.targetScore}% · perdas ponderadas`}
             data={bottomAgents}
             icon={<Target className="w-5 h-5" />}
             accent="text-functional-warning"
