@@ -24,7 +24,7 @@ import { useFeedbacks } from './hooks/useFeedbacks';
 import { useQueueEventNotifications } from './hooks/useQueueEventNotifications';
 import { supabase } from './lib/supabase';
 import { fetchAIGuidelines } from './lib/aiGuidelines';
-import { fetchQueuePendingCounts, type QueuePendingCounts } from './lib/helpdeskQueue';
+import { fetchQueuePendingCounts, type QueueBadgeCounts } from './lib/helpdeskQueue';
 import { releaseQueueTicketAssignment, canManageQueueAssignments } from './lib/queueDistribution';
 import { getContestationNotifications } from './lib/contestationNotifications';
 import { canAuditTickets } from './lib/auditPermissions';
@@ -48,7 +48,7 @@ export const QUEUE_SUBTITLES: Record<QueueSubTab, string> = {
   monitores: 'Gestão de presença, elegibilidade e distribuição de chamados da equipe',
 };
 
-const EMPTY_QUEUE_COUNTS: QueuePendingCounts = {
+const EMPTY_QUEUE_COUNTS: QueueBadgeCounts = {
   negativas: null, proativas: null, positivas: null, filhos: null, filhos_invalidos: null,
 };
 
@@ -558,8 +558,7 @@ function MainApp({
   });
   const [isQueueMenuOpen, setIsQueueMenuOpen] = React.useState(activeTab === 'filas');
   const [isQueueHovered, setIsQueueHovered] = React.useState(false);
-  const [queueCounts, setQueueCounts] = React.useState<QueuePendingCounts>(EMPTY_QUEUE_COUNTS);
-  const pendingQueueTotal = Object.values(queueCounts).reduce((total: number, count) => total + (count || 0), 0);
+  const [queueCounts, setQueueCounts] = React.useState<QueueBadgeCounts>(EMPTY_QUEUE_COUNTS);
   const queueBadge = (queue: AuditingQueueType) => (queueCounts[queue] || 0) > 0 ? queueCounts[queue]! : undefined;
   const updatePendingNegativesCount = React.useCallback((count: number) => {
     setQueueCounts(previous => previous.negativas === count ? previous : { ...previous, negativas: count });
@@ -1254,11 +1253,6 @@ function MainApp({
                           Filas de Triagem
                         </span>
                         <div className="flex items-center gap-1.5">
-                          {pendingQueueTotal > 0 && !isQueueMenuOpen && (
-                            <span className="px-1.5 py-0.5 text-[9px] font-black bg-rose-500 text-white rounded-full">
-                              {pendingQueueTotal}
-                            </span>
-                          )}
                           <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isQueueMenuOpen ? 'rotate-180' : ''}`} />
                         </div>
                       </div>
@@ -1519,11 +1513,6 @@ function MainApp({
                     Filas de Triagem
                   </span>
                   <div className="flex items-center gap-1.5">
-                    {pendingQueueTotal > 0 && !isQueueMenuOpen && (
-                      <span className="px-1.5 py-0.5 text-[9px] font-black bg-rose-500 text-white rounded-full">
-                        {pendingQueueTotal}
-                      </span>
-                    )}
                     <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isQueueMenuOpen ? 'rotate-180' : ''}`} />
                   </div>
                 </div>
@@ -2180,11 +2169,6 @@ function MainApp({
               }`}
             >
               <AnimatedLayersIcon active={activeTab === 'filas'} className="w-5 h-5" />
-              {pendingQueueTotal > 0 && (
-                <span className="absolute top-0 right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">
-                  {pendingQueueTotal}
-                </span>
-              )}
               <span className={`text-[10px] tracking-tight mt-1 ${activeTab === 'filas' ? 'font-black' : 'font-medium'}`}>
                 Filas
               </span>
@@ -2512,7 +2496,11 @@ function QueueSubNavItem({
         </span>
       </div>
       {Boolean(badge) && (
-        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none ml-2 shrink-0 ${color.badgeBg}`}>
+        <span
+          title={colorType === 'negativas' || colorType === 'filhos'
+            ? 'Chamados atribuídos pendentes no QWP'
+            : 'Total da view do Zendesk; confira as monitorias já existentes na fila'}
+          className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none ml-2 shrink-0 ${color.badgeBg}`}>
           {badge}
         </span>
       )}

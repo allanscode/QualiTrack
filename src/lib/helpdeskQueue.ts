@@ -155,13 +155,54 @@ export async function checkQueueUpdates(type: AuditingQueueType): Promise<string
   return data.ticket_ids.filter((id: unknown): id is string => typeof id === 'string');
 }
 
-export type QueuePendingCounts = Record<AuditingQueueType, number | null>;
+export type QueueBadgeCounts = Record<AuditingQueueType, number | null>;
+
+export interface QueueReconciliation {
+  queue_type: AuditingQueueType;
+  zendesk_view_count: number;
+  monitored_count: number;
+  without_monitoria_count: number;
+  monitoria_statuses: Record<string, number>;
+  monitored_tickets: Array<{ ticket_id: string; monitoria_id: string; status: string }>;
+  as_of: string;
+}
+
+/** Compara os IDs da view atual com as monitorias ativas já registradas. */
+export async function fetchQueueReconciliation(
+  queue: AuditingQueueType, existingMonitorias: Monitoria[] = [],
+): Promise<QueueReconciliation> {
+  if (isMockMode || !supabase) {
+    const tickets = getMockQueueTickets(queue, new Set());
+    const ticketIds = new Set(tickets.map(ticket => ticket.ticket_id));
+    const latest = new Map<string, Monitoria>();
+    for (const monitoria of existingMonitorias) {
+      if (monitoria.active === false || !ticketIds.has(monitoria.ticket_id)) continue;
+      const previous = latest.get(monitoria.ticket_id);
+      if (!previous || monitoria.created_at > previous.created_at) latest.set(monitoria.ticket_id, monitoria);
+    }
+    const monitoria_statuses: Record<string, number> = {};
+    const monitored_tickets = [...latest.entries()].map(([ticket_id, monitoria]) => {
+      monitoria_statuses[monitoria.status] = (monitoria_statuses[monitoria.status] || 0) + 1;
+      return { ticket_id, monitoria_id: monitoria.id, status: monitoria.status };
+    });
+    return { queue_type: queue, zendesk_view_count: tickets.length, monitored_count: latest.size,
+      without_monitoria_count: tickets.length - latest.size, monitoria_statuses, monitored_tickets,
+      as_of: new Date().toISOString() };
+  }
+  const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+    body: { action: 'fetch_queue_reconciliation', queue_type: queue },
+  });
+  if (error || typeof data?.zendesk_view_count !== 'number') {
+    throw new Error(data?.error || await extractFunctionErrorMessage(error, 'Falha ao comparar a view com as monitorias.'));
+  }
+  return data as QueueReconciliation;
+}
 
 /** Contadores das cinco filas, respeitando a visibilidade do perfil no servidor. */
-export async function fetchQueuePendingCounts(): Promise<QueuePendingCounts> {
+export async function fetchQueuePendingCounts(): Promise<QueueBadgeCounts> {
   const types: AuditingQueueType[] = ['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos'];
   if (isMockMode || !supabase) {
-    return Object.fromEntries(types.map(type => [type, getMockQueueTickets(type, new Set()).length])) as QueuePendingCounts;
+    return Object.fromEntries(types.map(type => [type, getMockQueueTickets(type, new Set()).length])) as QueueBadgeCounts;
   }
   const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
     body: { action: 'fetch_queue_counts' },
@@ -172,7 +213,7 @@ export async function fetchQueuePendingCounts(): Promise<QueuePendingCounts> {
   return Object.fromEntries(types.map(type => {
     const value = data.counts[type];
     return [type, typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null];
-  })) as QueuePendingCounts;
+  })) as QueueBadgeCounts;
 }
 
 /**

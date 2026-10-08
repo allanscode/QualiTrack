@@ -17,6 +17,8 @@ import {
 } from '../types';
 import {
   fetchQueueTickets,
+  fetchQueueReconciliation,
+  type QueueReconciliation,
   computeAgentQueuePriorities,
   evaluateTicketWithAI,
   evaluateChildTicketWithAI,
@@ -104,6 +106,18 @@ import HelpdeskSendModal from './HelpdeskSendModal';
 import ChildTicketMonitoriaAction from './ChildTicketMonitoriaAction';
 
 const PUBLISHABLE_HELPDESK_STATUSES = new Set(['pendente_revisao', 'concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada']);
+const MONITORIA_STAGE_LABELS: Record<string, string> = {
+  pendente_revisao: 'Em revisão',
+  em_contestacao: 'Em contestação',
+  aguardando_gestor_suporte: 'Aguardando gestor de suporte',
+  aguardando_revisao_pj: 'Aguardando revisão PJ',
+  aguardando_gestor_qualidade: 'Aguardando gestor de qualidade',
+  concluida: 'Concluída',
+  contestacao_aceita: 'Contestação aceita',
+  contestacao_negada: 'Contestação negada',
+  finalizada_alterada: 'Finalizada com alteração',
+  reavaliacao_solicitada: 'Reavaliação solicitada',
+};
 
 interface AuditingQueueViewProps {
   agents: User[];
@@ -176,6 +190,31 @@ export default function AuditingQueueView({
   ));
   const isSupervisorView = canManageQueueAssignments(currentUserRole);
   const canAudit = canAuditTickets(currentUserRole);
+  const [reconciliation, setReconciliation] = useState<QueueReconciliation | null>(null);
+  const [reconciliationLoading, setReconciliationLoading] = useState(false);
+  const [reconciliationError, setReconciliationError] = useState(false);
+  const [reconciliationRefreshKey, setReconciliationRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (currentSubTab === 'monitores' || currentUserRole === 'gestor_suporte') return;
+    let cancelled = false;
+    setReconciliation(null);
+    setReconciliationError(false);
+    const refresh = async () => {
+      setReconciliationLoading(true);
+      try {
+        const result = await fetchQueueReconciliation(activeQueue, monitorias);
+        if (!cancelled) { setReconciliation(result); setReconciliationError(false); }
+      } catch (error) {
+        if (!cancelled) { setReconciliationError(true); console.warn('[AuditingQueue] Falha na conciliação da view:', error); }
+      } finally {
+        if (!cancelled) setReconciliationLoading(false);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 300_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [activeQueue, currentSubTab, currentUserRole, reconciliationRefreshKey, monitorias]);
 
   // Redireciona monitores comuns para fora da sub-aba de supervisão
   useEffect(() => {
@@ -700,6 +739,7 @@ export default function AuditingQueueView({
 
   const refreshQueue = () => {
     if (loading) return;
+    setReconciliationRefreshKey(key => key + 1);
     setPrevCursors([]);
     setPageNumber(1);
     setCurrentPage(1);
@@ -2449,6 +2489,61 @@ export default function AuditingQueueView({
           <div className="w-full h-full bg-gradient-to-r from-transparent via-brand-highlight to-transparent animate-shimmer" />
         </div>
       </div>
+
+      {currentUserRole !== 'gestor_suporte' && (reconciliation || reconciliationLoading || reconciliationError) && (
+        <section aria-label="Conciliação da fila com o Zendesk"
+          className="rounded-xl border border-surface-border bg-surface-card px-4 py-3 text-brand-primary">
+          {reconciliation ? (
+            <>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+                <span><strong className="tabular-nums text-base">{reconciliation.zendesk_view_count}</strong> na view do Zendesk</span>
+                <span><strong className="tabular-nums text-base">{reconciliation.without_monitoria_count}</strong> sem monitoria na view</span>
+                <span><strong className="tabular-nums text-base">{reconciliation.monitored_count}</strong> já têm monitoria</span>
+                {reconciliationLoading && <span className="text-brand-muted">Atualizando…</span>}
+              </div>
+              {reconciliation.monitored_count > 0 && (
+                <details className="mt-2 border-t border-surface-border pt-2 text-xs">
+                  <summary className="cursor-pointer font-semibold text-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-highlight">
+                    Ver tickets que já têm monitoria e a etapa de cada um
+                  </summary>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {Object.entries(reconciliation.monitoria_statuses).map(([status, count]) => (
+                      <span key={status} className="rounded-md bg-surface-subtle px-2 py-1 text-brand-muted">
+                        {MONITORIA_STAGE_LABELS[status] || status.replaceAll('_', ' ')}: {count}
+                      </span>
+                    ))}
+                  </div>
+                  <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto" aria-label="Tickets com monitoria">
+                    {reconciliation.monitored_tickets.map(item => (
+                      <li key={item.ticket_id}>
+                        <button type="button" disabled={!onOpenExistingMonitoria}
+                          onClick={() => onOpenExistingMonitoria?.(item.monitoria_id)}
+                          className="w-full rounded-md px-2 py-1.5 text-left hover:bg-surface-subtle disabled:cursor-default focus-visible:outline-2 focus-visible:outline-brand-highlight">
+                          <span className="font-semibold">Ticket #{item.ticket_id}</span>
+                          <span className="ml-2 text-brand-muted">{MONITORIA_STAGE_LABELS[item.status] || item.status.replaceAll('_', ' ')}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              <p className="mt-2 text-[11px] text-brand-muted">
+                A distribuição entre monitores e os filtros do QWP podem mostrar menos cards que a view.
+              </p>
+            </>
+          ) : reconciliationLoading ? (
+            <p className="text-xs text-brand-muted">Conferindo os tickets da view com as monitorias salvas…</p>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span>Não foi possível conferir a view agora.</span>
+              <button type="button" onClick={() => setReconciliationRefreshKey(key => key + 1)}
+                className="font-semibold text-brand-highlight hover:underline focus-visible:outline-2 focus-visible:outline-brand-highlight">
+                Tentar novamente
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       {hasQueueUpdates && (
         <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-accent/30 bg-brand-accent/10 px-3 py-2 text-xs text-brand-primary">

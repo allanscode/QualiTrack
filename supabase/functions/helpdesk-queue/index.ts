@@ -95,6 +95,39 @@ const INVALID_CHILD_VIEW_ID = Deno.env.get('HELPDESK_INVALID_CHILD_VIEW_ID') || 
 const PAGE_SIZE = 25;
 const COUNTED_QUEUES: QueueType[] = ['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos'];
 let viewCountsCache: { expiresAt: number; counts: Record<QueueType, number | null> } | null = null;
+const viewTicketIdsCache = new Map<QueueType, { expiresAt: number; ids: string[] }>();
+
+async function fetchViewTicketIds(queue: QueueType, subdomain: string, headers: Record<string, string>): Promise<string[]> {
+  const cached = viewTicketIdsCache.get(queue);
+  if (cached && cached.expiresAt > Date.now()) return cached.ids;
+  const viewId = viewIdForQueue(queue);
+  const path = `/api/v2/views/${viewId}/tickets.json`;
+  const origin = `https://${subdomain}.zendesk.com`;
+  let url = `${origin}${path}?page[size]=100`;
+  const ids = new Set<string>();
+  let finished = false;
+  for (let page = 0; page < 100; page++) {
+    const response = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) throw new Error(`Falha ao conferir a view do Zendesk (${response.status}).`);
+    const body = await response.json() as {
+      tickets?: Array<{ id?: number | string }>;
+      meta?: { has_more?: boolean };
+      links?: { next?: string | null };
+    };
+    for (const ticket of body.tickets || []) {
+      if (ticket.id != null) ids.add(String(ticket.id));
+    }
+    if (!body.meta?.has_more) { finished = true; break; }
+    if (!body.links?.next) throw new Error('A paginação da view do Zendesk está incompleta.');
+    const next = new URL(body.links.next, origin);
+    if (next.origin !== origin || next.pathname !== path) throw new Error('Página da view do Zendesk inválida.');
+    url = next.toString();
+  }
+  if (!finished) throw new Error('A view do Zendesk excedeu o limite de leitura.');
+  const result = [...ids];
+  viewTicketIdsCache.set(queue, { expiresAt: Date.now() + 300_000, ids: result });
+  return result;
+}
 
 function viewIdForQueue(queueType: QueueType): string {
   switch (queueType) {
@@ -112,6 +145,7 @@ const RequestSchema = z.object({
     'fetch_draft_statuses',
     'check_queue_updates',
     'fetch_queue_counts',
+    'fetch_queue_reconciliation',
     'fetch_dialogue',
     'evaluate_ai',
     'evaluate_child_ticket',
@@ -1081,6 +1115,39 @@ serve(async (req) => {
         }
       }
       return jsonResponse({ counts, approximate: true }, 200);
+    }
+
+    if (action === 'fetch_queue_reconciliation') {
+      if (!queue_type) return jsonResponse({ error: 'Fila obrigatória.' }, 400);
+      if (caller.role === 'gestor_suporte') return jsonResponse({ error: 'Resumo disponível para a equipe de Qualidade.' }, 403);
+      const viewTicketIds = await fetchViewTicketIds(queue_type, subdomain, zendeskHeaders);
+      const latest = new Map<string, { id: string; status: string; created_at: string }>();
+      for (let offset = 0; offset < viewTicketIds.length; offset += 200) {
+        const ids = viewTicketIds.slice(offset, offset + 200);
+        const { data, error } = await supabase.from('monitorias')
+          .select('id,ticket_id,status,created_at,active').in('ticket_id', ids);
+        if (error) return jsonResponse({ error: 'Falha ao conferir monitorias da view.' }, 503);
+        for (const row of data || []) {
+          if (row.active === false) continue;
+          const previous = latest.get(row.ticket_id);
+          if (!previous || row.created_at > previous.created_at) latest.set(row.ticket_id, {
+            id: row.id, status: row.status, created_at: row.created_at,
+          });
+        }
+      }
+      const statuses: Record<string, number> = {};
+      for (const row of latest.values()) statuses[row.status] = (statuses[row.status] || 0) + 1;
+      return jsonResponse({
+        queue_type,
+        zendesk_view_count: viewTicketIds.length,
+        monitored_count: latest.size,
+        without_monitoria_count: viewTicketIds.length - latest.size,
+        monitoria_statuses: statuses,
+        monitored_tickets: [...latest.entries()].map(([ticket_id, row]) => ({
+          ticket_id, monitoria_id: row.id, status: row.status,
+        })).sort((a, b) => Number(b.ticket_id) - Number(a.ticket_id)),
+        as_of: new Date().toISOString(),
+      }, 200);
     }
 
     // Consulta somente IDs da primeira página. Não cria agentes, não altera
