@@ -24,6 +24,33 @@ describe('estado de publicação nas filas Zendesk', () => {
       .toEqual([]);
   });
 
+  it('retira filhos concluídos automaticamente das duas filas sem exigir nota mínima', () => {
+    const child = {
+      ...monitoria('auto-child', '178943'),
+      score: 0,
+      form_snapshot: { ticket_kind: 'chamado_filho', automation: 'child_ticket' },
+    };
+    for (const queue of ['filhos', 'filhos_invalidos'] as const) {
+      expect(attachQueuePublicationState([{ ticket_id: child.ticket_id }], queue, [child], new Set()))
+        .toEqual([]);
+    }
+  });
+
+  it('preserva filhos que ainda aguardam revisão humana ou publicação manual', () => {
+    const underReview = {
+      ...monitoria('review-child', '178944', 'pendente_revisao'),
+      form_snapshot: { automation: 'child_ticket' },
+    };
+    const manual = monitoria('manual-child', '178945');
+    for (const queue of ['filhos', 'filhos_invalidos'] as const) {
+      expect(attachQueuePublicationState([{ ticket_id: underReview.ticket_id }], queue, [underReview], new Set()))
+        .toEqual([{ ticket_id: underReview.ticket_id, already_audited: true,
+          monitoria_id: underReview.id, monitoria_status: underReview.status, monitoria_score: underReview.score }]);
+      expect(attachQueuePublicationState([{ ticket_id: manual.ticket_id }], queue, [manual], new Set()))
+        .toHaveLength(1);
+    }
+  });
+
   it('não oferece macro de atendimento para uma monitoria identificada como filho', () => {
     const child = { ...monitoria('child', '173388'), form_snapshot: { ticket_kind: 'chamado_filho' } };
     expect(attachQueuePublicationState([{ ticket_id: '173388' }], 'negativas', [child], new Set()))

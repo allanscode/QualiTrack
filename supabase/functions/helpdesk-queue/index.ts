@@ -21,6 +21,7 @@ import { buildAITargets } from './ai-targets.ts';
 import { retryAt } from './ai-retry.ts';
 import { processPositiveAI } from './positive-automation.ts';
 import { processChildAI } from './child-automation.ts';
+import { processChildAutoPublication } from './child-auto-publication.ts';
 import { processFinalPositiveInvalidation } from './final-invalidation.ts';
 import { canReadMatchedTicketTeam, canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
@@ -622,6 +623,13 @@ serve(async (req) => {
       });
       return jsonResponse(result, 200);
     }
+    if (workerBody?.action === 'process_child_auto_publication') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
+      return jsonResponse(await processChildAutoPublication(workerClient,key=>Deno.env.get(key)),200);
+    }
     if (workerBody?.action === 'process_ai_retries') {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
@@ -847,7 +855,7 @@ serve(async (req) => {
         return jsonResponse({ error: 'Ticket e monitoria salva são obrigatórios.' }, 400);
       }
       const { data: savedMonitoria, error: monitoriaError } = await supabase.from('monitorias')
-        .select('id,ticket_id,form_id,score,status,active,evaluator_id,evaluator_note')
+        .select('id,ticket_id,form_id,score,status,active,evaluator_id,evaluator_note,form_snapshot')
         .eq('id', monitoriaId).maybeSingle();
       if (monitoriaError) return jsonResponse({ error: 'Não foi possível conferir a monitoria salva.' }, 503);
       const publicationError = childPublicationError(

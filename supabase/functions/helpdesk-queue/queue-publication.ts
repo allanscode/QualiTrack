@@ -8,7 +8,7 @@ export interface QueueMonitoriaState {
   active: boolean | null;
   created_at: string;
   form_id?: string | null;
-  form_snapshot?: { ticket_kind?: string } | null;
+  form_snapshot?: { ticket_kind?: string; automation?: string } | null;
 }
 
 export interface QueuePublicationTicket {
@@ -39,6 +39,9 @@ export function attachQueuePublicationState<T extends QueuePublicationTicket>(
       || monitoria.form_snapshot?.ticket_kind === 'chamado_filho'
     )) return [];
     if (queue === 'negativas' && sentTicketIds.has(ticket.ticket_id)) return [];
+    if ((queue === 'filhos' || queue === 'filhos_invalidos')
+      && monitoria?.status === 'concluida'
+      && monitoria.form_snapshot?.automation === 'child_ticket') return [];
     if (queue !== 'negativas' && queue !== 'filhos' && queue !== 'filhos_invalidos' && monitoria) return [];
     return [{
       ...ticket,

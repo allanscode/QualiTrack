@@ -18,6 +18,7 @@ import { buildEditedCommentHtml, buildEvaluationHtml } from './template.ts';
 import { ZendeskProvider } from './zendesk.ts';
 import { publicationAccess } from './access.ts';
 import { canPublishMonitoriaStatus } from './publication-status.ts';
+import { processPositiveAutoPublication } from './positive-auto-publication.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 
@@ -76,6 +77,16 @@ serve(async (req: Request) => {
   }
 
   try {
+    if (req.method === 'POST' && req.headers.get('apikey') === secretApiKey()) {
+      const workerBody = await req.clone().json().catch(() => null);
+      if (workerBody?.action === 'process_positive_auto_publication') {
+        const workerClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', secretApiKey());
+        const result = await processPositiveAutoPublication(workerClient, resolveProvider());
+        return new Response(JSON.stringify(result), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
     // 1. Validar JWT; resolver o usuário chamador.
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {

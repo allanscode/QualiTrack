@@ -9,6 +9,7 @@ export interface ChildPublicationMonitoria {
   active: boolean;
   evaluator_id: string;
   evaluator_note: string | null;
+  form_snapshot?: { automation?: string; child_ai_evaluation?: { status?: string } } | null;
 }
 
 export function childPublicationError(
@@ -23,8 +24,12 @@ export function childPublicationError(
   if (role === 'qualidade' && monitoria.evaluator_id !== userId) {
     return 'Apenas o auditor responsável pode publicar esta monitoria.';
   }
-  if (monitoria.status !== 'concluida' || !Number.isFinite(monitoria.score) || monitoria.score < 75) {
-    return 'A macro só pode ser enviada após a conclusão de uma monitoria válida (nota mínima de 75%).';
+  const automaticChild = monitoria.form_snapshot?.automation === 'child_ticket';
+  const valid = automaticChild
+    ? monitoria.form_snapshot?.child_ai_evaluation?.status === 'conforme'
+    : Number.isFinite(monitoria.score) && monitoria.score >= 75;
+  if (monitoria.status !== 'concluida' || !valid) {
+    return 'A macro só pode ser enviada após a conclusão válida de uma monitoria de chamado filho.';
   }
   if (!monitoria.evaluator_note?.trim()) {
     return 'Preencha o Registro do Auditor na ficha antes de publicar a macro.';
