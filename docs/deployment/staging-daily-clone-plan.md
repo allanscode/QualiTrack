@@ -5,14 +5,13 @@
 O código de simulação do staging já impede que workers de IA e publicação automática
 processem filas, mantém a avaliação manual via OpenRouter e bloqueia mutações no Zendesk.
 A publicação dessas proteções no projeto de teste depende de acesso às Edge Functions:
-a credencial de gestão disponível não enxerga o projeto atual
-`njzrnwfjbmyfhemejvby` (HTTP 404). Até o deploy ser confirmado, o staging remoto não deve ser
+a credencial de gestão disponível identifica o projeto atual
+`secfejmccojxsvdntljx`. Até o deploy ser confirmado, o staging remoto não deve ser
 considerado protegido.
 
 O banco de produção tinha aproximadamente **55 MB em 08/10/2026**. Uma cópia lógica diária
 transferiria até cerca de **1,65 GB/mês de dados brutos** (55 MB × 30; compressão reduz o
-tráfego). O staging atual é `njzrnwfjbmyfhemejvby`, mas a credencial de gestão atual
-não tem acesso a esse projeto; portanto, plano, cota e capacidade de restauração lá ainda
+tráfego). O staging atual é `secfejmccojxsvdntljx`; plano, cota e capacidade de restauração lá ainda
 precisam ser confirmados. O limite gratuito publicado é 500 MB de banco por projeto; um
 projeto Pro adicional começa em US$ 10/mês de compute dentro de uma organização Pro, cujo
 plano começa em US$ 25/mês. Excedentes de armazenamento e transferência dependem do plano.

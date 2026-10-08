@@ -3,7 +3,7 @@ import { guardedExternalFetch, isProductionProject } from './external-environmen
 
 describe('staging external action guard', () => {
   const production = 'https://vpytvgpsqdapgouyjowc.supabase.co';
-  const staging = 'https://njzrnwfjbmyfhemejvby.supabase.co';
+  const staging = 'https://secfejmccojxsvdntljx.supabase.co';
 
   it('fails closed for any project other than production', () => {
     expect(isProductionProject(production)).toBe(true);
