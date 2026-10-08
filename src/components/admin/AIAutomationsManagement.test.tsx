@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '../../types';
 import { getAIAutomationControls, setAIAutomationEnabled } from '../../lib/aiAutomationControls';
 import AIAutomationsManagement from './AIAutomationsManagement';
@@ -15,7 +15,9 @@ const controls = [
 ];
 
 describe('automation controls', () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(getAIAutomationControls).mockResolvedValue(controls);
     vi.mocked(setAIAutomationEnabled).mockResolvedValue();
   });
@@ -32,5 +34,14 @@ describe('automation controls', () => {
     expect(await screen.findByText('Tickets positivos')).toBeInTheDocument();
     expect(screen.getByText('Somente administradores e gestores de qualidade podem alterar estas automações.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /avaliação automática de Tickets positivos/ })).not.toBeInTheDocument();
+  });
+
+  it('shows manual-only mode and hides automation switches on staging', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://secfejmccojxsvdntljx.supabase.co');
+    render(<AIAutomationsManagement currentUser={{ role: 'admin' } as User} />);
+    expect(await screen.findAllByText('Somente manual')).toHaveLength(2);
+    expect(screen.getByText(/automações permanecem bloqueadas no servidor/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /avaliação automática de Tickets positivos/ })).not.toBeInTheDocument();
+    expect(setAIAutomationEnabled).not.toHaveBeenCalled();
   });
 });
