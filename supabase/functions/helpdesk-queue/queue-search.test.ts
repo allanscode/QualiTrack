@@ -30,7 +30,7 @@ describe('queue search boundaries', () => {
   it('uses supported Zendesk search terms and excludes closed tickets', () => {
     expect(queueSearchQuery('negativas', 'validado')).toBe('type:ticket status<closed satisfaction:bad -tags:validado');
     expect(queueSearchQuery('positivas', '')).toBe('type:ticket status<closed satisfaction:good');
-    expect(queueSearchQuery('proativas', '')).toBe('type:ticket status:closed satisfaction:unoffered');
+    expect(queueSearchQuery('proativas', '')).toBe('type:ticket status:closed satisfaction:offered');
   });
   it('binds offset pagination to the original search and bounded page size', () => {
     const url = 'https://example.zendesk.com/api/v2/search.json?query=type%3Aticket&per_page=25&page=2';

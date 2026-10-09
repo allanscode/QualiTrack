@@ -40,7 +40,7 @@ export function ticketCanReceiveEvaluation(
 
 export function queueSearchQuery(queue: QueueType, validatedTag: string): string {
   if (queue === 'proativas') {
-    return 'type:ticket status:closed satisfaction:unoffered';
+    return 'type:ticket status:closed satisfaction:offered';
   }
   const base = 'type:ticket status<closed';
   switch (queue) {

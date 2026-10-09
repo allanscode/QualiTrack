@@ -14,6 +14,7 @@ import {
   AIEvaluationGuideline
 } from '../types';
 import { normalizeTicketDialogue } from './zendeskChatParser';
+import { matchesQueueSearchText } from './queueSearchText';
 
 /**
  * Extrai a mensagem de erro real devolvida pela Edge Function. Em status
@@ -242,13 +243,7 @@ export async function fetchQueueTickets(
     }
     tickets = getMockQueueTickets(type, auditedTicketIds);
     if (searchTerm) {
-      const term = searchTerm.toLowerCase().trim();
-      tickets = tickets.filter(t =>
-        t.ticket_id.toLowerCase().includes(term) ||
-        t.subject.toLowerCase().includes(term) ||
-        (t.agent_name && t.agent_name.toLowerCase().includes(term)) ||
-        (t.requester_name && t.requester_name.toLowerCase().includes(term))
-      );
+      tickets = tickets.filter(t => matchesQueueSearchText(t, searchTerm));
     }
   } else {
     try {

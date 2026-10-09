@@ -29,6 +29,7 @@ import {
   resolveFormAndGuidelineForCustomerType,
 } from '../lib/helpdeskQueue';
 import { getDialogueCategory, normalizeTicketDialogue } from '../lib/zendeskChatParser';
+import { matchesQueueSearchText, normalizeQueueSearchText } from '../lib/queueSearchText';
 import { formatTicketDateTime, toTicketDateInput } from '../lib/ticketDateTime';
 import { useQueueUpdateNotice } from '../hooks/useQueueUpdateNotice';
 import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuidelines';
@@ -326,7 +327,7 @@ export default function AuditingQueueView({
   const [selectedAgentFilter, setSelectedAgentFilter] = useState('');
   const [selectedMonitorFilter, setSelectedMonitorFilter] = useState('');
 
-  // Sincroniza busca com debounce de 400ms para pesquisar em toda a base do Zendesk (> 1.000 tickets)
+  // Aguarda a digitação antes de pesquisar todas as páginas da view no Zendesk.
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm.trim());
@@ -659,7 +660,7 @@ export default function AuditingQueueView({
       const saved = savedResult.status === 'fulfilled' ? savedResult.value : [];
       const auditedIds = new Set(monitorias.map(m => m.ticket_id?.trim()).filter(Boolean));
       const existingIds = new Set(data.map(ticket => ticket.ticket_id));
-      const search = activeSearch?.trim().toLocaleLowerCase('pt-BR');
+      const search = activeSearch?.trim();
       const retained = saved
         .filter(draft => !auditedIds.has(draft.ticket_id) && !existingIds.has(draft.ticket_id))
         .map(draft => ({
@@ -679,8 +680,7 @@ export default function AuditingQueueView({
           saved_ai_draft: true,
           draft_metadata_incomplete: !draft.ticket_snapshot,
         }))
-        .filter(ticket => !search || [ticket.ticket_id, ticket.subject, ticket.agent_name, ticket.requester_name]
-          .some(value => value?.toLocaleLowerCase('pt-BR').includes(search)));
+        .filter(ticket => !search || matchesQueueSearchText(ticket, search));
       // Descarta a resposta se já não for mais a busca mais recente — uma
       // troca de fila nesse meio tempo já disparou outra chamada, com seq
       // maior.
@@ -750,7 +750,7 @@ export default function AuditingQueueView({
     loadQueueData(null);
   };
 
-  // Reage à busca textual ou por ID em toda a base do Zendesk (> 1.000 chamados na view)
+  // Reage à busca textual, por ID ou pelo nome do agente em toda a view.
   const prevDebouncedSearchRef = useRef(debouncedSearch);
   useEffect(() => {
     if (prevDebouncedSearchRef.current === debouncedSearch) return;
@@ -920,13 +920,10 @@ export default function AuditingQueueView({
           && !(['negativas', 'filhos', 'filhos_invalidos'].includes(activeQueue) && t.already_audited)) return false;
       }
 
-      const matchesSearch = !searchTerm ||
-        t.ticket_id.includes(searchTerm) ||
-        t.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (t.agent_name && t.agent_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (t.requester_name && t.requester_name.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesSearch = matchesQueueSearchText(t, searchTerm);
 
-      const matchesAgent = !selectedAgentFilter || t.agent_name?.toLowerCase().includes(selectedAgentFilter.toLowerCase());
+      const matchesAgent = !selectedAgentFilter || Boolean(t.agent_name &&
+        normalizeQueueSearchText(t.agent_name).includes(normalizeQueueSearchText(selectedAgentFilter)));
 
       const hasDraft = t.saved_ai_draft || !!drafts[t.ticket_id] || (activeQueue === 'filhos' && (!!t.child_evaluation || validatedChildTickets.has(t.ticket_id)));
       if (aiDraftFilter === 'with_draft' && !hasDraft) return false;
