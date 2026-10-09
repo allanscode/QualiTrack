@@ -23,6 +23,7 @@ import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS } from './
 import { buildAITargets } from './ai-targets.ts';
 import { retryAt } from './ai-retry.ts';
 import { processPositiveAI } from './positive-automation.ts';
+import { syncQueueViewAuditExclusions } from './audit-views.ts';
 import { processChildAI } from './child-automation.ts';
 import { processChildAutoPublication } from './child-auto-publication.ts';
 import { processFinalPositiveInvalidation } from './final-invalidation.ts';
@@ -632,6 +633,18 @@ serve(async (req) => {
     if (new TextEncoder().encode(rawText).length > MAX_REQUEST_BYTES)
       return jsonResponse({ error: 'Payload muito grande.' }, 413);
     const workerBody = (() => { try { return JSON.parse(rawText); } catch { return null; } })();
+    if (workerBody?.action === 'sync_queue_view_audit_exclusions') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      try {
+        return jsonResponse(await syncQueueViewAuditExclusions(
+          key => Deno.env.get(key), workerBody.apply === true,
+        ), 200);
+      } catch (error) {
+        return jsonResponse({ error: error instanceof Error ? error.message : 'Falha ao atualizar views.' }, 502);
+      }
+    }
     if (workerBody?.action === 'process_final_positive_invalidation') {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
