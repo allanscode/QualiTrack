@@ -67,16 +67,11 @@ flowchart TD
 * **Regra de Negócio:** **O TEXTO DO COMENTÁRIO PRECISA CONTER A MENSAGEM INTEGRAL DA MACRO.**
 * **Diretriz de Conteúdo:**
   1. **A macro é a base obrigatória:** O analista não pode apagar o texto modelo pré-formatado inserido pela macro (saudação técnica, cabeçalho de triagem, campos padronizados).
-  2. **Acréscimo de informações é permitido e incentivado:** O analista **PODE E DEVE** inserir mais informações técnicas complementares além do texto da macro, tais como:
-     - Dados do posto / cliente / CNPJ / contato;
-     - Versão dos sistemas (WebPosto, PDV, Concentrador, TEF);
-     - ID de Acesso Remoto (AnyDesk / TeamViewer) e senha provisória;
-     - Descrição detalhada da falha, cenário de ocorrência e testes já executados no N1;
-     - Logs de erro colhidos, prints ou mensagens de rejeição fiscal (XML / SEFAZ).
+  2. **Relato complementar suficiente:** O analista deve resumir a demanda concreta de forma clara, ainda que em poucas linhas: o que ocorreu ou foi solicitado, o contexto relevante e o que a equipe de destino precisa verificar ou fazer. Considere o conjunto de comentários e campos do ticket.
+  3. **Dados técnicos quando pertinentes:** Versões, identificadores, acesso remoto, testes, prints e logs ajudam em casos que dependem deles, mas não são obrigatórios em todas as macros. Campos opcionais vazios não caracterizam falha por si só. Senhas e credenciais não devem ser exigidas no relato.
 * **Critério de Avaliação do QA:**
-  * **Conforme / Excelente:** O texto-base da macro está integralmente presente e foi complementado com evidências técnicas sólidas.
-  * **Conforme / Regular:** O texto-base da macro está presente, mas com dados complementares mínimos.
-  * **Não Conforme (Reprovado):** O analista apagou o texto da macro e deixou uma observação genérica (ex: *"ver com o cliente"*, *"favor analisar"*), ou o comentário está em branco.
+  * **Conforme:** O texto-base da macro está presente e há um resumo específico, mesmo breve, que permite entender e continuar a demanda. Dados técnicos adicionais são avaliados conforme o caso.
+  * **Não Conforme:** O texto-base foi apagado ou há somente conteúdo genérico da macro/categoria, sem relato da demanda concreta. A justificativa deve apontar a informação essencial ausente, não enumerar campos opcionais vazios.
 
 ---
 
@@ -116,8 +111,8 @@ O sistema de auditoria inteligente considera apenas os três quesitos abaixo. Ta
 | **3. Direcionamento Correto ("Para")** | Direcionamento incorreto rebaixa para **Atenção** ou **Não Conforme**. |
 
 ### Classificação de Parecer:
-* 🟢 **Conforme (90 a 100 pontos):** Todos os três pilares cumpridos com rigor; assunto da abertura válido, inclusive após mudança pela macro de resolvido; macro presente e detalhada com logs/AnyDesk; direcionamento exato.
-* 🟡 **Atenção / Ressalvas (70 a 89 pontos):** Assunto e direcionamento corretos, mas com detalhamento técnico insuficiente no comentário adicional.
+* 🟢 **Conforme (90 a 100 pontos):** Todos os três pilares cumpridos; assunto da abertura válido, inclusive após mudança pela macro de resolvido; macro presente com relato claro da demanda; direcionamento correto.
+* 🟡 **Atenção / Ressalvas (70 a 89 pontos):** Assunto e direcionamento corretos, mas o relato da demanda exige esclarecimento para continuidade.
 * 🔴 **Não Conforme (0 a 69 pontos):** Assunto da abertura alterado manualmente de forma indevida, texto da macro suprimido ou encaminhamento para destino incorreto.
 
 ---
@@ -127,7 +122,7 @@ O sistema de auditoria inteligente considera apenas os três quesitos abaixo. Ta
 Ao auditar um chamado na fila de **Triagem de Chamados Filhos**, execute o seguinte checklist:
 
 - [ ] **1. Assunto:** O título da abertura corresponde à macro, considerando prefixo e ID do pai? Se o ticket foi resolvido, a mudança automática de assunto pela macro de resolvido foi aceita?
-- [ ] **2. Texto:** A mensagem estrutural da macro foi mantida? Há enriquecimento com dados técnicos (AnyDesk, logs, passos de teste)?
+- [ ] **2. Texto:** A mensagem estrutural da macro foi mantida? Há um resumo claro da demanda que permita continuá-la, com dados técnicos apenas quando pertinentes?
 - [ ] **3. Destinatário ("Para"):** O filho foi atribuído inicialmente ao agente que o abriu? Em Análise Técnica, o pai foi encaminhado ao grupo especialista correto quando houver evidência?
 - [ ] **4. Chamado Pai Vinculado:** O ID do chamado pai (`parent_ticket_id` / `problem_id`) foi capturado e validado corretamente?
 

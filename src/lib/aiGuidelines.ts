@@ -116,7 +116,7 @@ Este manual normatiza a criação de chamados filhos (Side Conversations) aberto
 - **Regra 1: Assunto da abertura e macro de resolvido:**
   O assunto gerado pela macro de abertura não deve ser descaracterizado manualmente. O prefixo "Ticket " e o número do ticket pai (ex: "Nova Demanda do #169238" ou "Ticket Nova Demanda do #169238") são válidos. A macro de resolvido do Zendesk altera automaticamente o assunto depois da abertura; essa mudança é conforme e não reprova o ticket. Reprove apenas quando houver evidência de alteração manual indevida antes da resolução.
 - **Regra 2: Preservação do Texto da Macro com Enriquecimento:**
-  O texto-base da macro deve ser mantido e enriquecido obrigatoriamente com dados técnicos (versão, logs, AnyDesk, descrição da falha e testes já realizados).
+  O texto-base da macro deve ser mantido. Um resumo claro e específico da demanda, ainda que breve, deve permitir a continuidade do atendimento. Versões, acessos, identificadores, testes e logs são exemplos condicionados à pertinência e à disponibilidade; campos opcionais vazios não reprovam por si só. Não exija senhas ou credenciais no relato.
 - **Regra 3: Direcionamento Correto ("Para"):**
   Todo chamado filho inicia atribuído ao agente que o abriu. Em Análise Técnica, o ticket pai vai para o grupo especialista; o filho pode ser encaminhado depois, com rastreabilidade. A equipe mostrada junto ao nome do agente não invalida a autoatribuição.
 - **Regra 4: Tags e campos obrigatórios:**
