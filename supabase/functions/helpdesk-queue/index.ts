@@ -3059,7 +3059,9 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
 2. PRESERVAÇÃO DO TEXTO DA MACRO COM ENRIQUECIMENTO TÉCNICO:
 =============================================================================
 - REGRA: O COMENTÁRIO/DESCRIÇÃO PRECISA CONTER A MENSAGEM INTEGRAL DA MACRO.
-- O analista PODE E DEVE adicionar mais informações complementares (dados do cliente/posto, versão do sistema, AnyDesk/senha, descrição detalhada do erro, logs do PDV, prints, passos de reprodução e testes já executados).
+- O relato complementar deve explicar a demanda concreta de forma clara, mesmo que breve: o que foi solicitado ou ocorreu, o contexto relevante e o que a equipe de destino precisa fazer ou verificar. Considere o conjunto de comentários e campos do ticket; não exija um tamanho mínimo nem uma redação padronizada.
+- Os campos da macro são um roteiro, não uma lista universal de preenchimento obrigatório. Versão de sistema, acesso remoto, identificadores, passos, prints e logs só são necessários quando forem pertinentes à demanda e estiverem disponíveis. Campo opcional vazio, por si só, NÃO reprova o detalhamento. Nunca exija senha ou credencial no relato.
+- Uma descrição curta e consistente é suficiente se permitir compreender e dar continuidade ao caso sem adivinhar o problema. Se houver apenas o texto genérico da macro, o nome do operador, a categoria ou uma versão isolada, sem explicar a demanda específica, o detalhamento complementar não foi demonstrado; justifique pela falta do relato, não pela lista de campos vazios.
 - O que NÃO PODE: O analista NÃO PODE apagar o texto da macro e deixar apenas um texto genérico ou em branco. O texto-base estrutural da macro deve estar contido.
 - Se o texto da macro estiver presente (mesmo enriquecido com mais detalhes): Check "Preservação do Texto da Macro" passa (passed: true).
 - Se o analista apagou o texto da macro ou deixou vazio: Check falha (passed: false).
@@ -3103,7 +3105,7 @@ CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
 1. question_id: "child-subject-preserved", rule: "Assunto da Abertura e Macro de Resolvido" — aplique as regras do assunto acima.
 2. question_id: "child-parent-linked", rule: "Vínculo com o Chamado Pai" — verifique se o chamado pai foi identificado e vinculado corretamente nos dados disponíveis. Não deduza vínculo somente por ser um ticket filho.
 3. question_id: "child-macro-preserved", rule: "Preservação do Texto da Macro" — aplique as regras do texto-base acima.
-4. question_id: "child-macro-enriched", rule: "Detalhamento Técnico Complementar" — avalie separadamente se as informações complementares são suficientes para a equipe de destino, considerando a demanda concreta. Preservar o texto-base não prova suficiência técnica.
+4. question_id: "child-macro-enriched", rule: "Detalhamento Técnico Complementar" — avalie se há um resumo coerente e específico da demanda, suficiente para a continuidade do atendimento. Uma frase ou poucas linhas podem bastar. Não reprove por campos opcionais da macro em branco nem exija logs, acessos, versões ou passos quando não forem aplicáveis; se faltar o próprio relato, explique objetivamente qual contexto da demanda não foi registrado.
 5. question_id: "child-routing-correct", rule: "Direcionamento Correto ('Para')" — aplique as regras de direcionamento acima.
 
 Retorne exatamente um check para cada question_id, com answer e details fundamentados. Use answer "SIM" para conformidade demonstrada, "NAO" para falha demonstrada e "NA" quando não aplicável ou quando os dados não permitirem verificar, explicando expressamente o motivo. Nunca invente evidências ou marque falha por falta de dados. passed deve ser true apenas para answer "SIM", e false para "NAO" ou "NA". Critérios "NA" não reduzem a nota; havendo evidência insuficiente, sinalize status "atencao" se não houver falha comprovada.
