@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CHILD_QUESTION_IDS, childCreationRoutingEvidence, reconcileNovaDemandaRouting,
+  CHILD_QUESTION_IDS, childCreationRoutingEvidence, reconcileChildOpeningRouting,
   validateChildEvaluationResponse,
 } from './child-evaluation';
 
@@ -66,7 +66,7 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
   it('corrige o falso negativo quando o próprio criador era o destinatário inicial', () => {
     const evidence = childCreationRoutingEvidence(creationAudit(71, 71));
     expect(evidence).toMatchObject({ creatorId: 71, initialAssigneeId: 71, initialGroupId: 900, selfAssigned: true });
-    const corrected = reconcileNovaDemandaRouting(routingFailure(), evidence);
+    const corrected = reconcileChildOpeningRouting(routingFailure(), evidence);
     expect(corrected.status).toBe('conforme');
     expect(corrected.score).toBe(100);
     expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')).toMatchObject({
@@ -78,11 +78,11 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
   it('não confunde o grupo exibido com autoatribuição e preserva falha real', () => {
     const evidence = childCreationRoutingEvidence(creationAudit(71, 72));
     const result = routingFailure();
-    expect(reconcileNovaDemandaRouting(result, evidence)).toBe(result);
+    expect(reconcileChildOpeningRouting(result, evidence)).toBe(result);
     const falsePositive = { ...result, status: 'conforme' as const, score: 100,
       checks: result.checks.map(check => check.question_id === 'child-routing-correct'
         ? { ...check, answer: 'SIM' as const, passed: true } : check) };
-    const corrected = reconcileNovaDemandaRouting(falsePositive, evidence);
+    const corrected = reconcileChildOpeningRouting(falsePositive, evidence);
     expect(corrected.status).toBe('nao_conforme');
     expect(corrected.score).toBe(75);
     expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')).toMatchObject({
@@ -90,11 +90,29 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
     });
   });
 
-  it('não altera o parecer sem histórico confiável ou fora de Nova Demanda', () => {
+  it('corrige Análise Técnica sem apagar outras falhas reais da ficha', () => {
     const result = routingFailure();
-    expect(reconcileNovaDemandaRouting(result, null)).toBe(result);
-    expect(reconcileNovaDemandaRouting({ ...result, detected_type: 'analise_tecnica' },
-      childCreationRoutingEvidence(creationAudit(71, 71)))).toMatchObject({ score: 75 });
+    const withTechnicalFailure = { ...result, detected_type: 'analise_tecnica',
+      checks: result.checks.map(check => check.question_id === 'child-macro-enriched'
+        ? { ...check, answer: 'NAO' as const, passed: false } : check) };
+    const corrected = reconcileChildOpeningRouting(withTechnicalFailure,
+      childCreationRoutingEvidence(creationAudit(71, 71)));
+    expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')).toMatchObject({
+      answer: 'SIM', passed: true,
+    });
+    expect(corrected.checks.find(check => check.question_id === 'child-macro-enriched')).toMatchObject({
+      answer: 'NAO', passed: false,
+    });
+    expect(corrected.status).toBe('nao_conforme');
+    expect(corrected.summary).toContain('atribuição inicial do chamado filho ao próprio agente está correta');
+  });
+
+  it('não altera o parecer sem histórico confiável ou com tipo desconhecido', () => {
+    const result = routingFailure();
+    expect(reconcileChildOpeningRouting(result, null)).toBe(result);
+    const unknown = { ...result, detected_type: 'desconhecido' };
+    expect(reconcileChildOpeningRouting(unknown,
+      childCreationRoutingEvidence(creationAudit(71, 71)))).toBe(unknown);
     expect(childCreationRoutingEvidence({ audits: [{ author_id: -1, events: [] }] })).toBeNull();
   });
 });

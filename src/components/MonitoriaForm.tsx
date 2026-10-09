@@ -1692,7 +1692,7 @@ export default function MonitoriaForm({
                       </div>
                     )}
 
-                    {/* Se for Chamado Filho: Regras e Confrontos do POP v1.1 */}
+                    {/* Se for Chamado Filho: Regras e Confrontos do manual vigente */}
                     {childAiEval && (
                       <div className="space-y-3 pt-3 border-t border-surface-border">
                         <div className="flex items-center justify-between">
