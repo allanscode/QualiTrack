@@ -28,6 +28,7 @@ import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { isContestationAction, getContestationOutcome } from '../../../lib/contestation';
 import { chartColorMap, chartPalette, chartColorArray } from '../chartColors';
 import type { Monitoria } from '../../../types';
+import { buildGroupDistribution } from '../../../lib/groupDistribution';
 
 // High-fidelity mock datasets for fallback and customization mode
 const mockTrendData = [
@@ -305,28 +306,14 @@ export default function QualityDashboard({
 
   const resolvedComparativeData = useFallback ? mockComparativeData : comparativeData;
 
-  // Distribuição por Equipes (INJETAR: Gráfico de rosca exibindo proporcionalidade de monitorias realizadas por ele)
-  const teamsDistribution = useMemo(() => {
+  // Grupos de origem dos tickets nas monitorias deste avaliador.
+  const groupsDistribution = useMemo(() => {
     if (useFallback) return [
-      { name: 'Equipe Alpha', value: 25, color: '#3B82F6' },
-      { name: 'Equipe Beta', value: 15, color: '#10B981' },
-      { name: 'Equipe Gamma', value: 8, color: '#F59E0B' }
+      { name: 'Revenda - Retaguarda', value: 25, color: '#3B82F6' },
+      { name: 'Revenda - PDV | PAY', value: 15, color: '#10B981' },
+      { name: 'Grupo não informado', value: 8, color: '#F59E0B' }
     ];
-    const teamCounts: Record<string, number> = {};
-    myMonitorias.forEach((m: any) => {
-      if (m.team_id) {
-        teamCounts[m.team_id] = (teamCounts[m.team_id] || 0) + 1;
-      }
-    });
-    const COLORS = chartColorArray();
-    return Object.entries(teamCounts).map(([teamId, count], index) => {
-      const teamObj = teams?.find((t: any) => t.id === teamId);
-      return {
-        name: teamObj?.name || `Equipe ${teamId.substring(0, 4)}`,
-        value: count,
-        color: COLORS[index % COLORS.length]
-      };
-    }).filter(d => d.value > 0);
+    return buildGroupDistribution(myMonitorias, teams, chartColorArray());
   }, [useFallback, myMonitorias, teams]);
 
   // Minha Curva de Qualidade (Distribuição por Nível)
@@ -728,8 +715,8 @@ export default function QualityDashboard({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="h-[380px]">
           <DistributionChart 
-            title="Distribuição por Equipes" 
-            data={teamsDistribution} 
+            title="Distribuição por Grupo"
+            data={groupsDistribution}
             isCustomizing={isCustomizing}
             profile="qualidade"
             activeEditingId={activeEditingId}

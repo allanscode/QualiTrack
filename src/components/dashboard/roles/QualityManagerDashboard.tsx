@@ -26,6 +26,7 @@ import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { getRemainingBusinessSeconds } from '../../../lib/businessHours';
 import { DashboardTile } from '../DashboardTileLayout';
+import { buildGroupDistribution } from '../../../lib/groupDistribution';
 
 const mockMonitoriasDeadlines = [
   {
@@ -179,10 +180,9 @@ const mockDistributionData = [
 ];
 
 const mockTeamDistribution = [
-  { name: 'Alpha', value: 35, color: '#3B82F6' },
-  { name: 'Beta', value: 25, color: '#10B981' },
-  { name: 'Delta', value: 15, color: '#F59E0B' },
-  { name: 'Gama', value: 10, color: '#EF4444' }
+  { name: 'Revenda - Retaguarda', value: 35, color: '#3B82F6' },
+  { name: 'Revenda - PDV | PAY', value: 25, color: '#10B981' },
+  { name: 'Grupo não informado', value: 10, color: '#F59E0B' }
 ];
 
 const mockTopAgents = [
@@ -498,20 +498,7 @@ export default function QualityManagerDashboard({
 
   const teamMonitoriaDistribution = useMemo(() => {
     if (isCustomizing) return mockTeamDistribution;
-    const counts: Record<string, number> = {};
-    monitorias.forEach((m: any) => {
-      const teamName = m.team_name || teams.find((t: any) => t.id === m.team_id)?.name || 'Sem Equipe';
-      counts[teamName] = (counts[teamName] || 0) + 1;
-    });
-
-    const colors = chartColorArray();
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, value], i) => ({
-        name,
-        value,
-        color: colors[i % colors.length]
-      }));
+    return buildGroupDistribution(monitorias, teams, chartColorArray());
   }, [isCustomizing, monitorias, teams]);
 
   const auditorRanking = useMemo(() => {
@@ -795,7 +782,7 @@ export default function QualityManagerDashboard({
         : defaultText;
   };
 
-  const mediaExplanation = getExplanation('Média Geral', 'Média de score global e divisão por equipe');
+  const mediaExplanation = getExplanation('Distribuição por Grupo', 'Avaliações por grupo de origem do ticket');
   const curvaExplanation = getExplanation('Curva de Qualidade', 'Distribuição percentual das notas em faixas');
 
   const isEditingMedia = activeEditingId === 'media-geral';
@@ -815,7 +802,7 @@ export default function QualityManagerDashboard({
     try {
       const updatedExplanations = {
         ...(config.statCardExplanations || {}),
-        'gestor_qualidade_Média Geral': tempMediaSub,
+        'gestor_qualidade_Distribuição por Grupo': tempMediaSub,
       };
       await saveConfig({
         ...config,
@@ -1132,16 +1119,16 @@ export default function QualityManagerDashboard({
         />
       </div>
 
-      {/* LINHA 4: Gráficos de Distribuição Isolados (Distribuição por Equipe | Curva de Qualidade | Precisão da Qualidade, lg:grid-cols-3 gap-6) */}
+      {/* LINHA 4: Gráficos de Distribuição Isolados */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Bloco Distribuição por Equipe */}
-        <DashboardTile type="CustomChart" title="Distribuição por Equipe" profile="gestor_qualidade">
+        {/* Grupos de origem dos tickets das avaliações filtradas */}
+        <DashboardTile type="CustomChart" title="Distribuição por Grupo" profile="gestor_qualidade">
         <div className="h-[380px]">
           {isEditingMedia ? (
             <Card padding="lg" className="h-full flex flex-col justify-between border-brand-accent/50 bg-surface-card shadow-lg animate-fade-in relative z-50">
               <div className="flex flex-col h-full gap-3" onClick={(e) => e.stopPropagation()}>
                 <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">
-                  Editar Descrição: Distribuição por Equipe
+                  Editar Descrição: Distribuição por Grupo
                 </span>
                 <textarea
                   value={tempMediaSub}
@@ -1200,7 +1187,7 @@ export default function QualityManagerDashboard({
                   </AnimatePresence>
                 </div>
                 <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest truncate flex-1 min-w-0">
-                  Distribuição por Equipe
+                  Distribuição por Grupo
                 </h3>
               </div>
 
@@ -1267,7 +1254,7 @@ export default function QualityManagerDashboard({
                   </div>
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-brand-muted opacity-40">
-                    Sem dados por equipe
+                    Sem dados por grupo
                   </div>
                 )}
               </div>

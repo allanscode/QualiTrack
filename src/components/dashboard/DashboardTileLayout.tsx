@@ -77,7 +77,7 @@ function Slot({ item, index, count, registerSlot, editor }: {
     || item.type === 'QualityAchievementsWidget' || item.type === 'NegativeCallsTrainingAlert';
   const kind = item.type === 'StatCard' ? 'card' : autoHeight ? 'auto' : 'chart';
   const compactChart = item.type === 'DistributionChart'
-    || (item.type === 'CustomChart' && ['Distribuição por Equipe', 'Curva de Qualidade'].includes(item.title));
+    || (item.type === 'CustomChart' && ['Distribuição por Equipe', 'Distribuição por Grupo', 'Curva de Qualidade'].includes(item.title));
   const wide = item.type === 'TrendChart' || item.type === 'OfensoresChart' || item.type === 'ComparativeBarChart'
     || autoHeight;
   return (

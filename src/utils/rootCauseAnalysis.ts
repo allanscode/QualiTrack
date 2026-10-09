@@ -1,4 +1,5 @@
 import { Monitoria, AgentFeedback, EvaluationForm } from '../types';
+import { getCriticalErrorOccurrences } from '../lib/criticalErrors';
 
 export interface QuestionOffender {
   questionId: string;
@@ -10,7 +11,9 @@ export interface QuestionOffender {
 }
 
 export interface CriticalOffender {
+  id: string;
   name: string;
+  labelResolved: boolean;
   count: number;
   percentage: number;
 }
@@ -96,9 +99,8 @@ export function analyzeRootCause(
   const totalScore = activeMonitorias.reduce((acc, m) => acc + (typeof m.score === 'number' ? m.score : 0), 0);
   const avgScore = Math.round((totalScore / totalAudits) * 10) / 10;
 
-  const withCritical = activeMonitorias.filter(
-    m => (m.selected_critical_errors && m.selected_critical_errors.length > 0) || m.score === 0
-  );
+  const criticalOccurrences = activeMonitorias.map(m => getCriticalErrorOccurrences(m, forms));
+  const withCritical = criticalOccurrences.filter(occurrences => occurrences.length > 0);
   const criticalErrorsCount = withCritical.length;
   const criticalRate = Math.round((criticalErrorsCount / totalAudits) * 1000) / 10;
 
@@ -144,20 +146,26 @@ export function analyzeRootCause(
     .slice(0, 5);
 
   // 4. Ofensores Críticos Mais Frequentes
-  const criticalMap = new Map<string, number>();
-  activeMonitorias.forEach(m => {
-    if (m.selected_critical_errors && Array.isArray(m.selected_critical_errors)) {
-      m.selected_critical_errors.forEach(err => {
-        criticalMap.set(err, (criticalMap.get(err) || 0) + 1);
+  const criticalMap = new Map<string, { count: number; name: string; labelResolved: boolean }>();
+  criticalOccurrences.forEach(occurrences => {
+    occurrences.forEach(({ id, label }) => {
+      const labelResolved = !label.startsWith('Erro crítico ' + id);
+      const current = criticalMap.get(id);
+      criticalMap.set(id, {
+        count: (current?.count || 0) + 1,
+        name: labelResolved ? label : current?.name || 'Erro crítico sem descrição',
+        labelResolved: labelResolved || Boolean(current?.labelResolved),
       });
-    }
+    });
   });
 
   const topCriticalErrors: CriticalOffender[] = Array.from(criticalMap.entries())
-    .map(([name, count]) => ({
-      name,
-      count,
-      percentage: Math.round((count / (criticalErrorsCount || 1)) * 1000) / 10,
+    .map(([id, error]) => ({
+      id,
+      name: error.name,
+      labelResolved: error.labelResolved,
+      count: error.count,
+      percentage: Math.round((error.count / (criticalErrorsCount || 1)) * 1000) / 10,
     }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 4);
@@ -277,8 +285,8 @@ export function analyzeRootCause(
   if (topQuestionOffenders.length > 0) {
     const worst = topQuestionOffenders[0];
     recommendations.push({
-      title: `Reforço Operacional em "${worst.questionText.slice(0, 45)}..."`,
-      description: `Este critério falhou ${worst.failureCount} vezes (${worst.failureRate}% de reprovação). Recomendado criar checklist rápido de validação no 1:1 e orientar a equipe.`,
+      title: `Revisar o critério "${worst.questionText.slice(0, 45)}..."`,
+      description: `${worst.failureCount} respostas “Não” em ${worst.totalEvaluated} avaliações (${worst.failureRate}%). Consulte as observações dessas avaliações antes de definir uma ação.`,
       priority: worst.failureRate > 20 ? 'alta' : 'media',
       category: 'treinamento',
     });
@@ -286,8 +294,8 @@ export function analyzeRootCause(
 
   if (criticalRate > 5) {
     recommendations.push({
-      title: 'Atenção a Falhas Críticas de Conformidade',
-      description: `A taxa de erros críticos está em ${criticalRate}% (${criticalErrorsCount} casos). Priorize alinhamentos com gestores de suporte para blindar regras de negócio e segurança.`,
+      title: 'Revisar os erros críticos registrados',
+      description: `${criticalErrorsCount} de ${totalAudits} avaliações têm erro crítico registrado (${criticalRate}%). Verifique os critérios e as observações de cada caso.`,
       priority: 'alta',
       category: 'processo',
     });
@@ -297,8 +305,8 @@ export function analyzeRootCause(
     const lowestChannel = [...channelBreakdown].sort((a, b) => a.avgScore - b.avgScore)[0];
     if (lowestChannel && lowestChannel.avgScore < avgScore - 5) {
       recommendations.push({
-        title: `Padronização de Atendimento no Canal ${lowestChannel.channel}`,
-        description: `O canal ${lowestChannel.channel} registrou nota média de ${lowestChannel.avgScore}%, abaixo da média geral da operação (${avgScore}%). Recomendado auditar scripts específicos deste canal.`,
+        title: `Revisar avaliações do canal ${lowestChannel.channel}`,
+        description: `A nota média do canal foi ${lowestChannel.avgScore}%, ante ${avgScore}% no total filtrado. Compare as avaliações para entender a diferença.`,
         priority: 'media',
         category: 'ferramenta',
       });
@@ -307,8 +315,8 @@ export function analyzeRootCause(
 
   if (recommendations.length === 0) {
     recommendations.push({
-      title: 'Operação com Alta Aderência aos Critérios',
-      description: 'Nenhum desvio crítico concentrado detectado. Continue mantendo as sessões periódicas de 1:1 e acompanhamento do PDI.',
+      title: 'Sem concentração de falhas nos dados filtrados',
+      description: 'Não há um critério ou canal que se destaque pelas regras deste painel. Consulte as avaliações individuais para análise detalhada.',
       priority: 'baixa',
       category: 'processo',
     });

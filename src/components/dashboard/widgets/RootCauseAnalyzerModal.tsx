@@ -2,11 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
-  Sparkles,
   AlertTriangle,
   TrendingUp,
-  CheckCircle2,
-  BrainCircuit,
   MessageSquare,
   ShieldAlert,
   ArrowUpRight,
@@ -15,13 +12,9 @@ import {
   Lightbulb,
   ChevronDown,
   ChevronUp,
-  Target,
-  HelpCircle,
-  Plus,
 } from 'lucide-react';
 import { Monitoria, AgentFeedback, EvaluationForm } from '../../../types';
-import { analyzeRootCause, QuestionOffender } from '../../../utils/rootCauseAnalysis';
-import Badge from '../../ui/Badge';
+import { analyzeRootCause } from '../../../utils/rootCauseAnalysis';
 import Button from '../../ui/Button';
 
 interface RootCauseAnalyzerModalProps {
@@ -62,47 +55,6 @@ export default function RootCauseAnalyzerModal({
 
   if (!isOpen) return null;
 
-  // Gerador de diagnósticos humanizados e práticos para os ofensores
-  const getOffenderPracticalGuide = (off: QuestionOffender) => {
-    const text = off.questionText.toLowerCase();
-    const section = (off.sectionTitle || '').toLowerCase();
-
-    if (text.includes('encerra') || text.includes('sauda') || text.includes('postura') || section.includes('comport')) {
-      return {
-        whatItMeans: 'O chamado foi finalizado sem a confirmação ativa de resolução pelo cliente ou sem a saudação final padronizada.',
-        probableCause: 'Pressa para liberar a fila em horários de pico ou hábito de encerrar imediatamente após o envio da última resposta técnica.',
-        managerAction: 'Reforçar no próximo alinhamento a regra de ouro: "Sempre aguardar o cliente confirmar se ficou alguma dúvida antes de encerrar o ticket".',
-        pdiCategory: 'Comportamental & Empatia',
-      };
-    }
-
-    if (text.includes('valida') || text.includes('teste') || text.includes('triagem') || text.includes('n2') || text.includes('escalona')) {
-      return {
-        whatItMeans: 'O chamado foi transferido ou respondido sem os testes técnicos essenciais (ping, logs ou coleta de evidências).',
-        probableCause: 'Insegurança na interpretação do erro ou falta de acompanhamento do checklist de triagem do N1.',
-        managerAction: 'Acompanhar em conjunto com o atendente 2 chamados de lentidão nesta semana e alinhar o checklist de testes do artigo #402 da Base de Conhecimento.',
-        pdiCategory: 'Procedimento & Triagem Técnica',
-      };
-    }
-
-    if (text.includes('transpar') || text.includes('registro') || text.includes('causa') || text.includes('nota interna')) {
-      return {
-        whatItMeans: 'Ausência de detalhamento claro da causa raiz no encerramento ou falta de notas internas explicativas para o cliente e equipe.',
-        probableCause: 'Falta de hábito no preenchimento de campos de registro ou desconhecimento do fluxo de documentação.',
-        managerAction: 'Orientar o atendente a resumir em 2 linhas: 1) O que causou o problema; 2) Qual foi o ajuste exato realizado.',
-        pdiCategory: 'Documentação & Transparência',
-      };
-    }
-
-    // Genérico inteligente
-    return {
-      whatItMeans: `Desvio de conformidade recorrente detectado no critério "${off.questionText}".`,
-      probableCause: 'Divergência entre o padrão de qualidade esperado e a execução prática observada nos chamados.',
-      managerAction: 'Agendar um feedback pontual de 15 minutos com o atendente para alinhar as expectativas e verificar dúvidas conceituais.',
-      pdiCategory: 'Qualidade Operacional',
-    };
-  };
-
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto"
@@ -120,14 +72,13 @@ export default function RootCauseAnalyzerModal({
         <div className="p-4 sm:p-5 border-b border-surface-border flex items-center justify-between bg-surface-card flex-shrink-0 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-              <BrainCircuit className="w-5 h-5" />
+              <Layers className="w-5 h-5" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm sm:text-base font-black text-brand-primary uppercase tracking-wider truncate">
-                  Diagnóstico de Falhas & Causa Raiz
+                  Análise das monitorias
                 </h2>
-                <Badge variant="info" size="sm">Cálculo Local em Tempo Real</Badge>
               </div>
               <p className="text-xs text-brand-muted font-medium mt-0.5 truncate">
                 {teamName} • Amostra de {diagnosis.totalAudits} avaliações analisadas
@@ -157,7 +108,7 @@ export default function RootCauseAnalyzerModal({
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5" />
-            <span>Maiores Ofensores da Qualidade</span>
+            <span>Critérios com falhas</span>
             {diagnosis.topQuestionOffenders.length > 0 && (
               <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-black rounded-full">
                 {diagnosis.topQuestionOffenders.length}
@@ -175,7 +126,7 @@ export default function RootCauseAnalyzerModal({
             }`}
           >
             <TrendingUp className="w-3.5 h-3.5" />
-            <span>Evolução da Equipe Pós-Feedback</span>
+            <span>Notas antes e depois do feedback</span>
             {diagnosis.feedbackROI.totalAgentsWith1on1 > 0 && (
               <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-black rounded-full">
                 +{diagnosis.feedbackROI.overallDelta}%
@@ -193,7 +144,7 @@ export default function RootCauseAnalyzerModal({
             }`}
           >
             <Lightbulb className="w-3.5 h-3.5" />
-            <span>Recomendações Práticas</span>
+            <span>Pontos para revisão</span>
             <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-black rounded-full">
               {diagnosis.recommendations.length}
             </span>
@@ -208,7 +159,7 @@ export default function RootCauseAnalyzerModal({
             <div className="p-3.5 rounded-xl border border-surface-border bg-surface-card">
               <span className="text-[10px] uppercase font-bold text-brand-muted block">Média de Qualidade</span>
               <span className="text-xl font-black text-brand-primary mt-0.5 block">{diagnosis.avgScore}%</span>
-              <span className="text-[10px] text-brand-muted">Amostra representativa</span>
+              <span className="text-[10px] text-brand-muted">Nas avaliações filtradas</span>
             </div>
 
             <div className="p-3.5 rounded-xl border border-surface-border bg-surface-card">
@@ -218,13 +169,13 @@ export default function RootCauseAnalyzerModal({
             </div>
 
             <div className="p-3.5 rounded-xl border border-surface-border bg-surface-card">
-              <span className="text-[10px] uppercase font-bold text-brand-muted block">Gargalos Mapeados</span>
+              <span className="text-[10px] uppercase font-bold text-brand-muted block">Critérios com falhas</span>
               <span className="text-xl font-black text-amber-500 mt-0.5 block">{diagnosis.topQuestionOffenders.length}</span>
               <span className="text-[10px] text-brand-muted">Critérios com reincidência</span>
             </div>
 
             <div className="p-3.5 rounded-xl border border-surface-border bg-surface-card">
-              <span className="text-[10px] uppercase font-bold text-brand-muted block">Evolução Pós-1:1</span>
+              <span className="text-[10px] uppercase font-bold text-brand-muted block">Diferença após 1:1</span>
               <span className={`text-xl font-black mt-0.5 block ${diagnosis.feedbackROI.overallDelta >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                 {diagnosis.feedbackROI.overallDelta > 0 ? `+${diagnosis.feedbackROI.overallDelta}%` : `${diagnosis.feedbackROI.overallDelta}%`}
               </span>
@@ -234,13 +185,9 @@ export default function RootCauseAnalyzerModal({
             </div>
           </div>
 
-          {/* Dica Didática para Gestão */}
-          <div className="p-3.5 rounded-xl border border-purple-500/20 bg-purple-50/30 dark:bg-purple-950/20 flex items-start gap-2.5 text-[11px] text-brand-muted">
-            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              <strong>Como interpretar este painel:</strong> Os critérios abaixo representam os pontos onde sua equipe mais perde notas nas monitorias. Clique em qualquer critério para visualizar o <strong>diagnóstico de causa provável</strong> e a <strong>ação prática recomendada</strong> para o seu time.
-            </p>
-          </div>
+          <p className="text-[11px] text-brand-muted">
+            Dados das avaliações filtradas. As taxas mostram frequência de falhas; a causa deve ser verificada nas monitorias.
+          </p>
 
           {/* ABA 1: MAIORES OFENSORES */}
           {activeTab === 'ofensores' && (
@@ -249,22 +196,21 @@ export default function RootCauseAnalyzerModal({
                 <h3 className="text-xs font-black uppercase tracking-wider text-brand-primary mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Critérios com Maior Taxa de Reprovação (Top Ofensores)</span>
+                    <span>Critérios com mais respostas “Não”</span>
                   </div>
                   <span className="text-[10px] text-brand-muted font-normal lowercase">
-                    (clique no card para expandir o plano de ação)
+                    (clique para ver o cálculo)
                   </span>
                 </h3>
                 
                 {diagnosis.topQuestionOffenders.length === 0 ? (
                   <p className="text-xs text-brand-muted italic p-4 bg-surface-card rounded-xl border border-surface-border">
-                    Nenhum ofensor reincidente detectado no período avaliado. Sua equipe está operando em alta conformidade!
+                    Nenhuma resposta “Não” registrada nos critérios das avaliações filtradas.
                   </p>
                 ) : (
                   <div className="space-y-2.5">
                     {diagnosis.topQuestionOffenders.map((off, idx) => {
                       const isExpanded = expandedOffenderId === off.questionId;
-                      const guide = getOffenderPracticalGuide(off);
 
                       return (
                         <div
@@ -309,60 +255,23 @@ export default function RootCauseAnalyzerModal({
                                   <ChevronDown className="w-4 h-4 text-brand-muted" />
                                 )}
                               </div>
-                              <span className="text-[9px] uppercase font-bold text-brand-muted">Taxa de Não Conformidade</span>
+                          <span className="text-[9px] uppercase font-bold text-brand-muted">Respostas “Não”</span>
                             </div>
                           </div>
 
-                          {/* Barra de Progresso Visual de Gravidade */}
+                          {/* Taxa de falha */}
                           <div className="w-full h-1 bg-surface-subtle overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-500"
-                              style={{ width: `${Math.min(100, off.failureRate * 2.5)}%` }}
+                              className="h-full bg-rose-500"
+                              style={{ width: `${off.failureRate}%` }}
                             />
                           </div>
 
-                          {/* Detalhes Expansíveis Interativos */}
+                          {/* Detalhes do cálculo */}
                           {isExpanded && (
-                            <div className="p-4 bg-surface-subtle/40 border-t border-surface-border space-y-3 animate-fade-in text-xs">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {/* O que significa */}
-                                <div className="p-3 rounded-xl bg-surface-card border border-surface-border space-y-1">
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted flex items-center gap-1">
-                                    <HelpCircle className="w-3.5 h-3.5 text-blue-500" />
-                                    O que significa este desvio?
-                                  </span>
-                                  <p className="text-[11px] text-brand-primary leading-relaxed">
-                                    {guide.whatItMeans}
-                                  </p>
-                                </div>
-
-                                {/* Causa Provável */}
-                                <div className="p-3 rounded-xl bg-surface-card border border-surface-border space-y-1">
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                                    <AlertTriangle className="w-3.5 h-3.5" />
-                                    Causa Raiz Mais Comum
-                                  </span>
-                                  <p className="text-[11px] text-brand-primary leading-relaxed">
-                                    {guide.probableCause}
-                                  </p>
-                                </div>
-                              </div>
-
-                              {/* Ação Prática Recomendada para o Gestor */}
-                              <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-1.5">
-                                <div className="flex items-center justify-between gap-2 flex-wrap">
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
-                                    <Target className="w-3.5 h-3.5" />
-                                    Ação Prática Imediata para a Gestão
-                                  </span>
-                                  <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
-                                    Pilar: {guide.pdiCategory}
-                                  </span>
-                                </div>
-                                <p className="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium leading-relaxed">
-                                  {guide.managerAction}
-                                </p>
-                              </div>
+                            <div className="p-4 bg-surface-subtle/40 border-t border-surface-border text-xs text-brand-muted space-y-2">
+                              <p><strong className="text-brand-primary">{off.failureCount} de {off.totalEvaluated}</strong> avaliações com resposta “Não” neste critério.</p>
+                              <p>Para identificar o motivo, consulte as observações e os tickets dessas avaliações.</p>
                             </div>
                           )}
                         </div>
@@ -377,18 +286,22 @@ export default function RootCauseAnalyzerModal({
                 <div className="p-4 rounded-xl border border-surface-border bg-surface-card">
                   <h4 className="text-xs font-bold text-brand-primary mb-2 flex items-center gap-1.5">
                     <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
-                    Erros Críticos de Conformidade
+                    Erros críticos registrados
                   </h4>
                   {diagnosis.topCriticalErrors.length === 0 ? (
                     <p className="text-[11px] text-brand-muted italic">Nenhum erro crítico registrado na amostra.</p>
                   ) : (
                     <div className="space-y-2">
-                      {diagnosis.topCriticalErrors.map((err, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-surface-border/40 last:border-0">
-                          <span className="text-brand-muted truncate max-w-[200px]">{err.name}</span>
-                          <span className="font-bold text-rose-600 dark:text-rose-400">{err.count} ({err.percentage}%)</span>
+                      {diagnosis.topCriticalErrors.map(err => (
+                        <div key={err.id} className="flex items-center justify-between gap-3 text-xs py-1 border-b border-surface-border/40 last:border-0">
+                          <span className="text-brand-muted min-w-0" title={err.labelResolved ? err.name : `ID do critério: ${err.id}`}>
+                            {err.name}
+                            {!err.labelResolved && <span className="block text-[10px]">Descrição ausente na ficha salva</span>}
+                          </span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400 shrink-0">{err.count} ({err.percentage}%)</span>
                         </div>
                       ))}
+                      <p className="text-[10px] text-brand-muted">Percentual das {diagnosis.criticalErrorsCount} avaliações com erro crítico. Uma avaliação pode ter mais de um tipo.</p>
                     </div>
                   )}
                 </div>
@@ -404,7 +317,7 @@ export default function RootCauseAnalyzerModal({
                     <div className="space-y-2">
                       {diagnosis.channelBreakdown.map((ch, i) => (
                         <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-surface-border/40 last:border-0">
-                          <span className="text-brand-primary font-medium">{ch.channel} ({ch.count} audits)</span>
+                          <span className="text-brand-primary font-medium">{ch.channel} ({ch.count} avaliações)</span>
                           <span className="font-black text-brand-primary">{ch.avgScore}%</span>
                         </div>
                       ))}
@@ -422,10 +335,10 @@ export default function RootCauseAnalyzerModal({
                 <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-xs font-black text-emerald-800 dark:text-emerald-300">
-                    Evolução do Desempenho Pós-Alinhamento (PDI)
+                    Comparação de notas antes e depois do feedback
                   </h4>
                   <p className="text-[11px] text-emerald-700 dark:text-emerald-400/90 mt-1 leading-relaxed">
-                    Compara a média de notas dos atendentes <strong>antes</strong> do alinhamento com as notas obtidas <strong>após</strong> a realização do feedback/1:1, comprovando se as ações combinadas geraram evolução prática no atendimento.
+                    Compara as médias das avaliações feitas antes e depois da data do feedback. A diferença não comprova, por si só, que o feedback causou a mudança.
                   </p>
                 </div>
               </div>
@@ -488,35 +401,10 @@ export default function RootCauseAnalyzerModal({
               {diagnosis.recommendations.map((rec, i) => (
                 <div
                   key={i}
-                  className="p-4 rounded-xl border border-surface-border bg-surface-card hover:border-purple-500/30 transition-all flex items-start gap-3.5"
+                  className="p-4 rounded-xl border border-surface-border bg-surface-card"
                 >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                    rec.priority === 'alta'
-                      ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                      : rec.priority === 'media'
-                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                      : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                  }`}>
-                    <Lightbulb className="w-4 h-4" />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="text-xs font-black text-brand-primary">{rec.title}</h4>
-                      <Badge
-                        variant={rec.priority === 'alta' ? 'error' : rec.priority === 'media' ? 'warning' : 'success'}
-                        size="sm"
-                      >
-                        Prioridade {rec.priority.toUpperCase()}
-                      </Badge>
-                      <span className="text-[10px] uppercase font-bold text-brand-muted">
-                        Categoria: {rec.category}
-                      </span>
-                    </div>
-                    <p className="text-xs text-brand-muted leading-relaxed font-medium">
-                      {rec.description}
-                    </p>
-                  </div>
+                  <h4 className="text-xs font-semibold text-brand-primary mb-1">{rec.title}</h4>
+                  <p className="text-xs text-brand-muted leading-relaxed">{rec.description}</p>
                 </div>
               ))}
             </div>
@@ -527,10 +415,10 @@ export default function RootCauseAnalyzerModal({
         {/* Rodapé */}
         <div className="p-4 border-t border-surface-border bg-surface-card/60 flex items-center justify-between flex-shrink-0">
           <span className="text-[10px] text-brand-muted font-medium truncate pr-2">
-            Diagnóstico interativo gerado automaticamente com base nos critérios de qualidade.
+            Resumo das monitorias selecionadas. A análise da causa depende dos registros de cada avaliação.
           </span>
           <Button onClick={onClose} className="px-5 py-2 text-xs font-bold shrink-0">
-            Entendido
+            Fechar
           </Button>
         </div>
 

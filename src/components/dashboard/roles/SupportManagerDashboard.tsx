@@ -29,6 +29,7 @@ import SupportDrillDownModal from '../widgets/SupportDrillDownModal';
 import { useFeedbacks } from '../../../hooks/useFeedbacks';
 import FeedbacksWidget from '../../feedback/FeedbacksWidget';
 import { DashboardTile } from '../DashboardTileLayout';
+import { buildGroupDistribution } from '../../../lib/groupDistribution';
 
 // High-fidelity mock datasets for customization mode
 const mockTrendData = [
@@ -315,6 +316,15 @@ export default function SupportManagerDashboard({
     if (isCustomizing) return [];
     return monitorias.filter((m: any) => myTeamIds.includes(m.team_id));
   }, [isCustomizing, monitorias, myTeamIds]);
+
+  const groupDistribution = useMemo(() => isCustomizing
+    ? [
+        { name: 'Revenda - Retaguarda', value: 28, color: '#3B82F6' },
+        { name: 'Análise Técnica Revenda', value: 10, color: '#10B981' },
+        { name: 'Grupo não informado', value: 8, color: '#F59E0B' },
+      ]
+    : buildGroupDistribution(myMonitorias, teams, chartColorArray()),
+  [isCustomizing, myMonitorias, teams]);
 
   const scoredMonitorias = useMemo(() => {
     if (isCustomizing) return [];
@@ -1058,8 +1068,18 @@ export default function SupportManagerDashboard({
         </div>
       </div>
 
-      {/* LINHA 6 (Distribuição e Alertas - lg:grid-cols-2 gap-6) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* LINHA 6 (Distribuição e Alertas) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="h-[380px]">
+          <DistributionChart
+            title="Distribuição por Grupo"
+            data={groupDistribution}
+            isCustomizing={isCustomizing}
+            profile="gestor_suporte"
+            activeEditingId={activeEditingId}
+            setActiveEditingId={setActiveEditingId}
+          />
+        </div>
         {/* Bloco: Curva de Qualidade / Distribuição por Nível */}
         <DashboardTile type="CustomChart" title="Curva de Qualidade" profile="gestor_suporte">
         <div className="h-[380px]">

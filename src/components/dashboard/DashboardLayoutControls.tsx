@@ -1,9 +1,9 @@
-import { ArrowDown, ArrowUp, GripVertical, Plus, RotateCcw, EyeOff, LayoutGrid, FileText, BrainCircuit } from 'lucide-react';
+import { ArrowDown, ArrowUp, GripVertical, Plus, RotateCcw, EyeOff, LayoutGrid, FileText, Layers } from 'lucide-react';
 import type { DashboardWidgetDefinition } from '../../lib/dashboardLayout';
 import type { DashboardLayoutEditor } from '../../hooks/useDashboardLayoutEditor';
 
 const ACTIONS = [
-  { id: 'root_cause', label: 'Diagnóstico de Causa Raiz', icon: BrainCircuit },
+  { id: 'root_cause', label: 'Análise das monitorias', icon: Layers },
   { id: 'executive_report', label: 'Relatório Executivo (PDF)', icon: FileText },
 ] as const;
 

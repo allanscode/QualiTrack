@@ -11,6 +11,10 @@
 
 ## Arquitetura
 
+### Distribuição por equipe e por grupo
+
+O administrador vê **Distribuição por Equipe**, agrupada pela equipe responsável da monitoria (`team_id`). Gestores de qualidade, gestores de atendimento e monitores de qualidade veem **Distribuição por Grupo**, agrupada pelo grupo de origem do ticket (`ticket_group_team_id`) dentro das monitorias já autorizadas e filtradas para cada perfil. O nome é resolvido nos registros de `teams` com `kind = 'group'`. Registros sem grupo válido entram em **Grupo não informado**; a equipe gestora não é usada como substituta. A soma do gráfico corresponde ao total de monitorias do recorte exibido.
+
 ### Volume de avaliações por agente
 
 A tabela **Avaliações por Agente** está disponível para administrador, gestores de

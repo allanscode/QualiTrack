@@ -74,6 +74,33 @@ describe('Root Cause & Feedback ROI Analysis', () => {
     expect(result.topQuestionOffenders[0].failureRate).toBe(66.7);
   });
 
+  it('shows the critical error description from the saved form instead of its internal ID', () => {
+    const form = {
+      ...mockForms[0],
+      critical_errors: [{ id: 'critical-1', text: 'Critério de validação', type: 'yes_no_na' as const }],
+    };
+    const monitorias = [
+      { id: 'm1', score: 0, active: true, selected_critical_errors: ['critical-1'], form_snapshot: form },
+      { id: 'm2', score: 0, active: true, selected_critical_errors: ['critical-1'], form_snapshot: form },
+      { id: 'm3', score: 0, active: true },
+    ] as Monitoria[];
+
+    const result = analyzeRootCause(monitorias, [], []);
+    expect(result.criticalErrorsCount).toBe(2);
+    expect(result.topCriticalErrors[0]).toMatchObject({
+      id: 'critical-1', name: 'Critério de validação', labelResolved: true,
+      count: 2, percentage: 100,
+    });
+  });
+
+  it('marks missing critical error descriptions without presenting an ID as a name', () => {
+    const monitorias = [{ id: 'm1', score: 0, active: true, selected_critical_errors: ['missing-id'] }] as Monitoria[];
+    const result = analyzeRootCause(monitorias, [], []);
+    expect(result.topCriticalErrors[0]).toMatchObject({
+      id: 'missing-id', name: 'Erro crítico sem descrição', labelResolved: false,
+    });
+  });
+
   it('measures feedback ROI comparing before and after scores accurately', () => {
     const feedbacks: AgentFeedback[] = [
       {

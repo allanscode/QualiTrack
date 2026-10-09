@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Calendar, X, RefreshCw, FileText, BrainCircuit } from 'lucide-react';
+import { Calendar, X, RefreshCw, FileText, Layers } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
 import CustomSelect from '../ui/CustomSelect';
 import CustomDatepicker from '../ui/CustomDatepicker';
@@ -124,10 +124,10 @@ export default function FilterBar() {
               type="button"
               onClick={() => setIsRootCauseOpen(true)}
               className="min-w-0 min-h-10 flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 text-center text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 rounded-xl transition-all cursor-pointer"
-              title="Diagnóstico inteligente de falhas, causa raiz de ofensores e evolução pós-feedback"
+              title="Indicadores das avaliações filtradas e comparação de notas antes e depois do feedback"
             >
-              <BrainCircuit className="w-3.5 h-3.5 shrink-0 text-purple-600 dark:text-purple-400" />
-              <span>Diagnóstico de Causa Raiz</span>
+              <Layers className="w-3.5 h-3.5 shrink-0 text-purple-600 dark:text-purple-400" />
+              <span>Análise das monitorias</span>
             </button>
             )}
             {!hiddenActions.includes('executive_report') && (
