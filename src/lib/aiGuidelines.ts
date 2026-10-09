@@ -89,11 +89,11 @@ export async function extractGuidelineFileContent(file: File): Promise<string> {
 
 export const DEFAULT_CHILD_TICKET_GUIDELINE: AIEvaluationGuideline = {
   id: 'guideline-child-tickets-pop-v1',
-  title: 'Manual de Chamados Filhos — POP v1.1',
-  content: `# Manual Operacional de Chamados Filhos — POP v1.1
+  title: 'Manual de Chamados Filhos — POP v1.4',
+  content: `# Manual Operacional de Chamados Filhos — POP v1.4
 
 ## 1. Visão Geral e Objetivo
-Este manual normatiza a criação de chamados filhos (Side Conversations) abertos a partir de tickets do Zendesk na operação WebPosto. A conformidade de abertura é auditada automaticamente pelo QualiTrack através de 3 critérios mandatórios.
+Este manual normatiza a criação de chamados filhos (Side Conversations) abertos a partir de tickets do Zendesk na operação WebPosto. A ficha atual de abertura avalia assunto, texto da macro e direcionamento; o manual também estabelece governança de tags e campos obrigatórios.
 
 ## 2. Os 4 Tipos de Chamados Filhos (Macros Homologadas)
 1. **Nova Demanda (Geral / Mais Pagamentos):**
@@ -102,29 +102,31 @@ Este manual normatiza a criação de chamados filhos (Side Conversations) aberto
 
 2. **Enviar para Análise Técnica (N2 / Fábrica):**
    - Utilizado para escalonamento técnico em segundo nível (Cliente Final, Revenda, Fiscal, Contábil, Correções, Desenvolvimento).
-   - Direcionamento: O campo "Para" deve ser direcionado ao **Grupo Especialista correspondente** (ex: "Análise Técnica Fiscal", "Análise Técnica Revenda", etc.).
-   - Regra estrita: **NUNCA** pode ser atribuído a uma pessoa física/analista específico.
+   - Direcionamento do filho: O campo "Para" deve ser atribuído inicialmente ao **próprio agente que o abriu**.
+   - Direcionamento do pai: O ticket pai vai para o **Grupo Especialista correspondente** (ex: "Análise Técnica Fiscal", "Análise Técnica Revenda", etc.). Uma atribuição posterior do filho a um especialista pode ser legítima.
 
 3. **Apoio Análise Técnica:**
    - Utilizado quando é solicitada consultoria ou apoio pontual de um especialista técnico N2 sem transferir a titularidade do chamado.
-   - Direcionamento: O campo "Para" deve ser atribuído **nominalmente ao Analista Técnico N2** que prestou a consultoria.
+   - Direcionamento: O filho inicia no nome do agente que o abriu; pode ser encaminhado depois ao Analista Técnico N2 que prestou a consultoria.
 
-4. **Produtividade:**
-   - Utilizado para registro de atividades internas, homologações ou tarefas complementares de suporte.
+4. **Proatividade:**
+   - Utilizado para registrar contato proativo com o cliente. O filho inicia atribuído ao agente que realizou o contato e o campo "Tipo de Ticket" deve ser Proatividade.
 
-## 3. As 3 Regras de Ouro da Auditoria de Qualidade
+## 3. As 4 Regras de Ouro da Auditoria de Qualidade
 - **Regra 1: Assunto da abertura e macro de resolvido:**
   O assunto gerado pela macro de abertura não deve ser descaracterizado manualmente. O prefixo "Ticket " e o número do ticket pai (ex: "Nova Demanda do #169238" ou "Ticket Nova Demanda do #169238") são válidos. A macro de resolvido do Zendesk altera automaticamente o assunto depois da abertura; essa mudança é conforme e não reprova o ticket. Reprove apenas quando houver evidência de alteração manual indevida antes da resolução.
 - **Regra 2: Preservação do Texto da Macro com Enriquecimento:**
   O texto-base da macro deve ser mantido e enriquecido obrigatoriamente com dados técnicos (versão, logs, AnyDesk, descrição da falha e testes já realizados).
 - **Regra 3: Direcionamento Correto ("Para"):**
-  Conformidade entre o tipo de macro e o destino (Grupo técnico para Análise Técnica; Próprio Analista para Nova Demanda; Analista N2 para Apoio Técnico).
+  Todo chamado filho inicia atribuído ao agente que o abriu. Em Análise Técnica, o ticket pai vai para o grupo especialista; o filho pode ser encaminhado depois, com rastreabilidade. A equipe mostrada junto ao nome do agente não invalida a autoatribuição.
+- **Regra 4: Tags e campos obrigatórios:**
+  Preserve as tags criadas pelas macros e mantenha os campos obrigatórios preenchidos conforme o tipo de chamado. A ficha atual não possui critério específico para pontuar tags.
 `,
-  file_name: 'Manual_Chamados_Filhos_POP_v1.1.md',
+  file_name: 'Manual_Chamados_Filhos_POP_v1.4.md',
   file_path: '',
   active: true,
   created_at: '2026-09-01T00:00:00Z',
-  updated_at: '2026-09-18T00:00:00Z',
+  updated_at: '2026-10-09T00:00:00Z',
 };
 
 export async function fetchAIGuidelines(): Promise<AIEvaluationGuideline[]> {

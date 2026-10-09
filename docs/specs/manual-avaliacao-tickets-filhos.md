@@ -1,8 +1,8 @@
 # Manual de Avaliação de Tickets Filhos (QA / QualiTrack)
 ## Guia Operacional de Conformidade, Auditoria e Validação de Macros do Zendesk
 
-> **Versão:** 1.2 — Atualização Setembro / 2026  
-> **Referência Técnica:** Guia Operacional: Catálogo e Utilização de Macros do Zendesk (POP v1.1)  
+> **Versão:** 1.4 — Atualização Outubro / 2026
+> **Referência Técnica:** Manual Operacional de Chamados Filhos (POP v1.4)
 > **Plataforma:** Zendesk Support & Side Conversations (Conversas Paralelas)  
 > **Público-Alvo:** Monitores de Qualidade (QA), Supervisores de Suporte e Analistas de Atendimento  
 
@@ -32,8 +32,8 @@ flowchart TD
     Q2 -->|Texto da Macro Apagado| REP["❌ Não Conforme"]
     Q2 -->|Macro Presente + Detalhes Extras| OK2["✔ Excelente"]
     
-    Q3 -->|Pessoa Física em Análise Técnica| ERRO["❌ Direcionamento Incorreto"]
-    Q3 -->|Grupo Técnico Especialista| OK3["✔ Conforme"]
+    Q3 -->|Filho inicialmente em nome de outro agente| ERRO["❌ Direcionamento Incorreto"]
+    Q3 -->|Filho inicialmente no nome de quem abriu| OK3["✔ Conforme"]
     
 ```
 
@@ -82,20 +82,20 @@ flowchart TD
 
 ### Quesito 3: Direcionamento Correto do Campo "Para" (Side Conversation Assignee / Grupo)
 
-* **Regra de Roteamento:** Ao acionar qualquer macro que crie uma Conversa Paralela (Ticket Filho), o painel lateral do Zendesk abre o campo **"Para"**. O analista **DEVE** selecionar o destinatário estritamente conforme a matriz de governança:
+* **Regra de Roteamento:** O chamado filho deve iniciar atribuído ao agente que o abriu. No escalonamento para Análise Técnica, o chamado pai segue para o grupo especialista correspondente; o filho pode ser encaminhado depois, mantendo a rastreabilidade da abertura. O grupo exibido ao lado do nome de um agente não significa que o filho tenha sido atribuído diretamente ao grupo.
 
 | Tipo de Demanda / Macro | O que selecionar no campo "Para"? | Motivo Operacional | Erro Crítico a Evitar |
 | :--- | :--- | :--- | :--- |
-| **🛠 Enviar para Análise Técnica** *(Cliente Final, Revenda, Fiscal, Contábil, Correções, Dev)* | **O GRUPO correspondente da Análise Técnica**<br>*(ex: Análise Técnica Fiscal, Análise Técnica Revenda, etc.)* | O chamado deve entrar na fila coletiva do time especialista N2 para distribuição por SLA. | **NUNCA atribuir a um analista individual (pessoa física).** |
+| **🛠 Enviar para Análise Técnica** *(Cliente Final, Revenda, Fiscal, Contábil, Correções, Dev)* | **O agente que abriu o filho** | O pai segue para o grupo técnico especialista, podendo ter um agente atribuído. O filho registra a atividade do agente de origem e pode ser encaminhado depois. | Confundir o grupo de destino do pai com o destinatário inicial do filho. |
 | **🆕 Registrar Nova Demanda** *(Geral ou Mais Pagamentos)* | **O PRÓPRIO ANALISTA (Você mesmo / Auto-atribuição)** | O atendente que identificou a demanda fica responsável pelo acompanhamento do ciclo de vida até a entrega. | Atribuir para terceiros ou deixar sem atribuição. |
-| **👐 Apoio Análise Técnica** | **O Analista Técnico N2 específico que prestou o auxílio** | Atribuição nominal direta ao especialista que fez a consultoria pontual durante o atendimento. | Direcionar para grupo coletivo quando o atendimento foi individual. |
-| **⚡ Operação Mais Pagamentos** | **Grupo Mais Pagamentos (ID 50800061906068)** / Marca dedicada | Encaminhamento para a operação dedicada de TEF e maquininhas. | Direcionar para fila de suporte padrão PDV. |
+| **👐 Apoio Análise Técnica** | **O agente que abriu o filho** | O apoio técnico N2 pode recebê-lo posteriormente quando o fluxo justificar. | Perder a rastreabilidade de quem solicitou o apoio. |
+| **⚡ Operação Mais Pagamentos** | **O agente que abriu o filho** | A operação e a marca são específicas; o fluxo do pai deve ser verificado separadamente. | Confundir a equipe de operação com o destinatário inicial do filho. |
 
 * **Critério de Avaliação do QA:**
-  * **Conforme:** O campo "Para" aponta com precisão para o grupo ou analista definido na regra.
+  * **Conforme:** O histórico de abertura mostra o próprio agente como destinatário inicial do filho; o fluxo do pai segue a demanda quando houver evidência disponível.
   * **Não Conforme (Reprovado):**
-    - Chamado de Análise Técnica atribuído a um atendente específico em vez do grupo coletivo.
-    - Nova Demanda atribuída incorretamente para grupos de atendimento direto.
+    - Chamado filho inicialmente atribuído a outro usuário, sem justificativa ou rastreabilidade do agente que o abriu.
+    - Ticket pai comprovadamente encaminhado ao grupo especialista incorreto.
 
 ---
 
@@ -128,7 +128,7 @@ Ao auditar um chamado na fila de **Triagem de Chamados Filhos**, execute o segui
 
 - [ ] **1. Assunto:** O título da abertura corresponde à macro, considerando prefixo e ID do pai? Se o ticket foi resolvido, a mudança automática de assunto pela macro de resolvido foi aceita?
 - [ ] **2. Texto:** A mensagem estrutural da macro foi mantida? Há enriquecimento com dados técnicos (AnyDesk, logs, passos de teste)?
-- [ ] **3. Destinatário ("Para"):** O ticket foi para o Grupo Técnico correto (ou para o próprio analista no caso de Nova Demanda)?
+- [ ] **3. Destinatário ("Para"):** O filho foi atribuído inicialmente ao agente que o abriu? Em Análise Técnica, o pai foi encaminhado ao grupo especialista correto quando houver evidência?
 - [ ] **4. Chamado Pai Vinculado:** O ID do chamado pai (`parent_ticket_id` / `problem_id`) foi capturado e validado corretamente?
 
 ---

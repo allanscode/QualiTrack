@@ -123,6 +123,7 @@ interface AuditingQueueViewProps {
   agents: User[];
   teams: Team[];
   forms: EvaluationForm[];
+  guidelines?: AIEvaluationGuideline[];
   monitorias: Monitoria[];
   currentUserId?: string;
   /** Papel do usuário logado — controla o filtro "só meus chamados" e o painel de presença. */
@@ -173,6 +174,7 @@ export default function AuditingQueueView({
   agents,
   teams,
   forms,
+  guidelines,
   monitorias,
   currentUserId,
   currentUserRole,
@@ -190,6 +192,8 @@ export default function AuditingQueueView({
   ));
   const isSupervisorView = canManageQueueAssignments(currentUserRole);
   const canAudit = canAuditTickets(currentUserRole);
+  const activeChildGuideline = guidelines?.find(guideline => guideline.active && /filho/i.test(guideline.title))
+    || DEFAULT_CHILD_TICKET_GUIDELINE;
   const [reconciliation, setReconciliation] = useState<QueueReconciliation | null>(null);
   const [reconciliationLoading, setReconciliationLoading] = useState(false);
   const [reconciliationError, setReconciliationError] = useState(false);
@@ -4077,7 +4081,7 @@ export default function AuditingQueueView({
                     <div>
                       <div className="text-[9px] font-black uppercase tracking-wider text-brand-muted">Manual Vinculado Homologado</div>
                       <div className="text-xs font-black text-brand-primary">
-                        Manual de Chamados Filhos — POP v1.1
+                        Manual vigente de Chamados Filhos
                       </div>
                     </div>
                   </div>
@@ -4087,7 +4091,7 @@ export default function AuditingQueueView({
                 </div>
 
                 <div className="text-[11px] font-semibold text-brand-primary/80">
-                  A IA auditará a abertura deste chamado baseando-se estritamente nas 4 regras de conformidade:
+                  A IA auditará a abertura deste chamado conforme o manual vigente:
                 </div>
 
                 {/* As 3 Regras de Ouro */}
@@ -4107,7 +4111,7 @@ export default function AuditingQueueView({
                   <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
                     <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">3</span>
                     <div>
-                      <strong className="text-brand-primary">Direcionamento ("Para"):</strong> Destinatário correto (Grupo para Análise Técnica; Próprio analista para Nova Demanda; Analista N2 nominal para Apoio Técnico).
+                      <strong className="text-brand-primary">Direcionamento ("Para"):</strong> O filho inicia no nome de quem o abriu. Em Análise Técnica, o pai segue para o grupo especialista; o filho pode ser transferido depois.
                     </div>
                   </div>
                 </div>
@@ -4120,11 +4124,11 @@ export default function AuditingQueueView({
                     className="text-[10px] font-bold text-brand-highlight hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <Eye className="w-3 h-3" />
-                    <span>{showFullChildManual ? 'Ocultar Texto Completo do Manual' : 'Ver Texto Completo do POP v1.1 na Íntegra'}</span>
+                    <span>{showFullChildManual ? 'Ocultar texto do manual' : 'Ver manual vigente na íntegra'}</span>
                   </button>
                   {showFullChildManual && (
                     <div className="mt-2 p-3 max-h-48 overflow-y-auto rounded-lg bg-surface-card border border-surface-border text-[10px] text-brand-muted whitespace-pre-line font-mono leading-relaxed">
-                      {DEFAULT_CHILD_TICKET_GUIDELINE.content}
+                      {activeChildGuideline.content}
                     </div>
                   )}
                 </div>

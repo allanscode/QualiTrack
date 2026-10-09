@@ -2092,6 +2092,7 @@ function MainApp({
                   agents={users.filter(u => u.role === 'suporte' && u.active !== false)}
                   teams={teams}
                   forms={forms}
+                  guidelines={guidelines}
                   monitorias={monitorias}
                   currentUserId={userData?.id}
                   currentUserRole={userData?.role}

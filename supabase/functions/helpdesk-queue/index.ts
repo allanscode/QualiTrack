@@ -1,5 +1,5 @@
 import {
-  CHILD_QUESTION_IDS, childCreationRoutingEvidence, reconcileNovaDemandaRouting,
+  CHILD_QUESTION_IDS, childCreationRoutingEvidence, reconcileChildOpeningRouting,
   validateChildEvaluationResponse, type ChildCreationRoutingEvidence,
 } from './child-evaluation.ts';
 import { publicApiKey, secretApiKey } from '../_shared/keys.ts';
@@ -2967,6 +2967,13 @@ async function handleEvaluateChildTicket(
 
   const dialogueText = payload.dialogue_text || sanitizeDialogue(dialogue || []);
   const ticketFieldsText = (ticket_fields || []).map((f: any) => `- ${sanitizeMessageBody(f.title)}: ${sanitizeMessageBody(f.value)}`).join('\n');
+  const { data: childGuideline, error: childGuidelineError } = await supabase
+    .from('ai_evaluation_guidelines').select('title,content')
+    .eq('active', true).ilike('title', '%Filho%')
+    .order('updated_at', { ascending: false }).limit(1).maybeSingle();
+  if (childGuidelineError || !childGuideline?.content?.trim() || childGuideline.content.length > 20_000) {
+    return jsonResponse({ error: 'Manual vigente de Chamados Filhos indisponível; avaliação pausada para evitar regra desatualizada.' }, 503);
+  }
   const routingEvidence = await loadChildCreationRoutingEvidence(ticket_id);
   const routingEvidenceText = routingEvidence
     ? `Criador do chamado filho no histórico de abertura: Zendesk ID ${routingEvidence.creatorId}.\nDestinatário (Para) escolhido na abertura: Zendesk ID ${routingEvidence.initialAssigneeId}.\nGrupo associado ao destinatário na abertura: ${routingEvidence.initialGroupId ?? 'não informado'}.\nAutoatribuição na abertura: ${routingEvidence.selfAssigned ? 'SIM, IDs iguais' : 'NÃO, IDs diferentes'}.`
@@ -3021,7 +3028,10 @@ async function handleEvaluateChildTicket(
   };
 
   const prompt = `Você é um auditor sênior de qualidade da WebPosto especialista em auditoria de Chamados Filhos (Side Conversations do Zendesk).
-Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base no Manual - Guia Operacional de Macros do Zendesk (POP v1.1).
+Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base no manual vigente abaixo. Em caso de conflito com uma regra resumida neste prompt, o manual vigente prevalece.
+
+MANUAL VIGENTE: ${childGuideline.title}
+${childGuideline.content}
 
 O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentais:
 
@@ -3058,17 +3068,22 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
 3. DIRECIONAMENTO CORRETO (CAMPO "PARA" / ASSIGNEE):
 =============================================================================
 - "Enviar para Análise Técnica" (Cliente Final, Revenda, Fiscal, Contábil, Correções, Desenvolvimento):
-  * O campo "Para" DEVE ser direcionado ao GRUPO Técnico Especialista correspondente (ex: "Análise Técnica Fiscal", "Análise Técnica Revenda", etc.).
-  * NUNCA PODE SER ATRIBUÍDO A UMA PESSOA FÍSICA / ANALISTA ESPECÍFICO.
+  * O chamado FILHO deve ser inicialmente atribuído ao próprio agente que o abriu, para registrar a atividade.
+  * O chamado PAI é que deve ser encaminhado ao grupo técnico especialista correspondente (ex: "Análise Técnica Fiscal", "Análise Técnica Revenda").
+  * Uma atribuição posterior do filho a um especialista pode ser legítima; não confunda o grupo exibido ao lado do agente com o destinatário inicial.
 - "Registrar Nova Demanda" (Geral ou Mais Pagamentos):
   * O campo "Para" DEVE ser atribuído a SI MESMO (o próprio analista solicitante) para acompanhamento da resolução.
   * O Zendesk exibe grupo e analista juntos ("Grupo / Nome"). O grupo é a equipe do analista; sua presença NÃO significa que o chamado foi atribuído ao grupo em vez da pessoa.
   * Para verificar a autoatribuição, compare os IDs do criador e do destinatário no HISTÓRICO DE ABERTURA abaixo. Se forem iguais, marque o direcionamento SIM, independentemente do nome do grupo.
 - "Apoio Análise Técnica":
-  * O campo "Para" DEVE ser atribuído nominalmente ao Analista Técnico N2 que prestou a consultoria pontual.
+  * O chamado filho inicia atribuído ao agente que o abriu; o apoio técnico N2 pode recebê-lo depois, quando o fluxo justificar.
+- "Proatividade":
+  * O chamado filho inicia atribuído ao agente que realizou o contato proativo.
 - "Mais Pagamentos":
-  * Direcionamento ao Grupo Mais Pagamentos (ID 50800061906068) / marca dedicada.
+  * A operação e a marca podem ser Mais Pagamentos; isso não altera a regra de que o FILHO inicia no nome do agente que o abriu. Verifique separadamente o fluxo do PAI quando houver dados.
 - Check "Direcionamento Correto ('Para')" deve validar essa correspondência com rigor.
+- Para TODAS as macros de chamado filho identificadas, compare no histórico de abertura os IDs do criador e do destinatário inicial. Se forem iguais, o direcionamento inicial do FILHO está conforme; não exija que o filho tenha sido atribuído ao grupo técnico.
+- Avalie o encaminhamento do ticket PAI somente se houver dados do pai. Se o pai não puder ser verificado, marque o vínculo como NA e não transforme a autoatribuição correta do filho em falha.
 
 DADOS DO CHAMADO FILHO SOB AUDITORIA:
 - Ticket: #${ticket_id}
@@ -3093,7 +3108,7 @@ CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
 
 Retorne exatamente um check para cada question_id, com answer e details fundamentados. Use answer "SIM" para conformidade demonstrada, "NAO" para falha demonstrada e "NA" quando não aplicável ou quando os dados não permitirem verificar, explicando expressamente o motivo. Nunca invente evidências ou marque falha por falta de dados. passed deve ser true apenas para answer "SIM", e false para "NAO" ou "NA". Critérios "NA" não reduzem a nota; havendo evidência insuficiente, sinalize status "atencao" se não houver falha comprovada.
 
-Não avalie a presença, ausência ou preservação de tags. Elas são geridas pela automação do Zendesk e não compõem o parecer de qualidade.
+O manual também trata de tags e campos obrigatórios, mas a ficha atual contém apenas os cinco critérios acima. Não atribua falha a tags sem um critério próprio na ficha e evidência da alteração; não mencione tags nos cinco checks. Preserve a análise dos campos pertinentes aos critérios configurados.
 
 Analise os dados reais do ticket contra essas regras operacionais e gere o parecer estritamente no JSON do schema.`;
 
@@ -3127,7 +3142,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
           weight: typeof section.weight === 'number' ? section.weight : 0,
           questions: section.questions.map(question => ({ id: question.id, is_critical: question.is_critical })),
         }));
-        const value = reconcileNovaDemandaRouting(validated, routingEvidence, sections);
+        const value = reconcileChildOpeningRouting(validated, routingEvidence, sections);
         console.info(`[ai-timing] ${JSON.stringify({ job_id: payload.job_id, ticket_id, model: target.model, stage: 'provider_response_and_parse', provider_ms: providerMs, parsing_ms: Date.now() - parsingStarted })}`);
         return {
           value,

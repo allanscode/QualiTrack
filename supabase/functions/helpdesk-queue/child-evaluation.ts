@@ -52,13 +52,13 @@ const CHILD_DEFAULT_SCORE_SECTIONS = [
   { weight: 25, questions: [{ id: 'child-routing-correct' }] },
 ];
 
-/** The opening audit, not the current group label, determines Nova Demanda routing. */
-export function reconcileNovaDemandaRouting<T extends ChildEvaluation>(
+/** The opening audit determines the child recipient; the specialist group belongs to the parent. */
+export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
   result: T,
   evidence: ChildCreationRoutingEvidence | null,
   sections?: Array<{ weight?: number; questions?: Array<{ id: string; is_critical?: boolean }> }>,
 ): T {
-  if (!evidence || result.detected_type !== 'nova_demanda') return result;
+  if (!evidence || result.detected_type === 'desconhecido') return result;
   const routing = result.checks.find(check => check.question_id === 'child-routing-correct');
   const expectedAnswer = evidence.selfAssigned ? 'SIM' : 'NAO';
   if (!routing || routing.answer === expectedAnswer) return result;
@@ -66,18 +66,21 @@ export function reconcileNovaDemandaRouting<T extends ChildEvaluation>(
   const checks = result.checks.map(check => check.question_id === 'child-routing-correct'
     ? { ...check, answer: expectedAnswer, passed: evidence.selfAssigned,
       details: evidence.selfAssigned
-        ? 'O histórico de criação do Zendesk confirma que o analista abriu o chamado filho e o atribuiu a si mesmo. O grupo exibido identifica a equipe desse destinatário; não representa encaminhamento para outra pessoa.'
-        : 'O histórico de criação do Zendesk mostra que o destinatário inicial era outro usuário, diferente do analista que abriu a Nova Demanda.' }
+        ? 'O histórico de criação do Zendesk confirma que o chamado filho foi atribuído inicialmente ao agente que o abriu. O grupo técnico é o destino do ticket pai; a equipe exibida junto ao nome do agente não torna o filho irregular.'
+        : 'O histórico de criação do Zendesk mostra que o destinatário inicial do chamado filho era outro usuário, diferente do agente que o abriu.' }
     : check);
   const answers = Object.fromEntries(checks.map(check => [check.question_id, check.answer])) as Record<string, ChildAnswer>;
   const score = calculateCanonicalQualityScore(sections?.length ? sections : CHILD_DEFAULT_SCORE_SECTIONS, answers);
   const status = checks.some(check => check.answer === 'NAO') ? 'nao_conforme'
     : checks.some(check => check.answer === 'NA') ? 'atencao' : 'conforme';
+  const otherFailures = checks.filter(check => check.question_id !== 'child-routing-correct' && check.answer === 'NAO');
   const summary = evidence.selfAssigned
     ? status === 'conforme'
-      ? 'Os cinco critérios da abertura estão conformes. O histórico de criação do Zendesk confirma a autoatribuição ao analista na macro Nova Demanda.'
-      : 'O histórico de criação do Zendesk confirma a autoatribuição na macro Nova Demanda. Confira os demais critérios apontados no parecer.'
-    : 'O histórico de criação do Zendesk mostra que a Nova Demanda foi atribuída a outro usuário. Confira os demais critérios apontados no parecer.';
+      ? 'A atribuição inicial do chamado filho ao próprio agente está correta e os demais critérios da abertura estão conformes.'
+      : `A atribuição inicial do chamado filho ao próprio agente está correta. ${otherFailures.length
+        ? `A avaliação permanece não conforme por: ${otherFailures.map(check => check.rule).join(', ')}.`
+        : 'Os demais critérios exigem conferência por evidência insuficiente.'}`
+    : 'O histórico de criação do Zendesk mostra que o chamado filho foi atribuído inicialmente a outro usuário. Confira os demais critérios apontados no parecer.';
   return { ...result, checks, score, status, summary,
     recommendations: status === 'conforme' ? [] : ['Conferir os demais critérios apontados no parecer.'] };
 }
