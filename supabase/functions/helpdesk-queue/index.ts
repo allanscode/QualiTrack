@@ -31,6 +31,7 @@ import { canReadMatchedTicketTeam, canReadQueueTicket, canRunQueueAction, queueB
 import { calculateCanonicalQualityScore } from './quality-score.ts';
 import { csatStatusToSatisfactionResult, satisfactionResponseTimestamp } from './satisfaction.ts';
 import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
+import { collectViewSearchPage } from './queue-view-search.ts';
 import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro, hasPublishedChildMacroForMonitoria, hasPublishedInvalidChildMacro } from './child-view.ts';
 import { childMacroCustomFields, hasCriticalChildField, missingCustomFields } from './child-macro-fields.ts';
 import { childPublicationError, childPublicationText, type ChildPublicationMonitoria } from './child-publication.ts';
@@ -1328,7 +1329,37 @@ serve(async (req) => {
 
       if (searchTerm) {
         const numericMatch = searchTerm.match(/^#?(\d+)$/);
-        if (numericMatch) {
+        const configuredViewId = viewIdForQueue(queue_type);
+        if (configuredViewId) {
+          // A busca livre do Zendesk pesquisa o texto do ticket, não o nome
+          // do atendente, e não reproduz todas as condições da view. Percorra
+          // a própria view para buscar assunto, ID ou agente sem perder tickets.
+          const viewPath = `/api/v2/views/${configuredViewId}/tickets.json`;
+          const validateCursor = (next: string) => {
+            const trusted = trustedZendeskCursor(next, subdomain, viewPath);
+            if (!trusted) throw new Error('Cursor da view de triagem inválido.');
+            return trusted;
+          };
+          const found = await collectViewSearchPage({
+            initialUrl: parseResult.data.cursor
+              ? validateCursor(parseResult.data.cursor)
+              : `https://${subdomain}.zendesk.com${viewPath}?include=users,groups,organizations&page[size]=${PAGE_SIZE}${queue_type === 'proativas' ? '&sort_by=created&sort_order=desc' : ''}`,
+            term: searchTerm,
+            pageSize: PAGE_SIZE,
+            validateNext: validateCursor,
+            fetchPage: async pageUrl => {
+              const response = await fetch(pageUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(10_000) });
+              if (!response.ok) throw new Error(`Zendesk Views API falhou (${response.status}).`);
+              return response.json();
+            },
+          });
+          results = found.tickets;
+          sideloadedUsers = new Map(found.users.map((user: any) => [user.id, user]));
+          sideloadedGroups = new Map(found.groups.map((group: any) => [group.id, group]));
+          sideloadedOrgs = new Map(found.organizations.map((organization: any) => [organization.id, organization]));
+          nextCursor = found.nextCursor;
+          hasMore = found.hasMore;
+        } else if (numericMatch) {
           const targetTicketId = numericMatch[1];
           const ticketUrl = `https://${subdomain}.zendesk.com/api/v2/tickets/${targetTicketId}.json?include=users,groups,organizations`;
           const response = await fetch(ticketUrl, { headers: zendeskHeaders });
@@ -1434,7 +1465,7 @@ serve(async (req) => {
             // Proativas: CSAT nunca respondido pelo cliente (não é "sem
             // filtro nenhum" como antes — isso trazia qualquer ticket
             // solved/closed, sem relação com equidade de monitoria).
-            searchQuery += ' satisfaction:unoffered';
+            searchQuery += ' satisfaction:offered';
           }
 
           // Sideload de usuários, grupos e organizações para resolver o atendente (nome/e-mail),
