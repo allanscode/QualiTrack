@@ -1,5 +1,19 @@
 export type QueueType = 'negativas' | 'positivas' | 'proativas' | 'filhos' | 'filhos_invalidos';
 
+/** Admins and quality managers see the whole Zendesk view; monitors see assigned work. */
+export function queueBadgeCountsForRole(
+  role: string,
+  viewCounts: Record<QueueType, number | null>,
+  pendingAssignments: Array<{ queue_type: string }>,
+): Record<QueueType, number | null> {
+  if (role !== 'qualidade') return viewCounts;
+  return {
+    ...viewCounts,
+    negativas: pendingAssignments.filter(row => row.queue_type === 'negativas').length,
+    filhos: pendingAssignments.filter(row => row.queue_type === 'filhos').length,
+  };
+}
+
 const AUDIT_ACTIONS = new Set(['evaluate_ai', 'evaluate_child_ticket', 'generate_auditor_record', 'resolve_agent', 'fetch_draft_statuses', 'publish_child_macro']);
 
 export function canRunQueueAction(role: string, action: string): boolean {

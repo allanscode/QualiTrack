@@ -560,6 +560,7 @@ function MainApp({
   const [isQueueHovered, setIsQueueHovered] = React.useState(false);
   const [queueCounts, setQueueCounts] = React.useState<QueueBadgeCounts>(EMPTY_QUEUE_COUNTS);
   const queueBadge = (queue: AuditingQueueType) => (queueCounts[queue] || 0) > 0 ? queueCounts[queue]! : undefined;
+  const distributedBadgeScope = userData?.role === 'qualidade' ? 'assigned' : 'view';
   const updatePendingNegativesCount = React.useCallback((count: number) => {
     setQueueCounts(previous => previous.negativas === count ? previous : { ...previous, negativas: count });
   }, []);
@@ -1285,6 +1286,7 @@ function MainApp({
                             isDark={sidebarIsDark}
                             colorType="negativas"
                             badge={queueBadge('negativas')}
+                            badgeScope={distributedBadgeScope}
                           />
                           <QueueSubNavItem
                             label="Fila Proativa"
@@ -1312,6 +1314,7 @@ function MainApp({
                             isDark={sidebarIsDark}
                             colorType="filhos"
                             badge={queueBadge('filhos')}
+                            badgeScope={distributedBadgeScope}
                           />
                           <QueueSubNavItem
                             label="Filhos Inválidos"
@@ -1545,6 +1548,7 @@ function MainApp({
                       isDark={sidebarIsDark}
                       colorType="negativas"
                       badge={queueBadge('negativas')}
+                      badgeScope={distributedBadgeScope}
                     />
                     <QueueSubNavItem
                       label="Fila Proativa"
@@ -1572,6 +1576,7 @@ function MainApp({
                       isDark={sidebarIsDark}
                       colorType="filhos"
                       badge={queueBadge('filhos')}
+                      badgeScope={distributedBadgeScope}
                     />
                     <QueueSubNavItem
                       label="Filhos Inválidos"
@@ -2461,6 +2466,7 @@ function QueueSubNavItem({
   isDark,
   colorType,
   badge,
+  badgeScope = 'view',
 }: {
   label: string;
   active: boolean;
@@ -2469,6 +2475,7 @@ function QueueSubNavItem({
   isDark: boolean;
   colorType: QueueSubTab;
   badge?: number | string;
+  badgeScope?: 'assigned' | 'view';
 }) {
   const color = QUEUE_COLOR_MAP[colorType] || QUEUE_COLOR_MAP.negativas;
   return (
@@ -2497,7 +2504,7 @@ function QueueSubNavItem({
       </div>
       {Boolean(badge) && (
         <span
-          title={colorType === 'negativas' || colorType === 'filhos'
+          title={badgeScope === 'assigned'
             ? 'Chamados atribuídos pendentes no QWP'
             : 'Total da view do Zendesk; confira as monitorias já existentes na fila'}
           className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none ml-2 shrink-0 ${color.badgeBg}`}>

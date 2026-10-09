@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { canReadMatchedTicketTeam, canRunQueueAction, shouldMergeRecentQueueSnapshot } from './access';
+import { canReadMatchedTicketTeam, canRunQueueAction, queueBadgeCountsForRole, shouldMergeRecentQueueSnapshot } from './access';
+
+describe('queue sidebar counts', () => {
+  const viewCounts = { negativas: 3, proativas: 167, positivas: 86, filhos: 6, filhos_invalidos: 0 };
+
+  it('keeps Zendesk view totals for admin and quality manager even without assignments', () => {
+    expect(queueBadgeCountsForRole('admin', viewCounts, [])).toEqual(viewCounts);
+    expect(queueBadgeCountsForRole('gestor_qualidade', viewCounts, [])).toEqual(viewCounts);
+  });
+
+  it('shows only assigned distributed work to quality monitors', () => {
+    expect(queueBadgeCountsForRole('qualidade', viewCounts, [
+      { queue_type: 'filhos' }, { queue_type: 'negativas' },
+    ])).toEqual({ ...viewCounts, negativas: 1, filhos: 1 });
+  });
+});
 
 describe('shouldMergeRecentQueueSnapshot', () => {
   it('only merges the shared window on the first page of distributed queues', () => {

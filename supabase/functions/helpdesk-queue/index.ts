@@ -27,7 +27,7 @@ import { syncQueueViewAuditExclusions } from './audit-views.ts';
 import { processChildAI } from './child-automation.ts';
 import { processChildAutoPublication } from './child-auto-publication.ts';
 import { processFinalPositiveInvalidation } from './final-invalidation.ts';
-import { canReadMatchedTicketTeam, canReadQueueTicket, canRunQueueAction, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
+import { canReadMatchedTicketTeam, canReadQueueTicket, canRunQueueAction, queueBadgeCountsForRole, shouldMergeRecentQueueSnapshot, trustedZendeskCursor, type QueueType } from './access.ts';
 import { calculateCanonicalQualityScore } from './quality-score.ts';
 import { csatStatusToSatisfactionResult, satisfactionResponseTimestamp } from './satisfaction.ts';
 import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiveEvaluation, ticketMatchesQueue } from './queue-search.ts';
@@ -1100,15 +1100,13 @@ serve(async (req) => {
         }
         viewCountsCache = { expiresAt: Date.now() + 90_000, counts: { ...counts } };
       }
-      if (caller.role === 'qualidade' || caller.role === 'gestor_qualidade' || caller.role === 'admin') {
-        let assignmentsQuery = supabase.from('queue_ticket_assignments')
+      if (caller.role === 'qualidade') {
+        const assignmentsQuery = supabase.from('queue_ticket_assignments')
           .select('queue_type').eq('status', 'pending')
-          .in('queue_type', ['negativas', 'filhos']);
-        if (caller.role === 'qualidade') assignmentsQuery = assignmentsQuery.eq('assigned_to', user.id);
+          .in('queue_type', ['negativas', 'filhos']).eq('assigned_to', user.id);
         const { data: assignments, error } = await assignmentsQuery;
         if (error) return jsonResponse({ error: 'Falha ao contar chamados atribuídos.' }, 503);
-        counts.negativas = (assignments || []).filter(row => row.queue_type === 'negativas').length;
-        counts.filhos = (assignments || []).filter(row => row.queue_type === 'filhos').length;
+        Object.assign(counts, queueBadgeCountsForRole(caller.role, counts, assignments || []));
       }
       if (caller.role === 'gestor_suporte') {
         const cutoff = new Date(Date.now() - 15 * 60_000).toISOString();
