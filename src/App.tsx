@@ -1,3 +1,5 @@
+import { PageSkeleton } from './components/ui/PageSkeleton';
+import { userCacheScope } from './lib/pageCache';
 import { ProtectedAuthForm } from './components/ui/ProtectedAuthForm';
 /**
  * @license
@@ -378,7 +380,7 @@ function AppContent() {
             className="h-screen w-full"
           >
             <QualityConfigProvider>
-              <StaticDataProvider>
+              <StaticDataProvider key={userCacheScope(userData)} user={userData}>
                 <PresenceProvider user={userData}>
                   <MainApp
                     isSidebarOpen={isSidebarOpen}
@@ -2070,7 +2072,7 @@ function MainApp({
         </header>
 
         <div className="flex-1 overflow-auto px-3.5 sm:px-6 md:px-8 pb-24 md:pb-8 pt-4 md:pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
-          <React.Suspense fallback={<div className="flex justify-center items-center h-full"><div className="w-8 h-8 border-4 border-brand-accent border-t-transparent rounded-full animate-spin"></div></div>}>
+          <React.Suspense fallback={<PageSkeleton dashboard={activeTab === 'dashboard'} />}>
             {activeTab === 'dashboard' && (
               <div className="animate-fade-in">
                 <DashboardMain user={userData} activeTab={activeTab} />

@@ -1,3 +1,6 @@
+import { usePageCache } from '../../hooks/usePageCache';
+import { useBackgroundRefresh } from '../../hooks/useBackgroundRefresh';
+import { userCacheScope } from '../../lib/pageCache';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import { Monitoria, User, Team, EvaluationForm, DissatisfactionField, HelpdeskSubmission } from '../../types';
 import { supabase, mockDb, isMockMode } from '../../lib/supabase';
@@ -31,6 +34,7 @@ export interface DashboardState {
   teams: Team[];
   forms: EvaluationForm[];
   loading: boolean;
+  refreshing?: boolean;
   globalAvg: number;
   dissatisfactionFields: DissatisfactionField[];
   // CORRECTION 8: Cooldown for manual refresh button
@@ -92,7 +96,14 @@ export function DashboardProvider({
   const isSimulated = false;
   const user = loggedInUser;
 
-  const [filters, setFilters] = useState<DashboardFilters>(() => ({
+  const cache = usePageCache<{
+    filters: DashboardFilters; monitorias: Monitoria[]; allMonitorias: Monitoria[];
+    helpdeskSubmissions: HelpdeskSubmission[]; globalAvg: number;
+  }>(userCacheScope(user), 'dashboard');
+  const cached = cache.initial;
+  const successfulLoad = useRef(Boolean(cached));
+
+  const [filters, setFilters] = useState<DashboardFilters>(() => cached?.filters ?? ({
     ...getPresetDateRange('mes'),
     teamId: '',
     agentId: '',
@@ -102,17 +113,18 @@ export function DashboardProvider({
     channel: ''
   }));
 
-  const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
-  const [allMonitorias, setAllMonitorias] = useState<Monitoria[]>([]);
-  const [helpdeskSubmissions, setHelpdeskSubmissions] = useState<HelpdeskSubmission[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [globalAvg, setGlobalAvg] = useState(0);
+  const [monitorias, setMonitorias] = useState<Monitoria[]>(cached?.monitorias ?? []);
+  const [allMonitorias, setAllMonitorias] = useState<Monitoria[]>(cached?.allMonitorias ?? []);
+  const [helpdeskSubmissions, setHelpdeskSubmissions] = useState<HelpdeskSubmission[]>(cached?.helpdeskSubmissions ?? []);
+  const [loading, setLoading] = useState(!cached);
+  const [refreshing, setRefreshing] = useState(false);
+  const [globalAvg, setGlobalAvg] = useState(cached?.globalAvg ?? 0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
   // CORRECTION 8: Cooldown for manual refresh button
   const [refreshCooldownEnd, setRefreshCooldownEnd] = useState<number | null>(null);
   const [refreshCooldownRemaining, setRefreshCooldownRemaining] = useState<string>('');
-  const hasLoadedOnce = useRef(false);
+  const hasLoadedOnce = useRef(Boolean(cached));
   const fetchingRef = useRef(false);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
@@ -129,13 +141,14 @@ export function DashboardProvider({
       return;
     }
     fetchingRef.current = true;
+    setRefreshing(true);
     if (!hasLoadedOnce.current) {
       setLoading(true);
     }
     try {
       let docs: Monitoria[] = [];
+      let loadedSubmissions: HelpdeskSubmission[] = [];
       let scoreDocs: any[] = [];
-      const currentFilters = filtersRef.current;
       const currentStaticData = staticDataRef.current;
 
       if (!supabase) {
@@ -143,7 +156,8 @@ export function DashboardProvider({
         docs = data || [];
         scoreDocs = docs;
         const { data: subData } = await mockDb.get('helpdesk_submissions');
-        setHelpdeskSubmissions((subData as HelpdeskSubmission[]) || []);
+        if (!cache.isCurrent()) return;
+        loadedSubmissions = (subData as HelpdeskSubmission[]) || [];
       } else {
         const sb = supabase!; // TypeScript narrowing after guard
         const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
@@ -229,14 +243,17 @@ export function DashboardProvider({
               if (subError) throw subError;
               submissions.push(...((subData as HelpdeskSubmission[]) || []));
             }
-            setHelpdeskSubmissions(submissions);
+            if (!cache.isCurrent()) return;
+            loadedSubmissions = submissions;
           } else {
-            setHelpdeskSubmissions([]);
+            if (!cache.isCurrent()) return;
+            loadedSubmissions = [];
           }
         }
 
       } // Close try block for loadData
 
+      const currentFilters = filtersRef.current;
       const userDocs = currentStaticData.users;
 
       docs = docs.filter(m => m.active !== false);
@@ -280,6 +297,9 @@ export function DashboardProvider({
         scoreDocs = docs;
       }
 
+      if (!cache.isCurrent()) return;
+      successfulLoad.current = true;
+      setHelpdeskSubmissions(loadedSubmissions);
       setAllMonitorias(docs);
 
       let filtered = docs.filter(m => {
@@ -308,12 +328,12 @@ export function DashboardProvider({
         });
       }
     } finally {
-      setLoading(false);
-      hasLoadedOnce.current = true;
+      if (cache.isCurrent()) { setLoading(false); setRefreshing(false); }
+      hasLoadedOnce.current = successfulLoad.current;
       fetchingRef.current = false;
       toast.dismiss('dash-retry');
     }
-  }, [refreshTrigger]);
+  }, [refreshTrigger, cache]);
 
   useEffect(() => {
     if (!user) return;
@@ -374,20 +394,6 @@ export function DashboardProvider({
     };
   }, []);
 
-  // CORRECTION 7: Throttle reloads after realtime reconnection
-  const lastTabVisibleRef = useRef(0);
-
-  // Track tab visibility for realtime throttle
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        lastTabVisibleRef.current = Date.now();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
-
   useEffect(() => {
     if (!supabase) return;
     const sb = supabase!;
@@ -401,15 +407,14 @@ export function DashboardProvider({
       .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, () => {
         if (!mounted) return;
-        // CORRECTION 7: Ignore reloads in first 2s after tab becomes visible (reconnection sync)
-        if (Date.now() - lastTabVisibleRef.current < 2000) {
-          console.log('[Realtime] Ignorando reload - aba recém-ativa (sync de reconexão)');
-          return;
-        }
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           loadDataRef.current();
         }, 300);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'helpdesk_submissions' }, () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => loadDataRef.current(), 300);
       })
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
@@ -429,6 +434,14 @@ export function DashboardProvider({
       sb.removeChannel(channel);
     };
   }, [user]);
+
+  useBackgroundRefresh(loadData, Boolean(user));
+
+  useEffect(() => {
+    if (!loading && successfulLoad.current) {
+      cache.write({ filters, monitorias, allMonitorias, helpdeskSubmissions, globalAvg });
+    }
+  }, [cache, filters, monitorias, allMonitorias, helpdeskSubmissions, globalAvg, loading]);
 
   // SLA Notification Hook pós-login
   const { config: qualityConfig } = useQualityConfig();
@@ -505,7 +518,6 @@ export function DashboardProvider({
   const refresh = useCallback(() => {
     if (refreshCooldownEnd && Date.now() < refreshCooldownEnd) return; // block during cooldown
     setRefreshCooldownEnd(Date.now() + 5 * 60 * 1000); // 5 minute cooldown
-    hasLoadedOnce.current = false;
     setRefreshTrigger(prev => prev + 1);
   }, [refreshCooldownEnd]);
 
@@ -522,6 +534,7 @@ export function DashboardProvider({
     teams: staticData.teams,
     forms: staticData.forms,
     loading,
+    refreshing,
     globalAvg,
     dissatisfactionFields: staticData.dissatisfactionFields,
     refreshCooldownEnd,
@@ -539,6 +552,7 @@ export function DashboardProvider({
     staticData.teams,
     staticData.forms,
     loading,
+    refreshing,
     globalAvg,
     staticData.dissatisfactionFields,
     refreshCooldownEnd,

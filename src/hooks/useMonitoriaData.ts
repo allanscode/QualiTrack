@@ -1,16 +1,30 @@
+import { usePageCache } from './usePageCache';
+import { useBackgroundRefresh } from './useBackgroundRefresh';
+import { userCacheScope } from '../lib/pageCache';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, mockDb, isMockMode } from '../lib/supabase';
 import { Monitoria, User } from '../types';
 import { toast } from 'sonner';
 
 export function useMonitoriaData(user: User | null, activeTab?: string) {
-  const [monitorias, setMonitorias] = useState<Monitoria[]>([]);
-  const [loading, setLoading] = useState(true);
+  const scope = userCacheScope(user);
+  const [loadedScope, setLoadedScope] = useState(scope);
+  const cache = usePageCache<Monitoria[]>(scope, 'monitorias');
+  const [monitorias, setMonitorias] = useState<Monitoria[]>(() => cache.initial ?? []);
+  const [loading, setLoading] = useState(cache.initial === undefined);
 
-  const hasLoadedOnce = useRef(false);
+  const hasLoadedOnce = useRef(cache.initial !== undefined);
   const fetchingRef = useRef(false);
   const userRef = useRef(user);
   userRef.current = user;
+
+  useEffect(() => {
+    setLoadedScope(scope);
+    setMonitorias(cache.initial ?? []);
+    setLoading(cache.initial === undefined);
+    hasLoadedOnce.current = cache.initial !== undefined;
+    fetchingRef.current = false;
+  }, [cache, scope]);
 
   const load = useCallback(async (silent = false) => {
     const currentUser = userRef.current;
@@ -98,7 +112,11 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
           .map((item: Monitoria) => [item.id, item])).values()];
       }
 
-      setMonitorias(fetchedMonitorias.map((r: any) => ({ ...r, history: r.history || [], answers: r.answers || {} })));
+      if (!cache.isCurrent()) return;
+      const rows = fetchedMonitorias.map((r: Monitoria) => ({ ...r, history: r.history || [], answers: r.answers || {} }));
+      cache.write(rows);
+      setMonitorias(rows);
+      hasLoadedOnce.current = true;
     } catch (e: any) {
       console.error(e);
       if (e.message === 'timeout') {
@@ -106,12 +124,11 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
       }
     }
     finally {
-      setLoading(false);
-      hasLoadedOnce.current = true;
-      fetchingRef.current = false;
+      if (cache.isCurrent()) setLoading(false);
+      if (cache.isCurrent()) fetchingRef.current = false;
       toast.dismiss('mon-retry');
     }
-  }, []);
+  }, [cache]);
 
   const loadRef = useRef(load);
   loadRef.current = load;
@@ -190,5 +207,8 @@ export function useMonitoriaData(user: User | null, activeTab?: string) {
     };
   }, [user]);
 
-  return { monitorias, setMonitorias, loading, load };
+  useBackgroundRefresh(() => load(true), Boolean(user));
+
+  return { monitorias: loadedScope === scope ? monitorias : cache.initial ?? [],
+    setMonitorias, loading: loadedScope === scope ? loading : cache.initial === undefined, load };
 }

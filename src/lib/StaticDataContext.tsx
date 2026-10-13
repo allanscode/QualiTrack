@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useCallback, useMemo, ReactNode } from 'react';
+import { userCacheScope } from './pageCache';
+import { useBackgroundRefresh } from '../hooks/useBackgroundRefresh';
+import React, { createContext, useContext, useCallback, useMemo, useEffect, ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { User, Team, TeamGroup, EvaluationForm, DissatisfactionField, UserTeam, UserPreferences } from '../types';
 import { supabase, mockDb, isMockMode } from './supabase';
@@ -81,11 +83,18 @@ async function fetchAllStaticData() {
           sb.from('team_groups').select('*').abortSignal(controller.signal)
         ]);
 
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000);
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 15000);
         });
-
-        const results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+        let results;
+        try {
+          results = await Promise.race([fetchPromise, timeoutPromise]);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+        const failed = results.find(result => result.error);
+        if (failed?.error) throw failed.error;
         const [uRes, tRes, fRes, dfRes, utRes, upRes, tgRes] = results;
 
         const prefsMap: Record<string, UserPreferences> = {};
@@ -122,22 +131,43 @@ async function fetchAllStaticData() {
   }
 }
 
-export function StaticDataProvider({ children }: { children: ReactNode }) {
+export function StaticDataProvider({ children, user }: { children: ReactNode; user?: User | null }) {
+  const scope = userCacheScope(user);
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['staticData'],
+    queryKey: ['staticData', scope],
     queryFn: fetchAllStaticData,
     staleTime: 10 * 60 * 1000, // 10 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
     retry: 2,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnReconnect: false, // CORRECTION 5: custom qualitrack:reconnected event handles this
   });
 
   const refreshAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['staticData'] });
   }, [queryClient]);
+
+  useBackgroundRefresh(() => refetch(), Boolean(user));
+  useEffect(() => {
+    window.addEventListener('qualitrack:reconnected', refreshAll);
+    if (!supabase) return () => window.removeEventListener('qualitrack:reconnected', refreshAll);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const channel = supabase.channel(`static-data-${scope}`);
+    for (const table of ['users', 'teams', 'forms', 'dissatisfaction_fields', 'user_teams', 'user_preferences', 'team_groups']) {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+        clearTimeout(timer);
+        timer = setTimeout(refreshAll, 500);
+      });
+    }
+    channel.subscribe();
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('qualitrack:reconnected', refreshAll);
+      void supabase!.removeChannel(channel);
+    };
+  }, [scope, refreshAll]);
 
   const contextValue = useMemo(() => ({
     users: data?.users || [],

@@ -1,3 +1,4 @@
+import { clearPageCache } from '../lib/pageCache';
 import { readCaptchaToken } from '../components/ui/ProtectedAuthForm';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase, mockDb, upsertUserPreferences, isMockMode, assertSupabase, initialUrlHash, initialUrlSearch } from '../lib/supabase';
@@ -465,6 +466,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
       } else if (event === 'SIGNED_OUT') {
+        clearPageCache();
+        queryClient.clear();
         if (isCleaningSessionRef.current) {
           isCleaningSessionRef.current = false;
           setLoading(false);
@@ -649,6 +652,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // --- handleLogout ---
   const handleLogout = useCallback(async (options?: { silent?: boolean; message?: string }) => {
     clearPrivateDrafts(userData?.id);
+    clearPageCache();
     queryClient.clear();
     if (!isMockMode) {
       try {

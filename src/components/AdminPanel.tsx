@@ -1,3 +1,7 @@
+import { usePageCache } from '../hooks/usePageCache';
+import { useBackgroundRefresh } from '../hooks/useBackgroundRefresh';
+import { userCacheScope } from '../lib/pageCache';
+import { PageSkeleton } from './ui/PageSkeleton';
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { User, Team, EvaluationForm, AccessRequest } from '../types';
@@ -75,8 +79,9 @@ export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPa
     const tabs = getAvailableTabs(currentUser?.role);
     return tabs[0]?.key || 'users';
   });
-  const [requests, setRequests] = useState<AccessRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cache = usePageCache<AccessRequest[]>(userCacheScope(currentUser), 'access-requests');
+  const [requests, setRequests] = useState<AccessRequest[]>(() => cache.initial ?? []);
+  const [loading, setLoading] = useState(cache.initial === undefined);
 
   useEffect(() => {
     if (initialSubTab && availableTabs.some(t => t.key === initialSubTab)) {
@@ -106,11 +111,11 @@ export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPa
     try {
       if (!supabase) {
         const { data } = await mockDb.get('access_requests');
-        setRequests(data || []);
+        if (cache.isCurrent()) { setRequests(data || []); cache.write(data || []); }
       } else {
         try {
           const { data: r, error: re } = await supabase.from('access_requests').select('*').order('created_at', { ascending: false });
-          if (!re && r) setRequests(r);
+          if (!re && r && cache.isCurrent()) { setRequests(r); cache.write(r); }
         } catch (e) {
           console.warn('[Admin] Falha ao carregar solicitações de acesso.');
         }
@@ -156,11 +161,11 @@ export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPa
     loadRequests();
   }, []);
 
+  useBackgroundRefresh(loadRequests, currentUser?.role === 'admin');
+
   if (staticData.loading && loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <RefreshCw className="w-8 h-8 animate-spin text-brand-primary" />
-      </div>
+      <PageSkeleton />
     );
   }
 

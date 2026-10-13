@@ -13,7 +13,7 @@ import { useQualityConfig } from '../../lib/useQualityConfig';
 
 export default function FilterBar() {
   const { resolvedTheme } = useTheme();
-  const { filters, setFilters, users, teams, forms, loading, refresh, user, allMonitorias, dashboardRole, refreshCooldownEnd, refreshCooldownRemaining } = useDashboard();
+  const { filters, setFilters, users, teams, forms, loading, refreshing, refresh, user, allMonitorias, dashboardRole, refreshCooldownEnd, refreshCooldownRemaining } = useDashboard();
   const { feedbacks } = useFeedbacks(user);
   const { config } = useQualityConfig();
   const hiddenActions = config.dashboardHiddenActions?.[dashboardRole] || [];
@@ -146,11 +146,11 @@ export default function FilterBar() {
         <button
           type="button"
           onClick={refresh}
-          disabled={loading || !!refreshCooldownRemaining}
+          disabled={loading || refreshing || !!refreshCooldownRemaining}
           className="col-span-2 sm:col-span-1 min-h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-brand-muted hover:text-brand-primary transition-colors text-xs font-semibold tracking-wide disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Atualizando...' : refreshCooldownRemaining ? `Atualizar (${refreshCooldownRemaining})` : 'Atualizar Dados'}
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Atualizando...' : refreshCooldownRemaining ? `Atualizar (${refreshCooldownRemaining})` : 'Atualizar Dados'}
         </button>
       </div>
 
