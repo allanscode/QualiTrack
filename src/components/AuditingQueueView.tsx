@@ -105,6 +105,7 @@ import { getEvaluationOutcome } from '../lib/domainRules';
 import { childTicketForm } from '../lib/childTicketForm';
 import HelpdeskSendModal from './HelpdeskSendModal';
 import ChildTicketMonitoriaAction from './ChildTicketMonitoriaAction';
+import ChildTicketReevaluateAction from './ChildTicketReevaluateAction';
 
 const PUBLISHABLE_HELPDESK_STATUSES = new Set(['pendente_revisao', 'concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada']);
 const MONITORIA_STAGE_LABELS: Record<string, string> = {
@@ -2914,6 +2915,11 @@ export default function AuditingQueueView({
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}
                           </Button>}
+                          <ChildTicketReevaluateAction
+                            ticket={{ ...ticket, child_evaluation: evaluation }}
+                            loading={isEvaluatingTicket(ticket.ticket_id)}
+                            onReevaluate={canAudit ? () => setChildGuidelineModalTicket(ticket) : undefined}
+                          />
                           {renderCancelAIAction(ticket.ticket_id)}
                           {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
                         </div>
@@ -3046,6 +3052,11 @@ export default function AuditingQueueView({
                               <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
                             )}
                           </Button>}
+                          <ChildTicketReevaluateAction
+                            ticket={{ ...ticket, child_evaluation: evaluation }}
+                            loading={isEvaluatingTicket(ticket.ticket_id)}
+                            onReevaluate={canAudit ? () => setChildGuidelineModalTicket(ticket) : undefined}
+                          />
                           {renderCancelAIAction(ticket.ticket_id)}
                           {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
                         </div>

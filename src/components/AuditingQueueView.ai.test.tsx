@@ -69,6 +69,18 @@ describe('IA de chamados filhos', () => {
   });
   afterEach(cleanup);
 
+  it.each(['filhos', 'filhos_invalidos'] as const)('permite reavaliar o parecer diretamente no card em %s', async activeSubTab => {
+    mocks.fetchQueueTickets.mockResolvedValue({ tickets: [{ ...ticket('701'), child_evaluation: result }], hasMore: false });
+    renderQueue({ activeSubTab });
+    fireEvent.click(await screen.findByRole('button', { name: 'Reavaliar com IA' }, { timeout: 5000 }));
+    expect(mocks.evaluateChildTicketWithAI).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar Auditoria com IA' }));
+    await waitFor(() => expect(mocks.claimAIJob).toHaveBeenCalledWith('701', 'chamado_filho', 'admin'));
+    await waitFor(() => expect(mocks.evaluateChildTicketWithAI).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.completeAIJob).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reanalisar' })).toBeEnabled());
+  });
+
   it.each(['filhos', 'filhos_invalidos'] as const)('abre nova ficha preenchida sem copiar o id anterior em %s', async activeSubTab => {
     const evaluation = { ...result, checks: [{ question_id: 'child-subject-preserved', rule: 'Assunto', passed: false, answer: 'NAO' as const, details: 'Assunto fora do padrão.' }] };
     const onStartAudit = vi.fn();
