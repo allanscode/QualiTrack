@@ -17,7 +17,7 @@ import { Toaster, toast } from 'sonner';
 import { User, ROLE_LABELS, UserRole, AIEvaluationGuideline, QueueSubTab, AuditingQueueType } from './types';
 import { QualityConfigProvider } from './lib/useQualityConfig';
 import { StaticDataProvider, useStaticData } from './lib/StaticDataContext';
-import { ThemeProvider, useTheme, resolveSystemTheme, applyThemeToDOM, type Theme } from './providers/ThemeProvider';
+import { ThemeProvider, useTheme } from './providers/ThemeProvider';
 import { AuthProvider, useAuth } from './providers/AuthProvider';
 import { PresenceProvider } from './providers/PresenceProvider';
 import { useSidebarManager } from './hooks/useSidebarManager';
@@ -454,6 +454,7 @@ function MainApp({
     setFormPrefillData({
       ticket_id: prefill.ticket_id,
       ticket_subject: prefill.ticket_subject,
+      ticket_group_name: prefill.ticket_group_name || prefill.group_name,
       form_id: prefill.form_id,
       evaluated_id: prefill.evaluated_id,
       team_id: prefill.team_id,
@@ -502,7 +503,6 @@ function MainApp({
 
   const {
     sidebarColor,
-    handleThemeChange,
     sidebarIsDark,
     sidebarContrastClass,
     sidebarContrastSubtle,
@@ -1174,8 +1174,6 @@ function MainApp({
           onNavigateTab={setActiveTab}
           onNewMonitoria={handleOpenNewMonitoria}
           canCreateMonitoria={canAuditTickets(userData?.role)}
-          onToggleTheme={() => handleThemeChange(sidebarIsDark ? 'light' : 'dark')}
-          isDark={sidebarIsDark}
           monitorias={monitorias}
           users={users}
         />
@@ -1410,28 +1408,9 @@ function MainApp({
                     <LogOut className="w-4 h-4" />
                   </button>
                 </div>
-                {/* Theme Selector */}
-                <div className="grid grid-cols-3 gap-1 bg-black/10 p-1 rounded-xl">
-                  {[
-                    { value: 'light', label: 'Claro', icon: Sun },
-                    { value: 'dark', label: 'Escuro', icon: Moon },
-                    { value: 'system', label: 'Auto', icon: Monitor }
-                  ].map(opt => {
-                    const Icon = opt.icon;
-                    const isActive = theme === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        onClick={() => handleThemeChange(opt.value as Theme)}
-                        className={`flex items-center justify-center gap-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                          isActive ? 'bg-white/20 text-current shadow-xs' : 'text-current/60 hover:text-current'
-                        }`}
-                      >
-                        <Icon className="w-3 h-3" />
-                        <span>{opt.label}</span>
-                      </button>
-                    );
-                  })}
+                <div className="flex items-center gap-2 py-2 text-xs text-current">
+                  <Monitor className="w-4 h-4" />
+                  Tema automático do sistema
                 </div>
               </div>
             </m.aside>
@@ -2024,30 +2003,9 @@ function MainApp({
                               className="overflow-hidden"
                             >
                               <div className="pb-2 px-2">
-                                <div className="grid grid-cols-3 gap-1 bg-surface-subtle p-1 rounded-xl border border-surface-border">
-                                  {[
-                                    { value: 'light', label: 'Claro', icon: Sun },
-                                    { value: 'dark', label: 'Escuro', icon: Moon },
-                                    { value: 'system', label: 'Sistema', icon: Monitor }
-                                  ].map(opt => {
-                                    const Icon = opt.icon;
-                                    const isActive = theme === opt.value;
-                                    return (
-                                      <button
-                                        key={opt.value}
-                                        onClick={(e) => { e.stopPropagation(); handleThemeChange(opt.value as Theme); }}
-                                        className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                                          isActive
-                                            ? 'bg-surface-card text-brand-primary shadow-sm border border-surface-border'
-                                            : 'text-brand-muted hover:text-brand-primary hover:bg-surface-card/30 border border-transparent'
-                                        }`}
-                                      >
-                                        <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-brand-accent' : 'text-brand-muted'}`} />
-                                        <span>{opt.label}</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
+                                <p className="py-2 text-xs text-brand-muted">
+                                  Acompanha automaticamente o tema claro ou escuro do seu dispositivo.
+                                </p>
                               </div>
                             </m.div>
                           )}

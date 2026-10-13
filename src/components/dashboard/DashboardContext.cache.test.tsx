@@ -10,9 +10,23 @@ vi.mock('../../lib/supabase', () => ({ isMockMode: true, supabase: null, mockDb:
 vi.mock('../../lib/StaticDataContext', () => ({ useStaticData: () => ({ users: [], teams: [], forms: [], dissatisfactionFields: [] }) }));
 vi.mock('../../lib/useQualityConfig', () => ({ useQualityConfig: () => ({ config: {} }) }));
 const user = { id: 'dashboard-admin', role: 'admin', active: true } as User;
-const wrapper = ({ children }: { children: React.ReactNode }) => <DashboardProvider user={user}>{children}</DashboardProvider>;
+const wrapper = ({ children }: { children: React.ReactNode }) => <DashboardProvider user={user} activeTab="dashboard">{children}</DashboardProvider>;
 beforeEach(() => { clearPageCache(); mocks.get.mockReset(); });
 afterEach(cleanup);
+
+it('filters by ticket group independently of the agent management team', async () => {
+  mocks.get.mockImplementation(async (table: string) => ({ data: table === 'monitorias' ? [
+    { id: 'davi-cf', created_at: new Date().toISOString(), score: 100, team_id: 'pj', ticket_group_team_id: 'cf' },
+    { id: 'davi-revenda', created_at: new Date().toISOString(), score: 50, team_id: 'pj', ticket_group_team_id: 'revenda' },
+  ] : [] }));
+  const hook = renderHook(useDashboard, { wrapper });
+  await waitFor(() => expect(hook.result.current.loading).toBe(false));
+  act(() => hook.result.current.setFilters(filters => ({ ...filters, groupId: 'cf' })));
+  expect(hook.result.current.monitorias.map(row => row.id)).toEqual(['davi-cf']);
+  expect(hook.result.current.globalAvg).toBe(100);
+  act(() => hook.result.current.setFilters(filters => ({ ...filters, teamId: 'another-team' })));
+  expect(hook.result.current.monitorias).toEqual([]);
+});
 
 it('restores the dashboard and filters immediately, then replaces data without hiding it', async () => {
   mocks.get.mockImplementation(async (table: string) => ({ data: table === 'monitorias'

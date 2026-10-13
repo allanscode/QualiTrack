@@ -121,6 +121,9 @@ export interface MonitoriaHistoryEntry {
 
 export interface Monitoria {
   id: string;
+  /** Enrichment for presentation/prefill; persisted inside form_snapshot. */
+  ticket_subject?: string;
+  ticket_group_name?: string;
   form_id: string;
   evaluator_id: string;
   evaluated_id: string;

@@ -169,28 +169,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setLoadingPreferences(true);
     try {
-      let themeValue: 'light' | 'dark' | 'system' = 'system';
-      if (isMockMode) {
-        const { data: prefRows } = await mockDb.get('user_preferences');
-        const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
-        themeValue = (myPref?.preferences?.theme as 'light' | 'dark' | 'system') || 'system';
-      } else {
-        const sb = supabase ?? assertSupabase();
-        const { data: prefData } = await sb
-          .from('user_preferences')
-          .select('preferences')
-          .eq('user_id', user.id)
-          .single();
-        themeValue = (prefData?.preferences?.theme as 'light' | 'dark' | 'system') || 'system';
-      }
-
-      // Save literal theme (including 'system') to localStorage
-      localStorage.setItem('qualitrack_theme', themeValue);
-      // Pass the literal theme to setTheme - ThemeProvider will resolve 'system' for DOM
-      setTheme(themeValue);
-      // Apply resolved theme to DOM immediately
-      const resolved = themeValue === 'system' ? resolveSystemTheme() : themeValue;
-      applyThemeToDOM(resolved);
+      setTheme('system');
+      applyThemeToDOM(resolveSystemTheme());
       setAppReady(true);
 
       // Minimum loading time to avoid flash (500ms)
@@ -574,13 +554,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
           }
 
-          const { data: prefRows } = await mockDb.get('user_preferences');
-          const myPref = (prefRows || []).find((r: any) => r.user_id === user.id);
-          const themeValue: 'light' | 'dark' | 'system' = (myPref?.preferences?.theme as 'light' | 'dark' | 'system') || 'system';
-          localStorage.setItem('qualitrack_theme', themeValue);
-          setTheme(themeValue);
-          const resolved = themeValue === 'system' ? resolveSystemTheme() : themeValue;
-          applyThemeToDOM(resolved);
+          setTheme('system');
+          applyThemeToDOM(resolveSystemTheme());
           setAppReady(true);
 
           const enriched = await enrichUserWithTeamIds(user);

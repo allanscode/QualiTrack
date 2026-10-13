@@ -8,6 +8,18 @@ const evaluation = (agent: string, score: number, team = 'team-a', overrides: Pa
 } as Monitoria);
 
 describe('support ranking', () => {
+  it('includes a PJ agent in the ticket group ranking and uses only that group as baseline', () => {
+    const rows = [evaluation('davi', 100, 'pj-trindade', { ticket_group_team_id: 'cliente-final' }),
+      evaluation('peer', 80, 'cliente-final-team', { ticket_group_team_id: 'cliente-final' }),
+      evaluation('davi', 0, 'pj-trindade', { ticket_group_team_id: 'revenda' }),
+      evaluation('legacy', 100, 'cliente-final-team')];
+    const baseline = selectRankingBaseline(rows, { groupId: 'cliente-final' });
+    expect(baseline).toEqual(rows.slice(0, 2));
+    const ranking = buildSupportRanking(baseline, baseline, []);
+    expect(ranking[0]).toMatchObject({ id: 'davi', count: 1, rawScore: 100, score: 50 });
+    expect(selectRankingBaseline(rows, { groupId: 'cliente-final', teamId: 'cliente-final-team' })).toEqual([rows[1]]);
+    expect(selectRankingBaseline(rows, { groupId: '__missing_ticket_group__' })).toEqual([rows[3]]);
+  });
   it('uses evaluation share times average, so six strong evaluations outrank one perfect evaluation', () => {
     const rows = [evaluation('one', 100), ...Array.from({ length: 6 }, () => evaluation('six', 95)),
       ...Array.from({ length: 4 }, () => evaluation('others', 60))];

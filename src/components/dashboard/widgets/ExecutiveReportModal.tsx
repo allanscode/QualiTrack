@@ -16,6 +16,7 @@ interface ExecutiveReportModalProps {
   initialTeamId?: string;
   initialStartDate?: string;
   initialEndDate?: string;
+  groupName?: string;
   currentUser?: User | null;
 }
 
@@ -29,6 +30,7 @@ export default function ExecutiveReportModal({
   initialTeamId = '',
   initialStartDate = '',
   initialEndDate = '',
+  groupName,
   currentUser,
 }: ExecutiveReportModalProps) {
   const { config, getLevelForScore } = useQualityConfig();
@@ -238,7 +240,7 @@ export default function ExecutiveReportModal({
 
   // Copiar resumo em Markdown para envio rápido (Slack/WhatsApp/Teams)
   const handleCopyMarkdown = () => {
-    const teamTitle = selectedTeam ? selectedTeam.name : 'Todas as Equipes (Geral)';
+    const teamTitle = [selectedTeam ? selectedTeam.name : 'Todas as Equipes (Geral)', groupName && `Grupo: ${groupName}`].filter(Boolean).join(' · ');
     const managerName = teamManager ? teamManager.name : 'Gestão de Suporte';
     const text = `*📊 RELATÓRIO EXECUTIVO DE QUALIDADE · QUALIDADE WP*
 *Equipe:* ${teamTitle}
@@ -430,6 +432,7 @@ _Relatório emitido em ${new Date().toLocaleDateString('pt-BR')} por ${currentUs
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Equipe Avaliada</span>
                   <span className="font-bold text-slate-900">{selectedTeam ? selectedTeam.name : 'Geral (Todas as Equipes)'}</span>
+                  {groupName && <span className="block font-medium text-slate-700">Grupo do atendimento: {groupName}</span>}
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Gestor Responsável</span>
@@ -654,7 +657,7 @@ _Relatório emitido em ${new Date().toLocaleDateString('pt-BR')} por ${currentUs
         <EmailReportModal
           isOpen={isEmailModalOpen}
           onClose={() => setIsEmailModalOpen(false)}
-          teamTitle={selectedTeam ? selectedTeam.name : 'Todas as Equipes (Visão Consolidada)'}
+          teamTitle={[selectedTeam ? selectedTeam.name : 'Todas as Equipes (Visão Consolidada)', groupName && `Grupo: ${groupName}`].filter(Boolean).join(' · ')}
           periodLabel={dateRange.label}
           kpiSummary={{
             avgScore: Math.round(avgScore * 10) / 10,

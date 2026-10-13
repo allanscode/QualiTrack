@@ -1,6 +1,7 @@
 import { usePageCache } from '../../hooks/usePageCache';
 import { useBackgroundRefresh } from '../../hooks/useBackgroundRefresh';
 import { userCacheScope } from '../../lib/pageCache';
+import { matchesTicketGroup } from '../../lib/dashboardGroupFilter';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import { Monitoria, User, Team, EvaluationForm, DissatisfactionField, HelpdeskSubmission } from '../../types';
 import { supabase, mockDb, isMockMode } from '../../lib/supabase';
@@ -14,6 +15,7 @@ export interface DashboardFilters {
   startDate: string;
   endDate: string;
   teamId: string;
+  groupId?: string;
   agentId: string;
   auditorId: string;
   formId: string;
@@ -106,6 +108,7 @@ export function DashboardProvider({
   const [filters, setFilters] = useState<DashboardFilters>(() => cached?.filters ?? ({
     ...getPresetDateRange('mes'),
     teamId: '',
+    groupId: '',
     agentId: '',
     auditorId: '',
     formId: '',
@@ -271,6 +274,7 @@ export function DashboardProvider({
       if (currentFilters.channel) pass = pass && m.channel === currentFilters.channel;
       if (currentFilters.formId) pass = pass && m.form_id === currentFilters.formId;
       if (currentFilters.teamId && 'team_id' in m) pass = pass && m.team_id === currentFilters.teamId;
+      pass = pass && matchesTicketGroup(m, currentFilters.groupId);
       if (currentFilters.agentId && currentUser.role !== 'suporte' && 'evaluated_id' in m) pass = pass && m.evaluated_id === currentFilters.agentId;
       if (currentFilters.auditorId && 'evaluator_id' in m) pass = pass && m.evaluator_id === currentFilters.auditorId;
       return pass;
@@ -312,6 +316,7 @@ export function DashboardProvider({
       });
 
       if (currentFilters.teamId) filtered = filtered.filter(m => m.team_id === currentFilters.teamId);
+      filtered = filtered.filter(m => matchesTicketGroup(m, currentFilters.groupId));
       if (currentFilters.agentId && currentUser.role !== 'suporte') filtered = filtered.filter(m => m.evaluated_id === currentFilters.agentId);
       if (currentFilters.auditorId) filtered = filtered.filter(m => m.evaluator_id === currentFilters.auditorId);
       if (currentFilters.formId) filtered = filtered.filter(m => m.form_id === currentFilters.formId);
@@ -343,14 +348,6 @@ export function DashboardProvider({
     return () => clearTimeout(timer);
   }, [user, loadData]);
 
-  useEffect(() => {
-    if (activeTab === 'dashboard' && user) {
-      if (hasLoadedOnce.current) {
-        loadData();
-      }
-    }
-  }, [activeTab, user, loadData]);
-
   const loadDataRef = useRef(loadData);
   loadDataRef.current = loadData;
 
@@ -370,6 +367,7 @@ export function DashboardProvider({
     });
 
     if (filters.teamId) filtered = filtered.filter(m => m.team_id === filters.teamId);
+    filtered = filtered.filter(m => matchesTicketGroup(m, filters.groupId));
     if (filters.agentId && currentUser.role !== 'suporte') filtered = filtered.filter(m => m.evaluated_id === filters.agentId);
     if (filters.auditorId) filtered = filtered.filter(m => m.evaluator_id === filters.auditorId);
     if (filters.formId) filtered = filtered.filter(m => m.form_id === filters.formId);
