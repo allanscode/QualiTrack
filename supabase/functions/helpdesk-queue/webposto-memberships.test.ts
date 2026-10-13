@@ -14,26 +14,29 @@ describe('Zendesk membership preview respects PJ/CLT ownership', () => {
     { id: 14, name: 'Cliente Sul - Retaguarda' }, { id: 15, name: 'Mais Pagamentos - Portal' },
   ];
 
-  it('suggests only exclusive CLT groups and preserves field/PJ agents', () => {
+  it('uses primary groups, ignores secondary coverage and confirms PJ ownership', () => {
     const localUsers = [local('final', 'web', '1'), local('reseller', 'web', '2'),
       local('both', 'web', '3'), local('field', 'web', '4'), local('pj-agent', 'pj', '5'),
       local('already-assigned', 'final', '6'), local('pj-field', 'web', '7'),
       local('tef', 'web', '8'), local('sul', 'web', '9'), local('payments', 'web', '10')];
     const memberships = [
-      { user_id: 1, group_id: 10 }, { user_id: 2, group_id: 11 },
-      { user_id: 3, group_id: 10 }, { user_id: 3, group_id: 11 },
-      { user_id: 4, group_id: 10 }, { user_id: 4, group_id: 12 },
+      { user_id: 1, group_id: 10, default: true }, { user_id: 2, group_id: 11, default: true },
+      { user_id: 3, group_id: 10, default: true }, { user_id: 3, group_id: 11 },
+      { user_id: 3, group_id: 15 },
+      { user_id: 4, group_id: 10 }, { user_id: 4, group_id: 12, default: true },
       { user_id: 5, group_id: 11 }, { user_id: 7, group_id: 10 },
-      { user_id: 6, group_id: 10 },
-      { user_id: 8, group_id: 13 }, { user_id: 9, group_id: 14 }, { user_id: 10, group_id: 15 },
+      { user_id: 6, group_id: 10, default: true },
+      { user_id: 8, group_id: 13, default: true }, { user_id: 9, group_id: 14, default: true }, { user_id: 10, group_id: 15, default: true },
     ];
     const rows = previewWebpostoDivisions({ localUsers, teams, memberships,
-      zendeskUsers: [{ id: 7, user_fields: { vinculado_a_equipe: 'grupo_bruno' } }],
+      zendeskUsers: [{ id: 7, user_fields: { vinculado_a_equipe: 'grupo_bruno' } },
+        { id: 5, user_fields: { vinculado_a_equipe: 'grupo_bruno' } }],
       zendeskGroups, webPostoTeamId: 'web' });
     const byId = Object.fromEntries(rows.map(row => [row.user_id, row]));
     expect(byId.final.suggested_team).toBe('Cliente Final');
     expect(byId.reseller.suggested_team).toBe('Revenda');
-    expect(byId.both.suggested_team).toBe('Escala');
+    expect(byId.both.suggested_team).toBe('Cliente Final');
+    expect(byId.both.zendesk_primary_groups).toEqual(['Cliente Final']);
     expect(byId.field.status).toBe('revisar');
     expect(byId['pj-agent'].status).toBe('pj_preservado');
     expect(byId['already-assigned'].status).toBe('atribuido');
@@ -41,6 +44,41 @@ describe('Zendesk membership preview respects PJ/CLT ownership', () => {
     expect(byId.tef.suggested_team).toBe('Escala');
     expect(byId.sul.suggested_team).toBe('Cliente Final');
     expect(byId.payments.suggested_team).toBe('Mais Pagamentos');
+  });
+
+  it('flags existing assignments that differ from the primary group without changing them', () => {
+    const agent = local('agent', 'final', '1');
+    const rows = previewWebpostoDivisions({ localUsers: [agent], teams,
+      memberships: [{ user_id: 1, group_id: 15, default: true }, { user_id: 1, group_id: 10 }],
+      zendeskUsers: [], zendeskGroups, webPostoTeamId: 'web' });
+    expect(rows[0]).toMatchObject({ status: 'revisar', current_team: 'Cliente Final', suggested_team: 'Mais Pagamentos' });
+    expect(agent.primary_team_id).toBe('final');
+  });
+
+  it('does not infer a primary team from missing, conflicting or secondary memberships', () => {
+    for (const memberships of [
+      [{ user_id: 1, group_id: 10 }, { user_id: 1, group_id: 11 }],
+      [{ user_id: 1, group_id: 10, default: true }, { user_id: 1, group_id: 11, default: true }],
+    ]) {
+      const rows = previewWebpostoDivisions({ localUsers: [local('agent', 'web', '1')], teams,
+        memberships, zendeskUsers: [], zendeskGroups, webPostoTeamId: 'web' });
+      expect(rows[0]).toMatchObject({ status: 'revisar', suggested_team: null });
+    }
+  });
+
+  it('flags PJ assignments not confirmed by the Zendesk team field', () => {
+    const rows = previewWebpostoDivisions({ localUsers: [local('agent', 'pj', '1')], teams,
+      memberships: [{ user_id: 1, group_id: 10, default: true }], zendeskUsers: [], zendeskGroups,
+      webPostoTeamId: 'web' });
+    expect(rows[0]).toMatchObject({ status: 'revisar', suggested_team: null, current_team: 'PJ Bruno' });
+  });
+
+  it('recognizes matching specialized teams without imposing CLT divisions', () => {
+    const rows = previewWebpostoDivisions({ localUsers: [local('agent', 'fiscal', '1')],
+      teams: [...teams, { id: 'fiscal', name: 'Fiscal' }],
+      memberships: [{ user_id: 1, group_id: 99, default: true }], zendeskUsers: [],
+      zendeskGroups: [{ id: 99, name: 'Fiscal' }], webPostoTeamId: 'web' });
+    expect(rows[0]).toMatchObject({ status: 'atribuido', suggested_team: null });
   });
 
   it('does not suggest an identity when Zendesk ID and email disagree', () => {

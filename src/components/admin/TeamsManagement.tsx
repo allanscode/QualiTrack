@@ -109,6 +109,7 @@ interface ZendeskDivisionPreview {
     current_team: string;
     zendesk_groups: string[];
     zendesk_team_field: string | null;
+    zendesk_primary_groups?: string[];
     suggested_team: 'Cliente Final' | 'Revenda' | 'Escala' | 'Mais Pagamentos'
       | 'PJ Bruno' | 'PJ Duarte' | 'PJ SumWise' | 'PJ Trindade' | null;
     status: 'sugerido' | 'revisar' | 'pj_preservado' | 'atribuido';
@@ -668,7 +669,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-brand-primary">Conferir divisão CLT e PJ</h3>
-              <p className="text-xs text-brand-muted">Consulta os grupos e o campo “Vinculado à equipe” no Zendesk para identificar CLT, Escala e PJ.</p>
+              <p className="text-xs text-brand-muted">Compara o grupo principal e o campo “Vinculado à equipe” no Zendesk. Grupos adicionais e coberturas de escala não alteram a equipe principal.</p>
             </div>
             <Button type="button" variant="outline" onClick={handleCheckZendeskMembers} disabled={checkingZendeskMembers}>
               {checkingZendeskMembers ? 'Conferindo...' : 'Conferir no Zendesk'}
@@ -703,7 +704,7 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                 {zendeskDivisionPreview.rows.filter(row => divisionFilter === 'all' || row.status === divisionFilter).map(row => (
                   <div key={row.user_id} className="rounded-lg border border-surface-border bg-surface-subtle/40 p-3 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] sm:gap-3">
                     <div className="min-w-0"><strong className="block truncate text-xs text-brand-primary" title={row.name}>{row.name}</strong><span className="text-[11px] text-brand-muted">Atual: {row.current_team}</span></div>
-                    <p className="mt-1 break-words text-[11px] text-brand-muted sm:mt-0">{row.zendesk_groups.join(' · ') || 'Sem grupos correspondentes'}{row.zendesk_team_field && <span className="block mt-1 font-semibold text-brand-primary">Campo equipe: {row.zendesk_team_field}</span>}</p>
+                    <p className="mt-1 break-words text-[11px] text-brand-muted sm:mt-0"><span className="block font-semibold text-brand-primary">Grupo principal: {row.zendesk_primary_groups?.join(' · ') || 'Não informado'}</span><span className="block mt-1">Todos os grupos: {row.zendesk_groups.join(' · ') || 'Sem grupos correspondentes'}</span>{row.zendesk_team_field && <span className="block mt-1 font-semibold text-brand-primary">Campo equipe: {row.zendesk_team_field}</span>}</p>
                     <div className="mt-1 text-[11px] sm:mt-0"><strong className="text-brand-primary">{row.status === 'pj_preservado' ? 'PJ / campo' : row.status === 'atribuido' ? 'Equipe definida' : row.suggested_team || 'Revisar'}</strong><p className="text-brand-muted">{row.reason}</p></div>
                   </div>
                 ))}
