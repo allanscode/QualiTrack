@@ -10,7 +10,7 @@ vi.mock('../../lib/supabase', () => ({ isMockMode: true, supabase: null, mockDb:
 vi.mock('../../lib/StaticDataContext', () => ({ useStaticData: () => ({ users: [], teams: [], forms: [], dissatisfactionFields: [] }) }));
 vi.mock('../../lib/useQualityConfig', () => ({ useQualityConfig: () => ({ config: {} }) }));
 const user = { id: 'dashboard-admin', role: 'admin', active: true } as User;
-const wrapper = ({ children }: { children: React.ReactNode }) => <DashboardProvider user={user}>{children}</DashboardProvider>;
+const wrapper = ({ children }: { children: React.ReactNode }) => <DashboardProvider user={user} activeTab="dashboard">{children}</DashboardProvider>;
 beforeEach(() => { clearPageCache(); mocks.get.mockReset(); });
 afterEach(cleanup);
 

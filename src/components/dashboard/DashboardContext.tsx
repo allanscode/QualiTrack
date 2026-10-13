@@ -348,14 +348,6 @@ export function DashboardProvider({
     return () => clearTimeout(timer);
   }, [user, loadData]);
 
-  useEffect(() => {
-    if (activeTab === 'dashboard' && user) {
-      if (hasLoadedOnce.current) {
-        loadData();
-      }
-    }
-  }, [activeTab, user, loadData]);
-
   const loadDataRef = useRef(loadData);
   loadDataRef.current = loadData;
 
