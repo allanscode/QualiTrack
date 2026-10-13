@@ -284,11 +284,9 @@ export async function fetchQueueTickets(
 
   // Negativas dependem também do recibo de publicação; filhos dependem da
   // macro própria. Nas demais filas, a monitoria já encerra a triagem.
-  // A view de CSAT vazio inclui tickets fechados: eles ainda podem receber
-  // monitoria interna, embora o Zendesk não aceite novos comentários neles.
   tickets = tickets.filter(t => (type === 'negativas' || type === 'filhos' || type === 'filhos_invalidos' || !t.already_audited) &&
     t.status?.toLowerCase() !== 'archived' &&
-    (type === 'proativas' || t.status?.toLowerCase() !== 'closed'));
+    t.status?.toLowerCase() !== 'closed');
 
   return { tickets, nextCursor, hasMore };
 }

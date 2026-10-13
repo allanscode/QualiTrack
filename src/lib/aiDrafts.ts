@@ -60,11 +60,12 @@ export async function fetchOpenAIDrafts(queue: AuditingQueueType): Promise<AIEva
   if (queue !== 'negativas' && queue !== 'proativas' && queue !== 'positivas' && queue !== 'filhos') return [];
   if (isMockMode || !supabase) return Object.values(readMockDrafts()).filter(d =>
     (d.source_queue === queue || (queue === 'proativas' && !d.source_queue))
-    && (queue === 'positivas' || queue === 'filhos' || !['closed', 'archived'].includes(d.ticket_snapshot?.status?.toLowerCase() || '')));
+    && !['closed', 'archived'].includes(d.ticket_snapshot?.status?.toLowerCase() || ''));
 
+  const client = supabase;
   const drafts: AIEvaluationDraft[] = [];
   for (let from = 0; ; from += 500) {
-    let query = supabase.from('ai_evaluation_drafts').select('*');
+    let query = client.from('ai_evaluation_drafts').select('*');
     query = queue === 'proativas'
       ? query.or('source_queue.eq.proativas,source_queue.is.null')
       : query.eq('source_queue', queue);
@@ -74,23 +75,23 @@ export async function fetchOpenAIDrafts(queue: AuditingQueueType): Promise<AIEva
     if (!data || data.length < 500) break;
   }
   if (drafts.length === 0) return [];
-  // Positive reviews are durable work items: closing a Zendesk ticket must not
-  // discard the AI findings or prevent the monitor from opening its saved form.
-  if (queue === 'positivas' || queue === 'filhos') return drafts;
-
-  // O snapshot pode ter sido salvo antes de o Zendesk fechar o ticket.
-  // Confere o estado atual em lotes para não reoferecer avaliações impossíveis.
-  const statuses: Record<string, string> = {};
+  // Preserve os rascunhos no banco, mas oculte-os da triagem quando o Zendesk
+  // informar que o ticket fechou desde o snapshot salvo.
+  const batches: string[][] = [];
   for (let from = 0; from < drafts.length; from += 100) {
     const ids = drafts.slice(from, from + 100).map(draft => draft.ticket_id);
-    const { data, error } = await supabase.functions.invoke('helpdesk-queue', {
+    batches.push(ids);
+  }
+  const checked = await Promise.all(batches.map(async ids => {
+    const { data, error } = await client.functions.invoke('helpdesk-queue', {
       body: { action: 'fetch_draft_statuses', ticket_ids: ids },
     });
     if (error || !data?.statuses) {
       throw new Error(data?.error || await extractFunctionErrorMessage(error, 'Falha ao conferir o estado dos rascunhos no Zendesk.'));
     }
-    Object.assign(statuses, data.statuses);
-  }
+    return data.statuses as Record<string, string>;
+  }));
+  const statuses = Object.assign({}, ...checked) as Record<string, string>;
   return drafts.filter(draft => {
     const status = statuses[draft.ticket_id]?.toLowerCase();
     return status && status !== 'closed' && status !== 'archived';
@@ -98,7 +99,19 @@ export async function fetchOpenAIDrafts(queue: AuditingQueueType): Promise<AIEva
     ...draft,
     ticket_snapshot: draft.ticket_snapshot
       ? { ...draft.ticket_snapshot, status: statuses[draft.ticket_id] }
-      : undefined,
+      : {
+          ticket_id: draft.ticket_id,
+          subject: `Ticket #${draft.ticket_id} · rascunho IA recuperado`,
+          agent_name: draft.agent_name,
+          agent_email: draft.agent_email,
+          agent_id: draft.agent_id,
+          team_id: draft.team_id,
+          channel: draft.channel,
+          csat_status: queue === 'positivas' ? 'good' as const : 'unrated' as const,
+          ticket_date: draft.created_at,
+          status: statuses[draft.ticket_id],
+          draft_metadata_incomplete: true,
+        },
   }));
 }
 

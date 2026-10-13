@@ -31,16 +31,15 @@ export function ticketCanReceiveEvaluation(
   queue?: QueueType,
 ): boolean {
   const status = ticket?.status?.toLowerCase();
-  if (!ticket || status === 'archived') return false;
+  if (!ticket || status === 'closed' || status === 'archived') return false;
   if ((queue === 'filhos' || queue === 'filhos_invalidos') &&
     Array.isArray(ticket.tags) && ticket.tags.includes(CHILD_AUDITED_TAG)) return false;
-  if (queue === 'proativas') return true;
-  return status !== 'closed';
+  return true;
 }
 
 export function queueSearchQuery(queue: QueueType, validatedTag: string): string {
   if (queue === 'proativas') {
-    return 'type:ticket status:closed satisfaction:offered';
+    return 'type:ticket status:solved satisfaction:offered';
   }
   const base = 'type:ticket status<closed';
   switch (queue) {

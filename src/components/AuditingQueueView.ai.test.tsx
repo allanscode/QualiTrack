@@ -192,7 +192,7 @@ describe('revisão persistida das positivas', () => {
     id: 'draft-positive', ticket_id: '765', created_by: 'gabriel', source_queue: 'positivas',
     form_id: 'positive-form', agent_id: 'agent', channel: 'email', guideline_ids: [],
     created_at: '2026-10-07T10:00:00Z', updated_at: '2026-10-07T10:00:00Z',
-    ticket_snapshot: { ...ticket('765'), subject: 'Positiva fechada com falha no atendimento', csat_status: 'good', status: 'closed' },
+    ticket_snapshot: { ...ticket('765'), subject: 'Positiva resolvida com falha no atendimento', csat_status: 'good', status: 'solved' },
     result: { score: 74.9, summary: 'Atendimento precisa de revisão.', strengths: [], improvements: [],
       suggested_answers: {}, suggested_observations: {}, suggested_critical_errors: {}, dialogue: [] },
   };
@@ -204,7 +204,7 @@ describe('revisão persistida das positivas', () => {
   });
   afterEach(cleanup);
 
-  it.each([false, true])('recupera a positiva fechada e abre a ficha salva (Zendesk indisponível: %s)', async unavailable => {
+  it.each([false, true])('recupera a positiva resolvida e abre a ficha salva (Zendesk indisponível: %s)', async unavailable => {
     if (unavailable) mocks.fetchQueueTickets.mockRejectedValue(new Error('Zendesk indisponível'));
     const onStartAudit = vi.fn();
     renderQueue({ activeSubTab: 'positivas', currentUserId: 'gabriel', currentUserRole: 'qualidade', onStartAudit });
@@ -219,6 +219,14 @@ describe('revisão persistida das positivas', () => {
     expect(mocks.claimAIJob).not.toHaveBeenCalled();
     expect(mocks.startNewChild).not.toHaveBeenCalled();
   });
+  it('não mostra uma positiva fechada devolvida por um cache antigo', async () => {
+    mocks.fetchOpenAIDrafts.mockResolvedValue([{ ...positiveDraft,
+      ticket_snapshot: { ...positiveDraft.ticket_snapshot!, status: 'closed' },
+    }]);
+    renderQueue({ activeSubTab: 'positivas', currentUserId: 'gabriel', currentUserRole: 'qualidade' });
+    await waitFor(() => expect(mocks.fetchOpenAIDrafts).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Verificar Avaliação' })).not.toBeInTheDocument();
+  });
 });
 
 describe('revisão automática persistida dos filhos', () => {
@@ -230,7 +238,7 @@ describe('revisão automática persistida dos filhos', () => {
     id: 'child-draft', ticket_id: '777', created_by: 'gabriel', source_queue: 'filhos',
     form_id: CHILD_TICKET_FORM_ID, agent_id: 'agent', team_id: 'team', channel: 'email', guideline_ids: [],
     created_at: '2026-10-07T10:00:00Z', updated_at: '2026-10-07T10:00:00Z',
-    ticket_snapshot: { ...ticket('777'), status: 'closed' },
+    ticket_snapshot: { ...ticket('777'), status: 'solved' },
     result: { score: 0, summary: 'Conferir filho.', strengths: [], improvements: [],
       suggested_answers: { 'child-subject-preserved': 'NAO' }, suggested_observations: {}, suggested_critical_errors: {},
       child_evaluation: childResult, automatic_child: true, dialogue: [] },
@@ -248,7 +256,7 @@ describe('revisão automática persistida dos filhos', () => {
   });
   afterEach(cleanup);
 
-  it('abre o filho fechado com a ficha preenchida mesmo sem job/live view', async () => {
+  it('abre o filho resolvido com a ficha preenchida mesmo sem job/live view', async () => {
     const onStartAudit = vi.fn();
     renderQueue({ activeSubTab: 'filhos', currentUserId: 'admin', currentUserRole: 'qualidade', forms: [childForm], onStartAudit });
     expect(await screen.findByText('Revisão necessária · abaixo de 75%')).toBeInTheDocument();

@@ -19,14 +19,16 @@ describe('revisões positivas persistidas', () => {
     database.from.mockReturnValue(query);
   });
 
-  it.each(['positivas', 'filhos'] as const)('recupera tickets %s fechados e sem snapshot sem depender do Zendesk', async queue => {
+  it.each(['positivas', 'filhos'] as const)('oculta tickets %s fechados usando o estado atual do Zendesk', async queue => {
     database.range.mockResolvedValue({ data: [
       { ticket_id: '10', source_queue: queue, ticket_snapshot: { status: 'closed' } },
       { ticket_id: '11', source_queue: queue, ticket_snapshot: null },
     ], error: null });
-    database.invoke.mockRejectedValue(new Error('Zendesk indisponível'));
-    expect((await fetchOpenAIDrafts(queue)).map(draft => draft.ticket_id)).toEqual(['10', '11']);
-    expect(database.invoke).not.toHaveBeenCalled();
+    database.invoke.mockResolvedValue({ data: { statuses: { '10': 'closed', '11': 'solved' } }, error: null });
+    expect((await fetchOpenAIDrafts(queue)).map(draft => draft.ticket_id)).toEqual(['11']);
+    expect(database.invoke).toHaveBeenCalledWith('helpdesk-queue', {
+      body: { action: 'fetch_draft_statuses', ticket_ids: ['10', '11'] },
+    });
   });
 
   it('propaga falhas do banco para não apresentar uma fila vazia como válida', async () => {

@@ -702,7 +702,7 @@ export default function AuditingQueueView({
           }),
           ticket_id: draft.ticket_id,
           saved_ai_draft: true,
-          draft_metadata_incomplete: !draft.ticket_snapshot,
+          draft_metadata_incomplete: !draft.ticket_snapshot || draft.ticket_snapshot.draft_metadata_incomplete,
         }))
         .filter(ticket => !search || matchesQueueSearchText(ticket, search));
       // Descarta a resposta se já não for mais a busca mais recente — uma
@@ -950,6 +950,7 @@ export default function AuditingQueueView({
   // Filtro de busca na lista de tickets com suporte a filtro de rascunhos da IA
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
+      if (['closed', 'archived'].includes(t.status?.toLowerCase() || '')) return false;
       if (onlyWithoutMonitoria && (t.already_audited || t.monitoria_id)) return false;
       if (isDistributedQueue(activeQueue)) {
         if (!assignmentsReady[activeQueue]) return false;

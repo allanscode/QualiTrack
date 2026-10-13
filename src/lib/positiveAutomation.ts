@@ -10,6 +10,8 @@ export interface PositiveAutomationItem {
   score?: number | null;
 }
 const visibleStatuses: PositiveAutomationStatus[] = ['pending','preparing','evaluating','review_required','blocked'];
+const ticketIsVisible = (ticket: AuditingQueueTicket): boolean =>
+  !['closed', 'archived'].includes(ticket.status?.toLowerCase() || '');
 
 /** The durable intake survives changes to Zendesk's live view and is readable
  * only by the quality team. No transcript or worker payload is requested here. */
@@ -18,7 +20,7 @@ export async function fetchPositiveAutomation(queue: 'positivas' | 'filhos' = 'p
   if (isMockMode || !supabase) {
     try {
       const rows = JSON.parse(localStorage.getItem(`qualitrack-${kind}-ai-queue`) || '[]') as PositiveAutomationItem[];
-      return rows.filter(row => visibleStatuses.includes(row.status));
+      return rows.filter(row => visibleStatuses.includes(row.status) && ticketIsVisible(row.ticket_snapshot));
     } catch { return []; }
   }
   const rows: PositiveAutomationItem[] = [];
@@ -28,7 +30,7 @@ export async function fetchPositiveAutomation(queue: 'positivas' | 'filhos' = 'p
       .order('created_at',{ascending:true}).range(offset,offset+499);
     if (error) throw new Error(`Falha ao consultar avaliações automáticas: ${error.message}`);
     rows.push(...(data || []) as PositiveAutomationItem[]);
-    if (!data || data.length<500) return rows;
+    if (!data || data.length<500) return rows.filter(row => ticketIsVisible(row.ticket_snapshot));
   }
 }
 
@@ -37,10 +39,11 @@ export function mergePositiveAutomation(
   queue: 'positivas' | 'filhos' = 'positivas',
 ): AuditingQueueTicket[] {
   const metadata = queue === 'filhos' ? 'child_automation' : 'positive_automation';
-  const visible = new Map(rows.filter(row => !auditedIds.has(row.ticket_id)).map(row=>[row.ticket_id,row]));
+  const visible = new Map(rows.filter(row => !auditedIds.has(row.ticket_id)
+    && ticketIsVisible(row.ticket_snapshot)).map(row=>[row.ticket_id,row]));
   // A fila de filhos continua exibindo monitorias humanas em revisão ou
   // aguardando publicação. O servidor já retira as conclusões automáticas.
-  const merged = new Map(tickets.filter(ticket => (queue === 'filhos'
+  const merged = new Map(tickets.filter(ticket => ticketIsVisible(ticket) && (queue === 'filhos'
       ? ticket.already_audited || !auditedIds.has(ticket.ticket_id)
       : !auditedIds.has(ticket.ticket_id))
     && (!ticket[metadata] || visible.has(ticket.ticket_id) || ticket.saved_ai_draft))

@@ -24,6 +24,7 @@ import { buildAITargets } from './ai-targets.ts';
 import { retryAt } from './ai-retry.ts';
 import { processPositiveAI } from './positive-automation.ts';
 import { syncQueueViewAuditExclusions } from './audit-views.ts';
+import { syncProactiveViewStatus } from './proactive-view.ts';
 import { processChildAI } from './child-automation.ts';
 import { processChildAutoPublication } from './child-auto-publication.ts';
 import { processFinalPositiveInvalidation } from './final-invalidation.ts';
@@ -657,6 +658,16 @@ serve(async (req) => {
         return jsonResponse({ error: error instanceof Error ? error.message : 'Falha ao atualizar views.' }, 502);
       }
     }
+    if (workerBody?.action === 'sync_proactive_view_status') {
+      if (req.headers.get('apikey') !== secretApiKey()) return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      try {
+        return jsonResponse(await syncProactiveViewStatus(
+          key => Deno.env.get(key), workerBody.apply === true,
+        ), 200);
+      } catch (error) {
+        return jsonResponse({ error: error instanceof Error ? error.message : 'Falha ao atualizar view Proativas.' }, 502);
+      }
+    }
     if (workerBody?.action === 'process_final_positive_invalidation') {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
@@ -1135,9 +1146,11 @@ serve(async (req) => {
         for (const queue of COUNTED_QUEUES) counts[queue] = 0;
         for (const row of catalog || []) {
           const queue = row.queue_type as QueueType;
-          if (!auditedIds.has(row.ticket_id) && canReadMatchedTicketTeam(caller.role,
-            typeof row.ticket_snapshot?.team_id === 'string' ? row.ticket_snapshot.team_id : null,
-            managerTeamIds)) counts[queue] = (counts[queue] || 0) + 1;
+          if (!auditedIds.has(row.ticket_id)
+            && ticketCanReceiveEvaluation(row.ticket_snapshot, queue)
+            && canReadMatchedTicketTeam(caller.role,
+              typeof row.ticket_snapshot?.team_id === 'string' ? row.ticket_snapshot.team_id : null,
+              managerTeamIds)) counts[queue] = (counts[queue] || 0) + 1;
         }
       }
       return jsonResponse({ counts, approximate: true }, 200);
@@ -1457,7 +1470,9 @@ serve(async (req) => {
           hasMore = !!viewData.meta?.has_more;
           nextCursor = hasMore ? (viewData.links?.next || null) : null;
         } else {
-          let searchQuery = 'type:ticket status<closed';
+          let searchQuery = queue_type === 'proativas'
+            ? 'type:ticket status:solved'
+            : 'type:ticket status<closed';
 
           if (queue_type === 'negativas') {
             searchQuery += ' satisfaction:bad';
