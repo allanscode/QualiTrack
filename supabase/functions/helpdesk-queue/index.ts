@@ -247,8 +247,7 @@ async function buildWebpostoMembershipPreview(
       const webPosto = managementTeams?.find(team => team.name === 'WebPosto' && !team.parent_team_id)
         || managementTeams?.find(team => team.name.toLowerCase() === 'cliente final' && !team.parent_team_id);
       if (!webPosto) return jsonResponse({ error: 'Equipe WebPosto não encontrada.' }, 409);
-      const relevantTeams = (managementTeams || []).filter(team => team.id === webPosto.id
-        || team.parent_team_id === webPosto.id || /^PJ\s/i.test(team.name));
+      const relevantTeams = managementTeams || [];
       const { data: localAgents, error: agentsError } = await supabase.from('users')
         .select('id,name,email,role,primary_team_id,external_id,source_system')
         .eq('active', true).eq('role', 'suporte')
@@ -401,7 +400,7 @@ async function resolveZendeskTicketGroup(
   supabase: SupabaseClient,
   zendeskGroupId?: number,
   groupName?: string,
-): Promise<{ id: string; team_id?: string } | null> {
+): Promise<{ id: string } | null> {
   let row: { id: string; kind?: string } | null = null;
   if (zendeskGroupId) {
     const result = await supabase.from('teams')
@@ -414,11 +413,9 @@ async function resolveZendeskTicketGroup(
     row = result.data?.[0] || null;
   }
   if (!row) return null;
-  if (row.kind !== 'group') return { id: row.id, team_id: row.id };
-  const { data: links, error } = await supabase.from('team_groups')
-    .select('team_id').eq('group_id', row.id).limit(2);
-  if (error) throw error;
-  return { id: row.id, team_id: links?.length === 1 ? links[0].team_id : undefined };
+  // A ticket can belong to a coverage group outside the agent's home team.
+  // Team/group links describe primary memberships, never ticket ownership.
+  return { id: row.id };
 }
 
 async function resolveOrCreateAgent(
@@ -446,14 +443,13 @@ async function resolveOrCreateAgent(
     .eq('email', normalizedEmail)
     .maybeSingle();
 
-  // Um grupo do Zendesk identifica o ticket. Só sua equipe responsável pode
-  // tornar-se equipe principal do agente e dona da monitoria.
-  let teamId: string | undefined = explicitTeamId;
+  // Team ownership comes from the agent or an explicit manual selection.
+  // Never infer it from the ticket's group (including temporary coverage).
+  const teamId: string | undefined = explicitTeamId;
   let ticketGroupTeamId: string | undefined;
   if (sourceSystem === 'zendesk' && (zendeskGroupId || teamName)) {
     const group = await resolveZendeskTicketGroup(supabase, zendeskGroupId, teamName);
     ticketGroupTeamId = group?.id;
-    teamId = group?.team_id || teamId;
   }
 
   if (existing) {
@@ -2029,7 +2025,7 @@ serve(async (req) => {
           team_name: group?.name,
           channel: t?.via?.channel,
           existing_id: existing?.id || null,
-          existing_team_id: existing?.primary_team_id || groupLink?.team_id || null,
+          existing_team_id: existing?.primary_team_id || null,
           ticket_group_team_id: ticketGroupTeamId,
         },
       }, 200);
@@ -2082,7 +2078,7 @@ serve(async (req) => {
 
       const groupLink = await resolveZendeskTicketGroup(supabase, group?.id, group?.name);
       const ticketGroupTeamId = groupLink?.id || null;
-      const matchedTeamId = existingAgent?.primary_team_id || groupLink?.team_id || null;
+      const matchedTeamId = existingAgent?.primary_team_id || null;
       if (caller.role === 'gestor_suporte') {
         if (!canReadMatchedTicketTeam(caller.role, matchedTeamId, managerTeamIds)) {
           return jsonResponse({ error: 'Ticket fora das equipes deste gestor.' }, 403);

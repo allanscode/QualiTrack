@@ -85,4 +85,16 @@ describe('support ranking', () => {
   it('returns no results for empty data', () => {
     expect(buildSupportRanking([], [], [])).toEqual([]);
   });
+
+  it('counts cross-team coverage in both dimensions but only once in General', () => {
+    const row = evaluation('davi', 90, 'pj-trindade', { ticket_group_team_id: 'mais-pagamentos' });
+    const rows = [row];
+    for (const filters of [{}, { teamId: 'pj-trindade' }, { groupId: 'mais-pagamentos' },
+      { teamId: 'pj-trindade', groupId: 'mais-pagamentos' }]) {
+      const selected = selectRankingBaseline(rows, filters);
+      expect(selected).toEqual([row]);
+      expect(buildSupportRanking(selected, selected, [])[0].count).toBe(1);
+    }
+    expect(selectRankingBaseline(rows, { teamId: 'other', groupId: 'mais-pagamentos' })).toEqual([]);
+  });
 });
