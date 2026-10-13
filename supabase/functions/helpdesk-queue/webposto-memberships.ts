@@ -34,6 +34,7 @@ export interface DivisionPreviewRow {
   current_team: string;
   zendesk_groups: string[];
   zendesk_primary_groups: string[];
+  zendesk_primary_group_ids: number[];
   zendesk_team_field: string | null;
   suggested_team: DivisionSuggestion;
   status: 'sugerido' | 'revisar' | 'pj_preservado' | 'atribuido';
@@ -150,6 +151,9 @@ export function previewWebpostoDivisions(input: {
       current_team: teamNames.get(user.primary_team_id || '') || 'Sem equipe',
       zendesk_groups: names,
       zendesk_primary_groups: defaultGroupNames,
+      zendesk_primary_group_ids: zendeskId === null ? [] : [...new Set(input.memberships
+        .filter(membership => membership.user_id === zendeskId && membership.default === true)
+        .map(membership => membership.group_id))],
       zendesk_team_field: zendeskTeamField,
       suggested_team,
       status,

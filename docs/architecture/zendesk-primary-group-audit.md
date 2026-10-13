@@ -6,4 +6,10 @@ Em Configurações > Equipes, a conferência Zendesk é somente leitura. Ela apr
 
 Grupos secundários não geram sugestão de Escala. Sem um único grupo principal, o caso fica para revisão. Uma equipe já atribuída que diverge da sugestão também fica para revisão, permitindo verificar exceções antes de editar o cadastro. Identidades conflitantes nunca geram sugestão. Equipes PJ só aparecem como confirmadas quando o campo de equipe no Zendesk coincide com o cadastro; a conferência não move pessoas nem reescreve monitorias históricas.
 
-O vínculo contratual PJ e a frente principal de atendimento são conceitos diferentes. A definição de substituir um pelo outro exige uma regra de negócio explícita. Os vínculos N:N entre equipes e grupos não são prova da lotação principal de cada agente.
+O vínculo contratual PJ e a frente principal de atendimento são conceitos diferentes. Regra aprovada: preservar a equipe do agente e vincular cada equipe somente à união dos grupos principais de seus agentes ativos. O grupo de um ticket de escala não adiciona vínculo à equipe nem determina a lotação de um agente sem equipe cadastrada. Uma monitoria de PJ Trindade em Mais Pagamentos participa de ambos os filtros e conta uma única vez no geral.
+
+## Reconciliação dos vínculos
+
+`node scripts/reconcile-team-primary-groups.mjs --project-ref=<ref>` consulta a conferência completa e mostra o plano. `--apply` aplica os vínculos em transação com verificação de concorrência e cópia antes/depois no diretório temporário indicado. Não altera usuários, escopos de gestores ou monitorias. Grupos legados sem ID externo só recebem o ID Zendesk se houver correspondência exata e única do nome. Grupos ausentes/ambíguos e agentes sem vínculo principal impedem a alteração da equipe inteira; equipes sem agentes ativos também são preservadas para revisão, nunca esvaziadas por suposição.
+
+O processo é manual, não um agendamento. A sincronização periódica pode reutilizar as mesmas proteções. Após mudança no elenco ou no grupo principal, executar novamente. Testes do plano: `node --test scripts/team-primary-group-plan.test.mjs`.
