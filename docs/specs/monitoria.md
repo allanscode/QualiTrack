@@ -203,7 +203,7 @@ Se qualquer erro_critico marcado → Score Final = 0
 A automação captura os tickets da view de pesquisas positivas em uma fila persistente no banco. A saída da view ou o fechamento do ticket não apaga o resultado nem a revisão pendente. A execução ocorre no servidor, independentemente da tela aberta pelo monitor.
 
 - Nota inferior a 75%: mantém o rascunho preenchido com o indicativo **Revisão necessária · abaixo de 75%** na fila Positivas.
-- Nota igual ou superior a 75%: conclui a monitoria interna quando ficha, respostas e vínculo do agente são válidos, respeitando o limite mensal de positivas.
+- Nota igual ou superior a 75%: conclui a monitoria interna quando ficha, respostas e vínculo do agente são válidos, sem limite mensal de positivas por agente.
 - Dados insuficientes ou inconsistentes: impede a conclusão automática e preserva os dados para conferência.
 - A nota é calculada pelas respostas e pelos pesos da ficha; o valor declarado pelo modelo não autoriza a conclusão sozinho.
 - O auditor é configurado no ambiente. O histórico identifica explicitamente a execução automática pela IA.
@@ -211,7 +211,7 @@ A automação captura os tickets da view de pesquisas positivas em uma fila pers
 
 A configuração inicial permanece desabilitada até a definição do auditor e das credenciais do ambiente. No staging, o responsável escolhido é Gabriel Dias Di Napoli, com perfil de Qualidade. Os rascunhos positivos salvos continuam acessíveis mesmo quando o Zendesk está indisponível.
 
-O teto opcional `positive_ai_config.max_evaluations` limita o total de jobs iniciados no ambiente. A reserva incrementa `executions_started` na mesma transação que cria o job; ao atingir o teto, `enabled` passa a `false`. Jobs já iniciados podem terminar usando o mesmo identificador. O staging usa teto de cinco, independente do limite mensal por agente. Produção pode deixar esse teto de teste nulo.
+O teto opcional `positive_ai_config.max_evaluations` limita o total de jobs iniciados no ambiente. A reserva incrementa `executions_started` na mesma transação que cria o job; ao atingir o teto, `enabled` passa a `false`. Jobs já iniciados podem terminar usando o mesmo identificador. Produção pode deixar esse teto de teste nulo. A remoção do limite por agente não altera o teto ou a ativação de cada ambiente.
 
 Um erro crítico confirmado zera a nota final, conforme a regra da ficha. A fila mostra também a pontuação ponderada dos critérios antes da invalidação e a justificativa do erro crítico apontado pela IA. Ausência de evidência sobre tickets filhos, QPs ou aprovações externas exige conferência humana; não autoriza concluir a monitoria nem inventar uma infração.
 

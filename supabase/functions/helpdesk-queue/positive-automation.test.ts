@@ -43,7 +43,7 @@ describe('positive intake security and durability', () => {
   });
 
   const envValues: Record<string,string> = { ZENDESK_SUBDOMAIN:'example',ZENDESK_EMAIL:'worker@example.test',ZENDESK_API_TOKEN:'fake',OPENROUTER_API_KEY:'fake',HELPDESK_POSITIVE_VIEW_ID:'123' };
-  function database(enabled: boolean) {
+  function database(enabled: boolean, work?: { ticket_id: string; ticket_snapshot: Record<string, unknown>; auditor_id: string; lease_id: string; attempts: number }) {
     const writes: Array<{ table: string; value: unknown }> = [];
     const from = vi.fn((table: string) => {
       const builder = {
@@ -56,7 +56,7 @@ describe('positive intake security and durability', () => {
       return builder;
     });
     const rpc = vi.fn(async (name: string) => ({error:null,data:name==='claim_positive_ai_scan'
-      ? [{id:true,enabled:true,auditor_id:'auditor',capture_cursor:null,capture_lease_id:'lease'}] : []}));
+      ? [{id:true,enabled:true,auditor_id:'auditor',capture_cursor:null,capture_lease_id:'lease'}] : work ? [work] : []}));
     return { db: {from,rpc} as unknown as SupabaseClient, writes, rpc };
   }
   it('does not contact Zendesk or AI when disabled or missing credentials', async () => {
@@ -85,5 +85,24 @@ describe('positive intake security and durability', () => {
     await processPositiveAI(state.db,key=>envValues[key],vi.fn(),vi.fn(async()=>new Response('failed',{status:503})));
     expect(state.rpc).toHaveBeenCalledWith('claim_positive_ai_work');
     expect(state.writes).toContainEqual({table:'positive_ai_config',value:expect.objectContaining({last_error:expect.stringContaining('503')})});
+  });
+  it.each([
+    { status: 200, attempts: 1, stopped: true },
+    { status: 403, attempts: 1, stopped: true },
+    { status: 503, attempts: 1, stopped: false },
+    { status: 429, attempts: 5, stopped: true },
+  ])('persists a bounded retry decision for HTTP $status at attempt $attempts', async ({ status, attempts, stopped }) => {
+    const state = database(true, { ticket_id: '123', ticket_snapshot: {}, auditor_id: 'auditor', lease_id: 'work', attempts });
+    const execute = vi.fn();
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/views/')) return new Response(JSON.stringify({ tickets: [] }));
+      return new Response(JSON.stringify({ ticket: { id: 123, created_at: '2026-10-13T12:00:00Z', via: { channel: 'unknown' } } }), { status });
+    });
+    await processPositiveAI(state.db, key => envValues[key], execute, fetcher);
+    const update = state.writes.find(write => write.table === 'positive_ai_queue')?.value as { status: string; next_attempt_at: string };
+    expect(update.status).toBe('blocked');
+    expect(update.next_attempt_at === 'infinity').toBe(stopped);
+    if (!stopped) expect(Date.parse(update.next_attempt_at)).toBeGreaterThan(Date.now());
+    expect(execute).not.toHaveBeenCalled();
   });
 });
