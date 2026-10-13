@@ -1,3 +1,4 @@
+import { PageSkeleton } from './ui/PageSkeleton';
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { List } from 'react-window';
@@ -321,11 +322,7 @@ export default function MonitoriaList({
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [staticData.users]);
 
-  if (loading) return (
-    <div className="space-y-4">
-      {[1,2,3].map(i => <div key={i} className="h-24 bg-white rounded-card border border-surface-border animate-pulse" />)}
-    </div>
-  );
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-6 animate-fade-in pb-8">

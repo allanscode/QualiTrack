@@ -1,3 +1,6 @@
+import { usePageCache } from '../hooks/usePageCache';
+import { useBackgroundRefresh } from '../hooks/useBackgroundRefresh';
+import { userCacheScope } from '../lib/pageCache';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -321,8 +324,15 @@ export default function AuditingQueueView({
     };
   }, []);
 
+  const queueScope = JSON.stringify([currentUserId, currentUserRole,
+    userCacheScope(agents.find(agent => agent.id === currentUserId)), teams.map(team => team.id).sort()]);
+  const queueCache = usePageCache<{
+    tickets: AuditingQueueTicket[]; drafts: Record<string, AIEvaluationDraft>;
+    nextCursor: string | null; hasMore: boolean;
+  }>(queueScope, `queue:${activeQueue}`);
+  const visibleRequest = useRef('');
   const [loading, setLoading] = useState(false);
-  const [tickets, setTickets] = useState<AuditingQueueTicket[]>([]);
+  const [tickets, setTickets] = useState<AuditingQueueTicket[]>(() => queueCache.initial?.tickets ?? []);
   const [helpdeskTicket, setHelpdeskTicket] = useState<AuditingQueueTicket | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -419,7 +429,7 @@ export default function AuditingQueueView({
 
   // Rascunhos de avaliação da IA já prontos (persistidos), por ticket_id —
   // evita rodar a IA de novo toda vez que o monitor volta na mesma fila.
-  const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>({});
+  const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>(() => queueCache.initial?.drafts ?? {});
   useEffect(() => {
     if (activeQueue !== 'positivas' && activeQueue !== 'filhos') return;
     const audited = new Set(monitorias.map(monitoria => monitoria.ticket_id?.trim()));
@@ -646,6 +656,15 @@ export default function AuditingQueueView({
     const queueAtCallTime = activeQueue;
     const activeSearch = searchOverride !== undefined ? searchOverride : debouncedSearch;
 
+    const requestKey = JSON.stringify([queueAtCallTime, targetCursor, activeSearch]);
+    if (visibleRequest.current !== requestKey) {
+      const cached = targetCursor === null && !activeSearch ? queueCache.initial : undefined;
+      setTickets(cached?.tickets ?? []);
+      setDrafts(cached?.drafts ?? {});
+      setCursor(cached?.nextCursor ?? null);
+      setHasMore(cached?.hasMore ?? false);
+      visibleRequest.current = requestKey;
+    }
     setLoading(true);
     try {
       const [pageResult, savedResult, automationResult] = await Promise.allSettled([
@@ -688,7 +707,7 @@ export default function AuditingQueueView({
       // Descarta a resposta se já não for mais a busca mais recente — uma
       // troca de fila nesse meio tempo já disparou outra chamada, com seq
       // maior.
-      if (seq !== loadSeqRef.current) return;
+      if (seq !== loadSeqRef.current || !queueCache.isCurrent()) return;
       if (saved.length > 0) {
         setDrafts(previous => ({ ...previous, ...Object.fromEntries(saved.map(draft => [draft.ticket_id, draft])) }));
       }
@@ -699,6 +718,11 @@ export default function AuditingQueueView({
         mergedTickets.sort((a, b) =>
           (Date.parse(b.ticket_date || '') || 0) - (Date.parse(a.ticket_date || '') || 0));
       }
+      if (targetCursor === null && !activeSearch && pageResult.status === 'fulfilled') {
+        queueCache.write({ tickets: mergedTickets,
+          drafts: Object.fromEntries(saved.map(draft => [draft.ticket_id, draft])),
+          nextCursor, hasMore: more });
+      }
       setTickets(mergedTickets);
       setCursor(nextCursor);
       setHasMore(more);
@@ -707,7 +731,7 @@ export default function AuditingQueueView({
       console.error('Erro ao carregar fila:', err);
       toast.error('Não foi possível carregar a fila de chamados.');
     } finally {
-      if (seq === loadSeqRef.current) setLoading(false);
+      if (seq === loadSeqRef.current && queueCache.isCurrent()) setLoading(false);
     }
   };
 
@@ -725,6 +749,13 @@ export default function AuditingQueueView({
     const interval=window.setInterval(()=>void refresh(),30_000);
     return()=>{cancelled=true;window.clearInterval(interval);};
   }, [activeQueue,pageNumber,canAudit,monitorias,debouncedSearch]);
+
+  // Refresh only idle first pages: never move a selection or replace an open audit.
+  useBackgroundRefresh(() => loadQueueData(null),
+    currentSubTab !== 'monitores' && pageNumber === 1 && !loading && !searchTerm.trim()
+      && !batchRunning && !evaluatingTicketId && selectedTicketIds.size === 0
+      && !childPreviewTicket && !guidelinePickerTicket && !childGuidelineModalTicket
+      && !assignmentModalTicket && !helpdeskTicket);
 
   const goToNextPage = () => {
     if (!hasMore || !cursor) return;
@@ -2566,7 +2597,7 @@ export default function AuditingQueueView({
           ) : (
             <>
               {/* Lista de Tickets Negativos */}
-              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 `}>
             {paginatedTickets.map(ticket => (
               <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
@@ -2648,7 +2679,7 @@ export default function AuditingQueueView({
           ) : (
             <>
               {/* Lista de Chamados com CSAT Vazio */}
-              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 `}>
                 {paginatedTickets.map(ticket => {
                   const isPriority = ticket.agent_email && topPriorityEmails.has(ticket.agent_email.toLowerCase());
                   return (
@@ -2740,7 +2771,7 @@ export default function AuditingQueueView({
           ) : (
             <>
               {/* Lista de Chamados Positivos */}
-              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 `}>
                 {paginatedTickets.map(ticket => (
                   <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-functional-success/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-emerald-500/40 border-emerald-500/50 bg-emerald-500/3' : ''}`}>
                     <div className="flex flex-col gap-2">
@@ -2833,7 +2864,7 @@ export default function AuditingQueueView({
             </>
           ) : (
             <>
-              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 `}>
                 {paginatedTickets.map(ticket => {
                   const isValidated = validatedChildTickets.has(ticket.ticket_id);
                   const evaluation = childResultFor(ticket);
@@ -2973,7 +3004,7 @@ export default function AuditingQueueView({
             </div>
           ) : (
             <>
-              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 `}>
                 {paginatedTickets.map(ticket => {
                   const isValidated = validatedChildTickets.has(ticket.ticket_id);
                   const evaluation = childResultFor(ticket);

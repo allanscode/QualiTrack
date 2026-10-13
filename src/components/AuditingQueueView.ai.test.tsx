@@ -1,3 +1,4 @@
+import { clearPageCache } from '../lib/pageCache';
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuditingQueueView from './AuditingQueueView';
@@ -58,6 +59,7 @@ function renderQueue(props: Partial<ComponentProps<typeof AuditingQueueView>> = 
 
 describe('IA de chamados filhos', () => {
   beforeEach(() => {
+    clearPageCache();
     vi.clearAllMocks();
     mocks.fetchOpenAIDrafts.mockResolvedValue([]);
     mocks.fetchAIDrafts.mockResolvedValue({});
