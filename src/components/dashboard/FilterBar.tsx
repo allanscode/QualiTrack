@@ -110,6 +110,8 @@ export default function FilterBar() {
       .map(group => ({ value: group.id, label: group.name }));
   }, [groups, teams, allMonitorias]);
   const groupScopedMonitorias = useMemo(() => allMonitorias.filter(row => matchesTicketGroup(row, filters.groupId)), [allMonitorias, filters.groupId]);
+  const selectedGroupName = filters.groupId === MISSING_TICKET_GROUP ? 'Grupo não registrado'
+    : groupOptions.find(group => group.value === filters.groupId)?.label;
 
   const activeAuditors = useMemo(() => {
     const list = users.filter(u => (u.role === 'qualidade' || u.role === 'gestor_qualidade' || u.role === 'admin') && u.active !== false);
@@ -306,6 +308,7 @@ export default function FilterBar() {
           teams={teams}
           forms={forms}
           initialTeamId={filters.teamId}
+          groupName={selectedGroupName}
           initialStartDate={filters.startDate}
           initialEndDate={filters.endDate}
           currentUser={user}
@@ -319,7 +322,7 @@ export default function FilterBar() {
           monitorias={groupScopedMonitorias}
           forms={forms}
           feedbacks={feedbacks}
-          teamName={teams.find(t => t.id === filters.teamId)?.name || 'Operação Global'}
+          teamName={[teams.find(t => t.id === filters.teamId)?.name || 'Operação Global', selectedGroupName && `Grupo: ${selectedGroupName}`].filter(Boolean).join(' · ')}
         />
       )}
     </div>
