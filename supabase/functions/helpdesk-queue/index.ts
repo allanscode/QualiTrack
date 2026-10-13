@@ -38,6 +38,7 @@ import { childPublicationError, childPublicationText, type ChildPublicationMonit
 import { attachQueuePublicationState, type QueueMonitoriaState, type QueuePublicationTicket } from './queue-publication.ts';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
 import { previewWebpostoDivisions, type ZendeskMembership, type ZendeskMembershipGroup, type ZendeskMembershipUser } from './webposto-memberships.ts';
+import { checkMissingZendeskAccount } from './zendesk-account-check.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 // GLM pago primeiro; Gemma e Gemini pagos entram em sequência se necessário.
@@ -324,8 +325,22 @@ async function buildWebpostoMembershipPreview(
         zendeskGroups: [...zendeskGroups.values()],
         webPostoTeamId: webPosto.id,
       });
+      const checkedRows = [];
+      for (const row of rows) {
+        const local = localAgents?.find(agent => agent.id === row.user_id);
+        const accountCheck = !row.zendesk_primary_group_ids.length && local
+          ? await checkMissingZendeskAccount(origin, zendeskHeaders, local.email, local.name) : undefined;
+        const accountReason = accountCheck ? {
+          active_agent: 'Conta de agente ativa no Zendesk, mas sem grupo principal identificado; revisar os vínculos.',
+          suspended_agent: 'Conta de agente suspensa no Zendesk; revisar o acesso no QWP.',
+          end_user: 'Conta encontrada como usuário final no Zendesk; revisar o acesso no QWP.',
+          not_found: 'Conta não encontrada no Zendesk nas buscas por e-mail e nome.',
+          review: 'Busca encontrou uma possível identidade diferente; confirmar antes de alterar o acesso.',
+        }[accountCheck.status] : undefined;
+        checkedRows.push({ ...row, reason: accountReason || row.reason, zendesk_account_check: accountCheck });
+      }
       return jsonResponse({ success: true, checked_at: new Date().toISOString(), scanned_memberships: memberships.length,
-        scanned_pages: pages, rows }, 200);
+        scanned_pages: pages, rows: checkedRows }, 200);
 }
 
 function jsonResponse(body: any, status: number): Response {
