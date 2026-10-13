@@ -5,6 +5,7 @@ import { ChevronRight, ExternalLink, History, Shield, Tag, User as UserIcon } fr
 import { Monitoria, Team } from '../types';
 import { getStatusConfig, VARIANT_ICON_CONTAINER } from '../lib/statusHelper';
 import Badge from './ui/Badge';
+import MonitoriaIdBadge from './ui/MonitoriaIdBadge';
 import ActionDeadlineClock from './ui/ActionDeadlineClock';
 import { isChildTicketMonitoria } from '../lib/childTicketForm';
 
@@ -40,8 +41,7 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5 text-xs font-black text-brand-primary leading-tight">
-              <span className="text-brand-muted">#{m.display_id || m.id.slice(0, 4)}</span>
-              <span aria-hidden="true" className="text-brand-muted/60">&#183;</span>
+              <MonitoriaIdBadge displayId={m.display_id} id={m.id} />
               <span className="truncate font-mono">{m.ticket_id || 'S/N'}</span>
               {isChildTicketMonitoria(m) && (
                 <Badge variant="info" size="xs" className="shrink-0 text-[8px] uppercase tracking-wide" title="Monitoria de ticket filho">

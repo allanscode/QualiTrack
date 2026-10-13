@@ -5,6 +5,7 @@ import type { User } from '../../types';
 import { fetchRemovedMonitorias, restoreRemovedMonitoria, type RemovedMonitoria } from '../../lib/removedMonitorias';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
+import MonitoriaIdBadge from '../ui/MonitoriaIdBadge';
 
 interface Props {
   currentUser: User;
@@ -99,7 +100,7 @@ export default function RemovedMonitoriasManagement({ currentUser }: Props) {
               <p className="text-base font-bold text-brand-primary">Ticket #{row.ticket_id}</p>
               <p className="text-sm text-brand-muted">{row.evaluated_name || 'Atendente não informado'} · {row.status.replaceAll('_', ' ')}</p>
               <p className="text-xs text-brand-muted">Nota {row.score} · Atualizada em {formatDate(row.updated_at)}</p>
-              <p className="text-xs text-brand-muted">Monitoria {row.id}</p>
+              <MonitoriaIdBadge displayId={row.display_id} id={row.id} />
             </div>
             <Button type="button" variant="outline" icon={<RotateCcw className="h-4 w-4" />}
               onClick={() => { setSelectedId(row.id); setReason(''); }}>

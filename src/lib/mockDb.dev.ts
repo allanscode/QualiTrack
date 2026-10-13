@@ -158,7 +158,7 @@ const INITIAL_DATA: {
         ] },
         { id: 'child-routing', title: 'Destinatário (Para)', weight: 25, questions: [
           { id: 'child-routing-correct', text: 'O campo Para aponta para o grupo ou analista previsto para esta macro?', type: 'yes_no_na' },
-          { id: 'child-creator-authorized', text: 'O chamado filho foi criado por uma equipe autorizada pelo POP?', type: 'yes_no_na', is_critical: true },
+          { id: 'child-creator-authorized', text: 'O chamado filho foi criado por uma equipe autorizada pelo Manual de ticket filho?', type: 'yes_no_na', is_critical: true },
         ] },
       ],
       critical_errors: [],

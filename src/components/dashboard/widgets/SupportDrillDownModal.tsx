@@ -4,6 +4,7 @@ import { X, Search, ExternalLink, Tag, User as UserIcon, Download } from 'lucide
 import { toast } from 'sonner';
 import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
+import MonitoriaIdBadge from '../../ui/MonitoriaIdBadge';
 import Button from '../../ui/Button';
 import { Monitoria } from '../../../types';
 import { getStatusConfig } from '../../../lib/statusHelper';
@@ -185,10 +186,7 @@ export function SupportDrillDownContent({
                   {/* Identificação */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-[10px] font-black text-brand-muted uppercase tracking-widest">
-                        #{m.display_id || m.id.slice(0, 6)}
-                      </span>
-                      <span className="text-brand-muted/30">•</span>
+                      <MonitoriaIdBadge displayId={m.display_id} id={m.id} />
                       <span className="font-mono text-xs font-black text-brand-primary tracking-tight">
                         Chamado #{m.ticket_id}
                       </span>

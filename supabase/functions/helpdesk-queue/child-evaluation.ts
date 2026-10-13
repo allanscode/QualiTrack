@@ -81,9 +81,9 @@ export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
     : check.question_id === 'child-creator-authorized' && check.answer !== creatorAnswer
     ? { ...check, answer: creatorAnswer, passed: creatorAnswer === 'SIM',
       details: creatorAnswer === 'NAO'
-        ? `O histórico de abertura identifica a equipe ${evidence!.creatorGroupName} como origem do chamado filho. O POP proíbe que essa equipe crie tickets filhos.`
+        ? `O histórico de abertura identifica a equipe ${evidence!.creatorGroupName} como origem do chamado filho. O Manual de ticket filho proíbe que essa equipe crie tickets filhos.`
         : creatorAnswer === 'SIM'
-        ? `A equipe de origem identificada na abertura (${evidence!.creatorGroupName}) não está entre as equipes proibidas pelo POP.`
+        ? `A equipe de origem identificada na abertura (${evidence!.creatorGroupName}) não está entre as equipes proibidas pelo Manual de ticket filho.`
         : 'Não foi possível confirmar a equipe do criador na abertura; confira o histórico antes de invalidar por esta regra.' }
     : check);
   const answers = Object.fromEntries(checks.map(check => [check.question_id, check.answer])) as Record<string, ChildAnswer>;
@@ -92,7 +92,7 @@ export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
     : checks.some(check => check.answer === 'NA') ? 'atencao' : 'conforme';
   const otherFailures = checks.filter(check => check.question_id !== 'child-routing-correct' && check.answer === 'NAO');
   const summary = creatorAnswer === 'NAO'
-    ? `O chamado filho foi criado pela equipe ${evidence!.creatorGroupName}, o que viola o POP e exige invalidação após conferência do auditor.`
+    ? `O chamado filho foi criado pela equipe ${evidence!.creatorGroupName}, o que viola o Manual de ticket filho e exige invalidação após conferência do auditor.`
     : evidence?.selfAssigned
     ? status === 'conforme'
       ? 'A atribuição inicial do chamado filho ao próprio agente está correta e os demais critérios da abertura estão conformes.'

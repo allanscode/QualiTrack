@@ -62,6 +62,7 @@ import { getSavedZendeskTicketFields, normalizeZendeskTicketFields } from '../li
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
+import MonitoriaIdBadge from './ui/MonitoriaIdBadge';
 import Select from './ui/Select';
 import CustomSelect from './ui/CustomSelect';
 import CustomDatepicker from './ui/CustomDatepicker';
@@ -697,7 +698,7 @@ export default function MonitoriaForm({
                     : 'Monitorias salvas são somente leitura.'}
                 </p>
               )}
-              {initialData?.display_id && <Badge variant="info" size="xs" className="mt-0.5 text-[9px]">Mon: {initialData.display_id}</Badge>}
+              {initialData && <MonitoriaIdBadge displayId={initialData.display_id} id={initialData.id} className="mt-0.5" />}
               {headerSubtitle && (
                 <p className="text-[11px] sm:text-xs font-bold text-brand-primary mt-0.5 max-w-md truncate" title={headerSubtitle}>
                   {headerSubtitle}

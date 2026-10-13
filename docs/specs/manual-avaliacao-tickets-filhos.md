@@ -2,7 +2,7 @@
 ## Guia Operacional de Conformidade, Auditoria e Validação de Macros do Zendesk
 
 > **Versão:** 1.4 — Atualização Outubro / 2026
-> **Referência Técnica:** Manual Operacional de Chamados Filhos (POP v1.4)
+> **Referência Técnica:** Manual de ticket filho (versão 1.4)
 > **Plataforma:** Zendesk Support & Side Conversations (Conversas Paralelas)  
 > **Público-Alvo:** Monitores de Qualidade (QA), Supervisores de Suporte e Analistas de Atendimento  
 
@@ -100,7 +100,7 @@ flowchart TD
 
 ### Quesito 4: Equipe que Criou o Chamado Filho
 
-* **Regra do POP:** As equipes de **Análise Técnica** (inclusive especialidades) e **Análise de Correções** não podem criar tickets filhos. O escalonamento para essas equipes no ticket pai continua permitido; a restrição diz respeito a quem abriu o **filho**.
+* **Regra do Manual de ticket filho:** As equipes de **Análise Técnica** (inclusive especialidades) e **Análise de Correções** não podem criar tickets filhos. O escalonamento para essas equipes no ticket pai continua permitido; a restrição diz respeito a quem abriu o **filho**.
 * **Critério de Avaliação do QA:** Se o histórico de abertura comprovar que o criador pertencia a uma dessas equipes, marque **Não Conforme** no critério de equipe criadora. A falha é crítica e pode invalidar a monitoria, mesmo quando o filho foi corretamente autoatribuído. Registre a equipe e a evidência na justificativa.
 * **Evidência insuficiente:** O grupo atual do filho, o destino do pai ou o nome da macro não comprovam a equipe do criador na abertura. Se essa origem não puder ser verificada, marque **Não se aplica / evidência insuficiente** e faça conferência humana antes de invalidar por esta regra.
 

@@ -89,8 +89,8 @@ export async function extractGuidelineFileContent(file: File): Promise<string> {
 
 export const DEFAULT_CHILD_TICKET_GUIDELINE: AIEvaluationGuideline = {
   id: 'guideline-child-tickets-pop-v1',
-  title: 'Manual de Chamados Filhos — POP v1.4',
-  content: `# Manual Operacional de Chamados Filhos — POP v1.4
+  title: 'Manual de ticket filho — versão 1.4',
+  content: `# Manual de ticket filho — versão 1.4
 
 ## 1. Visão Geral e Objetivo
 Este manual normatiza a criação de chamados filhos (Side Conversations) abertos a partir de tickets do Zendesk na operação WebPosto. A ficha atual de abertura avalia assunto, texto da macro e direcionamento; o manual também estabelece governança de tags e campos obrigatórios.
@@ -124,7 +124,7 @@ Este manual normatiza a criação de chamados filhos (Side Conversations) aberto
 - **Regra 5: Equipe criadora autorizada (crítica):**
   A equipe de Análise Técnica ou de Análise de Correções não pode criar tickets filhos. Se o histórico de abertura comprovar que o criador pertencia a uma dessas equipes, a abertura é não conforme e pode ser invalidada, ainda que o filho tenha sido autoatribuído. Verifique a equipe do criador na abertura; grupo atual, destino do pai ou nome da macro isolados não provam a infração. Sem evidência suficiente, exija conferência humana.
 `,
-  file_name: 'Manual_Chamados_Filhos_POP_v1.4.md',
+  file_name: 'Manual_de_ticket_filho_v1.4.md',
   file_path: '',
   active: true,
   created_at: '2026-09-01T00:00:00Z',

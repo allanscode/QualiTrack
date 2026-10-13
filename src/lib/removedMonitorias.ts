@@ -2,7 +2,7 @@ import { mockDb, supabase } from './supabase';
 import type { Monitoria, User } from '../types';
 
 export type RemovedMonitoria = Pick<Monitoria,
-  'id' | 'ticket_id' | 'status' | 'score' | 'evaluated_name' | 'updated_at' | 'history' | 'active'>;
+  'id' | 'display_id' | 'ticket_id' | 'status' | 'score' | 'evaluated_name' | 'updated_at' | 'history' | 'active'>;
 
 export async function fetchRemovedMonitorias(ticketId = ''): Promise<RemovedMonitoria[]> {
   if (!supabase) {
@@ -15,7 +15,7 @@ export async function fetchRemovedMonitorias(ticketId = ''): Promise<RemovedMoni
   }
 
   let query = supabase.from('monitorias')
-    .select('id,ticket_id,status,score,evaluated_name,updated_at,history,active')
+    .select('id,display_id,ticket_id,status,score,evaluated_name,updated_at,history,active')
     .eq('active', false)
     .order('updated_at', { ascending: false })
     .limit(50);

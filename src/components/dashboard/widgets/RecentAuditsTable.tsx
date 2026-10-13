@@ -5,6 +5,7 @@ import { Monitoria, User } from '../../../types';
 import Card from '../../ui/Card';
 import { withDashboardTile } from '../DashboardTileLayout';
 import Badge from '../../ui/Badge';
+import MonitoriaIdBadge from '../../ui/MonitoriaIdBadge';
 import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
 import { Clock, ClipboardList, ChevronRight } from 'lucide-react';
 import { getStatusConfig } from '../../../lib/statusHelper';
@@ -100,7 +101,7 @@ function RecentAuditsTable({ monitorias, users, title = 'Monitorias Recentes', i
                   className="border-t border-surface-border/60 hover:bg-surface-subtle/70 transition-colors cursor-pointer group"
                   title={`Clique para visualizar os detalhes da monitoria #${m.ticket_id}`}
                 >
-                  <td className="px-6 py-3.5 font-mono font-black text-[10px] text-brand-muted">#{m.display_id || m.id.slice(0,4)}</td>
+                  <td className="px-6 py-3.5"><MonitoriaIdBadge displayId={m.display_id} id={m.id} /></td>
                   <td className="px-6 py-3.5 font-mono font-black text-sm text-brand-primary">#{m.ticket_id}</td>
                   <td className="px-6 py-3.5 text-sm font-semibold text-brand-primary">{getName(m.evaluator_id)}</td>
                   <td className="px-6 py-3.5 text-sm font-medium text-brand-muted">{getName(m.evaluated_id)}</td>

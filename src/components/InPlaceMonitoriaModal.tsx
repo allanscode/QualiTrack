@@ -10,6 +10,7 @@ import { useMonitoriaActions, getPreviousStage, getNextStage, getStageLabel, get
 import MonitoriaDetails from './MonitoriaDetails';
 import MonitoriaForm from './MonitoriaForm';
 import Badge from './ui/Badge';
+import MonitoriaIdBadge from './ui/MonitoriaIdBadge';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Select from './ui/Select';
@@ -141,9 +142,10 @@ export default function InPlaceMonitoriaModal({
             <cfg.icon className="size-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-black text-brand-primary">
-              Monitoria #{monitoria.display_id || monitoria.id.slice(0, 4)} · Ticket {monitoria.ticket_id || 'S/N'}
-            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-black text-brand-primary">Ticket #{monitoria.ticket_id || 'S/N'}</h2>
+              <MonitoriaIdBadge displayId={monitoria.display_id} id={monitoria.id} />
+            </div>
             <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-brand-primary/80">
               <span>Agente: {getName(monitoria.evaluated_id, false, monitoria.evaluated_name)}</span>
               <span>Equipe: {monitoria.team_name || teams.find(t => t.id === monitoria.team_id)?.name || 'N/A'}</span>
@@ -290,9 +292,10 @@ export default function InPlaceMonitoriaModal({
                           <h3 className="text-lg font-black text-brand-primary uppercase tracking-tight">
                             {modalTitle}
                           </h3>
-                          <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">
-                            Monitoria #{monitoria?.display_id || monitoria?.id.slice(0, 8) || 'S/N'} · Ticket #{monitoria?.ticket_id || 'S/N'}
-                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Ticket #{monitoria?.ticket_id || 'S/N'}</span>
+                            <MonitoriaIdBadge displayId={monitoria?.display_id} id={monitoria?.id} />
+                          </div>
                         </div>
                       </div>
 

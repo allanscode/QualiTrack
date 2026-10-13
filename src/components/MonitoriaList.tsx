@@ -28,6 +28,7 @@ import { m, AnimatePresence } from 'motion/react';
 import { matchesAnySearch } from '../utils/search';
 import Card from './ui/Card';
 import Badge from './ui/Badge';
+import MonitoriaIdBadge from './ui/MonitoriaIdBadge';
 import Button from './ui/Button';
 import CustomSelect from './ui/CustomSelect';
 import CustomDatepicker from './ui/CustomDatepicker';
@@ -701,7 +702,10 @@ export default function MonitoriaList({
                 <header className="flex items-start gap-3 border-b border-surface-border p-4 sm:items-center sm:p-6">
                   <span className={`flex size-10 shrink-0 items-center justify-center rounded-2xl ${VARIANT_ICON_CONTAINER[cfg.variant]}`}><cfg.icon className="size-5" /></span>
                   <div className="min-w-0 flex-1">
-                    <h2 id="monitoria-detail-title" className="text-base font-black text-brand-primary">Monitoria #{m.display_id || m.id.slice(0, 4)} · Ticket {m.ticket_id || 'S/N'}</h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 id="monitoria-detail-title" className="text-base font-black text-brand-primary">Ticket #{m.ticket_id || 'S/N'}</h2>
+                      <MonitoriaIdBadge displayId={m.display_id} id={m.id} />
+                    </div>
                     <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-brand-primary/80">
                       <span>Agente: {getName(m.evaluated_id, false, m.evaluated_name)}</span>
                       <span>Equipe: {m.team_name || staticData.teams.find(t => t.id === m.team_id)?.name || 'N/A'}</span>
@@ -804,9 +808,10 @@ export default function MonitoriaList({
                           <h3 id="monitoria-action-title" className="text-lg font-black text-brand-primary uppercase tracking-tight">
                             {modalTitle}
                           </h3>
-                          <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">
-                            Monitoria #{m?.display_id || m?.id.slice(0, 8) || 'S/N'} · Ticket #{m?.ticket_id || 'S/N'}
-                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Ticket #{m?.ticket_id || 'S/N'}</span>
+                            <MonitoriaIdBadge displayId={m?.display_id} id={m?.id} />
+                          </div>
                         </div>
                       </div>
 

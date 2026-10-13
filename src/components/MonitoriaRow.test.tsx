@@ -20,6 +20,7 @@ function row(item: Monitoria) {
 describe('identificação de ticket filho na lista', () => {
   it('mostra o selo depois do número para monitoria antiga marcada como filho', () => {
     row({ ...monitoria, form_snapshot: { ticket_kind: 'chamado_filho' } as unknown as Monitoria['form_snapshot'] });
+    expect(screen.getByText('Mon. #m-1')).toHaveClass('rounded-full');
     expect(screen.getByText('173388').nextElementSibling).toHaveTextContent('Ticket filho');
   });
 

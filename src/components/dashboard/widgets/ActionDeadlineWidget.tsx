@@ -3,7 +3,7 @@ import { Clock } from 'lucide-react';
 import { Monitoria } from '../../../types';
 import Card from '../../ui/Card';
 import { withDashboardTile } from '../DashboardTileLayout';
-import Badge from '../../ui/Badge';
+import MonitoriaIdBadge from '../../ui/MonitoriaIdBadge';
 import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard, useEditing } from '../DashboardContext';
@@ -201,7 +201,7 @@ function ActionDeadlineWidget({
             <div key={m.id} className="flex items-center justify-between p-3.5 rounded-2xl border border-surface-border hover:bg-surface-subtle/40 transition-colors">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <Badge variant="info" size="xs">Mon: {m.display_id || m.id.slice(0, 4)}</Badge>
+                  <MonitoriaIdBadge displayId={m.display_id} id={m.id} />
                   <span className="font-mono text-[10px] font-black text-brand-primary">#{m.ticket_id}</span>
                 </div>
                 <p className="text-[10px] text-brand-muted truncate font-bold uppercase tracking-wider">
