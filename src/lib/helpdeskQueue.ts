@@ -291,51 +291,7 @@ export async function fetchQueueTickets(
     t.status?.toLowerCase() !== 'archived' &&
     (type === 'proativas' || t.status?.toLowerCase() !== 'closed'));
 
-  // Fila de Positivas: trava de no máximo 2 avaliações por atendente no mês,
-  // usando o e-mail como chave de identificação agnóstica de plataforma.
-  if (type === 'positivas') {
-    const counts = countPositiveEvaluationsThisMonthByEmail(existingMonitorias, tickets);
-    tickets = tickets.map(t => {
-      const email = t.agent_email?.trim().toLowerCase();
-      const count = email ? (counts[email] || 0) : 0;
-      return { ...t, positive_cap_reached: count >= 2 } as AuditingQueueTicket;
-    });
-  }
-
   return { tickets, nextCursor, hasMore };
-}
-
-/**
- * Conta, por e-mail do atendente, quantas monitorias com resultado "Positiva"
- * já existem no mês corrente. O vínculo é feito por e-mail (não por id
- * interno), pois o mesmo atendente pode ainda não ter conta formal no
- * QualiTrack quando a fila é consultada.
- */
-function countPositiveEvaluationsThisMonthByEmail(
-  monitorias: Monitoria[],
-  tickets: AuditingQueueTicket[]
-): Record<string, number> {
-  const emailByAgentId: Record<string, string> = {};
-  tickets.forEach(t => {
-    if (t.agent_id && t.agent_email) {
-      emailByAgentId[t.agent_id] = t.agent_email.trim().toLowerCase();
-    }
-  });
-
-  const now = new Date();
-  const counts: Record<string, number> = {};
-
-  monitorias.forEach(m => {
-    if (m.satisfaction_result !== 'Positiva' || m.active === false) return;
-    const d = new Date(m.created_at || m.updated_at);
-    if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return;
-
-    const email = emailByAgentId[m.evaluated_id];
-    if (!email) return;
-    counts[email] = (counts[email] || 0) + 1;
-  });
-
-  return counts;
 }
 
 /**

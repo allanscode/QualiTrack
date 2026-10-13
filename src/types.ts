@@ -358,7 +358,7 @@ export interface AuditingQueueTicket {
   saved_ai_draft?: boolean;
   /** Rascunho antigo sem retrato do ticket; dados devem ser conferidos. */
   draft_metadata_incomplete?: boolean;
-  /** true = atendente já atingiu o máximo de 2 avaliações positivas no mês. */
+  /** @deprecated Historical cache field; agent limits no longer restrict evaluations. */
   positive_cap_reached?: boolean;
   /** Estado da captura persistente, independente da view do Zendesk. */
   positive_automation?: {

@@ -1,3 +1,4 @@
+import { nextPositivePreparationAttempt, PositivePreparationError } from './positive-preparation-retry.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import {
   buildZendeskParticipantRoles, classifyTranscriptMessage, isChatTranscript,
@@ -31,19 +32,19 @@ export function selectPositiveAIForm(tags: string[], forms: Form[], guidelines: 
   const normalized = tags.map(tag => tag.toLowerCase().trim());
   const revenda = normalized.some(tag => tag.includes('revenda'));
   const final = normalized.some(tag => /cliente[ _-]?final|^final$/.test(tag));
-  if (revenda && final) throw new Error('Tipo de cliente ambíguo; confira as tags antes da avaliação automática.');
-  if (!revenda && !final) throw new Error('Tipo de cliente não identificado; confira as tags e selecione a ficha manualmente.');
+  if (revenda && final) throw new PositivePreparationError('Tipo de cliente ambíguo; confira as tags antes da avaliação automática.');
+  if (!revenda && !final) throw new PositivePreparationError('Tipo de cliente não identificado; confira as tags e selecione a ficha manualmente.');
   const type = revenda ? 'revenda' : 'cliente_final';
   const title = revenda ? /revenda/i : /cliente.*final/i;
   const eligibleForms = forms.filter(form => form.active && title.test(form.title));
   const eligibleGuidelines = guidelines.filter(guideline => guideline.active && title.test(guideline.title));
   if (eligibleForms.length !== 1 || eligibleGuidelines.length !== 1) {
-    throw new Error('Ficha ou manual ausente/ambíguo para o tipo de cliente; seleção manual necessária.');
+    throw new PositivePreparationError('Ficha ou manual ausente/ambíguo para o tipo de cliente; seleção manual necessária.');
   }
   const form = eligibleForms[0];
   if (!Array.isArray(form.sections) || form.sections.length === 0 || form.sections.some(section =>
     !Number.isFinite(section.weight) || (section.weight || 0) <= 0 || !section.questions?.length)) {
-    throw new Error('Ficha sem critérios e pesos válidos para avaliação automática.');
+    throw new PositivePreparationError('Ficha sem critérios e pesos válidos para avaliação automática.');
   }
   return { type, form, guideline: eligibleGuidelines[0] };
 }
@@ -51,7 +52,7 @@ export function selectPositiveAIForm(tags: string[], forms: Form[], guidelines: 
 export function positiveCursor(candidate: string, origin: string, path: string): string {
   const url = new URL(candidate);
   if (url.origin !== origin || url.pathname !== path || url.username || url.password || url.hash) {
-    throw new Error('Paginação do Zendesk inválida.');
+    throw new PositivePreparationError('Paginação do Zendesk inválida.');
   }
   return url.href;
 }
@@ -62,7 +63,7 @@ export function positiveChannel(raw: string | undefined): 'Chat' | 'Email' | 'Te
   if (channel.includes('mail')) return 'Email';
   if (/voice|phone|telefone|call/.test(channel)) return 'Telefone';
   if (['chat','native_messaging','messaging','web'].includes(channel)) return 'Chat';
-  throw new Error('Canal do atendimento não identificado; revisão manual necessária.');
+  throw new PositivePreparationError('Canal do atendimento não identificado; revisão manual necessária.');
 }
 
 function snapshot(ticket: ZendeskTicket, body: ZendeskBody, origin: string): Json {
@@ -107,7 +108,11 @@ export async function processPositiveAI(
   const headers = { Authorization: `Basic ${btoa(`${email}/token:${apiToken}`)}`, Accept: 'application/json' };
   const read = async (url: string): Promise<ZendeskBody> => {
     const response = await fetcher(url, { headers, signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error(`Zendesk indisponível (${response.status}); nova tentativa será agendada.`);
+    if (!response.ok) {
+      const message = `Zendesk indisponível (${response.status}).`;
+      if (response.status === 408 || response.status === 429 || response.status >= 500) throw new Error(message);
+      throw new PositivePreparationError(message);
+    }
     return await response.json();
   };
   const { data: leases, error: scanError } = await db.rpc('claim_positive_ai_scan');
@@ -117,12 +122,12 @@ export async function processPositiveAI(
   if (config) {
     try {
       const viewId = env('HELPDESK_POSITIVE_VIEW_ID') || '48318855861396';
-      if (!/^\d+$/.test(viewId)) throw new Error('View positiva inválida.');
+      if (!/^\d+$/.test(viewId)) throw new PositivePreparationError('View positiva inválida.');
       const path = `/api/v2/views/${viewId}/tickets.json`;
       const url = config.capture_cursor ? positiveCursor(config.capture_cursor, origin, path)
         : `${origin}${path}?include=users,groups,organizations&page[size]=100`;
       const page = await read(url);
-      if (!Array.isArray(page.tickets)) throw new Error('A view não retornou uma lista de tickets válida.');
+      if (!Array.isArray(page.tickets)) throw new PositivePreparationError('A view não retornou uma lista de tickets válida.');
       const tickets = page.tickets.filter(ticket => Number.isSafeInteger(ticket.id) && ticket.id > 0
         && ['good', 'good_with_comment'].includes(ticket.satisfaction_rating?.score || ''));
       if (tickets.length) {
@@ -133,7 +138,7 @@ export async function processPositiveAI(
         captured = tickets.length;
       }
       const candidate = page.meta?.has_more ? page.links?.next : page.next_page;
-      if (page.meta?.has_more && !candidate) throw new Error('A view sinalizou mais páginas sem fornecer cursor.');
+      if (page.meta?.has_more && !candidate) throw new PositivePreparationError('A view sinalizou mais páginas sem fornecer cursor.');
       await requireWrite(db.from('positive_ai_config').update({
         capture_cursor: candidate ? positiveCursor(candidate, origin, path) : null,
         capture_lease_until: null, last_capture_at: new Date().toISOString(), last_error: null,
@@ -153,21 +158,22 @@ export async function processPositiveAI(
     const ticketPath = `/api/v2/tickets/${work.ticket_id}.json`;
     const ticketBody = await read(`${origin}${ticketPath}?include=users,groups,organizations`);
     const ticket = ticketBody.ticket;
-    if (!ticket || String(ticket.id) !== work.ticket_id) throw new Error('Ticket não disponível para preparação da ficha.');
+    if (!ticket || String(ticket.id) !== work.ticket_id) throw new PositivePreparationError('Ticket não disponível para preparação da ficha.');
     if (!ticket.created_at || !/^\d{4}-\d{2}-\d{2}T/.test(ticket.created_at) || !Number.isFinite(Date.parse(ticket.created_at))) {
-      throw new Error('Data do ticket inválida; revisão manual necessária.');
+      throw new PositivePreparationError('Data do ticket inválida; revisão manual necessária.');
     }
     const channel = positiveChannel(ticket.via?.channel);
     if (!['good', 'good_with_comment'].includes(ticket.satisfaction_rating?.score || '')) {
-      throw new Error('A pesquisa deixou de ser positiva; revisão manual necessária.');
+      throw new PositivePreparationError('A pesquisa deixou de ser positiva; revisão manual necessária.');
     }
     let agent = ticketBody.users?.find(user => user.id === ticket.assignee_id);
     if (!agent && ticket.assignee_id) agent = (await read(`${origin}/api/v2/users/${ticket.assignee_id}.json`)).user;
-    if (!agent?.email) throw new Error('Atendente sem e-mail verificado no Zendesk; vincule o agente manualmente.');
+    if (!agent?.email) throw new PositivePreparationError('Atendente sem e-mail verificado no Zendesk; vincule o agente manualmente.');
     const { data: user, error: userError } = await db.from('users').select('id,name,email,primary_team_id')
       .eq('active', true).eq('role', 'suporte').ilike('email', agent.email.trim()).maybeSingle();
-    if (userError || !user?.primary_team_id || user.email?.trim().toLowerCase() !== agent.email.trim().toLowerCase()) {
-      throw new Error('Agente ativo ou equipe de gestão não identificado; confira o cadastro.');
+    if (userError) throw new Error(userError.message);
+    if (!user?.primary_team_id || user.email?.trim().toLowerCase() !== agent.email.trim().toLowerCase()) {
+      throw new PositivePreparationError('Agente ativo ou equipe de gestão não identificado; confira o cadastro.');
     }
     let organization = ticketBody.organizations?.find(org => org.id === ticket.organization_id);
     if (!organization && ticket.organization_id) organization = (await read(`${origin}/api/v2/organizations/${ticket.organization_id}.json`)).organization;
@@ -185,14 +191,14 @@ export async function processPositiveAI(
     let next: string | null = `${origin}${commentPath}?include=users&per_page=100`;
     for (let pageNumber = 0; next && pageNumber < 10; pageNumber++) {
       const page: ZendeskBody = await read(next);
-      if (!Array.isArray(page.comments)) throw new Error('Transcrição incompleta; avaliação automática interrompida.');
+      if (!Array.isArray(page.comments)) throw new PositivePreparationError('Transcrição incompleta; avaliação automática interrompida.');
       comments.push(...page.comments);
       for (const person of page.users || []) users.set(person.id, person);
       const candidate: string | null | undefined = page.meta?.has_more ? page.links?.next : page.next_page;
-      if (page.meta?.has_more && !candidate) throw new Error('Paginação da transcrição incompleta.');
+      if (page.meta?.has_more && !candidate) throw new PositivePreparationError('Paginação da transcrição incompleta.');
       next = candidate ? positiveCursor(candidate, origin, commentPath) : null;
     }
-    if (next) throw new Error('Transcrição excede o limite de captura; revisão manual necessária.');
+    if (next) throw new PositivePreparationError('Transcrição excede o limite de captura; revisão manual necessária.');
     const participants = buildZendeskParticipantRoles([...users.values()]);
     const dialogue = comments.flatMap<DialogueMessage>(comment => {
       const body = comment.body || comment.html_body || '';
@@ -206,10 +212,10 @@ export async function processPositiveAI(
     }).filter(comment => comment.body.trim()).sort((a,b) => a.created_at.localeCompare(b.created_at));
     if (!dialogue.length || !dialogue.some(comment => comment.author_role === 'agent')
       || !dialogue.some(comment => comment.author_role === 'end_user')) {
-      throw new Error('Transcrição sem identificação segura de cliente e atendente; revisão manual necessária.');
+      throw new PositivePreparationError('Transcrição sem identificação segura de cliente e atendente; revisão manual necessária.');
     }
     if (dialogue.length > 500 || sanitizeDialogue(dialogue).length > 250_000) {
-      throw new Error('Transcrição excede o limite de avaliação; revisão manual necessária.');
+      throw new PositivePreparationError('Transcrição excede o limite de avaliação; revisão manual necessária.');
     }
     const fieldBody = await read(`${origin}/api/v2/ticket_fields.json`);
     const fieldDefinitions = new Map((fieldBody.ticket_fields || []).map(field => [field.id, field]));
@@ -246,7 +252,7 @@ export async function processPositiveAI(
     // Only a preparation lease may be released here. Started AI jobs are owned
     // by the durable retry pipeline and must never be restarted by this scanner.
     await requireWrite(db.from('positive_ai_queue').update({ status:'blocked',last_error:message.slice(0,500),lease_until:null,
-      next_attempt_at:new Date(Date.now()+Math.min(60,2 ** Math.min(work.attempts,6))*60_000).toISOString(),updated_at:new Date().toISOString(),
+      next_attempt_at:nextPositivePreparationAttempt(error,work.attempts),updated_at:new Date().toISOString(),
     }).eq('ticket_id',work.ticket_id).eq('lease_id',work.lease_id).eq('status','preparing'));
     return { enabled:true,captured,processed:0,blocked:work.ticket_id,error:message };
   }

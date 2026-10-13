@@ -965,7 +965,7 @@ export default function AuditingQueueView({
   }, [filteredTickets, startIndex, endIndex]);
 
   const evaluableTicketsCount = useMemo(() => {
-    return paginatedTickets.filter(t => !t.saved_ai_draft && !drafts[t.ticket_id] && !t.already_audited && !t.positive_cap_reached
+    return paginatedTickets.filter(t => !t.saved_ai_draft && !drafts[t.ticket_id] && !t.already_audited
       && !globalEvaluatingTickets.has(t.ticket_id) && aiJobs[t.ticket_id]?.status !== 'running'
       && !((activeQueue === 'filhos' || activeQueue === 'filhos_invalidos') && (t.child_evaluation || aiJobs[t.ticket_id]?.status === 'completed'))).length;
   }, [paginatedTickets, drafts, aiJobs, activeQueue]);
@@ -1041,10 +1041,6 @@ export default function AuditingQueueView({
   // de ficha e manual baseada no tipo de cliente (organização no Zendesk).
   const openGuidelinePicker = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
-    if (ticket.positive_cap_reached && !drafts[ticket.ticket_id]) {
-      toast.warning('Este atendente já atingiu o máximo de 2 avaliações positivas no mês.');
-      return;
-    }
     setGuidelinePickerTicket(ticket);
     setSelectionOverrideEnabled(false);
     setSelectedOverrideFormId('');
@@ -1227,7 +1223,7 @@ export default function AuditingQueueView({
 
     const pending = candidateTickets.filter(t => {
       if (isEvaluatingTicket(t.ticket_id) || (isChildBatch && childResultFor(t))) return false;
-      if (t.saved_ai_draft || drafts[t.ticket_id] || t.already_audited || t.positive_cap_reached) return false;
+      if (t.saved_ai_draft || drafts[t.ticket_id] || t.already_audited) return false;
       return true;
     });
 
@@ -1845,33 +1841,20 @@ export default function AuditingQueueView({
             <Trash2 className="w-3.5 h-3.5" />
             <span>Excluir rascunho</span>
           </Button>
-          {!ticket.positive_cap_reached && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isEvaluating}
-              onClick={() => openGuidelinePicker(ticket)}
-              className="flex items-center gap-1 border-amber-400 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-[11px] font-medium"
-              title="Escolher outra ficha ou manual e gerar um novo rascunho"
-            >
-              <Bot className={`w-3 h-3 ${isEvaluating ? 'animate-spin' : ''}`} />
-              <span>Reavaliar</span>
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isEvaluating}
+            onClick={() => openGuidelinePicker(ticket)}
+            className="flex items-center gap-1 border-amber-400 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-[11px] font-medium"
+            title="Escolher outra ficha ou manual e gerar um novo rascunho"
+          >
+            <Bot className={`w-3 h-3 ${isEvaluating ? 'animate-spin' : ''}`} />
+            <span>Reavaliar</span>
+          </Button>
         </div>
       );
     }
-
-    if (ticket.positive_cap_reached) {
-      return (
-        <span title="Este atendente já atingiu o máximo de 2 avaliações positivas no mês.">
-          <Badge variant="warning" size="xs" className="font-bold text-[9px]">
-            Máximo de 2 por agente atingido
-          </Badge>
-        </span>
-      );
-    }
-
 
     return (
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">

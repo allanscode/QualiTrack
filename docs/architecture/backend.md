@@ -14,7 +14,9 @@ Secrets configurados no Supabase prevalecem sobre os defaults. Ao atualizar esse
 
 `positive-automation.ts` captura uma página da view por execução e preserva o cursor. A tabela `positive_ai_queue` mantém o ticket, a ficha e o contexto necessário mesmo após a saída da view. As reservas no banco impedem execuções concorrentes do mesmo item. O worker privado `process_positive_ai` reutiliza a fila de retentativas existente.
 
-A conclusão de `ai_evaluation_jobs` aciona `finish_positive_ai_job`: valida respostas e erros críticos, recalcula a nota pela ficha congelada, reconfere o limite mensal e conclui a monitoria interna a partir de 75%. Notas inferiores e pendências de evidência permanecem como rascunhos para revisão. A captura e a avaliação fazem somente leituras no Zendesk.
+A conclusão de `ai_evaluation_jobs` aciona `finish_positive_ai_job`: valida respostas e erros críticos, recalcula a nota pela ficha congelada e conclui a monitoria interna a partir de 75%, sem teto mensal por agente. Notas inferiores e pendências de evidência permanecem como rascunhos para revisão. A captura e a avaliação fazem somente leituras no Zendesk.
+
+Na preparação, dados inválidos geram `PositivePreparationError` e deixam o ticket bloqueado para conferência, com `next_attempt_at='infinity'`. Falhas temporárias têm espera progressiva e no máximo cinco tentativas. Tickets `pending` têm prioridade sobre retentativas. O monitor pode usar o fluxo manual após conferir os dados; a captura periódica não reinicia esses bloqueios. Os jobs de IA já iniciados continuam sob responsabilidade da fila própria de retentativas.
 
 Para ativação por ambiente, configure o auditor em `positive_ai_config`, os secrets Zendesk/OpenRouter e, no Vault, `positive_ai_project_url`/`positive_ai_service_key` e `ai_retry_project_url`/`ai_retry_service_key`. As URLs e chaves devem pertencer ao próprio ambiente. Os agendamentos são `qwp-positive-ai` e `wp-quality-ai-retries`. `enabled=false` impede novos jobs automáticos; o limite opcional total pausa automaticamente ao atingir `max_evaluations`.
 
