@@ -69,6 +69,23 @@ describe('IA de chamados filhos', () => {
   });
   afterEach(cleanup);
 
+  it.each(['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos'] as const)('filtra monitorias salvas sem ocultar pareceres de IA em %s', async activeSubTab => {
+    mocks.fetchQueueTickets.mockResolvedValue({ tickets: [
+      { ...ticket('801'), already_audited: true, monitoria_id: 'saved', monitoria_status: 'pendente_revisao' },
+      { ...ticket('802'), child_evaluation: result },
+    ], hasMore: false });
+    renderQueue({ activeSubTab });
+    expect(await screen.findByText('Chamado filho 801', {}, { timeout: 5000 })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Somente tickets sem monitoria' }));
+    await waitFor(() => expect(screen.queryByText('Chamado filho 801')).not.toBeInTheDocument());
+    expect(screen.getByText('Chamado filho 802')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Filtros · 1' }));
+    expect(screen.getByRole('menuitemcheckbox')).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('menuitemcheckbox'));
+    expect(await screen.findByText('Chamado filho 801')).toBeInTheDocument();
+  });
+
   it.each(['filhos', 'filhos_invalidos'] as const)('permite reavaliar o parecer diretamente no card em %s', async activeSubTab => {
     mocks.fetchQueueTickets.mockResolvedValue({ tickets: [{ ...ticket('701'), child_evaluation: result }], hasMore: false });
     renderQueue({ activeSubTab });

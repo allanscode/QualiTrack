@@ -106,6 +106,7 @@ import { childTicketForm } from '../lib/childTicketForm';
 import HelpdeskSendModal from './HelpdeskSendModal';
 import ChildTicketMonitoriaAction from './ChildTicketMonitoriaAction';
 import ChildTicketReevaluateAction from './ChildTicketReevaluateAction';
+import QueueWithoutMonitoriaFilter from './QueueWithoutMonitoriaFilter';
 
 const PUBLISHABLE_HELPDESK_STATUSES = new Set(['pendente_revisao', 'concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada']);
 const MONITORIA_STAGE_LABELS: Record<string, string> = {
@@ -443,6 +444,8 @@ export default function AuditingQueueView({
 
   // Filtro de rascunhos feitos pela IA (Todos | Com Rascunho IA | Sem Rascunho IA)
   const [aiDraftFilter, setAiDraftFilter] = useState<'all' | 'with_draft' | 'without_draft'>('all');
+  const [onlyWithoutMonitoria, setOnlyWithoutMonitoria] = useState(false);
+  const activeFiltersCount = Number(aiDraftFilter !== 'all') + Number(onlyWithoutMonitoria);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -915,6 +918,7 @@ export default function AuditingQueueView({
   // Filtro de busca na lista de tickets com suporte a filtro de rascunhos da IA
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
+      if (onlyWithoutMonitoria && (t.already_audited || t.monitoria_id)) return false;
       if (isDistributedQueue(activeQueue)) {
         if (!assignmentsReady[activeQueue]) return false;
         if (queueAssignments[activeQueue][t.ticket_id]?.status === 'completed'
@@ -943,7 +947,7 @@ export default function AuditingQueueView({
 
       return matchesSearch && matchesAgent;
     });
-  }, [tickets, searchTerm, selectedAgentFilter, selectedMonitorFilter, drafts, activeQueue, validatedChildTickets, aiDraftFilter, queueAssignments, assignmentsReady, currentUserRole, currentUserId, isSupervisorView]);
+  }, [tickets, searchTerm, selectedAgentFilter, selectedMonitorFilter, drafts, activeQueue, validatedChildTickets, aiDraftFilter, onlyWithoutMonitoria, queueAssignments, assignmentsReady, currentUserRole, currentUserId, isSupervisorView]);
 
   // Paginação configurável por página (5, 10, 15, 20) com padrão 5
   const [pageSize, setPageSize] = useState<number>(5);
@@ -953,7 +957,7 @@ export default function AuditingQueueView({
   useEffect(() => {
     setCurrentPage(1);
     setSelectedTicketIds(new Set());
-  }, [searchTerm, selectedAgentFilter, selectedMonitorFilter, activeQueue, pageSize, aiDraftFilter]);
+  }, [searchTerm, selectedAgentFilter, selectedMonitorFilter, activeQueue, pageSize, aiDraftFilter, onlyWithoutMonitoria]);
 
   const totalItems = filteredTickets.length;
   const totalLocalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -2313,20 +2317,20 @@ export default function AuditingQueueView({
             aria-expanded={isFilterDropdownOpen}
             aria-haspopup="true"
             className={`h-9 px-3 rounded-lg border text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer ${
-              aiDraftFilter !== 'all'
+              activeFiltersCount > 0
                 ? 'bg-brand-highlight/10 border-brand-highlight/30 text-brand-primary font-semibold'
                 : 'bg-surface-subtle/50 hover:bg-surface-subtle/70 border-surface-border text-brand-muted hover:text-brand-primary'
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>{aiDraftFilter === 'all' ? 'Filtros' : 'Filtros · 1'}</span>
+            <span>{activeFiltersCount === 0 ? 'Filtros' : `Filtros · ${activeFiltersCount}`}</span>
             <ChevronDown className={`w-3 h-3 text-brand-muted transition-transform duration-200 ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {isFilterDropdownOpen && (
             <div
               role="menu"
-              className="absolute top-full left-0 mt-1.5 z-30 min-w-[190px] p-1.5 rounded-xl bg-surface-card border border-surface-border shadow-xl backdrop-blur-md animate-fade-in"
+              className="absolute top-full left-0 mt-1.5 z-30 min-w-[240px] p-1.5 rounded-xl bg-surface-card border border-surface-border shadow-xl backdrop-blur-md animate-fade-in"
             >
               <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
                 Status de Rascunho
@@ -2387,6 +2391,10 @@ export default function AuditingQueueView({
                 </span>
                 {aiDraftFilter === 'without_draft' && <Check className="w-3.5 h-3.5 text-brand-highlight" />}
               </button>
+              <QueueWithoutMonitoriaFilter checked={onlyWithoutMonitoria} onChange={checked => {
+                setOnlyWithoutMonitoria(checked);
+                setIsFilterDropdownOpen(false);
+              }} />
             </div>
           )}
         </div>
