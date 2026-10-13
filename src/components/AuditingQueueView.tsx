@@ -39,6 +39,7 @@ import { fetchAIGuidelines, DEFAULT_CHILD_TICKET_GUIDELINE } from '../lib/aiGuid
 import { fetchAIDrafts, fetchOpenAIDrafts, saveAIDraft, deleteAIDraft, removeAIDraft, AIEvaluationDraft } from '../lib/aiDrafts';
 import { claimAIJob, completeAIJob, failAIJob, cancelAIJob, fetchAIJobs, AIEvaluationJob } from '../lib/aiJobs';
 import { fetchPositiveAutomation, mergePositiveAutomation, positiveAutomationLabel } from '../lib/positiveAutomation';
+import { activeMonitoriaTicketIds } from '../lib/activeMonitoriaTickets';
 import {
   AlertTriangle,
   Sparkles,
@@ -432,7 +433,7 @@ export default function AuditingQueueView({
   const [drafts, setDrafts] = useState<Record<string, AIEvaluationDraft>>(() => queueCache.initial?.drafts ?? {});
   useEffect(() => {
     if (activeQueue !== 'positivas' && activeQueue !== 'filhos') return;
-    const audited = new Set(monitorias.map(monitoria => monitoria.ticket_id?.trim()));
+    const audited = activeMonitoriaTicketIds(monitorias);
     setTickets(previous => {
       const retained = previous.filter(ticket => !ticket.saved_ai_draft || (drafts[ticket.ticket_id] && !audited.has(ticket.ticket_id)));
       const existing = new Set(retained.map(ticket => ticket.ticket_id));
@@ -681,7 +682,7 @@ export default function AuditingQueueView({
       if (savedResult.status === 'rejected') console.error('Erro ao carregar rascunhos da fila:', savedResult.reason);
       if (automationResult.status === 'rejected') console.error('Erro ao carregar automações positivas:', automationResult.reason);
       const saved = savedResult.status === 'fulfilled' ? savedResult.value : [];
-      const auditedIds = new Set(monitorias.map(m => m.ticket_id?.trim()).filter(Boolean));
+      const auditedIds = activeMonitoriaTicketIds(monitorias);
       const existingIds = new Set(data.map(ticket => ticket.ticket_id));
       const search = activeSearch?.trim();
       const retained = saved
@@ -4142,6 +4143,12 @@ export default function AuditingQueueView({
                     <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">3</span>
                     <div>
                       <strong className="text-brand-primary">Direcionamento ("Para"):</strong> O filho inicia no nome de quem o abriu. Em Análise Técnica, o pai segue para o grupo especialista; o filho pode ser transferido depois.
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-brand-highlight/10 text-brand-highlight font-bold flex items-center justify-center shrink-0 text-[9px]">4</span>
+                    <div>
+                      <strong className="text-brand-primary">Equipe criadora:</strong> Análise Técnica e Análise de Correções não podem criar tickets filhos. A infração comprovada é crítica e pode invalidar a monitoria.
                     </div>
                   </div>
                 </div>

@@ -21,7 +21,7 @@ Tickets que já possuem monitoria salva exibem essa informação e a ação **Ve
 
 As filas de filhos e filhos inválidos permitem avaliar em lote os tickets selecionados ou, sem seleção, os elegíveis da página. Tickets já avaliados, auditados ou com IA em execução são ignorados. A janela individual pode ser fechada e o progresso do lote pode ser minimizado sem cancelar a análise; os resultados continuam associados ao ticket e podem ser recuperados ao abrir o parecer.
 
-Ao lançar a monitoria, o parecer preenche as respostas, justificativas por critério e observação geral da ficha própria, preservando respostas humanas já existentes. Novas análises retornam os cinco critérios identificados por `question_id`; evidência insuficiente é indicada explicitamente por `NA`. Pareceres antigos com três verificações preenchem somente os critérios correspondentes, deixando os demais para revisão. O preenchimento não salva nem publica a monitoria automaticamente.
+Ao lançar a monitoria, o parecer preenche as respostas, justificativas por critério e observação geral da ficha própria, preservando respostas humanas já existentes. Novas análises retornam os seis critérios identificados por `question_id`; evidência insuficiente é indicada explicitamente por `NA`. Pareceres antigos com três verificações preenchem somente os critérios correspondentes, deixando os demais para revisão. O preenchimento não salva nem publica a monitoria automaticamente.
 
 ### Fluxo de monitorias PJ
 
@@ -229,13 +229,13 @@ No staging, a sincronização externa fica desligada por `final_positive_invalid
 
 ## Automação de chamados filhos
 
-`child_ai_queue` preserva tickets e pareceres independentemente da view do Zendesk. A ficha fixa de filhos recebe os cinco critérios do parecer; a nota é recalculada a partir dos pesos da ficha. Notas abaixo de 75%, erros críticos ou evidências insuficientes ficam para revisão. Notas a partir de 75% com dados completos geram monitoria concluída em nome do auditor configurado, com histórico explícito de autoria automática.
+`child_ai_queue` preserva tickets e pareceres independentemente da view do Zendesk. A ficha fixa de filhos recebe os seis critérios do parecer; a nota é recalculada a partir dos pesos da ficha. Notas abaixo de 75%, erros críticos ou evidências insuficientes ficam para revisão. Notas a partir de 75% com dados completos geram monitoria concluída em nome do auditor configurado, com histórico explícito de autoria automática. Trabalhos iniciados com a ficha anterior são validados conforme o snapshot salvo no próprio job.
 
 A automação de filhos começa desativada e compartilha o teto de execuções do ambiente com a automação de positivas. O limite de cinco testes já consumido não é reiniciado. A distribuição das revisões mantém as regras de atribuição da fila de filhos.
 
 ## Indicadores de prazo
 
-- Cada transição de status recalcula o deadline
+- O prazo original do ciclo permanece nas transições entre status ativos, inclusive contestação, reavaliação e escalonamento
 - Prazo calculado com `addBusinessHours()` de `businessHours.ts`
 - Configurável via `useQualityConfig` (horas por etapa)
 - `ActionDeadlineClock` exibe contagem regressiva em tempo real (atualiza a cada 60 segundos)

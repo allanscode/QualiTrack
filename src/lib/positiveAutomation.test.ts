@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchPositiveAutomation, mergePositiveAutomation, positiveAutomationLabel, type PositiveAutomationItem } from './positiveAutomation';
+import { activeMonitoriaTicketIds } from './activeMonitoriaTickets';
 
 vi.mock('./supabase',()=>({isMockMode:true,supabase:null}));
 const row: PositiveAutomationItem = {
@@ -49,5 +50,15 @@ describe('durable positive automation queue',()=>{
       .toEqual([underReview]);
     expect(mergePositiveAutomation([underReview],[],new Set(['123']),undefined,'positivas'))
       .toEqual([]);
+  });
+  it('shows ticket 182786 again after its monitoria was removed', () => {
+    const audited = activeMonitoriaTicketIds([
+      { ticket_id: '182786', active: false },
+      { ticket_id: '180330', active: true },
+    ]);
+    const live = { ...row.ticket_snapshot, ticket_id: '182786', status: 'solved' };
+    expect([...audited]).toEqual(['180330']);
+    expect(mergePositiveAutomation([live], [], audited, undefined, 'filhos'))
+      .toEqual([live]);
   });
 });

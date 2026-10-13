@@ -121,6 +121,8 @@ Este manual normatiza a criação de chamados filhos (Side Conversations) aberto
   Todo chamado filho inicia atribuído ao agente que o abriu. Em Análise Técnica, o ticket pai vai para o grupo especialista; o filho pode ser encaminhado depois, com rastreabilidade. A equipe mostrada junto ao nome do agente não invalida a autoatribuição.
 - **Regra 4: Tags e campos obrigatórios:**
   Preserve as tags criadas pelas macros e mantenha os campos obrigatórios preenchidos conforme o tipo de chamado. A ficha atual não possui critério específico para pontuar tags.
+- **Regra 5: Equipe criadora autorizada (crítica):**
+  A equipe de Análise Técnica ou de Análise de Correções não pode criar tickets filhos. Se o histórico de abertura comprovar que o criador pertencia a uma dessas equipes, a abertura é não conforme e pode ser invalidada, ainda que o filho tenha sido autoatribuído. Verifique a equipe do criador na abertura; grupo atual, destino do pai ou nome da macro isolados não provam a infração. Sem evidência suficiente, exija conferência humana.
 `,
   file_name: 'Manual_Chamados_Filhos_POP_v1.4.md',
   file_path: '',

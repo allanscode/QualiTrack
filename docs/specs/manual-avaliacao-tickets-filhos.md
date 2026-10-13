@@ -18,13 +18,14 @@ A integridade dos tickets filhos é fundamental para o fluxo de atendimento da W
 
 ## 2. Os Três Pilares Mandatórios de Avaliação
 
-Durante a auditoria de um chamado filho, o Monitor de Qualidade e o motor de Inteligência Artificial do QualiTrack avaliam obrigatoriamente **três quesitos essenciais**:
+Durante a auditoria de um chamado filho, o Monitor de Qualidade e o motor de Inteligência Artificial do QualiTrack avaliam obrigatoriamente **quatro quesitos essenciais**:
 
 ```mermaid
 flowchart TD
     TF["Abertura de Ticket Filho (Side Conversation)"] --> Q1["1. Preservação do Assunto"]
     TF --> Q2["2. Preservação do Texto da Macro"]
     TF --> Q3["3. Direcionamento Correto ('Para')"]
+    TF --> Q4["4. Equipe Criadora Autorizada"]
     
     Q1 -->|Alteração manual indevida na abertura| INV["❌ Falha Grave / Fila de Inválidos"]
     Q1 -->|Assunto válido ou alterado pela macro de resolvido| OK1["✔ Conforme"]
@@ -34,6 +35,9 @@ flowchart TD
     
     Q3 -->|Filho inicialmente em nome de outro agente| ERRO["❌ Direcionamento Incorreto"]
     Q3 -->|Filho inicialmente no nome de quem abriu| OK3["✔ Conforme"]
+    Q4 -->|Criado por Análise Técnica ou Análise de Correções| ORIGEM["❌ Falha Crítica / Invalidação"]
+    Q4 -->|Outra equipe comprovada| OK4["✔ Conforme"]
+    Q4 -->|Equipe não comprovada| REVISAR["⚠ Conferência humana"]
     
 ```
 
@@ -94,26 +98,35 @@ flowchart TD
 
 ---
 
+### Quesito 4: Equipe que Criou o Chamado Filho
+
+* **Regra do POP:** As equipes de **Análise Técnica** (inclusive especialidades) e **Análise de Correções** não podem criar tickets filhos. O escalonamento para essas equipes no ticket pai continua permitido; a restrição diz respeito a quem abriu o **filho**.
+* **Critério de Avaliação do QA:** Se o histórico de abertura comprovar que o criador pertencia a uma dessas equipes, marque **Não Conforme** no critério de equipe criadora. A falha é crítica e pode invalidar a monitoria, mesmo quando o filho foi corretamente autoatribuído. Registre a equipe e a evidência na justificativa.
+* **Evidência insuficiente:** O grupo atual do filho, o destino do pai ou o nome da macro não comprovam a equipe do criador na abertura. Se essa origem não puder ser verificada, marque **Não se aplica / evidência insuficiente** e faça conferência humana antes de invalidar por esta regra.
+
+---
+
 ## 3. Matriz de Pontuação e Status do Parecer (QualiTrack)
 
 ### Ficha padrão no QualiTrack
 
-A ficha **Ficha de Monitoria de Ticket Filho** é selecionada automaticamente na fila de Chamados Filhos e na abertura manual quando o ticket já foi identificado como filho. Ela usa os três pilares deste manual, com pesos de 35% para assunto, 40% para texto da macro e 25% para direcionamento. A seção de assunto também confere o vínculo com o ticket pai; a seção de texto distingue preservação do modelo e qualidade do complemento técnico.
+A ficha **Ficha de Monitoria de Ticket Filho** é selecionada automaticamente na fila de Chamados Filhos e na abertura manual quando o ticket já foi identificado como filho. Ela usa os quatro quesitos deste manual, com pesos de 35% para assunto, 40% para texto da macro e 25% para direcionamento e equipe criadora. A seção de assunto também confere o vínculo com o ticket pai; a seção de texto distingue preservação do modelo e qualidade do complemento técnico.
 
-Falhas na preservação do assunto ou do texto-base são críticas. A avaliação da IA é apenas apoio: o auditor preenche e confirma cada resposta da ficha antes de salvar. Em monitorias antigas, a ficha originalmente usada permanece no histórico; quando a origem do ticket filho está registrada no job ou log de IA, a reavaliação abre a ficha própria com respostas novas, sem copiar respostas de critérios de atendimento.
+Falhas na preservação do assunto, do texto-base ou na equipe criadora proibida são críticas. A avaliação da IA é apenas apoio: o auditor preenche e confirma cada resposta da ficha antes de salvar. Em monitorias antigas, a ficha originalmente usada permanece no histórico; quando a origem do ticket filho está registrada no job ou log de IA, a reavaliação abre a ficha própria com respostas novas, sem copiar respostas de critérios de atendimento.
 
-O sistema de auditoria inteligente considera apenas os três quesitos abaixo. Tags do Zendesk não compõem o parecer nem a nota.
+O sistema de auditoria inteligente considera apenas os quatro quesitos abaixo. Tags do Zendesk não compõem o parecer nem a nota.
 
 | Quesito Auditado | Impacto no Status Geral |
 | :--- | :--- |
 | **1. Preservação do Assunto** | Se reprovado, limita o status máximo a **Não Conforme**. |
 | **2. Preservação do Texto da Macro** | Se ausente, penaliza gravemente a nota da monitoria. |
 | **3. Direcionamento Correto ("Para")** | Direcionamento incorreto rebaixa para **Atenção** ou **Não Conforme**. |
+| **4. Equipe Criadora Autorizada** | Criação comprovada por Análise Técnica ou Análise de Correções é **erro crítico** e zera a nota. Sem prova da origem, exige revisão. |
 
 ### Classificação de Parecer:
-* 🟢 **Conforme (90 a 100 pontos):** Todos os três pilares cumpridos; assunto da abertura válido, inclusive após mudança pela macro de resolvido; macro presente com relato claro da demanda; direcionamento correto.
+* 🟢 **Conforme (90 a 100 pontos):** Os quatro quesitos cumpridos; assunto da abertura válido, inclusive após mudança pela macro de resolvido; macro presente com relato claro da demanda; direcionamento correto e equipe criadora autorizada.
 * 🟡 **Atenção / Ressalvas (70 a 89 pontos):** Assunto e direcionamento corretos, mas o relato da demanda exige esclarecimento para continuidade.
-* 🔴 **Não Conforme (0 a 69 pontos):** Assunto da abertura alterado manualmente de forma indevida, texto da macro suprimido ou encaminhamento para destino incorreto.
+* 🔴 **Não Conforme (0 a 69 pontos):** Assunto da abertura alterado manualmente de forma indevida, texto da macro suprimido, encaminhamento para destino incorreto ou criação comprovada por equipe proibida.
 
 ---
 
@@ -125,6 +138,7 @@ Ao auditar um chamado na fila de **Triagem de Chamados Filhos**, execute o segui
 - [ ] **2. Texto:** A mensagem estrutural da macro foi mantida? Há um resumo claro da demanda que permita continuá-la, com dados técnicos apenas quando pertinentes?
 - [ ] **3. Destinatário ("Para"):** O filho foi atribuído inicialmente ao agente que o abriu? Em Análise Técnica, o pai foi encaminhado ao grupo especialista correto quando houver evidência?
 - [ ] **4. Chamado Pai Vinculado:** O ID do chamado pai (`parent_ticket_id` / `problem_id`) foi capturado e validado corretamente?
+- [ ] **5. Equipe Criadora:** O histórico de abertura confirma que o criador não pertencia à Análise Técnica nem à Análise de Correções? Se não houver prova, encaminhe para conferência humana.
 
 ---
 

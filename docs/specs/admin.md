@@ -1,7 +1,7 @@
 # SPEC: Módulo Admin
 
 ## Arquivo Principal
-- `src/components/AdminPanel.tsx` (9 subabas)
+- `src/components/AdminPanel.tsx` (10 subabas)
 
 ## Sub-módulos (Tabs Internas)
 
@@ -16,6 +16,7 @@
 | 7 | `campos_extras` | Campos Extras | `Sliders` | `DissatisfactionFieldsManagement` |
 | 8 | `ia_hub` | Inteligência Artificial | `Brain` | `AIHubManagement` |
 | 9 | `emails` | E-mails & Disparos | `Mail` | `EmailConfigManagement` |
+| 10 | `removed_monitorias` | Monitorias removidas | `RotateCcw` | `RemovedMonitoriasManagement` |
 
 > Tab bar: pill buttons em `bg-surface-card` container com `rounded-2xl`. Conteúdo: `AnimatePresence mode="wait"` + `motion.div` (fade + y-slide, 0.2s).
 
@@ -176,6 +177,18 @@ jobs, preservando fila e avaliações já iniciadas. O MockDb mantém estado loc
 | Aprovar solicitações | `admin`, `gestor_qualidade`, `gestor_suporte` |
 | Config. qualidade | `admin`, `gestor_qualidade` |
 | Campos de insatisfação | `admin`, `gestor_qualidade` |
+
+| Restaurar monitoria removida | `admin` (Administrador) |
+
+## Monitorias removidas
+
+A subaba `removed_monitorias` é exclusiva do administrador. Exibe as 50 remoções
+mais recentes e permite buscar pelo número exato do ticket. Para restaurar, o
+administrador confirma a ação e informa um motivo obrigatório. A RPC
+`restore_removed_monitoria` verifica o papel ativo no banco, impede que dois
+registros ativos usem o mesmo ticket, reativa a monitoria, registra autor e
+motivo no histórico e conclui a atribuição da fila. O prazo de ação original
+é preservado. No modo de desenvolvimento, o MockDb reproduz esse fluxo.
 
 ## Data Loading (AdminPanel)
 

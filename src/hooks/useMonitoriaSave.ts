@@ -219,7 +219,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           history: [...(deps.initialData?.history || []), historyEntry],
           action_deadline_at: nextStatus === 'concluida'
             ? null
-            : ((deps.initialData?.action_deadline_at && !deps.isReevaluating && !deps.isAdminEdit) ? deps.initialData.action_deadline_at : getDeadline()),
+            : (deps.initialData?.action_deadline_at || getDeadline()),
           evaluator_name: currentUser.name,
           evaluated_name: evaluatedUser?.name || '',
           form_name: selectedFormObj?.title || '',

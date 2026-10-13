@@ -2,7 +2,7 @@
 
 ## Conceito
 
-O Prazo de Ação (Action Deadline) define prazos máximos para cada etapa do fluxo de monitoria. Os prazos são calculados em **horas úteis**, respeitando horário comercial e feriados. O termo "SLA" não é usado na UI — sempre "prazo de ação".
+O Prazo de Ação (Action Deadline) define o tempo total disponível para um ciclo de monitoria. O prazo é calculado em **horas úteis**, respeitando horário comercial e feriados. Mudanças de status durante o ciclo não reiniciam a contagem. O termo "SLA" não é usado na UI — sempre "prazo de ação".
 
 ## Configuração (via Quality Config)
 
@@ -37,11 +37,11 @@ Implementado em `src/lib/businessHours.ts`:
 | Evento | Prazo Aplicado | Armazenado em |
 |---|---|---|
 | Monitoria criada | `action_deadlines.review` | `action_deadline_at` |
-| Contestação aberta | `action_deadlines.contestation` | `action_deadline_at` |
-| Reavaliação feita | `action_deadlines.review` | `action_deadline_at` |
-| Contestação negada | `action_deadlines.review` | `action_deadline_at` |
-| Escalado p/ gestor suporte | `action_deadlines.manager_review` | `action_deadline_at` |
-| Escalado p/ gestor qualidade | `action_deadlines.quality_review` | `action_deadline_at` |
+| Contestação aberta | Mantém o prazo do ciclo | `action_deadline_at` |
+| Reavaliação feita | Mantém o prazo do ciclo | `action_deadline_at` |
+| Contestação negada | Mantém o prazo do ciclo | `action_deadline_at` |
+| Escalado p/ gestor suporte | Mantém o prazo do ciclo | `action_deadline_at` |
+| Escalado p/ gestor qualidade | Mantém o prazo do ciclo | `action_deadline_at` |
 
 ## Exibição — ActionDeadlineClock Widget
 

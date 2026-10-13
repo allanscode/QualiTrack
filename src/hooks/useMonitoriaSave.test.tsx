@@ -2,9 +2,9 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMonitoriaSave } from './useMonitoriaSave';
 
-const db = vi.hoisted(() => ({ insert: vi.fn() }));
+const db = vi.hoisted(() => ({ insert: vi.fn(), update: vi.fn() }));
 vi.mock('../lib/supabase', () => ({
-  supabase: { from: () => ({ insert: db.insert }) },
+  supabase: { from: () => ({ insert: db.insert, update: db.update }) },
   mockDb: {},
 }));
 vi.mock('../lib/helpdeskQueue', () => ({ backfillAgentTeam: vi.fn() }));
@@ -99,5 +99,28 @@ describe('useMonitoriaSave', () => {
     expect(payload.resolution_type).toBeNull();
     expect(payload.history[0].action).toBe('Monitoria Criada');
     expect(payload.action_deadline_at).toBeTruthy();
+  });
+
+  it.each([
+    ['reavaliação', true, false],
+    ['edição administrativa', false, true],
+  ])('preserva o prazo da monitoria durante %s', async (_, isReevaluating, isAdminEdit) => {
+    const onSaved = vi.fn();
+    const deadline = '2026-10-15T15:00:00.000Z';
+    db.update.mockImplementation(() => ({ eq: async () => ({ error: null }) }));
+    const deps = {
+      ...pjDeps(60, onSaved),
+      initialData: {
+        id: 'monitoria-pj', status: 'em_contestacao', score: 55,
+        action_deadline_at: deadline, history: [], pj_review_required: true,
+      },
+      isReevaluating, isAdminEdit,
+    } as unknown as Parameters<typeof useMonitoriaSave>[0];
+    deps.header.reevaluation_justification = 'Justificativa da reavaliação';
+    const { result } = renderHook(() => useMonitoriaSave(deps));
+    act(() => result.current.handleSave());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', isAdminEdit ? 'em_contestacao' : 'pendente_revisao'));
+    expect(db.update.mock.calls[0][0].action_deadline_at).toBe(deadline);
   });
 });

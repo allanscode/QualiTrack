@@ -46,4 +46,17 @@ describe('useMonitoriaActions: encaminhamento PJ', () => {
     expect(payload.contestation_result).toBe(resultStatus);
     expect(payload.history[0].action).toContain('Gestão da Qualidade');
   });
+
+  it('mantém a data limite ao enviar o parecer PJ para a Qualidade', async () => {
+    const deadline = '2026-10-15T15:00:00.000Z';
+    const current = { ...monitoria, action_deadline_at: deadline };
+    const { result } = renderHook(() => useMonitoriaActions(manager, [current], config, vi.fn(), teams));
+    act(() => {
+      result.current.setActionModal({ id: current.id, type: 'contestar' });
+      result.current.setActionNote('Parecer justificado do gestor PJ');
+    });
+    await act(async () => { await result.current.handleAction(); });
+
+    expect(db.update.mock.calls[0][2].action_deadline_at).toBe(deadline);
+  });
 });

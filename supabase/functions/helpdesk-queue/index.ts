@@ -2983,7 +2983,16 @@ async function loadChildCreationRoutingEvidence(ticketId: string): Promise<Child
         signal: AbortSignal.timeout(10_000) },
     );
     if (!response.ok) return null;
-    return childCreationRoutingEvidence(await response.json());
+    const evidence = childCreationRoutingEvidence(await response.json());
+    if (!evidence?.selfAssigned || !evidence.initialGroupId) return evidence;
+    const groupResponse = await fetch(`https://${subdomain}.zendesk.com/api/v2/groups/${evidence.initialGroupId}.json`, {
+      headers: { Authorization: `Basic ${btoa(`${email}/token:${token}`)}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!groupResponse.ok) return evidence;
+    const group = (await groupResponse.json())?.group;
+    return group?.id === evidence.initialGroupId && typeof group.name === 'string'
+      ? { ...evidence, creatorGroupName: group.name } : evidence;
   } catch {
     return null;
   }
@@ -3018,7 +3027,7 @@ async function handleEvaluateChildTicket(
   }
   const routingEvidence = await loadChildCreationRoutingEvidence(ticket_id);
   const routingEvidenceText = routingEvidence
-    ? `Criador do chamado filho no histórico de abertura: Zendesk ID ${routingEvidence.creatorId}.\nDestinatário (Para) escolhido na abertura: Zendesk ID ${routingEvidence.initialAssigneeId}.\nGrupo associado ao destinatário na abertura: ${routingEvidence.initialGroupId ?? 'não informado'}.\nAutoatribuição na abertura: ${routingEvidence.selfAssigned ? 'SIM, IDs iguais' : 'NÃO, IDs diferentes'}.`
+    ? `Criador do chamado filho no histórico de abertura: Zendesk ID ${routingEvidence.creatorId}.\nDestinatário (Para) escolhido na abertura: Zendesk ID ${routingEvidence.initialAssigneeId}.\nGrupo associado ao destinatário na abertura: ${routingEvidence.initialGroupId ?? 'não informado'}.\nAutoatribuição na abertura: ${routingEvidence.selfAssigned ? 'SIM, IDs iguais' : 'NÃO, IDs diferentes'}.\nEquipe criadora comprovada na abertura: ${routingEvidence.creatorGroupName || 'não confirmada'}.`
     : 'Histórico de criação indisponível; não presuma que o grupo exibido ao lado do nome indique destinatário incorreto.';
 
   const responseSchema = {
@@ -3044,8 +3053,8 @@ async function handleEvaluateChildTicket(
       },
       checks: {
         type: 'array',
-        minItems: 5,
-        maxItems: 5,
+        minItems: 6,
+        maxItems: 6,
         items: {
           type: 'object',
           properties: {
@@ -3126,8 +3135,16 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
 - "Mais Pagamentos":
   * A operação e a marca podem ser Mais Pagamentos; isso não altera a regra de que o FILHO inicia no nome do agente que o abriu. Verifique separadamente o fluxo do PAI quando houver dados.
 - Check "Direcionamento Correto ('Para')" deve validar essa correspondência com rigor.
-- Para TODAS as macros de chamado filho identificadas, compare no histórico de abertura os IDs do criador e do destinatário inicial. Se forem iguais, o direcionamento inicial do FILHO está conforme; não exija que o filho tenha sido atribuído ao grupo técnico.
-- Avalie o encaminhamento do ticket PAI somente se houver dados do pai. Se o pai não puder ser verificado, marque o vínculo como NA e não transforme a autoatribuição correta do filho em falha.
+ - Para TODAS as macros de chamado filho identificadas, compare no histórico de abertura os IDs do criador e do destinatário inicial. Se forem iguais, o direcionamento inicial do FILHO está conforme; não exija que o filho tenha sido atribuído ao grupo técnico.
+ - Avalie o encaminhamento do ticket PAI somente se houver dados do pai. Se o pai não puder ser verificado, marque o vínculo como NA e não transforme a autoatribuição correta do filho em falha.
+
+=============================================================================
+4. EQUIPE AUTORIZADA A CRIAR O CHAMADO FILHO:
+=============================================================================
+- Nenhum chamado filho pode ser criado pelas equipes de Análise Técnica ou Análise de Correções, inclusive grupos de Análise Técnica especializados e Análise Técnica - Correções.
+- Confira a equipe do CRIADOR no histórico de abertura. Se o filho foi autoatribuído, o grupo inicial do filho identifica a equipe de origem; o grupo atual ou o destino do ticket pai não comprovam quem criou o filho.
+- Se a equipe criadora proibida estiver comprovada, marque child-creator-authorized como NAO. É falha crítica que invalida a monitoria, mesmo com autoatribuição correta. Não altere child-routing-correct apenas por esse motivo.
+- Sem prova da equipe do criador, marque NA e peça conferência humana. Não invalide por inferência a partir da macro, do assunto, do grupo atual ou da equipe do destinatário quando ele difere do criador.
 
 DADOS DO CHAMADO FILHO SOB AUDITORIA:
 - Ticket: #${ticket_id}
@@ -3148,11 +3165,12 @@ CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
 2. question_id: "child-parent-linked", rule: "Vínculo com o Chamado Pai" — verifique se o chamado pai foi identificado e vinculado corretamente nos dados disponíveis. Não deduza vínculo somente por ser um ticket filho.
 3. question_id: "child-macro-preserved", rule: "Preservação do Texto da Macro" — aplique as regras do texto-base acima.
 4. question_id: "child-macro-enriched", rule: "Detalhamento Técnico Complementar" — avalie se há um resumo coerente e específico da demanda, suficiente para a continuidade do atendimento. Uma frase ou poucas linhas podem bastar. Não reprove por campos opcionais da macro em branco nem exija logs, acessos, versões ou passos quando não forem aplicáveis; se faltar o próprio relato, explique objetivamente qual contexto da demanda não foi registrado.
-5. question_id: "child-routing-correct", rule: "Direcionamento Correto ('Para')" — aplique as regras de direcionamento acima.
+ 5. question_id: "child-routing-correct", rule: "Direcionamento Correto ('Para')" — aplique as regras de direcionamento acima.
+6. question_id: "child-creator-authorized", rule: "Equipe Criadora Autorizada" — aplique a proibição de origem acima; é critério crítico.
 
 Retorne exatamente um check para cada question_id, com answer e details fundamentados. Use answer "SIM" para conformidade demonstrada, "NAO" para falha demonstrada e "NA" quando não aplicável ou quando os dados não permitirem verificar, explicando expressamente o motivo. Nunca invente evidências ou marque falha por falta de dados. passed deve ser true apenas para answer "SIM", e false para "NAO" ou "NA". Critérios "NA" não reduzem a nota; havendo evidência insuficiente, sinalize status "atencao" se não houver falha comprovada.
 
-O manual também trata de tags e campos obrigatórios, mas a ficha atual contém apenas os cinco critérios acima. Não atribua falha a tags sem um critério próprio na ficha e evidência da alteração; não mencione tags nos cinco checks. Preserve a análise dos campos pertinentes aos critérios configurados.
+O manual também trata de tags e campos obrigatórios, mas a ficha atual contém apenas os seis critérios acima. Não atribua falha a tags sem um critério próprio na ficha e evidência da alteração; não mencione tags nos seis checks. Preserve a análise dos campos pertinentes aos critérios configurados.
 
 Analise os dados reais do ticket contra essas regras operacionais e gere o parecer estritamente no JSON do schema.`;
 

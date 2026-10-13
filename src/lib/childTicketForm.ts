@@ -9,11 +9,12 @@ const CHILD_QUESTION_RULES: Record<string, string[]> = {
   'child-macro-preserved': ['Preservação do Texto da Macro'],
   'child-macro-enriched': ['Detalhes técnicos complementares'],
   'child-routing-correct': ["Direcionamento Correto ('Para')"],
+  'child-creator-authorized': ['Equipe Criadora Autorizada'],
 };
 
 const normalizeRule = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** Map only explicit findings: historical three-check reports cannot answer all five questions. */
+/** Map only explicit findings: older reports cannot answer new questions by inference. */
 export function childEvaluationFormPrefill(evaluation: ChildTicketAiEvaluation) {
   const answers: Record<string, 'SIM' | 'NAO' | 'NA'> = {};
   const question_observations: Record<string, string> = {};

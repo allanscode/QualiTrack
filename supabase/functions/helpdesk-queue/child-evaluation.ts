@@ -3,7 +3,7 @@ import { calculateCanonicalQualityScore } from './quality-score.ts';
 
 export const CHILD_QUESTION_IDS = [
   'child-subject-preserved', 'child-parent-linked', 'child-macro-preserved',
-  'child-macro-enriched', 'child-routing-correct',
+  'child-macro-enriched', 'child-routing-correct', 'child-creator-authorized',
 ];
 
 export interface ChildCreationRoutingEvidence {
@@ -11,6 +11,12 @@ export interface ChildCreationRoutingEvidence {
   initialAssigneeId: number;
   initialGroupId: number | null;
   selfAssigned: boolean;
+  creatorGroupName?: string;
+}
+
+export function forbiddenChildCreatorGroup(groupName: string | undefined): boolean {
+  const normalized = (groupName || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /\banalise tecnica\b|\banalise de correcoes\b/.test(normalized);
 }
 
 function positiveId(value: unknown): number | null {
@@ -49,7 +55,7 @@ type ChildEvaluation = {
 const CHILD_DEFAULT_SCORE_SECTIONS = [
   { weight: 35, questions: [{ id: 'child-subject-preserved', is_critical: true }, { id: 'child-parent-linked' }] },
   { weight: 40, questions: [{ id: 'child-macro-preserved', is_critical: true }, { id: 'child-macro-enriched' }] },
-  { weight: 25, questions: [{ id: 'child-routing-correct' }] },
+  { weight: 25, questions: [{ id: 'child-routing-correct' }, { id: 'child-creator-authorized', is_critical: true }] },
 ];
 
 /** The opening audit determines the child recipient; the specialist group belongs to the parent. */
@@ -58,29 +64,42 @@ export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
   evidence: ChildCreationRoutingEvidence | null,
   sections?: Array<{ weight?: number; questions?: Array<{ id: string; is_critical?: boolean }> }>,
 ): T {
-  if (!evidence || result.detected_type === 'desconhecido') return result;
+  if (result.detected_type === 'desconhecido') return result;
   const routing = result.checks.find(check => check.question_id === 'child-routing-correct');
-  const expectedAnswer = evidence.selfAssigned ? 'SIM' : 'NAO';
-  if (!routing || routing.answer === expectedAnswer) return result;
+  const creator = result.checks.find(check => check.question_id === 'child-creator-authorized');
+  const expectedAnswer = evidence ? (evidence.selfAssigned ? 'SIM' : 'NAO') : null;
+  const creatorAnswer: ChildAnswer = evidence?.selfAssigned && evidence.creatorGroupName
+    ? (forbiddenChildCreatorGroup(evidence.creatorGroupName) ? 'NAO' : 'SIM') : 'NA';
+  if ((!routing || !expectedAnswer || routing.answer === expectedAnswer)
+    && (!creator || creator.answer === creatorAnswer)) return result;
 
-  const checks = result.checks.map(check => check.question_id === 'child-routing-correct'
-    ? { ...check, answer: expectedAnswer, passed: evidence.selfAssigned,
-      details: evidence.selfAssigned
+  const checks = result.checks.map(check => check.question_id === 'child-routing-correct' && expectedAnswer && check.answer !== expectedAnswer
+    ? { ...check, answer: expectedAnswer, passed: evidence!.selfAssigned,
+      details: evidence!.selfAssigned
         ? 'O histórico de criação do Zendesk confirma que o chamado filho foi atribuído inicialmente ao agente que o abriu. O grupo técnico é o destino do ticket pai; a equipe exibida junto ao nome do agente não torna o filho irregular.'
         : 'O histórico de criação do Zendesk mostra que o destinatário inicial do chamado filho era outro usuário, diferente do agente que o abriu.' }
+    : check.question_id === 'child-creator-authorized' && check.answer !== creatorAnswer
+    ? { ...check, answer: creatorAnswer, passed: creatorAnswer === 'SIM',
+      details: creatorAnswer === 'NAO'
+        ? `O histórico de abertura identifica a equipe ${evidence!.creatorGroupName} como origem do chamado filho. O POP proíbe que essa equipe crie tickets filhos.`
+        : creatorAnswer === 'SIM'
+        ? `A equipe de origem identificada na abertura (${evidence!.creatorGroupName}) não está entre as equipes proibidas pelo POP.`
+        : 'Não foi possível confirmar a equipe do criador na abertura; confira o histórico antes de invalidar por esta regra.' }
     : check);
   const answers = Object.fromEntries(checks.map(check => [check.question_id, check.answer])) as Record<string, ChildAnswer>;
   const score = calculateCanonicalQualityScore(sections?.length ? sections : CHILD_DEFAULT_SCORE_SECTIONS, answers);
   const status = checks.some(check => check.answer === 'NAO') ? 'nao_conforme'
     : checks.some(check => check.answer === 'NA') ? 'atencao' : 'conforme';
   const otherFailures = checks.filter(check => check.question_id !== 'child-routing-correct' && check.answer === 'NAO');
-  const summary = evidence.selfAssigned
+  const summary = creatorAnswer === 'NAO'
+    ? `O chamado filho foi criado pela equipe ${evidence!.creatorGroupName}, o que viola o POP e exige invalidação após conferência do auditor.`
+    : evidence?.selfAssigned
     ? status === 'conforme'
       ? 'A atribuição inicial do chamado filho ao próprio agente está correta e os demais critérios da abertura estão conformes.'
       : `A atribuição inicial do chamado filho ao próprio agente está correta. ${otherFailures.length
         ? `A avaliação permanece não conforme por: ${otherFailures.map(check => check.rule).join(', ')}.`
         : 'Os demais critérios exigem conferência por evidência insuficiente.'}`
-    : 'O histórico de criação do Zendesk mostra que o chamado filho foi atribuído inicialmente a outro usuário. Confira os demais critérios apontados no parecer.';
+    : 'Confira o histórico de criação e os demais critérios apontados no parecer.';
   return { ...result, checks, score, status, summary,
     recommendations: status === 'conforme' ? [] : ['Conferir os demais critérios apontados no parecer.'] };
 }
@@ -101,7 +120,7 @@ export function validateChildEvaluationResponse(value: unknown): any {
     && typeof check.passed === 'boolean' && check.passed === (check.answer === 'SIM')
     && typeof check.details === 'string' && check.details.trim())
     || new Set(parsed.checks.map((check: { question_id: string }) => check.question_id)).size !== CHILD_QUESTION_IDS.length) {
-    incompleteResponse('O parecer não contém os cinco critérios da ficha completos e sem duplicação.');
+    incompleteResponse('O parecer não contém os seis critérios da ficha completos e sem duplicação.');
   }
   if (parsed.checks.some((check: { rule: string; details: string }) => /\btag(s)?\b/i.test(`${check.rule} ${check.details}`))) {
     incompleteResponse('O parecer não deve avaliar tags dos chamados filhos.');

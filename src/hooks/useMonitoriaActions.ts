@@ -277,7 +277,10 @@ export function useMonitoriaActions(
         status: nextStatus,
         updated_at: now,
         history: [...(monitoria.history || []), historyEntry],
-        ...(nextStatus !== 'concluida' ? { action_deadline_at: addBusinessHours(new Date(), getDeadlineHours(nextStatus, qualityConfig.action_deadline), qualityConfig.businessHours).toISOString() } : { action_deadline_at: null }),
+        ...(nextStatus !== 'concluida'
+          ? { action_deadline_at: monitoria.action_deadline_at
+              || addBusinessHours(new Date(), getDeadlineHours(nextStatus, qualityConfig.action_deadline), qualityConfig.businessHours).toISOString() }
+          : { action_deadline_at: null }),
         ...(nextStatus === 'concluida' ? { resolution_type: 'human' } : {}),
         ...((type === 'aprovar' || type === 'aceitar')
           && !(isPj && monitoria.status === 'aguardando_gestor_qualidade')

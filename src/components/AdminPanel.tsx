@@ -17,7 +17,8 @@ import {
   Calendar,
   Target,
   Brain,
-  Mail
+  Mail,
+  RotateCcw
 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -29,8 +30,9 @@ import RequestsManagement from './admin/RequestsManagement';
 import DissatisfactionFieldsManagement from './admin/DissatisfactionFieldsManagement';
 import AIHubManagement from './admin/AIHubManagement';
 import EmailConfigManagement from './admin/EmailConfigManagement';
+import RemovedMonitoriasManagement from './admin/RemovedMonitoriasManagement';
 
-export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub' | 'emails';
+export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub' | 'emails' | 'removed_monitorias';
 
 interface TabItem {
   key: AdminSubTab;
@@ -48,6 +50,7 @@ const ALL_ADMIN_TABS: TabItem[] = [
   { key: 'campos_extras', label: 'Campos Extras', icon: Sliders },
   { key: 'ia_hub', label: 'Inteligência Artificial', icon: Brain },
   { key: 'emails', label: 'E-mails & Disparos', icon: Mail },
+  { key: 'removed_monitorias', label: 'Monitorias removidas', icon: RotateCcw },
 ];
 
 function getAvailableTabs(role?: string): TabItem[] {
@@ -210,6 +213,7 @@ export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPa
           {activeSubTab === 'campos_extras' && <DissatisfactionFieldsManagement forms={staticData.forms} />}
           {activeSubTab === 'ia_hub' && <AIHubManagement currentUser={currentUser} />}
           {activeSubTab === 'emails' && <EmailConfigManagement />}
+          {activeSubTab === 'removed_monitorias' && currentUser?.role === 'admin' && <RemovedMonitoriasManagement currentUser={currentUser} />}
         </m.div>
       </AnimatePresence>
     </div>

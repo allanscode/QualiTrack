@@ -16,7 +16,7 @@ const evaluation = () => ({
 });
 
 describe('resposta de IA para ficha de chamado filho', () => {
-  it('aceita os cinco critérios, incluindo evidência insuficiente explícita', () => {
+  it('aceita os seis critérios, incluindo evidência insuficiente explícita', () => {
     const result = evaluation();
     expect(validateChildEvaluationResponse(result)).toBe(result);
   });
@@ -66,7 +66,7 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
   it('corrige o falso negativo quando o próprio criador era o destinatário inicial', () => {
     const evidence = childCreationRoutingEvidence(creationAudit(71, 71));
     expect(evidence).toMatchObject({ creatorId: 71, initialAssigneeId: 71, initialGroupId: 900, selfAssigned: true });
-    const corrected = reconcileChildOpeningRouting(routingFailure(), evidence);
+    const corrected = reconcileChildOpeningRouting(routingFailure(), { ...evidence!, creatorGroupName: 'Atendimento' });
     expect(corrected.status).toBe('conforme');
     expect(corrected.score).toBe(100);
     expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')).toMatchObject({
@@ -78,7 +78,9 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
   it('não confunde o grupo exibido com autoatribuição e preserva falha real', () => {
     const evidence = childCreationRoutingEvidence(creationAudit(71, 72));
     const result = routingFailure();
-    expect(reconcileChildOpeningRouting(result, evidence)).toBe(result);
+    const uncertain = reconcileChildOpeningRouting(result, evidence);
+    expect(uncertain.checks.find(check => check.question_id === 'child-routing-correct')?.answer).toBe('NAO');
+    expect(uncertain.checks.find(check => check.question_id === 'child-creator-authorized')?.answer).toBe('NA');
     const falsePositive = { ...result, status: 'conforme' as const, score: 100,
       checks: result.checks.map(check => check.question_id === 'child-routing-correct'
         ? { ...check, answer: 'SIM' as const, passed: true } : check) };
@@ -109,10 +111,30 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
 
   it('não altera o parecer sem histórico confiável ou com tipo desconhecido', () => {
     const result = routingFailure();
-    expect(reconcileChildOpeningRouting(result, null)).toBe(result);
+    expect(reconcileChildOpeningRouting(result, null).checks.find(
+      check => check.question_id === 'child-creator-authorized')?.answer).toBe('NA');
     const unknown = { ...result, detected_type: 'desconhecido' };
     expect(reconcileChildOpeningRouting(unknown,
       childCreationRoutingEvidence(creationAudit(71, 71)))).toBe(unknown);
     expect(childCreationRoutingEvidence({ audits: [{ author_id: -1, events: [] }] })).toBeNull();
+  });
+
+  it('invalida a origem proibida sem alterar a autoatribuição comprovada', () => {
+    const evidence = childCreationRoutingEvidence(creationAudit(71, 71));
+    const corrected = reconcileChildOpeningRouting(routingFailure(), {
+      ...evidence!, creatorGroupName: 'Análise Técnica - Especialidades',
+    });
+    expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')?.answer).toBe('SIM');
+    expect(corrected.checks.find(check => check.question_id === 'child-creator-authorized')?.answer).toBe('NAO');
+    expect(corrected.status).toBe('nao_conforme');
+    expect(corrected.score).toBe(0);
+  });
+
+  it('pede revisão quando o grupo de origem não foi comprovado', () => {
+    const evidence = childCreationRoutingEvidence(creationAudit(71, 71));
+    const corrected = reconcileChildOpeningRouting(routingFailure(), evidence);
+    expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')?.answer).toBe('SIM');
+    expect(corrected.checks.find(check => check.question_id === 'child-creator-authorized')?.answer).toBe('NA');
+    expect(corrected.status).toBe('atencao');
   });
 });

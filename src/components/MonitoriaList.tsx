@@ -503,11 +503,7 @@ export default function MonitoriaList({
                 size="sm"
               />
 
-              {/* Acompanha quem ganhou o poder de excluir logo abaixo: sem
-                  isto, gestor_qualidade removeria uma monitoria e nunca mais
-                  conseguiria vê-la na lista para conferir. Não existe ação de
-                  RESTAURAR um registro removido — nem para admin — isso é uma
-                  lacuna anterior a esta mudança, fora do escopo pedido aqui. */}
+              {/* Administradores podem restaurar registros removidos em Administração > Monitorias removidas. */}
               {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && (
                 <CustomSelect
                   value={filters.statusFilter}

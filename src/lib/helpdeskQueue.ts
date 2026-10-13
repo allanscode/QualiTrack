@@ -15,6 +15,7 @@ import {
 } from '../types';
 import { normalizeTicketDialogue } from './zendeskChatParser';
 import { matchesQueueSearchText } from './queueSearchText';
+import { activeMonitoriaTicketIds } from './activeMonitoriaTickets';
 
 /**
  * Extrai a mensagem de erro real devolvida pela Edge Function. Em status
@@ -229,9 +230,7 @@ export async function fetchQueueTickets(
   cursor: string | null = null,
   searchTerm?: string
 ): Promise<QueueTicketsPage> {
-  const auditedTicketIds = new Set(
-    existingMonitorias.map(m => m.ticket_id?.trim()).filter(Boolean)
-  );
+  const auditedTicketIds = activeMonitoriaTicketIds(existingMonitorias);
 
   let tickets: AuditingQueueTicket[];
   let nextCursor: string | null = null;
