@@ -8,8 +8,6 @@ import {
   Settings,
   Shield,
   Plus,
-  Sun,
-  Moon,
   Ticket,
   User,
   ArrowRight,
@@ -26,8 +24,6 @@ interface CommandPaletteModalProps {
   onNavigateTab: (tab: string) => void;
   onNewMonitoria: () => void;
   canCreateMonitoria: boolean;
-  onToggleTheme: () => void;
-  isDark: boolean;
   monitorias: Monitoria[];
   users: UserType[];
 }
@@ -38,8 +34,6 @@ export default function CommandPaletteModal({
   onNavigateTab,
   onNewMonitoria,
   canCreateMonitoria,
-  onToggleTheme,
-  isDark,
   monitorias,
   users,
 }: CommandPaletteModalProps) {
@@ -98,15 +92,7 @@ export default function CommandPaletteModal({
       icon: Plus,
       action: () => { onNewMonitoria(); onClose(); },
     }] : []),
-    {
-      id: 'action-theme',
-      category: 'Ações Rápidas',
-      title: isDark ? 'Ativar Modo Claro' : 'Ativar Modo Escuro',
-      subtitle: 'Alternar tema de contraste visual da interface',
-      icon: isDark ? Sun : Moon,
-      action: () => { onToggleTheme(); onClose(); },
-    },
-  ], [onNavigateTab, onNewMonitoria, canCreateMonitoria, onToggleTheme, isDark, onClose]);
+  ], [onNavigateTab, onNewMonitoria, canCreateMonitoria, onClose]);
 
   // Busca dinâmica de tickets e atendentes
   const searchResults = useMemo(() => {

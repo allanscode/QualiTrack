@@ -6,6 +6,7 @@ import { isEvaluationValid } from '../lib/domainRules';
 import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 import { backfillAgentTeam } from '../lib/helpdeskQueue';
 import { toast } from 'sonner';
+import { monitoriaTicketPresentation } from '../lib/monitoriaTicketPresentation';
 
 interface SaveHookDeps {
   user: User | null;
@@ -172,6 +173,8 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
 
         const ticketGroupTeamId = deps.initialData?.ticket_group_team_id || deps.ticketGroupTeamId || deps.header.team_id;
         const selectedFormObj = deps.forms.find(f => f.id === deps.header.form_id);
+        const ticketDetails = deps.initialData && deps.initialData.ticket_id === deps.header.ticket_id
+          ? monitoriaTicketPresentation(deps.initialData, deps.teams) : undefined;
 
         const payload = {
           form_id: deps.header.form_id,
@@ -201,6 +204,8 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           active: true,
           form_snapshot: {
             ...(deps.selectedForm as any),
+            ticket_subject: ticketDetails?.subject || undefined,
+            ticket_group_name: ticketDetails?.group || undefined,
             ticket_fields: deps.ticketFields,
             ...(deps.header.form_id === CHILD_TICKET_FORM_ID ? { ticket_kind: 'chamado_filho' } : {}),
             ai_evaluation: deps.header.form_id === deps.initialData?.form_id

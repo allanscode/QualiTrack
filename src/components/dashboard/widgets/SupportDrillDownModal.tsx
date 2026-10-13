@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Search, ExternalLink, Shield, Tag, User as UserIcon, Download } from 'lucide-react';
+import { X, Search, ExternalLink, Tag, User as UserIcon, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
@@ -10,6 +10,10 @@ import { getStatusConfig } from '../../../lib/statusHelper';
 import { formatTimelineDateTime } from '../../../lib/timeline';
 import { matchesSearch } from '../../../utils/search';
 import { exportMonitoriasToCsv } from '../../../utils/exportCsv';
+import { useDashboard } from '../DashboardContext';
+import { useStaticData } from '../../../lib/StaticDataContext';
+import { useMonitoriaTicketContext } from '../../../hooks/useMonitoriaTicketContext';
+import { monitoriaTicketPresentation } from '../../../lib/monitoriaTicketPresentation';
 
 interface SupportDrillDownModalProps {
   title: string;
@@ -19,13 +23,22 @@ interface SupportDrillDownModalProps {
   onNavigateToMonitoria?: (monitoriaId: string, ticketId?: string) => void;
 }
 
-export default function SupportDrillDownModal({
-  title,
-  subtitle,
-  monitorias,
-  onClose,
-  onNavigateToMonitoria,
-}: SupportDrillDownModalProps) {
+export default function SupportDrillDownModal(props: SupportDrillDownModalProps) {
+  const { user } = useDashboard();
+  const { groups, teams } = useStaticData();
+  const ticketContext = useMonitoriaTicketContext(props.monitorias, user);
+  const enrichedMonitorias = useMemo(() => props.monitorias.map(row => {
+    const details = monitoriaTicketPresentation(row, [...groups, ...teams], ticketContext.data?.[row.id]);
+    return { ...row, ticket_subject: details.subject ?? undefined, ticket_group_name: details.group ?? undefined };
+  }), [props.monitorias, groups, teams, ticketContext.data]);
+
+  return <SupportDrillDownContent {...props} monitorias={enrichedMonitorias}
+    contextLoading={ticketContext.isFetching} contextError={ticketContext.isError} />;
+}
+
+export function SupportDrillDownContent({
+  title, subtitle, monitorias, onClose, onNavigateToMonitoria, contextLoading = false, contextError = false,
+}: SupportDrillDownModalProps & { contextLoading?: boolean; contextError?: boolean }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   // Fechar com tecla ESC
@@ -51,6 +64,9 @@ export default function SupportDrillDownModal({
         matchesSearch(ticketId, searchTerm) ||
         matchesSearch(agent, searchTerm) ||
         matchesSearch(team, searchTerm) ||
+        matchesSearch(m.ticket_subject || '', searchTerm) ||
+        matchesSearch(m.ticket_group_name || '', searchTerm) ||
+        matchesSearch(monitoriaTicketPresentation(m).type, searchTerm) ||
         matchesSearch(score, searchTerm)
       );
     });
@@ -75,6 +91,9 @@ export default function SupportDrillDownModal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="support-drilldown-title"
         className="max-w-4xl w-full max-h-[88vh] flex flex-col my-auto animate-scale-in"
         onClick={e => e.stopPropagation()}
       >
@@ -83,10 +102,10 @@ export default function SupportDrillDownModal({
           className="w-full flex-1 flex flex-col bg-surface-card border border-surface-border rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden min-h-0"
         >
         {/* Header */}
-        <div className="p-4 sm:p-6 border-b border-surface-border flex items-center justify-between gap-3 sm:gap-4">
+        <div className="p-4 sm:p-6 border-b border-surface-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <h3 className="text-base sm:text-lg font-black text-brand-primary uppercase tracking-tight">
+              <h3 id="support-drilldown-title" className="text-base sm:text-lg font-black text-brand-primary uppercase tracking-tight">
                 {title}
               </h3>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-brand-accent/10 text-brand-accent border border-brand-accent/20">
@@ -97,7 +116,7 @@ export default function SupportDrillDownModal({
               <p className="text-xs text-brand-muted mt-1 font-medium">{subtitle}</p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2 shrink-0">
             <Button
               size="sm"
               variant="outline"
@@ -108,7 +127,7 @@ export default function SupportDrillDownModal({
                 if (success) toast.success(`${filteredMonitorias.length} tickets exportados para CSV!`);
                 else toast.error('Nenhum dado para exportar.');
               }}
-              className="h-8 text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-brand-primary"
+              className="min-h-8 whitespace-nowrap text-[10px] font-black uppercase tracking-wider"
               title="Exportar esta lista para CSV (compatível com Excel)"
             >
               Exportar CSV
@@ -132,13 +151,17 @@ export default function SupportDrillDownModal({
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar por ticket, atendente, equipe ou protocolo..."
+              aria-label="Buscar tickets nesta lista"
+              placeholder="Buscar por ticket, assunto, agente, equipe ou grupo..."
               className="w-full bg-surface-card border border-surface-border rounded-xl pl-10 pr-4 py-2 text-xs font-medium text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-accent transition-all"
             />
           </div>
         </div>
 
         {/* Lista de Registros */}
+        {contextError && <p className="px-4 pt-3 text-xs text-brand-muted" role="status">
+          Não foi possível atualizar os detalhes dos tickets. As monitorias continuam disponíveis.
+        </p>}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {filteredMonitorias.length === 0 ? (
             <div className="text-center py-12 text-brand-muted">
@@ -152,6 +175,7 @@ export default function SupportDrillDownModal({
               const cfg = getStatusConfig(m.status);
               const score = m.score ?? 0;
               const isPositive = score >= 75;
+              const details = monitoriaTicketPresentation(m);
 
               return (
                 <div
@@ -172,7 +196,17 @@ export default function SupportDrillDownModal({
                       <Badge variant={cfg.variant} size="sm">
                         {cfg.label}
                       </Badge>
+                      <Badge variant="secondary" size="sm">{details.type}</Badge>
+                      {details.category && <span className="text-xs text-brand-muted">{details.category}</span>}
                     </div>
+
+                    <p className="text-sm font-semibold text-brand-primary break-words [overflow-wrap:anywhere] mb-2">
+                      {details.subject || (contextLoading ? 'Carregando assunto…' : 'Assunto não registrado')}
+                    </p>
+                    <p className="text-xs text-brand-muted mb-2 break-words [overflow-wrap:anywhere]">
+                      <span className="font-semibold">Grupo do atendimento:</span>{' '}
+                      {details.group || (contextLoading ? 'Carregando…' : 'Não registrado')}
+                    </p>
 
                     <div className="flex items-center gap-3 text-[11px] font-medium text-brand-muted flex-wrap">
                       <span className="flex items-center gap-1 text-brand-primary font-semibold">
@@ -184,7 +218,7 @@ export default function SupportDrillDownModal({
                           <span className="text-brand-muted/30">•</span>
                           <span className="flex items-center gap-1">
                             <Tag className="w-3 h-3 text-brand-highlight" />
-                            {m.team_name}
+                            Equipe do agente: {m.team_name}
                           </span>
                         </>
                       )}

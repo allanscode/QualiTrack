@@ -10,9 +10,12 @@ import ExecutiveReportModal from './widgets/ExecutiveReportModal';
 import RootCauseAnalyzerModal from './widgets/RootCauseAnalyzerModal';
 import { useFeedbacks } from '../../hooks/useFeedbacks';
 import { useQualityConfig } from '../../lib/useQualityConfig';
+import { useStaticData } from '../../lib/StaticDataContext';
+import { matchesTicketGroup, MISSING_TICKET_GROUP } from '../../lib/dashboardGroupFilter';
 
 export default function FilterBar() {
   const { resolvedTheme } = useTheme();
+  const { groups } = useStaticData();
   const { filters, setFilters, users, teams, forms, loading, refreshing, refresh, user, allMonitorias, dashboardRole, refreshCooldownEnd, refreshCooldownRemaining } = useDashboard();
   const { feedbacks } = useFeedbacks(user);
   const { config } = useQualityConfig();
@@ -31,6 +34,7 @@ export default function FilterBar() {
     return filters.startDate !== defaults.startDate || 
            filters.endDate !== defaults.endDate || 
            filters.teamId !== defaults.teamId || 
+           Boolean(filters.groupId) ||
            filters.agentId !== defaults.agentId ||
            filters.auditorId !== defaults.auditorId ||
            filters.status !== '';
@@ -42,6 +46,7 @@ export default function FilterBar() {
       startDate: defaults.startDate,
       endDate: defaults.endDate,
       teamId: '',
+      groupId: '',
       agentId: '',
       auditorId: '',
       status: '',
@@ -97,6 +102,14 @@ export default function FilterBar() {
     }
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [users, user, dashboardRole]);
+
+  const groupOptions = useMemo(() => {
+    const permittedIds = new Set(allMonitorias.map(row => row.ticket_group_team_id).filter(Boolean));
+    return [...groups, ...teams].filter(group => permittedIds.has(group.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(group => ({ value: group.id, label: group.name }));
+  }, [groups, teams, allMonitorias]);
+  const groupScopedMonitorias = useMemo(() => allMonitorias.filter(row => matchesTicketGroup(row, filters.groupId)), [allMonitorias, filters.groupId]);
 
   const activeAuditors = useMemo(() => {
     const list = users.filter(u => (u.role === 'qualidade' || u.role === 'gestor_qualidade' || u.role === 'admin') && u.active !== false);
@@ -215,8 +228,21 @@ export default function FilterBar() {
           <div className="flex-1 min-w-[130px]">
             <CustomSelect
               value={filters.teamId}
-              options={[{ value: '', label: 'Equipe' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
+              aria-label="Equipe do agente"
+              options={[{ value: '', label: 'Equipe do agente' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
               onChange={(val: string) => setFilters({ ...filters, teamId: val, agentId: '' })}
+              size="sm"
+            />
+          </div>
+
+          <div className="flex-1 min-w-[170px]" title="Grupo registrado no atendimento, independentemente da equipe do agente. Os dois filtros combinam-se quando selecionados.">
+            <CustomSelect
+              aria-label="Grupo do atendimento"
+              value={filters.groupId || ''}
+              options={[{ value: '', label: 'Grupo do atendimento' }, ...groupOptions,
+                ...(allMonitorias.some(row => !row.ticket_group_team_id)
+                  ? [{ value: MISSING_TICKET_GROUP, label: 'Grupo não registrado' }] : [])]}
+              onChange={groupId => setFilters({ ...filters, groupId, agentId: '' })}
               size="sm"
             />
           </div>
@@ -229,6 +255,7 @@ export default function FilterBar() {
                   { value: '', label: 'Agentes' },
                   ...activeAgents
                     .filter(a => !filters.teamId || (a.team_ids && a.team_ids.includes(filters.teamId)))
+                    .filter(a => !filters.groupId || groupScopedMonitorias.some(row => row.evaluated_id === a.id))
                     .map(a => ({ value: a.id, label: a.name }))
                 ]}
                 onChange={(val: string) => setFilters({ ...filters, agentId: val })}
@@ -274,7 +301,7 @@ export default function FilterBar() {
         <ExecutiveReportModal
           isOpen={isReportOpen}
           onClose={() => setIsReportOpen(false)}
-          monitorias={allMonitorias}
+          monitorias={groupScopedMonitorias}
           users={users}
           teams={teams}
           forms={forms}
@@ -289,7 +316,7 @@ export default function FilterBar() {
         <RootCauseAnalyzerModal
           isOpen={isRootCauseOpen}
           onClose={() => setIsRootCauseOpen(false)}
-          monitorias={allMonitorias}
+          monitorias={groupScopedMonitorias}
           forms={forms}
           feedbacks={feedbacks}
           teamName={teams.find(t => t.id === filters.teamId)?.name || 'Operação Global'}

@@ -1,14 +1,16 @@
 import { isEvaluationValid } from './domainRules';
+import { matchesTicketGroup } from './dashboardGroupFilter';
 
 export type TrendGranularity = 'day' | 'month' | 'year';
 export interface TrendFilters {
   startDate: string; endDate: string;
-  teamId?: string; agentId?: string; auditorId?: string;
+  teamId?: string; groupId?: string; agentId?: string; auditorId?: string;
   formId?: string; status?: string; channel?: string;
 }
 export interface TrendEvaluation {
   created_at: string; score: number | null;
   team_id?: string | null; evaluated_id?: string | null; evaluator_id?: string | null;
+  ticket_group_team_id?: string | null;
   form_id?: string | null; status?: string; channel?: string | null; active?: boolean;
 }
 export interface PerformanceTrendPoint {
@@ -87,6 +89,7 @@ export function selectTrendEvaluations<T extends TrendEvaluation>(
       const date = calendarDate(evaluation.created_at);
       if (!date || (windowStart && date < windowStart) || (filters.endDate && date > filters.endDate)) return false;
       if (filters.teamId && evaluation.team_id !== filters.teamId) return false;
+      if (!matchesTicketGroup(evaluation, filters.groupId)) return false;
       if (filters.agentId && role !== 'suporte' && evaluation.evaluated_id !== filters.agentId) return false;
       if (filters.auditorId && evaluation.evaluator_id !== filters.auditorId) return false;
       if (filters.formId && evaluation.form_id !== filters.formId) return false;

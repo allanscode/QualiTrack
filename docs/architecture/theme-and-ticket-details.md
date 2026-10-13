@@ -1,0 +1,9 @@
+# Tema e detalhes dos tickets
+
+O tema acompanha exclusivamente `prefers-color-scheme` do navegador, no login e na sessão. O script inicial evita flash de tema incorreto e seu hash está nas políticas CSP de Vercel e Nginx. ThemeProvider reage à mudança do dispositivo sem recarregar. Preferências antigas claro/escuro não sobrescrevem esse comportamento; os seletores manuais foram substituídos por indicação de tema automático.
+
+Os detalhes interativos do dashboard distinguem tipo do ticket, assunto, grupo do atendimento e equipe do agente. Pesquisa e CSV incluem os novos campos. Assuntos longos quebram linha e as ações ficam em outra linha no celular.
+
+`get_monitoria_ticket_context` consulta somente metadados guardados no QWP, em lotes de até 100 monitorias. A função não altera avaliações nem chama Zendesk. Exige usuário ativo e restringe suporte à própria monitoria, supervisor às equipes vinculadas e qualidade/admin ao escopo de leitura existente. Retorna somente ID da monitoria, assunto e grupo; não expõe diálogo, prompt ou auditor. A ordem de preferência é snapshot salvo, catálogo verificado e assunto do log de IA. Sem informação histórica, a tela mostra “não registrado”. Novas fichas manuais preservam os metadados disponíveis em form_snapshot.
+
+Equipe gestora (`team_id`) e grupo do ticket (`ticket_group_team_id`) são filtros independentes e cumulativos no dashboard. Para comparar agentes de equipes diferentes que atenderam o mesmo grupo, selecione somente o grupo. O ranking usa o total de monitorias do grupo autorizado como denominador; selecionar um agente não reduz essa base. Tendências e dados enviados aos relatórios também respeitam o grupo. Registros sem grupo têm opção própria e nunca recebem a equipe gestora como grupo por suposição. As opções derivam de monitorias já autorizadas por RBAC.

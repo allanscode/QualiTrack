@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Monitoria, User, Team } from '../types';
 import { getStatusConfig } from '../lib/statusHelper';
+import { monitoriaTicketPresentation } from '../lib/monitoriaTicketPresentation';
 
 export function escapeCsvCell(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -58,6 +59,9 @@ export function exportMonitoriasToCsv(
     'Prazo Limite',
     'Ação Corretiva',
     'Justificativa Contestação',
+    'Tipo de ticket',
+    'Assunto',
+    'Grupo do atendimento',
   ];
 
   const rows = monitorias.map(m => {
@@ -82,6 +86,9 @@ export function exportMonitoriasToCsv(
       escapeCell(deadline),
       escapeCell(m.corrective_action || ''),
       escapeCell(m.contestation_reason || ''),
+      escapeCell(monitoriaTicketPresentation(m, teams).type),
+      escapeCell(monitoriaTicketPresentation(m, teams).subject || ''),
+      escapeCell(monitoriaTicketPresentation(m, teams).group || ''),
     ].join(';');
   });
 

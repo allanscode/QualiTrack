@@ -1,5 +1,6 @@
 import type { Monitoria, User } from '../types';
 import type { DashboardFilters } from '../components/dashboard/DashboardContext';
+import { matchesTicketGroup } from './dashboardGroupFilter';
 
 export interface SupportRankingItem {
   id: string;
@@ -19,6 +20,7 @@ export function selectRankingBaseline(rows: readonly Monitoria[], filters: Parti
     const date = row.created_at ? new Date(row.created_at).getTime() : undefined;
     return row.active !== false && (date === undefined || (date >= start && date <= end))
       && (!filters.teamId || row.team_id === filters.teamId)
+      && matchesTicketGroup(row, filters.groupId)
       && (!filters.auditorId || row.evaluator_id === filters.auditorId)
       && (!filters.formId || row.form_id === filters.formId)
       && (!filters.status || row.status === filters.status)
