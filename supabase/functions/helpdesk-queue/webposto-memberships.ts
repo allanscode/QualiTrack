@@ -33,6 +33,7 @@ export interface DivisionPreviewRow {
   name: string;
   current_team: string;
   zendesk_groups: string[];
+  zendesk_primary_groups: string[];
   zendesk_team_field: string | null;
   suggested_team: DivisionSuggestion;
   status: 'sugerido' | 'revisar' | 'pj_preservado' | 'atribuido';
@@ -76,11 +77,11 @@ export function previewWebpostoDivisions(input: {
       .map(groupId => groupNames.get(groupId))
       .filter((name): name is string => Boolean(name))
       .sort((a, b) => a.localeCompare(b));
-    const normalized = names.map(normalize);
     const defaultGroupNames = zendeskId === null ? [] : input.memberships
       .filter(membership => membership.user_id === zendeskId && membership.default === true)
       .map(membership => groupNames.get(membership.group_id))
       .filter((name): name is string => Boolean(name));
+    const normalized = defaultGroupNames.map(normalize);
     const isPjTeam = normalize(teamNames.get(user.primary_team_id || '') || '').startsWith('pj ');
     const fieldPjName = /^grupo_(bruno|duarte|sumwise|trindade)(?:_|$)/.exec(normalize(zendeskTeamField || ''))?.[1];
     const pjTeamName = fieldPjName ? ({ bruno: 'PJ Bruno', duarte: 'PJ Duarte',
@@ -97,42 +98,50 @@ export function previewWebpostoDivisions(input: {
     let suggested_team: DivisionSuggestion = null;
     let status: DivisionPreviewRow['status'] = 'revisar';
     let reason = 'Sem vínculo exclusivo com Cliente Final ou Revenda no Zendesk.';
-    if (isPjTeam) {
+    if (identityConflict) {
+      reason = 'ID externo e e-mail apontam para usuários Zendesk diferentes.';
+    } else if (zendeskId === null) {
+      reason = 'Usuário não encontrado entre os agentes dos grupos consultados.';
+    } else if (isPjTeam && pjTeamName === teamNames.get(user.primary_team_id || '')) {
       status = 'pj_preservado';
-      reason = 'Já pertence a uma equipe PJ; não migrar para a divisão CLT.';
-    } else if (pjTeamName && isWebPostoRoot) {
+      reason = 'Equipe PJ confirmada pelo campo de equipe no Zendesk. O grupo principal indica a frente de atendimento.';
+    } else if (isPjTeam) {
+      reason = 'Equipe PJ atual não confirmada pelo campo de equipe do Zendesk; revisar a exceção antes de alterar.';
+    } else if (pjTeamName) {
       suggested_team = pjTeamName;
       status = 'sugerido';
       reason = `Campo “Vinculado à equipe” no Zendesk indica ${pjTeamName}.`;
     } else if (hasFieldGroup) {
       reason = 'Vínculo com grupo de campo; confira a equipe PJ antes da atribuição.';
-    } else if (!isWebPostoRoot) {
+    } else if (defaultGroupNames.length !== 1) {
+      reason = 'Grupo principal ausente ou ambíguo no Zendesk; grupos secundários não definem a equipe.';
+    } else if (normalized[0] === normalize(teamNames.get(user.primary_team_id || '') || '')) {
       status = 'atribuido';
-      reason = 'Equipe principal já definida; nenhuma mudança sugerida.';
-    } else if (identityConflict) {
-      reason = 'ID externo e e-mail apontam para usuários Zendesk diferentes.';
-    } else if (zendeskId === null) {
-      reason = 'Usuário não encontrado entre os agentes dos grupos consultados.';
+      reason = 'Equipe atual corresponde ao grupo principal no Zendesk.';
     } else if (explicitRevendaManager) {
       suggested_team = 'Revenda';
       status = 'sugerido';
       reason = 'Victor foi definido como gestor da Revenda; mantém o atendimento aos dois grupos.';
     } else if (final && revenda) {
-      suggested_team = 'Escala';
-      status = 'sugerido';
-      reason = `Atende Cliente Final e Revenda; gestão sugerida: Escala.${defaultGroupNames.length ? ` Grupo padrão: ${defaultGroupNames.join(', ')}.` : ''}`;
-    } else if (final || revenda) {
-      suggested_team = final ? 'Cliente Final' : 'Revenda';
-      status = 'sugerido';
-      reason = 'Grupos de tickets indicam esta frente de atendimento.';
-    } else if (maisPagamentos) {
-      suggested_team = 'Mais Pagamentos';
-      status = 'sugerido';
-      reason = 'A maioria dos vínculos específicos é de Mais Pagamentos.';
+      reason = 'Grupo principal atende frentes diferentes; revisar a equipe responsável.';
     } else if (escala) {
       suggested_team = 'Escala';
       status = 'sugerido';
-      reason = 'Vínculo com grupo de Escala, sem grupos de Cliente Final ou Revenda.';
+      reason = 'Grupo principal de Escala no Zendesk.';
+    } else if (final || revenda) {
+      suggested_team = final ? 'Cliente Final' : 'Revenda';
+      status = 'sugerido';
+      reason = 'Grupo principal no Zendesk indica esta frente de atendimento.';
+    } else if (maisPagamentos) {
+      suggested_team = 'Mais Pagamentos';
+      status = 'sugerido';
+      reason = 'Grupo principal de Mais Pagamentos no Zendesk.';
+    }
+
+    if (suggested_team && !isWebPostoRoot) {
+      status = suggested_team === teamNames.get(user.primary_team_id || '') ? 'atribuido' : 'revisar';
+      reason = status === 'atribuido' ? 'Equipe atual corresponde ao grupo principal no Zendesk.'
+        : `Grupo principal sugere ${suggested_team}; confira eventual exceção antes de alterar a equipe atual.`;
     }
 
     return {
@@ -140,6 +149,7 @@ export function previewWebpostoDivisions(input: {
       name: user.name,
       current_team: teamNames.get(user.primary_team_id || '') || 'Sem equipe',
       zendesk_groups: names,
+      zendesk_primary_groups: defaultGroupNames,
       zendesk_team_field: zendeskTeamField,
       suggested_team,
       status,
