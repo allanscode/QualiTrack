@@ -175,14 +175,29 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n, 0);
     });
 
-    await t.test('reconfere o limite mensal na conclusão de três jobs já iniciados', async () => {
+    await t.test('conclui três jobs do mesmo agente e permite iniciar o próximo sem teto mensal', async () => {
       await reset();
       const jobs = [await begin('201'), await begin('202'), await begin('203')];
       for (const job of jobs) await complete(job, { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' });
-      assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n, 2);
-      assert.equal((await state('203')).status, 'review_required');
-      assert.match((await state('203')).last_error, /Limite de duas/);
-      assert.equal((await db.query("SELECT count(*)::int AS n FROM ai_evaluation_drafts WHERE ticket_id='203'")).rows[0].n, 1);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n, 3);
+      assert.equal((await state('203')).status, 'completed');
+      assert.equal((await state('203')).last_error, null);
+      const fourth = await begin('204');
+      assert.ok(fourth);
+      await complete(fourth, { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' });
+      assert.equal((await state('204')).status, 'completed');
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n, 4);
+    });
+
+    await t.test('prioriza tickets novos e nunca reserva bloqueios sem nova tentativa agendada', async () => {
+      await reset();
+      await db.exec(`INSERT INTO positive_ai_queue(ticket_id,ticket_snapshot,status,created_at,next_attempt_at)
+        VALUES ('601','{}','blocked',now()-interval '2 days',now()),
+               ('602','{}','pending',now(),now()),
+               ('603','{}','blocked',now()-interval '3 days','infinity');`);
+      assert.equal((await db.query('SELECT ticket_id FROM claim_positive_ai_work()')).rows[0].ticket_id, '602');
+      assert.equal((await db.query('SELECT ticket_id FROM claim_positive_ai_work()')).rows[0].ticket_id, '601');
+      assert.deepEqual((await db.query('SELECT ticket_id FROM claim_positive_ai_work()')).rows, []);
     });
 
     await t.test('teto do ambiente pausa novos jobs e permite terminar o último reservado', async () => {
