@@ -107,7 +107,7 @@ export default function MonitoriaList({
 
   const filters = useMonitoriaFilters();
   const [page, setPage] = useState(0);
-  const { monitorias, loading, total, load, fetchDetail } = useMonitoriaData(user, activeTab, {
+  const { monitorias, loading, total, load, fetchDetail, fetchExportRows } = useMonitoriaData(user, activeTab, {
     page,
     pageSize: 50,
     filters: {
@@ -477,10 +477,16 @@ export default function MonitoriaList({
                 size="sm"
                 variant="outline"
                 icon={<Download className="w-3.5 h-3.5" />}
-                onClick={() => {
-                  const success = exportMonitoriasToCsv(filtered, 'monitorias_qualitrack', staticData.users, staticData.teams);
-                  if (success) toast.success(`${filtered.length} monitorias desta página exportadas para CSV!`);
-                  else toast.error('Nenhuma monitoria para exportar.');
+                onClick={async () => {
+                  try {
+                    const rows = await fetchExportRows(filtered.map(row => row.id));
+                    const success = exportMonitoriasToCsv(rows, 'monitorias_qualitrack', staticData.users, staticData.teams);
+                    if (success) toast.success(`${rows.length} monitorias desta página exportadas para CSV!`);
+                    else toast.error('Nenhuma monitoria para exportar.');
+                  } catch (error) {
+                    console.error('[Monitorias] Falha ao exportar CSV:', error);
+                    toast.error('Não foi possível exportar as monitorias.');
+                  }
                 }}
                 className="h-8 text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-brand-primary shrink-0"
                 title="Exportar registros desta página para CSV (compatível com Excel)"

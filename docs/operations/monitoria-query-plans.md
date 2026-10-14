@@ -54,8 +54,15 @@ Não há projeto de staging. A medição foi feita em produção, apenas com
   - carga antiga (todas as fichas, todas as colunas): **~6,2 MB**;
   - página nova (50 fichas, todas as colunas): **~635 kB**;
   - índice de tickets auditados (colunas mínimas): **~74 kB**.
-- `form_snapshot` responde por ~3,5 MB do total. Selecionar colunas na lista,
-  sem o snapshot, é a próxima redução relevante de volume.
+- `form_snapshot` responde por ~3,5 MB do total. A lista paginada já seleciona
+  apenas os campos necessários e carrega a ficha completa ao abrir os detalhes.
+  O CSV busca os campos completos somente para os registros da página exportada.
+
+Esses números são a referência anterior à publicação; ainda é necessário medir
+o tráfego da lista e o tempo do RPC depois de aplicar as migrações. O dashboard
+continua lendo o histórico completo para widgets, relatórios e detalhes que
+dependem das respostas e do snapshot do formulário. A agregação no servidor
+reduz o cálculo dos indicadores atendidos pela RPC, mas não elimina essa leitura.
 
 Os índices foram mantidos para quando a tabela crescer. Repita as medições
 quando ela passar de ~10 mil linhas e remova os índices que não forem usados

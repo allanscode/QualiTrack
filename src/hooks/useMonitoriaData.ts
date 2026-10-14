@@ -27,7 +27,7 @@ export type MonitoriaDataOptions = {
 };
 
 const CHILD_FORM_ID = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
-const LIST_COLUMNS = 'id,form_id,evaluator_id,evaluated_id,ticket_id,ticket_date,analysis_date,score,status,resolution_type,action_deadline_at,active,team_id,team_name,evaluator_name,evaluated_name,pj_reviewer_id,pj_review_kind,pj_review_required,created_at,updated_at';
+const LIST_COLUMNS = 'id,form_id,evaluator_id,evaluated_id,ticket_id,ticket_date,analysis_date,score,status,resolution_type,action_deadline_at,active,team_id,team_name,evaluator_name,evaluated_name,pj_reviewer_id,pj_review_kind,pj_review_required,history,created_at,updated_at';
 
 function matchesFilters(row: Monitoria, filters: MonitoriaListFilters) {
   if ((filters.statusFilter || 'active') === 'active' ? row.active === false : row.active !== false) return false;
@@ -45,13 +45,13 @@ function matchesFilters(row: Monitoria, filters: MonitoriaListFilters) {
   if (filters.endDate && (!date || date > `${filters.endDate}T23:59:59`)) return false;
   if (filters.search) {
     const term = filters.search.toLocaleLowerCase('pt-BR');
-    if (![row.ticket_id, String(row.display_id || ''), row.team_name, row.evaluated_name, row.evaluator_name]
+    if (![row.ticket_id, String(row.display_id || ''), row.team_name, row.evaluated_name, row.evaluator_name, row.evaluator_note]
       .some(value => String(value || '').toLocaleLowerCase('pt-BR').includes(term))) return false;
   }
   return true;
 }
 
-function applyQueryFilters(query: any, filters: MonitoriaListFilters) {
+function applyQueryFilters(query: any, filters: MonitoriaListFilters, supportsDisplayId: boolean) {
   query = query.eq('active', (filters.statusFilter || 'active') === 'active');
   if (filters.tab === 'pendente_revisao') query = query.in('status', ['pendente_revisao', 'contestacao_negada']);
   else if (filters.tab === 'expiradas_prazo') query = query.eq('status', 'concluida').eq('resolution_type', 'automatic');
@@ -61,13 +61,21 @@ function applyQueryFilters(query: any, filters: MonitoriaListFilters) {
   if (filters.suporteFilter) query = query.eq('evaluated_id', filters.suporteFilter);
   if (filters.auditorFilter) query = query.eq('evaluator_id', filters.auditorFilter);
   if (filters.ticketKindFilter === 'child') query = query.eq('form_id', CHILD_FORM_ID);
-  if (filters.ticketKindFilter === 'service') query = query.neq('form_id', CHILD_FORM_ID);
+  if (filters.ticketKindFilter === 'service') query = query.or(`form_id.is.null,form_id.neq.${CHILD_FORM_ID}`);
   const dateColumn = filters.dateType === 'ticket' ? 'ticket_date' : 'analysis_date';
   if (filters.startDate) query = query.gte(dateColumn, filters.startDate);
   if (filters.endDate) query = query.lte(dateColumn, filters.endDate);
   if (filters.search) {
-    const term = filters.search.trim().replace(/[%,().]/g, '');
-    if (term) query = query.or(`ticket_id.ilike.%${term}%,team_name.ilike.%${term}%,evaluated_name.ilike.%${term}%`);
+    const term = filters.search.trim().replace(/[^\p{L}\p{N}\s-]/gu, '');
+    if (term) {
+      const predicates = [
+        `ticket_id.ilike.%${term}%`, `team_name.ilike.%${term}%`,
+        `evaluated_name.ilike.%${term}%`, `evaluator_name.ilike.%${term}%`,
+        `evaluator_note.ilike.%${term}%`,
+      ];
+      if (supportsDisplayId && /^\d+$/.test(term)) predicates.push(`display_id.eq.${Number(term)}`);
+      query = query.or(predicates.join(','));
+    }
   }
   return query;
 }
@@ -123,8 +131,10 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
         const isSuporte = currentUser.role === 'suporte';
         const source = isSuporte ? 'vw_monitorias_suporte' : 'monitorias';
         const makeQuery = (name: string) => {
-          let query = supabase!.from(name).select(LIST_COLUMNS, { count: 'exact' });
-          query = applyQueryFilters(query, currentFilters);
+          // display_id is a column on monitorias, but not on the masked views.
+          const columns = name === 'monitorias' ? `${LIST_COLUMNS},display_id` : LIST_COLUMNS;
+          let query = supabase!.from(name).select(columns, { count: 'exact' });
+          query = applyQueryFilters(query, currentFilters, name === 'monitorias');
           if (name === source && isSuporte) query = query.eq('evaluated_id', currentUser.id);
           if (name === source && currentUser.role === 'gestor_suporte') {
             query = currentUser.team_ids?.length ? query.in('team_id', currentUser.team_ids) : query.eq('team_id', '00000000-0000-0000-0000-000000000000');
@@ -147,7 +157,7 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
         const failure = result.find(item => item.error)?.error;
         if (failure) throw failure;
         const merged = new Map<string, Monitoria>();
-        result.forEach(item => ((item.data || []) as Monitoria[]).forEach(row => merged.set(row.id, row)));
+        result.forEach(item => ((item.data || []) as unknown as Monitoria[]).forEach(row => merged.set(row.id, row)));
         rows = [...merged.values()].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
           .slice(page * pageSize, (page + 1) * pageSize);
         count = result.reduce((sum, item) => sum + (item.count || 0), 0);
@@ -210,6 +220,26 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
     return null;
   }, []);
 
+  const fetchExportRows = useCallback(async (ids: string[]): Promise<Monitoria[]> => {
+    const currentUser = userRef.current;
+    if (!currentUser || ids.length === 0) return [];
+    if (isMockMode) {
+      const { data } = await mockDb.get('monitorias');
+      const byId = new Map(((data || []) as Monitoria[]).map(row => [row.id, row]));
+      return ids.map(id => byId.get(id)).filter((row): row is Monitoria => Boolean(row));
+    }
+    const source = currentUser.role === 'suporte' ? 'vw_monitorias_suporte' : 'monitorias';
+    const requests = [supabase!.from(source).select('*').in('id', ids)];
+    if (currentUser.role === 'suporte' || currentUser.role === 'gestor_suporte') {
+      requests.push(supabase!.from('vw_monitorias_pj_reviewer').select('*').in('id', ids));
+    }
+    const results = await Promise.all(requests);
+    const failure = results.find(result => result.error)?.error;
+    if (failure) throw failure;
+    const byId = new Map(results.flatMap(result => (result.data || []) as Monitoria[]).map(row => [row.id, row]));
+    return ids.map(id => byId.get(id)).filter((row): row is Monitoria => Boolean(row));
+  }, []);
+
   return {
     monitorias: loadedKey === key ? monitorias : cache.initial?.rows || [],
     setMonitorias,
@@ -217,5 +247,6 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
     total: loadedKey === key ? total : cache.initial?.total || 0,
     load,
     fetchDetail,
+    fetchExportRows,
   };
 }
