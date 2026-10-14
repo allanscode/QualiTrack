@@ -19,6 +19,7 @@
 | Fluxo de Onboarding | docs/flows/onboarding.md | Convite, solicitação de acesso, setup |
 | Docker/Infra | docs/onboarding/docker-setup.md | Docker Compose, Swarm, Traefik, build args, health check |
 | Plano de Deploy | docs/deployment-plan.md | Passos locais e remotos, Supabase config, pós-deploy |
+| Otimizações de Monitorias e Dashboard | docs/operations/optimization-release-2026-10-14.md | Entregas dos PRs #58–#60, deploy, validações e roteiro de teste WQ-78 |
 | Contexto para Agentes IA | docs/agents/ai-context.md | Regras, padrões, bugs conhecidos (27+ pontos) |
 | Email Templates | docs/supabase-email-templates.md | Templates HTML profissionais para Auth emails |
 
