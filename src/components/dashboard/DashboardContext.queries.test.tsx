@@ -30,7 +30,10 @@ vi.mock('../../lib/supabase', () => {
           .map(row => columns.includes('form_snapshot') ? row : { id: row.id, active: row.active, created_at: row.created_at, score: row.score });
         return Promise.resolve({ data, error: null });
       },
-      then(resolve: (value: { data: unknown[]; error: null }) => void) { resolve({ data: [], error: null }); },
+      then(resolve: (value: { data: unknown[]; error: null }) => void) {
+        mocks.calls.push({ source, columns, start, end });
+        resolve({ data: [], error: null });
+      },
     };
     return query;
   };
@@ -59,12 +62,25 @@ it('reads lightweight history and full records only for the selected period', as
   expect(history?.columns).not.toContain('answers');
   expect(details?.start).toBeTruthy();
   expect(details?.end).toBeTruthy();
+  expect(mocks.calls.some(call => call.source === 'helpdesk_submissions')).toBe(false);
 
   act(() => hook.result.current.setFilters(filters => ({
     ...filters,
     startDate: `${new Date().getFullYear() - 2}-01-01`,
   })));
   await waitFor(() => expect(hook.result.current.monitorias.map(row => row.id)).toEqual(['current', 'historic']));
+});
+
+it('loads helpdesk submissions only for the support manager dashboard', async () => {
+  const manager = {
+    id: 'support-manager', name: 'Support Manager', email: 'manager@example.test',
+    created_at: new Date().toISOString(), role: 'gestor_suporte', active: true, team_ids: [],
+  } as User;
+  const managerWrapper = ({ children }: { children: React.ReactNode }) =>
+    <DashboardProvider user={manager} activeTab="dashboard">{children}</DashboardProvider>;
+  const hook = renderHook(useDashboard, { wrapper: managerWrapper });
+  await waitFor(() => expect(hook.result.current.loading).toBe(false));
+  expect(mocks.calls.filter(call => call.source === 'helpdesk_submissions')).toHaveLength(1);
 });
 
 it('uses the anonymized view for both support queries', async () => {

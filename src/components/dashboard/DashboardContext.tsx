@@ -307,21 +307,22 @@ export function DashboardProvider({
         ]);
         scoreDocs = summaryDocs;
 
-        if (docs.length > 0) {
-          const submissions: HelpdeskSubmission[] = [];
+        if (currentUser.role === 'gestor_suporte' && docs.length > 0) {
           const docIds = docs.map(d => d.id);
-          for (let offset = 0; offset < docIds.length; offset += 150) {
+          const idBatches = Array.from({ length: Math.ceil(docIds.length / 150) }, (_, index) =>
+            docIds.slice(index * 150, (index + 1) * 150));
+          const submissionBatches = await Promise.all(idBatches.map(async ids => {
             const { data: subData, error: subError } = await sb
               .from('helpdesk_submissions')
               .select('*')
-              .in('monitoria_id', docIds.slice(offset, offset + 150))
+              .in('monitoria_id', ids)
               .eq('status', 'sent')
               .order('created_at', { ascending: false });
             if (subError) throw subError;
-            submissions.push(...((subData as HelpdeskSubmission[]) || []));
-          }
+            return (subData as HelpdeskSubmission[]) || [];
+          }));
           if (!cache.isCurrent()) return;
-          loadedSubmissions = submissions;
+          loadedSubmissions = submissionBatches.flat();
         } else {
           if (!cache.isCurrent()) return;
           loadedSubmissions = [];

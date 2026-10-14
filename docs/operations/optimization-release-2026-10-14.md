@@ -39,3 +39,7 @@ A primeira página da lista consultava 50 monitorias, mas a página seguinte req
 A correção solicita apenas o intervalo da página atual para os perfis com uma origem. Para `suporte` e `gestor_suporte`, ela guarda quantos registros de cada origem já foram mostrados e busca no máximo 50 registros de cada uma por página, preservando a ordem por data e ID. O total continua vindo da contagem do servidor; abrir uma ficha continua carregando seus detalhes sob demanda. Nenhuma migração de banco é necessária.
 
 Validação local: lint, 514 testes e build passaram. Na validação autenticada do WQ-78, conferir a aba de rede ao avançar até a terceira página: cada requisição de lista deve ter intervalo de até 50 registros e as linhas devem continuar em ordem, sem repetições nem lacunas.
+
+## Ajuste adicional para Admin e Qualidade
+
+Na verificação do perfil Admin/Qualidade com o período do mês atual, foi identificado que o carregamento aguardava também a consulta de envios do Helpdesk. Esses perfis não usam esse conjunto de dados; ele é consumido somente pelo dashboard de gestor de suporte. A consulta foi removida para os demais perfis, eliminando uma etapa de rede da abertura do dashboard. Quando o gestor de suporte precisa buscar mais de 150 fichas, os lotes do Helpdesk agora são consultados em paralelo. O ganho de tempo ainda precisa ser medido no navegador após o deploy.
