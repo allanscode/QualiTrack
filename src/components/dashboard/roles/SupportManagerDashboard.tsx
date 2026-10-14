@@ -1,4 +1,5 @@
 import { buildSupportRanking, compareSupportOffenders, selectRankingBaseline } from '../../../lib/supportRanking';
+import { aggregatedSupportRanking } from '../dashboardAggregates';
 import type { Monitoria } from '../../../types';
 import React, { useMemo, useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
@@ -282,7 +283,7 @@ export default function SupportManagerDashboard({
     // safe fallback
   }
 
-  const { user, monitorias, allMonitorias, filters = { startDate: '', endDate: '' }, helpdeskSubmissions = [], users, teams, forms, dissatisfactionFields, globalAvg } = dashboardData;
+  const { user, monitorias, allMonitorias, filters = { startDate: '', endDate: '' }, helpdeskSubmissions = [], users, teams, forms, dissatisfactionFields, globalAvg, aggregates } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
   const { feedbacks, createFeedback, acknowledgeFeedback, completeFeedback } = useFeedbacks(user);
 
@@ -336,10 +337,11 @@ export default function SupportManagerDashboard({
   // 1. Média Geral (Scoped average)
   const avgScore = useMemo(() => {
     if (isCustomizing) return 84.20;
+    if (aggregates) return Number(aggregates.average);
     return scoredMonitorias.length > 0
       ? scoredMonitorias.reduce((a: number, m: any) => a + (m.score || 0), 0) / scoredMonitorias.length
       : 0;
-  }, [isCustomizing, scoredMonitorias]);
+  }, [isCustomizing, scoredMonitorias, aggregates]);
 
   const scoreDiff = avgScore - config.targetScore;
   const diffSign = scoreDiff >= 0 ? '↑' : '↓';
@@ -391,7 +393,7 @@ export default function SupportManagerDashboard({
     : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400';
 
   // Total volume
-  const totalMonitorias = isCustomizing ? 15 : myMonitorias.length;
+  const totalMonitorias = isCustomizing ? 15 : aggregates?.total ?? myMonitorias.length;
 
   // Total Pendentes (Unified agent acknowledgements + disputes + support manager actions)
   const pendingTotalList = useMemo(() => {
@@ -504,8 +506,9 @@ export default function SupportManagerDashboard({
   // Rankings
   const agentRanking = useMemo(() => {
     if (isCustomizing) return [];
+    if (aggregates) return aggregatedSupportRanking(aggregates, scoredMonitorias, users);
     return buildSupportRanking(scoredMonitorias, selectRankingBaseline(allMonitorias.filter((m: Monitoria) => myTeamIds.includes(m.team_id ?? '')), filters), users);
-  }, [isCustomizing, scoredMonitorias, allMonitorias, filters, users, myTeamIds]);
+  }, [isCustomizing, scoredMonitorias, allMonitorias, filters, users, myTeamIds, aggregates]);
 
   // Melhores Suporte
   const topAgents = useMemo(() => {

@@ -23,6 +23,57 @@ export interface DashboardFilters {
   channel: string;
 }
 
+export interface DashboardAggregateGroup {
+  id: string | null;
+  count: number;
+}
+
+export interface DashboardAggregateRanking extends DashboardAggregateGroup {
+  id: string;
+  average: number;
+  score?: number;
+  badness?: number;
+}
+
+export interface DashboardAggregatePeriod {
+  period: string;
+  count: number;
+  average: number;
+}
+
+export interface DashboardAggregates {
+  total: number;
+  scored: number;
+  average: number;
+  ranking_baseline: number;
+  agents: DashboardAggregateRanking[];
+  auditors: DashboardAggregateRanking[];
+  teams: DashboardAggregateGroup[];
+  groups: DashboardAggregateGroup[];
+  statuses: DashboardAggregateGroup[];
+  days: DashboardAggregatePeriod[];
+  months: DashboardAggregatePeriod[];
+  years: DashboardAggregatePeriod[];
+}
+
+// Dashboard widgets use these fields for their visible rows and drilldowns.
+// Keep the projection explicit so new large columns are never fetched by default.
+const DASHBOARD_MONITORIA_COLUMNS = [
+  'id', 'form_id', 'evaluator_id', 'evaluated_id', 'evaluator_name',
+  'evaluated_name', 'team_id', 'team_name', 'ticket_group_team_id',
+  'form_name', 'ticket_id', 'channel', 'ticket_date', 'analysis_date',
+  'satisfaction_result', 'satisfaction_has_record', 'satisfaction_record_text',
+  'answers', 'score', 'status', 'resolution_type', 'contestation_result',
+  'action_deadline_at', 'active', 'history', 'dissatisfaction_answers',
+  'created_at', 'updated_at', 'evaluator_note', 'question_observations',
+  'critical_error_observations', 'selected_critical_errors',
+  'client_contact_log', 'client_contact_success', 'client_contact_channel',
+  'form_snapshot', 'contestation_reason', 'corrective_action',
+  'action_attachments', 'pj_reviewer_id', 'pj_review_kind',
+  'pj_review_decision', 'pj_review_note', 'pj_reviewed_at',
+  'pj_review_required',
+].join(',');
+
 export interface DashboardState {
   user: User | null;
   loggedInUser: User | null;
@@ -38,6 +89,7 @@ export interface DashboardState {
   loading: boolean;
   refreshing?: boolean;
   globalAvg: number;
+  aggregates?: DashboardAggregates | null;
   dissatisfactionFields: DissatisfactionField[];
   // CORRECTION 8: Cooldown for manual refresh button
   refreshCooldownEnd: number | null;
@@ -122,6 +174,7 @@ export function DashboardProvider({
   const [loading, setLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
   const [globalAvg, setGlobalAvg] = useState(cached?.globalAvg ?? 0);
+  const [aggregates, setAggregates] = useState<DashboardAggregates | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
   // CORRECTION 8: Cooldown for manual refresh button
@@ -175,7 +228,8 @@ export function DashboardProvider({
             const pageSize = 500;
             const rows: Monitoria[] = [];
             for (let offset = 0; ; offset += pageSize) {
-              let query = sb.from(source).select('*')
+              let query = sb.from(source).select(DASHBOARD_MONITORIA_COLUMNS)
+                .eq('active', true)
                 .order('created_at', { ascending: false })
                 .order('id', { ascending: false })
                 .range(offset, offset + pageSize - 1);
@@ -203,7 +257,7 @@ export function DashboardProvider({
                 if (timeoutId) clearTimeout(timeoutId);
               }
               if (result.error) throw result.error;
-              const page = (result.data ?? []) as Monitoria[];
+              const page = (result.data ?? []) as unknown as Monitoria[];
               rows.push(...page);
               if (page.length < pageSize) break;
             }
@@ -347,6 +401,35 @@ export function DashboardProvider({
     }, 300);
     return () => clearTimeout(timer);
   }, [user, loadData]);
+
+  // Metrics and rankings are computed over the filtered, authorized set in
+  // PostgreSQL. Keep MockDb's local calculations for offline development.
+  useEffect(() => {
+    if (!supabase || !user || activeTab !== 'dashboard') return;
+    const sb = supabase;
+    let cancelled = false;
+    setAggregates(null);
+    const timer = setTimeout(async () => {
+      const { data, error } = await sb.rpc('dashboard_aggregates', {
+        p_start_date: filters.startDate || null,
+        p_end_date: filters.endDate || null,
+        p_team_id: filters.teamId || null,
+        p_group_id: filters.groupId || null,
+        p_agent_id: filters.agentId || null,
+        p_auditor_id: filters.auditorId || null,
+        p_form_id: filters.formId || null,
+        p_status: filters.status || null,
+        p_channel: filters.channel || null,
+      });
+      if (cancelled) return;
+      if (error) {
+        console.error('[Dashboard] Falha ao carregar indicadores agregados:', error);
+        return;
+      }
+      setAggregates(data as unknown as DashboardAggregates);
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [user, activeTab, filters, refreshTrigger]);
 
   const loadDataRef = useRef(loadData);
   loadDataRef.current = loadData;
@@ -534,6 +617,7 @@ export function DashboardProvider({
     loading,
     refreshing,
     globalAvg,
+    aggregates,
     dissatisfactionFields: staticData.dissatisfactionFields,
     refreshCooldownEnd,
     refreshCooldownRemaining,
@@ -552,6 +636,7 @@ export function DashboardProvider({
     loading,
     refreshing,
     globalAvg,
+    aggregates,
     staticData.dissatisfactionFields,
     refreshCooldownEnd,
     refreshCooldownRemaining,

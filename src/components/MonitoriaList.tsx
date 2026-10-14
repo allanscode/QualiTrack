@@ -25,7 +25,6 @@ import { toast } from 'sonner';
 import { uploadActionAttachment } from '../lib/monitoriaAttachments';
 import { exportMonitoriasToCsv } from '../utils/exportCsv';
 import { m, AnimatePresence } from 'motion/react';
-import { matchesAnySearch } from '../utils/search';
 import Card from './ui/Card';
 import Badge from './ui/Badge';
 import MonitoriaIdBadge from './ui/MonitoriaIdBadge';
@@ -106,8 +105,21 @@ export default function MonitoriaList({
     }).length;
   }, [feedbacksState.feedbacks]);
 
-  const { monitorias, loading, load } = useMonitoriaData(user, activeTab);
   const filters = useMonitoriaFilters();
+  const [page, setPage] = useState(0);
+  const { monitorias, loading, total, load, fetchDetail } = useMonitoriaData(user, activeTab, {
+    page,
+    pageSize: 50,
+    filters: {
+      tab: filters.tab, search: filters.search, statusFilter: filters.statusFilter,
+      teamFilter: filters.teamFilter, suporteFilter: filters.suporteFilter,
+      auditorFilter: filters.auditorFilter, ticketKindFilter: filters.ticketKindFilter,
+      dateType: filters.dateType, startDate: filters.startDate, endDate: filters.endDate,
+    },
+  });
+  useEffect(() => { setPage(0); }, [filters.tab, filters.search, filters.statusFilter, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.ticketKindFilter, filters.dateType, filters.startDate, filters.endDate]);
+  const [selectedDetail, setSelectedDetail] = useState<Monitoria | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const {
     actionModal, setActionModal,
     actionNote, setActionNote,
@@ -116,7 +128,8 @@ export default function MonitoriaList({
     targetStatus, setTargetStatus,
     submitting,
     handleAction,
-  } = useMonitoriaActions(user, monitorias, qualityConfig, load, staticData.teams);
+  } = useMonitoriaActions(user, selectedDetail && !monitorias.some(item => item.id === selectedDetail.id)
+    ? [...monitorias, selectedDetail] : monitorias, qualityConfig, load, staticData.teams);
 
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -124,6 +137,20 @@ export default function MonitoriaList({
   const openerRef = useRef<HTMLElement | null>(null);
   const [viewingMonitoria, setViewingMonitoria] = useState<Monitoria | null>(null);
   const [helpdeskMonitoria, setHelpdeskMonitoria] = useState<Monitoria | null>(null);
+
+  useEffect(() => {
+    if (!selectedId) { setSelectedDetail(null); setDetailLoading(false); return; }
+    let cancelled = false;
+    setSelectedDetail(null);
+    setDetailLoading(true);
+    fetchDetail(selectedId).then(detail => {
+      if (!cancelled) setSelectedDetail(detail);
+    }).catch(error => {
+      console.error('[Monitorias] Falha ao abrir ficha:', error);
+      if (!cancelled) toast.error('Não foi possível carregar a ficha da monitoria.');
+    }).finally(() => { if (!cancelled) setDetailLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedId, fetchDetail]);
 
   // Debounced search state
   const [searchInput, setSearchInput] = useState(filters.search);
@@ -226,79 +253,7 @@ export default function MonitoriaList({
     return staticData.users.find(u => u.id === id)?.name || id;
   };
 
-  const filtered = useMemo(() => {
-    return monitorias.filter(m => {
-      if (filters.statusFilter === 'active' && m.active === false) return false;
-      if (filters.statusFilter === 'removed' && m.active !== false) return false;
-
-      if (user?.role === 'suporte' && m.evaluated_id !== user.id && m.pj_reviewer_id !== user.id) return false;
-
-      if (user?.role === 'gestor_suporte') {
-        const ownsTeam = Boolean(m.team_id && user.team_ids?.includes(m.team_id));
-        const isAssignedReviewer = m.pj_reviewer_id === user.id;
-        if (!ownsTeam && !isAssignedReviewer) return false;
-      }
-
-      if (filters.tab !== 'todas') {
-        if (filters.tab === 'pendente_revisao') {
-          if (m.status !== 'pendente_revisao' && m.status !== 'contestacao_negada') return false;
-        } else if (filters.tab === 'expiradas_prazo') {
-          const isTimeout = m.status === 'concluida' && m.resolution_type === 'automatic';
-          if (!isTimeout) return false;
-        } else if (filters.tab === 'concluida') {
-          const isTimeout = m.status === 'concluida' && m.resolution_type === 'automatic';
-          if (isTimeout || m.status !== 'concluida') return false;
-        } else {
-          if (m.status !== filters.tab) return false;
-        }
-      }
-
-      if (filters.teamFilter && m.team_id !== filters.teamFilter) return false;
-      if (filters.suporteFilter && m.evaluated_id !== filters.suporteFilter) return false;
-      if (filters.auditorFilter && m.evaluator_id !== filters.auditorFilter) return false;
-      if (filters.ticketKindFilter === 'child' && !isChildTicketMonitoria(m)) return false;
-      if (filters.ticketKindFilter === 'service' && isChildTicketMonitoria(m)) return false;
-
-      if (filters.search) {
-        const teamName = m.team_name || staticData.teams.find(t => t.id === m.team_id)?.name || '';
-        const evaluatedName = getName(m.evaluated_id, false, m.evaluated_name);
-        const evaluatorName = getName(m.evaluator_id, true, m.evaluator_name);
-        const searchable: string[] = [
-          m.ticket_id,
-          String(m.display_id || ''),
-          teamName,
-          evaluatedName,
-          evaluatorName,
-          m.evaluator_note || '',
-        ];
-        if (!matchesAnySearch(searchable, filters.search)) return false;
-      }
-
-      const targetDate = filters.dateType === 'analysis' ? (m.analysis_date || m.created_at) : m.ticket_date;
-      if (filters.startDate && targetDate < filters.startDate) return false;
-      if (filters.endDate && targetDate > filters.endDate + 'T23:59:59') return false;
-
-      return true;
-    }).sort((a, b) => {
-      const aIsFinished = ['concluida', 'finalizada_alterada', 'contestacao_aceita'].includes(a.status);
-      const bIsFinished = ['concluida', 'finalizada_alterada', 'contestacao_aceita'].includes(b.status);
-
-      if (!aIsFinished && bIsFinished) return -1;
-      if (aIsFinished && !bIsFinished) return 1;
-
-      if (!aIsFinished && !bIsFinished) {
-        if (a.action_deadline_at && b.action_deadline_at) {
-          return new Date(a.action_deadline_at).getTime() - new Date(b.action_deadline_at).getTime();
-        }
-        if (a.action_deadline_at) return -1;
-        if (b.action_deadline_at) return 1;
-      }
-
-      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return bTime - aTime;
-    });
-  }, [monitorias, user, filters.tab, filters.search, filters.statusFilter, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.ticketKindFilter, filters.dateType, filters.startDate, filters.endDate]);
+  const filtered = monitorias;
 
   const activeTeams = useMemo(() => {
     let filtered = staticData.teams.filter(t => t.active !== false);
@@ -343,7 +298,7 @@ export default function MonitoriaList({
           <span className={`hidden sm:inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
             monitoriaViewMode === 'avaliacoes' ? 'bg-black/20 text-brand-on-primary' : 'bg-surface-subtle text-brand-muted'
           }`}>
-            {monitorias.filter(m => m.active !== false).length}
+            {total}
           </span>
         </button>
 
@@ -524,11 +479,11 @@ export default function MonitoriaList({
                 icon={<Download className="w-3.5 h-3.5" />}
                 onClick={() => {
                   const success = exportMonitoriasToCsv(filtered, 'monitorias_qualitrack', staticData.users, staticData.teams);
-                  if (success) toast.success(`${filtered.length} monitorias exportadas para CSV!`);
+                  if (success) toast.success(`${filtered.length} monitorias desta página exportadas para CSV!`);
                   else toast.error('Nenhuma monitoria para exportar.');
                 }}
                 className="h-8 text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-brand-primary shrink-0"
-                title="Exportar registros filtrados para CSV (compatível com Excel)"
+                title="Exportar registros desta página para CSV (compatível com Excel)"
               >
                 Exportar CSV
               </Button>
@@ -567,45 +522,6 @@ export default function MonitoriaList({
               { id: 'concluida', label: 'Concluídas' },
               { id: 'expiradas_prazo', label: 'Por SLA', fullTitle: 'Finalizadas por SLA (Decurso de Prazo)' },
             ].map(({ id: t, label: tabLabel, fullTitle }) => {
-              const count = monitorias.filter(m => {
-                const matchesActiveStatus = filters.statusFilter === 'active' ? m.active !== false : m.active === false;
-
-                let matchesTab = false;
-                if (t === 'todas') {
-                  matchesTab = true;
-                } else if (t === 'pendente_revisao') {
-                  matchesTab = m.status === 'pendente_revisao' || m.status === 'contestacao_negada';
-                } else if (t === 'expiradas_prazo') {
-                  matchesTab = m.status === 'concluida' && m.resolution_type === 'automatic';
-                } else if (t === 'concluida') {
-                  const isTimeout = m.status === 'concluida' && m.resolution_type === 'automatic';
-                  matchesTab = m.status === 'concluida' && !isTimeout;
-                } else {
-                  matchesTab = m.status === t;
-                }
-
-                if (!matchesActiveStatus || !matchesTab) return false;
-
-                if (user?.role === 'suporte' && m.evaluated_id !== user.id && m.pj_reviewer_id !== user.id) return false;
-                if (user?.role === 'gestor_suporte') {
-                  const ownsTeam = Boolean(m.team_id && user.team_ids?.includes(m.team_id));
-                  const isAssignedReviewer = m.pj_reviewer_id === user.id;
-                  if (!ownsTeam && !isAssignedReviewer) return false;
-                }
-
-                if (filters.teamFilter && m.team_id !== filters.teamFilter) return false;
-                if (filters.suporteFilter && m.evaluated_id !== filters.suporteFilter) return false;
-                if (filters.auditorFilter && m.evaluator_id !== filters.auditorFilter) return false;
-                if (filters.ticketKindFilter === 'child' && !isChildTicketMonitoria(m)) return false;
-                if (filters.ticketKindFilter === 'service' && isChildTicketMonitoria(m)) return false;
-
-                const targetDate = filters.dateType === 'analysis' ? (m.analysis_date || m.created_at) : m.ticket_date;
-                if (filters.startDate && targetDate < filters.startDate) return false;
-                if (filters.endDate && targetDate > filters.endDate + 'T23:59:59') return false;
-
-                return true;
-              }).length;
-
               return (
                 <button
                   key={t}
@@ -618,15 +534,15 @@ export default function MonitoriaList({
                   title={fullTitle || tabLabel}
                 >
                   <span className="whitespace-nowrap">{tabLabel}</span>
-                  <span
+                  {filters.tab === t && <span
                     className={`px-1.5 py-1 rounded-full text-[11px] font-mono font-bold flex-shrink-0 min-w-[22px] text-center leading-none tabular-nums ${
                       filters.tab === t
                         ? 'bg-black/20 text-brand-on-primary'
                         : 'bg-surface-card text-brand-muted border border-surface-border/60'
                     }`}
                   >
-                    {count}
-                  </span>
+                    {total}
+                  </span>}
                 </button>
               );
             })}
@@ -688,6 +604,14 @@ export default function MonitoriaList({
           )}
         </div>
       </Card>
+      <div className="flex items-center justify-between gap-3 text-xs text-brand-muted">
+        <span>{total === 0 ? 'Nenhum registro' : `${page * 50 + 1}–${Math.min((page + 1) * 50, total)} de ${total} monitorias`}</span>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" disabled={page === 0 || loading} onClick={() => setPage(current => current - 1)}>Anterior</Button>
+          <span className="font-semibold">Página {page + 1}</span>
+          <Button size="sm" variant="outline" disabled={(page + 1) * 50 >= total || loading} onClick={() => setPage(current => current + 1)}>Próxima</Button>
+        </div>
+      </div>
       </>
       )}
 
@@ -695,7 +619,8 @@ export default function MonitoriaList({
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/25 dark:bg-black/40 p-0 sm:p-6 backdrop-blur-md" onMouseDown={event => { if (event.target === event.currentTarget) closeDetails(); }}>
           <section data-detail-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-detail-title" className="flex h-[92vh] sm:h-auto sm:max-h-[calc(100dvh-3rem)] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl border-t sm:border border-surface-border bg-surface-card shadow-2xl">
             {(() => {
-              const m = monitorias.find(item => item.id === selectedId);
+              const m = selectedDetail;
+              if (detailLoading) return <div className="p-6 text-brand-primary" role="status">Carregando ficha...</div>;
               if (!m) return <div className="p-6 text-brand-primary">Monitoria não encontrada.</div>;
               const cfg = getStatusConfig(m.status);
               return <>
@@ -729,7 +654,7 @@ export default function MonitoriaList({
             <m.div data-action-dialog role="dialog" aria-modal="true" aria-labelledby="monitoria-action-title" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="w-full max-w-md overflow-y-auto rounded-t-3xl sm:rounded-3xl max-h-[92dvh] sm:max-h-[calc(100dvh-3rem)]">
               <Card className="w-full shadow-2xl border-t sm:border border-surface-border bg-surface-card rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 pb-safe">
                 {(() => {
-                  const m = monitorias.find(item => item.id === actionModal.id);
+                  const m = selectedDetail?.id === actionModal.id ? selectedDetail : monitorias.find(item => item.id === actionModal.id);
                   const currentSt = m?.status || 'pendente_revisao';
                   const isPjAction = Boolean(m?.pj_review_required || m?.pj_review_kind);
                   const isStepChange = actionModal.type === 'alterar_etapa' || actionModal.type === 'avancar_etapa' || actionModal.type === 'retroceder_etapa';
