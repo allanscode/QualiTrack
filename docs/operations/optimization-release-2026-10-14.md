@@ -31,3 +31,11 @@ O perfil `suporte` continua consultando `vw_monitorias_suporte`, preservando o a
 6. Registrar no navegador os bytes HTTP e o tempo de carregamento do dashboard por perfil e período. Comparar com a referência em [medição das consultas](monitoria-query-plans.md), usando a mesma amostra e condições de cache.
 
 Os números anteriores à publicação (~6,2 MB para todas as fichas, ~635 kB para uma página de 50 e ~74 kB para o índice de tickets) são referências de volume da leitura, **não** uma medição HTTP ou de latência após o deploy. Nenhum ganho percentual pós-deploy foi confirmado ainda. Períodos muito amplos ainda carregam as fichas completas correspondentes; se isso se tornar pesado, os widgets que dependem das respostas precisarão de agregações específicas no servidor.
+
+## Correção encontrada na fase de teste: páginas seguintes
+
+A primeira página da lista consultava 50 monitorias, mas a página seguinte requisitava novamente desde o primeiro registro. O volume crescia a cada avanço e poderia alcançar todo o histórico. A consulta de perfis com casos próprios e casos de revisão PJ fazia o mesmo em cada uma das duas origens.
+
+A correção solicita apenas o intervalo da página atual para os perfis com uma origem. Para `suporte` e `gestor_suporte`, ela guarda quantos registros de cada origem já foram mostrados e busca no máximo 50 registros de cada uma por página, preservando a ordem por data e ID. O total continua vindo da contagem do servidor; abrir uma ficha continua carregando seus detalhes sob demanda. Nenhuma migração de banco é necessária.
+
+Validação local: lint, 514 testes e build passaram. Na validação autenticada do WQ-78, conferir a aba de rede ao avançar até a terceira página: cada requisição de lista deve ter intervalo de até 50 registros e as linhas devem continuar em ordem, sem repetições nem lacunas.

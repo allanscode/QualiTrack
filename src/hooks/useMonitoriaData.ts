@@ -28,6 +28,29 @@ export type MonitoriaDataOptions = {
 
 const CHILD_FORM_ID = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
 const LIST_COLUMNS = 'id,form_id,evaluator_id,evaluated_id,ticket_id,ticket_date,analysis_date,score,status,resolution_type,action_deadline_at,active,team_id,team_name,evaluator_name,evaluated_name,pj_reviewer_id,pj_review_kind,pj_review_required,history,created_at,updated_at';
+type SourceOffsets = { primary: number; reviewer: number };
+
+function compareNewestFirst(a: Monitoria, b: Monitoria) {
+  return b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id);
+}
+
+function mergeSourcePage(primary: Monitoria[], reviewer: Monitoria[], pageSize: number) {
+  const rows: Monitoria[] = [];
+  const seen = new Set<string>();
+  let primaryUsed = 0;
+  let reviewerUsed = 0;
+  while (rows.length < pageSize && (primaryUsed < primary.length || reviewerUsed < reviewer.length)) {
+    const nextPrimary = primary[primaryUsed];
+    const nextReviewer = reviewer[reviewerUsed];
+    const usePrimary = !nextReviewer || (nextPrimary && compareNewestFirst(nextPrimary, nextReviewer) <= 0);
+    const row = usePrimary ? primary[primaryUsed++] : reviewer[reviewerUsed++];
+    if (!seen.has(row.id)) {
+      rows.push(row);
+      seen.add(row.id);
+    }
+  }
+  return { rows, primaryUsed, reviewerUsed };
+}
 
 function matchesFilters(row: Monitoria, filters: MonitoriaListFilters) {
   if ((filters.statusFilter || 'active') === 'active' ? row.active === false : row.active !== false) return false;
@@ -96,6 +119,13 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
   const enabledRef = useRef(enabled);
   const filtersRef = useRef(filters);
   const loadedOnceRef = useRef(cache.initial !== undefined);
+  const cursorIdentity = `${scope}:${pageSize}:${filterKey}`;
+  const cursorsRef = useRef<{ identity: string; pages: Map<number, SourceOffsets> }>({
+    identity: cursorIdentity, pages: new Map([[0, { primary: 0, reviewer: 0 }]]),
+  });
+  if (cursorsRef.current.identity !== cursorIdentity) {
+    cursorsRef.current = { identity: cursorIdentity, pages: new Map([[0, { primary: 0, reviewer: 0 }]]) };
+  }
   userRef.current = user;
   enabledRef.current = enabled;
   filtersRef.current = filters;
@@ -139,25 +169,44 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
           return query.order('created_at', { ascending: false }).order('id', { ascending: false });
         };
         const hasReviewer = isSuporte || currentUser.role === 'gestor_suporte';
-        // The two access-controlled views overlap rarely. Fetch only enough from each
-        // to merge the requested page in chronological order without skipping cases.
-        const end = (page + 1) * pageSize - 1;
-        let reviewerQuery = hasReviewer ? makeQuery('vw_monitorias_pj_reviewer').eq('pj_reviewer_id', currentUser.id) : null;
-        if (reviewerQuery && isSuporte) reviewerQuery = reviewerQuery.neq('evaluated_id', currentUser.id);
-        if (reviewerQuery && currentUser.role === 'gestor_suporte' && currentUser.team_ids?.length) {
-          reviewerQuery = reviewerQuery.not('team_id', 'in', `(${currentUser.team_ids.join(',')})`);
+        if (!hasReviewer) {
+          const result = await makeQuery(source).range(page * pageSize, (page + 1) * pageSize - 1);
+          if (result.error) throw result.error;
+          rows = (result.data || []) as Monitoria[];
+          count = result.count || 0;
+        } else {
+          // The reviewer view adds cases outside the user's own/team list. Remember
+          // how many rows each source contributed so both requests stay bounded.
+          const pages = cursorsRef.current.pages;
+          let nextPage = page;
+          while (!pages.has(nextPage)) nextPage--;
+          for (; nextPage <= page; nextPage++) {
+            const offsets = pages.get(nextPage)!;
+            let reviewerQuery = makeQuery('vw_monitorias_pj_reviewer').eq('pj_reviewer_id', currentUser.id);
+            if (isSuporte) reviewerQuery = reviewerQuery.neq('evaluated_id', currentUser.id);
+            if (currentUser.role === 'gestor_suporte' && currentUser.team_ids?.length) {
+              reviewerQuery = reviewerQuery.or(`team_id.is.null,team_id.not.in.(${currentUser.team_ids.join(',')})`);
+            }
+            const results = await Promise.all([
+              makeQuery(source).range(offsets.primary, offsets.primary + pageSize - 1),
+              reviewerQuery.range(offsets.reviewer, offsets.reviewer + pageSize - 1),
+            ]);
+            const failure = results.find(item => item.error)?.error;
+            if (failure) throw failure;
+            if (!cache.isCurrent()) return;
+            const merged = mergeSourcePage(
+              (results[0].data || []) as Monitoria[],
+              (results[1].data || []) as Monitoria[], pageSize,
+            );
+            for (const laterPage of pages.keys()) if (laterPage > nextPage) pages.delete(laterPage);
+            pages.set(nextPage + 1, {
+              primary: offsets.primary + merged.primaryUsed,
+              reviewer: offsets.reviewer + merged.reviewerUsed,
+            });
+            rows = merged.rows;
+            count = (results[0].count || 0) + (results[1].count || 0);
+          }
         }
-        const result = await Promise.all([
-          makeQuery(source).range(0, end),
-          ...(reviewerQuery ? [reviewerQuery.range(0, end)] : []),
-        ]);
-        const failure = result.find(item => item.error)?.error;
-        if (failure) throw failure;
-        const merged = new Map<string, Monitoria>();
-        result.forEach(item => ((item.data || []) as Monitoria[]).forEach(row => merged.set(row.id, row)));
-        rows = [...merged.values()].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
-          .slice(page * pageSize, (page + 1) * pageSize);
-        count = result.reduce((sum, item) => sum + (item.count || 0), 0);
       }
       if (!cache.isCurrent()) return;
       cache.write({ rows, total: count });
