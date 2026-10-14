@@ -51,7 +51,7 @@ function matchesFilters(row: Monitoria, filters: MonitoriaListFilters) {
   return true;
 }
 
-function applyQueryFilters(query: any, filters: MonitoriaListFilters, supportsDisplayId: boolean) {
+function applyQueryFilters(query: any, filters: MonitoriaListFilters) {
   query = query.eq('active', (filters.statusFilter || 'active') === 'active');
   if (filters.tab === 'pendente_revisao') query = query.in('status', ['pendente_revisao', 'contestacao_negada']);
   else if (filters.tab === 'expiradas_prazo') query = query.eq('status', 'concluida').eq('resolution_type', 'automatic');
@@ -73,7 +73,6 @@ function applyQueryFilters(query: any, filters: MonitoriaListFilters, supportsDi
         `evaluated_name.ilike.%${term}%`, `evaluator_name.ilike.%${term}%`,
         `evaluator_note.ilike.%${term}%`,
       ];
-      if (supportsDisplayId && /^\d+$/.test(term)) predicates.push(`display_id.eq.${Number(term)}`);
       query = query.or(predicates.join(','));
     }
   }
@@ -131,10 +130,8 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
         const isSuporte = currentUser.role === 'suporte';
         const source = isSuporte ? 'vw_monitorias_suporte' : 'monitorias';
         const makeQuery = (name: string) => {
-          // display_id is a column on monitorias, but not on the masked views.
-          const columns = name === 'monitorias' ? `${LIST_COLUMNS},display_id` : LIST_COLUMNS;
-          let query = supabase!.from(name).select(columns, { count: 'exact' });
-          query = applyQueryFilters(query, currentFilters, name === 'monitorias');
+          let query = supabase!.from(name).select(LIST_COLUMNS, { count: 'exact' });
+          query = applyQueryFilters(query, currentFilters);
           if (name === source && isSuporte) query = query.eq('evaluated_id', currentUser.id);
           if (name === source && currentUser.role === 'gestor_suporte') {
             query = currentUser.team_ids?.length ? query.in('team_id', currentUser.team_ids) : query.eq('team_id', '00000000-0000-0000-0000-000000000000');
@@ -157,7 +154,7 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
         const failure = result.find(item => item.error)?.error;
         if (failure) throw failure;
         const merged = new Map<string, Monitoria>();
-        result.forEach(item => ((item.data || []) as unknown as Monitoria[]).forEach(row => merged.set(row.id, row)));
+        result.forEach(item => ((item.data || []) as Monitoria[]).forEach(row => merged.set(row.id, row)));
         rows = [...merged.values()].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
           .slice(page * pageSize, (page + 1) * pageSize);
         count = result.reduce((sum, item) => sum + (item.count || 0), 0);
