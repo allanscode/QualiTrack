@@ -27,7 +27,13 @@ vi.mock('../hooks/useMonitoriaData', () => ({
     evaluator_id: 'auditor-1', evaluated_id: 'agente-1', score: 50,
     history: [{ action: 'Contestação realizada', by_id: 'admin-1', by_name: 'Administrador', at: '2026-09-25T15:21:00.000Z' }],
     evaluator_note: 'Observação da qualidade',
-  } as Monitoria], loading: false, load: vi.fn() }),
+  } as Monitoria], total: 1, loading: false, load: vi.fn(), fetchDetail: vi.fn().mockImplementation(async () => ({
+    id: 'monitoria-1', display_id: 5786, ticket_id: '167240', status: fixture.status,
+    active: true, created_at: '2026-09-22T11:14:00.000Z', updated_at: '2026-09-25T15:21:00.000Z',
+    evaluator_id: 'auditor-1', evaluated_id: 'agente-1', score: 50,
+    history: [{ action: 'Contestação realizada', by_id: 'admin-1', by_name: 'Administrador', at: '2026-09-25T15:21:00.000Z' }],
+    evaluator_note: 'Observação da qualidade',
+  } as Monitoria)) }),
 }));
 vi.mock('../hooks/useFeedbacks', () => ({ useFeedbacks: () => ({ feedbacks: [] }) }));
 vi.mock('./MonitoriaForm', () => ({ default: () => <div>Ficha de avaliação</div> }));

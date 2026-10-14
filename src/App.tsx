@@ -21,7 +21,8 @@ import { ThemeProvider, useTheme } from './providers/ThemeProvider';
 import { AuthProvider, useAuth } from './providers/AuthProvider';
 import { PresenceProvider } from './providers/PresenceProvider';
 import { useSidebarManager } from './hooks/useSidebarManager';
-import { useMonitoriaData } from './hooks/useMonitoriaData';
+import { useMonitoriaIndex } from './hooks/useMonitoriaIndex';
+import { useMonitoriaNotifications } from './hooks/useMonitoriaNotifications';
 import { useFeedbacks } from './hooks/useFeedbacks';
 import { useQueueEventNotifications } from './hooks/useQueueEventNotifications';
 import { supabase } from './lib/supabase';
@@ -420,7 +421,7 @@ function MainApp({
 }: any) {
   const { theme } = useAuth();
   const { users, teams, forms, refreshAll } = useStaticData();
-  const { monitorias } = useMonitoriaData(userData, activeTab);
+  const notificationMonitorias = useMonitoriaNotifications(userData);
   const { feedbacks } = useFeedbacks(userData);
   const queueEvents = useQueueEventNotifications(userData);
   const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
@@ -495,6 +496,10 @@ function MainApp({
   };
 
   const [isNewMonitoriaModalOpen, setIsNewMonitoriaModalOpen] = useState(false);
+  const { monitorias } = useMonitoriaIndex(
+    userData,
+    activeTab === 'filas' || isNewMonitoriaModalOpen || isCommandPaletteOpen,
+  );
 
   const handleOpenNewMonitoria = () => {
     if (!canAuditTickets(userData?.role)) return;
@@ -713,7 +718,7 @@ function MainApp({
     }> = [];
 
     // Notificações de Contestação (WQ-25: status 'em_contestacao', estável por evento/monitoria, auditor + gestores de qualidade)
-    const contestationNotifs = getContestationNotifications(userData, monitorias, readNotificationIds);
+    const contestationNotifs = getContestationNotifications(userData, notificationMonitorias, readNotificationIds);
     for (const cn of contestationNotifs) {
       list.push({
         id: cn.id,
@@ -732,7 +737,7 @@ function MainApp({
 
     // Notificações para Suporte (Nova Avaliação Disponível)
     if (userData?.role === 'suporte') {
-      const myMonitorias = monitorias.filter((m: any) => m.evaluated_id === userData.id);
+      const myMonitorias = notificationMonitorias.filter(m => m.evaluated_id === userData.id);
       if (myMonitorias.length > 0) {
         const latest = myMonitorias[0];
         const timeStr = latest.created_at
@@ -804,7 +809,7 @@ function MainApp({
 
     // Alerta de SLA / Prazo de Ação Próximo (< 4 horas)
     const nowMs = Date.now();
-    const urgentDeadlines = monitorias.filter(m => {
+    const urgentDeadlines = notificationMonitorias.filter(m => {
       if (m.active === false || m.status === 'concluida') return false;
       if (userData?.role === 'suporte' && m.evaluated_id !== userData.id) return false;
       if (!m.action_deadline_at) return false;
@@ -939,7 +944,7 @@ function MainApp({
     }
 
     return list;
-  }, [userData, monitorias, readNotificationIds, guidelines, feedbacks, queueEvents]);
+  }, [userData, notificationMonitorias, readNotificationIds, guidelines, feedbacks, queueEvents]);
 
   const visibleNotifications = React.useMemo(
     () => notifications.filter(notification => !dismissedNotificationIds.has(notification.id)),
@@ -1008,8 +1013,8 @@ function MainApp({
   };
 
   React.useEffect(() => {
-    const handleFocus = (e: any) => {
-      const detail = e?.detail;
+    const handleFocus = async (e: Event) => {
+      const detail = (e as CustomEvent<{ monitoriaId?: string; ticketId?: string }>)?.detail;
       if (!detail) return;
 
       // Se a aba ativa não for 'monitorias', abre in-place como popup!
@@ -1018,11 +1023,16 @@ function MainApp({
         if (detail.monitoriaId) {
           setInPlaceMonitoriaId(detail.monitoriaId);
         } else if (detail.ticketId) {
-          const found = monitorias.find((m: any) => String(m.ticket_id) === String(detail.ticketId));
+          const found = monitorias.find(m => String(m.ticket_id) === String(detail.ticketId));
           if (found) {
             setInPlaceMonitoriaId(found.id);
-          } else {
-            setInPlaceMonitoriaId(detail.ticketId);
+          } else if (supabase) {
+            const source = userData?.role === 'suporte' ? 'vw_monitorias_suporte' : 'monitorias';
+            const { data, error } = await supabase.from(source).select('id')
+              .eq('ticket_id', detail.ticketId).eq('active', true)
+              .order('created_at', { ascending: false }).limit(1).maybeSingle();
+            if (error) console.error('[App] Falha ao localizar monitoria do ticket:', error);
+            if (data?.id) setInPlaceMonitoriaId(data.id);
           }
         }
       } else {
@@ -1031,7 +1041,7 @@ function MainApp({
     };
     window.addEventListener('qualitrack:focus_monitoria', handleFocus);
     return () => window.removeEventListener('qualitrack:focus_monitoria', handleFocus);
-  }, [activeTab, monitorias]);
+  }, [activeTab, monitorias, userData?.role]);
 
   const toggleSidebar = () => {
     const willBeOpen = !isSidebarOpen;

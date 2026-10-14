@@ -1,214 +1,252 @@
-import { usePageCache } from './usePageCache';
-import { useBackgroundRefresh } from './useBackgroundRefresh';
-import { userCacheScope } from '../lib/pageCache';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, mockDb, isMockMode } from '../lib/supabase';
-import { Monitoria, User } from '../types';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useBackgroundRefresh } from './useBackgroundRefresh';
+import { usePageCache } from './usePageCache';
+import { userCacheScope } from '../lib/pageCache';
+import { isMockMode, mockDb, supabase } from '../lib/supabase';
+import type { Monitoria, User } from '../types';
 
-export function useMonitoriaData(user: User | null, activeTab?: string) {
+export type MonitoriaListFilters = {
+  tab?: string;
+  search?: string;
+  statusFilter?: 'active' | 'removed';
+  teamFilter?: string;
+  suporteFilter?: string;
+  auditorFilter?: string;
+  ticketKindFilter?: 'all' | 'child' | 'service';
+  dateType?: 'analysis' | 'ticket';
+  startDate?: string;
+  endDate?: string;
+};
+
+export type MonitoriaDataOptions = {
+  page?: number;
+  pageSize?: number;
+  filters?: MonitoriaListFilters;
+  enabled?: boolean;
+};
+
+const CHILD_FORM_ID = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
+const LIST_COLUMNS = 'id,form_id,evaluator_id,evaluated_id,ticket_id,ticket_date,analysis_date,score,status,resolution_type,action_deadline_at,active,team_id,team_name,evaluator_name,evaluated_name,pj_reviewer_id,pj_review_kind,pj_review_required,history,created_at,updated_at';
+
+function matchesFilters(row: Monitoria, filters: MonitoriaListFilters) {
+  if ((filters.statusFilter || 'active') === 'active' ? row.active === false : row.active !== false) return false;
+  if (filters.tab === 'pendente_revisao' && !['pendente_revisao', 'contestacao_negada'].includes(row.status)) return false;
+  if (filters.tab === 'expiradas_prazo' && !(row.status === 'concluida' && row.resolution_type === 'automatic')) return false;
+  if (filters.tab === 'concluida' && !(row.status === 'concluida' && row.resolution_type !== 'automatic')) return false;
+  if (filters.tab && !['todas', 'pendente_revisao', 'expiradas_prazo', 'concluida'].includes(filters.tab) && row.status !== filters.tab) return false;
+  if (filters.teamFilter && row.team_id !== filters.teamFilter) return false;
+  if (filters.suporteFilter && row.evaluated_id !== filters.suporteFilter) return false;
+  if (filters.auditorFilter && row.evaluator_id !== filters.auditorFilter) return false;
+  if (filters.ticketKindFilter === 'child' && row.form_id !== CHILD_FORM_ID) return false;
+  if (filters.ticketKindFilter === 'service' && row.form_id === CHILD_FORM_ID) return false;
+  const date = filters.dateType === 'ticket' ? row.ticket_date : row.analysis_date || row.created_at;
+  if (filters.startDate && (!date || date < filters.startDate)) return false;
+  if (filters.endDate && (!date || date > `${filters.endDate}T23:59:59`)) return false;
+  if (filters.search) {
+    const term = filters.search.toLocaleLowerCase('pt-BR');
+    if (![row.ticket_id, String(row.display_id || ''), row.team_name, row.evaluated_name, row.evaluator_name, row.evaluator_note]
+      .some(value => String(value || '').toLocaleLowerCase('pt-BR').includes(term))) return false;
+  }
+  return true;
+}
+
+function applyQueryFilters(query: any, filters: MonitoriaListFilters, supportsDisplayId: boolean) {
+  query = query.eq('active', (filters.statusFilter || 'active') === 'active');
+  if (filters.tab === 'pendente_revisao') query = query.in('status', ['pendente_revisao', 'contestacao_negada']);
+  else if (filters.tab === 'expiradas_prazo') query = query.eq('status', 'concluida').eq('resolution_type', 'automatic');
+  else if (filters.tab === 'concluida') query = query.eq('status', 'concluida').or('resolution_type.is.null,resolution_type.neq.automatic');
+  else if (filters.tab && filters.tab !== 'todas') query = query.eq('status', filters.tab);
+  if (filters.teamFilter) query = query.eq('team_id', filters.teamFilter);
+  if (filters.suporteFilter) query = query.eq('evaluated_id', filters.suporteFilter);
+  if (filters.auditorFilter) query = query.eq('evaluator_id', filters.auditorFilter);
+  if (filters.ticketKindFilter === 'child') query = query.eq('form_id', CHILD_FORM_ID);
+  if (filters.ticketKindFilter === 'service') query = query.or(`form_id.is.null,form_id.neq.${CHILD_FORM_ID}`);
+  const dateColumn = filters.dateType === 'ticket' ? 'ticket_date' : 'analysis_date';
+  if (filters.startDate) query = query.gte(dateColumn, filters.startDate);
+  if (filters.endDate) query = query.lte(dateColumn, filters.endDate);
+  if (filters.search) {
+    const term = filters.search.trim().replace(/[^\p{L}\p{N}\s-]/gu, '');
+    if (term) {
+      const predicates = [
+        `ticket_id.ilike.%${term}%`, `team_name.ilike.%${term}%`,
+        `evaluated_name.ilike.%${term}%`, `evaluator_name.ilike.%${term}%`,
+        `evaluator_note.ilike.%${term}%`,
+      ];
+      if (supportsDisplayId && /^\d+$/.test(term)) predicates.push(`display_id.eq.${Number(term)}`);
+      query = query.or(predicates.join(','));
+    }
+  }
+  return query;
+}
+
+/** Fetch a bounded page only while the evaluations tab (or an explicit caller) needs it. */
+export function useMonitoriaData(user: User | null, activeTab?: string, options: MonitoriaDataOptions = {}) {
+  const page = Math.max(0, options.page || 0);
+  const pageSize = Math.min(50, Math.max(25, options.pageSize || 50));
+  const filters = options.filters || {};
+  const filterKey = JSON.stringify(filters);
+  const enabled = options.enabled ?? activeTab === 'monitorias';
   const scope = userCacheScope(user);
-  const [loadedScope, setLoadedScope] = useState(scope);
-  const cache = usePageCache<Monitoria[]>(scope, 'monitorias');
-  const [monitorias, setMonitorias] = useState<Monitoria[]>(() => cache.initial ?? []);
-  const [loading, setLoading] = useState(cache.initial === undefined);
-
-  const hasLoadedOnce = useRef(cache.initial !== undefined);
-  const fetchingRef = useRef(false);
+  const cache = usePageCache<{ rows: Monitoria[]; total: number }>(scope, `monitorias:${page}:${pageSize}:${filterKey}`);
+  const [loadedKey, setLoadedKey] = useState(`${scope}:${page}:${pageSize}:${filterKey}`);
+  const [monitorias, setMonitorias] = useState<Monitoria[]>(cache.initial?.rows || []);
+  const [total, setTotal] = useState(cache.initial?.total || 0);
+  const [loading, setLoading] = useState(enabled && cache.initial === undefined);
   const userRef = useRef(user);
+  const enabledRef = useRef(enabled);
+  const filtersRef = useRef(filters);
+  const loadedOnceRef = useRef(cache.initial !== undefined);
   userRef.current = user;
+  enabledRef.current = enabled;
+  filtersRef.current = filters;
+  const key = `${scope}:${page}:${pageSize}:${filterKey}`;
 
   useEffect(() => {
-    setLoadedScope(scope);
-    setMonitorias(cache.initial ?? []);
-    setLoading(cache.initial === undefined);
-    hasLoadedOnce.current = cache.initial !== undefined;
-    fetchingRef.current = false;
-  }, [cache, scope]);
+    setLoadedKey(key);
+    setMonitorias(cache.initial?.rows || []);
+    setTotal(cache.initial?.total || 0);
+    setLoading(enabled && cache.initial === undefined);
+    loadedOnceRef.current = cache.initial !== undefined;
+  }, [cache, enabled, key]);
 
   const load = useCallback(async (silent = false) => {
     const currentUser = userRef.current;
-    if (!currentUser) return;
-    if (fetchingRef.current) {
-      console.log('[Monitorias] Fetch já em andamento, ignorando...');
-      return;
-    }
-    fetchingRef.current = true;
-    if (!silent && !hasLoadedOnce.current) setLoading(true);
+    if (!currentUser || !enabledRef.current) return;
+    if (!silent && !loadedOnceRef.current) setLoading(true);
     try {
-      let fetchedMonitorias: any[] = [];
-
+      let rows: Monitoria[] = [];
+      let count = 0;
+      const currentFilters = filtersRef.current;
       if (isMockMode) {
-        const { data: d } = await mockDb.get('monitorias');
-        fetchedMonitorias = d || [];
+        const { data } = await mockDb.get('monitorias');
+        const all = ((data || []) as Monitoria[]).filter(row => {
+          if (currentUser.role === 'suporte' && row.evaluated_id !== currentUser.id && row.pj_reviewer_id !== currentUser.id) return false;
+          if (currentUser.role === 'gestor_suporte' && !currentUser.team_ids?.includes(row.team_id || '') && row.pj_reviewer_id !== currentUser.id) return false;
+          return matchesFilters(row, currentFilters);
+        }).sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
+        count = all.length;
+        rows = all.slice(page * pageSize, (page + 1) * pageSize);
       } else {
-        const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
-          try {
-            console.log(`[Monitorias] Buscando monitorias (Tentativa ${retryCount + 1})...`);
-            const controller = new AbortController();
-
-            const isSuporte = currentUser.role === 'suporte';
-            const source = isSuporte ? 'vw_monitorias_suporte' : 'monitorias';
-            let monitoriasQuery = supabase!.from(source).select('*').order('created_at', { ascending: false });
-
-            const myTeamIds = currentUser.team_ids || [];
-
-            if (currentUser.role === 'suporte') {
-              if (myTeamIds.length > 0) {
-                monitoriasQuery = monitoriasQuery.or(`evaluated_id.eq.${currentUser.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`);
-              } else {
-                monitoriasQuery = monitoriasQuery.eq('evaluated_id', currentUser.id);
-              }
-            } else if (currentUser.role === 'gestor_suporte') {
-              if (myTeamIds.length > 0) {
-                monitoriasQuery = monitoriasQuery.in('team_id', myTeamIds);
-              } else {
-                monitoriasQuery = monitoriasQuery.eq('team_id', '00000000-0000-0000-0000-000000000000');
-              }
-            }
-
-            const fetchPromise = Promise.all([
-              monitoriasQuery.abortSignal(controller.signal),
-              ...(['suporte', 'gestor_suporte'].includes(currentUser.role) ? [supabase!.from('vw_monitorias_pj_reviewer')
-                .select('*').order('created_at', { ascending: false })
-                .abortSignal(controller.signal)] : []),
-            ]);
-
-            let timeoutId: ReturnType<typeof setTimeout> | undefined;
-            const timeoutPromise = new Promise<never>((_, reject) => {
-              timeoutId = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 30000);
-            });
-
-            let results: any[];
-            try {
-              results = await Promise.race([fetchPromise, timeoutPromise]) as any[];
-            } finally {
-              if (timeoutId) clearTimeout(timeoutId);
-            }
-            const errorRes = results.find(r => r.error);
-            if (errorRes) throw errorRes.error;
-
-            return results;
-          } catch (err: any) {
-            console.error(`[Monitorias] Erro na tentativa ${retryCount + 1}:`, err);
-            if (retryCount < 4) {
-              const waitTime = Math.min(1000 * Math.pow(1.5, retryCount) + 1000 * retryCount, 10000);
-              if (!hasLoadedOnce.current) {
-                toast.loading(`Recuperando monitorias... (${retryCount + 1}/5)`, { id: 'mon-retry' });
-              }
-              await new Promise(res => setTimeout(res, waitTime));
-              return executeWithRetry(retryCount + 1);
-            }
-            toast.dismiss('mon-retry');
-            toast.error(hasLoadedOnce.current
-              ? 'Não foi possível atualizar as monitorias. Os dados anteriores continuam visíveis.'
-              : 'O servidor de dados não respondeu. Tente novamente em instantes.');
-            throw err;
+        const isSuporte = currentUser.role === 'suporte';
+        const source = isSuporte ? 'vw_monitorias_suporte' : 'monitorias';
+        const makeQuery = (name: string) => {
+          // display_id is a column on monitorias, but not on the masked views.
+          const columns = name === 'monitorias' ? `${LIST_COLUMNS},display_id` : LIST_COLUMNS;
+          let query = supabase!.from(name).select(columns, { count: 'exact' });
+          query = applyQueryFilters(query, currentFilters, name === 'monitorias');
+          if (name === source && isSuporte) query = query.eq('evaluated_id', currentUser.id);
+          if (name === source && currentUser.role === 'gestor_suporte') {
+            query = currentUser.team_ids?.length ? query.in('team_id', currentUser.team_ids) : query.eq('team_id', '00000000-0000-0000-0000-000000000000');
           }
+          return query.order('created_at', { ascending: false }).order('id', { ascending: false });
         };
-
-        const [mRes, reviewerRes] = await executeWithRetry();
-        fetchedMonitorias = [...new Map([...(mRes.data || []), ...(reviewerRes?.data || [])]
-          .map((item: Monitoria) => [item.id, item])).values()];
+        const hasReviewer = isSuporte || currentUser.role === 'gestor_suporte';
+        // The two access-controlled views overlap rarely. Fetch only enough from each
+        // to merge the requested page in chronological order without skipping cases.
+        const end = (page + 1) * pageSize - 1;
+        let reviewerQuery = hasReviewer ? makeQuery('vw_monitorias_pj_reviewer').eq('pj_reviewer_id', currentUser.id) : null;
+        if (reviewerQuery && isSuporte) reviewerQuery = reviewerQuery.neq('evaluated_id', currentUser.id);
+        if (reviewerQuery && currentUser.role === 'gestor_suporte' && currentUser.team_ids?.length) {
+          reviewerQuery = reviewerQuery.not('team_id', 'in', `(${currentUser.team_ids.join(',')})`);
+        }
+        const result = await Promise.all([
+          makeQuery(source).range(0, end),
+          ...(reviewerQuery ? [reviewerQuery.range(0, end)] : []),
+        ]);
+        const failure = result.find(item => item.error)?.error;
+        if (failure) throw failure;
+        const merged = new Map<string, Monitoria>();
+        result.forEach(item => ((item.data || []) as unknown as Monitoria[]).forEach(row => merged.set(row.id, row)));
+        rows = [...merged.values()].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
+          .slice(page * pageSize, (page + 1) * pageSize);
+        count = result.reduce((sum, item) => sum + (item.count || 0), 0);
       }
-
       if (!cache.isCurrent()) return;
-      const rows = fetchedMonitorias.map((r: Monitoria) => ({ ...r, history: r.history || [], answers: r.answers || {} }));
-      cache.write(rows);
+      cache.write({ rows, total: count });
       setMonitorias(rows);
-      hasLoadedOnce.current = true;
-    } catch (e: any) {
-      console.error(e);
-      if (e.message === 'timeout') {
-        toast.error('O servidor não respondeu. Tente alternar entre os menus para recarregar.');
-      }
-    }
-    finally {
+      setTotal(count);
+      loadedOnceRef.current = true;
+    } catch (error) {
+      console.error('[Monitorias] Falha ao carregar página:', error);
+      toast.error(loadedOnceRef.current ? 'Não foi possível atualizar as monitorias.' : 'Não foi possível carregar as monitorias.');
+    } finally {
       if (cache.isCurrent()) setLoading(false);
-      if (cache.isCurrent()) fetchingRef.current = false;
-      toast.dismiss('mon-retry');
     }
-  }, [cache]);
+  }, [cache, page, pageSize]);
 
   const loadRef = useRef(load);
   loadRef.current = load;
-
+  useEffect(() => { if (enabled && user) void load(); }, [enabled, user, load]);
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (loading) {
-      timer = setTimeout(() => {
-        if (loading) {
-          console.warn('[Monitorias] Failsafe ativado: Forçando fim do carregamento após 45s.');
-          setLoading(false);
-          toast.dismiss('mon-retry');
-        }
-      }, 45000);
+    if (!enabled || isMockMode || !user) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const channel = supabase!.channel(`monitorias-list-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => void loadRef.current(true), 300);
+      }).subscribe();
+    return () => { clearTimeout(timer); void supabase!.removeChannel(channel); };
+  }, [enabled, user]);
+  useEffect(() => {
+    if (!enabled) return;
+    const reconnect = () => void loadRef.current(true);
+    window.addEventListener('qualitrack:reconnected', reconnect);
+    return () => window.removeEventListener('qualitrack:reconnected', reconnect);
+  }, [enabled]);
+  useBackgroundRefresh(() => { if (enabledRef.current) void loadRef.current(true); }, enabled && Boolean(user));
+
+  const fetchDetail = useCallback(async (id: string): Promise<Monitoria | null> => {
+    const currentUser = userRef.current;
+    if (!currentUser) return null;
+    if (isMockMode) {
+      const { data } = await mockDb.get('monitorias');
+      return ((data || []) as Monitoria[]).find(row => row.id === id &&
+        (currentUser.role !== 'suporte' || row.evaluated_id === currentUser.id || row.pj_reviewer_id === currentUser.id) &&
+        (currentUser.role !== 'gestor_suporte' || currentUser.team_ids?.includes(row.team_id || '') || row.pj_reviewer_id === currentUser.id)) || null;
     }
-    return () => clearTimeout(timer);
-  }, [loading]);
-
-  useEffect(() => {
-    if (user) {
-      load();
+    const sources = currentUser.role === 'suporte'
+      ? ['vw_monitorias_suporte', 'vw_monitorias_pj_reviewer']
+      : currentUser.role === 'gestor_suporte' ? ['monitorias', 'vw_monitorias_pj_reviewer'] : ['monitorias'];
+    for (const source of sources) {
+      let query = supabase!.from(source).select('*').eq('id', id);
+      if (source === 'monitorias' && currentUser.role === 'gestor_suporte') {
+        query = currentUser.team_ids?.length ? query.in('team_id', currentUser.team_ids) : query.eq('team_id', '00000000-0000-0000-0000-000000000000');
+      }
+      const { data, error } = await query.maybeSingle();
+      if (error) throw error;
+      if (data) return { ...(data as Monitoria), history: (data as Monitoria).history || [], answers: (data as Monitoria).answers || {} };
     }
-  }, [user, load]);
-
-  useEffect(() => {
-    if (activeTab === 'monitorias' && user && hasLoadedOnce.current) {
-      console.log('[Monitorias] Aba selecionada, recarregando...');
-      load();
-    }
-  }, [activeTab, user, load]);
-
-  useEffect(() => {
-    const handleReconnect = () => {
-      console.log('[Monitorias] Reconexão detectada. Recarregando monitorias...');
-      loadRef.current();
-    };
-    window.addEventListener('qualitrack:reconnected', handleReconnect);
-    return () => {
-      window.removeEventListener('qualitrack:reconnected', handleReconnect);
-    };
+    return null;
   }, []);
 
-  useEffect(() => {
-    if (isMockMode || !user) return;
-    const sb = supabase!;
+  const fetchExportRows = useCallback(async (ids: string[]): Promise<Monitoria[]> => {
+    const currentUser = userRef.current;
+    if (!currentUser || ids.length === 0) return [];
+    if (isMockMode) {
+      const { data } = await mockDb.get('monitorias');
+      const byId = new Map(((data || []) as Monitoria[]).map(row => [row.id, row]));
+      return ids.map(id => byId.get(id)).filter((row): row is Monitoria => Boolean(row));
+    }
+    const source = currentUser.role === 'suporte' ? 'vw_monitorias_suporte' : 'monitorias';
+    const requests = [supabase!.from(source).select('*').in('id', ids)];
+    if (currentUser.role === 'suporte' || currentUser.role === 'gestor_suporte') {
+      requests.push(supabase!.from('vw_monitorias_pj_reviewer').select('*').in('id', ids));
+    }
+    const results = await Promise.all(requests);
+    const failure = results.find(result => result.error)?.error;
+    if (failure) throw failure;
+    const byId = new Map(results.flatMap(result => (result.data || []) as Monitoria[]).map(row => [row.id, row]));
+    return ids.map(id => byId.get(id)).filter((row): row is Monitoria => Boolean(row));
+  }, []);
 
-    let mounted = true;
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const channelName = `monitorias-realtime-list-${Math.random().toString(36).substring(2, 11)}`;
-    const channel = sb
-      .channel(channelName)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'monitorias' }, () => {
-        if (!mounted) return;
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-          loadRef.current(true);
-        }, 300);
-      })
-      .subscribe((status: string) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[Realtime] Inscrição ativa na tabela monitorias');
-        } else if (status === 'TIMED_OUT') {
-          console.warn('[Realtime] Timeout - verificar config de Realtime no Supabase');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[Realtime] Erro no canal - Realtime pode não estar configurado');
-        } else if (status === 'CLOSED') {
-          console.log('[Realtime] Canal fechado');
-        }
-      });
-
-    return () => {
-      mounted = false;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      sb.removeChannel(channel);
-    };
-  }, [user]);
-
-  useBackgroundRefresh(() => load(true), Boolean(user));
-
-  return { monitorias: loadedScope === scope ? monitorias : cache.initial ?? [],
-    setMonitorias, loading: loadedScope === scope ? loading : cache.initial === undefined, load };
+  return {
+    monitorias: loadedKey === key ? monitorias : cache.initial?.rows || [],
+    setMonitorias,
+    loading: enabled && (loadedKey === key ? loading : cache.initial === undefined),
+    total: loadedKey === key ? total : cache.initial?.total || 0,
+    load,
+    fetchDetail,
+    fetchExportRows,
+  };
 }

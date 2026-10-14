@@ -1,4 +1,5 @@
 import { buildSupportRanking, compareSupportOffenders, selectRankingBaseline } from '../../../lib/supportRanking';
+import { aggregatedSupportRanking } from '../dashboardAggregates';
 import React, { useMemo, useState, useEffect } from 'react';
 import { useDashboard } from '../DashboardContext';
 import { usePresence } from '../../../providers/PresenceProvider';
@@ -346,7 +347,7 @@ export default function AdminDashboardView({
     monitorias: any[];
   } | null>(null);
 
-  const { user, monitorias, allMonitorias = [], filters = { startDate: '', endDate: '' }, users, teams, forms, dissatisfactionFields } = dashboardData;
+  const { user, monitorias, allMonitorias = [], filters = { startDate: '', endDate: '' }, users, teams, forms, dissatisfactionFields, aggregates } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
   const { feedbacks, createFeedback, acknowledgeFeedback, completeFeedback } = useFeedbacks(user);
 
@@ -363,10 +364,11 @@ export default function AdminDashboardView({
 
   const avgScore = useMemo(() => {
     if (isCustomizing) return 85.42;
+    if (aggregates) return Number(aggregates.average);
     return scoredMonitorias.length > 0
       ? scoredMonitorias.reduce((a: number, m: any) => a + (m.score || 0), 0) / scoredMonitorias.length
       : 0;
-  }, [isCustomizing, scoredMonitorias]);
+  }, [isCustomizing, scoredMonitorias, aggregates]);
 
   const pendingActionsList = useMemo(() => {
     if (isCustomizing) return [];
@@ -377,7 +379,7 @@ export default function AdminDashboardView({
 
   const pendingActions = isCustomizing ? 4 : pendingActionsList.length;
 
-  const totalMonitorias = isCustomizing ? 85 : monitorias.length;
+  const totalMonitorias = isCustomizing ? 85 : aggregates?.total ?? monitorias.length;
 
   // Monitorias que tiveram pelo menos uma contestação
   const contestedMonitorias = useMemo(() => {
@@ -534,8 +536,9 @@ export default function AdminDashboardView({
 
   const agentRanking = useMemo(() => {
     if (isCustomizing) return [];
+    if (aggregates) return aggregatedSupportRanking(aggregates, scoredMonitorias, users);
     return buildSupportRanking(scoredMonitorias, selectRankingBaseline(allMonitorias, filters), users);
-  }, [isCustomizing, scoredMonitorias, allMonitorias, filters, users]);
+  }, [isCustomizing, scoredMonitorias, allMonitorias, filters, users, aggregates]);
 
   const topAgents = useMemo(() => {
     if (isCustomizing) return mockTopAgents;

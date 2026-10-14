@@ -66,7 +66,7 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
             <span className="mt-1 flex min-w-0 items-center gap-1 text-[9px] sm:text-[10px] text-brand-muted" title={latestAction ? `${latestAction.action} · ${latestAction.by_name} · ${format(new Date(latestAction.at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}` : undefined}>
               <History className="size-3 shrink-0" aria-hidden="true" />
               <span className="shrink-0 font-semibold">Atualizado {format(new Date(lastUpdatedAt), 'dd/MM HH:mm', { locale: ptBR })} ·</span>
-              <span className="truncate">{latestAction?.action || 'Sem ação registrada'}</span>
+              {latestAction && <span className="truncate">{latestAction.action}</span>}
             </span>
             {/* Status chip visível no mobile */}
             <span className="flex sm:hidden items-center gap-1.5 mt-0.5">
