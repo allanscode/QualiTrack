@@ -15,6 +15,7 @@ import { useDashboard } from '../DashboardContext';
 import { useStaticData } from '../../../lib/StaticDataContext';
 import { useMonitoriaTicketContext } from '../../../hooks/useMonitoriaTicketContext';
 import { monitoriaTicketPresentation } from '../../../lib/monitoriaTicketPresentation';
+import { supabase } from '../../../lib/supabase';
 
 interface SupportDrillDownModalProps {
   title: string;
@@ -33,13 +34,40 @@ export default function SupportDrillDownModal(props: SupportDrillDownModalProps)
     return { ...row, ticket_subject: details.subject ?? undefined, ticket_group_name: details.group ?? undefined };
   }), [props.monitorias, groups, teams, ticketContext.data]);
 
+  const exportRows = async (rows: Monitoria[], filename: string) => {
+    try {
+      let completeRows = rows;
+      if (supabase && rows.length > 0) {
+        const details = new Map<string, Partial<Monitoria>>();
+        const source = user?.role === 'suporte' ? 'vw_monitorias_suporte' : 'monitorias';
+        for (let offset = 0; offset < rows.length; offset += 100) {
+          const { data, error } = await supabase.from(source)
+            .select('id,corrective_action,contestation_reason,form_snapshot')
+            .in('id', rows.slice(offset, offset + 100).map(row => row.id));
+          if (error) throw error;
+          for (const detail of data ?? []) details.set(detail.id, detail as Partial<Monitoria>);
+        }
+        if (details.size !== rows.length) throw new Error('Alguns tickets não estão mais disponíveis para exportação.');
+        completeRows = rows.map(row => ({ ...row, ...details.get(row.id) }));
+      }
+      if (exportMonitoriasToCsv(completeRows, filename)) {
+        toast.success(`${rows.length} tickets exportados para CSV!`);
+      } else {
+        toast.error('Nenhum dado para exportar.');
+      }
+    } catch (error) {
+      console.error('[Dashboard] Falha ao exportar tickets:', error);
+      toast.error('Não foi possível exportar os tickets. Tente novamente.');
+    }
+  };
+
   return <SupportDrillDownContent {...props} monitorias={enrichedMonitorias}
-    contextLoading={ticketContext.isFetching} contextError={ticketContext.isError} />;
+    contextLoading={ticketContext.isFetching} contextError={ticketContext.isError} onExport={exportRows} />;
 }
 
 export function SupportDrillDownContent({
-  title, subtitle, monitorias, onClose, onNavigateToMonitoria, contextLoading = false, contextError = false,
-}: SupportDrillDownModalProps & { contextLoading?: boolean; contextError?: boolean }) {
+  title, subtitle, monitorias, onClose, onNavigateToMonitoria, contextLoading = false, contextError = false, onExport,
+}: SupportDrillDownModalProps & { contextLoading?: boolean; contextError?: boolean; onExport?: (rows: Monitoria[], filename: string) => Promise<void> }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   // Fechar com tecla ESC
@@ -124,8 +152,8 @@ export function SupportDrillDownContent({
               icon={<Download className="w-3.5 h-3.5" />}
               onClick={() => {
                 const safeTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                const success = exportMonitoriasToCsv(filteredMonitorias, `drilldown_${safeTitle}`);
-                if (success) toast.success(`${filteredMonitorias.length} tickets exportados para CSV!`);
+                if (onExport) void onExport(filteredMonitorias, `drilldown_${safeTitle}`);
+                else if (exportMonitoriasToCsv(filteredMonitorias, `drilldown_${safeTitle}`)) toast.success(`${filteredMonitorias.length} tickets exportados para CSV!`);
                 else toast.error('Nenhum dado para exportar.');
               }}
               className="min-h-8 whitespace-nowrap text-[10px] font-black uppercase tracking-wider"

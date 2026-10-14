@@ -59,11 +59,27 @@ Não há projeto de staging. A medição foi feita em produção, apenas com
   O CSV busca os campos completos somente para os registros da página exportada.
 
 Esses números são a referência anterior à publicação; ainda é necessário medir
-o tráfego da lista e o tempo do RPC depois de aplicar as migrações. O dashboard
-continua lendo o histórico completo para widgets, relatórios e detalhes que
-dependem das respostas e do snapshot do formulário. A agregação no servidor
-reduz o cálculo dos indicadores atendidos pela RPC, mas não elimina essa leitura.
+o tráfego da lista e o tempo do RPC depois de aplicar as migrações. A agregação
+no servidor reduz o cálculo dos indicadores atendidos pela RPC.
 
 Os índices foram mantidos para quando a tabela crescer. Repita as medições
 quando ela passar de ~10 mil linhas e remova os índices que não forem usados
 (`pg_stat_user_indexes.idx_scan`).
+
+## Redução de tráfego do dashboard
+
+O dashboard divide a leitura em dois conjuntos com o mesmo escopo de acesso:
+
+- Um índice leve de todas as monitorias ativas contém somente IDs, datas, nota,
+  status, equipe, grupo, agente e campos necessários para tendências e pendências.
+- As fichas com respostas, observações, histórico e `form_snapshot` são lidas
+  somente para o intervalo de datas selecionado. `helpdesk_submissions` também
+  é consultada apenas para as fichas desse intervalo.
+- O CSV de um detalhamento busca os campos adicionais no momento da exportação.
+  Para o perfil `suporte`, ambas as leituras usam `vw_monitorias_suporte`.
+
+O ganho esperado é menor tráfego quando o período é menor que todo o histórico.
+Ainda faltam medições comparáveis de bytes HTTP e tempo de carregamento por perfil
+em produção. A seleção de períodos muito amplos ainda carrega fichas completas;
+quando o volume justificar, os widgets que dependem das respostas precisarão de
+agregações próprias no servidor.

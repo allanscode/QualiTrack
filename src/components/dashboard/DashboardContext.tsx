@@ -74,6 +74,17 @@ const DASHBOARD_MONITORIA_COLUMNS = [
   'pj_review_required',
 ].join(',');
 
+// Trends and pending actions span the whole history, but need only small fields.
+const DASHBOARD_SUMMARY_COLUMNS = [
+  'id', 'form_id', 'evaluator_id', 'evaluated_id', 'evaluator_name',
+  'evaluated_name', 'team_id', 'team_name', 'ticket_group_team_id',
+  'form_name', 'ticket_id', 'channel', 'ticket_date', 'analysis_date',
+  'satisfaction_result', 'score', 'status', 'resolution_type',
+  'contestation_result', 'action_deadline_at', 'active', 'created_at',
+  'updated_at', 'pj_reviewer_id', 'pj_review_kind', 'pj_review_decision',
+  'pj_reviewed_at', 'pj_review_required',
+].join(',');
+
 export interface DashboardState {
   user: User | null;
   loggedInUser: User | null;
@@ -152,6 +163,7 @@ export function DashboardProvider({
 
   const cache = usePageCache<{
     filters: DashboardFilters; monitorias: Monitoria[]; allMonitorias: Monitoria[];
+    detailMonitorias?: Monitoria[];
     helpdeskSubmissions: HelpdeskSubmission[]; globalAvg: number;
   }>(userCacheScope(user), 'dashboard');
   const cached = cache.initial;
@@ -170,6 +182,7 @@ export function DashboardProvider({
 
   const [monitorias, setMonitorias] = useState<Monitoria[]>(cached?.monitorias ?? []);
   const [allMonitorias, setAllMonitorias] = useState<Monitoria[]>(cached?.allMonitorias ?? []);
+  const [detailMonitorias, setDetailMonitorias] = useState<Monitoria[]>(cached?.detailMonitorias ?? cached?.allMonitorias ?? cached?.monitorias ?? []);
   const [helpdeskSubmissions, setHelpdeskSubmissions] = useState<HelpdeskSubmission[]>(cached?.helpdeskSubmissions ?? []);
   const [loading, setLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
@@ -181,7 +194,9 @@ export function DashboardProvider({
   const [refreshCooldownEnd, setRefreshCooldownEnd] = useState<number | null>(null);
   const [refreshCooldownRemaining, setRefreshCooldownRemaining] = useState<string>('');
   const hasLoadedOnce = useRef(Boolean(cached));
+  const loadedRangeRef = useRef(cached ? `${cached.filters.startDate}|${cached.filters.endDate}` : '');
   const fetchingRef = useRef(false);
+  const queuedRef = useRef(false);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
   const userRef = useRef(user);
@@ -192,8 +207,9 @@ export function DashboardProvider({
   const loadData = useCallback(async () => {
     const currentUser = userRef.current;
     if (!currentUser) return;
+    const requestedRange = `${filtersRef.current.startDate}|${filtersRef.current.endDate}`;
     if (fetchingRef.current) {
-      console.log('[Dashboard] Fetch já em andamento, ignorando...');
+      queuedRef.current = true;
       return;
     }
     fetchingRef.current = true;
@@ -203,6 +219,7 @@ export function DashboardProvider({
     }
     try {
       let docs: Monitoria[] = [];
+      let summaryDocs: Monitoria[] = [];
       let loadedSubmissions: HelpdeskSubmission[] = [];
       let scoreDocs: any[] = [];
       const currentStaticData = staticDataRef.current;
@@ -210,13 +227,14 @@ export function DashboardProvider({
       if (!supabase) {
         const { data } = await mockDb.get('monitorias');
         docs = data || [];
-        scoreDocs = docs;
+        summaryDocs = docs;
+        scoreDocs = summaryDocs;
         const { data: subData } = await mockDb.get('helpdesk_submissions');
         if (!cache.isCurrent()) return;
         loadedSubmissions = (subData as HelpdeskSubmission[]) || [];
       } else {
         const sb = supabase!; // TypeScript narrowing after guard
-        const executeWithRetry = async (retryCount = 0): Promise<any[]> => {
+        const executeWithRetry = async (columns: string, period: DashboardFilters, retryCount = 0): Promise<Monitoria[]> => {
           try {
             console.log(`[Dashboard] Carregando monitorias (Tentativa ${retryCount + 1})...`);
             // Fetch every page; the default Supabase row cap would distort the
@@ -228,11 +246,13 @@ export function DashboardProvider({
             const pageSize = 500;
             const rows: Monitoria[] = [];
             for (let offset = 0; ; offset += pageSize) {
-              let query = sb.from(source).select(DASHBOARD_MONITORIA_COLUMNS)
+              let query = sb.from(source).select(columns)
                 .eq('active', true)
                 .order('created_at', { ascending: false })
                 .order('id', { ascending: false })
                 .range(offset, offset + pageSize - 1);
+              if (period.startDate) query = query.gte('created_at', new Date(`${period.startDate}T00:00:00`).toISOString());
+              if (period.endDate) query = query.lte('created_at', new Date(`${period.endDate}T23:59:59`).toISOString());
               if (currentUser.role === 'suporte') {
                 if (myTeamIds.length > 0) {
                   const rbacFilter = `evaluated_id.eq.${currentUser.id},team_id.in.(${myTeamIds.map(id => `"${id}"`).join(',')})`;
@@ -261,7 +281,7 @@ export function DashboardProvider({
               rows.push(...page);
               if (page.length < pageSize) break;
             }
-            return [{ data: rows }];
+            return rows;
           } catch (err: any) {
           console.error(`[Dashboard] Erro na tentativa ${retryCount + 1}:`, err);
           if (retryCount < 4) {
@@ -270,7 +290,7 @@ export function DashboardProvider({
               toast.loading(`Recuperando dashboard... (${retryCount + 1}/5)`, { id: 'dash-retry' });
             }
             await new Promise(res => setTimeout(res, waitTime));
-            return executeWithRetry(retryCount + 1);
+            return executeWithRetry(columns, period, retryCount + 1);
           }
           toast.dismiss('dash-retry');
           toast.error(hasLoadedOnce.current
@@ -280,40 +300,43 @@ export function DashboardProvider({
         }
       };
 
-        const [mRes] = await executeWithRetry();
+        const period = filtersRef.current;
+        [summaryDocs, docs] = await Promise.all([
+          executeWithRetry(DASHBOARD_SUMMARY_COLUMNS, { ...period, startDate: '', endDate: '' }),
+          executeWithRetry(DASHBOARD_MONITORIA_COLUMNS, period),
+        ]);
+        scoreDocs = summaryDocs;
 
-        if (mRes.data) {
-          docs = mRes.data as Monitoria[];
-          // CORRECTION 4: Derive scoreDocs from the full query result (same data, just filtered)
-          scoreDocs = mRes.data as any[];
-
-          if (docs.length > 0) {
-            const submissions: HelpdeskSubmission[] = [];
-            const docIds = docs.map(d => d.id);
-            for (let offset = 0; offset < docIds.length; offset += 150) {
-              const { data: subData, error: subError } = await sb
-                .from('helpdesk_submissions')
-                .select('*')
-                .in('monitoria_id', docIds.slice(offset, offset + 150))
-                .eq('status', 'sent')
-                .order('created_at', { ascending: false });
-              if (subError) throw subError;
-              submissions.push(...((subData as HelpdeskSubmission[]) || []));
-            }
-            if (!cache.isCurrent()) return;
-            loadedSubmissions = submissions;
-          } else {
-            if (!cache.isCurrent()) return;
-            loadedSubmissions = [];
+        if (docs.length > 0) {
+          const submissions: HelpdeskSubmission[] = [];
+          const docIds = docs.map(d => d.id);
+          for (let offset = 0; offset < docIds.length; offset += 150) {
+            const { data: subData, error: subError } = await sb
+              .from('helpdesk_submissions')
+              .select('*')
+              .in('monitoria_id', docIds.slice(offset, offset + 150))
+              .eq('status', 'sent')
+              .order('created_at', { ascending: false });
+            if (subError) throw subError;
+            submissions.push(...((subData as HelpdeskSubmission[]) || []));
           }
+          if (!cache.isCurrent()) return;
+          loadedSubmissions = submissions;
+        } else {
+          if (!cache.isCurrent()) return;
+          loadedSubmissions = [];
         }
+      }
 
-      } // Close try block for loadData
-
+      if (requestedRange !== `${filtersRef.current.startDate}|${filtersRef.current.endDate}`) {
+        queuedRef.current = true;
+        return;
+      }
       const currentFilters = filtersRef.current;
       const userDocs = currentStaticData.users;
 
       docs = docs.filter(m => m.active !== false);
+      summaryDocs = summaryDocs.filter(m => m.active !== false);
 
     const globalFiltered = scoreDocs.filter(m => {
       if (m.active === false) return false;
@@ -340,25 +363,29 @@ export function DashboardProvider({
         let myTeamIds = myUser?.team_ids || currentUser.team_ids || [];
 
         if (myTeamIds.length === 0) {
-          const fromRecords = docs.filter(m => m.evaluated_id === currentUser.id && m.team_id).map(m => m.team_id!);
+          const fromRecords = summaryDocs.filter(m => m.evaluated_id === currentUser.id && m.team_id).map(m => m.team_id!);
           myTeamIds = Array.from(new Set(fromRecords));
         }
 
         docs = docs.filter(m => m.evaluated_id === currentUser.id || (m.team_id && myTeamIds.includes(m.team_id)));
+        summaryDocs = summaryDocs.filter(m => m.evaluated_id === currentUser.id || (m.team_id && myTeamIds.includes(m.team_id)));
       } else if (currentUser.role === 'gestor_suporte') {
         const myTeamIds = currentUser.team_ids || [];
         docs = docs.filter(m => m.team_id && myTeamIds.includes(m.team_id));
+        summaryDocs = summaryDocs.filter(m => m.team_id && myTeamIds.includes(m.team_id));
       } else if (currentUser.role === 'gestor_qualidade') {
       }
 
       if (currentUser.role === 'suporte' || currentUser.role === 'gestor_suporte') {
-        scoreDocs = docs;
+        scoreDocs = summaryDocs;
       }
 
       if (!cache.isCurrent()) return;
       successfulLoad.current = true;
+      loadedRangeRef.current = requestedRange;
       setHelpdeskSubmissions(loadedSubmissions);
-      setAllMonitorias(docs);
+      setAllMonitorias(summaryDocs);
+      setDetailMonitorias(docs);
 
       let filtered = docs.filter(m => {
         const targetDate = m.created_at;
@@ -387,20 +414,25 @@ export function DashboardProvider({
         });
       }
     } finally {
-      if (cache.isCurrent()) { setLoading(false); setRefreshing(false); }
+      if (cache.isCurrent() && !queuedRef.current) { setLoading(false); setRefreshing(false); }
       hasLoadedOnce.current = successfulLoad.current;
       fetchingRef.current = false;
       toast.dismiss('dash-retry');
+      if (queuedRef.current) {
+        queuedRef.current = false;
+        setTimeout(() => loadData(), 0);
+      }
     }
   }, [refreshTrigger, cache]);
 
   useEffect(() => {
     if (!user) return;
+    if (loadedRangeRef.current !== `${filters.startDate}|${filters.endDate}`) setLoading(true);
     const timer = setTimeout(() => {
       loadData();
     }, 300);
     return () => clearTimeout(timer);
-  }, [user, loadData]);
+  }, [user, loadData, filters.startDate, filters.endDate]);
 
   // Metrics and rankings are computed over the filtered, authorized set in
   // PostgreSQL. Keep MockDb's local calculations for offline development.
@@ -434,13 +466,14 @@ export function DashboardProvider({
   const loadDataRef = useRef(loadData);
   loadDataRef.current = loadData;
 
-  // Re-filtração instantânea em memória quando os filtros do dashboard mudam (zero queries adicionais ao Supabase)
+  // Refiltra localmente os detalhes do período; o histórico leve alimenta tendências.
   useEffect(() => {
-    if (!hasLoadedOnce.current || allMonitorias.length === 0) return;
+    if (!hasLoadedOnce.current) return;
+    if (loadedRangeRef.current !== `${filters.startDate}|${filters.endDate}`) return;
     const currentUser = userRef.current;
     if (!currentUser) return;
 
-    let filtered = allMonitorias.filter(m => {
+    let filtered = detailMonitorias.filter(m => {
       const targetDate = m.created_at;
       if (!targetDate) return true;
       const d = new Date(targetDate).getTime();
@@ -462,7 +495,7 @@ export function DashboardProvider({
 
     setMonitorias(filtered);
     setGlobalAvg(gAvg);
-  }, [allMonitorias, filters]);
+  }, [detailMonitorias, filters]);
 
   useEffect(() => {
     const handleReconnect = () => {
@@ -520,9 +553,9 @@ export function DashboardProvider({
 
   useEffect(() => {
     if (!loading && successfulLoad.current) {
-      cache.write({ filters, monitorias, allMonitorias, helpdeskSubmissions, globalAvg });
+      cache.write({ filters, monitorias, allMonitorias, detailMonitorias, helpdeskSubmissions, globalAvg });
     }
-  }, [cache, filters, monitorias, allMonitorias, helpdeskSubmissions, globalAvg, loading]);
+  }, [cache, filters, monitorias, allMonitorias, detailMonitorias, helpdeskSubmissions, globalAvg, loading]);
 
   // SLA Notification Hook pós-login
   const { config: qualityConfig } = useQualityConfig();
