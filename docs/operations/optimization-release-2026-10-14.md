@@ -2,7 +2,7 @@
 
 **Situação:** código publicado em produção; validação funcional e medição após o deploy em [WQ-78](https://qualityautomacao.atlassian.net/browse/WQ-78), coluna **Fase de Teste**.
 
-**Produção:** `main` em `a724e967a358f3e511ee2e11ab3c0e707bd01dba`, deploy Vercel `dpl_CQ4tHnSKYMfr66K9FWjx1uCf8iDg`, disponível em [qwp.qualityautomacao.com.br](https://qwp.qualityautomacao.com.br). A Vercel informou `Ready`, associou o domínio ao deploy e a página respondeu HTTP 200. Essa checagem não substitui o teste autenticado dos fluxos abaixo.
+**Aplicação publicada:** alterações funcionais do commit `a724e967a358f3e511ee2e11ab3c0e707bd01dba`, inicialmente implantadas pela Vercel como `dpl_CQ4tHnSKYMfr66K9FWjx1uCf8iDg`. O endereço estável é [qwp.qualityautomacao.com.br](https://qwp.qualityautomacao.com.br), que respondeu HTTP 200 na verificação de 14/10/2026. Commits posteriores apenas de documentação podem gerar outro ID de deploy sem mudar o código da aplicação. Essa checagem não substitui o teste autenticado dos fluxos abaixo.
 
 ## O que mudou
 
