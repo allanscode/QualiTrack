@@ -13,6 +13,8 @@
 
 Na lista de monitorias, o selo **Ticket filho** e o filtro **Todos os tickets / Tickets filhos / Atendimentos** usam o mesmo identificador da ficha de ticket filho (`isChildTicketMonitoria`). Cada linha mostra a ação mais recente pelo horário do histórico, abaixo dos dados principais. As linhas virtualizadas têm altura suficiente para essa informação e os contadores de status usam fonte ampliada.
 
+A lista consulta 50 monitorias por página, da mais recente para a mais antiga. O campo de ticket só aplica a busca ao clicar em **Pesquisar** ou pressionar Enter; o carregamento dos resultados mantém os filtros na tela e mostra a página atual e o total de páginas.
+
 Nos detalhes da monitoria, a linha do tempo apresenta os eventos em sequência vertical, com ação, responsável e data em linhas legíveis. Observações longas mostram duas linhas inicialmente e podem ser expandidas sem perder o texto completo; anexos permanecem associados ao evento. A etapa atual aparece ao fim do histórico quando a monitoria ainda não foi concluída.
 
 ### Avaliação por IA de tickets filhos

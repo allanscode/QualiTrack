@@ -1,4 +1,3 @@
-import { PageSkeleton } from './ui/PageSkeleton';
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { List } from 'react-window';
@@ -152,21 +151,11 @@ export default function MonitoriaList({
     return () => { cancelled = true; };
   }, [selectedId, fetchDetail]);
 
-  // Keep ticket numbers intact while the user is typing; apply the server filter
-  // only after a short pause instead of refreshing the list between digits.
+  // Keep the draft separate from the applied server filter until submission.
   const [searchInput, setSearchInput] = useState(filters.search);
   useEffect(() => {
     setSearchInput(filters.search);
   }, [filters.search]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchInput !== filters.search) {
-        filters.setSearch(searchInput);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchInput, filters.search, filters.setSearch]);
 
   const focusOnMonitoria = useCallback((targetId: string) => {
     filters.setTab('todas');
@@ -278,8 +267,6 @@ export default function MonitoriaList({
     const list = staticData.users.filter(u => ['qualidade', 'gestor_qualidade', 'admin'].includes(u.role) && u.active !== false);
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [staticData.users]);
-
-  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-6 animate-fade-in pb-8">
@@ -395,18 +382,26 @@ export default function MonitoriaList({
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full">
             {/* Busca (col-span-12 lg:col-span-4) */}
-            <div className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-1">
-              <div className="relative h-9">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+            <form
+              className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-1 flex h-9 gap-2"
+              onSubmit={event => {
+                event.preventDefault();
+                filters.setSearch(searchInput.trim());
+              }}
+            >
+              <div className="relative min-w-0 flex-1">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" aria-hidden="true" />
                 <input
-                  type="text"
-                  placeholder="Buscar ticket..."
+                  type="search"
+                  aria-label="Buscar monitoria por ticket"
+                  placeholder="Número do ticket..."
                   value={searchInput}
-                  onChange={e => setSearchInput(e.target.value)}
+                  onChange={event => setSearchInput(event.target.value)}
                   className="w-full h-full bg-surface-card border border-surface-border rounded-lg pl-9 pr-3 text-[10px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent transition-all outline-none shadow-sm"
                 />
               </div>
-            </div>
+              <Button type="submit" size="sm" variant="outline" className="h-9 shrink-0">Pesquisar</Button>
+            </form>
 
             {/* Grupo Datas (col-span-12 lg:col-span-4) */}
             <div className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-2 flex flex-col min-[360px]:flex-row items-center gap-2 w-full">
@@ -560,7 +555,12 @@ export default function MonitoriaList({
       {/* Block 2: The List */}
       <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card overflow-hidden">
         <div>
-          {filtered.length > 0 ? (
+          {loading ? (
+            <div role="status" className="flex min-h-32 items-center justify-center gap-2 text-sm text-brand-muted">
+              <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden="true" />
+              Buscando monitorias...
+            </div>
+          ) : filtered.length > 0 ? (
             filtered.length > 50 ? (
               <List<VirtualRowProps>
                 rowComponent={VirtualMonitoriaRow}
@@ -612,10 +612,10 @@ export default function MonitoriaList({
         </div>
       </Card>
       <div className="flex items-center justify-between gap-3 text-xs text-brand-muted">
-        <span>{total === 0 ? 'Nenhum registro' : `${page * 50 + 1}–${Math.min((page + 1) * 50, total)} de ${total} monitorias`}</span>
+        <span>{loading ? 'Carregando resultados...' : total === 0 ? 'Nenhum registro' : `${page * 50 + 1}–${Math.min((page + 1) * 50, total)} de ${total} monitorias`}</span>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" disabled={page === 0 || loading} onClick={() => setPage(current => current - 1)}>Anterior</Button>
-          <span className="font-semibold">Página {page + 1}</span>
+          <span className="font-semibold">Página {page + 1} de {Math.max(1, Math.ceil(total / 50))}</span>
           <Button size="sm" variant="outline" disabled={(page + 1) * 50 >= total || loading} onClick={() => setPage(current => current + 1)}>Próxima</Button>
         </div>
       </div>
