@@ -13,6 +13,8 @@
 
 Na lista de monitorias, o selo **Ticket filho** e o filtro **Todos os tickets / Tickets filhos / Atendimentos** usam o mesmo identificador da ficha de ticket filho (`isChildTicketMonitoria`). Cada linha mostra a ação mais recente pelo horário do histórico, abaixo dos dados principais. As linhas virtualizadas têm altura suficiente para essa informação e os contadores de status usam fonte ampliada.
 
+A lista consulta 50 monitorias por página, da mais recente para a mais antiga. O campo de ticket só aplica a busca ao clicar em **Pesquisar** ou pressionar Enter; o carregamento dos resultados mantém os filtros na tela e mostra a página atual e o total de páginas.
+
 Nos detalhes da monitoria, a linha do tempo apresenta os eventos em sequência vertical, com ação, responsável e data em linhas legíveis. Observações longas mostram duas linhas inicialmente e podem ser expandidas sem perder o texto completo; anexos permanecem associados ao evento. A etapa atual aparece ao fim do histórico quando a monitoria ainda não foi concluída.
 
 ### Avaliação por IA de tickets filhos
@@ -202,12 +204,13 @@ Se qualquer erro_critico marcado → Score Final = 0
 
 A automação captura os tickets da view de pesquisas positivas em uma fila persistente no banco. A saída da view ou o fechamento do ticket não apaga o resultado nem a revisão pendente. A execução ocorre no servidor, independentemente da tela aberta pelo monitor.
 
-- Nota inferior a 75%: mantém o rascunho preenchido com o indicativo **Revisão necessária · abaixo de 75%** na fila Positivas.
+- Nota inferior a 75% com ficha e evidências completas: salva a monitoria como `pendente_revisao`, com o prazo de ação configurado. A equipe segue a avaliação e eventual contestação usuais. O Zendesk só recebe o resultado depois da conclusão: validação se a nota final chegar a 75% ou invalidação se continuar abaixo.
 - Nota igual ou superior a 75%: conclui a monitoria interna quando ficha, respostas e vínculo do agente são válidos, sem limite mensal de positivas por agente.
-- Dados insuficientes ou inconsistentes: impede a conclusão automática e preserva os dados para conferência.
+- Dados insuficientes ou inconsistentes: não criam monitoria automaticamente; o rascunho fica na fila para conferência.
 - A nota é calculada pelas respostas e pelos pesos da ficha; o valor declarado pelo modelo não autoriza a conclusão sozinho.
 - O auditor é configurado no ambiente. O histórico identifica explicitamente a execução automática pela IA.
 - O processamento é independente da publicação de comentários no Zendesk.
+- Se o gestor não decidir no prazo, uma monitoria criada pela fila Positivas com IA é concluída com a nota vigente, inclusive em equipe PJ. As demais monitorias PJ mantêm a exigência de decisão humana.
 
 A configuração inicial permanece desabilitada até a definição do auditor e das credenciais do ambiente. No staging, o responsável escolhido é Gabriel Dias Di Napoli, com perfil de Qualidade. Os rascunhos positivos salvos continuam acessíveis mesmo quando o Zendesk está indisponível.
 
@@ -217,7 +220,7 @@ Um erro crítico confirmado zera a nota final, conforme a regra da ficha. A fila
 
 ## Prazo de Ação / Deadlines
 
-O ambiente clonado precisa manter o job `process-action-deadline-timeouts` no `pg_cron`, executando `SELECT public.process_action_deadline_timeouts()` a cada cinco minutos. A migração `20261007000005` garante a coluna `concluded_at` também nos bancos legados. Monitorias PJ continuam seguindo a aprovação específica, sem conclusão pelo cron comum.
+O ambiente clonado precisa manter o job `process-action-deadline-timeouts` no `pg_cron`, executando `SELECT public.process_action_deadline_timeouts()` a cada cinco minutos. A migração `20261007000005` garante a coluna `concluded_at` também nos bancos legados. Monitorias PJ exigem aprovação específica, exceto monitorias da fila Positivas com IA que ainda aguardam o primeiro parecer do gestor quando o prazo vence.
 
 ## Positivas invalidadas e Zendesk
 
@@ -230,6 +233,8 @@ No staging, a sincronização externa fica desligada por `final_positive_invalid
 ## Automação de chamados filhos
 
 `child_ai_queue` preserva tickets e pareceres independentemente da view do Zendesk. A ficha fixa de filhos recebe os seis critérios do parecer; a nota é recalculada a partir dos pesos da ficha. Notas abaixo de 75%, erros críticos ou evidências insuficientes ficam para revisão. Notas a partir de 75% com dados completos geram monitoria concluída em nome do auditor configurado, com histórico explícito de autoria automática. Trabalhos iniciados com a ficha anterior são validados conforme o snapshot salvo no próprio job.
+
+As 229 avaliações antigas de tickets filhos concluídas entre 1º e 6 de outubro de 2026 sem monitoria tinham apenas três critérios e precedem essa automação. A migração `20261015000002_recover_legacy_child_ai_jobs.sql` arquiva o parecer original em `child_ai_legacy_jobs` e coloca somente tickets ainda sem monitoria, rascunho ou item de automação na fila para uma nova avaliação com a ficha atual. O worker processa um ticket por chamada, verifica novamente o Zendesk e preserva a revisão humana quando faltar evidência ou a nota ficar abaixo de 75%. O parecer original não é convertido em monitoria nem usado como nota final.
 
 A automação de filhos começa desativada e compartilha o teto de execuções do ambiente com a automação de positivas. O limite de cinco testes já consumido não é reiniciado. A distribuição das revisões mantém as regras de atribuição da fila de filhos.
 

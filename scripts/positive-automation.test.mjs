@@ -50,10 +50,10 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       [ticketId, claim.lease_id, customPayload, customForm])).rows[0].id;
     return job;
   };
-  const complete = async (jobId, answers, extras = {}) => {
+  const complete = async (jobId, answers, extras = {}, draftMeta = payload.draft_meta) => {
     const result = { score: 100, summary: 'Parecer da IA', strengths: [], improvements: [],
       suggested_answers: answers, suggested_observations: Object.fromEntries(Object.keys(answers).map(key => [key, 'Evidência do diálogo'])), suggested_critical_errors: {}, ...extras };
-    await db.query('SELECT complete_ai_evaluation_execution($1,$2,$3,$4)', [jobId, id(1), result, payload.draft_meta]);
+    await db.query('SELECT complete_ai_evaluation_execution($1,$2,$3,$4)', [jobId, id(1), result, draftMeta]);
   };
   const state = async ticketId => (await db.query('SELECT * FROM positive_ai_queue WHERE ticket_id=$1', [ticketId])).rows[0];
   const reset = async () => db.exec(`DELETE FROM positive_ai_queue; DELETE FROM ai_evaluation_retry_queue;
@@ -66,6 +66,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
     await db.query('UPDATE users SET primary_team_id=$1 WHERE id=$2', [id(10), id(2)]);
     await db.query('INSERT INTO forms(id,title,sections,critical_errors,active) VALUES ($1,$2,$3,$4,true)',
       [form.id, form.title, form.sections, form.critical_errors]);
+    await db.exec("INSERT INTO business_hours(day_of_week) SELECT generate_series(1,5) ON CONFLICT(day_of_week) DO NOTHING");
     await db.query('INSERT INTO positive_ai_config(id,enabled,auditor_id) VALUES (true,true,$1) ON CONFLICT(id) DO UPDATE SET enabled=true,auditor_id=EXCLUDED.auditor_id', [id(1)]);
     await db.exec("SET request.jwt.claim.role='service_role'");
 
@@ -80,21 +81,30 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       await db.exec("SET request.jwt.claim.role='service_role'");
     });
 
-    await t.test('nota abaixo de 75 permanece mesmo após sair do catálogo', async () => {
+    await t.test('nota abaixo de 75 cria monitoria pendente mesmo após sair do catálogo', async () => {
       await reset();
       const job = await begin('101');
       await db.query('DELETE FROM queue_ticket_catalog WHERE ticket_id=$1', ['101']);
       await complete(job, { q1: 'SIM', q2: 'SIM', q3: 'NAO', q4: 'NAO' });
       const retained = await state('101');
-      assert.equal(retained.status, 'review_required');
+      assert.equal(retained.status, 'completed');
       assert.equal(Number(retained.score), 50);
       assert.equal(retained.ticket_snapshot.status, 'closed');
-      const draft = (await db.query("SELECT * FROM ai_evaluation_drafts WHERE ticket_id='101'")).rows[0];
-      assert.equal(draft.source_queue, 'positivas');
-      assert.equal(draft.created_by, id(1));
-      assert.deepEqual(draft.result.dialogue, payload.dialogue);
-      assert.match(draft.result.automation_review_reason, /abaixo de 75/);
-      assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n, 0);
+      const saved = (await db.query("SELECT * FROM monitorias WHERE ticket_id='101'")).rows[0];
+      assert.equal(retained.monitoria_id, saved.id);
+      assert.equal(saved.status, 'pendente_revisao');
+      assert.equal(saved.resolution_type, null);
+      assert.equal(saved.concluded_at, null);
+      assert.ok(saved.action_deadline_at);
+      assert.deepEqual(saved.form_snapshot.ai_evaluation.dialogue, payload.dialogue);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM positive_auto_publications')).rows[0].n, 0);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM final_positive_invalidation_outbox')).rows[0].n, 0);
+      await db.query("UPDATE monitorias SET action_deadline_at=now()-interval '1 minute' WHERE id=$1", [saved.id]);
+      await db.exec('SELECT process_action_deadline_timeouts()');
+      const finalized = (await db.query('SELECT status,score FROM monitorias WHERE id=$1', [saved.id])).rows[0];
+      assert.equal(finalized.status, 'concluida');
+      assert.equal(Number(finalized.score), 50);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM final_positive_invalidation_outbox')).rows[0].n, 1);
     });
 
     await t.test('75 conclui ficha preenchida em nome de Gabriel uma única vez', async () => {
@@ -109,6 +119,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       assert.equal(row.evaluator_id, id(1));
       assert.equal(row.evaluator_name, 'Gabriel Di Napoli');
       assert.equal(row.resolution_type, 'automatic');
+      assert.equal(row.action_deadline_at, null);
       assert.deepEqual(row.answers, answers);
       assert.deepEqual(row.question_observations, Object.fromEntries(['q1','q2','q3','q4'].map(key => [key, 'Evidência do diálogo'])));
       assert.equal(row.form_snapshot.automation, 'positive_csat');
@@ -116,6 +127,44 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       assert.equal((await state('102')).monitoria_id, row.id);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n, 1);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM ai_evaluation_drafts')).rows[0].n, 0);
+    });
+
+    await t.test('decisão final positiva após contestação só publica depois da conclusão', async () => {
+      await reset();
+      await complete(await begin('105'), { q1: 'SIM', q2: 'SIM', q3: 'NAO', q4: 'NAO' });
+      const saved = (await db.query("SELECT id FROM monitorias WHERE ticket_id='105'")).rows[0];
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM positive_auto_publications')).rows[0].n, 0);
+      await db.query("UPDATE monitorias SET status='em_contestacao' WHERE id=$1", [saved.id]);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM positive_auto_publications')).rows[0].n, 0);
+      await db.query("UPDATE monitorias SET status='concluida',score=100 WHERE id=$1", [saved.id]);
+      const publication = (await db.query('SELECT source,status FROM positive_auto_publications WHERE monitoria_id=$1', [saved.id])).rows[0];
+      assert.deepEqual(publication, { source: 'positive_csat', status: 'pending' });
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM final_positive_invalidation_outbox')).rows[0].n, 0);
+    });
+
+    await t.test('PJ com IA vence no prazo sem liberar a conclusão dos demais casos PJ', async () => {
+      await reset();
+      await db.query("INSERT INTO teams(id,name,kind,requires_pj_review) VALUES ($1,'Equipe PJ','team',true)", [id(11)]);
+      await db.query("INSERT INTO users(id,email,name,role,active,primary_team_id) VALUES ($1,'pj@example.invalid','Agente PJ','suporte',true,$2)", [id(3), id(11)]);
+      const pjPayload = { ...payload, draft_meta: { ...payload.draft_meta, agent_id: id(3), team_id: id(11) } };
+      await complete(await begin('106', pjPayload), { q1: 'SIM', q2: 'SIM', q3: 'NAO', q4: 'NAO' }, {}, pjPayload.draft_meta);
+      const saved = (await db.query("SELECT * FROM monitorias WHERE ticket_id='106'")).rows[0];
+      assert.equal(saved.status, 'pendente_revisao');
+      assert.equal(saved.pj_review_required, true);
+      await assert.rejects(db.query("UPDATE monitorias SET status='concluida' WHERE id=$1", [saved.id]), /parecer do gestor/);
+      await db.query("UPDATE monitorias SET action_deadline_at=now()-interval '1 minute' WHERE id=$1", [saved.id]);
+      await db.exec("SET request.jwt.claim.role='authenticated'");
+      await db.query("SELECT set_config('app.positive_ai_timeout',$1,false)", [saved.id]);
+      await assert.rejects(db.query("UPDATE monitorias SET status='concluida',resolution_type='automatic' WHERE id=$1", [saved.id]), /parecer do gestor/);
+      await db.exec("SET request.jwt.claim.role='service_role'");
+      await db.exec("SELECT set_config('app.positive_ai_timeout','',false)");
+      await db.query("INSERT INTO monitorias(form_id,evaluator_id,evaluated_id,team_id,ticket_id,score,status,action_deadline_at,form_snapshot) VALUES " +
+        "($1,$2,$3,$4,'107',50,'pendente_revisao',now()-interval '1 minute','{}')",
+        [form.id, id(1), id(3), id(11)]);
+      await db.exec('SELECT process_action_deadline_timeouts()');
+      assert.equal((await db.query('SELECT status FROM monitorias WHERE id=$1', [saved.id])).rows[0].status, 'concluida');
+      assert.equal((await db.query("SELECT status FROM monitorias WHERE ticket_id='107'")).rows[0].status, 'pendente_revisao');
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM final_positive_invalidation_outbox WHERE monitoria_id=$1', [saved.id])).rows[0].n, 1);
     });
 
     await t.test('respostas incompletas não podem usar a nota anunciada pela IA', async () => {
@@ -126,11 +175,12 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n, 0);
     });
 
-    await t.test('erro crítico impede conclusão mesmo com todas as respostas positivas', async () => {
+    await t.test('erro crítico cria monitoria pendente com nota zero', async () => {
       await reset();
       await complete(await begin('104'), { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' }, { suggested_critical_errors: { critical: true } });
-      assert.equal((await state('104')).status, 'review_required');
+      assert.equal((await state('104')).status, 'completed');
       assert.equal(Number((await state('104')).score), 0);
+      assert.equal((await db.query("SELECT status FROM monitorias WHERE ticket_id='104'")).rows[0].status, 'pendente_revisao');
     });
 
     await t.test('erros críticos separados exigem verificação explícita e evidência', async () => {
@@ -138,7 +188,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       const answers = { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' };
       for (const [ticket, extras, status] of [
         ['301', {}, 'review_required'],
-        ['302', { suggested_critical_errors: { lgpd: true }, suggested_observations: { ...Object.fromEntries(Object.keys(answers).map(key => [key, 'Evidência'])), lgpd: 'Violação identificada' } }, 'review_required'],
+        ['302', { suggested_critical_errors: { lgpd: true }, suggested_observations: { ...Object.fromEntries(Object.keys(answers).map(key => [key, 'Evidência'])), lgpd: 'Violação identificada' } }, 'completed'],
         ['303', { suggested_critical_errors: { lgpd: false }, suggested_observations: { ...Object.fromEntries(Object.keys(answers).map(key => [key, 'Evidência'])), lgpd: 'Critério conferido' } }, 'completed'],
       ]) {
         await reset();

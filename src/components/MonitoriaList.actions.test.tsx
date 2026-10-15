@@ -6,8 +6,9 @@ import type { Monitoria, User } from '../types';
 
 vi.unmock('motion/react');
 
-const { updateMonitoria, publishEvaluation, fixture } = vi.hoisted(() => ({
-  updateMonitoria: vi.fn(), publishEvaluation: vi.fn(), fixture: { status: 'em_contestacao' },
+const { updateMonitoria, publishEvaluation, observedSearch, fixture } = vi.hoisted(() => ({
+  updateMonitoria: vi.fn(), publishEvaluation: vi.fn(), observedSearch: vi.fn(),
+  fixture: { status: 'em_contestacao', loading: false },
 }));
 vi.mock('../lib/supabase', () => ({ supabase: null, isMockMode: true, mockDb: { update: updateMonitoria } }));
 vi.mock('../lib/helpdesk', () => ({ publishEvaluationToHelpdesk: publishEvaluation, getLatestHelpdeskSubmission: vi.fn() }));
@@ -21,19 +22,22 @@ vi.mock('../lib/useQualityConfig', () => ({
   }, getLevelForScore: () => ({ color: 'text-level-ruim' }) }),
 }));
 vi.mock('../hooks/useMonitoriaData', () => ({
-  useMonitoriaData: () => ({ monitorias: [{
+  useMonitoriaData: (_user: unknown, _tab: unknown, options: { filters: { search: string } }) => {
+    observedSearch(options.filters.search);
+    return { monitorias: [{
     id: 'monitoria-1', display_id: 5786, ticket_id: '167240', status: fixture.status,
     active: true, created_at: '2026-09-22T11:14:00.000Z', updated_at: '2026-09-25T15:21:00.000Z',
     evaluator_id: 'auditor-1', evaluated_id: 'agente-1', score: 50,
     history: [{ action: 'Contestação realizada', by_id: 'admin-1', by_name: 'Administrador', at: '2026-09-25T15:21:00.000Z' }],
     evaluator_note: 'Observação da qualidade',
-  } as Monitoria], total: 1, loading: false, load: vi.fn(), fetchDetail: vi.fn().mockImplementation(async () => ({
+  } as Monitoria], total: 1, loading: fixture.loading, load: vi.fn(), fetchDetail: vi.fn().mockImplementation(async () => ({
     id: 'monitoria-1', display_id: 5786, ticket_id: '167240', status: fixture.status,
     active: true, created_at: '2026-09-22T11:14:00.000Z', updated_at: '2026-09-25T15:21:00.000Z',
     evaluator_id: 'auditor-1', evaluated_id: 'agente-1', score: 50,
     history: [{ action: 'Contestação realizada', by_id: 'admin-1', by_name: 'Administrador', at: '2026-09-25T15:21:00.000Z' }],
     evaluator_note: 'Observação da qualidade',
-  } as Monitoria)) }),
+  } as Monitoria)) };
+  },
 }));
 vi.mock('../hooks/useFeedbacks', () => ({ useFeedbacks: () => ({ feedbacks: [] }) }));
 vi.mock('./MonitoriaForm', () => ({ default: () => <div>Ficha de avaliação</div> }));
@@ -49,10 +53,26 @@ function ListWithSelectedMonitoria() {
 describe('MonitoriaList actions', () => {
   beforeEach(() => {
     fixture.status = 'em_contestacao';
+    fixture.loading = false;
+    observedSearch.mockClear();
     updateMonitoria.mockReset();
     updateMonitoria.mockResolvedValue({ data: null });
     publishEvaluation.mockReset();
     publishEvaluation.mockResolvedValue({ success: true });
+  });
+
+  it('busca somente após Pesquisar e mantém o campo montado durante a consulta', async () => {
+    const view = render(<MonitoriaList user={admin} activeTab="monitorias" />);
+    const input = screen.getByRole('searchbox', { name: 'Buscar monitoria por ticket' });
+    fireEvent.change(input, { target: { value: '178524' } });
+    expect(input).toHaveValue('178524');
+    expect(observedSearch.mock.calls.at(-1)?.[0]).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Pesquisar' }));
+    await waitFor(() => expect(observedSearch.mock.calls.at(-1)?.[0]).toBe('178524'));
+    fixture.loading = true;
+    view.rerender(<MonitoriaList user={admin} activeTab="monitorias" />);
+    expect(screen.getByRole('searchbox', { name: 'Buscar monitoria por ticket' })).toHaveValue('178524');
+    expect(screen.getByText('Buscando monitorias...')).toBeInTheDocument();
   });
 
   it('envia o registro ao Zendesk depois da aprovação final pela Qualidade', async () => {

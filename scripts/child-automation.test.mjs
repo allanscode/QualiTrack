@@ -5,7 +5,7 @@ import { buildFreshSql, discoverFreshMigrations } from './prepare-supabase.mjs';
 
 const id = number => `50000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
 
-async function createDatabase() {
+async function createDatabase(beforeMigration) {
   const db = new PGlite();
   await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
     CREATE SCHEMA auth; CREATE SCHEMA storage; CREATE SCHEMA realtime;
@@ -25,10 +25,64 @@ async function createDatabase() {
     CREATE FUNCTION cron.unschedule(text) RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;`);
   await db.exec((await buildFreshSql()).sql);
   for (const migration of await discoverFreshMigrations()) {
+    if (migration.name === '20261015000002_recover_legacy_child_ai_jobs.sql' && beforeMigration) {
+      await beforeMigration(db);
+    }
     await db.exec(migration.sql.replace(/^CREATE EXTENSION IF NOT EXISTS pg_(?:cron|net).*;\s*$/gm, ''));
   }
   return db;
 }
+
+test('legacy child jobs are queued for a fresh evaluation without losing their original verdict', async () => {
+  const ticketId = '178524';
+  const oldJobId = id(91);
+  const db = await createDatabase(async database => {
+    await database.query('INSERT INTO auth.users(id,email) VALUES ($1,$2)',[id(1),'auditor@example.invalid']);
+    await database.query(`INSERT INTO users(id,email,name,role,active) VALUES
+      ($1,'auditor@example.invalid','Auditor','qualidade',true),
+      ($2,'agent@example.invalid','Agent','suporte',true)
+      ON CONFLICT(id) DO UPDATE SET role=EXCLUDED.role,active=true,name=EXCLUDED.name`,[id(1),id(2)]);
+    await database.query("INSERT INTO teams(id,name,kind) VALUES ($1,'Child team','team')",[id(10)]);
+    await database.query('UPDATE users SET primary_team_id=$1 WHERE id=$2',[id(10),id(2)]);
+    await database.query(`INSERT INTO positive_ai_config(id,enabled,auditor_id,max_evaluations,executions_started)
+      VALUES(true,false,$1,NULL,0) ON CONFLICT(id) DO UPDATE SET auditor_id=EXCLUDED.auditor_id,max_evaluations=NULL`,[id(1)]);
+    await database.query(`INSERT INTO child_ai_config(id,enabled,auditor_id)
+      VALUES(true,false,$1) ON CONFLICT(id) DO UPDATE SET auditor_id=EXCLUDED.auditor_id`,[id(1)]);
+    await database.query("INSERT INTO queue_ticket_catalog(ticket_id,queue_type,ticket_snapshot) VALUES ($1,'filhos',$2)",
+      [ticketId,{ticket_id:ticketId,subject:'Legacy child',status:'solved',ticket_date:'2026-10-05T12:00:00Z'}]);
+    await database.query(`INSERT INTO ai_evaluation_jobs(ticket_id,job_id,evaluation_type,status,started_by,finished_at,result)
+      VALUES($1,$2,'chamado_filho','completed',$3,'2026-10-05T13:00:00Z',$4)`,
+    [ticketId,oldJobId,id(1),{score:66.67,checks:[{rule:'old1'},{rule:'old2'},{rule:'old3'}]}]);
+  });
+  try {
+    const archived=(await db.query('SELECT * FROM child_ai_legacy_jobs WHERE ticket_id=$1',[ticketId])).rows[0];
+    assert.equal(archived.original_job_id,oldJobId);
+    assert.equal(archived.original_job.result.checks.length,3);
+    const queued=(await db.query('SELECT * FROM child_ai_queue WHERE ticket_id=$1',[ticketId])).rows[0];
+    assert.equal(queued.status,'pending');
+    assert.equal(queued.legacy_job_id,oldJobId);
+    await db.exec("SET request.jwt.claim.role='service_role'");
+    await db.exec('UPDATE child_ai_config SET enabled=true');
+    const claim=(await db.query('SELECT * FROM claim_child_ai_work()')).rows[0];
+    assert.equal(claim.ticket_id,ticketId);
+    const formId='6c7d1e88-841b-4da9-9a66-9f1464ce896f';
+    const form=(await db.query('SELECT to_jsonb(f) AS value FROM forms f WHERE id=$1',[formId])).rows[0].value;
+    const payload={action:'evaluate_child_ticket',dialogue:[{id:'comment',body:'Evidence'}],
+      draft_meta:{form_id:formId,agent_id:id(2),team_id:id(10),source_queue:'filhos',
+        agent_name:'Agent',agent_email:'agent@example.invalid',channel:'Chat',guideline_ids:[]}};
+    const newJobId=(await db.query('SELECT start_child_ai_job($1,$2,$3,$4) AS id',
+      [ticketId,claim.lease_id,payload,form])).rows[0].id;
+    assert.notEqual(newJobId,oldJobId);
+    assert.equal((await db.query('SELECT status FROM ai_evaluation_jobs WHERE ticket_id=$1',[ticketId])).rows[0].status,'running');
+    assert.equal((await db.query('SELECT original_job->\'result\'->>\'score\' AS score FROM child_ai_legacy_jobs WHERE ticket_id=$1',[ticketId])).rows[0].score,'66.67');
+    const questions=form.sections.flatMap(section=>section.questions.map(question=>question.id));
+    const result={detected_type:'analise_tecnica',status:'conforme',score:100,summary:'Re-evaluated child',recommendations:[],
+      checks:questions.map(question_id=>({question_id,answer:'SIM',passed:true,rule:question_id,details:'Verified evidence'}))};
+    await db.query('SELECT complete_ai_evaluation_execution($1,$2,$3,$4)',[newJobId,id(1),result,payload.draft_meta]);
+    assert.equal((await db.query('SELECT status FROM child_ai_queue WHERE ticket_id=$1',[ticketId])).rows[0].status,'completed');
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias WHERE ticket_id=$1',[ticketId])).rows[0].n,1);
+  } finally { await db.close(); }
+});
 
 
 test('child automation persists reviews, computes the fixed form and shares the budget', async t => {
