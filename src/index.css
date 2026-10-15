@@ -14,17 +14,38 @@
 }
 
 .dark .dashboard-skeleton-block::after {
-  background: linear-gradient(100deg, transparent 25%, rgb(255 255 255 / 0.13) 50%, transparent 75%);
+  background: linear-gradient(100deg, transparent 25%, rgb(255 255 255 / 0.28) 50%, transparent 75%);
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .dashboard-skeleton-block::after {
-    animation: dashboard-skeleton-shimmer 1.6s ease-in-out infinite;
+    animation: dashboard-skeleton-shimmer 1.3s ease-in-out infinite;
+  }
+  .dashboard-loading-icon {
+    animation: dashboard-loading-spin 1s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-skeleton-block::after {
+    display: none;
+  }
+  .dashboard-skeleton-block,
+  .dashboard-loading-icon {
+    animation: dashboard-loading-breathe 1.6s ease-in-out infinite;
   }
 }
 
 @keyframes dashboard-skeleton-shimmer {
   to { transform: translateX(100%); }
+}
+
+@keyframes dashboard-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dashboard-loading-breathe {
+  50% { opacity: 0.45; }
 }
 
 .dashboard-tile-container {

@@ -7,7 +7,7 @@ export function PageSkeleton({ dashboard = false }: { dashboard?: boolean }) {
     <div role="status" aria-label={dashboard ? 'Carregando dashboard' : 'Carregando página'} className="space-y-6">
       <span className="sr-only">Carregando dados…</span>
       {dashboard && <div className="flex items-center gap-3 text-brand-muted">
-        <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" />
+        <LoaderCircle className="dashboard-loading-icon size-4" aria-hidden="true" />
         <span className="text-sm font-medium">Carregando indicadores do dashboard…</span>
       </div>}
       <div aria-hidden="true" className="space-y-6">

@@ -202,12 +202,13 @@ Se qualquer erro_critico marcado → Score Final = 0
 
 A automação captura os tickets da view de pesquisas positivas em uma fila persistente no banco. A saída da view ou o fechamento do ticket não apaga o resultado nem a revisão pendente. A execução ocorre no servidor, independentemente da tela aberta pelo monitor.
 
-- Nota inferior a 75%: mantém o rascunho preenchido com o indicativo **Revisão necessária · abaixo de 75%** na fila Positivas.
+- Nota inferior a 75% com ficha e evidências completas: salva a monitoria como `pendente_revisao`, com o prazo de ação configurado. A equipe segue a avaliação e eventual contestação usuais. O Zendesk só recebe o resultado depois da conclusão: validação se a nota final chegar a 75% ou invalidação se continuar abaixo.
 - Nota igual ou superior a 75%: conclui a monitoria interna quando ficha, respostas e vínculo do agente são válidos, sem limite mensal de positivas por agente.
-- Dados insuficientes ou inconsistentes: impede a conclusão automática e preserva os dados para conferência.
+- Dados insuficientes ou inconsistentes: não criam monitoria automaticamente; o rascunho fica na fila para conferência.
 - A nota é calculada pelas respostas e pelos pesos da ficha; o valor declarado pelo modelo não autoriza a conclusão sozinho.
 - O auditor é configurado no ambiente. O histórico identifica explicitamente a execução automática pela IA.
 - O processamento é independente da publicação de comentários no Zendesk.
+- Se o gestor não decidir no prazo, uma monitoria criada pela fila Positivas com IA é concluída com a nota vigente, inclusive em equipe PJ. As demais monitorias PJ mantêm a exigência de decisão humana.
 
 A configuração inicial permanece desabilitada até a definição do auditor e das credenciais do ambiente. No staging, o responsável escolhido é Gabriel Dias Di Napoli, com perfil de Qualidade. Os rascunhos positivos salvos continuam acessíveis mesmo quando o Zendesk está indisponível.
 
@@ -217,7 +218,7 @@ Um erro crítico confirmado zera a nota final, conforme a regra da ficha. A fila
 
 ## Prazo de Ação / Deadlines
 
-O ambiente clonado precisa manter o job `process-action-deadline-timeouts` no `pg_cron`, executando `SELECT public.process_action_deadline_timeouts()` a cada cinco minutos. A migração `20261007000005` garante a coluna `concluded_at` também nos bancos legados. Monitorias PJ continuam seguindo a aprovação específica, sem conclusão pelo cron comum.
+O ambiente clonado precisa manter o job `process-action-deadline-timeouts` no `pg_cron`, executando `SELECT public.process_action_deadline_timeouts()` a cada cinco minutos. A migração `20261007000005` garante a coluna `concluded_at` também nos bancos legados. Monitorias PJ exigem aprovação específica, exceto monitorias da fila Positivas com IA que ainda aguardam o primeiro parecer do gestor quando o prazo vence.
 
 ## Positivas invalidadas e Zendesk
 
