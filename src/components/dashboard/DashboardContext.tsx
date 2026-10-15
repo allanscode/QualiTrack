@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useQualityConfig } from '../../lib/useQualityConfig';
 import { getRemainingBusinessSeconds } from '../../lib/businessHours';
 import { getPresetDateRange } from '../../lib/dashboardDatePresets';
+import { getTrendWindowStart } from '../../lib/performanceTrend';
 
 export interface DashboardFilters {
   startDate: string;
@@ -196,6 +197,8 @@ export function DashboardProvider({
   const [refreshing, setRefreshing] = useState(false);
   const [globalAvg, setGlobalAvg] = useState(cached?.globalAvg ?? 0);
   const [aggregates, setAggregates] = useState<DashboardAggregates | null>(null);
+  const [deadlineMonitorias, setDeadlineMonitorias] = useState<Monitoria[]>([]);
+  const [deadlineReady, setDeadlineReady] = useState(!['admin', 'qualidade', 'gestor_qualidade'].includes(dashboardRole));
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
   // CORRECTION 8: Cooldown for manual refresh button
@@ -204,6 +207,10 @@ export function DashboardProvider({
   const hasLoadedOnce = useRef(Boolean(cached));
   const loadedRangeRef = useRef(cached ? `${cached.filters.startDate}|${cached.filters.endDate}` : '');
   const summaryDocsRef = useRef<Monitoria[] | null>(cached?.allMonitorias ?? null);
+  const summaryCoverageRef = useRef(cached ? {
+    startDate: ['admin', 'gestor_qualidade'].includes(dashboardRole) ? getTrendWindowStart(cached.filters) : '',
+    endDate: ['admin', 'gestor_qualidade'].includes(dashboardRole) ? cached.filters.endDate : '',
+  } : null);
   const fetchingRef = useRef(false);
   const queuedRef = useRef(false);
   const filtersRef = useRef(filters);
@@ -310,16 +317,30 @@ export function DashboardProvider({
       };
 
         const period = filtersRef.current;
+        const boundedHistory = ['admin', 'gestor_qualidade'].includes(currentUser.role);
+        const historyStart = boundedHistory ? getTrendWindowStart(period) : '';
+        const historyEnd = boundedHistory ? period.endDate : '';
+        const coverage = summaryCoverageRef.current;
+        const summaryIsCovered = coverage && (!coverage.startDate || (historyStart && coverage.startDate <= historyStart))
+          && (!coverage.endDate || (historyEnd && coverage.endDate >= historyEnd));
         const summaryColumns = ['admin', 'qualidade', 'gestor_qualidade'].includes(currentUser.role)
           ? DASHBOARD_METRICS_COLUMNS : DASHBOARD_SUMMARY_COLUMNS;
-        [summaryDocs, docs] = await Promise.all([
-          reuseSummary && summaryDocsRef.current
-            ? Promise.resolve(summaryDocsRef.current)
-            : executeWithRetry(summaryColumns, { ...period, startDate: '', endDate: '' }),
-          executeWithRetry(DASHBOARD_MONITORIA_COLUMNS, period),
-        ]);
-        if (!reuseSummary || !summaryDocsRef.current) summaryDocsRef.current = summaryDocs;
-        scoreDocs = summaryDocs;
+        if (currentUser.role === 'qualidade') {
+          docs = await executeWithRetry(DASHBOARD_MONITORIA_COLUMNS, period);
+          summaryDocs = docs;
+        } else {
+          [summaryDocs, docs] = await Promise.all([
+            reuseSummary && summaryDocsRef.current && summaryIsCovered
+              ? Promise.resolve(summaryDocsRef.current)
+              : executeWithRetry(summaryColumns, { ...period, startDate: historyStart, endDate: historyEnd }),
+            executeWithRetry(DASHBOARD_MONITORIA_COLUMNS, period),
+          ]);
+          if (!reuseSummary || !summaryDocsRef.current || !summaryIsCovered) {
+            summaryDocsRef.current = summaryDocs;
+            summaryCoverageRef.current = { startDate: historyStart, endDate: historyEnd };
+          }
+        }
+        scoreDocs = ['admin', 'qualidade', 'gestor_qualidade'].includes(currentUser.role) ? docs : summaryDocs;
 
         if (currentUser.role === 'gestor_suporte' && docs.length > 0) {
           const docIds = docs.map(d => d.id);
@@ -450,6 +471,26 @@ export function DashboardProvider({
     return () => clearTimeout(timer);
   }, [user, loadData, filters.startDate, filters.endDate]);
 
+  // Historic SLA alerts must remain visible even when chart history is bounded.
+  useEffect(() => {
+    if (!supabase || !user || loading || !['admin', 'qualidade', 'gestor_qualidade'].includes(user.role)) return;
+    if (sessionStorage.getItem(`qualitrack_sla_notified_${user.id}`)) return;
+    let cancelled = false;
+    let query = supabase.from('monitorias')
+      .select('id,evaluator_id,evaluated_id,team_id,status,action_deadline_at,created_at')
+      .eq('active', true)
+      .gte('action_deadline_at', new Date().toISOString())
+      .in('status', ['pendente_revisao', 'contestacao_negada', 'em_contestacao', 'aguardando_gestor_suporte', 'aguardando_gestor_qualidade']);
+    if (user.role === 'qualidade') query = query.eq('evaluator_id', user.id);
+    void query.then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) console.error('[Dashboard] Falha ao carregar alertas de prazo:', error);
+      setDeadlineMonitorias((data ?? []) as Monitoria[]);
+      setDeadlineReady(true);
+    });
+    return () => { cancelled = true; };
+  }, [user, loading]);
+
   // Metrics and rankings are computed over the filtered, authorized set in
   // PostgreSQL. Keep MockDb's local calculations for offline development.
   useEffect(() => {
@@ -577,7 +618,7 @@ export function DashboardProvider({
   const { config: qualityConfig } = useQualityConfig();
 
   useEffect(() => {
-    if (loading || !user || allMonitorias.length === 0) return;
+    if (loading || !user || !deadlineReady) return;
 
     // Check if we have already notified in this login session
     const notifiedKey = `qualitrack_sla_notified_${user.id}`;
@@ -587,7 +628,8 @@ export function DashboardProvider({
     const myTeamIds = user.team_ids || [];
     const now = new Date();
 
-    const pendingMonitorias = allMonitorias.filter(m => {
+    const alertRows = [...new Map([...allMonitorias, ...deadlineMonitorias].map(m => [m.id, m])).values()];
+    const pendingMonitorias = alertRows.filter(m => {
       if (!m.action_deadline_at) return false;
 
       // Filter by role scope
@@ -625,7 +667,7 @@ export function DashboardProvider({
 
     // Set flag in sessionStorage to run once per login session
     sessionStorage.setItem(notifiedKey, 'true');
-  }, [loading, user, allMonitorias, qualityConfig]);
+  }, [loading, user, allMonitorias, deadlineMonitorias, deadlineReady, qualityConfig]);
 
   // CORRECTION 8: Cooldown timer for manual refresh button
   useEffect(() => {
