@@ -85,6 +85,14 @@ const DASHBOARD_SUMMARY_COLUMNS = [
   'pj_reviewed_at', 'pj_review_required',
 ].join(',');
 
+// Admin and quality dashboards use history for trends, rankings, average and
+// SLA alerts. Their period drilldowns come from the separate detail query.
+const DASHBOARD_METRICS_COLUMNS = [
+  'id', 'form_id', 'evaluator_id', 'evaluated_id', 'team_id',
+  'ticket_group_team_id', 'channel', 'score', 'status',
+  'action_deadline_at', 'active', 'created_at',
+].join(',');
+
 export interface DashboardState {
   user: User | null;
   loggedInUser: User | null;
@@ -195,6 +203,7 @@ export function DashboardProvider({
   const [refreshCooldownRemaining, setRefreshCooldownRemaining] = useState<string>('');
   const hasLoadedOnce = useRef(Boolean(cached));
   const loadedRangeRef = useRef(cached ? `${cached.filters.startDate}|${cached.filters.endDate}` : '');
+  const summaryDocsRef = useRef<Monitoria[] | null>(cached?.allMonitorias ?? null);
   const fetchingRef = useRef(false);
   const queuedRef = useRef(false);
   const filtersRef = useRef(filters);
@@ -204,7 +213,7 @@ export function DashboardProvider({
   const staticDataRef = useRef(staticData);
   staticDataRef.current = staticData;
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (reuseSummary = false) => {
     const currentUser = userRef.current;
     if (!currentUser) return;
     const requestedRange = `${filtersRef.current.startDate}|${filtersRef.current.endDate}`;
@@ -301,10 +310,15 @@ export function DashboardProvider({
       };
 
         const period = filtersRef.current;
+        const summaryColumns = ['admin', 'qualidade', 'gestor_qualidade'].includes(currentUser.role)
+          ? DASHBOARD_METRICS_COLUMNS : DASHBOARD_SUMMARY_COLUMNS;
         [summaryDocs, docs] = await Promise.all([
-          executeWithRetry(DASHBOARD_SUMMARY_COLUMNS, { ...period, startDate: '', endDate: '' }),
+          reuseSummary && summaryDocsRef.current
+            ? Promise.resolve(summaryDocsRef.current)
+            : executeWithRetry(summaryColumns, { ...period, startDate: '', endDate: '' }),
           executeWithRetry(DASHBOARD_MONITORIA_COLUMNS, period),
         ]);
+        if (!reuseSummary || !summaryDocsRef.current) summaryDocsRef.current = summaryDocs;
         scoreDocs = summaryDocs;
 
         if (currentUser.role === 'gestor_suporte' && docs.length > 0) {
@@ -429,9 +443,10 @@ export function DashboardProvider({
   useEffect(() => {
     if (!user) return;
     if (loadedRangeRef.current !== `${filters.startDate}|${filters.endDate}`) setLoading(true);
+    const changingPeriod = hasLoadedOnce.current && loadedRangeRef.current !== `${filters.startDate}|${filters.endDate}`;
     const timer = setTimeout(() => {
-      loadData();
-    }, 300);
+      loadData(changingPeriod);
+    }, hasLoadedOnce.current ? 300 : 0);
     return () => clearTimeout(timer);
   }, [user, loadData, filters.startDate, filters.endDate]);
 

@@ -75,7 +75,6 @@ export default defineConfig(({ command, mode, isPreview }) => {
               return 'vendor-other';
             }
             // Feature chunks
-            if (id.includes('/src/components/dashboard/')) return 'features-dashboard';
             if (id.includes('/src/components/MonitoriaList.tsx') || id.includes('/src/components/MonitoriaForm.tsx')) return 'features-monitoria';
             if (id.includes('/src/components/AdminPanel.tsx') || id.includes('/src/components/AdminDashboardView.tsx')) return 'features-admin';
             if (id.includes('/src/components/QualityConfigManagement.tsx')) return 'features-quality';
