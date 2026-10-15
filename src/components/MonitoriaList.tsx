@@ -152,7 +152,8 @@ export default function MonitoriaList({
     return () => { cancelled = true; };
   }, [selectedId, fetchDetail]);
 
-  // Debounced search state
+  // Keep ticket numbers intact while the user is typing; apply the server filter
+  // only after a short pause instead of refreshing the list between digits.
   const [searchInput, setSearchInput] = useState(filters.search);
   useEffect(() => {
     setSearchInput(filters.search);
@@ -163,9 +164,9 @@ export default function MonitoriaList({
       if (searchInput !== filters.search) {
         filters.setSearch(searchInput);
       }
-    }, 150);
+    }, 500);
     return () => clearTimeout(timer);
-  }, [searchInput, filters]);
+  }, [searchInput, filters.search, filters.setSearch]);
 
   const focusOnMonitoria = useCallback((targetId: string) => {
     filters.setTab('todas');
