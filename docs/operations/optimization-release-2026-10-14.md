@@ -43,3 +43,7 @@ Validação local: lint, 514 testes e build passaram. Na validação autenticada
 ## Ajuste adicional para Admin e Qualidade
 
 Na verificação do perfil Admin/Qualidade com o período do mês atual, foi identificado que o carregamento aguardava também a consulta de envios do Helpdesk. Esses perfis não usam esse conjunto de dados; ele é consumido somente pelo dashboard de gestor de suporte. A consulta foi removida para os demais perfis, eliminando uma etapa de rede da abertura do dashboard. Quando o gestor de suporte precisa buscar mais de 150 fichas, os lotes do Helpdesk agora são consultados em paralelo. O ganho de tempo ainda precisa ser medido no navegador após o deploy.
+
+## Ajuste da busca na lista de monitorias
+
+A pesquisa por ticket aplicava o filtro após apenas 150 ms, o que disparava novas consultas enquanto o usuário digitava um número. O intervalo agora é de 500 ms após a última tecla, e o temporizador não reinicia por renderizações do componente. A consulta só é aplicada depois de uma breve pausa; a lista continua sendo filtrada no servidor.
