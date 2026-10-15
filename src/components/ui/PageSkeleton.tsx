@@ -1,10 +1,15 @@
 import React from 'react';
+import { LoaderCircle } from 'lucide-react';
 
 export function PageSkeleton({ dashboard = false }: { dashboard?: boolean }) {
   const block = 'rounded-lg bg-brand-muted/15 motion-safe:animate-pulse';
   return (
     <div role="status" aria-label={dashboard ? 'Carregando dashboard' : 'Carregando página'} className="space-y-6">
       <span className="sr-only">Carregando dados…</span>
+      {dashboard && <div className="flex items-center gap-3 text-brand-muted">
+        <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" />
+        <span className="text-sm font-medium">Carregando indicadores do dashboard…</span>
+      </div>}
       <div aria-hidden="true" className="space-y-6">
         <div className="flex flex-wrap gap-3 rounded-2xl border border-surface-border bg-surface-card p-5">
           {[0, 1, 2, 3].map(i => <div key={i} className={`${block} h-10 w-32`} />)}
