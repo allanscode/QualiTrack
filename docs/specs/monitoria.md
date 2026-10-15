@@ -234,6 +234,8 @@ No staging, a sincronização externa fica desligada por `final_positive_invalid
 
 `child_ai_queue` preserva tickets e pareceres independentemente da view do Zendesk. A ficha fixa de filhos recebe os seis critérios do parecer; a nota é recalculada a partir dos pesos da ficha. Notas abaixo de 75%, erros críticos ou evidências insuficientes ficam para revisão. Notas a partir de 75% com dados completos geram monitoria concluída em nome do auditor configurado, com histórico explícito de autoria automática. Trabalhos iniciados com a ficha anterior são validados conforme o snapshot salvo no próprio job.
 
+As 229 avaliações antigas de tickets filhos concluídas entre 1º e 6 de outubro de 2026 sem monitoria tinham apenas três critérios e precedem essa automação. A migração `20261015000002_recover_legacy_child_ai_jobs.sql` arquiva o parecer original em `child_ai_legacy_jobs` e coloca somente tickets ainda sem monitoria, rascunho ou item de automação na fila para uma nova avaliação com a ficha atual. O worker processa um ticket por chamada, verifica novamente o Zendesk e preserva a revisão humana quando faltar evidência ou a nota ficar abaixo de 75%. O parecer original não é convertido em monitoria nem usado como nota final.
+
 A automação de filhos começa desativada e compartilha o teto de execuções do ambiente com a automação de positivas. O limite de cinco testes já consumido não é reiniciado. A distribuição das revisões mantém as regras de atribuição da fila de filhos.
 
 ## Indicadores de prazo
