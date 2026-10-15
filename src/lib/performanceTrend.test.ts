@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildComparisonTrend, buildPerformanceTrend, getTrendGranularity, selectTrendEvaluations } from './performanceTrend';
+import { buildComparisonTrend, buildPerformanceTrend, getTrendGranularity, getTrendWindowStart, selectTrendEvaluations } from './performanceTrend';
 
 describe('buildPerformanceTrend', () => {
   it('calculates daily global, positive and negative averages using the fixed 75% threshold', () => {
@@ -71,5 +71,12 @@ describe('buildPerformanceTrend', () => {
       .evaluations.map(item => item.score)).toEqual([70, 80, 90, 60]);
     expect(selectTrendEvaluations(evaluations, { startDate: '2026-09-01', endDate: '2026-09-15' })
       .evaluations.map(item => item.score)).toEqual([80]);
+  });
+
+  it('exposes the exact start date needed by each trend preset for bounded queries', () => {
+    expect(getTrendWindowStart({ startDate: '2026-10-15', endDate: '2026-10-15' })).toBe('2026-09-16');
+    expect(getTrendWindowStart({ startDate: '2026-10-01', endDate: '2026-10-31' })).toBe('2025-11-01');
+    expect(getTrendWindowStart({ startDate: '2026-01-01', endDate: '2026-12-31' })).toBe('2022-01-01');
+    expect(getTrendWindowStart({ startDate: '2024-03-10', endDate: '2026-10-15' })).toBe('2024-03-10');
   });
 });

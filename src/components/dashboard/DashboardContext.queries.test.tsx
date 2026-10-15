@@ -18,6 +18,7 @@ vi.mock('../../lib/supabase', () => {
     const query = {
       select(value: string) { columns = value; return query; },
       eq() { return query; },
+      not() { return query; },
       or() { return query; },
       in() { return query; },
       order() { return query; },
@@ -52,13 +53,14 @@ afterEach(cleanup);
 it('reads lightweight history and full records only for the selected period', async () => {
   const hook = renderHook(useDashboard, { wrapper });
   await waitFor(() => expect(hook.result.current.loading).toBe(false));
-  expect(hook.result.current.allMonitorias.map(row => row.id)).toEqual(['current', 'historic']);
+  expect(hook.result.current.allMonitorias.map(row => row.id)).toEqual(['current']);
   expect(hook.result.current.monitorias.map(row => row.id)).toEqual(['current']);
   expect(hook.result.current.monitorias[0].form_snapshot).toEqual({ name: 'current' });
 
   const history = mocks.calls.find(call => call.source === 'monitorias' && !call.columns.includes('form_snapshot'));
   const details = mocks.calls.find(call => call.source === 'monitorias' && call.columns.includes('form_snapshot'));
-  expect(history).toMatchObject({ start: undefined, end: undefined });
+  expect(history?.start).toBeTruthy();
+  expect(history?.end).toBeTruthy();
   expect(history?.columns).not.toContain('answers');
   expect(details?.start).toBeTruthy();
   expect(details?.end).toBeTruthy();
@@ -69,6 +71,17 @@ it('reads lightweight history and full records only for the selected period', as
     startDate: `${new Date().getFullYear() - 2}-01-01`,
   })));
   await waitFor(() => expect(hook.result.current.monitorias.map(row => row.id)).toEqual(['current', 'historic']));
+  await waitFor(() => expect(hook.result.current.allMonitorias.map(row => row.id)).toEqual(['current', 'historic']));
+});
+
+it('loads quality metrics from the selected period without a second history query', async () => {
+  const quality = { ...user, id: 'quality-auditor', role: 'qualidade' } as User;
+  const qualityWrapper = ({ children }: { children: React.ReactNode }) =>
+    <DashboardProvider user={quality} activeTab="dashboard">{children}</DashboardProvider>;
+  const hook = renderHook(useDashboard, { wrapper: qualityWrapper });
+  await waitFor(() => expect(hook.result.current.loading).toBe(false));
+  expect(mocks.calls.filter(call => call.columns.includes('form_snapshot'))).toHaveLength(1);
+  expect(mocks.calls.filter(call => call.columns.includes('form_snapshot'))[0].start).toBeTruthy();
 });
 
 it('loads helpdesk submissions only for the support manager dashboard', async () => {

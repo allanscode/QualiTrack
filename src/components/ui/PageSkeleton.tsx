@@ -2,7 +2,7 @@ import React from 'react';
 import { LoaderCircle } from 'lucide-react';
 
 export function PageSkeleton({ dashboard = false }: { dashboard?: boolean }) {
-  const block = 'rounded-lg bg-brand-muted/15 motion-safe:animate-pulse';
+  const block = dashboard ? 'dashboard-skeleton-block rounded-lg bg-brand-muted/15' : 'rounded-lg bg-brand-muted/15 motion-safe:animate-pulse';
   return (
     <div role="status" aria-label={dashboard ? 'Carregando dashboard' : 'Carregando página'} className="space-y-6">
       <span className="sr-only">Carregando dados…</span>

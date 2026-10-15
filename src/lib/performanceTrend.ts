@@ -59,9 +59,7 @@ export function getTrendGranularity(filters: Pick<TrendFilters, 'startDate' | 'e
 }
 
 /** Preset charts show a rolling history ending at the selected date; other filters still apply. */
-export function selectTrendEvaluations<T extends TrendEvaluation>(
-  evaluations: T[], filters: TrendFilters, role?: string,
-): { evaluations: T[]; granularity: TrendGranularity } {
+export function getTrendWindowStart(filters: TrendFilters): string {
   const granularity = getTrendGranularity(filters);
   const anchor = filters.endDate || new Date().toISOString().slice(0, 10);
   const [year, month, day] = anchor.split('-').map(Number);
@@ -82,6 +80,14 @@ export function selectTrendEvaluations<T extends TrendEvaluation>(
       windowStart = `${year - 4}-01-01`;
     }
   }
+  return windowStart;
+}
+
+export function selectTrendEvaluations<T extends TrendEvaluation>(
+  evaluations: T[], filters: TrendFilters, role?: string,
+): { evaluations: T[]; granularity: TrendGranularity } {
+  const granularity = getTrendGranularity(filters);
+  const windowStart = getTrendWindowStart(filters);
   return {
     granularity,
     evaluations: evaluations.filter(evaluation => {
