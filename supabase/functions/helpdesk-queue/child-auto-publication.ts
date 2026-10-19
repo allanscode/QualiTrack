@@ -1,11 +1,11 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
-import { childPublicationText, CHILD_TICKET_FORM_ID, type ChildPublicationMonitoria } from './child-publication.ts';
+import { childPublicationText, childPublicationVerdict, type ChildPublicationMonitoria } from './child-publication.ts';
 import { childMacroCustomFields, hasCriticalChildField, missingCustomFields } from './child-macro-fields.ts';
 import { childViewConditionsWithAuditExclusion, hasPublishedChildMacroForMonitoria, hasPublishedInvalidChildMacro } from './child-view.ts';
 import { CHILD_AUDITED_TAG } from './queue-search.ts';
 
 type Work = { monitoria_id: string; ticket_id: string; lease_id: string };
-type Monitoria = ChildPublicationMonitoria & { form_snapshot: { automation?: string; child_ai_evaluation?: {status?: string} } | null };
+type Monitoria = ChildPublicationMonitoria & { form_snapshot: { automation?: string; legacy_source?: string; child_ai_evaluation?: {status?: string} } | null };
 type Ticket = { status?: string; tags?: string[]; updated_at?: string; custom_fields?: Array<{ id: number; value: unknown }> };
 type ZendeskBody = { ticket?: Ticket; comments?: Array<{ body?: string }>; view?: { conditions?: { all?: Array<{field:string;operator:string;value?:string}>; any?: Array<{field:string;operator:string;value?:string}> } } };
 
@@ -44,13 +44,10 @@ export async function processChildAutoPublication(
       .eq('id',work.monitoria_id).maybeSingle();
     if (error) throw error;
     const monitoria = data as Monitoria | null;
-    if (!monitoria || !monitoria.active || monitoria.status !== 'concluida'
-      || monitoria.form_id !== CHILD_TICKET_FORM_ID || !Number.isFinite(monitoria.score)
-      || monitoria.score < 0 || monitoria.score > 100
-      || monitoria.form_snapshot?.automation !== 'child_ticket'
-      || monitoria.form_snapshot?.child_ai_evaluation?.status !== 'conforme'
+    const verdict = childPublicationVerdict(monitoria);
+    if (!monitoria || !verdict
       || monitoria.ticket_id !== work.ticket_id || !monitoria.evaluator_note?.trim()) {
-      await finish('skipped','Monitoria automática de chamado filho inválida ou sem Registro do Auditor.');
+      await finish('skipped','Monitoria de chamado filho inválida ou sem Registro do Auditor.');
       return { processed: 1, status: 'skipped', ticket_id: work.ticket_id };
     }
     const latest = await db.from('monitorias').select('id').eq('ticket_id',work.ticket_id).eq('active',true)
@@ -88,16 +85,17 @@ export async function processChildAutoPublication(
 
     const comments = (await read(`${base}/tickets/${work.ticket_id}/comments.json?sort_order=desc&per_page=100`)).comments;
     if (!Array.isArray(comments)) throw new Error('Zendesk não retornou os comentários anteriores.');
-    const alreadySent = hasPublishedChildMacroForMonitoria(comments,monitoria.id);
-    const correctsPreviousInvalid = hasPublishedInvalidChildMacro(comments);
-    const fields = childMacroCustomFields('conforme',hasCriticalChildField(ticket.custom_fields));
+    const alreadySent = hasPublishedChildMacroForMonitoria(comments,monitoria.id,verdict);
+    const correctsPreviousInvalid = verdict === 'conforme' && hasPublishedInvalidChildMacro(comments);
+    const fields = childMacroCustomFields(verdict,verdict === 'conforme' && hasCriticalChildField(ticket.custom_fields));
+    const verdictLabel = verdict === 'conforme' ? 'VÁLIDO' : 'INVÁLIDO';
     let confirmed = ticket;
     if (!alreadySent || missingCustomFields(ticket.custom_fields,fields).length) {
       const commentText = childPublicationText(monitoria,correctsPreviousInvalid);
       ticketWriteStarted = true;
       const response = await fetcher(ticketUrl, { method:'PUT',headers,signal:AbortSignal.timeout(20000),
         body:JSON.stringify({ticket:{
-          ...(alreadySent ? {} : {comment:{body:`[QualidadeWP · Chamado filho VÁLIDO]\n\n${commentText}`,public:false}}),
+          ...(alreadySent ? {} : {comment:{body:`[QualidadeWP · Chamado filho ${verdictLabel}]\n\n${commentText}`,public:false}}),
           custom_fields:fields,safe_update:true,updated_stamp:ticket.updated_at,
         }}),
       });

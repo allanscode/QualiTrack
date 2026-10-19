@@ -5,6 +5,7 @@ import AILogsManagement from './AILogsManagement';
 import AIAuditSummary from './AIAuditSummary';
 import AIPipelineView from './AIPipelineView';
 import AIAutomationsManagement from './AIAutomationsManagement';
+import AIModelManagement from './AIModelManagement';
 import { Brain, FileText, Activity, Sparkles, Power } from 'lucide-react';
 
 interface AIHubManagementProps {
@@ -82,7 +83,10 @@ export default function AIHubManagement({ currentUser }: AIHubManagementProps) {
       </div>
 
       {/* Conteúdo Dinâmico do Painel Selecionado */}
-      {activePanel === 'automations' && <AIAutomationsManagement currentUser={currentUser} />}
+      {activePanel === 'automations' && <>
+        {currentUser?.role === 'admin' && <AIModelManagement />}
+        <AIAutomationsManagement currentUser={currentUser} />
+      </>}
       {activePanel === 'guidelines' && (
         <AIGuidelinesManagement currentUser={currentUser} />
       )}

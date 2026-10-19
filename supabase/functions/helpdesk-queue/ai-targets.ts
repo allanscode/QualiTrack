@@ -10,12 +10,13 @@ function timeoutMs(value: string | undefined, fallback: number): number {
 }
 
 /** Each model shares its own time budget across retries, not the primary's budget. */
-export function buildAITargets(readSetting: ReadSetting): AIModelTarget[] {
+export function buildAITargets(readSetting: ReadSetting, selectedModel = OPENROUTER_MODEL, selectedIsFree = false): AIModelTarget[] {
   const budgets = [
     timeoutMs(readSetting('AI_PRIMARY_TIMEOUT_MS'), 60_000),
     timeoutMs(readSetting('AI_GEMMA_TIMEOUT_MS'), 40_000),
   ];
-  return [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS].map((model, index) => ({
+  const models = selectedIsFree ? [selectedModel] : [selectedModel, ...OPENROUTER_FALLBACK_MODELS.filter(model => model !== selectedModel)];
+  return models.map((model, index) => ({
     provider: 'openrouter', model, maxAttempts: 2, timeoutMs: budgets[index],
   }));
 }

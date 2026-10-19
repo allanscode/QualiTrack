@@ -223,5 +223,28 @@ test('child automation persists reviews, computes the fixed form and shares the 
       await complete(job);
       assert.equal((await state('502')).status,'completed');
     });
+    await t.test('expired child review monitoria below 75 auto-concludes and enqueues Zendesk child publication',async()=>{
+      await reset();
+      await db.exec('DELETE FROM child_auto_publications');
+      const monitoriaId = '5db70d8a-77fc-4dea-940a-e6eaf9b822c8';
+      await db.query(`INSERT INTO monitorias(
+        id,ticket_id,channel,form_id,evaluator_id,evaluator_name,evaluated_id,evaluated_name,
+        team_id,score,status,active,evaluator_note,satisfaction_result,action_deadline_at,form_snapshot,answers
+      ) VALUES ($1,'179157','Chat',$2,$3,'Auditor',$4,'Agent',$5,0,'pendente_revisao',true,
+        'Registro do auditor para filho inválido','Sem pesquisa',now()-interval '5 minutes',
+        '{"ticket_kind":"chamado_filho"}'::jsonb,'{"child-macro-preserved":"NAO"}'::jsonb)`,
+      [monitoriaId,formId,id(1),id(2),id(10)]);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM child_auto_publications WHERE monitoria_id=$1',[monitoriaId])).rows[0].n,0);
+      await db.query('SELECT process_action_deadline_timeouts()');
+      const concluded = (await db.query('SELECT status,resolution_type,score::numeric AS score FROM monitorias WHERE id=$1',[monitoriaId])).rows[0];
+      assert.equal(concluded.status,'concluida');
+      assert.equal(concluded.resolution_type,'automatic');
+      assert.equal(Number(concluded.score),0);
+      const claimed = (await db.query('SELECT * FROM claim_child_auto_publication()')).rows;
+      assert.equal(claimed.length,1);
+      assert.equal(claimed[0].monitoria_id,monitoriaId);
+      assert.equal(claimed[0].ticket_id,'179157');
+      assert.equal(claimed[0].status,'processing');
+    });
   } finally { await db.close(); }
 });

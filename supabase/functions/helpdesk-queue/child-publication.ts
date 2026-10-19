@@ -9,7 +9,26 @@ export interface ChildPublicationMonitoria {
   active: boolean;
   evaluator_id: string;
   evaluator_note: string | null;
-  form_snapshot?: { automation?: string; child_ai_evaluation?: { status?: string } } | null;
+  form_snapshot?: {
+    automation?: string;
+    legacy_source?: string;
+    child_ai_evaluation?: { status?: string };
+  } | null;
+}
+
+export function childPublicationVerdict(
+  monitoria: ChildPublicationMonitoria | null,
+): 'conforme' | 'nao_conforme' | null {
+  if (!monitoria || !monitoria.active || monitoria.status !== 'concluida'
+    || monitoria.form_id !== CHILD_TICKET_FORM_ID
+    || monitoria.form_snapshot?.legacy_source === 'zendesk_child_note'
+    || !Number.isFinite(monitoria.score) || monitoria.score < 0 || monitoria.score > 100) {
+    return null;
+  }
+  if (monitoria.form_snapshot?.automation === 'child_ticket') {
+    return monitoria.form_snapshot?.child_ai_evaluation?.status === 'conforme' ? 'conforme' : null;
+  }
+  return monitoria.score >= 75 ? 'conforme' : 'nao_conforme';
 }
 
 export function childPublicationError(
@@ -24,12 +43,8 @@ export function childPublicationError(
   if (role === 'qualidade' && monitoria.evaluator_id !== userId) {
     return 'Apenas o auditor responsável pode publicar esta monitoria.';
   }
-  const automaticChild = monitoria.form_snapshot?.automation === 'child_ticket';
-  const valid = automaticChild
-    ? monitoria.form_snapshot?.child_ai_evaluation?.status === 'conforme'
-    : Number.isFinite(monitoria.score) && monitoria.score >= 75;
-  if (monitoria.status !== 'concluida' || !valid) {
-    return 'A macro só pode ser enviada após a conclusão válida de uma monitoria de chamado filho.';
+  if (!childPublicationVerdict(monitoria)) {
+    return 'A macro só pode ser enviada após a conclusão de uma monitoria de chamado filho.';
   }
   if (!monitoria.evaluator_note?.trim()) {
     return 'Preencha o Registro do Auditor na ficha antes de publicar a macro.';
@@ -41,8 +56,11 @@ export function childPublicationError(
 }
 
 export function childPublicationText(monitoria: ChildPublicationMonitoria, correctsPreviousInvalid = false): string {
-  const correction = correctsPreviousInvalid
-    ? 'Retificação: a monitoria concluída considerou este chamado filho válido. O parecer anterior permanece no histórico do ticket.\n\n'
-    : 'Chamado filho válido.\n\n';
-  return `${correction}Registro do Auditor da monitoria #${monitoria.id}:\n${monitoria.evaluator_note!.trim()}`;
+  const verdict = childPublicationVerdict(monitoria) ?? (monitoria.score >= 75 ? 'conforme' : 'nao_conforme');
+  const intro = verdict === 'nao_conforme'
+    ? 'Chamado filho inválido.\n\n'
+    : correctsPreviousInvalid
+      ? 'Retificação: a monitoria concluída considerou este chamado filho válido. O parecer anterior permanece no histórico do ticket.\n\n'
+      : 'Chamado filho válido.\n\n';
+  return `${intro}Registro do Auditor da monitoria #${monitoria.id}:\n${monitoria.evaluator_note!.trim()}`;
 }
