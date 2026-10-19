@@ -77,29 +77,5 @@ END $$;
 REVOKE ALL ON FUNCTION public.claim_child_auto_publication() FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_child_auto_publication() TO service_role;
 
--- Enfileira monitorias ativas de chamado filho concluídas após revisão/prazo com nota < 75
--- que ainda não entraram na fila de publicação (ex.: #179157 / Mon. #5db7d8a).
-INSERT INTO public.child_auto_publications(monitoria_id, ticket_id)
-  SELECT m.id, btrim(m.ticket_id)
-  FROM public.monitorias m
-  WHERE m.active IS TRUE
-    AND m.status = 'concluida'
-    AND btrim(m.ticket_id) ~ '^[0-9]+$'
-    AND m.form_id = '6c7d1e88-841b-4da9-9a66-9f1464ce896f'::uuid
-    AND m.id IN (
-      '5db70d8a-77fc-4dea-940a-e6eaf9b822c8'::uuid,
-      '7f587b7d-44c0-4431-ad6d-2ad40ae196f7'::uuid,
-      'daa60a84-b5de-432d-952b-11c45443710c'::uuid
-    )
-    AND coalesce(m.form_snapshot->>'legacy_source', '') <> 'zendesk_child_note'
-    AND coalesce(m.form_snapshot->>'automation', '') <> 'child_ticket'
-    AND m.score >= 0 AND m.score < 75
-    AND nullif(btrim(coalesce(m.evaluator_note, '')), '') IS NOT NULL
-    AND NOT EXISTS (
-      SELECT 1 FROM public.monitorias newer
-      WHERE newer.ticket_id = m.ticket_id AND newer.active IS TRUE AND newer.created_at > m.created_at
-    )
-  ON CONFLICT(monitoria_id) DO NOTHING;
-
 NOTIFY pgrst, 'reload schema';
 COMMIT;
