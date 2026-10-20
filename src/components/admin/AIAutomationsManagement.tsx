@@ -19,7 +19,7 @@ const AUTOMATIONS: Array<{ id: AutomationName; title: string; description: strin
   {
     id: 'filhos',
     title: 'Chamados filhos',
-    description: 'Avalia automaticamente os chamados filhos com a mesma regra de 75%.',
+    description: 'Conclui chamados conformes e deixa não conformes para revisão do monitor.',
   },
 ];
 
@@ -31,6 +31,7 @@ function controlStatus(control: AIAutomationControl): string {
 }
 
 export default function AIAutomationsManagement({ currentUser }: { currentUser: User | null }) {
+  const staging = import.meta.env.VITE_SUPABASE_URL === 'https://secfejmccojxsvdntljx.supabase.co';
   const [controls, setControls] = useState<AIAutomationControl[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<AutomationName | null>(null);
@@ -58,7 +59,7 @@ export default function AIAutomationsManagement({ currentUser }: { currentUser: 
   }, [refresh]);
 
   const toggle = async (control: AIAutomationControl) => {
-    if (!canToggle) return;
+    if (!canToggle || staging) return;
     setBusy(control.automation);
     setError(null);
     try {
@@ -79,7 +80,9 @@ export default function AIAutomationsManagement({ currentUser }: { currentUser: 
         <div>
           <h3 id="automation-title" className="text-base font-bold text-brand-primary">Avaliações automáticas</h3>
           <p className="mt-1 max-w-2xl text-sm text-brand-muted">
-            Controle cada fila separadamente. Desligar impede novas avaliações; as já iniciadas continuam até terminar.
+            {staging
+              ? 'No staging, a avaliação com IA é apenas manual. As automações permanecem bloqueadas no servidor.'
+              : 'Controle cada fila separadamente. Desligar impede novas avaliações; as já iniciadas continuam até terminar.'}
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" icon={<RefreshCw className="h-4 w-4" />}
@@ -93,7 +96,7 @@ export default function AIAutomationsManagement({ currentUser }: { currentUser: 
       <div className="mt-5 divide-y divide-surface-border border-t border-surface-border">
         {AUTOMATIONS.map(automation => {
           const control = controls.find(item => item.automation === automation.id);
-          const status = control ? controlStatus(control) : 'Indisponível';
+          const status = staging ? 'Somente manual' : control ? controlStatus(control) : 'Indisponível';
           const capped = Boolean(control && control.max_evaluations !== null
             && control.executions_started >= control.max_evaluations);
           return (
@@ -112,7 +115,7 @@ export default function AIAutomationsManagement({ currentUser }: { currentUser: 
                 {capped && <p className="mt-2 text-xs text-functional-warning">O limite de avaliações deste ambiente foi atingido.</p>}
                 {control?.last_error && <p className="mt-2 text-xs text-functional-warning">Última falha de captura: {control.last_error}</p>}
               </div>
-              {canToggle && (
+              {canToggle && !staging && (
                 <Button type="button" size="sm" variant={control?.enabled ? 'outline' : 'primary'}
                   icon={control?.enabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   loading={busy === automation.id}
