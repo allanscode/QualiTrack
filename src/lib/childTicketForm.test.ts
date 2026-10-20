@@ -32,10 +32,10 @@ describe('ficha de ticket filho', () => {
   const child = { id: CHILD_TICKET_FORM_ID, active: true } as EvaluationForm;
   const regular = { id: 'regular', active: true } as EvaluationForm;
 
-  it('seleciona a rubrica própria para tickets filhos', () => {
+  it('usa uma ficha única de critérios para qualquer tipo de chamado filho', () => {
     const macroForm = { ...child, id: CHILD_FORM_IDS.nova_demanda };
-    expect(childTicketForm([regular, macroForm], 'nova_demanda')).toBe(macroForm);
-    expect(childTicketForm([regular, child], 'nova_demanda')).toBeUndefined();
+    expect(childTicketForm([regular, macroForm, child])).toBe(child);
+    expect(childTicketForm([regular, macroForm])).toBeUndefined();
   });
 
   it('corrige a ficha na reavaliação de monitoria antiga de filho', () => {

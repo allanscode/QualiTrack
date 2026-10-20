@@ -60,8 +60,8 @@ export function childEvaluationFormPrefill(evaluation: ChildTicketAiEvaluation) 
   };
 }
 
-export function childTicketForm(forms: EvaluationForm[], macroType?: ChildTicketMacroType): EvaluationForm | undefined {
-  return macroType ? forms.find(form => form.id === CHILD_FORM_IDS[macroType] && form.active !== false) : undefined;
+export function childTicketForm(forms: EvaluationForm[]): EvaluationForm | undefined {
+  return forms.find(form => form.id === CHILD_TICKET_FORM_ID && form.active !== false);
 }
 
 export function isChildTicketMonitoria(monitoria: Monitoria): boolean {
@@ -89,9 +89,5 @@ export function shouldUseChildFormForReevaluation(initialData: Monitoria | undef
 
 export function childFormForReevaluation(initialData: Monitoria | undefined, forms: EvaluationForm[]): EvaluationForm | undefined {
   if (!shouldUseChildFormForReevaluation(initialData)) return undefined;
-  const snapshot = initialData?.form_snapshot as { child_macro_type?: ChildTicketMacroType; child_ai_evaluation?: { detected_type?: ChildTicketMacroType } } | undefined;
-  const macroType = snapshot?.child_macro_type || snapshot?.child_ai_evaluation?.detected_type;
-  if (macroType) return childTicketForm(forms, macroType);
-  // Older child monitorias predate macro-specific rubrics.
-  return forms.find(form => form.id === CHILD_TICKET_FORM_ID && form.active !== false);
+  return childTicketForm(forms);
 }

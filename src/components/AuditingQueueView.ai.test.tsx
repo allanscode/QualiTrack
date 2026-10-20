@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuditingQueueView from './AuditingQueueView';
 import type { AuditingQueueTicket, ChildTicketAiEvaluation } from '../types';
 import type { ComponentProps } from 'react';
-import { CHILD_FORM_IDS } from '../lib/childTicketForm';
+import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 import { useMonitoriaFormState } from '../hooks/useMonitoriaFormState';
 import type { EvaluationForm, Monitoria } from '../types';
 import type { AIEvaluationDraft } from '../lib/aiDrafts';
@@ -104,7 +104,7 @@ describe('IA de chamados filhos', () => {
     const evaluation = { ...result, checks: [{ question_id: 'child-subject-preserved', rule: 'Assunto', passed: false, answer: 'NAO' as const, details: 'Assunto fora do padrão.' }] };
     const onStartAudit = vi.fn();
     const form: EvaluationForm = {
-      id: CHILD_FORM_IDS.nova_demanda, title: 'Filhos', description: '', team_id: '', active: true,
+      id: CHILD_TICKET_FORM_ID, title: 'Filhos', description: '', team_id: '', active: true,
       sections: [], createdBy: 'admin', created_at: '2026-10-07T00:00:00Z',
     };
     mocks.fetchQueueTickets.mockResolvedValue({ tickets: [{ ...ticket('179525'), already_audited: true, monitoria_id: 'old', child_evaluation: evaluation }], hasMore: false });
@@ -236,7 +236,7 @@ describe('revisão automática persistida dos filhos', () => {
   };
   const childDraft: AIEvaluationDraft = {
     id: 'child-draft', ticket_id: '777', created_by: 'gabriel', source_queue: 'filhos',
-    form_id: CHILD_FORM_IDS.nova_demanda, agent_id: 'agent', team_id: 'team', channel: 'email', guideline_ids: [],
+    form_id: CHILD_TICKET_FORM_ID, agent_id: 'agent', team_id: 'team', channel: 'email', guideline_ids: [],
     created_at: '2026-10-07T10:00:00Z', updated_at: '2026-10-07T10:00:00Z',
     ticket_snapshot: { ...ticket('777'), status: 'solved' },
     result: { score: 0, summary: 'Conferir filho.', strengths: [], improvements: [],
@@ -244,7 +244,7 @@ describe('revisão automática persistida dos filhos', () => {
       child_evaluation: childResult, automatic_child: true, dialogue: [] },
   };
   const childForm: EvaluationForm = {
-    id: CHILD_FORM_IDS.nova_demanda, title: 'Filhos', description: '', team_id: '', active: true,
+    id: CHILD_TICKET_FORM_ID, title: 'Filhos', description: '', team_id: '', active: true,
     sections: [{ id: 'section', title: 'Assunto', weight: 100, questions: [{ id: 'child-subject-preserved', text: 'Assunto preservado?', type: 'yes_no_na' }] }],
     createdBy: 'admin', created_at: '2026-10-07T00:00:00Z',
   };
@@ -263,7 +263,7 @@ describe('revisão automática persistida dos filhos', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abrir ficha de monitoria' }));
     await waitFor(() => expect(onStartAudit).toHaveBeenCalledTimes(1));
     const prefill = onStartAudit.mock.calls[0][0];
-    expect(prefill).toMatchObject({ ticket_id: '777', form_id: CHILD_FORM_IDS.nova_demanda, evaluated_id: 'agent',
+    expect(prefill).toMatchObject({ ticket_id: '777', form_id: CHILD_TICKET_FORM_ID, evaluated_id: 'agent',
       team_id: 'team', satisfaction_result: 'Sem pesquisa', child_evaluation: childResult, dialogue: [] });
     const { result: state } = renderHook(() => useMonitoriaFormState({ ...prefill, childAiEvaluation: prefill.child_evaluation } as Monitoria, [childForm], []));
     expect(state.current.scores['child-subject-preserved']).toBe('NAO');

@@ -1599,8 +1599,7 @@ export default function AuditingQueueView({
   const handleStartManualChildAudit = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
     const savedDraft = drafts[ticket.ticket_id];
-    const detectedType = ticket.child_macro_type || childResultFor(ticket)?.detected_type;
-    const selectedChildForm = childTicketForm(forms, detectedType === 'desconhecido' ? undefined : detectedType)
+    const selectedChildForm = childTicketForm(forms)
       || forms.find(form => form.id === CHILD_TICKET_FORM_ID && form.active !== false);
     if (!selectedChildForm) {
       toast.error('A ficha manual de chamados filhos não está disponível. Avise a Gestão da Qualidade.');
@@ -2002,10 +2001,9 @@ export default function AuditingQueueView({
   const handleStartChildAudit = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
     const savedDraft = drafts[ticket.ticket_id];
-    const detectedType = ticket.child_macro_type || childResultFor(ticket)?.detected_type;
-    const selectedChildForm = childTicketForm(forms, detectedType === 'desconhecido' ? undefined : detectedType);
+    const selectedChildForm = childTicketForm(forms);
     if (!selectedChildForm) {
-      toast.error('A ficha desta macro de chamado filho não está disponível ou o tipo não foi identificado. Avise a Gestão da Qualidade.');
+      toast.error('A ficha única de chamados filhos não está disponível. Avise a Gestão da Qualidade.');
       return;
     }
     let queueAssignment;
