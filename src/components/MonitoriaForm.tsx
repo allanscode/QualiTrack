@@ -1220,12 +1220,16 @@ export default function MonitoriaForm({
                             </div>}
                           </div>
                           {isChildFormId(header.form_id) ? (
-                            <label className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface-subtle px-3 py-2 text-xs font-bold text-brand-primary">
-                              <input type="checkbox" checked={scores[q.id] === 'SIM'}
-                                onChange={event => setScores(prev => ({ ...prev, [q.id]: event.target.checked ? 'SIM' : 'NAO' }))}
-                                disabled={isViewOnly} />
-                              Critério atendido
-                            </label>
+                            <div className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface-subtle p-1 text-xs font-bold text-brand-primary" role="group" aria-label="O critério atende ao procedimento do manual?">
+                              <span className="px-2 text-[10px] uppercase tracking-wider text-brand-muted">Atende?</span>
+                              {(['SIM', 'NAO'] as const).map(answer => (
+                                <button key={answer} type="button" onClick={() => !isViewOnly && setScores(prev => ({ ...prev, [q.id]: answer }))}
+                                  disabled={isViewOnly} aria-pressed={scores[q.id] === answer}
+                                  className={`rounded-md px-3 py-1.5 text-[10px] font-black transition-colors ${scores[q.id] === answer ? answer === 'SIM' ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/20 text-rose-700 dark:text-rose-300' : 'text-brand-muted hover:bg-surface-card hover:text-brand-primary'}`}>
+                                  {answer}
+                                </button>
+                              ))}
+                            </div>
                           ) : <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
                             {(['SIM', 'NAO', 'NA'] as const).map(opt => {
                               const isSelected = scores[q.id] === opt;

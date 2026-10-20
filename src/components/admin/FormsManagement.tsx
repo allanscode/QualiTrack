@@ -25,6 +25,7 @@ import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import CustomSelect from '../ui/CustomSelect';
+import { isChildFormId } from '../../lib/childTicketForm';
 
 interface FormsManagementProps {
   currentUser: User | null;
@@ -298,12 +299,15 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
   const totalWeight = useMemo(() => {
     return (editingForm.sections || []).reduce((acc, s) => acc + (Number(s.weight) || 0), 0);
   }, [editingForm.sections]);
+  const isChildForm = isChildFormId(editingForm.id);
 
   const isValid = useMemo(() => {
-    return totalWeight === 100 && 
-           !(editingForm.sections || []).some(s => (Number(s.weight) || 0) <= 0) &&
-           !(editingForm.sections || []).some(s => !s.questions || s.questions.length === 0);
-  }, [totalWeight, editingForm.sections]);
+    const hasCriteria = Boolean(editingForm.sections?.length)
+      && !(editingForm.sections || []).some(s => !s.questions || s.questions.length === 0);
+    if (isChildFormId(editingForm.id)) return hasCriteria;
+    return totalWeight === 100 &&
+      !(editingForm.sections || []).some(s => (Number(s.weight) || 0) <= 0) && hasCriteria;
+  }, [editingForm.id, editingForm.sections, totalWeight]);
 
   return (
     <div className="space-y-6">
@@ -385,7 +389,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
               <p className="text-xs text-brand-muted line-clamp-2 mb-4">{f.description}</p>
               <div className="flex items-center gap-4">
                 <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-300">{(f.sections || []).length} Pilares</span>
-                <span className="text-[10px] font-black uppercase text-slate-500 dark:text-emerald-400">Peso Total: {(f.sections || []).reduce((acc, s) => acc + (s.weight || 0), 0)}%</span>
+                {!isChildFormId(f.id) && <span className="text-[10px] font-black uppercase text-slate-500 dark:text-emerald-400">Peso Total: {(f.sections || []).reduce((acc, s) => acc + (s.weight || 0), 0)}%</span>}
               </div>
             </div>
           </Card>
@@ -405,10 +409,12 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                   <div>
                     <h3 className="text-lg font-black text-brand-primary tracking-tight uppercase">Editor de Formulário</h3>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${totalWeight === 100 ? 'bg-functional-success text-functional-success' : 'bg-functional-warning text-functional-warning'}`}>
-                        Peso Total: {totalWeight}% {totalWeight !== 100 && '(Incompleto)'}
-                      </span>
-                      <span className="text-brand-muted opacity-30">•</span>
+                      {!isChildForm && <>
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${totalWeight === 100 ? 'bg-functional-success text-functional-success' : 'bg-functional-warning text-functional-warning'}`}>
+                          Peso Total: {totalWeight}% {totalWeight !== 100 && '(Incompleto)'}
+                        </span>
+                        <span className="text-brand-muted opacity-30">•</span>
+                      </>}
                       <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">{editingForm.title || 'Novo Formulário'}</p>
                     </div>
                   </div>
@@ -511,7 +517,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                     <div className="flex items-center justify-between">
                       <div>
                         <h4 className="text-sm font-black text-brand-primary uppercase tracking-widest">Definição da Estrutura</h4>
-                        <p className="text-[10px] font-bold text-brand-muted uppercase mt-1">Crie os pilares de avaliação e distribua os pesos.</p>
+                        <p className="text-[10px] font-bold text-brand-muted uppercase mt-1">{isChildForm ? 'Critérios do manual, avaliados individualmente como sim ou não.' : 'Crie os pilares de avaliação e distribua os pesos.'}</p>
                       </div>
                     </div>
                     
@@ -530,7 +536,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                               />
                             </div>
                             <div className="flex items-center gap-4">
-                              <div className="flex flex-col items-end">
+                              {!isChildForm && <div className="flex flex-col items-end">
                                 <label className="uppercase tracking-widest text-[10px] font-black text-brand-muted opacity-80 dark:opacity-70 mb-1.5 block">Peso do Pilar</label>
                                 <div className="flex items-center gap-1.5">
                                   <input 
@@ -542,7 +548,7 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                                   />
                                   <span className="text-xs font-bold text-brand-muted">%</span>
                                 </div>
-                              </div>
+                              </div>}
                               <button onClick={() => removeSection(section.id)} className="p-2 rounded-lg hover:bg-surface-subtle text-brand-muted opacity-40 hover:opacity-100 hover:text-error transition-all cursor-pointer"><Trash2 className="w-4 h-4" /></button>
                             </div>
                           </div>
@@ -563,11 +569,11 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                                       onChange={e => updateQuestion(section.id, q.id, 'text', e.target.value)}
                                       placeholder="Ex: Utilizou a saudação padrão corretamente?"
                                     />
-                                    <div className="flex items-center gap-4 mt-1">
+                                    {!isChildForm && <div className="flex items-center gap-4 mt-1">
                                       <span className="text-[10px] font-bold text-brand-muted opacity-80 dark:opacity-60 uppercase tracking-wider">Peso no Pilar: {itemWeightInPilar}%</span>
                                       <span className="text-brand-muted opacity-30">•</span>
                                       <span className="text-[10px] font-bold text-brand-muted opacity-80 dark:opacity-60 uppercase tracking-wider">Impacto Global: {itemImpactInTotal}%</span>
-                                    </div>
+                                    </div>}
                                     {expandedDescriptions[q.id] && (
                                       <div className="mt-2.5">
                                         <textarea
@@ -679,6 +685,17 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                 {/* EXTREMA ESQUERDA: Status/Alerta do Peso */}
                 <div className="flex-1 flex items-center justify-start min-w-[200px]">
                   {(() => {
+                    if (isChildForm) return (editingForm.sections || []).some(s => !s.questions?.length) ? (
+                      <div className="flex items-center gap-2 text-error animate-pulse">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Cada pilar precisa de pelo menos um critério</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-success">
+                        <Check className="w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Critérios válidos</span>
+                      </div>
+                    );
                     if (totalWeight !== 100) return (
                       <div className="flex items-center gap-2 text-error animate-pulse">
                         <AlertTriangle className="w-4 h-4" />
