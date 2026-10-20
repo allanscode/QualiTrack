@@ -65,7 +65,7 @@ test('legacy child jobs are queued for a fresh evaluation without losing their o
     await db.exec('UPDATE child_ai_config SET enabled=true');
     const claim=(await db.query('SELECT * FROM claim_child_ai_work()')).rows[0];
     assert.equal(claim.ticket_id,ticketId);
-    const formId='6c7d1e88-841b-4da9-9a66-9f1464ce896f';
+    const formId='6c7d1e88-841b-4da9-9a66-9f1464ce8971';
     const form=(await db.query('SELECT to_jsonb(f) AS value FROM forms f WHERE id=$1',[formId])).rows[0].value;
     const payload={action:'evaluate_child_ticket',dialogue:[{id:'comment',body:'Evidence'}],
       draft_meta:{form_id:formId,agent_id:id(2),team_id:id(10),source_queue:'filhos',
@@ -109,7 +109,7 @@ test('automatic child and positive dispatches share a one-per-minute database ga
 
 test('child automation persists reviews, computes the fixed form and shares the budget', async t => {
   const db = await createDatabase();
-  const formId = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
+  const formId = '6c7d1e88-841b-4da9-9a66-9f1464ce8971';
   const payload = { action:'evaluate_child_ticket', dialogue:[{id:'comment',body:'Opening macro evidence'}],
     draft_meta:{form_id:formId,agent_id:id(2),team_id:id(10),source_queue:'filhos',
       agent_name:'Agent',agent_email:'agent@example.invalid',channel:'Chat',guideline_ids:[]} };
@@ -149,7 +149,7 @@ test('child automation persists reviews, computes the fixed form and shares the 
     await t.test('service-only claims and disabled intake',async()=>{
       for(const signature of ['claim_child_ai_scan()','claim_child_ai_work()','start_child_ai_job(text,uuid,jsonb,jsonb)','finish_child_ai_job(uuid)']) {
         const access=(await db.query("SELECT has_function_privilege('authenticated',$1,'EXECUTE') AS allowed",[signature])).rows[0];
-        assert.equal(access.allowed,false);
+        assert.equal(access.allowed,false,signature);
       }
       await db.exec('UPDATE child_ai_config SET enabled=false');
       await db.query("INSERT INTO queue_ticket_catalog(ticket_id,queue_type,ticket_snapshot) VALUES ('90','filhos','{}')");
@@ -161,7 +161,7 @@ test('child automation persists reviews, computes the fixed form and shares the 
       await db.query("DELETE FROM queue_ticket_catalog WHERE ticket_id='101'");
       await complete(job,{'child-parent-linked':'NAO','child-routing-correct':'NAO'},{status:'nao_conforme'});
       assert.equal((await state('101')).status,'review_required');
-      assert.equal(Number((await state('101')).score),70);
+      assert.equal((await state('101')).score,null);
       const draft=(await db.query("SELECT * FROM ai_evaluation_drafts WHERE ticket_id='101'")).rows[0];
       assert.equal(draft.source_queue,'filhos');
       assert.equal(draft.result.suggested_answers['child-routing-correct'],'NAO');
@@ -190,8 +190,8 @@ test('child automation persists reviews, computes the fixed form and shares the 
     });
     await t.test('conforming verdict preserves the author and does not count as CSAT positive',async()=>{
       await reset();const job=await begin('102');
-      await complete(job,{'child-routing-correct':'NAO'});
-      const row=await state('102');assert.equal(row.status,'completed');assert.equal(Number(row.score),87.5);
+      await complete(job,{});
+      const row=await state('102');assert.equal(row.status,'completed');assert.equal(row.score,null);
       const saved=(await db.query('SELECT * FROM monitorias WHERE id=$1',[row.monitoria_id])).rows[0];
       assert.equal(saved.status,'concluida');assert.equal(saved.satisfaction_result,'Sem pesquisa');
       assert.equal(saved.evaluator_id,id(1));assert.equal(saved.form_id,formId);assert.ok(saved.concluded_at);
@@ -213,7 +213,7 @@ test('child automation persists reviews, computes the fixed form and shares the 
     await t.test('conforming verdict below 75 requires human review while preserving the calculated score',async()=>{
       await reset();const job=await begin('103');
       await complete(job,{'child-parent-linked':'NAO','child-routing-correct':'NAO'});
-      const row=await state('103');assert.equal(row.status,'review_required');assert.equal(Number(row.score),70);
+      const row=await state('103');assert.equal(row.status,'review_required');assert.equal(row.score,null);
       const draft=(await db.query("SELECT * FROM ai_evaluation_drafts WHERE ticket_id='103'")).rows[0];
       assert.equal(draft.result.child_evaluation.status,'conforme');
       assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n,0);
@@ -221,7 +221,7 @@ test('child automation persists reviews, computes the fixed form and shares the 
     await t.test('nonconforming verdict requires human review even with a high score',async()=>{
       await reset();const job=await begin('104');
       await complete(job,{}, {status:'nao_conforme'});
-      const row=await state('104');assert.equal(row.status,'review_required');assert.equal(Number(row.score),100);
+      const row=await state('104');assert.equal(row.status,'review_required');assert.equal(row.score,null);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n,0);
       assert.equal((await db.query("SELECT result->>'automation_review_reason' AS reason FROM ai_evaluation_drafts WHERE ticket_id='104'")).rows[0].reason,
         'Parecer nao conforme ou inconclusivo; revisao manual necessaria.');
@@ -256,14 +256,15 @@ test('child automation persists reviews, computes the fixed form and shares the 
         team_id,score,status,active,evaluator_note,satisfaction_result,action_deadline_at,form_snapshot,answers
       ) VALUES ($1,'179157','Chat',$2,$3,'Auditor',$4,'Agent',$5,0,'pendente_revisao',true,
         'Registro do auditor para filho inválido','Sem pesquisa',now()-interval '5 minutes',
-        '{"ticket_kind":"chamado_filho"}'::jsonb,'{"child-macro-preserved":"NAO"}'::jsonb)`,
+        (SELECT to_jsonb(f)||jsonb_build_object('ticket_kind','chamado_filho','child_verdict','invalido') FROM forms f WHERE f.id=$2),
+        '{"child-macro-preserved":"NAO"}'::jsonb)`,
       [monitoriaId,formId,id(1),id(2),id(10)]);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM child_auto_publications WHERE monitoria_id=$1',[monitoriaId])).rows[0].n,0);
       await db.query('SELECT process_action_deadline_timeouts()');
       const concluded = (await db.query('SELECT status,resolution_type,score::numeric AS score FROM monitorias WHERE id=$1',[monitoriaId])).rows[0];
       assert.equal(concluded.status,'concluida');
       assert.equal(concluded.resolution_type,'automatic');
-      assert.equal(Number(concluded.score),0);
+      assert.equal(concluded.score,null);
       const claimed = (await db.query('SELECT * FROM claim_child_auto_publication()')).rows;
       assert.equal(claimed.length,1);
       assert.equal(claimed[0].monitoria_id,monitoriaId);

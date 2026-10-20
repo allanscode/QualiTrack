@@ -202,7 +202,9 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       await db.exec("SET request.jwt.claim.role='authenticated'");
       await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [id(5)]);
       await db.query("SELECT act_on_monitoria_as_support_manager($1,'contestar','Solicito reavaliação', '[]'::jsonb)", [saved.id]);
-      assert.equal((await db.query('SELECT status FROM monitorias WHERE id=$1', [saved.id])).rows[0].status, 'em_contestacao');
+      assert.equal((await db.query('SELECT status FROM monitorias WHERE id=$1', [saved.id])).rows[0].status, 'aguardando_gestor_qualidade');
+      await db.exec("SET request.jwt.claim.role='service_role'");
+      await db.query("SELECT set_config('request.jwt.claim.sub','',false)");
       await db.exec("SET request.jwt.claim.role='service_role'");
       await db.exec("SELECT set_config('request.jwt.claim.sub','',false)");
     });

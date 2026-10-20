@@ -63,14 +63,16 @@ test('clean Supabase install: exact generated SQL, no demo data, approved system
         if (row.relname === 'forms') continue;
         assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.${row.relname}`)).rows[0].n,0,row.relname);
       }
-      assert.deepEqual((await db.query(`SELECT id::text, title, created_by, active,
-        jsonb_array_length(sections) AS section_count FROM public.forms`)).rows, [{
-        id: '6c7d1e88-841b-4da9-9a66-9f1464ce896f',
-        title: 'Ficha de Monitoria de Ticket Filho',
-        created_by: null,
-        active: true,
-        section_count: 3,
-      }]);
+      const childForms = (await db.query(`SELECT id::text, title, created_by, active,
+        jsonb_array_length(sections) AS section_count FROM public.forms ORDER BY id`)).rows;
+      assert.deepEqual(childForms.map(form => form.id), [
+        '6c7d1e88-841b-4da9-9a66-9f1464ce896f',
+        '6c7d1e88-841b-4da9-9a66-9f1464ce8970',
+        '6c7d1e88-841b-4da9-9a66-9f1464ce8971',
+        '6c7d1e88-841b-4da9-9a66-9f1464ce8972',
+        '6c7d1e88-841b-4da9-9a66-9f1464ce8973',
+      ]);
+      assert.ok(childForms.every(form => form.created_by === null && form.active && form.section_count === 3));
       assert.equal((await db.query('SELECT count(*)::int AS n FROM auth.users')).rows[0].n,0);
       assert.equal((await db.query("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name IN ('password','reset_token','team_ids','team_id')")).rows[0].n,0);
       assert.ok(manifest.every(x => /^[a-f0-9]{64}$/.test(x.sha256)));
