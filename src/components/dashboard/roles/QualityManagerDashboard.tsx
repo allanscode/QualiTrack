@@ -343,7 +343,7 @@ export default function QualityManagerDashboard({
     monitorias: any[];
   } | null>(null);
 
-  const { monitorias, allMonitorias = [], filters = { startDate: '', endDate: '' }, users, teams, forms, dissatisfactionFields, aggregates } = dashboardData;
+  const { monitorias, allMonitorias = [], qualityManagerQueue = [], filters = { startDate: '', endDate: '' }, users, teams, forms, dissatisfactionFields, aggregates } = dashboardData;
   const { config, saveConfig, getLevelForScore } = useQualityConfig();
 
   const [hoverMedia, setHoverMedia] = useState(false);
@@ -376,8 +376,8 @@ export default function QualityManagerDashboard({
 
   const pendingMyActionsList = useMemo(() => {
     if (isCustomizing) return [];
-    return monitorias.filter((m: any) => m.status === 'aguardando_gestor_qualidade');
-  }, [isCustomizing, monitorias]);
+    return qualityManagerQueue;
+  }, [isCustomizing, qualityManagerQueue]);
 
   const pendingMyActions = isCustomizing ? 1 : pendingMyActionsList.length;
 

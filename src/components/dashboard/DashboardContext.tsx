@@ -11,6 +11,7 @@ import { useQualityConfig } from '../../lib/useQualityConfig';
 import { getRemainingBusinessSeconds } from '../../lib/businessHours';
 import { getPresetDateRange } from '../../lib/dashboardDatePresets';
 import { getTrendWindowStart } from '../../lib/performanceTrend';
+import { QUALITY_MANAGER_ACTION_STATUSES, selectQualityManagerActions } from '../../lib/qualityManagerQueue';
 
 export interface DashboardFilters {
   startDate: string;
@@ -102,6 +103,7 @@ export interface DashboardState {
   filters: DashboardFilters;
   monitorias: Monitoria[];
   allMonitorias: Monitoria[];
+  qualityManagerQueue: Monitoria[];
   helpdeskSubmissions: HelpdeskSubmission[];
   users: User[];
   teams: Team[];
@@ -198,6 +200,7 @@ export function DashboardProvider({
   const [globalAvg, setGlobalAvg] = useState(cached?.globalAvg ?? 0);
   const [aggregates, setAggregates] = useState<DashboardAggregates | null>(null);
   const [deadlineMonitorias, setDeadlineMonitorias] = useState<Monitoria[]>([]);
+  const [qualityManagerQueue, setQualityManagerQueue] = useState<Monitoria[]>([]);
   const [deadlineReady, setDeadlineReady] = useState(!['admin', 'qualidade', 'gestor_qualidade'].includes(dashboardRole));
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
@@ -491,6 +494,34 @@ export function DashboardProvider({
     return () => { cancelled = true; };
   }, [user, loading]);
 
+  // The quality manager's decision queue must not depend on the dashboard date range.
+  useEffect(() => {
+    if (!user || user.role !== 'gestor_qualidade') {
+      setQualityManagerQueue([]);
+      return;
+    }
+    setQualityManagerQueue([]);
+    let cancelled = false;
+    const applyRows = (rows: Monitoria[]) => {
+      if (!cancelled) setQualityManagerQueue(selectQualityManagerActions(rows));
+    };
+    if (isMockMode || !supabase) {
+      void mockDb.get('monitorias').then(({ data }) => applyRows((data || []) as Monitoria[]));
+    } else {
+      void supabase.from('monitorias').select(DASHBOARD_MONITORIA_COLUMNS)
+        .eq('active', true).in('status', [...QUALITY_MANAGER_ACTION_STATUSES])
+        .order('created_at', { ascending: false })
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('[Dashboard] Falha ao carregar fila da Gestão da Qualidade:', error);
+            return;
+          }
+          applyRows((data || []) as unknown as Monitoria[]);
+        });
+    }
+    return () => { cancelled = true; };
+  }, [user, refreshTrigger]);
+
   // Metrics and rankings are computed over the filtered, authorized set in
   // PostgreSQL. Keep MockDb's local calculations for offline development.
   useEffect(() => {
@@ -701,6 +732,7 @@ export function DashboardProvider({
     filters,
     monitorias,
     allMonitorias,
+    qualityManagerQueue,
     helpdeskSubmissions,
     users: staticData.users,
     teams: staticData.teams,
@@ -720,6 +752,7 @@ export function DashboardProvider({
     filters,
     monitorias,
     allMonitorias,
+    qualityManagerQueue,
     helpdeskSubmissions,
     staticData.users,
     staticData.teams,
