@@ -4,7 +4,7 @@ import { m, useReducedMotion } from 'motion/react';
 
 export function PageSkeleton({ dashboard = false }: { dashboard?: boolean }) {
   const reduceMotion = useReducedMotion();
-  const block = dashboard ? 'dashboard-skeleton-block rounded-lg bg-brand-muted/15' : 'rounded-lg bg-brand-muted/15 motion-safe:animate-pulse';
+  const block = dashboard ? 'dashboard-skeleton-block rounded-lg bg-brand-muted/25' : 'rounded-lg bg-brand-muted/15 motion-safe:animate-pulse';
   const group = {
     hidden: {},
     show: { transition: { staggerChildren: reduceMotion ? 0 : 0.075, delayChildren: reduceMotion ? 0 : 0.04 } },

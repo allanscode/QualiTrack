@@ -8,18 +8,19 @@
 .dashboard-skeleton-block::after {
   content: '';
   position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 25%, rgb(255 255 255 / 0.5) 50%, transparent 75%);
+  inset: 0 auto 0 -55%;
+  width: 55%;
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.72) 50%, transparent);
   transform: translateX(-100%);
 }
 
 .dark .dashboard-skeleton-block::after {
-  background: linear-gradient(100deg, transparent 25%, rgb(255 255 255 / 0.28) 50%, transparent 75%);
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.5) 50%, transparent);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .dashboard-skeleton-block::after {
-    animation: dashboard-skeleton-shimmer 1.3s ease-in-out infinite;
+.dashboard-skeleton-block::after {
+    animation: dashboard-skeleton-shimmer 1.15s cubic-bezier(0.3, 0.1, 0.7, 0.9) infinite;
   }
   .dashboard-loading-icon {
     animation: dashboard-loading-spin 1s linear infinite;
@@ -33,7 +34,7 @@
 }
 
 @keyframes dashboard-skeleton-shimmer {
-  to { transform: translateX(100%); }
+  to { transform: translateX(360%); }
 }
 
 @keyframes dashboard-loading-spin {
@@ -729,8 +730,8 @@ html.dark body {
   isolation: isolate;
   background-color: var(--surface-bg);
   background-image:
-    radial-gradient(ellipse at 10% 0%, color-mix(in srgb, var(--brand-accent) 8%, transparent), transparent 44%),
-    radial-gradient(ellipse at 92% 100%, color-mix(in srgb, var(--brand-highlight) 7%, transparent), transparent 42%);
+    radial-gradient(ellipse at 10% 0%, color-mix(in srgb, var(--brand-accent) 13%, transparent), transparent 48%),
+    radial-gradient(ellipse at 92% 100%, color-mix(in srgb, var(--brand-highlight) 11%, transparent), transparent 46%);
 }
 .qt-sidebar-glass,
 .qt-topbar-glass,
@@ -743,7 +744,7 @@ html.dark body {
 .qt-topbar-glass { background-color: color-mix(in srgb, var(--surface-bg) 90%, transparent); }
 .qt-mobile-nav-glass { background-color: color-mix(in srgb, var(--surface-card) 94%, transparent); }
 .qt-glass-card {
-  background-color: color-mix(in srgb, var(--surface-card) 82%, transparent);
+  background-color: color-mix(in srgb, var(--surface-card) 72%, transparent);
   backdrop-filter: blur(18px) saturate(1.08);
   -webkit-backdrop-filter: blur(18px) saturate(1.08);
   border-color: color-mix(in srgb, var(--surface-border) 78%, var(--brand-highlight) 22%);
