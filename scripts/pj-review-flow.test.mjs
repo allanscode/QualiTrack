@@ -259,6 +259,21 @@ test('PJ manager approval and contestation go directly to Quality', async () => 
       'reviewer view does not grant direct base-table access to PJ monitorias');
     await assert.rejects(asUser(2, () => db.query('SELECT public.review_pj_monitoria($1,$2,$3)',
       [id(36), 'rejected', 'Discordo do parecer PJ'])), /revisão de Victor foi encerrada/i);
+    const childPjRouteMigration = (await discoverFreshMigrations())
+      .find(migration => migration.name === '20261020202000_child_tickets_bypass_pj_score_route.sql');
+    assert.ok(childPjRouteMigration);
+    await db.exec(childPjRouteMigration.sql);
+    await db.query('INSERT INTO public.forms(id,title,created_by) VALUES ($1,$2,$3)',
+      ['6c7d1e88-841b-4da9-9a66-9f1464ce896f', 'Ticket Filho', id(6)]);
+    await db.query(`INSERT INTO public.monitorias
+      (id,form_id,evaluated_id,evaluator_id,team_id,score,status,
+       question_observations,form_snapshot,applied_config)
+      VALUES ($1,'6c7d1e88-841b-4da9-9a66-9f1464ce896f',$2,$3,$4,NULL,
+        'aguardando_gestor_suporte','{}','{"ticket_kind":"chamado_filho"}','{}')`,
+      [id(38), id(3), id(6), id(10)]);
+    assert.deepEqual((await db.query('SELECT score,status,pj_review_required FROM public.monitorias WHERE id=$1', [id(38)])).rows[0], {
+      score: null, status: 'aguardando_gestor_suporte', pj_review_required: false,
+    });
   } finally {
     await db.close();
   }

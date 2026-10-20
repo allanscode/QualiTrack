@@ -81,11 +81,23 @@ describe('cadeia paga GLM e Gemma', () => {
     expect(execute).toHaveBeenCalledTimes(4);
   });
 
-  it.each([400, 401, 403])('erro global HTTP %i interrompe a cadeia', async status => {
+  it.each([400, 401])('erro global HTTP %i interrompe a cadeia', async status => {
     const error = await httpAIError('openrouter', targets[0].model, new Response('segredo', { status }));
     const execute = vi.fn(async () => { throw error; });
     await expect(runAIModelChain({ targets, execute, sleep: noSleep })).rejects.toMatchObject({ httpStatus: status });
     expect(execute).toHaveBeenCalledTimes(1);
+    expect(error.message).not.toContain('segredo');
+  });
+
+  it('permite fallback para outro modelo após HTTP 403 específico do endpoint', async () => {
+    const error = await httpAIError('openrouter', targets[0].model, new Response('segredo', { status: 403 }));
+    const execute = vi.fn(async (target: AIModelTarget) => {
+      if (target.model === targets[0].model) throw error;
+      return { value: 'Gemma concluiu' };
+    });
+    const result = await runAIModelChain({ targets, execute, sleep: noSleep });
+    expect(result.model).toBe(targets[1].model);
+    expect(execute).toHaveBeenCalledTimes(3);
     expect(error.message).not.toContain('segredo');
   });
 

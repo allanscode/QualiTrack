@@ -104,6 +104,27 @@ describe('useMonitoriaSave', () => {
     expect(payload.action_deadline_at).toBeTruthy();
   });
 
+  it('não encaminha ticket filho para revisão PJ por não possuir score', async () => {
+    const onSaved = vi.fn();
+    db.insert.mockImplementation(() => ({ select: () => ({ single: async () => ({ data: { id: 'monitoria-filho' }, error: null }) }) }));
+    const deps = pjDeps(0, onSaved);
+    deps.header.form_id = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
+    deps.scores = { 'child-question': 'NAO' };
+    deps.selectedForm = { id: deps.header.form_id, sections: [{ questions: [{ id: 'child-question' }] }] } as never;
+
+    const { result } = renderHook(() => useMonitoriaSave(deps));
+    act(() => result.current.handleSave());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-filho', 'aguardando_gestor_suporte'));
+    const payload = db.insert.mock.calls[0][0][0];
+    expect(payload).toMatchObject({
+      score: null,
+      child_verdict: 'invalido',
+      status: 'aguardando_gestor_suporte',
+      pj_review_required: false,
+    });
+  });
+
   it.each([
     ['reavaliação', true, false],
     ['edição administrativa', false, true],

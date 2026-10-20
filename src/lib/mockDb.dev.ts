@@ -56,6 +56,7 @@ const INITIAL_DATA: {
   user_preferences: Array<{ user_id: string; preferences: UserPreferences; updated_at: string }>;
   agent_feedbacks: AgentFeedback[];
   pj_review_settings: Array<{ id: string; reviewer_id: string }>;
+  system_maintenance: Array<{ id: string; enabled: boolean; blocked_roles: string[]; expected_duration_minutes: number; expected_return_at: string | null; updated_by?: string }>;
 } = {
   users: [
     {
@@ -324,6 +325,7 @@ const INITIAL_DATA: {
   ],
   access_requests: [],
   pj_review_settings: [{ id: 'pj', reviewer_id: VICTOR_ID }],
+  system_maintenance: [{ id: '1', enabled: false, blocked_roles: [], expected_duration_minutes: 60, expected_return_at: null }],
   quality_configs: [],
   dissatisfaction_fields: [
     {

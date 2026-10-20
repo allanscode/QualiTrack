@@ -22,7 +22,7 @@ export function detectChildMacroType(tags: readonly string[], subject: string): 
 }
 
 export function childVerdict(answers: Record<string, 'SIM' | 'NAO' | 'NA'>, form: EvaluationForm | undefined): 'valido' | 'invalido' | null {
-  const questions = form?.sections.flatMap(section => section.questions) || [];
+  const questions = form?.sections?.flatMap(section => section.questions) || [];
   if (!questions.length) return null;
   return questions.every(question => answers[question.id] === 'SIM') ? 'valido' : 'invalido';
 }
@@ -65,8 +65,16 @@ export function childTicketForm(forms: EvaluationForm[]): EvaluationForm | undef
 }
 
 export function isChildTicketMonitoria(monitoria: Monitoria): boolean {
+  const snapshot = monitoria.form_snapshot as (EvaluationForm & {
+    ticket_kind?: string;
+    automation?: string;
+    child_verdict?: string;
+  }) | undefined;
   return isChildFormId(monitoria.form_id)
-    || (monitoria.form_snapshot as EvaluationForm & { ticket_kind?: string } | undefined)?.ticket_kind === 'chamado_filho';
+    || snapshot?.ticket_kind === 'chamado_filho'
+    || snapshot?.automation === 'child_ticket'
+    || snapshot?.child_verdict === 'valido'
+    || snapshot?.child_verdict === 'invalido';
 }
 
 export function legacyChildNoteVerdict(

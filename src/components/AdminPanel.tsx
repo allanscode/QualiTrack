@@ -19,7 +19,8 @@ import {
   Brain,
   Mail,
   RotateCcw,
-  Bell
+  Bell,
+  Wrench
 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -34,8 +35,9 @@ import EmailConfigManagement from './admin/EmailConfigManagement';
 import RemovedMonitoriasManagement from './admin/RemovedMonitoriasManagement';
 import DeliveryDashboard from './admin/DeliveryDashboard';
 import NotificationSettingsManagement from './admin/NotificationSettingsManagement';
+import MaintenanceModeManagement from './admin/MaintenanceModeManagement';
 
-export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub' | 'emails' | 'notifications' | 'removed_monitorias' | 'deliveries';
+export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub' | 'emails' | 'notifications' | 'removed_monitorias' | 'deliveries' | 'maintenance';
 
 interface TabItem {
   key: AdminSubTab;
@@ -56,6 +58,7 @@ const ALL_ADMIN_TABS: TabItem[] = [
   { key: 'notifications', label: 'Notificações', icon: Bell },
   { key: 'removed_monitorias', label: 'Monitorias removidas', icon: RotateCcw },
   { key: 'deliveries', label: 'Entregas Zendesk', icon: BarChart3 },
+  { key: 'maintenance', label: 'Manutenção', icon: Wrench },
 ];
 
 function getAvailableTabs(role?: string): TabItem[] {
@@ -223,6 +226,7 @@ export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPa
           )}
           {activeSubTab === 'removed_monitorias' && currentUser?.role === 'admin' && <RemovedMonitoriasManagement currentUser={currentUser} />}
           {activeSubTab === 'deliveries' && currentUser?.role === 'admin' && <DeliveryDashboard />}
+          {activeSubTab === 'maintenance' && currentUser?.role === 'admin' && currentUser && <MaintenanceModeManagement currentUser={currentUser} />}
         </m.div>
       </AnimatePresence>
     </div>

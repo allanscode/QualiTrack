@@ -70,7 +70,7 @@ describe('useMonitoriaFormState', () => {
 
   it('abre reavaliação de filho antigo na ficha própria sem reaproveitar respostas incompatíveis', () => {
     const oldForm = { id: 'regular', title: 'Atendimento', sections: [] } as unknown as EvaluationForm;
-    const childForm = { id: '6c7d1e88-841b-4da9-9a66-9f1464ce8970', title: 'Ticket Filho', sections: [] } as unknown as EvaluationForm;
+    const childForm = { id: '6c7d1e88-841b-4da9-9a66-9f1464ce896f', title: 'Ticket Filho', sections: [] } as unknown as EvaluationForm;
     const initialData = {
       form_id: oldForm.id,
       form_snapshot: { ...oldForm, ticket_kind: 'chamado_filho', child_macro_type: 'nova_demanda' },

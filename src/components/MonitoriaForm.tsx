@@ -56,7 +56,7 @@ import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import { useMonitoriaDraft } from '../hooks/useMonitoriaDraft';
 import { getEvaluationOutcome } from '../lib/domainRules';
 import { awaitsFinalPositiveDecision, canPublishSavedMonitoria } from '../lib/helpdeskPublicationGate';
-import { childVerdict, isChildFormId, legacyChildNoteVerdict } from '../lib/childTicketForm';
+import { childVerdict, isChildFormId, isChildTicketMonitoria, legacyChildNoteVerdict } from '../lib/childTicketForm';
 import { isVerifiedTicketGroupPair } from '../lib/ticketTeam';
 import { getSavedZendeskTicketFields, normalizeZendeskTicketFields } from '../lib/monitoriaTicketFields';
 import Card from './ui/Card';
@@ -101,9 +101,7 @@ export default function MonitoriaForm({
     (initialData as any)?.aiEvaluation ||
     (initialData as any)?.form_snapshot?.ai_evaluation;
 
-  const isChildEvaluation = isChildFormId(initialData?.form_id)
-    || (initialData?.form_snapshot as { ticket_kind?: string } | undefined)?.ticket_kind === 'chamado_filho';
-  const childAiEval: ChildTicketAiEvaluation | undefined = isChildEvaluation
+  const childAiEval: ChildTicketAiEvaluation | undefined = (initialData ? isChildTicketMonitoria(initialData) : false)
     ? ((initialData as any)?.childAiEvaluation || (initialData as any)?.form_snapshot?.child_ai_evaluation)
     : undefined;
 
@@ -192,6 +190,7 @@ export default function MonitoriaForm({
     qualityFieldsToShow,
     handleCheckboxChange,
   } = useMonitoriaFormState(initialData, forms, dissatisfactionFields);
+  const isChildEvaluation = initialData ? isChildTicketMonitoria(initialData) : isChildFormId(header.form_id);
   const ticketFields = ticketFieldContext.ticketId === header.ticket_id?.trim() ? ticketFieldContext.fields : [];
   const ticketFieldSource = ticketFieldContext.ticketId === header.ticket_id?.trim() ? ticketFieldContext.source : 'current';
   const [lookedUpTicketGroup, setLookedUpTicketGroup] = useState<{

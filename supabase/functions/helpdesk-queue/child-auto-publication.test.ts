@@ -7,7 +7,7 @@ import { CHILD_AUDITED_TAG } from './queue-search.ts';
 const work = { monitoria_id: 'monitoria-child-1', ticket_id: '171437', lease_id: 'lease-child-1' };
 const monitoria = {
   id: work.monitoria_id, ticket_id: work.ticket_id, form_id: CHILD_TICKET_FORM_ID,
-  score: 53, status: 'concluida', active: true, evaluator_id: 'auditor-1',
+  score: null, child_verdict: 'valido', status: 'concluida', active: true, evaluator_id: 'auditor-1',
   evaluator_note: 'Registro completo',
   form_snapshot: { automation: 'child_ticket', child_ai_evaluation: { status: 'conforme' } },
 };
@@ -93,6 +93,7 @@ describe('automatic child publication', () => {
       id: '5db70d8a-77fc-4dea-940a-e6eaf9b822c8',
       ticket_id: '179157',
       score: 0,
+      child_verdict: 'invalido',
       status: 'concluida',
       evaluator_note: 'Chamado filho reprovado após revisão.',
       form_snapshot: { ticket_kind: 'chamado_filho' },

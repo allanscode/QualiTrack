@@ -53,6 +53,7 @@ interface AuthContextType {
   theme: ReturnType<typeof useTheme>['theme'];
   setTheme: ReturnType<typeof useTheme>['setTheme'];
   loadingPreferences: boolean;
+  maintenanceNotice: { active: boolean; expectedReturnAt: string | null } | null | undefined;
 }
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
@@ -135,6 +136,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReconnecting, setIsReconnecting] = useState(false);
 
   const [loadingPreferences, setLoadingPreferences] = useState(false);
+  const [maintenanceNotice, setMaintenanceNotice] = useState<{ active: boolean; expectedReturnAt: string | null } | null | undefined>(undefined);
+
+  const refreshMaintenanceNotice = useCallback(async (role?: UserRole) => {
+    if (!role || role === 'admin') { setMaintenanceNotice(null); return; }
+    try {
+      let row: { enabled?: boolean; blocked_roles?: string[]; expected_return_at?: string | null } | null = null;
+      if (isMockMode) {
+        const { data } = await mockDb.get('system_maintenance');
+        row = data?.[0] ?? null;
+      } else {
+        const sb = supabase ?? assertSupabase();
+        const { data, error } = await sb.from('system_maintenance').select('enabled, blocked_roles, expected_return_at').eq('id', 1).maybeSingle();
+        if (error) throw error;
+        row = data;
+      }
+      const isActive = Boolean(row?.enabled && row.blocked_roles?.includes(role)
+        && (!row.expected_return_at || new Date(row.expected_return_at).getTime() > Date.now()));
+      setMaintenanceNotice(isActive ? { active: true, expectedReturnAt: row?.expected_return_at ?? null } : null);
+    } catch (error) {
+      // Falha de leitura não deve impedir autenticação; a política no banco continua protegida.
+      console.warn('[Auth] Não foi possível consultar o modo de manutenção.');
+      setMaintenanceNotice(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!userData) { setMaintenanceNotice(null); return; }
+    setMaintenanceNotice(undefined);
+    void refreshMaintenanceNotice(userData.role);
+    const timer = window.setInterval(() => void refreshMaintenanceNotice(userData.role), 30_000);
+    return () => window.clearInterval(timer);
+  }, [userData?.id, userData?.role, refreshMaintenanceNotice]);
 
   // --- Sync activeTab with localStorage and URL hash ---
   useEffect(() => {
@@ -809,6 +842,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       theme,
       setTheme,
       loadingPreferences,
+      maintenanceNotice,
     }}>
       {children}
     </AuthContext.Provider>

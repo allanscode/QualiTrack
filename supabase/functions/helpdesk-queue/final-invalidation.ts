@@ -78,16 +78,19 @@ export async function processFinalPositiveInvalidation(
     checkRead(read, 'consultar o ticket');
     const ticket = (await read.json() as { ticket?: Ticket }).ticket;
     verifyTicket(ticket, work.ticket_id);
-    if (['closed', 'archived'].includes(ticket.status!.toLowerCase())) {
-      return await finish('blocked', 'Ticket fechado/arquivado no Zendesk: a decisão final permanece salva.');
+    const isClosed = ticket.status!.toLowerCase() === 'closed';
+    if (ticket.status!.toLowerCase() === 'archived') {
+      return await finish('blocked', 'Ticket arquivado no Zendesk: a decisão final permanece salva.');
     }
-    if (!['new', 'open', 'pending', 'hold', 'solved'].includes(ticket.status!.toLowerCase())) {
+    if (!['new', 'open', 'pending', 'hold', 'solved', 'closed'].includes(ticket.status!.toLowerCase())) {
       return await finish('blocked', 'Status do ticket não reconhecido.');
     }
     const marker = `Registro do Auditor da monitoria #${work.monitoria_id}`;
     const commentPath = `/api/v2/tickets/${work.ticket_id}/comments.json`;
     let nextCommentPage: string | null = `https://${subdomain}.zendesk.com${commentPath}?sort_order=desc&per_page=100`;
-    let alreadyPublished = Boolean(manualReceipt);
+    // Closed Zendesk tickets can receive field-only updates, not new comments.
+    // Reconcile their final evaluation fields without attempting comment writes.
+    let alreadyPublished = Boolean(manualReceipt) || isClosed;
     for (let pageNumber = 0; !alreadyPublished && nextCommentPage && pageNumber < 10; pageNumber++) {
       const url = new URL(nextCommentPage);
       if (url.origin !== `https://${subdomain}.zendesk.com` || url.pathname !== commentPath) {

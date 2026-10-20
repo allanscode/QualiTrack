@@ -34,6 +34,21 @@ describe('final positive invalidation worker', () => {
     expect(await processFinalPositiveInvalidation(db, () => undefined, fetcher)).toEqual({ enabled: false, processed: 0 });
     expect(rpc).not.toHaveBeenCalled();
   });
+  it('reconciles the final evaluation fields on a closed ticket without posting a comment', async () => {
+    const { db } = database();
+    const closedTicket = { ...ticket, status: 'closed' };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(response({ ticket: closedTicket }))
+      .mockResolvedValueOnce(response({ ticket: { ...closedTicket, custom_fields: fields, updated_at: '2026-10-07T12:01:00Z' } }));
+
+    expect(await processFinalPositiveInvalidation(db, env, fetcher)).toMatchObject({ status: 'applied' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(String(fetcher.mock.calls[1][0])).toContain('/tickets/123.json');
+    const payload = JSON.parse(String(fetcher.mock.calls[1][1]?.body));
+    expect(payload.ticket).toMatchObject({ custom_fields: fields, safe_update: true, updated_stamp: closedTicket.updated_at });
+    expect(payload.ticket.comment).toBeUndefined();
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/comments.json'))).toBe(false);
+  });
   it('publishes the saved auditor record as an internal comment only after final authorization', async () => {
     const { db, rpc } = database();
     const fetcher = vi.fn()

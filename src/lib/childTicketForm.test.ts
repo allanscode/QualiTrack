@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChildTicketAiEvaluation, EvaluationForm, Monitoria } from '../types';
-import { CHILD_FORM_IDS, CHILD_TICKET_FORM_ID, childEvaluationFormPrefill, childTicketForm, legacyChildNoteVerdict, shouldUseChildFormForReevaluation } from './childTicketForm';
+import { CHILD_FORM_IDS, CHILD_TICKET_FORM_ID, childEvaluationFormPrefill, childTicketForm, isChildTicketMonitoria, legacyChildNoteVerdict, shouldUseChildFormForReevaluation } from './childTicketForm';
 
 describe('ficha de ticket filho', () => {
   it('preenche resultados por ID e preserva NA sem converter em reprovação', () => {
@@ -52,9 +52,22 @@ describe('ficha de ticket filho', () => {
     } as Monitoria)).toBe(false);
   });
 
+  it('reconhece snapshots antigos de automacao/veredito de filho com form_id legado', () => {
+    const legacyForm = { form_id: 'legacy-form', form_snapshot: { automation: 'child_ticket' } } as unknown as Monitoria;
+    const binarySnapshot = { form_id: 'legacy-form', form_snapshot: { child_verdict: 'invalido' } } as unknown as Monitoria;
+    expect(isChildTicketMonitoria(legacyForm)).toBe(true);
+    expect(isChildTicketMonitoria(binarySnapshot)).toBe(true);
+  });
+
   it('identifica o veredito histórico sem inferi-lo da nota numérica', () => {
     const legacy = { form_snapshot: { legacy_source: 'zendesk_child_note', legacy_verdict: 'invalido' }, score: 85 } as unknown as Monitoria;
     expect(legacyChildNoteVerdict(legacy)).toBe('invalido');
     expect(legacyChildNoteVerdict({ ...legacy, form_snapshot: { legacy_verdict: 'invalido' } as unknown as EvaluationForm })).toBeNull();
+  });
+  it('reconhece snapshots antigos de automacao/veredito de filho com form_id legado', () => {
+    const legacyForm = { form_id: 'legacy-form', form_snapshot: { automation: 'child_ticket' } } as unknown as Monitoria;
+    const binarySnapshot = { form_id: 'legacy-form', form_snapshot: { child_verdict: 'invalido' } } as unknown as Monitoria;
+    expect(isChildTicketMonitoria(legacyForm)).toBe(true);
+    expect(isChildTicketMonitoria(binarySnapshot)).toBe(true);
   });
 });

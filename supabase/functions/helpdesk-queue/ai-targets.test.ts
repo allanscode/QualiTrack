@@ -34,7 +34,7 @@ describe('limites independentes da cadeia de IA', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
-  it('interrompe o GLM aos 60 segundos e permite 35 segundos ao Gemma', async () => {
+  it('usa o limite de 2 minutos no principal e dá 40 segundos ao fallback', async () => {
     vi.useFakeTimers();
     const targets = buildAITargets(() => undefined);
     let primarySignal: AbortSignal | undefined;
@@ -46,7 +46,7 @@ describe('limites independentes da cadeia de IA', () => {
       return new Promise<{ value: string }>(resolve => setTimeout(() => resolve({ value: 'fallback' }), 35_000));
     });
     const pending = runAIModelChain({ targets, execute });
-    await vi.advanceTimersByTimeAsync(95_000);
+    await vi.advanceTimersByTimeAsync(160_000);
     expect(await pending).toMatchObject({ value: 'fallback', fallbackUsed: true });
     expect(primarySignal?.aborted).toBe(true);
     expect(execute).toHaveBeenCalledTimes(2);

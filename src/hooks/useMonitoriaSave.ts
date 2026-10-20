@@ -131,8 +131,8 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
         const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
         const selectedTeam = deps.teams.find(t => t.id === managementTeamId);
         const isPositive = isChild ? verdict === 'valido' : isEvaluationValid(deps.score);
-        const requiresPjReview = deps.initialData?.pj_review_required === true
-          || (selectedTeam?.requires_pj_review === true && !isPositive);
+        const requiresPjReview = !isChild && (deps.initialData?.pj_review_required === true
+          || (selectedTeam?.requires_pj_review === true && !isPositive));
         const reopensPjReview = deps.isAdminEdit && deps.initialData?.status === 'concluida'
           && deps.initialData.pj_review_required !== true && requiresPjReview;
         let nextStatus: MonitoriaStatus;

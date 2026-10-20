@@ -151,8 +151,17 @@ serve(async (req: Request) => {
       return failure('Monitoria não encontrada', 'not_found', 404);
     }
     if (!monitoria.active) return failure('Monitoria inativa não pode ser publicada.', 'validation', 409);
-    if (monitoria.form_id === '6c7d1e88-841b-4da9-9a66-9f1464ce896f'
-      || monitoria.form_snapshot?.ticket_kind === 'chamado_filho') {
+    const childFormIds = new Set([
+      '6c7d1e88-841b-4da9-9a66-9f1464ce896f',
+      '6c7d1e88-841b-4da9-9a66-9f1464ce8970',
+      '6c7d1e88-841b-4da9-9a66-9f1464ce8971',
+      '6c7d1e88-841b-4da9-9a66-9f1464ce8972',
+      '6c7d1e88-841b-4da9-9a66-9f1464ce8973',
+    ]);
+    if (childFormIds.has(monitoria.form_id)
+      || monitoria.form_snapshot?.ticket_kind === 'chamado_filho'
+      || monitoria.form_snapshot?.automation === 'child_ticket'
+      || ['valido', 'invalido'].includes(monitoria.form_snapshot?.child_verdict)) {
       return failure('Tickets filhos usam a macro própria da fila Chamados Filhos.', 'validation', 409);
     }
 

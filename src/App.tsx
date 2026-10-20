@@ -121,6 +121,7 @@ function AppContent() {
     isSidebarOpen,
     setIsSidebarOpen,
     loadingPreferences,
+    maintenanceNotice,
   } = useAuth();
 
   // Alternar visibilidade da senha. Cada campo tem seu proprio estado para
@@ -353,7 +354,7 @@ function AppContent() {
               </div>
             </div>
           </m.div>
-        ) : loadingPreferences || !appReady ? (
+        ) : loadingPreferences || !appReady || maintenanceNotice === undefined ? (
           <m.div
             key="app-transition"
             initial={{ opacity: 0 }}
@@ -374,6 +375,8 @@ function AppContent() {
               </div>
             )}
           </m.div>
+        ) : maintenanceNotice?.active ? (
+          <MaintenanceScreen expectedReturnAt={maintenanceNotice.expectedReturnAt} onLogout={() => void handleLogout()} />
         ) : (
           <m.div
             key="app-main"
@@ -406,6 +409,27 @@ function AppContent() {
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+function MaintenanceScreen({ expectedReturnAt, onLogout }: { expectedReturnAt: string | null; onLogout: () => void }) {
+  const returnLabel = expectedReturnAt
+    ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(expectedReturnAt))
+    : 'horário ainda não definido';
+
+  return (
+    <main className="min-h-screen w-full flex items-center justify-center bg-surface-bg px-4 py-10 text-brand-primary">
+      <section className="w-full max-w-xl rounded-3xl border border-surface-border bg-surface-card p-8 text-center shadow-premium">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-accent/10 text-brand-accent">
+          <Clock className="h-8 w-8" aria-hidden="true" />
+        </div>
+        <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-brand-accent">Qualidade WP</p>
+        <h1 className="mb-3 text-2xl font-black">Sistema em manutenção</h1>
+        <p className="text-sm leading-6 text-brand-muted">Estamos realizando uma manutenção. Seu acesso será liberado automaticamente quando o período terminar.</p>
+        <p className="mt-6 rounded-xl bg-surface-subtle px-4 py-3 text-sm font-semibold">Previsão de retorno: {returnLabel}</p>
+        <button type="button" onClick={onLogout} className="mt-6 rounded-lg border border-surface-border px-5 py-2.5 text-sm font-bold hover:bg-surface-subtle">Sair da conta</button>
+      </section>
+    </main>
   );
 }
 
