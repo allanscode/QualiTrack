@@ -30,10 +30,6 @@
   .dashboard-skeleton-block::after {
     display: none;
   }
-  .dashboard-skeleton-block,
-  .dashboard-loading-icon {
-    animation: dashboard-loading-breathe 1.6s ease-in-out infinite;
-  }
 }
 
 @keyframes dashboard-skeleton-shimmer {
@@ -42,10 +38,6 @@
 
 @keyframes dashboard-loading-spin {
   to { transform: rotate(360deg); }
-}
-
-@keyframes dashboard-loading-breathe {
-  50% { opacity: 0.45; }
 }
 
 .dashboard-tile-container {
@@ -732,7 +724,14 @@ html.dark body {
 
 
 /* Subtle glass materials that use the existing QualiTrack theme tokens. */
-.qt-app-shell { position: relative; isolation: isolate; background-color: var(--surface-bg); }
+.qt-app-shell {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--surface-bg);
+  background-image:
+    radial-gradient(ellipse at 10% 0%, color-mix(in srgb, var(--brand-accent) 8%, transparent), transparent 44%),
+    radial-gradient(ellipse at 92% 100%, color-mix(in srgb, var(--brand-highlight) 7%, transparent), transparent 42%);
+}
 .qt-sidebar-glass,
 .qt-topbar-glass,
 .qt-mobile-nav-glass {
@@ -744,13 +743,17 @@ html.dark body {
 .qt-topbar-glass { background-color: color-mix(in srgb, var(--surface-bg) 90%, transparent); }
 .qt-mobile-nav-glass { background-color: color-mix(in srgb, var(--surface-card) 94%, transparent); }
 .qt-glass-card {
-  background-color: color-mix(in srgb, var(--surface-card) 96%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-color: var(--surface-border);
+  background-color: color-mix(in srgb, var(--surface-card) 82%, transparent);
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  border-color: color-mix(in srgb, var(--surface-border) 78%, var(--brand-highlight) 22%);
   border-radius: 1rem;
   box-shadow: var(--shadow-premium);
   transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 260ms ease, border-color 260ms ease;
+}
+.qt-glass-card:hover {
+  border-color: color-mix(in srgb, var(--brand-accent) 34%, var(--surface-border));
+  box-shadow: var(--shadow-premium-lg);
 }
 .qt-metric-card:hover {
   transform: translateY(-4px);
