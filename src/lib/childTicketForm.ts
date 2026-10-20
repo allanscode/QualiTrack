@@ -69,11 +69,16 @@ export function isChildTicketMonitoria(monitoria: Monitoria): boolean {
     || (monitoria.form_snapshot as EvaluationForm & { ticket_kind?: string } | undefined)?.ticket_kind === 'chamado_filho';
 }
 
-export function legacyChildNoteVerdict(monitoria: Pick<Monitoria, 'form_snapshot'>): 'valido' | 'invalido' | null {
-  const snapshot = monitoria.form_snapshot as { legacy_source?: string; legacy_verdict?: string } | undefined;
+export function legacyChildNoteVerdict(
+  monitoria: Pick<Monitoria, 'form_snapshot'> & Partial<Pick<Monitoria, 'child_verdict'>>,
+): 'valido' | 'invalido' | null {
+  const snapshot = monitoria.form_snapshot as { legacy_source?: string; legacy_verdict?: string; child_verdict?: string } | undefined;
   if (snapshot?.legacy_source !== 'zendesk_child_note') return null;
-  return snapshot.legacy_verdict === 'valido' || snapshot.legacy_verdict === 'invalido'
-    ? snapshot.legacy_verdict : null;
+  if (snapshot.legacy_verdict !== 'valido' && snapshot.legacy_verdict !== 'invalido') return null;
+  const monitoriaVerdict = monitoria.child_verdict || snapshot.child_verdict;
+  return monitoriaVerdict && monitoriaVerdict !== snapshot.legacy_verdict
+    ? null
+    : snapshot.legacy_verdict;
 }
 
 /** A ficha antiga fica no histórico; só a reavaliação muda de rubrica. */
