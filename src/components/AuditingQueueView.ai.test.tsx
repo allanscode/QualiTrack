@@ -276,4 +276,12 @@ describe('revisão automática persistida dos filhos', () => {
     await waitFor(() => expect(mocks.fetchOpenAIDrafts).toHaveBeenCalledWith('filhos'));
     expect(screen.queryByRole('button', { name: 'Abrir ficha de monitoria' })).not.toBeInTheDocument();
   });
+
+  it('mostra o rascunho fechado de filho para revisão da ficha oficial', async () => {
+    mocks.fetchOpenAIDrafts.mockResolvedValue([{ ...childDraft,
+      ticket_snapshot: { ...childDraft.ticket_snapshot!, status: 'closed' },
+    }]);
+    renderQueue({ activeSubTab: 'filhos', currentUserId: 'admin', currentUserRole: 'qualidade', forms: [childForm] });
+    expect(await screen.findByRole('button', { name: 'Abrir ficha de monitoria' })).toBeInTheDocument();
+  });
 });

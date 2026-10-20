@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../lib/supabase';
 import { AIEvaluationLog, User } from '../../types';
-import { getAiLogSummary, getAiLogTokenUsage, matchesAiLogStatus } from '../../lib/aiLogSummary';
+import { formatAiLogCost, getAiLogSummary, getAiLogTokenUsage, getAiLogUsage, matchesAiLogStatus } from '../../lib/aiLogSummary';
 import {
   RefreshCw,
   Search,
@@ -92,6 +92,20 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
     );
   });
 
+  const usageTotals = filteredLogs.reduce((totals, log) => {
+    const usage = getAiLogUsage(log);
+    totals.calls += usage.calls;
+    if (usage.cost !== null) totals.cost += usage.cost;
+    if (usage.inputTokens !== null) totals.inputTokens += usage.inputTokens;
+    if (usage.outputTokens !== null) totals.outputTokens += usage.outputTokens;
+    return totals;
+  }, { calls: 0, cost: 0, inputTokens: 0, outputTokens: 0 });
+  const hasKnownCost = filteredLogs.some(log => getAiLogUsage(log).cost !== null);
+  const hasKnownTokens = filteredLogs.some(log => {
+    const usage = getAiLogUsage(log);
+    return usage.inputTokens !== null || usage.outputTokens !== null;
+  });
+
   const handleCopy = (text: string, section: string) => {
     navigator.clipboard.writeText(text);
     setCopiedSection(section);
@@ -165,6 +179,27 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
         </div>
       </div>
 
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <Card className="p-3">
+          <p className="text-[10px] uppercase tracking-wide text-brand-muted font-bold">Chamadas OpenRouter</p>
+          <p className="mt-1 text-lg font-bold text-brand-primary">{usageTotals.calls.toLocaleString('pt-BR')}</p>
+          <p className="text-[10px] text-brand-muted">nas {filteredLogs.length} execuções carregadas</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-[10px] uppercase tracking-wide text-brand-muted font-bold">Custo conhecido</p>
+          <p className="mt-1 text-lg font-bold text-brand-primary">{hasKnownCost ? formatAiLogCost(usageTotals.cost) : '--'}</p>
+          <p className="text-[10px] text-brand-muted">metadados informados pela API</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-[10px] uppercase tracking-wide text-brand-muted font-bold">Tokens de entrada</p>
+          <p className="mt-1 text-lg font-bold text-brand-primary">{hasKnownTokens ? usageTotals.inputTokens.toLocaleString('pt-BR') : '--'}</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-[10px] uppercase tracking-wide text-brand-muted font-bold">Tokens de saída</p>
+          <p className="mt-1 text-lg font-bold text-brand-primary">{hasKnownTokens ? usageTotals.outputTokens.toLocaleString('pt-BR') : '--'}</p>
+        </Card>
+      </div>
+
       {/* Lista de Logs */}
       {loading ? (
         <div className="flex flex-col items-center justify-center p-12 text-brand-muted space-y-3">
@@ -190,6 +225,7 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                   <th className="py-3 px-4">Provedor / Modelo</th>
                   <th className="py-3 px-4">Latência</th>
                   <th className="py-3 px-4">Tokens (entrada / saída)</th>
+                  <th className="py-3 px-4">Chamadas / custo</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Data/Hora</th>
                   <th className="py-3 px-4 text-right">Ações</th>
@@ -199,6 +235,7 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                 {filteredLogs.map(log => {
                   const summary = getAiLogSummary(log);
                   const tokenUsage = getAiLogTokenUsage(log);
+                  const usage = getAiLogUsage(log);
                   return (
                   <tr key={log.id} className="hover:bg-surface-subtle/40 transition-colors">
                     <td className="py-3 px-4 font-mono font-bold text-brand-primary">
@@ -245,6 +282,10 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                       {tokenUsage.input === null ? '--' : tokenUsage.input.toLocaleString('pt-BR')}
                       {' / '}
                       {tokenUsage.output === null ? '--' : tokenUsage.output.toLocaleString('pt-BR')}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-brand-muted whitespace-nowrap">
+                      <span className="block">{usage.calls} chamada(s)</span>
+                      <span className="block text-brand-primary">{formatAiLogCost(usage.cost)}</span>
                     </td>
                     <td className="py-3 px-4">
                       {summary.hadRecoverableError ? (
@@ -432,7 +473,7 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
 
               {inspectorTab === 'metrics' && (
                 <div className="space-y-4 font-sans text-xs">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <Card className="p-3 space-y-1">
                       <span className="text-[11px] text-brand-muted font-bold">Provedor & Modelo</span>
                       <p className="font-mono font-bold text-brand-primary">{selectedLog.provider.toUpperCase()} ({selectedLog.model})</p>
@@ -450,6 +491,14 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                         {' / '}
                         {getAiLogTokenUsage(selectedLog).output?.toLocaleString('pt-BR') ?? '--'}
                       </p>
+                    </Card>
+                    <Card className="p-3 space-y-1">
+                      <span className="text-[11px] text-brand-muted font-bold">Chamadas OpenRouter</span>
+                      <p className="font-mono font-bold text-brand-primary">{getAiLogUsage(selectedLog).calls}</p>
+                    </Card>
+                    <Card className="p-3 space-y-1">
+                      <span className="text-[11px] text-brand-muted font-bold">Custo conhecido</span>
+                      <p className="font-mono font-bold text-brand-primary">{formatAiLogCost(getAiLogUsage(selectedLog).cost)}</p>
                     </Card>
                     <Card className="p-3 space-y-1">
                       <span className="text-[11px] text-brand-muted font-bold">Tipo de Avaliação</span>
@@ -492,6 +541,14 @@ export default function AILogsManagement({ currentUser }: AILogsManagementProps)
                               Tokens: entrada {attempt.promptTokens?.toLocaleString('pt-BR') ?? '--'}
                               {' · '}saída {attempt.completionTokens?.toLocaleString('pt-BR') ?? '--'}
                             </p>
+                            <p className="mt-1 text-[10px] text-brand-muted">
+                              Custo informado pela API: {formatAiLogCost(typeof attempt.cost === 'number' ? attempt.cost : null)}
+                            </p>
+                            {attempt.requestId && (
+                              <p className="mt-1 break-all text-[10px] text-brand-muted" title="ID da geração retornado pelo OpenRouter">
+                                ID da geração: {attempt.requestId}
+                              </p>
+                            )}
                             {attempt.status === 'failed' && (
                               <p className="mt-1 text-[11px] text-functional-warning">
                                 {attempt.message || attempt.reason || 'Falha sem detalhe'}

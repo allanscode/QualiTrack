@@ -950,7 +950,9 @@ export default function AuditingQueueView({
   // Filtro de busca na lista de tickets com suporte a filtro de rascunhos da IA
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
-      if (['closed', 'archived'].includes(t.status?.toLowerCase() || '')) return false;
+      if (['closed', 'archived'].includes(t.status?.toLowerCase() || '')
+        && !(activeQueue === 'filhos' && (t.saved_ai_draft
+          || ['review_required', 'blocked'].includes(t.child_automation?.status || '')))) return false;
       if (onlyWithoutMonitoria && (t.already_audited || t.monitoria_id)) return false;
       if (isDistributedQueue(activeQueue)) {
         if (!assignmentsReady[activeQueue]) return false;
@@ -1775,7 +1777,7 @@ export default function AuditingQueueView({
   const renderAiActions = (ticket: AuditingQueueTicket, accentClass: string) => {
     if (ticket.already_audited) {
       if (activeQueue === 'filhos' || activeQueue === 'filhos_invalidos') {
-        const valid = ticket.monitoria_status === 'concluida' && (ticket.monitoria_score ?? 0) >= 75;
+        const valid = ticket.monitoria_status === 'concluida';
         return <div className="flex flex-wrap items-center gap-2">
           <Badge variant={valid ? 'warning' : 'neutral'} size="xs">
             {valid ? 'Macro do filho pendente' : 'Monitoria do filho em revisão'}
@@ -1957,9 +1959,10 @@ export default function AuditingQueueView({
   const handleStartChildAudit = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
     const savedDraft = drafts[ticket.ticket_id];
-    const selectedChildForm = childTicketForm(forms);
+    const detectedType = ticket.child_macro_type || childResultFor(ticket)?.detected_type;
+    const selectedChildForm = childTicketForm(forms, detectedType === 'desconhecido' ? undefined : detectedType);
     if (!selectedChildForm) {
-      toast.error('A ficha padrão de tickets filhos não está disponível. Avise a Gestão da Qualidade.');
+      toast.error('A ficha desta macro de chamado filho não está disponível ou o tipo não foi identificado. Avise a Gestão da Qualidade.');
       return;
     }
     let queueAssignment;

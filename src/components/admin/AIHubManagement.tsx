@@ -5,6 +5,7 @@ import AILogsManagement from './AILogsManagement';
 import AIAuditSummary from './AIAuditSummary';
 import AIPipelineView from './AIPipelineView';
 import AIAutomationsManagement from './AIAutomationsManagement';
+import PositiveQueueTriage from './PositiveQueueTriage';
 import AIModelManagement from './AIModelManagement';
 import { Brain, FileText, Activity, Sparkles, Power } from 'lucide-react';
 
@@ -83,10 +84,13 @@ export default function AIHubManagement({ currentUser }: AIHubManagementProps) {
       </div>
 
       {/* Conteúdo Dinâmico do Painel Selecionado */}
-      {activePanel === 'automations' && <>
-        {currentUser?.role === 'admin' && <AIModelManagement />}
-        <AIAutomationsManagement currentUser={currentUser} />
-      </>}
+      {activePanel === 'automations' && (
+        <>
+          {currentUser?.role === 'admin' && <AIModelManagement />}
+          <AIAutomationsManagement currentUser={currentUser} />
+          {(currentUser?.role === 'admin' || currentUser?.role === 'gestor_qualidade') && <PositiveQueueTriage />}
+        </>
+      )}
       {activePanel === 'guidelines' && (
         <AIGuidelinesManagement currentUser={currentUser} />
       )}

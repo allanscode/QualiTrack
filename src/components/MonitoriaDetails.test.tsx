@@ -30,14 +30,14 @@ describe('MonitoriaDetails', () => {
     expect(screen.getByText('Linha do Tempo')).toBeInTheDocument();
     expect(screen.getByText('Requer a??o corretiva.')).toBeInTheDocument();
     expect(screen.getByText('Feedback individual aplicado.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Aprovar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aprovar e concluir' })).not.toBeInTheDocument();
     expect(screen.queryByText('Maria Auditora')).not.toBeInTheDocument();
   });
 
   it('retains manager approval and contestation controls', () => {
     renderDetails(managerUser);
-    expect(screen.getByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Contestar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Aprovar e concluir' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Contestar e enviar/ })).toBeInTheDocument();
   });
 
   it('allows administrator to execute governance and workflow actions across different stages', () => {
@@ -49,7 +49,7 @@ describe('MonitoriaDetails', () => {
       <MonitoriaDetails monitoria={contestada} user={adminUser} users={[supportUser, managerUser, adminUser]} onView={vi.fn()} onAction={vi.fn()} />
     );
     expect(screen.getByRole('button', { name: 'Reavaliar' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Editar Avaliação' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar Avaliação' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Recusar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Avançar Etapa/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Retroceder Etapa/i })).toBeInTheDocument();
@@ -61,8 +61,8 @@ describe('MonitoriaDetails', () => {
     const { unmount: unmount2 } = render(
       <MonitoriaDetails monitoria={aguardandoSuporte} user={adminUser} users={[supportUser, managerUser, adminUser]} onView={vi.fn()} onAction={vi.fn()} />
     );
-    expect(screen.getByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Escalar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aprovar e concluir' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Contestar e enviar/ })).not.toBeInTheDocument();
     unmount2();
 
     // Concluída por SLA

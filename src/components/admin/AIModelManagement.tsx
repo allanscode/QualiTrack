@@ -3,6 +3,14 @@ import { toast } from 'sonner';
 import { getAIModelConfig, listOpenRouterModels, setAIModelConfig, type OpenRouterModelOption } from '../../lib/aiModelConfig';
 import Button from '../ui/Button';
 
+const SHORTLIST = [
+  'z-ai/glm-5.3-flash', 'google/gemma-4-31b-it', 'google/gemini-3.8-flash',
+  'z-ai/glm-5.3-flash:free', 'google/gemma-4-31b-it:free',
+  'google/gemma-4-26b-a4b-it:free', 'nvidia/nemotron-3.5-lightning:free',
+  'nvidia/nemotron-3-nano-30b-a3b:free',
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+];
+
 function price(value: string | undefined): string {
   if (value === undefined || value === '' || !Number.isFinite(Number(value))) return 'preço indisponível';
   const perMillion = Number(value) * 1_000_000;
@@ -28,8 +36,11 @@ export default function AIModelManagement() {
     finally { setBusy(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
-  const visible = useMemo(() => models.filter(model =>
-    `${model.name} ${model.id}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 100), [models, search]);
+  const visible = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return query ? models.filter(model => `${model.name} ${model.id}`.toLowerCase().includes(query)).slice(0, 100)
+      : SHORTLIST.map(id => models.find(model => model.id === id)).filter((model): model is OpenRouterModelOption => !!model);
+  }, [models, search]);
   const chosen = models.find(model => model.id === selected);
   const save = async () => {
     if (!chosen || selected === current) return;
@@ -45,6 +56,7 @@ export default function AIModelManagement() {
     <label htmlFor="ai-model-search" className="mt-4 block text-xs font-semibold text-brand-primary">Buscar no catálogo OpenRouter</label>
     <input id="ai-model-search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nome ou ID do modelo"
       className="mt-1 w-full rounded-lg border border-surface-border bg-surface-subtle px-3 py-2 text-sm text-brand-primary" />
+    {!search.trim() && <p className="mt-2 text-xs text-brand-muted">Sugestões disponíveis no catálogo atual. Gemini 3.8 Flash aparece como pago; endpoints gratuitos podem ter limite de requisições.</p>}
     <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-surface-border" role="radiogroup" aria-label="Modelos de texto">
       {visible.map(model => <label key={model.id} className="flex cursor-pointer items-start gap-3 border-b border-surface-border p-3 text-sm last:border-b-0 hover:bg-surface-subtle">
         <input type="radio" name="ai-model" value={model.id} checked={selected === model.id} onChange={() => setSelected(model.id)} disabled={busy} />

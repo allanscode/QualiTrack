@@ -15,3 +15,4 @@ backups/
 .supabase-fresh/
 .playwright-mcp/
 scratch/
+/tmp/

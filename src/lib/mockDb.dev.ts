@@ -1,5 +1,5 @@
 import type { User, UserTeam, Team, TeamGroup, EvaluationForm, Monitoria, AccessRequest, DissatisfactionField, UserPreferences, AgentFeedback } from '../types';
-import { CHILD_TICKET_FORM_ID } from './childTicketForm';
+import { CHILD_FORM_IDS, CHILD_TICKET_FORM_ID } from './childTicketForm';
 const DB_PREFIX = 'qualitrack_mock_';
 
 const generateId = (): string => {
@@ -381,12 +381,32 @@ const INITIAL_DATA: {
   ]
 };
 
+const legacyChildForm = INITIAL_DATA.forms.find(form => form.id === CHILD_TICKET_FORM_ID);
+if (legacyChildForm) {
+  const titles = {
+    nova_demanda: 'Chamado filho · Nova Demanda',
+    analise_tecnica: 'Chamado filho · Análise Técnica',
+    apoio_tecnico: 'Chamado filho · Apoio Técnico',
+    produtividade: 'Chamado filho · Produtividade',
+  };
+  INITIAL_DATA.forms.push(...Object.entries(CHILD_FORM_IDS).map(([type, id]) => ({
+    ...legacyChildForm, id, title: titles[type as keyof typeof titles],
+    sections: legacyChildForm.sections.map(section => ({ ...section,
+      questions: section.questions.map(question => ({ ...question, is_critical: false })) })),
+    critical_errors: [],
+  })));
+}
+
 if (typeof window !== 'undefined' && !import.meta.env.VITE_SUPABASE_URL) {
   Object.keys(INITIAL_DATA).forEach((k) => {
     const key = k as keyof typeof INITIAL_DATA;
     const existing = localStorage.getItem(`${DB_PREFIX}${key}`);
     if (!existing) {
       localStorage.setItem(`${DB_PREFIX}${key}`, JSON.stringify(INITIAL_DATA[key]));
+    } else if (key === 'forms') {
+      const forms = JSON.parse(existing) as EvaluationForm[];
+      const missing = INITIAL_DATA.forms.filter(form => Object.values(CHILD_FORM_IDS).includes(form.id) && !forms.some(saved => saved.id === form.id));
+      if (missing.length) localStorage.setItem(`${DB_PREFIX}${key}`, JSON.stringify([...forms, ...missing]));
     } else if (key === 'users') {
       const users = JSON.parse(existing) as MockSeedUser[];
       INITIAL_DATA.users.forEach((defaultUser) => {

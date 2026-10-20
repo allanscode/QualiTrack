@@ -5,7 +5,7 @@ import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 import MonitoriaTimeline from './MonitoriaTimeline';
 import Button from './ui/Button';
 import PjReviewFlow from './PjReviewFlow';
-import { isChildTicketMonitoria } from '../lib/childTicketForm';
+import { isChildTicketMonitoria, legacyChildNoteVerdict } from '../lib/childTicketForm';
 
 type Props = {
   monitoria: Monitoria;
@@ -21,15 +21,27 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
   const setViewingMonitoria = onView;
   const setActionModal = onAction;
   const isPj = Boolean(m.pj_review_required || m.pj_review_kind);
+  const legacyVerdict = legacyChildNoteVerdict(m);
   const approvalManagerId = teams.find(team => team.id === m.team_id)?.approval_manager_id;
   const canActAsTeamManager = user?.role === 'gestor_suporte' && (!approvalManagerId || approvalManagerId === user.id);
+  const managerContestationRound = (m.history || []).filter(entry =>
+    /contestaç[aã]o realizada pelo gestor de suporte|gestor pj encaminhou contestaç[aã]o/i.test(entry.action)).length;
   return (
     <div className="space-y-5">
+              {legacyVerdict && (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-300">
+                  <p className="font-black uppercase tracking-wide">Monitoria histórica · {legacyVerdict === 'valido' ? 'Válido' : 'Inválido'}</p>
+                  <p className="mt-1">Parecer antigo de três critérios publicado como nota interna no Zendesk. A nota exibida é a nota original; os seis critérios da ficha atual não foram preenchidos. {m.status === 'concluida' ? 'Monitoria concluída.' : 'Monitoria em aberto enquanto o ticket permanece resolvido no Zendesk.'}</p>
+                  {m.status !== 'concluida' && m.action_deadline_at && (
+                    <p className="mt-1 font-semibold">Fechamento estimado no Zendesk: {new Date(m.action_deadline_at).toLocaleString('pt-BR')}. O ticket só deixa de ser editável quando o Zendesk confirmar o status fechado.</p>
+                  )}
+                </div>
+              )}
               {isPj && <PjReviewFlow monitoria={m} />}
               <MonitoriaTimeline monitoria={m} user={user} users={users} />
 
               <div className="space-y-4 pb-2">
-                <p className="text-xs font-black uppercase text-brand-primary tracking-wider ml-1">Observações da Qualidade</p>
+                <p className="text-xs font-black uppercase text-brand-primary tracking-wider ml-1">Registro do Auditor</p>
                 <div className="relative text-sm text-brand-primary font-medium bg-surface-bg/50 py-3 pl-9 pr-5 rounded-2xl border border-surface-border/40 leading-relaxed italic break-words whitespace-pre-wrap">
                   <span className="absolute left-3 top-1.5 text-3xl font-black text-brand-primary/30 leading-none select-none">"</span>
                   {m.evaluator_note || 'Nenhuma observação registrada.'}
@@ -73,7 +85,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                   </div>
                 )}
 
-                {m.status !== 'concluida' && m.action_deadline_at && new Date(m.action_deadline_at).getTime() < Date.now() && (
+                {m.status !== 'concluida' && m.action_deadline_at && new Date(m.action_deadline_at).getTime() < Date.now() && !legacyVerdict && (
                   <div className="p-3 rounded-2xl bg-functional-error/10 border border-functional-error/30 flex items-start gap-3 text-xs text-functional-error">
                     <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
@@ -107,7 +119,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                     </Button>
                   )}
 
-                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && !['em_contestacao', 'reavaliacao_solicitada'].includes(m.status) && (
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -134,8 +146,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                     </Button>
                   )}
 
-                  {canActAsTeamManager && m.status === 'pendente_revisao'
-                    && (isPj || m.score === undefined || m.score === null || m.score < 75) && (
+                  {canActAsTeamManager && (m.status === 'pendente_revisao' || m.status === 'aguardando_gestor_suporte') && (
                     <>
                       <Button
                         variant="secondary"
@@ -143,36 +154,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                         onClick={() => setActionModal({ id: m.id, type: 'aceitar' })}
                         icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                       >
-                        {isPj ? 'Enviar aprovação à Qualidade' : 'Aprovar'}
-                      </Button>
-                      {((isPj && m.score != null && m.score < 75)
-                        || (!isPj && (m.score === undefined || m.score === null || m.score < 75))) && <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
-                        icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                      >
-                        {isPj ? 'Enviar contestação à Qualidade' : 'Contestar'}
-                      </Button>}
-                    </>
-                  )}
-
-                  {/* Aprovar/Contestar direto pelo Gestor de Qualidade ou Admin, mesmo
-                      sem contestação — cobre o caso do Gestor de Atendimento ainda não
-                      estar usando o sistema (ex.: piloto restrito à equipe de Qualidade),
-                      sem deixar a monitoria travada em pendente_revisao esperando alguém
-                      que não vai entrar. O nome de quem agiu fica registrado no histórico
-                      (by_name), então não se perde rastreabilidade de que foi a Qualidade
-                      substituindo a decisão do Gestor de Atendimento. */}
-                  {(user?.role === 'gestor_qualidade' || user?.role === 'admin') && !isPj && m.status === 'pendente_revisao' && (
-                    <>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
-                        icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                      >
-                        Aprovar
+                        Aprovar e concluir
                       </Button>
                       <Button
                         variant="outline"
@@ -180,28 +162,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                         onClick={() => setActionModal({ id: m.id, type: 'contestar' })}
                         icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
                       >
-                        Contestar
-                      </Button>
-                    </>
-                  )}
-
-                  {(canActAsTeamManager || (user?.role === 'admin' && !isPj)) && m.status === 'aguardando_gestor_suporte' && (
-                    <>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setActionModal({ id: m.id, type: 'aprovar' })}
-                        icon={<CheckCircle2 className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />}
-                      >
-                        {isPj ? 'Enviar aprovação à Qualidade' : 'Aprovar'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setActionModal({ id: m.id, type: 'escalar' })}
-                        icon={<AlertTriangle className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-y-0.5" />}
-                      >
-                        {isPj ? 'Enviar contestação à Qualidade' : 'Escalar'}
+                        Contestar e enviar à Qualidade
                       </Button>
                     </>
                   )}
@@ -239,19 +200,22 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                       >
                         Aprovar
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setActionModal({ id: m.id, type: 'solicitar_reavaliacao' })}
-                        icon={<Pencil className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />}
-                      >
-                        Solicitar
-                      </Button>
+                      {managerContestationRound >= 2 ? (
+                        <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'invalidar' })}
+                          icon={<XCircle className="w-3.5 h-3.5" />}>
+                          Invalidar e concluir
+                        </Button>
+                      ) : managerContestationRound === 1 ? (
+                        <Button variant="outline" size="sm" onClick={() => setActionModal({ id: m.id, type: 'manter' })}
+                          icon={<XCircle className="w-3.5 h-3.5" />}>
+                          Negar e devolver ao Suporte
+                        </Button>
+                      ) : null}
                     </>
                   )}
 
                   {/* Controles de Etapa e Fluxo — Exclusivos de Administrador e Gestor de Qualidade */}
-                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && !isPj && m.active !== false && (() => {
+                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (() => {
                     const prevStage = getPreviousStage(m.status);
                     const nextStage = getNextStage(m.status);
                     const isClosed = ['concluida', 'finalizada_alterada', 'contestacao_aceita', 'contestacao_negada'].includes(m.status);

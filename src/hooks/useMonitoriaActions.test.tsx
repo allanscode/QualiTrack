@@ -25,9 +25,9 @@ describe('useMonitoriaActions: encaminhamento PJ', () => {
   });
 
   it.each([
-    ['aceitar', 'approval', undefined],
-    ['contestar', 'contestation', 'pending'],
-  ] as const)('envia %s diretamente à Gestão da Qualidade sem revisor', async (action, kind, resultStatus) => {
+    ['aceitar', 'concluida', undefined, undefined],
+    ['contestar', 'aguardando_gestor_qualidade', 'contestation', 'pending'],
+  ] as const)('registra %s pelo gestor PJ sem revisor intermediário', async (action, status, kind, resultStatus) => {
     const load = vi.fn();
     const { result } = renderHook(() => useMonitoriaActions(manager, [monitoria], config, load, teams));
     act(() => {
@@ -38,13 +38,13 @@ describe('useMonitoriaActions: encaminhamento PJ', () => {
 
     await waitFor(() => expect(load).toHaveBeenCalledOnce());
     expect(db.update).toHaveBeenCalledWith('monitorias', monitoria.id, expect.objectContaining({
-      status: 'aguardando_gestor_qualidade',
+      status,
       pj_reviewer_id: null,
       pj_review_kind: kind,
     }));
     const payload = db.update.mock.calls[0][2];
     expect(payload.contestation_result).toBe(resultStatus);
-    expect(payload.history[0].action).toContain('Gestão da Qualidade');
+    expect(payload.history[0].action).toContain(action === 'contestar' ? 'Gestor de Suporte' : 'Monitoria aceita');
   });
 
   it('mantém a data limite ao enviar o parecer PJ para a Qualidade', async () => {

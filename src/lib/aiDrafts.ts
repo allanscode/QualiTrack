@@ -60,7 +60,7 @@ export async function fetchOpenAIDrafts(queue: AuditingQueueType): Promise<AIEva
   if (queue !== 'negativas' && queue !== 'proativas' && queue !== 'positivas' && queue !== 'filhos') return [];
   if (isMockMode || !supabase) return Object.values(readMockDrafts()).filter(d =>
     (d.source_queue === queue || (queue === 'proativas' && !d.source_queue))
-    && !['closed', 'archived'].includes(d.ticket_snapshot?.status?.toLowerCase() || ''));
+    && (queue === 'filhos' || !['closed', 'archived'].includes(d.ticket_snapshot?.status?.toLowerCase() || '')));
 
   const client = supabase;
   const drafts: AIEvaluationDraft[] = [];
@@ -75,8 +75,8 @@ export async function fetchOpenAIDrafts(queue: AuditingQueueType): Promise<AIEva
     if (!data || data.length < 500) break;
   }
   if (drafts.length === 0) return [];
-  // Preserve os rascunhos no banco, mas oculte-os da triagem quando o Zendesk
-  // informar que o ticket fechou desde o snapshot salvo.
+  // Chamados filhos fechados ainda precisam da ficha oficial quando há parecer
+  // salvo para revisão. As outras filas preservam o filtro de tickets fechados.
   const batches: string[][] = [];
   for (let from = 0; from < drafts.length; from += 100) {
     const ids = drafts.slice(from, from + 100).map(draft => draft.ticket_id);
@@ -94,7 +94,7 @@ export async function fetchOpenAIDrafts(queue: AuditingQueueType): Promise<AIEva
   const statuses = Object.assign({}, ...checked) as Record<string, string>;
   return drafts.filter(draft => {
     const status = statuses[draft.ticket_id]?.toLowerCase();
-    return status && status !== 'closed' && status !== 'archived';
+    return status && (queue === 'filhos' || (status !== 'closed' && status !== 'archived'));
   }).map(draft => ({
     ...draft,
     ticket_snapshot: draft.ticket_snapshot

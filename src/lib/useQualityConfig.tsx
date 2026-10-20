@@ -291,7 +291,7 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
       let activeDocs: any[] = [];
       if (supabase) {
         const { data } = await supabase.from('monitorias')
-          .select('id, updated_at, action_deadline_at')
+          .select('id, updated_at, action_deadline_at, form_snapshot')
           .eq('active', true)
           .not('action_deadline_at', 'is', null)
           .not('status', 'in', '(concluida,finalizada_alterada)');
@@ -307,7 +307,11 @@ export function QualityConfigProvider({ children }: { children: ReactNode }) {
         if (!m.action_deadline_at || !m.updated_at) return null;
 
         const remainingSeconds = getRemainingBusinessSeconds(new Date(m.updated_at), new Date(m.action_deadline_at), previousConfig.businessHours);
-        const newDeadline = addBusinessHours(new Date(m.updated_at), remainingSeconds / 3600, newConfig.businessHours).toISOString();
+        const recalculated = addBusinessHours(new Date(m.updated_at), remainingSeconds / 3600, newConfig.businessHours);
+        const zendeskCap = m.form_snapshot?.zendesk_closure_window?.deadline_at;
+        const newDeadline = typeof zendeskCap === 'string' && Number.isFinite(Date.parse(zendeskCap))
+          ? new Date(Math.min(recalculated.getTime(), Date.parse(zendeskCap))).toISOString()
+          : recalculated.toISOString();
 
         return { id: m.id, action_deadline_at: newDeadline };
       }).filter(Boolean);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChildTicketAiEvaluation, EvaluationForm, Monitoria } from '../types';
-import { CHILD_TICKET_FORM_ID, childEvaluationFormPrefill, childTicketForm, shouldUseChildFormForReevaluation } from './childTicketForm';
+import { CHILD_TICKET_FORM_ID, childEvaluationFormPrefill, childTicketForm, legacyChildNoteVerdict, shouldUseChildFormForReevaluation } from './childTicketForm';
 
 describe('ficha de ticket filho', () => {
   it('preenche resultados por ID e preserva NA sem converter em reprovação', () => {
@@ -49,5 +49,11 @@ describe('ficha de ticket filho', () => {
       ...previous,
       form_snapshot: { ...regular, child_ai_evaluation: { checks: [] } },
     } as Monitoria)).toBe(false);
+  });
+
+  it('identifica o veredito histórico sem inferi-lo da nota numérica', () => {
+    const legacy = { form_snapshot: { legacy_source: 'zendesk_child_note', legacy_verdict: 'invalido' }, score: 85 } as unknown as Monitoria;
+    expect(legacyChildNoteVerdict(legacy)).toBe('invalido');
+    expect(legacyChildNoteVerdict({ ...legacy, form_snapshot: { legacy_verdict: 'invalido' } as unknown as EvaluationForm })).toBeNull();
   });
 });

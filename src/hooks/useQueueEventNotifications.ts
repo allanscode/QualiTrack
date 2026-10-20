@@ -4,7 +4,7 @@ import type { User } from '../types';
 
 export interface QueueEventNotification {
   id: string;
-  event_type: 'csat_bad' | 'child_ticket_created';
+  event_type: 'csat_bad' | 'child_ticket_review_required';
   ticket_id: string;
   occurred_at: string;
 }
@@ -24,6 +24,7 @@ export function useQueueEventNotifications(user: User | null): QueueEventNotific
     const refresh = async () => {
       const { data, error } = await client.from('queue_event_notifications')
         .select('id,event_type,ticket_id,occurred_at')
+        .in('event_type', ['csat_bad', 'child_ticket_review_required'])
         .order('occurred_at', { ascending: false })
         .limit(50);
       if (!mounted) return;

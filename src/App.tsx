@@ -25,6 +25,8 @@ import { useMonitoriaIndex } from './hooks/useMonitoriaIndex';
 import { useMonitoriaNotifications } from './hooks/useMonitoriaNotifications';
 import { useFeedbacks } from './hooks/useFeedbacks';
 import { useQueueEventNotifications } from './hooks/useQueueEventNotifications';
+import { useNotificationPreferences } from './hooks/useNotificationPreferences';
+import type { NotificationKind } from './lib/notificationPreferences';
 import { supabase } from './lib/supabase';
 import { fetchAIGuidelines } from './lib/aiGuidelines';
 import { fetchQueuePendingCounts, type QueueBadgeCounts } from './lib/helpdeskQueue';
@@ -424,6 +426,7 @@ function MainApp({
   const notificationMonitorias = useMonitoriaNotifications(userData);
   const { feedbacks } = useFeedbacks(userData);
   const queueEvents = useQueueEventNotifications(userData);
+  const notificationPreferences = useNotificationPreferences(userData?.id);
   const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
   const [isSettingsHovered, setIsSettingsHovered] = React.useState(false);
   const [focusMonitoriaTarget, setFocusMonitoriaTarget] = React.useState<{ monitoriaId?: string; ticketId?: string } | null>(null);
@@ -701,6 +704,7 @@ function MainApp({
   const notifications = React.useMemo(() => {
     const list: Array<{
       id: string;
+      kind: NotificationKind;
       title: string;
       message: string;
       time: string;
@@ -722,6 +726,7 @@ function MainApp({
     for (const cn of contestationNotifs) {
       list.push({
         id: cn.id,
+        kind: 'contestation',
         title: cn.title,
         message: cn.message,
         time: cn.time,
@@ -745,6 +750,7 @@ function MainApp({
           : 'Data não informada';
         list.push({
           id: `eval-${latest.id}`,
+          kind: 'new_monitoria',
           title: 'Nova Avaliação Disponível',
           message: `Monitoria referente ao chamado #${latest.ticket_id} foi publicada com nota ${latest.score}%.`,
           time: timeStr,
@@ -771,6 +777,7 @@ function MainApp({
           : 'Data não informada';
         list.push({
           id: notifId,
+          kind: 'feedback_pending',
           title: 'Feedback 1:1 Aguardando Ciência',
           message: `Você possui um novo alinhamento "${fb.title}" com Plano de Ação Combinado aguardando sua assinatura digital.`,
           time: timeStr,
@@ -795,6 +802,7 @@ function MainApp({
           : 'Data não informada';
         list.push({
           id: notifId,
+          kind: 'feedback_ack',
           title: 'Ciência de Feedback Confirmada',
           message: `O atendente confirmou a ciência do alinhamento "${fb.title}".`,
           time: timeStr,
@@ -821,6 +829,7 @@ function MainApp({
       const notifId = `sla-urgent-${m.id}`;
       list.push({
         id: notifId,
+        kind: 'deadline',
         title: 'Prazo de Ação Expirando (SLA)',
         message: `A monitoria do chamado #${m.ticket_id} possui menos de 4h para expirar o prazo regulamentar.`,
         time: 'Urgente',
@@ -839,8 +848,11 @@ function MainApp({
       const notifId = `queue-event-${event.id}`;
       list.push({
         id: notifId,
-        title: isNegative ? 'Novo CSAT Ruim' : 'Novo Chamado Filho',
-        message: `O ticket #${event.ticket_id} entrou na fila ${isNegative ? 'CSAT Negativas' : 'Chamados Filhos'}.`,
+        kind: isNegative ? 'queue_negative' : 'queue_child_review',
+        title: isNegative ? 'Novo CSAT Ruim' : 'Chamado Filho para Revisão',
+        message: isNegative
+          ? `O ticket #${event.ticket_id} entrou na fila CSAT Negativas.`
+          : `O ticket #${event.ticket_id} precisa de revisão do monitor.`,
         time: formatDate(new Date(event.occurred_at), "dd/MM 'às' HH:mm"),
         type: 'fila',
         iconBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
@@ -873,6 +885,7 @@ function MainApp({
 
         list.push({
           id: notifId,
+          kind: 'manual_pending',
           title: 'Revisão de Manual Pendente',
           message: `O monitor ${g.pending_modified_by_name || 'de Qualidade'} enviou uma proposta de alteração no manual "${g.pending_title || g.title}". Clique para analisar e homologar.`,
           time: timeStr,
@@ -905,6 +918,7 @@ function MainApp({
 
           list.push({
             id: notifId,
+            kind: 'manual_updated',
             title: 'Manual de IA Atualizado',
             message: `O manual "${g.title}" foi homologado pelo Administrador (${approverName}) na versão v${versionNum}. As diretrizes já estão ativas para as auditorias com IA.`,
             time: timeStr,
@@ -928,6 +942,7 @@ function MainApp({
 
           list.push({
             id: notifId,
+            kind: 'manual_rejected',
             title: 'Proposta de Manual Devolvida',
             message: `A proposta para o manual "${g.title}" foi devolvida pelo Administrador: "${latestEntry.rejection_reason || 'Sem justificativa'}".`,
             time: timeStr,
@@ -943,8 +958,8 @@ function MainApp({
       });
     }
 
-    return list;
-  }, [userData, notificationMonitorias, readNotificationIds, guidelines, feedbacks, queueEvents]);
+    return list.filter(notification => notificationPreferences[notification.kind] !== false);
+  }, [userData, notificationMonitorias, readNotificationIds, guidelines, feedbacks, queueEvents, notificationPreferences]);
 
   const visibleNotifications = React.useMemo(
     () => notifications.filter(notification => !dismissedNotificationIds.has(notification.id)),

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { supabase, mockDb } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, User, ActionAttachment, Team } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
-import { getContestationOutcome, isContestationAction, resolveContestationResult } from '../lib/contestation';
 import { toast } from 'sonner';
 
 export type ActionType =
@@ -20,13 +19,15 @@ export type ActionType =
   | 'reabrir'
   | 'alterar_etapa'
   | 'avancar_etapa'
-  | 'retroceder_etapa';
+  | 'retroceder_etapa'
+  | 'invalidar';
 
 const actionDescriptions: Record<string, string> = {
   'aceitar': 'Monitoria aceita',
   'contestar': 'Contestação realizada',
   'manter': 'Contestação negada pela Qualidade',
   'aprovar': 'Monitoria aprovada pelo Gestor',
+  'invalidar': 'Decisão definitiva da Qualidade: avaliação invalidada',
   'escalar': 'Escalado para decisão da Qualidade',
   'excluir': 'Monitoria removida pelo Administrador',
   'reavaliar': 'Reavaliação aceita pelo Gestor Qual.',
@@ -40,7 +41,7 @@ const actionDescriptions: Record<string, string> = {
 };
 
 export const STAGES_FLOW: { status: MonitoriaStatus; label: string; roleLabel: string }[] = [
-  { status: 'pendente_revisao', label: 'Pendente Revisão', roleLabel: 'Agente de Suporte' },
+  { status: 'pendente_revisao', label: 'Pendente Revisão', roleLabel: 'Gestor de Suporte' },
   { status: 'em_contestacao', label: 'Em Contestação', roleLabel: 'Monitor de Qualidade' },
   { status: 'aguardando_gestor_suporte', label: 'Gestão Suporte', roleLabel: 'Gestor de Suporte' },
   { status: 'aguardando_gestor_qualidade', label: 'Gestão Qualidade', roleLabel: 'Gestor de Qualidade' },
@@ -61,7 +62,7 @@ export function getPreviousStage(current: MonitoriaStatus): MonitoriaStatus | nu
     case 'aguardando_revisao_pj':
       return 'aguardando_gestor_suporte';
     case 'aguardando_gestor_suporte':
-      return 'em_contestacao';
+      return 'pendente_revisao';
     case 'em_contestacao':
       return 'pendente_revisao';
     default:
@@ -72,7 +73,7 @@ export function getPreviousStage(current: MonitoriaStatus): MonitoriaStatus | nu
 export function getNextStage(current: MonitoriaStatus): MonitoriaStatus | null {
   switch (current) {
     case 'pendente_revisao':
-      return 'em_contestacao';
+      return 'aguardando_gestor_suporte';
     case 'em_contestacao':
       return 'aguardando_gestor_suporte';
     case 'aguardando_gestor_suporte':
@@ -173,14 +174,40 @@ export function useMonitoriaActions(
 
     const trimmedNote = actionNote.trim();
     const isPj = Boolean(monitoria.pj_review_required || monitoria.pj_review_kind);
-    const isPjManagerAction = isPj && user.role === 'gestor_suporte'
-      && ['aceitar', 'aprovar', 'contestar', 'escalar'].includes(type);
+    const contestations = monitoria.history?.filter(entry =>
+      /contestaç[aã]o realizada pelo gestor de suporte|gestor pj encaminhou contestaç[aã]o/i.test(entry.action)) || [];
+    const isSecondContestation = contestations.length >= 2;
+    const isManagerDecision = ['aceitar', 'aprovar', 'contestar', 'escalar'].includes(type);
 
     const approvingTeam = teams.find(team => team.id === monitoria.team_id);
     if (user.role === 'gestor_suporte' && approvingTeam?.approval_manager_id
       && approvingTeam.approval_manager_id !== user.id
-      && ['aceitar', 'aprovar', 'contestar', 'escalar'].includes(type)) {
+      && isManagerDecision) {
       toast.error('Outro gestor foi designado para aprovar esta equipe.');
+      setSubmitting(false);
+      return false;
+    }
+
+    if (isManagerDecision && user.role === 'gestor_suporte'
+      && !['pendente_revisao', 'aguardando_gestor_suporte'].includes(monitoria.status)) {
+      toast.error('Esta avaliação não aguarda decisão do Gestor de Suporte.');
+      setSubmitting(false);
+      return false;
+    }
+    if (user.role === 'gestor_suporte' && (type === 'contestar' || type === 'escalar') && isSecondContestation) {
+      toast.error('A segunda contestação já teve encaminhamento definitivo.');
+      setSubmitting(false);
+      return false;
+    }
+    const isQualityRole = ['gestor_qualidade', 'admin'].includes(user.role);
+    const isFirstQualityDenial = type === 'manter'
+      && monitoria.status === 'aguardando_gestor_qualidade'
+      && !isSecondContestation;
+    const isLegacyContestRefusal = type === 'manter' && monitoria.status === 'em_contestacao';
+    if ((type === 'manter' && (!isQualityRole || (!isFirstQualityDenial && !isLegacyContestRefusal)))
+      || (type === 'invalidar'
+        && (!isQualityRole || monitoria.status !== 'aguardando_gestor_qualidade' || !isSecondContestation))) {
+      toast.error('Decisão da Qualidade incompatível com esta etapa.');
       setSubmitting(false);
       return false;
     }
@@ -192,7 +219,7 @@ export function useMonitoriaActions(
         setSubmitting(false);
         return false;
       }
-      if (type === 'contestar' && !trimmedNote) {
+      if ((type === 'contestar' || type === 'escalar') && !trimmedNote) {
         toast.error('Justificativa da Contestação é obrigatória para contestar.');
         setSubmitting(false);
         return false;
@@ -218,14 +245,15 @@ export function useMonitoriaActions(
 
     let nextStatus: MonitoriaStatus = monitoria.status;
     if (type === 'aceitar' || type === 'aprovar') nextStatus = 'concluida';
-    else if (type === 'contestar' || type === 'devolver') nextStatus = 'em_contestacao';
-    else if (type === 'manter') nextStatus = 'contestacao_negada';
+    else if (type === 'contestar' || type === 'escalar') nextStatus = 'aguardando_gestor_qualidade';
+    else if (type === 'devolver') nextStatus = 'em_contestacao';
+    else if (type === 'manter') nextStatus = monitoria.status === 'em_contestacao'
+      ? 'contestacao_negada' : 'aguardando_gestor_suporte';
+    else if (type === 'invalidar') nextStatus = 'concluida';
     else if (type === 'recusar_agente') nextStatus = 'aguardando_gestor_suporte';
-    else if (type === 'escalar') nextStatus = 'aguardando_gestor_qualidade';
     else if (type === 'solicitar_reavaliacao') nextStatus = 'reavaliacao_solicitada';
     else if (type === 'reabrir') nextStatus = reopenStatus;
     else if (isStepChange) nextStatus = targetStatus;
-    if (isPjManagerAction) nextStatus = 'aguardando_gestor_qualidade';
 
     const isAdvance = (STAGE_ORDER[nextStatus] ?? 0) >= (STAGE_ORDER[monitoria.status] ?? 0);
 
@@ -241,10 +269,12 @@ export function useMonitoriaActions(
       }
     }
 
-    const entryAction = isPjManagerAction
-      ? (type === 'contestar' || type === 'escalar'
-        ? 'Gestor PJ encaminhou contestação para a Gestão da Qualidade'
-        : 'Gestor PJ encaminhou aprovação para a Gestão da Qualidade')
+    const entryAction = user.role === 'gestor_suporte' && (type === 'contestar' || type === 'escalar')
+      ? `Contestação realizada pelo Gestor de Suporte (${isSecondContestation ? 'decisão definitiva' : 'primeira decisão'})`
+      : type === 'manter' && monitoria.status === 'aguardando_gestor_qualidade'
+      ? 'Primeira contestação negada pela Gestão da Qualidade; retorno ao Gestor de Suporte'
+      : user.role === 'gestor_qualidade' && type === 'aprovar'
+      ? 'Contestação validada pela Gestão da Qualidade; decisão final'
       : isStepChange
       ? (isAdvance ? `Etapa avançada administrativamente (${monitoria.status} ➔ ${nextStatus})` : `Etapa revertida administrativamente (${monitoria.status} ➔ ${nextStatus})`)
       : (actionDescriptions[type] || 'Ação realizada');
@@ -265,11 +295,19 @@ export function useMonitoriaActions(
 
     const finalQualityDecision = nextStatus === 'concluida'
       && monitoria.status === 'aguardando_gestor_qualidade'
-      && (user.role === 'gestor_qualidade' || user.role === 'admin')
-      && monitoria.history?.some(entry => isContestationAction(entry.action));
-    const reevaluationOutcome = finalQualityDecision
-      ? getContestationOutcome({ ...monitoria, status: 'concluida' })
-      : null;
+      && (user.role === 'gestor_qualidade' || user.role === 'admin');
+    const savedZendeskCap = (monitoria.form_snapshot as typeof monitoria.form_snapshot & {
+      zendesk_closure_window?: { deadline_at?: string };
+    } | undefined)?.zendesk_closure_window?.deadline_at;
+    const fallbackDeadline = addBusinessHours(new Date(), getDeadlineHours(nextStatus, qualityConfig.action_deadline), qualityConfig.businessHours);
+    const cappedDeadline = typeof savedZendeskCap === 'string' && Number.isFinite(Date.parse(savedZendeskCap))
+      ? new Date(Math.min(fallbackDeadline.getTime(), Date.parse(savedZendeskCap))).toISOString()
+      : fallbackDeadline.toISOString();
+    const managementRestart = (isStepChange || type === 'reabrir')
+      && ['admin', 'gestor_qualidade'].includes(user.role)
+      && monitoria.action_deadline_at
+      && Date.parse(monitoria.action_deadline_at) < Date.now();
+    const activeDeadline = managementRestart ? fallbackDeadline.toISOString() : monitoria.action_deadline_at || cappedDeadline;
 
     const update: any = type === 'excluir'
       ? { active: false, history: [...(monitoria.history || []), historyEntry], updated_at: now }
@@ -278,28 +316,27 @@ export function useMonitoriaActions(
         updated_at: now,
         history: [...(monitoria.history || []), historyEntry],
         ...(nextStatus !== 'concluida'
-          ? { action_deadline_at: monitoria.action_deadline_at
-              || addBusinessHours(new Date(), getDeadlineHours(nextStatus, qualityConfig.action_deadline), qualityConfig.businessHours).toISOString() }
+          ? { action_deadline_at: activeDeadline }
           : { action_deadline_at: null }),
         ...(nextStatus === 'concluida' ? { resolution_type: 'human' } : {}),
         ...((type === 'aprovar' || type === 'aceitar')
           && !(isPj && monitoria.status === 'aguardando_gestor_qualidade')
           ? { corrective_action: finalNote } : {}),
-        ...(type === 'contestar' || type === 'solicitar_reavaliacao' ? { contestation_reason: finalNote } : {}),
+        ...(type === 'contestar' || type === 'escalar' || type === 'solicitar_reavaliacao' ? { contestation_reason: finalNote } : {}),
         ...(combinedAttachments.length > 0 ? { action_attachments: combinedAttachments } : {}),
-        ...(isPjManagerAction ? {
+        ...(isPj && user.role === 'gestor_suporte' && isManagerDecision ? {
           pj_reviewer_id: null,
-          pj_review_kind: type === 'contestar' || type === 'escalar' ? 'contestation' : 'approval',
+          pj_review_kind: type === 'contestar' || type === 'escalar' ? 'contestation' : monitoria.pj_review_kind,
           pj_review_decision: null,
           pj_review_note: null,
           pj_reviewed_at: null,
           ...(type === 'contestar' || type === 'escalar' ? { contestation_result: 'pending' } : {}),
         } : {}),
-        ...(!isPjManagerAction && resolveContestationResult(actionDescriptions[type] || '')
-          ? { contestation_result: resolveContestationResult(actionDescriptions[type] || '') } : {}),
-        ...(isPj && monitoria.pj_review_kind === 'contestation' && type === 'aprovar'
-          ? { contestation_result: 'approved' } : {}),
-        ...(reevaluationOutcome ? { contestation_result: reevaluationOutcome } : {}),
+        ...(type === 'contestar' || type === 'escalar' ? { contestation_result: 'pending' } : {}),
+        ...(type === 'manter' || type === 'invalidar' ? { contestation_result: 'rejected' } : {}),
+        ...(finalQualityDecision && type === 'aprovar' ? { contestation_result: 'approved' } : {}),
+        ...(type === 'aprovar' && user.role === 'gestor_suporte' && monitoria.contestation_result === 'rejected'
+          ? { contestation_result: 'rejected' } : {}),
       };
 
     try {
@@ -313,6 +350,16 @@ export function useMonitoriaActions(
         if (error) throw error;
       } else if (user.role === 'gestor_suporte') {
         const { error } = await supabase.rpc('act_on_monitoria_as_support_manager', {
+          p_monitoria_id: id,
+          p_action: type,
+          p_note: finalNote || '',
+          p_attachments: actionAttachments,
+        });
+        if (error) throw error;
+      } else if ((user.role === 'gestor_qualidade' || user.role === 'admin')
+        && monitoria.status === 'aguardando_gestor_qualidade'
+        && ['aprovar', 'manter', 'invalidar'].includes(type)) {
+        const { error } = await supabase.rpc('act_on_monitoria_as_quality_manager', {
           p_monitoria_id: id,
           p_action: type,
           p_note: finalNote || '',

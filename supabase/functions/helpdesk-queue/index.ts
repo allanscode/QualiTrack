@@ -839,14 +839,16 @@ serve(async (req) => {
       const ids = [...new Set(monitorias.map(row => row.id))];
       for (let offset = 0; offset < ids.length; offset += 100) {
         const batch = ids.slice(offset, offset + 100);
-        const [positiveResult, childResult] = await Promise.all([
+        const [positiveResult, childResult, legacyChildResult] = await Promise.all([
           supabase.from('positive_auto_publications').select('monitoria_id,status').in('monitoria_id', batch),
           supabase.from('child_auto_publications').select('monitoria_id,status').in('monitoria_id', batch),
+          supabase.from('legacy_child_note_receipts').select('monitoria_id').in('monitoria_id', batch),
         ]);
-        if (positiveResult.error || childResult.error)
+        if (positiveResult.error || childResult.error || legacyChildResult.error)
           return jsonResponse({ error: 'Falha ao consultar evidências de envio.' }, 503);
         positives.push(...(positiveResult.data || []));
         children.push(...(childResult.data || []));
+        children.push(...(legacyChildResult.data || []).map(row => ({ monitoria_id: row.monitoria_id, status: 'sent' })));
         let submissionsComplete = false;
         for (let page = 0; page < 100; page++) {
           const { data, error } = await supabase.from('helpdesk_submissions')
@@ -1024,7 +1026,7 @@ serve(async (req) => {
         return jsonResponse({ error: 'Ticket e monitoria salva são obrigatórios.' }, 400);
       }
       const { data: savedMonitoria, error: monitoriaError } = await supabase.from('monitorias')
-        .select('id,ticket_id,form_id,score,status,active,evaluator_id,evaluator_note,form_snapshot')
+        .select('id,ticket_id,form_id,score,answers,status,active,evaluator_id,evaluator_note,form_snapshot')
         .eq('id', monitoriaId).maybeSingle();
       if (monitoriaError) return jsonResponse({ error: 'Não foi possível conferir a monitoria salva.' }, 503);
       const publicationError = childPublicationError(
@@ -1038,7 +1040,8 @@ serve(async (req) => {
       if (latestMonitoria?.id !== monitoriaId) {
         return jsonResponse({ error: 'Existe uma monitoria mais recente para este ticket. Confira o resultado atual antes do envio.' }, 409);
       }
-      const child_verdict = childPublicationVerdict(savedMonitoria as ChildPublicationMonitoria) || 'conforme';
+      const child_verdict = childPublicationVerdict(savedMonitoria as ChildPublicationMonitoria);
+      if (!child_verdict) return jsonResponse({ error: 'Veredito do chamado filho indisponível.' }, 409);
       const { data: catalog, error: catalogError } = await supabase.from('queue_ticket_catalog')
         .select('queue_type').eq('ticket_id', ticket_id).in('queue_type', ['filhos', 'filhos_invalidos']).limit(1);
       if (catalogError) return jsonResponse({ error: 'Não foi possível conferir a origem do chamado filho.' }, 503);
@@ -1056,9 +1059,11 @@ serve(async (req) => {
       const ticketResponse = await fetch(ticketUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(10000) });
       if (!ticketResponse.ok) return jsonResponse({ error: `Zendesk não encontrou o ticket (${ticketResponse.status}).` }, 502);
       const ticketBody = await ticketResponse.json();
-      if (['closed', 'archived'].includes(String(ticketBody.ticket?.status || '').toLowerCase())) {
-        return jsonResponse({ error: 'O ticket está fechado no Zendesk e não aceita comentários.' }, 409);
+      const ticketStatus = String(ticketBody.ticket?.status || '').toLowerCase();
+      if (ticketStatus === 'archived') {
+        return jsonResponse({ error: 'O ticket está arquivado no Zendesk e não aceita atualizações.' }, 409);
       }
+      const isClosedTicket = ticketStatus === 'closed';
 
       if (!Array.isArray(ticketBody.ticket?.tags)) {
         return jsonResponse({ error: 'Zendesk não retornou as tags atuais do ticket. Atualize e tente novamente.' }, 502);
@@ -1076,6 +1081,17 @@ serve(async (req) => {
             .eq('ticket_id', ticket_id).eq('queue_type', row.queue_type);
           if (catalogUpdateError) console.error('[helpdesk-queue] Falha ao atualizar catálogo após macro:', catalogUpdateError);
         }
+        const { error: autoPubError } = await supabase.from('child_auto_publications')
+          .upsert({
+            monitoria_id: monitoriaId,
+            ticket_id: String(ticket_id).trim(),
+            status: 'sent',
+            lease_id: null,
+            lease_until: null,
+            last_error: null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'monitoria_id' });
+        if (autoPubError) console.error('[helpdesk-queue] Falha ao registrar publicação manual de filho:', autoPubError);
       };
       const updatedStamp = ticketBody.ticket?.updated_at;
       if (typeof updatedStamp !== 'string' || !updatedStamp) {
@@ -1109,7 +1125,7 @@ serve(async (req) => {
       );
       if (!commentsResponse.ok) return jsonResponse({ error: 'Não foi possível conferir envios anteriores no Zendesk. Nenhuma macro foi enviada.' }, 502);
       const commentsBody = await commentsResponse.json();
-      const alreadySentForMonitoria = hasPublishedChildMacroForMonitoria(commentsBody.comments, monitoriaId, child_verdict);
+      const alreadySentForMonitoria = isClosedTicket || hasPublishedChildMacroForMonitoria(commentsBody.comments, monitoriaId, child_verdict);
       const correctsPreviousInvalid = child_verdict === 'conforme' && hasPublishedInvalidChildMacro(commentsBody.comments);
       const macroFields = childMacroCustomFields(child_verdict, child_verdict === 'conforme' && hasCriticalChildField(ticketBody.ticket?.custom_fields));
       if (alreadySentForMonitoria && currentTags.includes(CHILD_AUDITED_TAG)
@@ -2551,7 +2567,7 @@ async function executeAndPersistAIJob(
       evaluationType?: string; promptText?: string; sanitizedDialogue?: string;
     } | undefined;
     if (technical) {
-      await enrichGenerationMetadata(technical.attempts?.at(-1));
+      await Promise.all((technical.attempts || []).map(enrichGenerationMetadata));
       const clientSelection = payload.draft_meta?.selection_context;
       const actualFormId = payload.draft_meta?.form_id || null;
       const actualGuidelineIds = payload.guideline_ids || payload.draft_meta?.guideline_ids || [];
@@ -2744,7 +2760,7 @@ async function handleGenerateAuditorRecord(
       onAttempt: record => logAIAttempt('registro_auditor', ticket_id, undefined, record),
     });
     attempts = chain.attempts;
-    await enrichGenerationMetadata(attempts.at(-1));
+    await Promise.all(attempts.map(enrichGenerationMetadata));
 
     const result = { auditor_record: chain.value };
     const { error: logError } = await supabase.from('ai_evaluation_logs').insert({
@@ -3117,6 +3133,9 @@ async function handleEvaluateChildTicket(
   signal?: AbortSignal,
 ): Promise<Response> {
   const { ticket_id, ticket_subject, ticket_status, dialogue, ticket_fields, macro_type } = payload;
+  const configuredQuestions = payload.form_criteria?.sections.flatMap(section => section.questions) || [];
+  const questionIds = configuredQuestions.length ? configuredQuestions.map(question => question.id) : CHILD_QUESTION_IDS;
+  const criteriaText = configuredQuestions.map(question => `- [${question.id}] ${sanitizeMessageBody(question.text)}`).join('\n');
 
   if (!ticket_id) {
     return jsonResponse({ error: 'ticket_id é obrigatório para evaluate_child_ticket' }, 400);
@@ -3155,22 +3174,18 @@ async function handleEvaluateChildTicket(
         enum: ['conforme', 'nao_conforme', 'atencao'],
         description: 'Status geral da conformidade de abertura'
       },
-      score: {
-        type: 'number',
-        description: 'Nota de conformidade de 0 a 100'
-      },
       summary: {
         type: 'string',
         description: 'Resumo executivo do parecer de qualidade sobre o chamado filho'
       },
       checks: {
         type: 'array',
-        minItems: 6,
-        maxItems: 6,
+        minItems: questionIds.length,
+        maxItems: questionIds.length,
         items: {
           type: 'object',
           properties: {
-            question_id: { type: 'string', enum: CHILD_QUESTION_IDS },
+            question_id: { type: 'string', enum: questionIds },
             answer: { type: 'string', enum: ['SIM', 'NAO', 'NA'], description: 'SIM: conforme; NAO: falha comprovada; NA: não aplicável ou evidência insuficiente, explicada em details' },
             rule: { type: 'string', description: 'Nome da regra validada' },
             passed: { type: 'boolean', description: 'Se a regra foi cumprida' },
@@ -3186,7 +3201,7 @@ async function handleEvaluateChildTicket(
         description: 'Orientações práticas para o monitor ou analista'
       }
     },
-    required: ['detected_type', 'status', 'score', 'summary', 'checks', 'recommendations'],
+    required: ['detected_type', 'status', 'summary', 'checks', 'recommendations'],
     additionalProperties: false
   };
 
@@ -3272,7 +3287,10 @@ ${routingEvidenceText}
 CONTEÚDO / DESCRIÇÃO / COMENTÁRIOS DO TICKET FILHO:
 ${dialogueText || '(sem texto registrado)'}
 
-CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
+CRITÉRIOS DA FICHA EDITÁVEL DESTA MACRO (use exatamente estes IDs):
+${criteriaText || CHILD_QUESTION_IDS.join(', ')}
+
+CHECKS DE REFERÊNCIA DO MANUAL:
 1. question_id: "child-subject-preserved", rule: "Assunto da Abertura e Macro de Resolvido" — aplique as regras do assunto acima.
 2. question_id: "child-parent-linked", rule: "Vínculo com o Chamado Pai" — verifique se o chamado pai foi identificado e vinculado corretamente nos dados disponíveis. Não deduza vínculo somente por ser um ticket filho.
 3. question_id: "child-macro-preserved", rule: "Preservação do Texto da Macro" — aplique as regras do texto-base acima.
@@ -3280,9 +3298,9 @@ CHECKS OBRIGATÓRIOS QUE DEVEM CONSTAR NA RESPOSTA:
  5. question_id: "child-routing-correct", rule: "Direcionamento Correto ('Para')" — aplique as regras de direcionamento acima.
 6. question_id: "child-creator-authorized", rule: "Equipe Criadora Autorizada" — aplique a proibição de origem acima; é critério crítico.
 
-Retorne exatamente um check para cada question_id, com answer e details fundamentados. Use answer "SIM" para conformidade demonstrada, "NAO" para falha demonstrada e "NA" quando não aplicável ou quando os dados não permitirem verificar, explicando expressamente o motivo. Nunca invente evidências ou marque falha por falta de dados. passed deve ser true apenas para answer "SIM", e false para "NAO" ou "NA". Critérios "NA" não reduzem a nota; havendo evidência insuficiente, sinalize status "atencao" se não houver falha comprovada.
+Retorne exatamente um check para cada question_id da ficha editável desta macro, com answer e details fundamentados. Use answer "SIM" para conformidade demonstrada, "NAO" para falha demonstrada e "NA" quando não aplicável ou quando os dados não permitirem verificar, explicando expressamente o motivo. Nunca invente evidências ou marque falha por falta de dados. passed deve ser true apenas para answer "SIM", e false para "NAO" ou "NA". Havendo evidência insuficiente, sinalize status "atencao" se não houver falha comprovada. Não calcule nota ou percentual para chamados filhos.
 
-O manual também trata de tags e campos obrigatórios, mas a ficha atual contém apenas os seis critérios acima. Não atribua falha a tags sem um critério próprio na ficha e evidência da alteração; não mencione tags nos seis checks. Preserve a análise dos campos pertinentes aos critérios configurados.
+O manual também trata de tags e campos obrigatórios. Não atribua falha a tags sem um critério próprio na ficha e evidência da alteração; não mencione tags nos checks da ficha. Preserve a análise dos campos pertinentes aos critérios configurados.
 
 Analise os dados reais do ticket contra essas regras operacionais e gere o parecer estritamente no JSON do schema.`;
 
@@ -3311,7 +3329,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
         });
         const providerMs = Date.now() - modelStarted;
         const parsingStarted = Date.now();
-        const validated = validateChildEvaluationResponse(parseModelJSON(response.text));
+        const validated = validateChildEvaluationResponse(parseModelJSON(response.text), questionIds);
         const sections = payload.form_criteria?.sections.map(section => ({
           weight: typeof section.weight === 'number' ? section.weight : 0,
           questions: section.questions.map(question => ({ id: question.id, is_critical: question.is_critical })),

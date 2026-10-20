@@ -150,6 +150,7 @@ serve(async (req: Request) => {
     if (!monitoria) {
       return failure('Monitoria não encontrada', 'not_found', 404);
     }
+    if (!monitoria.active) return failure('Monitoria inativa não pode ser publicada.', 'validation', 409);
     if (monitoria.form_id === '6c7d1e88-841b-4da9-9a66-9f1464ce896f'
       || monitoria.form_snapshot?.ticket_kind === 'chamado_filho') {
       return failure('Tickets filhos usam a macro própria da fila Chamados Filhos.', 'validation', 409);
@@ -221,6 +222,16 @@ serve(async (req: Request) => {
       return failure(monitoria.satisfaction_result==='Positiva' && rawScore<75
         ? 'Pesquisa positiva com nota abaixo de 75%: aguarde a conclusão das revisões e contestações antes de invalidar no Zendesk.'
         : 'A monitoria está em contestação ou decisão de gestor. Aguarde a próxima versão da avaliação antes de publicar no Zendesk.', 'validation',409);
+    }
+    if (!dry_run && !['concluida','finalizada_alterada'].includes(monitoria.status)) {
+      return failure('Aguarde a decisão final antes de publicar no Zendesk.', 'validation', 409);
+    }
+    if (!dry_run) {
+      const latest = await supabaseAdmin.from('monitorias').select('id')
+        .eq('ticket_id', normalizedTicketId).eq('active', true)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (latest.error) return failure('Não foi possível conferir a versão atual da monitoria.', 'provider', 503);
+      if (latest.data?.id !== monitoria_id) return failure('Existe monitoria ativa mais recente para este ticket.', 'validation', 409);
     }
     const domainOutcome: 'positiva' | 'negativa' = (!isNaN(rawScore) && rawScore >= 75) ? 'positiva' : 'negativa';
 

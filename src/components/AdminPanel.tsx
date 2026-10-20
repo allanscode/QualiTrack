@@ -18,7 +18,8 @@ import {
   Target,
   Brain,
   Mail,
-  RotateCcw
+  RotateCcw,
+  Bell
 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -32,8 +33,9 @@ import AIHubManagement from './admin/AIHubManagement';
 import EmailConfigManagement from './admin/EmailConfigManagement';
 import RemovedMonitoriasManagement from './admin/RemovedMonitoriasManagement';
 import DeliveryDashboard from './admin/DeliveryDashboard';
+import NotificationSettingsManagement from './admin/NotificationSettingsManagement';
 
-export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub' | 'emails' | 'removed_monitorias' | 'deliveries';
+export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub' | 'emails' | 'notifications' | 'removed_monitorias' | 'deliveries';
 
 interface TabItem {
   key: AdminSubTab;
@@ -51,6 +53,7 @@ const ALL_ADMIN_TABS: TabItem[] = [
   { key: 'campos_extras', label: 'Campos Extras', icon: Sliders },
   { key: 'ia_hub', label: 'Inteligência Artificial', icon: Brain },
   { key: 'emails', label: 'E-mails & Disparos', icon: Mail },
+  { key: 'notifications', label: 'Notificações', icon: Bell },
   { key: 'removed_monitorias', label: 'Monitorias removidas', icon: RotateCcw },
   { key: 'deliveries', label: 'Entregas Zendesk', icon: BarChart3 },
 ];
@@ -215,6 +218,9 @@ export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPa
           {activeSubTab === 'campos_extras' && <DissatisfactionFieldsManagement forms={staticData.forms} />}
           {activeSubTab === 'ia_hub' && <AIHubManagement currentUser={currentUser} />}
           {activeSubTab === 'emails' && <EmailConfigManagement />}
+          {activeSubTab === 'notifications' && currentUser?.role === 'admin' && (
+            <NotificationSettingsManagement users={staticData.users} currentUser={currentUser} />
+          )}
           {activeSubTab === 'removed_monitorias' && currentUser?.role === 'admin' && <RemovedMonitoriasManagement currentUser={currentUser} />}
           {activeSubTab === 'deliveries' && currentUser?.role === 'admin' && <DeliveryDashboard />}
         </m.div>

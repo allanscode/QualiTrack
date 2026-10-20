@@ -274,7 +274,7 @@ export interface ChildTicketCheckResult {
 export interface ChildTicketAiEvaluation {
   detected_type: ChildTicketMacroType | 'desconhecido';
   status: 'conforme' | 'nao_conforme' | 'atencao';
-  score: number;
+  score?: number;
   summary: string;
   checks: ChildTicketCheckResult[];
   recommendations: string[];
@@ -320,6 +320,8 @@ export interface AIEvaluationLog {
     httpStatus?: number;
     durationMs?: number;
     routedProvider?: string;
+    routerAttempt?: number;
+    requestId?: string;
     startedAt?: string;
     promptTokens?: number;
     completionTokens?: number;

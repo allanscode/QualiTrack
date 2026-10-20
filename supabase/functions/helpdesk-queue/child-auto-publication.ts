@@ -6,7 +6,7 @@ import { CHILD_AUDITED_TAG } from './queue-search.ts';
 
 type Work = { monitoria_id: string; ticket_id: string; lease_id: string };
 type Monitoria = ChildPublicationMonitoria & { form_snapshot: { automation?: string; legacy_source?: string; child_ai_evaluation?: {status?: string} } | null };
-type Ticket = { status?: string; tags?: string[]; updated_at?: string; custom_fields?: Array<{ id: number; value: unknown }> };
+type Ticket = { id?: number; status?: string; tags?: string[]; updated_at?: string; followup_ids?: number[]; custom_fields?: Array<{ id: number; value: unknown }> };
 type ZendeskBody = { ticket?: Ticket; comments?: Array<{ body?: string }>; view?: { conditions?: { all?: Array<{field:string;operator:string;value?:string}>; any?: Array<{field:string;operator:string;value?:string}> } } };
 
 /** Uses the official child-ticket fields and exit tag. Ambiguous writes stop for review. */
@@ -40,7 +40,7 @@ export async function processChildAutoPublication(
       return await response.json();
     };
     const { data, error } = await db.from('monitorias')
-      .select('id,ticket_id,form_id,score,status,active,evaluator_id,evaluator_note,form_snapshot')
+      .select('id,ticket_id,form_id,score,answers,status,active,evaluator_id,evaluator_note,form_snapshot')
       .eq('id',work.monitoria_id).maybeSingle();
     if (error) throw error;
     const monitoria = data as Monitoria | null;
@@ -66,10 +66,11 @@ export async function processChildAutoPublication(
     }
     const ticketUrl = `${base}/tickets/${work.ticket_id}.json`;
     const ticket = (await read(ticketUrl)).ticket;
-    if (!ticket || ['closed','archived'].includes(ticket.status?.toLowerCase() || '')) {
-      await finish('skipped','Ticket fechado ou indisponível no Zendesk; monitoria permanece concluída.');
+    if (!ticket || ticket.status?.toLowerCase() === 'archived') {
+      await finish('skipped','Ticket arquivado ou indisponível no Zendesk.');
       return { processed: 1, status: 'skipped', ticket_id: work.ticket_id };
     }
+    const isClosed = ticket.status?.toLowerCase() === 'closed';
     if (!Array.isArray(ticket.tags) || !ticket.updated_at) throw new Error('Zendesk não retornou tags ou versão do ticket.');
 
     for (const viewId of ticket.tags.includes(CHILD_AUDITED_TAG) ? []
@@ -83,11 +84,11 @@ export async function processChildAutoPublication(
       if (!update.ok) throw new Error(`Zendesk recusou a exclusão da view ${viewId} (${update.status}).`);
     }
 
-    const comments = (await read(`${base}/tickets/${work.ticket_id}/comments.json?sort_order=desc&per_page=100`)).comments;
+    const comments = isClosed ? [] : (await read(`${base}/tickets/${work.ticket_id}/comments.json?sort_order=desc&per_page=100`)).comments;
     if (!Array.isArray(comments)) throw new Error('Zendesk não retornou os comentários anteriores.');
-    const alreadySent = hasPublishedChildMacroForMonitoria(comments,monitoria.id,verdict);
-    const correctsPreviousInvalid = verdict === 'conforme' && hasPublishedInvalidChildMacro(comments);
-    const fields = childMacroCustomFields(verdict,verdict === 'conforme' && hasCriticalChildField(ticket.custom_fields));
+    const alreadySent = isClosed || hasPublishedChildMacroForMonitoria(comments,monitoria.id,verdict);
+    const correctsPreviousInvalid = !isClosed && verdict === 'conforme' && hasPublishedInvalidChildMacro(comments);
+    const fields = childMacroCustomFields(verdict,!isClosed && verdict === 'conforme' && hasCriticalChildField(ticket.custom_fields));
     const verdictLabel = verdict === 'conforme' ? 'VÁLIDO' : 'INVÁLIDO';
     let confirmed = ticket;
     if (!alreadySent || missingCustomFields(ticket.custom_fields,fields).length) {
@@ -121,6 +122,14 @@ export async function processChildAutoPublication(
       if (!Array.isArray(confirmed?.tags) || !confirmed.tags.includes(CHILD_AUDITED_TAG)) {
         throw new Error('Zendesk não confirmou a tag de saída da fila.');
       }
+    }
+    const verified = (await read(ticketUrl)).ticket;
+    const verifiedComments = isClosed ? [] : (await read(`${base}/tickets/${work.ticket_id}/comments.json?sort_order=desc&per_page=100`)).comments;
+    if (missingCustomFields(verified?.custom_fields,fields).length
+      || !verified?.tags?.includes(CHILD_AUDITED_TAG)
+      || (!isClosed && (!Array.isArray(verifiedComments)
+        || !hasPublishedChildMacroForMonitoria(verifiedComments,monitoria.id,verdict)))) {
+      throw new Error('Zendesk não confirmou comentário, campos e tag da macro.');
     }
     for (const row of catalog.data) {
       const snapshot = row.ticket_snapshot && typeof row.ticket_snapshot === 'object' ? row.ticket_snapshot : {};

@@ -56,7 +56,7 @@ import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import { useMonitoriaDraft } from '../hooks/useMonitoriaDraft';
 import { getEvaluationOutcome } from '../lib/domainRules';
 import { awaitsFinalPositiveDecision, canPublishSavedMonitoria } from '../lib/helpdeskPublicationGate';
-import { CHILD_TICKET_FORM_ID, legacyChildNoteVerdict } from '../lib/childTicketForm';
+import { childVerdict, isChildFormId, legacyChildNoteVerdict } from '../lib/childTicketForm';
 import { isVerifiedTicketGroupPair } from '../lib/ticketTeam';
 import { getSavedZendeskTicketFields, normalizeZendeskTicketFields } from '../lib/monitoriaTicketFields';
 import Card from './ui/Card';
@@ -101,7 +101,7 @@ export default function MonitoriaForm({
     (initialData as any)?.aiEvaluation ||
     (initialData as any)?.form_snapshot?.ai_evaluation;
 
-  const isChildEvaluation = initialData?.form_id === CHILD_TICKET_FORM_ID
+  const isChildEvaluation = isChildFormId(initialData?.form_id)
     || (initialData?.form_snapshot as { ticket_kind?: string } | undefined)?.ticket_kind === 'chamado_filho';
   const childAiEval: ChildTicketAiEvaluation | undefined = isChildEvaluation
     ? ((initialData as any)?.childAiEvaluation || (initialData as any)?.form_snapshot?.child_ai_evaluation)
@@ -538,7 +538,8 @@ export default function MonitoriaForm({
     && canPublishSavedMonitoria(initialData)
     && !!header.ticket_id?.trim();
   const canPublishChild = isViewOnly && isChildEvaluation
-    && initialData?.status === 'concluida' && !legacyChildNoteVerdict(initialData)
+    && initialData?.status === 'concluida'
+    && !legacyChildNoteVerdict(initialData)
     && ['admin', 'gestor_qualidade', 'qualidade'].includes(user?.role || '');
   // Sugestão de desfecho do preview baseada na regra de domínio estrita (WQ-22):
   // score >= 75% -> Válido (positiva), score < 75% -> Invalidado (negativa)
@@ -576,7 +577,7 @@ export default function MonitoriaForm({
     qualityFieldsToShow,
     onSaved: (savedMonitoriaId: string, savedStatus: MonitoriaStatus) => {
       clearDraft();
-      if (header.form_id === CHILD_TICKET_FORM_ID && savedStatus === 'concluida' && score >= 75) {
+      if (isChildFormId(header.form_id) && savedStatus === 'concluida' && childVerdict(scores, selectedForm) === 'valido') {
         setChildPublishModal({ monitoriaId: savedMonitoriaId, fromConclusion: true });
         return;
       }
@@ -585,7 +586,7 @@ export default function MonitoriaForm({
       const publicationContext={status:savedStatus,score,satisfaction_result:header.satisfaction_result};
       const awaitsFinal=awaitsFinalPositiveDecision(publicationContext);
       const shouldAutoSend = /^\d+$/.test(ticketIdTrimmed)
-        && header.form_id !== CHILD_TICKET_FORM_ID
+        && !isChildFormId(header.form_id)
         && canPublishSavedMonitoria(publicationContext)
         && !isAdminEdit
         && !isReevaluating;
@@ -593,7 +594,7 @@ export default function MonitoriaForm({
       if (shouldAutoSend) {
         setHelpdeskModal({ monitoriaId: savedMonitoriaId, fromConclusion: true });
       } else {
-        if (awaitsFinal && header.form_id!==CHILD_TICKET_FORM_ID) {
+        if (awaitsFinal && !isChildFormId(header.form_id)) {
           toast.info('Monitoria salva. A invalidação no Zendesk aguarda a conclusão das revisões e contestações.');
         }
         onSaved(savedMonitoriaId);
@@ -683,7 +684,7 @@ export default function MonitoriaForm({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <h2 className="text-sm sm:text-lg font-black text-brand-primary tracking-tight uppercase truncate">
-                  {isViewOnly ? 'Visualizar' : isAdminEdit ? 'Editar (Admin)' : isReevaluating ? 'Reavaliar' : 'Nova'} Monitoria
+                  {isViewOnly ? 'Visualizar' : isAdminEdit ? 'Editar Avaliação' : isReevaluating ? 'Reavaliar' : 'Nova'} Monitoria
                 </h2>
                 {isViewOnly && (
                   <Badge variant="warning" size="xs" className="flex items-center gap-1 flex-shrink-0 text-[9px] px-1.5 py-0.5">
@@ -710,7 +711,7 @@ export default function MonitoriaForm({
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* Docked Score Badge in Top Header (appears on scroll in step 2) */}
             <AnimatePresence>
-              {scoreCompact && step === 2 && selectedForm && (
+              {scoreCompact && step === 2 && selectedForm && !isChildFormId(header.form_id) && (
                 <m.div
                   key="header-docked-score"
                   initial={{ opacity: 0, scale: 0.72, y: -4 }}
@@ -1086,9 +1087,15 @@ export default function MonitoriaForm({
 
           {step === 2 && selectedForm && (
             <section className="space-y-8 animate-fade-in max-w-4xl mx-auto">
+              {isChildFormId(header.form_id) && (
+                <div className="rounded-2xl border border-surface-border bg-surface-card p-5" role="status">
+                  <p className="text-sm font-bold text-brand-primary">Veredito do chamado filho: {childVerdict(scores, selectedForm) === 'valido' ? 'Válido' : childVerdict(scores, selectedForm) === 'invalido' ? 'Inválido' : 'Preencha todos os critérios'}</p>
+                  <p className="mt-1 text-xs text-brand-muted">Todos os critérios devem estar atendidos para validar a abertura.</p>
+                </div>
+              )}
               {/* Score Banner Principal - Animação de encolher ao rolar para baixo e transferir para o topo fixo */}
               <AnimatePresence>
-                {!scoreCompact && (
+                {!scoreCompact && !isChildFormId(header.form_id) && (
                   <m.div
                     key="step2-main-score-banner"
                     initial={{ opacity: 0, height: 0, scale: 0.95 }}
@@ -1171,16 +1178,16 @@ export default function MonitoriaForm({
                     <div className="w-8 h-8 rounded-xl bg-brand-accent text-white flex items-center justify-center text-xs font-black font-mono shadow-xs">{sIdx + 1}</div>
                     <div>
                       <h3 className="text-lg font-black text-brand-primary tracking-tight uppercase">{section.title}</h3>
-                      <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Peso desta seção: {section.weight}%</p>
+                      {!isChildFormId(header.form_id) && <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Peso desta seção: {section.weight}%</p>}
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4">
                     {section.questions.map(q => (
-                      <Card key={q.id} className={`bg-surface-card rounded-xl p-5 hover:border-brand-accent transition-all group ${q.is_critical && scores[q.id] === 'NAO' ? 'border-error ring-4 ring-error/5' : ''}`}>
+                      <Card key={q.id} className={`bg-surface-card rounded-xl p-5 hover:border-brand-accent transition-all group ${!isChildFormId(header.form_id) && q.is_critical && scores[q.id] === 'NAO' ? 'border-error ring-4 ring-error/5' : ''}`}>
                         <div className="flex flex-col md:flex-row justify-between gap-6">
                           <div className="flex-1">
                             <div className="flex items-start gap-3">
-                              {q.is_critical && (
+                              {!isChildFormId(header.form_id) && q.is_critical && (
                                 <Badge variant="error" size="sm" className="mt-1 flex-shrink-0 animate-pulse">ERRO CRÍTICO</Badge>
                               )}
                               <div className="flex items-center gap-2 flex-wrap">
@@ -1195,13 +1202,20 @@ export default function MonitoriaForm({
                                 )}
                               </div>
                             </div>
-                            <div className="flex items-center gap-4 mt-2">
+                            {!isChildFormId(header.form_id) && <div className="flex items-center gap-4 mt-2">
                               <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">
                                 Impacto: {((section.weight || 0) / (section.questions.filter(qu => scores[qu.id] !== 'NA').length || section.questions.length)).toFixed(1)}%
                               </span>
-                            </div>
+                            </div>}
                           </div>
-                          <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
+                          {isChildFormId(header.form_id) ? (
+                            <label className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface-subtle px-3 py-2 text-xs font-bold text-brand-primary">
+                              <input type="checkbox" checked={scores[q.id] === 'SIM'}
+                                onChange={event => setScores(prev => ({ ...prev, [q.id]: event.target.checked ? 'SIM' : 'NAO' }))}
+                                disabled={isViewOnly} />
+                              Critério atendido
+                            </label>
+                          ) : <div className="flex gap-0.5 bg-surface-subtle p-0.5 rounded-lg border border-surface-border h-fit flex-shrink-0">
                             {(['SIM', 'NAO', 'NA'] as const).map(opt => {
                               const isSelected = scores[q.id] === opt;
                               let selectedStyle = 'bg-brand-primary text-brand-on-primary shadow-xs';
@@ -1232,7 +1246,7 @@ export default function MonitoriaForm({
                                 </button>
                               );
                             })}
-                          </div>
+                          </div>}
                         </div>
 
                         {/* Campo de Observação do Auditor */}
@@ -1411,7 +1425,7 @@ export default function MonitoriaForm({
                 </div>
               ))}
 
-              {selectedForm.critical_errors && selectedForm.critical_errors.length > 0 && (
+              {!isChildFormId(header.form_id) && selectedForm.critical_errors && selectedForm.critical_errors.length > 0 && (
                 <div className="pt-10 border-t border-error/10">
                   <h3 className="text-sm font-black text-error flex items-center gap-1.5 mb-4 uppercase tracking-wider"><AlertOctagon className="w-4 h-4" /> Itens Fatais (Erros Críticos)</h3>
                   <div className="grid grid-cols-1 gap-3">
@@ -1590,7 +1604,7 @@ export default function MonitoriaForm({
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 px-1">
                   <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest">Registro do Auditor</p>
-                  {!isViewOnly && !isReevaluating && (
+                  {!isViewOnly && !isReevaluating && !isChildFormId(header.form_id) && (
                     <Button
                       type="button"
                       size="sm"
@@ -1705,11 +1719,6 @@ export default function MonitoriaForm({
                               {childAiEval.status === 'conforme' ? 'Conforme' : childAiEval.status === 'nao_conforme' ? 'Não Conforme' : 'Atenção'}
                             </Badge>
                           </div>
-                          {childAiEval.score !== undefined && (
-                            <span className="text-xs font-mono font-bold text-brand-muted">
-                              Conformidade: {childAiEval.score}%
-                            </span>
-                          )}
                         </div>
 
                         {childAiEval.checks && childAiEval.checks.length > 0 && (

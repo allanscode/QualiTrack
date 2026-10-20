@@ -1,5 +1,5 @@
 import type { Monitoria, User } from '../types';
-import { CHILD_TICKET_FORM_ID } from './childTicketForm';
+import { isChildFormId } from './childTicketForm';
 
 export type EvaluationVolumeSort = 'positive' | 'negative' | 'proactive' | 'total';
 type VolumeMonitoria = Pick<Monitoria, 'id' | 'evaluated_id' | 'form_id' | 'score' | 'satisfaction_result'>
@@ -22,15 +22,15 @@ export function getAgentEvaluationVolumes(rows: readonly VolumeMonitoria[], user
   const agents = new Map<string, AgentEvaluationVolume>();
   const seen = new Set<string>();
   for (const row of rows) {
-    if (row.active === false || !row.evaluated_id || !Number.isFinite(row.score) || seen.has(row.id)) continue;
+    const snapshot = row.form_snapshot as (Monitoria['form_snapshot'] & { ticket_kind?: string });
+    const child = isChildFormId(row.form_id) || snapshot?.ticket_kind === 'chamado_filho';
+    if (row.active === false || !row.evaluated_id || (!child && !Number.isFinite(row.score)) || seen.has(row.id)) continue;
     seen.add(row.id);
     const agent = agents.get(row.evaluated_id) ?? {
       id: row.evaluated_id, name: names.get(row.evaluated_id) || row.evaluated_name || 'Agente não identificado',
       teams: [], positive: 0, negative: 0, proactive: 0, child: 0, other: 0, total: 0,
     };
     if (row.team_name && !agent.teams.includes(row.team_name)) agent.teams.push(row.team_name);
-    const snapshot = row.form_snapshot as (Monitoria['form_snapshot'] & { ticket_kind?: string });
-    const child = row.form_id === CHILD_TICKET_FORM_ID || snapshot?.ticket_kind === 'chamado_filho';
     if (child) agent.child++;
     else if (row.satisfaction_result === 'Positiva') agent.positive++;
     else if (row.satisfaction_result === 'Negativa') agent.negative++;

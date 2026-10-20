@@ -58,6 +58,15 @@ describe('durable positive automation queue',()=>{
     expect(mergePositiveAutomation([], [closed], new Set())).toEqual([]);
     expect(mergePositiveAutomation([closed.ticket_snapshot], [], new Set())).toEqual([]);
   });
+  it('shows closed child reviews and blocks, but keeps closed pending intake hidden', async () => {
+    const closed = { ...row, ticket_snapshot: { ...row.ticket_snapshot, status: 'closed' } };
+    const review: PositiveAutomationItem = { ...closed, ticket_id: '176473', status: 'review_required' };
+    const pending: PositiveAutomationItem = { ...closed, ticket_id: '176647', status: 'pending' };
+    localStorage.setItem('qualitrack-child-ai-queue', JSON.stringify([closed, review, pending]));
+    expect((await fetchPositiveAutomation('filhos')).map(item => item.ticket_id)).toEqual(['123', '176473']);
+    expect(mergePositiveAutomation([], [closed, review, pending], new Set(), undefined, 'filhos').map(ticket => ticket.ticket_id))
+      .toEqual(['123', '176473']);
+  });
   it('shows ticket 182786 again after its monitoria was removed', () => {
     const audited = activeMonitoriaTicketIds([
       { ticket_id: '182786', active: false },

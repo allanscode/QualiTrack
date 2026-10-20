@@ -14,7 +14,10 @@ it('creates a fresh Realtime channel when StrictMode mounts the effect twice', a
   const client = {
     from: () => ({
       select: () => ({
-        order: () => ({ limit: async () => ({ data: [], error: null }) }),
+        in: (_column: string, values: string[]) => {
+          expect(values).toEqual(['csat_bad', 'child_ticket_review_required']);
+          return { order: () => ({ limit: async () => ({ data: [], error: null }) }) };
+        },
       }),
     }),
     channel: (topic: string) => {

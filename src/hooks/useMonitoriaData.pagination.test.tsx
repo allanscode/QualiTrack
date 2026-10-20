@@ -14,16 +14,32 @@ vi.mock('../lib/supabase', () => ({
   mockDb: {},
   supabase: {
     from: (source: string) => {
+      const orders: { field: keyof Monitoria; ascending: boolean }[] = [];
       const query = {
         select: () => query,
         eq: () => query,
         in: () => query,
         neq: () => query,
         or: () => query,
-        order: () => query,
+        order: (field: keyof Monitoria, options: { ascending: boolean }) => {
+          orders.push({ field, ascending: options.ascending });
+          return query;
+        },
         range: (from: number, to: number) => {
           state.ranges.push({ source, from, to });
-          const all = state.sources[source] || [];
+          const all = [...(state.sources[source] || [])].sort((a, b) => {
+            for (const { field, ascending } of orders) {
+              const left = a[field];
+              const right = b[field];
+              if (left == null && right != null) return 1;
+              if (left != null && right == null) return -1;
+              if (left == null || right == null) continue;
+              const result = typeof left === 'number' && typeof right === 'number'
+                ? left - right : String(left).localeCompare(String(right));
+              if (result) return ascending ? result : -result;
+            }
+            return 0;
+          });
           return Promise.resolve({ data: all.slice(from, to + 1), count: all.length, error: null });
         },
       };
@@ -47,6 +63,26 @@ beforeEach(() => {
   clearPageCache();
   state.sources = {};
   state.ranges = [];
+});
+
+it('sorts score across all server pages and resets the reviewer merge when direction changes', async () => {
+  state.sources.vw_monitorias_suporte = Array.from({ length: 60 }, (_, index) => ({
+    ...row('own', index, index), score: index * 2,
+  }));
+  state.sources.vw_monitorias_pj_reviewer = Array.from({ length: 60 }, (_, index) => ({
+    ...row('review', index, index), score: index * 2 + 1,
+  }));
+  const user = { id: 'agent', role: 'suporte', active: true } as User;
+  const hook = renderHook(({ page, direction }) => useMonitoriaData(user, 'monitorias', {
+    page, filters: { sortField: 'score', sortDirection: direction as 'asc' | 'desc' },
+  }), { initialProps: { page: 0, direction: 'asc' } });
+  await waitFor(() => expect(hook.result.current.monitorias.map(item => item.score)).toEqual(Array.from({ length: 50 }, (_, index) => index)));
+  hook.rerender({ page: 1, direction: 'asc' });
+  await waitFor(() => expect(hook.result.current.monitorias[0]?.score).toBe(50));
+  expect(hook.result.current.monitorias[49]?.score).toBe(99);
+  hook.rerender({ page: 0, direction: 'desc' });
+  await waitFor(() => expect(hook.result.current.monitorias[0]?.score).toBe(119));
+  expect(hook.result.current.monitorias[49]?.score).toBe(70);
 });
 afterEach(cleanup);
 
