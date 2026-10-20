@@ -9,7 +9,13 @@ type Monitoria = {
   evaluator_id: string; evaluator_note: string | null; satisfaction_result: string | null;
   satisfaction_has_record: boolean; satisfaction_record_text: string | null;
 };
-const CHILD_FORM_ID = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
+const CHILD_FORM_IDS = new Set([
+  '6c7d1e88-841b-4da9-9a66-9f1464ce896f',
+  '6c7d1e88-841b-4da9-9a66-9f1464ce8970',
+  '6c7d1e88-841b-4da9-9a66-9f1464ce8971',
+  '6c7d1e88-841b-4da9-9a66-9f1464ce8972',
+  '6c7d1e88-841b-4da9-9a66-9f1464ce8973',
+]);
 
 /** Processes one durable publication. An uncertain Zendesk write is never retried automatically. */
 export async function processPositiveAutoPublication(db: SupabaseClient, provider: HelpdeskProvider) {
@@ -34,7 +40,9 @@ export async function processPositiveAutoPublication(db: SupabaseClient, provide
     const monitoria = data as Monitoria | null;
     if (!monitoria || !monitoria.active || !['concluida','finalizada_alterada'].includes(monitoria.status)
       || !Number.isFinite(monitoria.score) || monitoria.score < 0 || monitoria.score > 100
-      || monitoria.form_id === CHILD_FORM_ID
+      || CHILD_FORM_IDS.has(monitoria.form_id)
+      || monitoria.form_snapshot?.ticket_kind === 'chamado_filho'
+      || monitoria.form_snapshot?.automation === 'child_ticket'
       || monitoria.ticket_id?.trim() !== work.ticket_id) {
       await finish('skipped','A monitoria deixou de ser uma decisão final válida.');
       return { processed: 1, status: 'skipped', ticket_id: work.ticket_id };

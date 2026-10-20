@@ -56,7 +56,7 @@ export class ZendeskProvider implements HelpdeskProvider {
 
     const headers = { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
     const read = async (targetUrl: string): Promise<Record<string, any>> => {
-      const response = await fetch(targetUrl, { headers, signal: AbortSignal.timeout(10000) });
+      const response = await (this.fetcher ?? fetch)(targetUrl, { headers, signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new Error(`Zendesk retornou ${response.status} na conferência do envio.`);
       return await response.json();
     };
@@ -74,6 +74,9 @@ export class ZendeskProvider implements HelpdeskProvider {
           },
         }),
         custom_fields: customFields,
+        ...(typeof current?.updated_at === 'string'
+          ? { safe_update: true, updated_stamp: current.updated_at }
+          : {}),
       },
     };
 

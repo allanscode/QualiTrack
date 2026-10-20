@@ -102,6 +102,7 @@ const POSITIVE_VIEW_ID = Deno.env.get('HELPDESK_POSITIVE_VIEW_ID') || '483188558
 const PROACTIVE_VIEW_ID = Deno.env.get('HELPDESK_PROACTIVE_VIEW_ID') || '47851284392724';
 const CHILD_VIEW_ID = Deno.env.get('HELPDESK_CHILD_VIEW_ID') || '47405806430228';
 const INVALID_CHILD_VIEW_ID = Deno.env.get('HELPDESK_INVALID_CHILD_VIEW_ID') || '47656856998292';
+const PARENT_TICKET_FIELD_ID = Number(Deno.env.get('HELPDESK_PARENT_TICKET_FIELD_ID') || '41306351713940');
 
 // Página pequena (25) em vez de buscar tudo de uma vez — views com centenas
 // de tickets (ex.: 808 em Proativas) estourariam o rate limit do Zendesk
@@ -210,6 +211,7 @@ const RequestSchema = z.object({
     }).optional(),
   }).optional(),
   ticket_subject: z.string().max(500).optional(),
+  parent_ticket_id: z.string().regex(/^\d{1,12}$/).nullable().optional(),
   ticket_status: z.string().max(40).optional(),
   search_term: z.string().max(200).optional(),
   // Cursor de paginação — vem de um `next_cursor` de uma resposta anterior
@@ -1746,25 +1748,18 @@ serve(async (req) => {
           childMacroType = 'produtividade';
         }
 
+        const explicitParentField = Array.isArray(t.custom_fields)
+          ? t.custom_fields.find((field: any) => field.id === PARENT_TICKET_FIELD_ID)?.value
+          : undefined;
         let parentTicketId: string | undefined;
-        // 1. problem_id é o campo nativo do Zendesk para relação pai → filho — máxima prioridade.
-        if (t.problem_id && Number(t.problem_id) > 0) {
+        if ((typeof explicitParentField === 'string' || typeof explicitParentField === 'number')
+          && /^\d{1,12}$/.test(String(explicitParentField).trim())) {
+          parentTicketId = String(explicitParentField).trim();
+        } else if (t.problem_id && Number(t.problem_id) > 0) {
           parentTicketId = String(t.problem_id);
-        }
-        // 2. Regex no assunto: ex. "Filho #168555 - Análise Técnica"
-        if (!parentTicketId && t.subject) {
-          const match = t.subject.match(/#(\d{5,9})/);
+        } else if (t.subject) {
+          const match = t.subject.match(/#(\d{1,12})/);
           if (match) parentTicketId = match[1];
-        }
-        // 3. Último recurso: custom_fields com 6+ dígitos (exige 6 para evitar capturar
-        //    IDs internos curtos, como IDs de categorias/classificações com 5 dígitos).
-        if (!parentTicketId && Array.isArray(t.custom_fields)) {
-          for (const cf of t.custom_fields) {
-            if (cf.value && typeof cf.value === 'string' && /^\d{6,9}$/.test(cf.value.trim())) {
-              parentTicketId = cf.value.trim();
-              break;
-            }
-          }
         }
 
         return {
@@ -3132,7 +3127,7 @@ async function handleEvaluateChildTicket(
   callerId?: string,
   signal?: AbortSignal,
 ): Promise<Response> {
-  const { ticket_id, ticket_subject, ticket_status, dialogue, ticket_fields, macro_type } = payload;
+  const { ticket_id, ticket_subject, parent_ticket_id, ticket_status, dialogue, ticket_fields, macro_type } = payload;
   const configuredQuestions = payload.form_criteria?.sections.flatMap(section => section.questions) || [];
   const questionIds = configuredQuestions.length ? configuredQuestions.map(question => question.id) : CHILD_QUESTION_IDS;
   const criteriaText = configuredQuestions.map(question => `- [${question.id}] ${sanitizeMessageBody(question.text)}`).join('\n');
@@ -3275,6 +3270,7 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
 
 DADOS DO CHAMADO FILHO SOB AUDITORIA:
 - Ticket: #${ticket_id}
+- Chamado pai vinculado (ID normalizado do Zendesk): ${parent_ticket_id ? `#${parent_ticket_id}` : 'não identificado nos campos de vínculo disponíveis'}
 - Assunto Registrado: ${sanitizeMessageBody(ticket_subject || 'Não informado')}
 - Status Atual do Ticket: ${sanitizeMessageBody(ticket_status || 'Não informado')}
 - Tipo Sugerido/Macro: ${macro_type || 'Detectar automaticamente'}
@@ -3292,7 +3288,7 @@ ${criteriaText || CHILD_QUESTION_IDS.join(', ')}
 
 CHECKS DE REFERÊNCIA DO MANUAL:
 1. question_id: "child-subject-preserved", rule: "Assunto da Abertura e Macro de Resolvido" — aplique as regras do assunto acima.
-2. question_id: "child-parent-linked", rule: "Vínculo com o Chamado Pai" — verifique se o chamado pai foi identificado e vinculado corretamente nos dados disponíveis. Não deduza vínculo somente por ser um ticket filho.
+2. question_id: "child-parent-linked", rule: "Vínculo com o Chamado Pai" — use o ID normalizado acima quando presente como evidência de identificação do ticket pai. Confirme o vínculo com o campo Zendesk "ID Ticket Pai", problem_id ou ID explicitamente registrado no assunto/campos. Não exija problem_id se outra relação explícita foi encontrada e não deduza vínculo somente por ser um ticket filho. Se nenhum campo ou evidência contiver o ID do pai, responda NA e explique a ausência de vínculo verificável.
 3. question_id: "child-macro-preserved", rule: "Preservação do Texto da Macro" — aplique as regras do texto-base acima.
 4. question_id: "child-macro-enriched", rule: "Detalhamento Técnico Complementar" — avalie se há um resumo coerente e específico da demanda, suficiente para a continuidade do atendimento. Uma frase ou poucas linhas podem bastar. Não reprove por campos opcionais da macro em branco nem exija logs, acessos, versões ou passos quando não forem aplicáveis; se faltar o próprio relato, explique objetivamente qual contexto da demanda não foi registrado.
  5. question_id: "child-routing-correct", rule: "Direcionamento Correto ('Para')" — aplique as regras de direcionamento acima.

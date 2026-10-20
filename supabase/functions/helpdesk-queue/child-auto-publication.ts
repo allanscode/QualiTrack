@@ -88,7 +88,7 @@ export async function processChildAutoPublication(
     if (!Array.isArray(comments)) throw new Error('Zendesk não retornou os comentários anteriores.');
     const alreadySent = isClosed || hasPublishedChildMacroForMonitoria(comments,monitoria.id,verdict);
     const correctsPreviousInvalid = !isClosed && verdict === 'conforme' && hasPublishedInvalidChildMacro(comments);
-    const fields = childMacroCustomFields(verdict,!isClosed && verdict === 'conforme' && hasCriticalChildField(ticket.custom_fields));
+    const fields = childMacroCustomFields(verdict,verdict === 'conforme' && hasCriticalChildField(ticket.custom_fields));
     const verdictLabel = verdict === 'conforme' ? 'VÁLIDO' : 'INVÁLIDO';
     let confirmed = ticket;
     if (!alreadySent || missingCustomFields(ticket.custom_fields,fields).length) {
