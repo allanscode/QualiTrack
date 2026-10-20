@@ -29,3 +29,31 @@ export function getAiLogTokenUsage(log: AIEvaluationLog): { input: number | null
   };
   return { input: sum('promptTokens'), output: sum('completionTokens') };
 }
+
+export function getAiLogUsage(log: AIEvaluationLog): {
+  calls: number;
+  cost: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+} {
+  const attempts = log.attempts || [];
+  const costs = attempts.map(attempt => attempt.cost)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+  const tokens = getAiLogTokenUsage(log);
+  return {
+    calls: attempts.length,
+    cost: costs.length ? costs.reduce((total, value) => total + value, 0) : null,
+    inputTokens: tokens.input,
+    outputTokens: tokens.output,
+  };
+}
+
+export function formatAiLogCost(cost: number | null): string {
+  if (cost === null) return '--';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 8,
+  }).format(cost);
+}

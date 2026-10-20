@@ -4,9 +4,10 @@
 
 O banco de produção tinha aproximadamente **55 MB em 08/10/2026**. Uma cópia lógica diária
 transferiria até cerca de **1,65 GB/mês de dados brutos** (55 MB × 30; compressão reduz o
-tráfego). O staging existente é `secfejmccojxsvdntljx`, mas a credencial de gestão atual
-recebe HTTP 403 nesse projeto; portanto, plano, cota e capacidade de restauração lá ainda
-precisam ser confirmados. O limite gratuito publicado é 500 MB de banco por projeto; um
+tráfego). O staging existente é `secfejmccojxsvdntljx`. O acesso de gestão foi validado em
+16/10/2026 com a credencial específica desse projeto, e o recorte de chamados filhos foi
+copiado e testado nele. A cópia integral diária continua pendente; plano, cota e capacidade de
+restauração ainda precisam ser confirmados. O limite gratuito publicado é 500 MB de banco por projeto; um
 projeto Pro adicional começa em US$ 10/mês de compute dentro de uma organização Pro, cujo
 plano começa em US$ 25/mês. Excedentes de armazenamento e transferência dependem do plano.
 Não há cobrança específica por cada `pg_dump`/restauração, mas computação e tráfego podem
@@ -36,5 +37,5 @@ novo projeto é criado. A rotina segura precisa de cópia lógica com uma etapa 
 5. Fazer um teste periódico de restauração e de bloqueio de chamadas externas; alertar se
    qualquer etapa falhar. Falha deve preservar o staging anterior e o último dump íntegro.
 
-Antes de implementar, confirmar acesso de gestão ao projeto de staging, cotas do plano,
-destino off-site criptografado, política de retenção e janela de indisponibilidade aceita.
+Antes de implementar a cópia integral diária, confirmar cotas do plano, destino off-site
+criptografado, política de retenção e janela de indisponibilidade aceita.

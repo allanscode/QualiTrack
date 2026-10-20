@@ -48,6 +48,8 @@ export interface PublishEvaluationInput {
   outcome: EvaluationOutcome;
   htmlBody: string;
   clearPreviousInvalid?: boolean;
+  /** Automatic delivery may create a linked ticket when the source is closed. */
+  allowFollowUp?: boolean;
 }
 
 /**
@@ -56,6 +58,6 @@ export interface PublishEvaluationInput {
  */
 export interface HelpdeskProvider {
   readonly name: string;
-  checkPublicationEligibility(ticketId: string): Promise<{ eligible: boolean; reason?: string }>;
-  publishEvaluation(input: PublishEvaluationInput): Promise<{ externalCommentId: string }>;
+  checkPublicationEligibility(ticketId: string, options?: { allowFollowUp?: boolean }): Promise<{ eligible: boolean; reason?: string }>;
+  publishEvaluation(input: PublishEvaluationInput): Promise<{ externalCommentId: string; externalTicketId?: string }>;
 }

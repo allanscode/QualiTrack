@@ -1,5 +1,4 @@
 import { incompleteResponse } from './ai-fallback.ts';
-import { calculateCanonicalQualityScore } from './quality-score.ts';
 
 export const CHILD_QUESTION_IDS = [
   'child-subject-preserved', 'child-parent-linked', 'child-macro-preserved',
@@ -46,23 +45,17 @@ type ChildAnswer = 'SIM' | 'NAO' | 'NA';
 type ChildEvaluation = {
   detected_type: string;
   status: 'conforme' | 'nao_conforme' | 'atencao';
-  score: number;
+  score?: number;
   summary: string;
   checks: Array<{ question_id: string; answer: ChildAnswer; passed: boolean; details: string; rule: string }>;
   recommendations: string[];
 };
 
-const CHILD_DEFAULT_SCORE_SECTIONS = [
-  { weight: 35, questions: [{ id: 'child-subject-preserved', is_critical: true }, { id: 'child-parent-linked' }] },
-  { weight: 40, questions: [{ id: 'child-macro-preserved', is_critical: true }, { id: 'child-macro-enriched' }] },
-  { weight: 25, questions: [{ id: 'child-routing-correct' }, { id: 'child-creator-authorized', is_critical: true }] },
-];
-
 /** The opening audit determines the child recipient; the specialist group belongs to the parent. */
 export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
   result: T,
   evidence: ChildCreationRoutingEvidence | null,
-  sections?: Array<{ weight?: number; questions?: Array<{ id: string; is_critical?: boolean }> }>,
+  _sections?: Array<{ weight?: number; questions?: Array<{ id: string; is_critical?: boolean }> }>,
 ): T {
   if (result.detected_type === 'desconhecido') return result;
   const routing = result.checks.find(check => check.question_id === 'child-routing-correct');
@@ -86,8 +79,6 @@ export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
         ? `A equipe de origem identificada na abertura (${evidence!.creatorGroupName}) não está entre as equipes proibidas pelo Manual de ticket filho.`
         : 'Não foi possível confirmar a equipe do criador na abertura; confira o histórico antes de invalidar por esta regra.' }
     : check);
-  const answers = Object.fromEntries(checks.map(check => [check.question_id, check.answer])) as Record<string, ChildAnswer>;
-  const score = calculateCanonicalQualityScore(sections?.length ? sections : CHILD_DEFAULT_SCORE_SECTIONS, answers);
   const status = checks.some(check => check.answer === 'NAO') ? 'nao_conforme'
     : checks.some(check => check.answer === 'NA') ? 'atencao' : 'conforme';
   const otherFailures = checks.filter(check => check.question_id !== 'child-routing-correct' && check.answer === 'NAO');
@@ -100,27 +91,28 @@ export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
         ? `A avaliação permanece não conforme por: ${otherFailures.map(check => check.rule).join(', ')}.`
         : 'Os demais critérios exigem conferência por evidência insuficiente.'}`
     : 'Confira o histórico de criação e os demais critérios apontados no parecer.';
-  return { ...result, checks, score, status, summary,
-    recommendations: status === 'conforme' ? [] : ['Conferir os demais critérios apontados no parecer.'] };
+  const withoutScore = { ...result };
+  delete withoutScore.score;
+  return { ...withoutScore, checks, status, summary,
+    recommendations: status === 'conforme' ? [] : ['Conferir os demais critérios apontados no parecer.'] } as T;
 }
 
-export function validateChildEvaluationResponse(value: unknown): any {
+export function validateChildEvaluationResponse(value: unknown, questionIds: readonly string[] = CHILD_QUESTION_IDS): any {
   if (!value || typeof value !== 'object' || Array.isArray(value)) incompleteResponse('O parecer do chamado filho não é um objeto JSON.');
   const parsed = value as Record<string, any>;
   if (!['nova_demanda', 'analise_tecnica', 'apoio_tecnico', 'produtividade', 'desconhecido'].includes(parsed.detected_type)) {
     incompleteResponse('O parecer não contém detected_type válido.');
   }
   if (!['conforme', 'nao_conforme', 'atencao'].includes(parsed.status)) incompleteResponse('O parecer não contém status válido.');
-  if (!Number.isFinite(parsed.score) || parsed.score < 0 || parsed.score > 100) incompleteResponse('O parecer não contém score válido.');
   if (typeof parsed.summary !== 'string' || !parsed.summary.trim()) incompleteResponse('O parecer não contém summary válido.');
-  if (!Array.isArray(parsed.checks) || parsed.checks.length !== CHILD_QUESTION_IDS.length || !parsed.checks.every((check: any) =>
-    check && CHILD_QUESTION_IDS.includes(check.question_id)
+  if (!Array.isArray(parsed.checks) || parsed.checks.length !== questionIds.length || !parsed.checks.every((check: any) =>
+    check && questionIds.includes(check.question_id)
     && ['SIM', 'NAO', 'NA'].includes(check.answer)
     && typeof check.rule === 'string' && check.rule.trim()
     && typeof check.passed === 'boolean' && check.passed === (check.answer === 'SIM')
     && typeof check.details === 'string' && check.details.trim())
-    || new Set(parsed.checks.map((check: { question_id: string }) => check.question_id)).size !== CHILD_QUESTION_IDS.length) {
-    incompleteResponse('O parecer não contém os seis critérios da ficha completos e sem duplicação.');
+    || new Set(parsed.checks.map((check: { question_id: string }) => check.question_id)).size !== questionIds.length) {
+    incompleteResponse('O parecer não contém todos os critérios da ficha completos e sem duplicação.');
   }
   if (parsed.checks.some((check: { rule: string; details: string }) => /\btag(s)?\b/i.test(`${check.rule} ${check.details}`))) {
     incompleteResponse('O parecer não deve avaliar tags dos chamados filhos.');

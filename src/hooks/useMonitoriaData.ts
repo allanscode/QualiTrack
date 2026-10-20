@@ -5,6 +5,7 @@ import { usePageCache } from './usePageCache';
 import { userCacheScope } from '../lib/pageCache';
 import { isMockMode, mockDb, supabase } from '../lib/supabase';
 import type { Monitoria, User } from '../types';
+import type { MonitoriaSortDirection, MonitoriaSortField } from './useMonitoriaFilters';
 
 export type MonitoriaListFilters = {
   tab?: string;
@@ -17,6 +18,8 @@ export type MonitoriaListFilters = {
   dateType?: 'analysis' | 'ticket';
   startDate?: string;
   endDate?: string;
+  sortField?: MonitoriaSortField;
+  sortDirection?: MonitoriaSortDirection;
 };
 
 export type MonitoriaDataOptions = {
@@ -30,11 +33,20 @@ const CHILD_FORM_ID = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
 const LIST_COLUMNS = 'id,form_id,evaluator_id,evaluated_id,ticket_id,ticket_date,analysis_date,score,status,resolution_type,action_deadline_at,active,team_id,team_name,evaluator_name,evaluated_name,pj_reviewer_id,pj_review_kind,pj_review_required,history,created_at,updated_at';
 type SourceOffsets = { primary: number; reviewer: number };
 
-function compareNewestFirst(a: Monitoria, b: Monitoria) {
-  return b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id);
+function compareMonitorias(a: Monitoria, b: Monitoria, field: MonitoriaSortField, direction: MonitoriaSortDirection) {
+  const left = a[field];
+  const right = b[field];
+  if (left == null && right != null) return 1;
+  if (left != null && right == null) return -1;
+  if (left != null && right != null) {
+    const comparison = typeof left === 'number' && typeof right === 'number'
+      ? left - right : String(left).localeCompare(String(right));
+    if (comparison) return direction === 'asc' ? comparison : -comparison;
+  }
+  return (field === 'created_at' ? 0 : b.created_at.localeCompare(a.created_at)) || b.id.localeCompare(a.id);
 }
 
-function mergeSourcePage(primary: Monitoria[], reviewer: Monitoria[], pageSize: number) {
+function mergeSourcePage(primary: Monitoria[], reviewer: Monitoria[], pageSize: number, field: MonitoriaSortField, direction: MonitoriaSortDirection) {
   const rows: Monitoria[] = [];
   const seen = new Set<string>();
   let primaryUsed = 0;
@@ -42,7 +54,7 @@ function mergeSourcePage(primary: Monitoria[], reviewer: Monitoria[], pageSize: 
   while (rows.length < pageSize && (primaryUsed < primary.length || reviewerUsed < reviewer.length)) {
     const nextPrimary = primary[primaryUsed];
     const nextReviewer = reviewer[reviewerUsed];
-    const usePrimary = !nextReviewer || (nextPrimary && compareNewestFirst(nextPrimary, nextReviewer) <= 0);
+    const usePrimary = !nextReviewer || (nextPrimary && compareMonitorias(nextPrimary, nextReviewer, field, direction) <= 0);
     const row = usePrimary ? primary[primaryUsed++] : reviewer[reviewerUsed++];
     if (!seen.has(row.id)) {
       rows.push(row);
@@ -147,13 +159,15 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
       let rows: Monitoria[] = [];
       let count = 0;
       const currentFilters = filtersRef.current;
+      const sortField = currentFilters.sortField || 'created_at';
+      const sortDirection = currentFilters.sortDirection || 'desc';
       if (isMockMode) {
         const { data } = await mockDb.get('monitorias');
         const all = ((data || []) as Monitoria[]).filter(row => {
           if (currentUser.role === 'suporte' && row.evaluated_id !== currentUser.id && row.pj_reviewer_id !== currentUser.id) return false;
           if (currentUser.role === 'gestor_suporte' && !currentUser.team_ids?.includes(row.team_id || '') && row.pj_reviewer_id !== currentUser.id) return false;
           return matchesFilters(row, currentFilters);
-        }).sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
+        }).sort((a, b) => compareMonitorias(a, b, sortField, sortDirection));
         count = all.length;
         rows = all.slice(page * pageSize, (page + 1) * pageSize);
       } else {
@@ -166,7 +180,9 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
           if (name === source && currentUser.role === 'gestor_suporte') {
             query = currentUser.team_ids?.length ? query.in('team_id', currentUser.team_ids) : query.eq('team_id', '00000000-0000-0000-0000-000000000000');
           }
-          return query.order('created_at', { ascending: false }).order('id', { ascending: false });
+          query = query.order(sortField, { ascending: sortDirection === 'asc', nullsFirst: false });
+          if (sortField !== 'created_at') query = query.order('created_at', { ascending: false });
+          return query.order('id', { ascending: false });
         };
         const hasReviewer = isSuporte || currentUser.role === 'gestor_suporte';
         if (!hasReviewer) {
@@ -196,7 +212,7 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
             if (!cache.isCurrent()) return;
             const merged = mergeSourcePage(
               (results[0].data || []) as Monitoria[],
-              (results[1].data || []) as Monitoria[], pageSize,
+              (results[1].data || []) as Monitoria[], pageSize, sortField, sortDirection,
             );
             for (const laterPage of pages.keys()) if (laterPage > nextPage) pages.delete(laterPage);
             pages.set(nextPage + 1, {

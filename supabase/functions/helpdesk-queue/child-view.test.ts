@@ -35,12 +35,15 @@ describe('exclusão de filhos avaliados na view do Zendesk', () => {
     expect(hasPublishedChildMacro([{ body: 'Outro comentário' }])).toBe(false);
   });
 
-  it('distingue a nota válida da monitoria atual do antigo parecer inválido', () => {
+  it('distingue a nota válida da monitoria atual do antigo parecer inválido e reconhece macro inválida por monitoria', () => {
     const invalid = { body: '[QualidadeWP · Chamado filho INVÁLIDO]\n\nParecer antigo' };
     const current = { body: '[QualidadeWP · Chamado filho VÁLIDO]\n\nRegistro do Auditor da monitoria #m1:\nRetificação' };
+    const invalidForM2 = { body: '[QualidadeWP · Chamado filho INVÁLIDO]\n\nChamado filho inválido.\n\nRegistro do Auditor da monitoria #m2:\nReprovado' };
     expect(hasPublishedInvalidChildMacro([invalid])).toBe(true);
     expect(hasPublishedChildMacroForMonitoria([invalid], 'm1')).toBe(false);
     expect(hasPublishedChildMacroForMonitoria([invalid, current], 'm1')).toBe(true);
     expect(hasPublishedChildMacroForMonitoria([invalid, current], 'm2')).toBe(false);
+    expect(hasPublishedChildMacroForMonitoria([invalidForM2], 'm2', 'nao_conforme')).toBe(true);
+    expect(hasPublishedChildMacroForMonitoria([invalidForM2], 'm2', 'conforme')).toBe(false);
   });
 });

@@ -25,7 +25,24 @@ type ZendeskBody = {
 };
 type Work = { ticket_id: string; ticket_snapshot: Json; auditor_id: string; lease_id: string; attempts: number };
 type Config = { id: boolean; enabled: boolean; auditor_id: string; capture_cursor: string | null; capture_lease_id: string };
+export const CHILD_AUTOMATION_FORM_IDS = {
+  nova_demanda: '6c7d1e88-841b-4da9-9a66-9f1464ce8970',
+  analise_tecnica: '6c7d1e88-841b-4da9-9a66-9f1464ce8971',
+  apoio_tecnico: '6c7d1e88-841b-4da9-9a66-9f1464ce8972',
+  produtividade: '6c7d1e88-841b-4da9-9a66-9f1464ce8973',
+} as const;
+/** Historical form ID retained for old jobs and fixtures. */
 export const CHILD_AUTOMATION_FORM_ID = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
+
+function childMacroType(ticket: ZendeskTicket): keyof typeof CHILD_AUTOMATION_FORM_IDS | undefined {
+  const tags = (ticket.tags || []).map(tag => tag.toLowerCase());
+  const subject = (ticket.subject || '').toLowerCase();
+  if (tags.includes('existe_nova_demanda') || subject.includes('nova demanda')) return 'nova_demanda';
+  if (tags.includes('analise_tecnica') || /an[aá]lise t[eé]cnica/.test(subject)) return 'analise_tecnica';
+  if (tags.includes('apoio_tecnico') || tags.includes('apoio_analise_tecnica') || /apoio an[aá]lise/.test(subject)) return 'apoio_tecnico';
+  if (tags.includes('produtividade') || tags.includes('filho_produtividade') || subject.includes('produtividade')) return 'produtividade';
+  return undefined;
+}
 
 function snapshot(ticket: ZendeskTicket, body: ZendeskBody, origin: string): Json {
   const agent = body.users?.find(user => user.id === ticket.assignee_id);
@@ -137,8 +154,10 @@ export async function processChildAI(
     }
     let organization = ticketBody.organizations?.find(org => org.id === ticket.organization_id);
     if (!organization && ticket.organization_id) organization = (await read(`${origin}/api/v2/organizations/${ticket.organization_id}.json`)).organization;
+    const macroType = childMacroType(ticket);
+    if (!macroType) throw new Error('Macro do chamado filho não identificada; revisão manual necessária.');
     const [{ data: form, error: formError }, { data: team, error: teamError }] = await Promise.all([
-      db.from('forms').select('*').eq('id', CHILD_AUTOMATION_FORM_ID).eq('active', true).single(),
+      db.from('forms').select('*').eq('id', CHILD_AUTOMATION_FORM_IDS[macroType]).eq('active', true).single(),
       db.from('teams').select('name').eq('id', user.primary_team_id).eq('active', true).single(),
     ]);
     if (formError || teamError || !form || !team) throw new Error('Ficha de filho ou equipe indisponivel.');
@@ -187,13 +206,13 @@ export async function processChildAI(
     if (ticket.problem_id) ticketFields.push({ title: 'Chamado pai (problem_id)', value: String(ticket.problem_id) });
 
     const enriched = { ...work.ticket_snapshot, ...snapshot(ticket, { ...ticketBody, users: [agent], organizations: organization ? [organization] : [] }, origin),
-      agent_name: user.name, agent_email: user.email, agent_id: user.id, team_id: user.primary_team_id,channel,
+      agent_name: user.name, agent_email: user.email, agent_id: user.id, team_id: user.primary_team_id,channel, child_macro_type: macroType,
       dialogue, ticket_fields: ticketFields };
     await requireWrite(db.from('child_ai_queue').update({ ticket_snapshot: enriched }).eq('ticket_id',work.ticket_id).eq('lease_id',work.lease_id));
     await requireWrite(db.from('queue_ticket_catalog').upsert({ ticket_id: work.ticket_id,queue_type:'filhos',ticket_snapshot: enriched,
       verified_at: new Date().toISOString() },{onConflict:'ticket_id,queue_type'}));
     const payload: Json = {
-      action: 'evaluate_child_ticket',ticket_id:work.ticket_id,ticket_subject:ticket.subject,ticket_status:ticket.status,form_criteria:form,dialogue,
+      action: 'evaluate_child_ticket',ticket_id:work.ticket_id,ticket_subject:ticket.subject,ticket_status:ticket.status,macro_type:macroType,form_criteria:form,dialogue,
       agent_info:{name:user.name,email:user.email,team_name:team.name,channel},
       ticket_fields:ticketFields,
       draft_meta:{source_queue:'filhos',form_id:form.id,agent_id:user.id,agent_name:user.name,agent_email:user.email,

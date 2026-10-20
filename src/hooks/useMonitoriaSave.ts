@@ -3,8 +3,8 @@ import { supabase, mockDb } from '../lib/supabase';
 import { User, Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, EvaluationForm, Team, DissatisfactionField, ZendeskTicketField } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
 import { isEvaluationValid } from '../lib/domainRules';
-import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
-import { backfillAgentTeam } from '../lib/helpdeskQueue';
+import { childVerdict, isChildFormId } from '../lib/childTicketForm';
+import { backfillAgentTeam, getZendeskClosureWindow } from '../lib/helpdeskQueue';
 import { toast } from 'sonner';
 import { monitoriaTicketPresentation } from '../lib/monitoriaTicketPresentation';
 
@@ -41,6 +41,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
 
   const isAllAnswered = () => {
     if (!deps.selectedForm) return false;
+    if (isChildFormId(deps.header.form_id)) return deps.selectedForm.sections.some(section => section.questions.length > 0);
     return deps.selectedForm.sections.every(s =>
       s.questions.every(q => !!deps.scores[q.id])
     );
@@ -104,7 +105,10 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
       toast.error('Informe a justificativa da reavaliação.');
       return;
     }
-    if (deps.header.form_id === CHILD_TICKET_FORM_ID && isEvaluationValid(deps.score) && !deps.header.evaluator_note?.trim()) {
+    const isChild = isChildFormId(deps.header.form_id);
+    const verdict = isChild ? childVerdict(deps.scores, deps.selectedForm) : null;
+    if (isChild && !verdict) { toast.error('Responda todos os critérios do chamado filho.'); return; }
+    if (isChild && verdict === 'valido' && !deps.header.evaluator_note?.trim()) {
       toast.error('Preencha o Registro do Auditor antes de concluir um chamado filho válido.');
       return;
     }
@@ -112,21 +116,21 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
     startTransition(async () => {
       try {
         const nowTs = new Date().toISOString();
-        const scoreNote = deps.isReevaluating ? `[DE ${deps.initialData?.score}% PARA ${deps.score}%] ` : '';
+        const scoreNote = deps.isReevaluating && !isChild ? `[DE ${deps.initialData?.score}% PARA ${deps.score}%] ` : '';
         let historyNote = deps.isReevaluating ? `${scoreNote}${deps.header.reevaluation_justification}` : undefined;
 
         if (deps.isAdminEdit && deps.initialData) {
           const changes: string[] = [];
           if (deps.header.ticket_id !== deps.initialData.ticket_id) changes.push(`Ticket: ${deps.initialData.ticket_id} → ${deps.header.ticket_id}`);
           if (deps.header.ticket_date !== deps.initialData.ticket_date) changes.push(`Data do ticket: ${deps.initialData.ticket_date} → ${deps.header.ticket_date}`);
-          if (deps.score !== deps.initialData.score) changes.push(`Score: ${deps.initialData.score}% → ${deps.score}%`);
+          if (!isChild && deps.score !== deps.initialData.score) changes.push(`Score: ${deps.initialData.score}% → ${deps.score}%`);
           historyNote = changes.length > 0 ? changes.join(' | ') : 'Edição administrativa';
         }
 
         const evaluatedUser = deps.allUsers.find(u => u.id === deps.header.evaluated_id);
         const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
         const selectedTeam = deps.teams.find(t => t.id === managementTeamId);
-        const isPositive = isEvaluationValid(deps.score);
+        const isPositive = isChild ? verdict === 'valido' : isEvaluationValid(deps.score);
         const requiresPjReview = deps.initialData?.pj_review_required === true
           || (selectedTeam?.requires_pj_review === true && !isPositive);
         const reopensPjReview = deps.isAdminEdit && deps.initialData?.status === 'concluida'
@@ -136,7 +140,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           nextStatus = reopensPjReview ? 'pendente_revisao'
             : (deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao'));
         } else {
-          nextStatus = requiresPjReview ? 'pendente_revisao' : (isPositive ? 'concluida' : 'pendente_revisao');
+          nextStatus = isPositive && !requiresPjReview ? 'concluida' : 'aguardando_gestor_suporte';
         }
 
         const historyAction = deps.isAdminEdit
@@ -144,7 +148,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           : deps.isReevaluating
             ? (requiresPjReview ? 'Monitoria Reavaliada (Aguardando gestor PJ)'
               : (isPositive ? 'Monitoria Reavaliada (Concluída)' : 'Monitoria Reavaliada (Procedente)'))
-            : (nextStatus === 'concluida' ? 'Monitoria Criada e Concluída' : 'Monitoria Criada');
+            : (nextStatus === 'concluida' ? 'Monitoria Criada e Concluída' : 'Monitoria Criada e encaminhada ao Gestor de Suporte');
 
         const historyEntry: MonitoriaHistoryEntry = {
           action: historyAction,
@@ -154,12 +158,23 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           note: historyNote
         };
 
+        // Existing monitorias retain their saved deadline. The new policy only
+        // applies to the first save of a pending monitoria on a new ticket.
+        const closureWindow = !deps.initialData?.id && nextStatus !== 'concluida'
+          ? await getZendeskClosureWindow(deps.header.ticket_id)
+          : { applies: false };
+        const savedClosureWindow = (deps.initialData as any)?.form_snapshot?.zendesk_closure_window;
+        const closureCapAt = closureWindow.applies ? closureWindow.deadline_at : savedClosureWindow?.deadline_at;
+
         const getDeadline = () => {
           const now = new Date();
           const actionDeadline = deps.qualityConfig.action_deadline;
           const bh = deps.qualityConfig.businessHours;
-          if (deps.isReevaluating) return addBusinessHours(now, actionDeadline?.auditor_reevaluation || 25, bh).toISOString();
-          return addBusinessHours(now, actionDeadline?.agent_review || 50, bh).toISOString();
+          const normal = deps.isReevaluating
+            ? addBusinessHours(now, actionDeadline?.auditor_reevaluation || 25, bh)
+            : addBusinessHours(now, actionDeadline?.manager_support || 25, bh);
+          if (typeof closureCapAt !== 'string' || !Number.isFinite(Date.parse(closureCapAt))) return normal.toISOString();
+          return new Date(Math.min(normal.getTime(), Date.parse(closureCapAt))).toISOString();
         };
 
         const filteredDissatisfactionAnswers = { ...deps.dissatisfactionAnswers };
@@ -189,11 +204,14 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           satisfaction_result: deps.header.satisfaction_result || null,
           satisfaction_has_record: deps.header.satisfaction_has_record,
           satisfaction_record_text: deps.header.satisfaction_record_text,
-          answers: deps.scores,
+          answers: isChild
+            ? Object.fromEntries(deps.selectedForm!.sections.flatMap(section => section.questions.map(question =>
+                [question.id, deps.scores[question.id] === 'SIM' ? 'SIM' : 'NAO'] as const)))
+            : deps.scores,
           question_observations: deps.observations,
-          critical_error_observations: deps.criticalErrorObservations,
-          selected_critical_errors: Object.keys(deps.criticalErrors).filter(id => deps.criticalErrors[id]),
-          score: deps.score,
+          critical_error_observations: isChild ? {} : deps.criticalErrorObservations,
+          selected_critical_errors: isChild ? [] : Object.keys(deps.criticalErrors).filter(id => deps.criticalErrors[id]),
+          score: isChild ? null : deps.score,
           status: nextStatus,
           pj_review_required: requiresPjReview,
           resolution_type: nextStatus === 'concluida' ? 'human'
@@ -204,14 +222,17 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           active: true,
           form_snapshot: {
             ...(deps.selectedForm as any),
+            ...(closureWindow.applies || savedClosureWindow
+              ? { zendesk_closure_window: closureWindow.applies ? closureWindow : savedClosureWindow }
+              : {}),
             ticket_subject: ticketDetails?.subject || undefined,
             ticket_group_name: ticketDetails?.group || undefined,
             ticket_fields: deps.ticketFields,
-            ...(deps.header.form_id === CHILD_TICKET_FORM_ID ? { ticket_kind: 'chamado_filho' } : {}),
+            ...(isChild ? { ticket_kind: 'chamado_filho', child_verdict: verdict } : {}),
             ai_evaluation: deps.header.form_id === deps.initialData?.form_id
               ? ((deps.initialData as any)?.aiEvaluation || (deps.initialData as any)?.form_snapshot?.ai_evaluation)
               : undefined,
-            ...(deps.header.form_id === CHILD_TICKET_FORM_ID ? {
+            ...(isChild ? {
               child_ai_evaluation: (deps.initialData as any)?.childAiEvaluation
                 || (deps.initialData as any)?.form_snapshot?.child_ai_evaluation,
             } : {}),

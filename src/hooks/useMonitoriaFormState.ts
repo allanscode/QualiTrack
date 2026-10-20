@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { ChildTicketAiEvaluation, EvaluationForm, Monitoria, DissatisfactionField } from '../types';
 import { calculateQualityScore } from '../utils/qualityMath';
 import { toTicketDateInput } from '../lib/ticketDateTime';
-import { CHILD_TICKET_FORM_ID, childEvaluationFormPrefill, shouldUseChildFormForReevaluation } from '../lib/childTicketForm';
+import { childEvaluationFormPrefill, childFormForReevaluation, isChildFormId, shouldUseChildFormForReevaluation } from '../lib/childTicketForm';
 
 const DEFAULT_HEADER = (initialData?: Monitoria) => {
   const today = new Date().toISOString().split('T')[0];
@@ -31,12 +31,11 @@ export function useMonitoriaFormState(
   dissatisfactionFields: DissatisfactionField[]
 ) {
   const childEvaluation = (initialData as Monitoria & { childAiEvaluation?: ChildTicketAiEvaluation } | undefined)?.childAiEvaluation;
-  const childPrefill = initialData?.form_id === CHILD_TICKET_FORM_ID && !initialData.id && childEvaluation
+  const childPrefill = isChildFormId(initialData?.form_id) && !initialData?.id && childEvaluation
     ? childEvaluationFormPrefill(childEvaluation) : undefined;
+  const reevaluationFormId = childFormForReevaluation(initialData, forms)?.id;
   const reevalChildWithWrongForm = shouldUseChildFormForReevaluation(initialData)
-    && initialData?.form_id !== CHILD_TICKET_FORM_ID;
-  const reevaluationFormId = shouldUseChildFormForReevaluation(initialData)
-    ? CHILD_TICKET_FORM_ID : undefined;
+    && !!reevaluationFormId && initialData?.form_id !== reevaluationFormId;
   const [step, setStep] = useState(1);
   const [dissatisfactionAnswers, setDissatisfactionAnswers] = useState<Record<string, string[]>>(initialData?.dissatisfaction_answers || {});
   const [header, setHeader] = useState(() => ({
@@ -60,7 +59,7 @@ export function useMonitoriaFormState(
     return forms.find(f => f.id === header.form_id);
   }, [initialData, forms, header.form_id]);
 
-  const score = calculateQualityScore(selectedForm, scores, criticalErrors);
+  const score = isChildFormId(selectedForm?.id) ? 0 : calculateQualityScore(selectedForm, scores, criticalErrors);
 
   const clientFieldsToShow = useMemo(() => {
     return dissatisfactionFields.filter(f =>

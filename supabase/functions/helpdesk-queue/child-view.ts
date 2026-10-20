@@ -27,10 +27,17 @@ export function hasPublishedChildMacro(comments: unknown): boolean {
     typeof comment?.body === 'string' && comment.body.startsWith('[QualidadeWP · Chamado filho '));
 }
 
-export function hasPublishedChildMacroForMonitoria(comments: unknown, monitoriaId: string): boolean {
+export function hasPublishedChildMacroForMonitoria(
+  comments: unknown,
+  monitoriaId: string,
+  verdict: 'conforme' | 'nao_conforme' = 'conforme',
+): boolean {
+  const prefix = verdict === 'conforme'
+    ? '[QualidadeWP · Chamado filho VÁLIDO]'
+    : '[QualidadeWP · Chamado filho INVÁLIDO]';
   return Array.isArray(comments) && comments.some(comment =>
     typeof comment?.body === 'string'
-    && comment.body.startsWith('[QualidadeWP · Chamado filho VÁLIDO]')
+    && comment.body.startsWith(prefix)
     && comment.body.includes(`Registro do Auditor da monitoria #${monitoriaId}:`));
 }
 

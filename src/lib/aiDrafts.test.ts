@@ -45,4 +45,13 @@ describe('rascunhos de IA na fila', () => {
     await deleteAIDraft('321');
     expect(await fetchOpenAIDrafts('positivas')).toEqual([]);
   });
+
+  it('mantém visível o rascunho do chamado filho fechado para concluir a ficha', async () => {
+    await saveAIDraft({
+      ticketId: '176473', sourceQueue: 'filhos',
+      ticketSnapshot: { ticket_id: '176473', subject: 'Filho avaliado', csat_status: 'unrated', ticket_date: '2026-10-01', status: 'closed' },
+      result: { score: 75, summary: 'Conferência humana necessária' } as never, guidelineIds: [],
+    });
+    expect((await fetchOpenAIDrafts('filhos')).map(draft => draft.ticket_id)).toEqual(['176473']);
+  });
 });

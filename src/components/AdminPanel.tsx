@@ -18,7 +18,8 @@ import {
   Target,
   Brain,
   Mail,
-  RotateCcw
+  RotateCcw,
+  Bell
 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -31,8 +32,9 @@ import DissatisfactionFieldsManagement from './admin/DissatisfactionFieldsManage
 import AIHubManagement from './admin/AIHubManagement';
 import EmailConfigManagement from './admin/EmailConfigManagement';
 import RemovedMonitoriasManagement from './admin/RemovedMonitoriasManagement';
+import NotificationSettingsManagement from './admin/NotificationSettingsManagement';
 
-export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub' | 'emails' | 'removed_monitorias';
+export type AdminSubTab = 'users' | 'teams' | 'forms' | 'requests' | 'operacao' | 'metas' | 'campos_extras' | 'ia_hub' | 'emails' | 'notifications' | 'removed_monitorias';
 
 interface TabItem {
   key: AdminSubTab;
@@ -50,6 +52,7 @@ const ALL_ADMIN_TABS: TabItem[] = [
   { key: 'campos_extras', label: 'Campos Extras', icon: Sliders },
   { key: 'ia_hub', label: 'Inteligência Artificial', icon: Brain },
   { key: 'emails', label: 'E-mails & Disparos', icon: Mail },
+  { key: 'notifications', label: 'Notificações', icon: Bell },
   { key: 'removed_monitorias', label: 'Monitorias removidas', icon: RotateCcw },
 ];
 
@@ -213,6 +216,9 @@ export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPa
           {activeSubTab === 'campos_extras' && <DissatisfactionFieldsManagement forms={staticData.forms} />}
           {activeSubTab === 'ia_hub' && <AIHubManagement currentUser={currentUser} />}
           {activeSubTab === 'emails' && <EmailConfigManagement />}
+          {activeSubTab === 'notifications' && currentUser?.role === 'admin' && (
+            <NotificationSettingsManagement users={staticData.users} currentUser={currentUser} />
+          )}
           {activeSubTab === 'removed_monitorias' && currentUser?.role === 'admin' && <RemovedMonitoriasManagement currentUser={currentUser} />}
         </m.div>
       </AnimatePresence>

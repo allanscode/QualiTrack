@@ -84,6 +84,28 @@ test('legacy child jobs are queued for a fresh evaluation without losing their o
   } finally { await db.close(); }
 });
 
+test('automatic child and positive dispatches share a one-per-minute database gate', async () => {
+  const db = await createDatabase();
+  try {
+    const check = async kind => (await db.query(
+      'SELECT _private.claim_auto_monitoria_dispatch($1) AS allowed', [kind])).rows[0].allowed;
+    assert.equal(await check('positive'), true);
+    assert.equal(await check('child'), false);
+    const state = (await db.query('SELECT last_kind,next_allowed_at FROM _private.auto_monitoria_dispatch')).rows[0];
+    assert.equal(state.last_kind, 'positive');
+    assert.ok(new Date(state.next_allowed_at).getTime() > Date.now());
+    await db.exec("UPDATE _private.auto_monitoria_dispatch SET next_allowed_at=clock_timestamp()-interval '1 second'");
+    assert.equal(await check('child'), true);
+    assert.equal((await db.query('SELECT last_kind FROM _private.auto_monitoria_dispatch')).rows[0].last_kind, 'child');
+    await assert.rejects(check('manual'), /inválido/);
+    for (const role of ['anon','authenticated','service_role']) {
+      const allowed = (await db.query(
+        "SELECT has_function_privilege($1,'_private.claim_auto_monitoria_dispatch(text)','EXECUTE') AS allowed", [role])).rows[0].allowed;
+      assert.equal(allowed, false);
+    }
+  } finally { await db.close(); }
+});
+
 
 test('child automation persists reviews, computes the fixed form and shares the budget', async t => {
   const db = await createDatabase();
@@ -146,6 +168,7 @@ test('child automation persists reviews, computes the fixed form and shares the 
       assert.equal(draft.result.automatic_child,true);
       assert.equal(draft.result.child_evaluation.checks.length,6);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n,0);
+      assert.equal((await db.query("SELECT count(*)::int AS n FROM queue_event_notifications WHERE ticket_id='101' AND event_type='child_ticket_review_required'")).rows[0].n,1);
     });
     await t.test('retained reviews use authenticated quality distribution and preserve active ownership',async()=>{
       await reset();const job=await begin('111');await complete(job,{'child-routing-correct':'NAO','child-parent-linked':'NAO'},{status:'nao_conforme'});
@@ -174,6 +197,7 @@ test('child automation persists reviews, computes the fixed form and shares the 
       assert.equal(saved.evaluator_id,id(1));assert.equal(saved.form_id,formId);assert.ok(saved.concluded_at);
       assert.equal(saved.form_snapshot.automation,'child_ticket');assert.equal(saved.form_snapshot.child_ai_evaluation.checks.length,6);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM ai_evaluation_drafts')).rows[0].n,0);
+      assert.equal((await db.query("SELECT count(*)::int AS n FROM queue_event_notifications WHERE ticket_id='102' AND event_type='child_ticket_review_required'")).rows[0].n,0);
       await db.query('SELECT finish_child_ai_job($1)',[job]);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n,1);
     });
@@ -222,6 +246,29 @@ test('child automation persists reviews, computes the fixed form and shares the 
       assert.equal((await db.query('SELECT enabled FROM child_ai_config')).rows[0].enabled,false);
       await complete(job);
       assert.equal((await state('502')).status,'completed');
+    });
+    await t.test('expired child review monitoria below 75 auto-concludes and enqueues Zendesk child publication',async()=>{
+      await reset();
+      await db.exec('DELETE FROM child_auto_publications');
+      const monitoriaId = '5db70d8a-77fc-4dea-940a-e6eaf9b822c8';
+      await db.query(`INSERT INTO monitorias(
+        id,ticket_id,channel,form_id,evaluator_id,evaluator_name,evaluated_id,evaluated_name,
+        team_id,score,status,active,evaluator_note,satisfaction_result,action_deadline_at,form_snapshot,answers
+      ) VALUES ($1,'179157','Chat',$2,$3,'Auditor',$4,'Agent',$5,0,'pendente_revisao',true,
+        'Registro do auditor para filho inválido','Sem pesquisa',now()-interval '5 minutes',
+        '{"ticket_kind":"chamado_filho"}'::jsonb,'{"child-macro-preserved":"NAO"}'::jsonb)`,
+      [monitoriaId,formId,id(1),id(2),id(10)]);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM child_auto_publications WHERE monitoria_id=$1',[monitoriaId])).rows[0].n,0);
+      await db.query('SELECT process_action_deadline_timeouts()');
+      const concluded = (await db.query('SELECT status,resolution_type,score::numeric AS score FROM monitorias WHERE id=$1',[monitoriaId])).rows[0];
+      assert.equal(concluded.status,'concluida');
+      assert.equal(concluded.resolution_type,'automatic');
+      assert.equal(Number(concluded.score),0);
+      const claimed = (await db.query('SELECT * FROM claim_child_auto_publication()')).rows;
+      assert.equal(claimed.length,1);
+      assert.equal(claimed[0].monitoria_id,monitoriaId);
+      assert.equal(claimed[0].ticket_id,'179157');
+      assert.equal(claimed[0].status,'processing');
     });
   } finally { await db.close(); }
 });

@@ -7,7 +7,10 @@ vi.mock('../lib/supabase', () => ({
   supabase: { from: () => ({ insert: db.insert, update: db.update }) },
   mockDb: {},
 }));
-vi.mock('../lib/helpdeskQueue', () => ({ backfillAgentTeam: vi.fn() }));
+vi.mock('../lib/helpdeskQueue', () => ({
+  backfillAgentTeam: vi.fn(),
+  getZendeskClosureWindow: vi.fn().mockResolvedValue({ applies: false }),
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 describe('useMonitoriaSave', () => {
@@ -92,12 +95,12 @@ describe('useMonitoriaSave', () => {
     const { result } = renderHook(() => useMonitoriaSave(pjDeps(74.99, onSaved)));
     act(() => result.current.handleSave());
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', 'pendente_revisao'));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', 'aguardando_gestor_suporte'));
     const payload = db.insert.mock.calls[0][0][0];
-    expect(payload.status).toBe('pendente_revisao');
+    expect(payload.status).toBe('aguardando_gestor_suporte');
     expect(payload.pj_review_required).toBe(true);
     expect(payload.resolution_type).toBeNull();
-    expect(payload.history[0].action).toBe('Monitoria Criada');
+    expect(payload.history[0].action).toBe('Monitoria Criada e encaminhada ao Gestor de Suporte');
     expect(payload.action_deadline_at).toBeTruthy();
   });
 
@@ -120,7 +123,7 @@ describe('useMonitoriaSave', () => {
     const { result } = renderHook(() => useMonitoriaSave(deps));
     act(() => result.current.handleSave());
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', isAdminEdit ? 'em_contestacao' : 'pendente_revisao'));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', isAdminEdit ? 'em_contestacao' : 'aguardando_gestor_suporte'));
     expect(db.update.mock.calls[0][0].action_deadline_at).toBe(deadline);
   });
 });

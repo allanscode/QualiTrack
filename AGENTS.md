@@ -29,6 +29,19 @@
 
 Trabalhe de forma estruturada e cirúrgica. É permitida a instanciação de workers, subagentes ou rotinas de orquestração (via Orca ou CLI) sempre que seu uso for válido, justificado e inteligente, garantindo escopos isolados de arquivos e tarefas para não gerar conflitos de merge, concorrência ou duplicação. Validações determinísticas locais (`npm.cmd run lint`, `npm.cmd test`) continuam mandatórias antes de qualquer consolidação. Aprovação final e deploy em produção nunca são implícitos.
 
+#### Roteamento automático na sessão QWP Router do Orca
+
+Esta regra vale para pedidos enviados à sessão coordenadora iniciada com `gpt-6-luna` e esforço `low` e ativada pela mensagem `QWP Router`. Classifique cada pedido pelo alcance e risco, sem pedir ao usuário que escolha modelo. Se a sessão tiver um preâmbulo de Dispatch do Orca, execute somente a Task recebida e siga esse preâmbulo; não abra outra coordenação.
+
+- **Simples:** consultas, documentação e correções locais claras ficam com a coordenadora Luna/low. Não crie Run, Task, worker ou revisão apenas para cumprir um rito.
+- **Desenvolvimento médio:** a coordenadora faz uma inspeção curta e entrega a implementação a um worker Codex `gpt-6-sol`/`medium` no Orca. O worker recebe escopo de arquivos, restrições e critério de aceite; a coordenadora acompanha e valida o resultado, sem repetir a implementação.
+- **Alto risco:** segurança, RLS, migração destrutiva, perda de dados, concorrência crítica ou falha persistente permitem `gpt-6-sol`/`high`. Use `gpt-6-astra` somente se a dificuldade justificar capacidade adicional. Produção continua exigindo autorização explícita.
+- Inicie **no máximo dois workers simultâneos**, somente para unidades realmente independentes e com escopos de escrita isolados. Não combine workers Orca e subagentes internos do Codex para a mesma unidade. Distribua testes e revisão sem executar a mesma verificação duas vezes sem motivo.
+- Antes de coordenar, carregue o guia da skill `orchestration` da versão instalada com `orca skills get orchestration`. Crie Run e Task somente quando houver Dispatch a iniciar; use `orca orchestration worker-start` com `--model` e `--effort` explícitos, confirme `launch.effective` no recibo e conclua o ciclo de `worker_done` e liberação conforme o guia. Se o Orca não estiver disponível, não trate um subagente interno como substituto equivalente; informe a limitação.
+- Em investigações, comece com `rg` e leituras delimitadas aos trechos encontrados; abra arquivos completos somente quando necessário para decidir ou validar.
+
+O roteamento acima só é automático para pedidos feitos na sessão ativada como `QWP Router`. Outras sessões Codex conservam o modelo com que foram iniciadas.
+
 1. **Zero dependências de estado global**: Não use Redux, Zustand, Context API global. Estado gerenciado via Context Providers específicos (StaticDataContext, DashboardContext, QualityConfigProvider) e hooks locais.
 2. **Extração de hooks customizados**: Lógica de negócio complexa deve ser extraída para hooks em src/hooks/ (ex: useSessionManager, useSidebarManager, useMonitoriaData, useMonitoriaFilters, useMonitoriaActions, useMonitoriaFormState, useMonitoriaSave).
 3. **Isolamento de responsabilidade**: Cada dashboard (AgentDashboard, QualityDashboard, SupportManagerDashboard, QualityManagerDashboard, AdminDashboard) é independente e consome apenas os contexts necessários.

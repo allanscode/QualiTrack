@@ -21,7 +21,7 @@ export class ZendeskProvider implements HelpdeskProvider {
 
   constructor(private readonly config: ZendeskConfig) {}
 
-  async checkPublicationEligibility(ticketId: string): Promise<{ eligible: boolean; reason?: string }> {
+  async checkPublicationEligibility(ticketId: string, options?: { allowFollowUp?: boolean }): Promise<{ eligible: boolean; reason?: string }> {
     const response = await fetch(`https://${this.config.subdomain}.zendesk.com/api/v2/tickets/${ticketId}.json`, {
       headers: { Authorization: `Basic ${btoa(`${this.config.email}/token:${this.config.apiToken}`)}` },
       signal: AbortSignal.timeout(10000),
@@ -31,13 +31,14 @@ export class ZendeskProvider implements HelpdeskProvider {
     const data = await response.json();
     const status = String(data?.ticket?.status || '').toLowerCase();
     if (!status) throw new Error('Zendesk não retornou o status do ticket.');
+    if (status === 'closed' && options?.allowFollowUp) return { eligible: true };
     if (status === 'closed' || status === 'archived') {
       return { eligible: false, reason: 'O ticket está fechado no Zendesk e não aceita a publicação da avaliação. A monitoria permanece salva.' };
     }
     return { eligible: true };
   }
 
-  async publishEvaluation(input: PublishEvaluationInput): Promise<{ externalCommentId: string }> {
+  async publishEvaluation(input: PublishEvaluationInput): Promise<{ externalCommentId: string; externalTicketId?: string }> {
     const url = `https://${this.config.subdomain}.zendesk.com/api/v2/tickets/${input.ticketId}.json`;
     const auth = btoa(`${this.config.email}/token:${this.config.apiToken}`);
 
@@ -53,22 +54,32 @@ export class ZendeskProvider implements HelpdeskProvider {
       customFields.push({ id: FIELD_CSAT_VAZIO, value: null });
     }
 
+    const headers = { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
+    const read = async (targetUrl: string): Promise<Record<string, any>> => {
+      const response = await fetch(targetUrl, { headers, signal: AbortSignal.timeout(10000) });
+      if (!response.ok) throw new Error(`Zendesk retornou ${response.status} na conferência do envio.`);
+      return await response.json();
+    };
+    const current = input.allowFollowUp ? (await read(url)).ticket : null;
+    const closed = String(current?.status || '').toLowerCase() === 'closed';
+    if (closed && !input.allowFollowUp) throw new Error('Ticket fechado não aceita atualização direta.');
+    if (String(current?.status || '').toLowerCase() === 'archived') throw new Error('Ticket arquivado não aceita publicação automática.');
+    const marker = input.htmlBody.match(/Monitoria QWP #[0-9a-f-]{36}/i)?.[0];
     const payload = {
       ticket: {
-        comment: {
-          html_body: input.htmlBody,
-          public: false,
-        },
+        ...(closed ? {} : {
+          comment: {
+            html_body: input.htmlBody,
+            public: false,
+          },
+        }),
         custom_fields: customFields,
       },
     };
 
     const response = await fetch(url, {
       method: 'PUT',
-      headers: {
-        Authorization: `Basic ${auth}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(20000),
     });
@@ -95,7 +106,7 @@ export class ZendeskProvider implements HelpdeskProvider {
       }
       const repairResponse = await fetch(url, {
         method: 'PUT',
-        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ ticket: {
           custom_fields: customFields, safe_update: true, updated_stamp: updatedStamp,
         } }),
@@ -114,15 +125,23 @@ export class ZendeskProvider implements HelpdeskProvider {
       }
     }
 
-    const commentId = data?.audit?.events?.find((event: any) => event?.type === 'Comment')?.id;
-
-    if (!commentId) {
-      // A atualização foi aceita (2xx) mas não conseguimos extrair o id do
-      // comentário do audit trail — não é motivo para tratar como falha,
-      // já que o comentário foi de fato publicado no ticket.
-      return { externalCommentId: String(data?.audit?.id ?? '') };
+    // A 2xx response can precede a failed field update or omit the comment.
+    // Read the delivered ticket and its newest comments before saving a receipt.
+    const verifiedTicket = (await read(url)).ticket;
+    if (customFields.some(field => !Array.isArray(verifiedTicket?.custom_fields)
+      || !verifiedTicket.custom_fields.some((item: { id: number; value: unknown }) =>
+        item.id === field.id && item.value === field.value))) {
+      throw new Error('Zendesk não confirmou os campos da macro após o envio.');
     }
-
-    return { externalCommentId: String(commentId) };
+    if (closed) {
+      return { externalCommentId: `closed-fields:${input.ticketId}` };
+    }
+    const comments = (await read(`https://${this.config.subdomain}.zendesk.com/api/v2/tickets/${input.ticketId}/comments.json?sort_order=desc&per_page=100`)).comments;
+    const auditCommentId = String(data?.audit?.events?.find((event: { type?: string; id?: number }) => event.type === 'Comment')?.id ?? '');
+    const comment = Array.isArray(comments) && comments.find((item: { id?: number; body?: string; html_body?: string; public?: boolean }) =>
+      item.public === false && ((auditCommentId && String(item.id) === auditCommentId)
+        || (marker && `${item.body || ''} ${item.html_body || ''}`.includes(marker))));
+    if (!comment?.id) throw new Error('Zendesk não confirmou o comentário privado da avaliação.');
+    return { externalCommentId: String(comment.id) };
   }
 }

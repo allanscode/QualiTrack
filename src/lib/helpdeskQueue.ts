@@ -507,7 +507,7 @@ export async function evaluateTicketWithAI(
       body: {
         action: 'evaluate_ai',
         ticket_id: ticketId,
-        form_criteria: { sections: form.sections },
+        form_criteria: { sections: form.sections, critical_errors: form.critical_errors || [] },
         dialogue: dialogue || [],
         agent_info: agentInfo,
         guideline_ids: guidelineIds,
@@ -620,7 +620,6 @@ function getFallbackChildTicketEvaluation(ticketId: string, macroType?: ChildTic
   return {
     detected_type: macroType || 'analise_tecnica',
     status: 'conforme',
-    score: 100,
     summary: `Conferência automática prévia para o chamado filho #${ticketId}. Os quesitos operacionais de assunto, texto da macro e direcionamento foram validados.`,
     checks: [
       { question_id: 'child-subject-preserved', answer: 'SIM', rule: "Assunto da Abertura e Macro de Resolvido", passed: true, details: "O assunto da abertura é válido; alterações automáticas pela macro de resolvido também são aceitas." },
@@ -773,6 +772,31 @@ export interface LookupTicketResult {
  * se o chamado existe, identificar duplicidades e permitir avaliação
  * assistida com IA ou preenchimento manual guiado.
  */
+export interface ZendeskClosureWindow {
+  applies: boolean;
+  deadline_at?: string;
+  anchor_at?: string;
+  anchor_kind?: 'SOLVED' | 'CREATED';
+  schedule_id?: string;
+}
+
+/** Reads the closure window without updating the Zendesk ticket. */
+export async function getZendeskClosureWindow(ticketId: string): Promise<ZendeskClosureWindow> {
+  if (isMockMode || !supabase) return { applies: false };
+  const cleanId = ticketId.trim();
+  if (!/^\d+$/.test(cleanId)) throw new Error('Número de ticket inválido.');
+  const { data, error } = await supabase.functions.invoke('qwp-closure-window', {
+    body: { ticket_id: cleanId },
+  });
+  if (error || data?.error) {
+    throw new Error(data?.error || await extractFunctionErrorMessage(error, 'Não foi possível calcular a janela do Zendesk.'));
+  }
+  if (data?.applies && (!data.deadline_at || !Number.isFinite(Date.parse(data.deadline_at)))) {
+    throw new Error('Prazo retornado pelo Zendesk é inválido.');
+  }
+  return data as ZendeskClosureWindow;
+}
+
 export async function lookupTicketFromHelpdesk(ticketId: string): Promise<LookupTicketResult> {
   const cleanId = ticketId.replace(/\D/g, '').trim();
   if (!cleanId) {

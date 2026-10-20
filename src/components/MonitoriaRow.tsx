@@ -7,7 +7,7 @@ import { getStatusConfig, VARIANT_ICON_CONTAINER } from '../lib/statusHelper';
 import Badge from './ui/Badge';
 import MonitoriaIdBadge from './ui/MonitoriaIdBadge';
 import ActionDeadlineClock from './ui/ActionDeadlineClock';
-import { isChildTicketMonitoria } from '../lib/childTicketForm';
+import { isChildTicketMonitoria, legacyChildNoteVerdict } from '../lib/childTicketForm';
 
 type Props = {
   monitoria: Monitoria;
@@ -20,8 +20,10 @@ type Props = {
 
 export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForScore, onOpen }: Props) {
   const config = getStatusConfig(m.status);
+  const legacyVerdict = legacyChildNoteVerdict(m);
   const level = getLevelForScore(m.score || 0);
-  const scoreColor = m.score !== undefined ? level.color : 'text-brand-muted';
+  const child = isChildTicketMonitoria(m);
+  const scoreColor = !child && m.score != null ? level.color : 'text-brand-muted';
   const expired = m.status === 'concluida' && m.resolution_type === 'automatic';
   const latestAction = [...(m.history || [])]
     .filter(entry => entry.action && !Number.isNaN(Date.parse(entry.at)))
@@ -46,6 +48,12 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
               {isChildTicketMonitoria(m) && (
                 <Badge variant="info" size="xs" className="shrink-0 text-[8px] uppercase tracking-wide" title="Monitoria de ticket filho">
                   Ticket filho
+                </Badge>
+              )}
+              {legacyVerdict && (
+                <Badge variant="warning" size="xs" className="shrink-0 text-[8px] uppercase tracking-wide"
+                  title="Parecer histórico de 3 critérios publicado no Zendesk; não representa a ficha atual de 6 critérios">
+                  Legado · {legacyVerdict === 'valido' ? 'Válido' : 'Inválido'}
                 </Badge>
               )}
             </span>
@@ -79,7 +87,8 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
             </span>
           </span>
           <span className="hidden md:flex min-w-[130px] justify-center">
-            {m.active !== false && <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status} />}
+            {m.active !== false && <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status}
+              zendeskClosure={Boolean(legacyVerdict && m.status !== 'concluida')} />}
           </span>
           <span className="hidden sm:flex min-w-[100px] justify-center">
             <Badge variant={config.variant} size="xs" className="uppercase font-black tracking-widest px-2 py-0.5 text-[8.5px]">
@@ -87,8 +96,9 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
             </Badge>
           </span>
           <span className="shrink-0 text-right">
-            <span className={`block text-sm sm:text-base font-black tabular-nums leading-tight ${scoreColor}`}>
-              {m.score !== undefined ? `${m.score}%` : '—'}
+            <span className={`block text-sm sm:text-base font-black tabular-nums leading-tight ${scoreColor}`}
+              title={legacyVerdict ? 'Nota original do parecer legado de 3 critérios' : undefined}>
+              {child ? 'Filho' : m.score != null ? `${m.score}%` : '—'}
             </span>
             <span className="hidden sm:block text-[9px] font-semibold uppercase text-brand-muted">
               {format(new Date(m.created_at), 'dd MMM yyyy', { locale: ptBR })}

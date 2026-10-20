@@ -170,7 +170,7 @@ export async function processPositiveAI(
     if (!agent && ticket.assignee_id) agent = (await read(`${origin}/api/v2/users/${ticket.assignee_id}.json`)).user;
     if (!agent?.email) throw new PositivePreparationError('Atendente sem e-mail verificado no Zendesk; vincule o agente manualmente.');
     const { data: user, error: userError } = await db.from('users').select('id,name,email,primary_team_id')
-      .eq('active', true).eq('role', 'suporte').ilike('email', agent.email.trim()).maybeSingle();
+      .eq('active', true).in('role', ['suporte', 'gestor_suporte']).ilike('email', agent.email.trim()).maybeSingle();
     if (userError) throw new Error(userError.message);
     if (!user?.primary_team_id || user.email?.trim().toLowerCase() !== agent.email.trim().toLowerCase()) {
       throw new PositivePreparationError('Agente ativo ou equipe de gestão não identificado; confira o cadastro.');

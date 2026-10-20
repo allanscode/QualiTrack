@@ -18,6 +18,8 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowLeftRight,
+  ArrowUp,
+  ArrowDown,
   RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -33,6 +35,7 @@ import CustomDatepicker from './ui/CustomDatepicker';
 import { useQualityConfig } from '../lib/useQualityConfig';
 import { useMonitoriaData } from '../hooks/useMonitoriaData';
 import { useMonitoriaFilters } from '../hooks/useMonitoriaFilters';
+import type { MonitoriaSortField } from '../hooks/useMonitoriaFilters';
 import { useMonitoriaActions, getPreviousStage, getNextStage, getStageLabel, getStagePendingAction, STAGES_FLOW } from '../hooks/useMonitoriaActions';
 import { useFeedbacks } from '../hooks/useFeedbacks';
 import FeedbacksSubtabView from './feedback/FeedbacksSubtabView';
@@ -114,9 +117,10 @@ export default function MonitoriaList({
       teamFilter: filters.teamFilter, suporteFilter: filters.suporteFilter,
       auditorFilter: filters.auditorFilter, ticketKindFilter: filters.ticketKindFilter,
       dateType: filters.dateType, startDate: filters.startDate, endDate: filters.endDate,
+      sortField: filters.sortField, sortDirection: filters.sortDirection,
     },
   });
-  useEffect(() => { setPage(0); }, [filters.tab, filters.search, filters.statusFilter, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.ticketKindFilter, filters.dateType, filters.startDate, filters.endDate]);
+  useEffect(() => { setPage(0); }, [filters.tab, filters.search, filters.statusFilter, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.ticketKindFilter, filters.dateType, filters.startDate, filters.endDate, filters.sortField, filters.sortDirection]);
   const [selectedDetail, setSelectedDetail] = useState<Monitoria | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const {
@@ -468,6 +472,31 @@ export default function MonitoriaList({
                 />
               )}
 
+              <div className="flex items-center gap-1" role="group" aria-label="Ordenação das monitorias">
+                <CustomSelect
+                  value={filters.sortField}
+                  onChange={value => filters.setSortField(value as MonitoriaSortField)}
+                  options={[
+                    { value: 'created_at', label: 'Criação' },
+                    { value: 'score', label: 'Nota' },
+                    { value: 'action_deadline_at', label: 'Prazo de ação' },
+                  ]}
+                  aria-label="Ordenar por"
+                  size="sm"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 shrink-0"
+                  aria-label={filters.sortDirection === 'desc' ? 'Ordem decrescente; mudar para crescente' : 'Ordem crescente; mudar para decrescente'}
+                  title={filters.sortDirection === 'desc' ? 'Ordem decrescente' : 'Ordem crescente'}
+                  aria-pressed={filters.sortDirection === 'asc'}
+                  onClick={() => filters.setSortDirection(current => current === 'desc' ? 'asc' : 'desc')}
+                >
+                  {filters.sortDirection === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                </Button>
+              </div>
+
               {/* Botão Exportar CSV */}
               <Button
                 size="sm"
@@ -675,9 +704,11 @@ export default function MonitoriaList({
                     actionModal.type === 'reabrir' ? 'Reabrir Monitoria' :
                     actionModal.type === 'aceitar' ? 'Aprovação e Aceite' :
                     actionModal.type === 'aprovar' ? 'Aprovar Monitoria' :
+                    actionModal.type === 'invalidar' ? 'Decisão Final: Invalidar' :
                     actionModal.type === 'contestar' ? 'Contestar Avaliação' :
                     actionModal.type === 'solicitar_reavaliacao' ? 'Solicitar Reavaliação' :
-                    actionModal.type === 'manter' ? 'Recusar Reavaliação' :
+                    actionModal.type === 'manter'
+                      ? (m?.status === 'aguardando_gestor_qualidade' ? 'Negar e devolver ao Suporte' : 'Recusar Contestação') :
                     actionModal.type === 'escalar' ? (isPjAction ? 'Enviar contestação à Qualidade' : 'Escalar para Gestão Qualidade') :
                     actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
                     actionModal.type === 'excluir' ? 'Excluir Monitoria' :
@@ -718,6 +749,7 @@ export default function MonitoriaList({
                     actionModal.type === 'excluir' ||
                     actionModal.type === 'solicitar_reavaliacao' ||
                     actionModal.type === 'manter' ||
+                    actionModal.type === 'invalidar' ||
                     actionModal.type === 'recusar_agente' ||
                     isStepChange
                   );
@@ -959,19 +991,19 @@ export default function MonitoriaList({
                           variant="primary"
                           className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest"
                           onClick={async () => {
-                            const approvedMonitoria = actionModal.type === 'aprovar'
-                              && (user?.role === 'gestor_qualidade' || user?.role === 'admin')
+                            const terminalMonitoria = ['aprovar', 'aceitar', 'invalidar'].includes(actionModal.type)
+                              && (user?.role === 'gestor_qualidade' || user?.role === 'admin' || user?.role === 'gestor_suporte')
                               && m && !isChildTicketMonitoria(m) ? m : null;
                             const success = await handleAction();
                             if (success) {
                               closeDetails();
-                              if (approvedMonitoria) {
-                                const result = await publishEvaluationToHelpdesk(approvedMonitoria.id);
+                              if (terminalMonitoria) {
+                                const result = await publishEvaluationToHelpdesk(terminalMonitoria.id);
                                 if (result?.success) {
-                                  toast.success(`Registro do Auditor enviado ao Zendesk no ticket #${approvedMonitoria.ticket_id}.`);
+                                  toast.success(`Registro do Auditor enviado ao Zendesk no ticket #${terminalMonitoria.ticket_id}.`);
                                 } else if (result) {
-                                  toast.error(`Monitoria aprovada, mas o envio ao Zendesk falhou: ${result.error}`);
-                                  setHelpdeskMonitoria(approvedMonitoria);
+                                  toast.error(`Monitoria concluída, mas o envio ao Zendesk falhou: ${result.error}`);
+                                  setHelpdeskMonitoria(terminalMonitoria);
                                 }
                               }
                             }

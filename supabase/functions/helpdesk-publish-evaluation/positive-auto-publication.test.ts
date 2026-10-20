@@ -17,6 +17,8 @@ function setup(options: {
   monitoriaError?: Error;
   finalDecision?: boolean;
   lastSentOutcome?: 'positiva' | 'negativa';
+  row?: Record<string, unknown>;
+  latestId?: string;
 } = {}) {
   const calls: Array<{ name: string; args?: Record<string, unknown> }> = [];
   const rpc = vi.fn(async (name: string, args?: Record<string, unknown>) => {
@@ -33,6 +35,7 @@ function setup(options: {
     select: vi.fn(() => query), eq: vi.fn(() => query), order: vi.fn(() => query), limit: vi.fn(() => query),
     maybeSingle: vi.fn(async () => ({ data: options.monitoriaError ? null : {
       ...monitoria, form_snapshot: options.finalDecision ? {} : monitoria.form_snapshot,
+      ...options.row,
     }, error: options.monitoriaError ?? null })),
   };
   const receiptQuery = {
@@ -49,6 +52,10 @@ function setup(options: {
     checkPublicationEligibility: vi.fn(async () => ({ eligible: true })),
     publishEvaluation: vi.fn(async () => ({ externalCommentId: 'comment-1' })),
   };
+  const originalMaybeSingle = query.maybeSingle;
+  query.maybeSingle = vi.fn(async () => query.select.mock.calls.at(-1)?.[0] === 'id'
+    ? { data: { id: options.latestId ?? monitoria.id }, error: null }
+    : originalMaybeSingle());
   return { db: { rpc, from } as unknown as SupabaseClient, provider, rpc, calls, from };
 }
 
@@ -62,10 +69,11 @@ describe('positive auto-publication', () => {
 
     expect(await processPositiveAutoPublication(state.db, state.provider))
       .toEqual({ processed: 1, status: 'sent', ticket_id: work.ticket_id });
-    expect(state.provider.checkPublicationEligibility).toHaveBeenCalledWith(work.ticket_id);
+    expect(state.provider.checkPublicationEligibility).toHaveBeenCalledWith(work.ticket_id,{allowFollowUp:true});
     expect(state.provider.publishEvaluation).toHaveBeenCalledWith({
       ticketId: work.ticket_id, outcome: 'positiva', htmlBody: expect.stringContaining('Atendimento correto'),
       clearPreviousInvalid: false,
+      allowFollowUp: true,
     });
     expect(call(state.calls, 'claim_helpdesk_publication')).toEqual({
       p_monitoria: monitoria.id, p_caller: monitoria.evaluator_id, p_force: false,
@@ -101,8 +109,35 @@ describe('positive auto-publication', () => {
     expect(call(state.calls, 'claim_helpdesk_publication')).toMatchObject({ p_force: true });
     expect(state.provider.publishEvaluation).toHaveBeenCalledWith({
       ticketId: work.ticket_id, outcome: 'positiva',
-      htmlBody: expect.stringContaining('93,75%'), clearPreviousInvalid: true,
+      htmlBody: expect.stringContaining('Atendimento correto'), clearPreviousInvalid: true, allowFollowUp: true,
     });
+  });
+
+  it.each([
+    ['manager decision', 'concluida'],
+    ['SLA auto-finalization', 'finalizada_alterada'],
+  ])('publishes a negative %s only at the terminal status', async (_name, status) => {
+    const state = setup({ row: { status, score: 74, satisfaction_result: 'Negativa', form_snapshot: {} } });
+    expect(await processPositiveAutoPublication(state.db,state.provider)).toMatchObject({ status: 'sent' });
+    expect(state.provider.publishEvaluation).toHaveBeenCalledWith(expect.objectContaining({
+      outcome: 'negativa', allowFollowUp: true,
+    }));
+    expect(call(state.calls,'finish_helpdesk_publication')).toMatchObject({ p_outcome: 'negativa' });
+  });
+
+  it('does not publish a review state or a stale monitoria', async () => {
+    const pending = setup({ row: { status: 'pendente_revisao' } });
+    expect(await processPositiveAutoPublication(pending.db,pending.provider)).toMatchObject({ status: 'skipped' });
+    expect(pending.provider.publishEvaluation).not.toHaveBeenCalled();
+    const stale = setup({ latestId: 'newer-monitoria' });
+    expect(await processPositiveAutoPublication(stale.db,stale.provider)).toMatchObject({ status: 'skipped' });
+    expect(stale.provider.publishEvaluation).not.toHaveBeenCalled();
+  });
+
+  it('routes child forms to the child macro outbox', async () => {
+    const state = setup({ row: { form_id: '6c7d1e88-841b-4da9-9a66-9f1464ce896f' } });
+    expect(await processPositiveAutoPublication(state.db,state.provider)).toMatchObject({ status: 'skipped' });
+    expect(state.provider.publishEvaluation).not.toHaveBeenCalled();
   });
 
   it('skips a closed ticket without claiming or posting', async () => {

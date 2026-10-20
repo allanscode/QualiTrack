@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { buildFreshSql, discoverFreshMigrations } from './prepare-supabase.mjs';
 
@@ -183,6 +184,45 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       assert.equal((await db.query("SELECT status FROM monitorias WHERE ticket_id='104'")).rows[0].status, 'pendente_revisao');
     });
 
+    await t.test('gestor que atende ticket pode contestar sua monitoria crítica no fluxo comum', async () => {
+      await reset();
+      await db.query("INSERT INTO auth.users(id,email) VALUES ($1,'manager@example.invalid') ON CONFLICT(id) DO NOTHING", [id(5)]);
+      await db.query("INSERT INTO users(id,email,name,role,active,primary_team_id) VALUES ($1,'manager@example.invalid','Gestor atendente','gestor_suporte',true,$2) ON CONFLICT(id) DO UPDATE SET role=EXCLUDED.role,active=true,primary_team_id=EXCLUDED.primary_team_id", [id(5), id(10)]);
+      await db.query('INSERT INTO user_teams(user_id,team_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id(5), id(10)]);
+      const managerMeta = { ...payload.draft_meta, agent_id: id(5), agent_name: 'Gestor atendente', agent_email: 'manager@example.invalid' };
+      const managerPayload = { ...payload, draft_meta: managerMeta };
+      const job = await begin('109', managerPayload);
+      await complete(job, { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' },
+        { suggested_critical_errors: { critical: true } }, managerMeta);
+      const saved = (await db.query("SELECT id,evaluated_id,status,score,form_snapshot FROM monitorias WHERE ticket_id='109'")).rows[0];
+      assert.equal(saved.evaluated_id, id(5));
+      assert.equal(saved.status, 'pendente_revisao');
+      assert.equal(Number(saved.score), 0);
+      assert.equal(saved.form_snapshot.review_route, 'standard_manager');
+      await db.exec("SET request.jwt.claim.role='authenticated'");
+      await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [id(5)]);
+      await db.query("SELECT act_on_monitoria_as_support_manager($1,'contestar','Solicito reavaliação', '[]'::jsonb)", [saved.id]);
+      assert.equal((await db.query('SELECT status FROM monitorias WHERE id=$1', [saved.id])).rows[0].status, 'em_contestacao');
+      await db.exec("SET request.jwt.claim.role='service_role'");
+      await db.exec("SELECT set_config('request.jwt.claim.sub','',false)");
+    });
+
+    await t.test('erro crítico de equipe PJ segue a mesma revisão do gestor', async () => {
+      await reset();
+      await db.query("INSERT INTO teams(id,name,kind,requires_pj_review) VALUES ($1,'PJ crítico','team',true) ON CONFLICT (id) DO NOTHING", [id(12)]);
+      await db.query("INSERT INTO users(id,email,name,role,active,primary_team_id) VALUES ($1,'critical-pj@example.invalid','Agente PJ','suporte',true,$2) ON CONFLICT (id) DO UPDATE SET primary_team_id=EXCLUDED.primary_team_id", [id(4), id(12)]);
+      const pjPayload = { ...payload, draft_meta: { ...payload.draft_meta, agent_id: id(4), team_id: id(12) } };
+      await complete(await begin('108', pjPayload), { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' },
+        { suggested_critical_errors: { critical: true } }, pjPayload.draft_meta);
+      const saved = (await db.query("SELECT id,status,score,pj_review_required,form_snapshot FROM monitorias WHERE ticket_id='108'")).rows[0];
+      assert.equal(saved.status, 'pendente_revisao');
+      assert.equal(Number(saved.score), 0);
+      assert.equal(saved.pj_review_required, false);
+      assert.equal(saved.form_snapshot.review_route, 'standard_manager');
+      await db.query("UPDATE monitorias SET status='em_contestacao' WHERE id=$1", [saved.id]);
+      assert.equal((await db.query('SELECT pj_review_required,status FROM monitorias WHERE id=$1', [saved.id])).rows[0].pj_review_required, false);
+    });
+
     await t.test('erros críticos separados exigem verificação explícita e evidência', async () => {
       const withCritical = { ...form, critical_errors: [{ id: 'lgpd', text: 'Ética e LGPD', is_critical: true }] };
       const answers = { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' };
@@ -237,6 +277,50 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       await complete(fourth, { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' });
       assert.equal((await state('204')).status, 'completed');
       assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n, 4);
+    });
+
+    await t.test('salva o Registro do Auditor automático na mesma ficha da monitoria manual', async () => {
+      await reset();
+      const job = await begin('205');
+      await complete(job, { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' }, {
+        auditor_record: 'Os critérios foram atendidos, com registro claro da solução ao cliente.',
+      });
+      const row = (await db.query('SELECT evaluator_note, form_snapshot FROM monitorias WHERE ticket_id=$1', ['205'])).rows[0];
+      assert.equal(row.evaluator_note, 'Os critérios foram atendidos, com registro claro da solução ao cliente.');
+      assert.equal(row.form_snapshot.ai_evaluation.summary, 'Parecer da IA');
+    });
+
+    await t.test('converte parecer histórico com erro crítico para o gestor sem publicar no Zendesk', async () => {
+      await reset();
+      const criticalForm = {
+        ...form,
+        critical_errors: [{ id: 'critical', text: 'Erro crítico confirmado', is_critical: true }],
+      };
+      const job = await begin('206', payload, criticalForm);
+      await complete(job, { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' }, {
+        summary: 'O atendimento apresentou erro crítico comprovado no registro da solução, apesar dos demais critérios conformes.',
+        suggested_observations: {
+          q1: 'Evidência do diálogo', q2: 'Evidência do diálogo',
+          q3: 'Evidência do diálogo', q4: 'Evidência do diálogo',
+          critical: 'Solução registrada de modo incorreto.',
+        },
+        suggested_critical_errors: { critical: true },
+        requires_human_review: true, review_reasons: ['Evidência externa pendente.'],
+      });
+      assert.equal((await state('206')).status, 'review_required');
+      await db.exec(`UPDATE positive_ai_queue SET last_error='Nota abaixo de 75% — revisão manual necessária.' WHERE ticket_id='206';
+        UPDATE ai_evaluation_drafts SET result=jsonb_set(jsonb_set(result,'{requires_human_review}','false'),
+          '{review_reasons}','[]') WHERE ticket_id='206';`);
+      const sql = await readFile(new URL('../docs/operations/2026-10-16-positive-critical-backfill.sql', import.meta.url), 'utf8');
+      await db.exec(sql);
+      const row = (await db.query(`SELECT m.status,m.score,m.pj_review_required,m.evaluator_note,
+        m.form_snapshot->>'review_route' AS route FROM monitorias m WHERE ticket_id='206'`)).rows[0];
+      assert.equal(row.status, 'pendente_revisao');
+      assert.equal(Number(row.score), 0);
+      assert.equal(row.pj_review_required, false);
+      assert.equal(row.route, 'standard_manager');
+      assert.match(row.evaluator_note, /erro crítico comprovado/);
+      assert.equal((await state('206')).status, 'completed');
     });
 
     await t.test('prioriza tickets novos e nunca reserva bloqueios sem nova tentativa agendada', async () => {

@@ -34,9 +34,10 @@ describe('confirmação dos campos da macro', () => {
 
   it('remove a marca crítica anterior quando a decisão final valida o ticket', async () => {
     const finalFields = [...fields, { id: 47850817758484, value: null }];
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      ticket: { custom_fields: finalFields }, audit: { events: [{ type: 'Comment', id: 92 }] },
-    }), { status: 200 }));
+    const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(
+      url.includes('/comments.json') ? { comments: [{ id: 92, public: false, body: 'Decisão final' }] }
+        : { ticket: { custom_fields: finalFields }, audit: { events: [{ type: 'Comment', id: 92 }] } },
+    ), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     await provider.publishEvaluation({ ticketId: '180210', outcome: 'positiva',
       htmlBody: '<p>Decisão final</p>', clearPreviousInvalid: true });
@@ -51,11 +52,13 @@ describe('confirmação dos campos da macro', () => {
         audit: { events: [{ type: 'Comment', id: 91 }] },
       }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ticket: { custom_fields: fields } }), { status: 200 }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ticket: { custom_fields: fields } }), { status: 200 }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ comments: [{ id: 91, public: false, body: 'Teste' }] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     expect(await provider.publishEvaluation({ ticketId: '178984', outcome: 'positiva', htmlBody: '<p>Teste</p>' }))
       .toEqual({ externalCommentId: '91' });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     const repair = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(repair.ticket.comment).toBeUndefined();
     expect(repair.ticket.custom_fields).toEqual(fields);
@@ -68,5 +71,27 @@ describe('confirmação dos campos da macro', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ ticket: { custom_fields: [] } }), { status: 200 })));
     await expect(provider.publishEvaluation({ ticketId: '178984', outcome: 'positiva', htmlBody: '<p>Teste</p>' }))
       .rejects.toThrow(/não confirmou os campos/i);
+  });
+
+  it('updates custom_fields directly on a closed ticket when automatic delivery runs', async () => {
+    const calls: Array<{ url: string; method?: string; body?: string }> = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, method: init?.method, body: init?.body ? String(init.body) : undefined });
+      return new Response(JSON.stringify({
+        ticket: { status: 'closed', custom_fields: fields },
+      }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await provider.checkPublicationEligibility('123', { allowFollowUp: true })).toEqual({ eligible: true });
+    expect(await provider.publishEvaluation({
+      ticketId: '123', outcome: 'positiva', allowFollowUp: true,
+      htmlBody: '<p>Monitoria QWP #11111111-1111-1111-1111-111111111111</p>',
+    })).toEqual({ externalCommentId: 'closed-fields:123' });
+    const puts = calls.filter(call => call.method === 'PUT');
+    expect(puts).toHaveLength(1);
+    const sent = JSON.parse(puts[0].body!);
+    expect(sent.ticket.comment).toBeUndefined();
+    expect(sent.ticket.custom_fields).toEqual(fields);
+    expect(calls.filter(call => call.method === 'POST')).toHaveLength(0);
   });
 });

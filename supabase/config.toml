@@ -58,6 +58,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/helpdesk-queue/index.ts"
 
+[functions.legacy-zendesk-closure-sync]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/legacy-zendesk-closure-sync/index.ts"
+
 [functions.helpdesk-webhook]
 enabled = true
 # Zendesk authenticates with HELPDESK_WEBHOOK_SECRET inside the function.

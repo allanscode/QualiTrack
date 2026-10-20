@@ -38,7 +38,7 @@ import {
 } from '../lib/helpdeskQueue';
 import { fetchAIGuidelines } from '../lib/aiGuidelines';
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility';
-import { childTicketForm } from '../lib/childTicketForm';
+import { childTicketForm, detectChildMacroType } from '../lib/childTicketForm';
 
 interface NewMonitoriaModalProps {
   isOpen: boolean;
@@ -173,7 +173,8 @@ export default function NewMonitoriaModal({
     // Resolver formulário baseado nas tags
     const customerType = resolveCustomerType(ticketDetails.tags, []);
     const { form: suggestedForm } = resolveFormAndGuidelineForCustomerType(customerType, forms, []);
-    const formToUse = ticketDetails.ticket_kind === 'chamado_filho' ? childTicketForm(forms) : suggestedForm;
+    const formToUse = ticketDetails.ticket_kind === 'chamado_filho'
+      ? childTicketForm(forms, detectChildMacroType(ticketDetails.tags, ticketDetails.subject)) : suggestedForm;
     if (!formToUse) {
       toast.error('A ficha padrão para este tipo de ticket não está disponível.');
       return;

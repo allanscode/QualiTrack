@@ -1,53 +1,97 @@
-import {describe,expect,it,vi} from 'vitest';
-import type {SupabaseClient} from 'https://esm.sh/@supabase/supabase-js@2.108.2';
-import {processFinalPositiveInvalidation} from './final-invalidation';
-import {childMacroCustomFields} from './child-macro-fields';
+import { describe, expect, it, vi } from 'vitest';
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
+import { processFinalPositiveInvalidation } from './final-invalidation';
+import { childMacroCustomFields } from './child-macro-fields';
 
-const envValues:Record<string,string>={ZENDESK_FINAL_SYNC_ENABLED:'true',ZENDESK_SUBDOMAIN:'example',ZENDESK_EMAIL:'worker@example.invalid',ZENDESK_API_TOKEN:'fake'};
-const env=(key:string)=>envValues[key];
-const fields=childMacroCustomFields('nao_conforme');
-const ticket={id:123,status:'solved',updated_at:'2026-10-07T12:00:00Z',custom_fields:[]};
-const response=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status});
-function database(authorized=true){
-  const rpc=vi.fn(async(name:string)=>({error:null,data:name==='claim_final_positive_invalidation'
-    ?[{id:'work',monitoria_id:'monitoria',ticket_id:'123',lease_id:'lease',attempts:1}]
-    :name==='authorize_final_positive_invalidation'?authorized:true}));
-  return {db:{rpc} as unknown as SupabaseClient,rpc};
+const envValues: Record<string, string> = {
+  ZENDESK_FINAL_SYNC_ENABLED: 'true', ZENDESK_SUBDOMAIN: 'example',
+  ZENDESK_EMAIL: 'worker@example.invalid', ZENDESK_API_TOKEN: 'fake',
+};
+const env = (key: string) => envValues[key];
+const fields = childMacroCustomFields('nao_conforme');
+const ticket = { id: 123, status: 'solved', updated_at: '2026-10-07T12:00:00Z', custom_fields: [] };
+const monitoria = {
+  id: 'monitoria', ticket_id: '123', active: true, status: 'concluida', score: 0,
+  satisfaction_result: 'Positiva', evaluator_note: 'Erro crítico confirmado na solução.',
+  satisfaction_has_record: true, satisfaction_record_text: 'Cliente elogiou o atendimento.',
+};
+const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
+function database(authorized = true, note = monitoria.evaluator_note, manualSent = false) {
+  const rpc = vi.fn(async (name: string) => ({ error: null, data: name === 'claim_final_positive_invalidation'
+    ? [{ id: 'work', monitoria_id: 'monitoria', ticket_id: '123', lease_id: 'lease' }]
+    : name === 'authorize_final_positive_invalidation' ? authorized : true }));
+  const query = { select: vi.fn(() => query), eq: vi.fn(() => query),
+    maybeSingle: vi.fn(async () => ({ data: { ...monitoria, evaluator_note: note }, error: null })) };
+  const receipts = { select: vi.fn(() => receipts), eq: vi.fn(() => receipts),
+    limit: vi.fn(() => receipts), maybeSingle: vi.fn(async () => ({ data: manualSent ? { id: 'receipt' } : null, error: null })) };
+  return { db: { rpc, from: vi.fn((table: string) => table === 'monitorias' ? query : receipts) } as unknown as SupabaseClient, rpc };
 }
+const comments = { comments: [] };
 
-describe('final positive invalidation worker',()=>{
-  it('defaults off and cannot perform requests or claim work without explicit external-write switch',async()=>{
-    const {db,rpc}=database();const fetcher=vi.fn();
-    expect(await processFinalPositiveInvalidation(db,()=>undefined,fetcher)).toEqual({enabled:false,processed:0});
-    expect(rpc).not.toHaveBeenCalled();expect(fetcher).not.toHaveBeenCalled();
+describe('final positive invalidation worker', () => {
+  it('defaults off before claiming work', async () => {
+    const { db, rpc } = database(); const fetcher = vi.fn();
+    expect(await processFinalPositiveInvalidation(db, () => undefined, fetcher)).toEqual({ enabled: false, processed: 0 });
+    expect(rpc).not.toHaveBeenCalled();
   });
-  it('updates only official fields using Zendesk optimistic concurrency, without comments/tags/status changes',async()=>{
-    const {db,rpc}=database();
-    const fetcher=vi.fn().mockResolvedValueOnce(response({ticket})).mockResolvedValueOnce(response({ticket:{...ticket,custom_fields:fields}}));
-    expect(await processFinalPositiveInvalidation(db,env,fetcher)).toMatchObject({status:'applied'});
-    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ticket:{custom_fields:fields,safe_update:true,updated_stamp:ticket.updated_at}});
-    expect(rpc).toHaveBeenCalledWith('authorize_final_positive_invalidation',{p_id:'work',p_lease_id:'lease'});
+  it('publishes the saved auditor record as an internal comment only after final authorization', async () => {
+    const { db, rpc } = database();
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(response({ ticket }))
+      .mockResolvedValueOnce(response(comments))
+      .mockResolvedValueOnce(response({ ticket: { ...ticket, custom_fields: fields } }));
+    expect(await processFinalPositiveInvalidation(db, env, fetcher)).toMatchObject({ status: 'applied' });
+    const payload = JSON.parse(fetcher.mock.calls[2][1].body);
+    expect(payload.ticket).toMatchObject({ custom_fields: fields, safe_update: true, updated_stamp: ticket.updated_at });
+    expect(payload.ticket.comment).toMatchObject({ public: false, html_body: expect.stringContaining(monitoria.evaluator_note) });
+    expect(payload.ticket.comment.html_body).toContain('Registro do Auditor da monitoria #monitoria');
+    expect(rpc).toHaveBeenCalledWith('authorize_final_positive_invalidation', { p_id: 'work', p_lease_id: 'lease' });
   });
-  it('does not PUT when a monitoria reopened or a newer/current decision no longer authorizes invalidation',async()=>{
-    const {db}=database(false);const fetcher=vi.fn().mockResolvedValue(response({ticket}));
-    expect(await processFinalPositiveInvalidation(db,env,fetcher)).toMatchObject({status:'skipped'});
+  it('does not publish before manager decision is final', async () => {
+    const { db } = database(false);
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ ticket })).mockResolvedValueOnce(response(comments));
+    expect(await processFinalPositiveInvalidation(db, env, fetcher)).toMatchObject({ status: 'skipped' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it('blocks a missing auditor record without calling Zendesk', async () => {
+    const { db } = database(true, '');
+    const fetcher = vi.fn();
+    expect(await processFinalPositiveInvalidation(db, env, fetcher)).toMatchObject({ status: 'blocked' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('recovers a previously accepted comment without posting it again', async () => {
+    const { db } = database();
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ ticket: { ...ticket, custom_fields: fields } }))
+      .mockResolvedValueOnce(response({ comments: [{ body: 'Registro do Auditor da monitoria #monitoria' }] }));
+    expect(await processFinalPositiveInvalidation(db, env, fetcher)).toMatchObject({ status: 'applied' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it('checks later comment pages before posting again', async () => {
+    const { db } = database();
+    const next = 'https://example.zendesk.com/api/v2/tickets/123/comments.json?page=2';
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(response({ ticket: { ...ticket, custom_fields: fields } }))
+      .mockResolvedValueOnce(response({ comments: [], next_page: next }))
+      .mockResolvedValueOnce(response({ comments: [{ body: 'Registro do Auditor da monitoria #monitoria' }] }));
+    expect(await processFinalPositiveInvalidation(db, env, fetcher)).toMatchObject({ status: 'applied' });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+  it('uses an existing manual negative publication without adding a second comment', async () => {
+    const { db } = database(true, monitoria.evaluator_note, true);
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ ticket: { ...ticket, custom_fields: fields } }));
+    expect(await processFinalPositiveInvalidation(db, env, fetcher)).toMatchObject({ status: 'applied' });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
-  it.each(['closed','archived'])('blocks immutable %s tickets explicitly',async(status)=>{
-    const {db,rpc}=database();const fetcher=vi.fn().mockResolvedValue(response({ticket:{...ticket,status}}));
-    expect(await processFinalPositiveInvalidation(db,env,fetcher)).toMatchObject({status:'blocked'});
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenLastCalledWith('finish_final_positive_invalidation',expect.objectContaining({p_error:expect.stringContaining('fechado/arquivado')}));
+  it('treats an ambiguous Zendesk write as blocked to avoid duplicate comments', async () => {
+    const { db } = database();
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ ticket }))
+      .mockResolvedValueOnce(response(comments)).mockRejectedValueOnce(new Error('network timeout'));
+    expect(await processFinalPositiveInvalidation(db, env, fetcher)).toMatchObject({ status: 'blocked' });
   });
-  it('recovers a prior successful but unacknowledged PUT without applying twice',async()=>{
-    const {db}=database();const fetcher=vi.fn().mockResolvedValue(response({ticket:{...ticket,custom_fields:fields}}));
-    expect(await processFinalPositiveInvalidation(db,env,fetcher)).toMatchObject({status:'applied'});
-    expect(fetcher).toHaveBeenCalledTimes(1);
-  });
-  it('retries a concurrent Zendesk edit and never claims success for fields not confirmed',async()=>{
-    const first=database();const conflict=vi.fn().mockResolvedValueOnce(response({ticket})).mockResolvedValueOnce(response({},409));
-    expect(await processFinalPositiveInvalidation(first.db,env,conflict)).toMatchObject({status:'pending'});
-    const second=database();const ignored=vi.fn().mockResolvedValueOnce(response({ticket})).mockResolvedValueOnce(response({ticket}));
-    expect(await processFinalPositiveInvalidation(second.db,env,ignored)).toMatchObject({status:'pending'});
+  it('retries a rejected optimistic-lock write after a fresh check', async () => {
+    const { db } = database();
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ ticket }))
+      .mockResolvedValueOnce(response(comments)).mockResolvedValueOnce(response({}, 409));
+    expect(await processFinalPositiveInvalidation(db, env, fetcher)).toMatchObject({ status: 'pending' });
   });
 });

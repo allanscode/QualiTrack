@@ -1,0 +1,1090 @@
+{
+  "as_of": "2026-10-15 17:34-17:38 America/Sao_Paulo",
+  "positive_catalog_no_queue_job_draft": [
+    "176408",
+    "176411",
+    "176431",
+    "176435",
+    "176439",
+    "176442",
+    "176447",
+    "176450",
+    "176452",
+    "176461",
+    "176465",
+    "176548",
+    "176560",
+    "176572",
+    "176607",
+    "176616",
+    "176656",
+    "176667",
+    "176677",
+    "176681",
+    "176713",
+    "176718",
+    "176721",
+    "176731",
+    "176739",
+    "176756",
+    "176761",
+    "176772",
+    "176777",
+    "176779",
+    "176782",
+    "176818",
+    "176828",
+    "176844",
+    "176873",
+    "176874",
+    "176881",
+    "176886",
+    "176889",
+    "176890",
+    "176899",
+    "176907",
+    "176925",
+    "176929",
+    "176930",
+    "176939",
+    "176948",
+    "176969",
+    "176982",
+    "176984",
+    "176987",
+    "176988",
+    "176995",
+    "177036",
+    "177045",
+    "177048",
+    "177072",
+    "177074",
+    "177104",
+    "177136",
+    "177138",
+    "177164",
+    "177180",
+    "177183",
+    "177187",
+    "177193",
+    "178282",
+    "178297",
+    "178300",
+    "178302",
+    "178307",
+    "178308",
+    "178310",
+    "178327",
+    "178336",
+    "178343",
+    "178361",
+    "178367",
+    "178368",
+    "178374",
+    "178377",
+    "178389",
+    "178392",
+    "178401",
+    "178403",
+    "178430",
+    "178433",
+    "178438",
+    "178447",
+    "178461",
+    "178468",
+    "178470",
+    "178513",
+    "178554",
+    "178561",
+    "178592",
+    "178602",
+    "178621",
+    "179023",
+    "179261",
+    "179266",
+    "179270",
+    "179273",
+    "179280",
+    "179283",
+    "179302",
+    "179312",
+    "179327",
+    "179333",
+    "179335",
+    "179336",
+    "179341",
+    "179343",
+    "179345",
+    "179350",
+    "179355",
+    "179364",
+    "179376",
+    "179378",
+    "179380",
+    "179386",
+    "179393",
+    "179746",
+    "179796",
+    "179807",
+    "179834",
+    "179881",
+    "179887",
+    "179890",
+    "179895",
+    "179906",
+    "179915",
+    "179921",
+    "179924",
+    "179929",
+    "179938",
+    "179985",
+    "180027",
+    "180028",
+    "180034",
+    "180046",
+    "180049",
+    "180071",
+    "180089",
+    "180094",
+    "180103",
+    "180112",
+    "180121",
+    "180232"
+  ],
+  "csat_bad_no_catalog_monitoria": [
+    "183287",
+    "183472",
+    "183577",
+    "183904",
+    "184379",
+    "185588"
+  ],
+  "tagged_child_no_qwp_monitoria": [
+    {
+      "ticket_id": "176473",
+      "queue_status": "review_required"
+    },
+    {
+      "ticket_id": "176598",
+      "queue_status": "blocked"
+    },
+    {
+      "ticket_id": "176647",
+      "queue_status": "review_required"
+    },
+    {
+      "ticket_id": "176662",
+      "queue_status": "review_required"
+    },
+    {
+      "ticket_id": "176674",
+      "queue_status": "review_required"
+    },
+    {
+      "ticket_id": "176735",
+      "queue_status": "review_required"
+    },
+    {
+      "ticket_id": "176773",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176785",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176793",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176802",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176809",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176813",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176815",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176820",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176826",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176829",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176831",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176840",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176843",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176847",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176854",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176877",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176918",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176947",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176955",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176960",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "176961",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177008",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177013",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177029",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177030",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177076",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177108",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177112",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177130",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177148",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177149",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177150",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177154",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177160",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177166",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177172",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177251",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177253",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177255",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177287",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177300",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177317",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177323",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177324",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177342",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177368",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177388",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177406",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177407",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177418",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177431",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177436",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177446",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177498",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177518",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177522",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177538",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177542",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177544",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177557",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177570",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177607",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177621",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177627",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177636",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177645",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177649",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177656",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177659",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177680",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177701",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177702",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177713",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177726",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177746",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177798",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177809",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177822",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177833",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177849",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177871",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177876",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177880",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177917",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177962",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177964",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177972",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "177976",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178025",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178181",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178320",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178329",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178330",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178372",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178378",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178382",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178402",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178412",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178422",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178426",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178432",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178435",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178440",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178442",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178453",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178463",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178474",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178478",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178481",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178484",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178491",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178509",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178512",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178514",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178516",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178517",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178524",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178531",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178537",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178550",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178564",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178571",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178585",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178593",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178595",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178596",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178619",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178622",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178623",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178643",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178644",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178650",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178653",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178666",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178669",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178701",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178712",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178723",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178745",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178746",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178763",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178765",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178790",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178797",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178812",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178814",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178816",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178835",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178869",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178894",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178898",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178963",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "178971",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179002",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179010",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179020",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179021",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179042",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179044",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179075",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179078",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179079",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179091",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179093",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179133",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179136",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179146",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179149",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179156",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179165",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179169",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179214",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179222",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179293",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179321",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179342",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179344",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179358",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179363",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179371",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179435",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179459",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179465",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179479",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179484",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179502",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179516",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179546",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179552",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179558",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179575",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179580",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179590",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179639",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179650",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179697",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179727",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179742",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179789",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179794",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179797",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179820",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179832",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179848",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179872",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179909",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179931",
+      "queue_status": "pending"
+    },
+    {
+      "ticket_id": "179950",
+      "queue_status": "pending"
+    }
+  ],
+  "sept30_legacy_child_no_qwp_queue_draft": [
+    "172219",
+    "175802",
+    "175814",
+    "175883",
+    "175894",
+    "175911",
+    "175932",
+    "175938",
+    "175988",
+    "176002",
+    "176004",
+    "176043",
+    "176056",
+    "176086",
+    "176088",
+    "176152",
+    "176168",
+    "176189",
+    "176194",
+    "176204",
+    "176208",
+    "176213",
+    "176215",
+    "176250",
+    "176283"
+  ],
+  "completed_ordinary_no_send_receipt": [
+    "169332",
+    "172190",
+    "173302",
+    "173341",
+    "173388",
+    "175307",
+    "175475",
+    "176729",
+    "177071",
+    "177077",
+    "177408",
+    "177554",
+    "177613",
+    "177780",
+    "177997",
+    "179882",
+    "184957"
+  ],
+  "uncertain_manual_publications": [
+    "173036",
+    "180231"
+  ],
+  "positive_publication_skipped_closed": [
+    "177386",
+    "177420",
+    "177434",
+    "177466",
+    "177531",
+    "177541",
+    "177551",
+    "177571",
+    "177604"
+  ],
+  "child_publication_skipped_closed": [
+    "175783",
+    "176249",
+    "176488",
+    "176528",
+    "176549",
+    "176660",
+    "176688"
+  ]
+}

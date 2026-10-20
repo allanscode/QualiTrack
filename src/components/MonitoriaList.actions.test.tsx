@@ -96,7 +96,7 @@ describe('MonitoriaList actions', () => {
   });
 
   it.each([
-    ['Recusar', 'Recusar Reavaliação', 'contestacao_negada'],
+    ['Recusar', 'Recusar Contestação', 'contestacao_negada'],
     ['Retroceder Etapa', 'Retroceder Etapa', 'pendente_revisao'],
     ['Avançar Etapa', 'Avançar Etapa', 'aguardando_gestor_suporte'],
     ['Alterar Etapa', 'Alterar Etapa da Monitoria', 'aguardando_gestor_suporte'],

@@ -6,7 +6,6 @@ export const OPENROUTER_FALLBACK_MODELS = [
   'google/gemma-4-31b-it',
 ] as const;
 export const OPENROUTER_FALLBACK_MODEL = OPENROUTER_FALLBACK_MODELS[0];
-export const OPENROUTER_ALLOWED_MODELS: readonly string[] = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS];
 // Sem um teto, o OpenRouter reserva até 131.072 tokens de saída para o GLM e
 // pode devolver HTTP 402 mesmo quando a ficha costuma usar muito menos.
 export const OPENROUTER_EVALUATION_MAX_TOKENS = 12_000;
@@ -36,7 +35,7 @@ export async function callOpenRouter(options: {
   const { prompt, responseSchema, apiKey, model = OPENROUTER_MODEL,
     maxTokens = OPENROUTER_EVALUATION_MAX_TOKENS, signal, fetcher = fetch } = options;
   if (!apiKey) throw new AIModelError('OPENROUTER_API_KEY não configurada.', 'credentials_error', false, 'provider');
-  if (!OPENROUTER_ALLOWED_MODELS.includes(model))
+  if (!/^[a-zA-Z0-9._:-]+\/[a-zA-Z0-9._:-]+$/.test(model))
     throw new AIModelError('Modelo não permitido.', 'request_configuration_error', false, 'global');
 
   const response = await fetcher('https://openrouter.ai/api/v1/chat/completions', {
