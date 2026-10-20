@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 
 interface CardProps {
   children: React.ReactNode;
@@ -25,7 +25,7 @@ export default function Card({
     <div 
       onClick={onClick}
       className={`
-        bg-surface-card 
+        qt-glass-card bg-surface-card
         border border-surface-border 
         rounded-card 
         shadow-premium 

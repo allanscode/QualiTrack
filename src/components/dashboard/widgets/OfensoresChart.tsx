@@ -331,7 +331,7 @@ function OfensoresChart({
                         }}
                         cursor={false}
                       />
-                      <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={12} isAnimationActive={false}>
+                      <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={12} isAnimationActive={!shouldReduceMotion} animationDuration={850}>
                         {ofensores.map((entry, index) => {
                           const p = chartPalette();
                           const baseColor = p.ruim; // vermelho
@@ -419,7 +419,7 @@ function OfensoresChart({
                         }}
                         cursor={false}
                       />
-                      <Bar dataKey="simCount" radius={[0, 4, 4, 0]} maxBarSize={12} isAnimationActive={false}>
+                      <Bar dataKey="simCount" radius={[0, 4, 4, 0]} maxBarSize={12} isAnimationActive={!shouldReduceMotion} animationDuration={850}>
                         {acertos.map((entry, index) => {
                           const p = chartPalette();
                           const baseColor = p.excelente; // verde
@@ -485,7 +485,7 @@ function OfensoresChart({
                   className="print:fill-slate-950"
                 />
                 <Tooltip content={<CustomTooltip />} cursor={false} />
-                <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={false}>
+                <Bar dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={!shouldReduceMotion} animationDuration={850}>
                   {ofensores.map((entry, index) => {
                     const p = chartPalette();
                     const baseColor = p.ruim;

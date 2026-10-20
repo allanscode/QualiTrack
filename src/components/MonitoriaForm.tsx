@@ -543,6 +543,11 @@ export default function MonitoriaForm({
   const savedLegacyChildVerdict = isViewOnly && initialData
     ? legacyChildNoteVerdict(initialData)
     : null;
+  const savedChildVerdict = isViewOnly && initialData
+    ? initialData.child_verdict
+      || (initialData.form_snapshot as { child_verdict?: 'valido' | 'invalido' } | undefined)?.child_verdict
+      || null
+    : null;
   // Sugestão de desfecho do preview baseada na regra de domínio estrita (WQ-22):
   // score >= 75% -> Válido (positiva), score < 75% -> Invalidado (negativa)
   const targetScore = isViewOnly ? (initialData?.score ?? 0) : score;
@@ -1094,11 +1099,15 @@ export default function MonitoriaForm({
                   <p className="text-sm font-bold text-brand-primary">
                     {savedLegacyChildVerdict
                       ? `Parecer histórico importado: ${savedLegacyChildVerdict === 'valido' ? 'Válido' : 'Inválido'}`
+                      : savedChildVerdict
+                        ? `Veredito final do chamado filho: ${savedChildVerdict === 'valido' ? 'Válido' : 'Inválido'}`
                       : `Veredito do chamado filho: ${childVerdict(scores, selectedForm) === 'valido' ? 'Válido' : childVerdict(scores, selectedForm) === 'invalido' ? 'Inválido' : 'Preencha todos os critérios'}`}
                   </p>
                   <p className="mt-1 text-xs text-brand-muted">
                     {savedLegacyChildVerdict
                       ? 'Este registro conserva o parecer original importado do Zendesk. Os critérios antigos não são recalculados com a ficha atual.'
+                      : savedChildVerdict
+                        ? 'Resultado final gravado na monitoria e usado como fonte para a publicação no Zendesk.'
                       : 'Todos os critérios devem estar atendidos para validar a abertura.'}
                   </p>
                 </div>

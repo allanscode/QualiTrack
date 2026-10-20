@@ -837,6 +837,8 @@ export default function AuditingQueueView({
           return [monitoria ? {
             ...ticket, already_audited: true, monitoria_id: monitoria.id,
             monitoria_status: monitoria.status, monitoria_score: monitoria.score,
+            monitoria_child_verdict: monitoria.child_verdict
+              || (monitoria.form_snapshot as { child_verdict?: 'valido' | 'invalido' } | undefined)?.child_verdict || null,
           } : ticket];
         });
       }
@@ -1998,6 +2000,12 @@ export default function AuditingQueueView({
     }
   };
 
+  const getSavedChildVerdictBadge = (verdict?: 'valido' | 'invalido' | null) => {
+    if (verdict === 'valido') return <Badge variant="success" size="xs" className="font-black uppercase tracking-wider">Válido</Badge>;
+    if (verdict === 'invalido') return <Badge variant="error" size="xs" className="font-black uppercase tracking-wider">Inválido</Badge>;
+    return null;
+  };
+
   const handleStartChildAudit = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
     const savedDraft = drafts[ticket.ticket_id];
@@ -2964,7 +2972,9 @@ export default function AuditingQueueView({
                         <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-1.5">
                           {renderAssignedMonitorBadge(ticket)}
                           {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
-                          {evaluation && getChildStatusBadge(evaluation.status)}
+                          {ticket.already_audited
+                            ? getSavedChildVerdictBadge(ticket.monitoria_child_verdict)
+                            : evaluation && getChildStatusBadge(evaluation.status)}
                           {renderScoreBadge(ticket)}
                         </div>
                       </div>

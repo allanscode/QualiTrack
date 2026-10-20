@@ -360,6 +360,8 @@ export interface AuditingQueueTicket {
   monitoria_id?: string;
   monitoria_status?: MonitoriaStatus;
   monitoria_score?: number | null;
+  /** Veredito humano persistido; tem precedência sobre o parecer preliminar da IA. */
+  monitoria_child_verdict?: 'valido' | 'invalido' | null;
   /** Rascunho de IA preservado no banco após o ticket sair da view do Zendesk. */
   saved_ai_draft?: boolean;
   /** Rascunho antigo sem retrato do ticket; dados devem ser conferidos. */

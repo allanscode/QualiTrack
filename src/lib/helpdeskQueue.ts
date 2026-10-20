@@ -279,6 +279,8 @@ export async function fetchQueueTickets(
       return monitoria ? {
         ...ticket, already_audited: true, monitoria_id: monitoria.id,
         monitoria_status: monitoria.status, monitoria_score: monitoria.score,
+        monitoria_child_verdict: monitoria.child_verdict
+          || (monitoria.form_snapshot as { child_verdict?: 'valido' | 'invalido' } | undefined)?.child_verdict || null,
       } : ticket;
     });
   }

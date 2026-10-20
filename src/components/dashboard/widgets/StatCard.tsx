@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Info } from 'lucide-react';
 import Card from '../../ui/Card';
-import { m, AnimatePresence } from 'motion/react';
+import { animate, m, AnimatePresence, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { usePresence } from '../../../providers/PresenceProvider';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
@@ -60,6 +60,32 @@ const ROLE_LABELS: Record<string, string> = {
   gestor_suporte: 'Gestor de Suporte',
   suporte: 'Agente de Atendimento',
 };
+
+function AnimatedMetricValue({ value }: { value: string | number }) {
+  const raw = String(value);
+  const match = raw.match(/^([^\d-]*)(-?\d+(?:\.\d+)?)(.*)$/);
+  const reduceMotion = useReducedMotion();
+  const parsed = match ? Number(match[2]) : null;
+  const count = useMotionValue(0);
+  const precision = match?.[2].includes('.') ? match[2].split('.')[1].length : 0;
+  const display = useTransform(count, current => {
+    const formatted = current.toLocaleString('pt-BR', { minimumFractionDigits: precision, maximumFractionDigits: precision });
+    return `${match?.[1] || ''}${formatted}${match?.[3] || ''}`;
+  });
+
+  useEffect(() => {
+    if (parsed === null || reduceMotion) {
+      count.set(parsed ?? 0);
+      return;
+    }
+    count.set(0);
+    const controls = animate(count, parsed, { duration: 1.15, ease: [0.16, 1, 0.3, 1] });
+    return () => controls.stop();
+  }, [count, parsed, reduceMotion]);
+
+  if (parsed === null) return <>{value}</>;
+  return <m.span>{display}</m.span>;
+}
 
 function getIconBg(accent: string): string {
   if (BG_MAP[accent]) return BG_MAP[accent];
@@ -233,7 +259,7 @@ function StatCard({
 
   return (
     <>
-      <Card onClick={onClick} padding="none" className={`px-5 py-4 flex flex-col justify-between min-h-[100px] relative z-10 hover:z-30 transition-all duration-200 ${onClick ? 'cursor-pointer active:scale-[0.99]' : ''}`}>
+      <Card onClick={onClick} padding="none" className={`qt-metric-card px-5 py-4 flex flex-col justify-between min-h-[100px] relative z-10 hover:z-30 transition-all duration-200 ${onClick ? 'cursor-pointer active:scale-[0.99]' : ''}`}>
         <div className="flex items-center gap-3 mb-3 min-w-0">
         <div
           onClick={canEdit ? handleEditClick : undefined}
@@ -294,7 +320,7 @@ function StatCard({
               isOnlineUsersCard ? 'cursor-pointer hover:opacity-80' : ''
             }`}
           >
-            {value}
+            <AnimatedMetricValue value={value} />
           </p>
           {badge}
           {comparisonDelta && (

@@ -4,6 +4,7 @@ import type { Monitoria, User } from '../types';
 import { getHistoryEventConfig, getStatusConfig, VARIANT_TEXT_CLASS, type StatusConfig } from '../lib/statusHelper';
 import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
+import { isChildTicketMonitoria } from '../lib/childTicketForm';
 
 const NOTE_ACCENT_CLASS: Record<StatusConfig['variant'], string> = {
   warning: 'border-amber-500/25',
@@ -42,7 +43,11 @@ type Props = { monitoria: Monitoria; user: User | null; users: User[] };
 
 export default function MonitoriaTimeline({ monitoria, user, users }: Props) {
   const history = monitoria.history || [];
-  if (history.length === 0) return null;
+  const childSnapshot = monitoria.form_snapshot as { child_verdict?: 'valido' | 'invalido' } | undefined;
+  const childVerdict = isChildTicketMonitoria(monitoria)
+    ? monitoria.child_verdict || childSnapshot?.child_verdict || null
+    : null;
+  if (history.length === 0 && !isChildTicketMonitoria(monitoria)) return null;
   const showCurrentStage = !['concluida', 'finalizada_alterada'].includes(monitoria.status);
 
   return (
@@ -50,6 +55,18 @@ export default function MonitoriaTimeline({ monitoria, user, users }: Props) {
       <h3 id={`timeline-${monitoria.id}`} className="mb-3 ml-1 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-brand-primary">
         <History className="size-3.5 text-brand-highlight" aria-hidden="true" /> Linha do Tempo
       </h3>
+      {isChildTicketMonitoria(monitoria) && (
+        <div className={`mb-3 rounded-xl border px-3.5 py-3 ${childVerdict === 'valido'
+          ? 'border-emerald-500/25 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300'
+          : childVerdict === 'invalido'
+            ? 'border-rose-500/25 bg-rose-500/8 text-rose-700 dark:text-rose-300'
+            : 'border-amber-500/25 bg-amber-500/8 text-amber-700 dark:text-amber-300'}`} role="status">
+          <strong className="text-xs font-black uppercase tracking-wide">
+            Veredito final do chamado filho: {childVerdict === 'valido' ? 'Válido' : childVerdict === 'invalido' ? 'Inválido' : 'Não registrado'}
+          </strong>
+          <p className="mt-0.5 text-[11px] text-brand-muted">Este é o resultado persistido da monitoria. Alterações posteriores aparecem como eventos no histórico.</p>
+        </div>
+      )}
       <ol className="min-w-0">
         {history.map((entry, index) => {
           const event = getHistoryEventConfig(entry.action);

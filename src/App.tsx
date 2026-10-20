@@ -1191,7 +1191,7 @@ function MainApp({
   const teamNames = userTeams.map(t => t.name).join(', ');
 
   return (
-    <div className="h-screen w-full flex bg-surface-bg text-brand-primary font-sans overflow-hidden">
+    <div className="qt-app-shell h-screen w-full flex bg-surface-bg text-brand-primary font-sans overflow-hidden">
       <AnimatePresence>
         {isFormOpen && (
           <MonitoriaForm
@@ -1270,7 +1270,7 @@ function MainApp({
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 26, stiffness: 280 }}
               style={sidebarStyle}
-              className={`${sidebarContrastClass} fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] flex flex-col border-r ${sidebarBorderClass} shadow-2xl md:hidden`}
+              className={`${sidebarContrastClass} qt-sidebar-glass fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] flex flex-col border-r ${sidebarBorderClass} shadow-2xl md:hidden`}
             >
               {/* Drawer Header with Logo & Close button */}
               <div className="h-16 flex items-center justify-between px-5 border-b border-white/10">
@@ -1504,7 +1504,7 @@ function MainApp({
           }
           toggleSidebar();
         }}
-        className={`${sidebarContrastClass} hidden md:flex flex-col relative z-20 border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
+        className={`${sidebarContrastClass} qt-sidebar-glass hidden md:flex flex-col relative z-20 border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
       >
         <div
           onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
@@ -1744,8 +1744,8 @@ function MainApp({
         </div>
       </m.aside>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-surface-bg">
-        <header className="px-3.5 sm:px-6 md:px-8 h-16 md:h-20 flex items-center gap-2.5 sm:gap-4 border-b border-surface-border/60 bg-surface-bg/85 backdrop-blur-md sticky top-0 z-20 transition-colors">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-transparent">
+        <header className="qt-topbar-glass px-3.5 sm:px-6 md:px-8 h-16 md:h-20 flex items-center gap-2.5 sm:gap-4 border-b border-surface-border/60 sticky top-0 z-20 transition-colors">
           <button
             onClick={() => {
               if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -2154,7 +2154,7 @@ function MainApp({
         {/* Mobile Bottom Navigation Bar */}
         <nav
           aria-label="Navegação Principal Mobile"
-          className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-surface-card/95 backdrop-blur-lg border-t border-surface-border/80 px-2 pt-1 pb-safe flex items-center justify-around shadow-premium select-none"
+          className="qt-mobile-nav-glass fixed bottom-0 inset-x-0 z-40 md:hidden border-t border-surface-border/80 px-2 pt-1 pb-safe flex items-center justify-around shadow-premium select-none"
         >
           {/* Dashboard */}
           <button
@@ -2364,19 +2364,19 @@ function NavItem({ icon: IconComponent, label, active, onClick, isOpen, isDark, 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={`
-        w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative
+        w-full flex items-center gap-3 px-4 h-11 rounded-full transition-all font-bold group relative
         ${active
-          ? (isDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black font-extrabold')
+          ? 'qt-active-nav-pill font-extrabold'
           : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5 font-bold')}
       `}
     >
       {active && (
         <m.div
-          layoutId="active-bar"
-          className={`absolute left-0 w-1 h-6 rounded-full ${isDark ? 'bg-white' : 'bg-black'}`}
+          layoutId="activeTab"
+          className="absolute left-0 w-1 h-6 rounded-full bg-brand-accent"
         />
       )}
-      <div className={`${active ? 'text-current' : (isDark ? 'text-white/30 group-hover:text-white' : 'text-slate-700 group-hover:text-black')}`}>
+      <div className={`relative z-10 ${active ? 'text-current' : (isDark ? 'text-white/30 group-hover:text-white' : 'text-slate-700 group-hover:text-black')}`}>
         {typeof IconComponent === 'function' ? (
           <IconComponent isHovered={isHovered} active={active} className="w-5 h-5" />
         ) : React.isValidElement(IconComponent) ? (
@@ -2385,7 +2385,7 @@ function NavItem({ icon: IconComponent, label, active, onClick, isOpen, isDark, 
           IconComponent
         )}
       </div>
-      <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${isOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
+      <div className={`relative z-10 flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${isOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
         <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
           {label}
         </span>

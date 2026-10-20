@@ -127,6 +127,16 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           historyNote = changes.length > 0 ? changes.join(' | ') : 'Edição administrativa';
         }
 
+        if (isChild && verdict) {
+          const previousChildVerdict = deps.initialData?.child_verdict
+            || (deps.initialData?.form_snapshot as { child_verdict?: 'valido' | 'invalido' } | undefined)?.child_verdict;
+          const verdictLabel = verdict === 'valido' ? 'VÁLIDO' : 'INVÁLIDO';
+          const verdictHistory = previousChildVerdict && previousChildVerdict !== verdict
+            ? `Veredito final alterado: ${previousChildVerdict === 'valido' ? 'VÁLIDO' : 'INVÁLIDO'} → ${verdictLabel}.`
+            : `Veredito final do chamado filho: ${verdictLabel}.`;
+          historyNote = [historyNote, verdictHistory].filter(Boolean).join('\n\n');
+        }
+
         const evaluatedUser = deps.allUsers.find(u => u.id === deps.header.evaluated_id);
         const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
         const selectedTeam = deps.teams.find(t => t.id === managementTeamId);
