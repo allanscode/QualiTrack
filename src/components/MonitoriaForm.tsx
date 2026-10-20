@@ -541,6 +541,9 @@ export default function MonitoriaForm({
     && initialData?.status === 'concluida'
     && !legacyChildNoteVerdict(initialData)
     && ['admin', 'gestor_qualidade', 'qualidade'].includes(user?.role || '');
+  const savedLegacyChildVerdict = isViewOnly && initialData
+    ? legacyChildNoteVerdict(initialData)
+    : null;
   // Sugestão de desfecho do preview baseada na regra de domínio estrita (WQ-22):
   // score >= 75% -> Válido (positiva), score < 75% -> Invalidado (negativa)
   const targetScore = isViewOnly ? (initialData?.score ?? 0) : score;
@@ -1089,8 +1092,16 @@ export default function MonitoriaForm({
             <section className="space-y-8 animate-fade-in max-w-4xl mx-auto">
               {isChildFormId(header.form_id) && (
                 <div className="rounded-2xl border border-surface-border bg-surface-card p-5" role="status">
-                  <p className="text-sm font-bold text-brand-primary">Veredito do chamado filho: {childVerdict(scores, selectedForm) === 'valido' ? 'Válido' : childVerdict(scores, selectedForm) === 'invalido' ? 'Inválido' : 'Preencha todos os critérios'}</p>
-                  <p className="mt-1 text-xs text-brand-muted">Todos os critérios devem estar atendidos para validar a abertura.</p>
+                  <p className="text-sm font-bold text-brand-primary">
+                    {savedLegacyChildVerdict
+                      ? `Parecer histórico importado: ${savedLegacyChildVerdict === 'valido' ? 'Válido' : 'Inválido'}`
+                      : `Veredito do chamado filho: ${childVerdict(scores, selectedForm) === 'valido' ? 'Válido' : childVerdict(scores, selectedForm) === 'invalido' ? 'Inválido' : 'Preencha todos os critérios'}`}
+                  </p>
+                  <p className="mt-1 text-xs text-brand-muted">
+                    {savedLegacyChildVerdict
+                      ? 'Este registro conserva o parecer original importado do Zendesk. Os critérios antigos não são recalculados com a ficha atual.'
+                      : 'Todos os critérios devem estar atendidos para validar a abertura.'}
+                  </p>
                 </div>
               )}
               {/* Score Banner Principal - Animação de encolher ao rolar para baixo e transferir para o topo fixo */}
