@@ -60,7 +60,7 @@ export interface DashboardAggregates {
 // Dashboard widgets use these fields for their visible rows and drilldowns.
 // Keep the projection explicit so new large columns are never fetched by default.
 const DASHBOARD_MONITORIA_COLUMNS = [
-  'id', 'form_id', 'evaluator_id', 'evaluated_id', 'evaluator_name',
+  'id', 'form_id', 'child_verdict', 'evaluator_id', 'evaluated_id', 'evaluator_name',
   'evaluated_name', 'team_id', 'team_name', 'ticket_group_team_id',
   'form_name', 'ticket_id', 'channel', 'ticket_date', 'analysis_date',
   'satisfaction_result', 'satisfaction_has_record', 'satisfaction_record_text',
@@ -77,7 +77,7 @@ const DASHBOARD_MONITORIA_COLUMNS = [
 
 // Trends and pending actions span the whole history, but need only small fields.
 const DASHBOARD_SUMMARY_COLUMNS = [
-  'id', 'form_id', 'evaluator_id', 'evaluated_id', 'evaluator_name',
+  'id', 'form_id', 'child_verdict', 'evaluator_id', 'evaluated_id', 'evaluator_name',
   'evaluated_name', 'team_id', 'team_name', 'ticket_group_team_id',
   'form_name', 'ticket_id', 'channel', 'ticket_date', 'analysis_date',
   'satisfaction_result', 'score', 'status', 'resolution_type',
@@ -89,7 +89,7 @@ const DASHBOARD_SUMMARY_COLUMNS = [
 // Admin and quality dashboards use history for trends, rankings, average and
 // SLA alerts. Their period drilldowns come from the separate detail query.
 const DASHBOARD_METRICS_COLUMNS = [
-  'id', 'form_id', 'evaluator_id', 'evaluated_id', 'team_id',
+  'id', 'form_id', 'child_verdict', 'evaluator_id', 'evaluated_id', 'team_id',
   'ticket_group_team_id', 'channel', 'score', 'status',
   'action_deadline_at', 'active', 'created_at',
 ].join(',');

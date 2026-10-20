@@ -16,6 +16,7 @@ import { useStaticData } from '../../../lib/StaticDataContext';
 import { useMonitoriaTicketContext } from '../../../hooks/useMonitoriaTicketContext';
 import { monitoriaTicketPresentation } from '../../../lib/monitoriaTicketPresentation';
 import { supabase } from '../../../lib/supabase';
+import { isChildTicketMonitoria } from '../../../lib/childTicketForm';
 
 interface SupportDrillDownModalProps {
   title: string;
@@ -86,7 +87,7 @@ export function SupportDrillDownContent({
       const ticketId = String(m.ticket_id || '');
       const agent = m.evaluated_name || '';
       const team = m.team_name || '';
-      const score = m.score !== undefined && m.score !== null ? `${m.score}%` : '';
+      const score = isChildTicketMonitoria(m) ? '' : (m.score !== undefined && m.score !== null ? `${m.score}%` : '');
 
       return (
         matchesSearch(displayId, searchTerm) ||
@@ -203,7 +204,9 @@ export function SupportDrillDownContent({
             filteredMonitorias.map(m => {
               const cfg = getStatusConfig(m.status);
               const score = m.score ?? 0;
-              const isPositive = score >= 75;
+              const child = isChildTicketMonitoria(m);
+              const childVerdict = m.child_verdict || (m.form_snapshot as { child_verdict?: 'valido' | 'invalido' } | undefined)?.child_verdict;
+              const isPositive = child ? childVerdict === 'valido' : score >= 75;
               const details = monitoriaTicketPresentation(m);
 
               return (
@@ -261,7 +264,7 @@ export function SupportDrillDownContent({
                           isPositive ? 'text-functional-success' : 'text-functional-error'
                         }`}
                       >
-                        {m.score !== undefined && m.score !== null ? `${m.score}%` : '—'}
+                        {child ? (childVerdict === 'valido' ? 'Válido' : childVerdict === 'invalido' ? 'Inválido' : '—') : m.score !== undefined && m.score !== null ? `${m.score}%` : '—'}
                       </span>
                       <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">
                         {isPositive ? 'Válido' : 'Invalidado'}

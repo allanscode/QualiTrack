@@ -5,6 +5,11 @@ export const OPENROUTER_MODEL = 'z-ai/glm-5.3-flash';
 export const OPENROUTER_FALLBACK_MODELS = [
   'google/gemma-4-31b-it',
 ] as const;
+export const OPENROUTER_FREE_FALLBACK_MODELS = [
+  'poolside/laguna-s-2.1:free',
+  'minimax/minimax-m3.1-flash:free',
+  'google/gemma-4-31b-it:free',
+] as const;
 export const OPENROUTER_FALLBACK_MODEL = OPENROUTER_FALLBACK_MODELS[0];
 // Sem um teto, o OpenRouter reserva até 131.072 tokens de saída para o GLM e
 // pode devolver HTTP 402 mesmo quando a ficha costuma usar muito menos.
@@ -31,9 +36,9 @@ export async function callOpenRouter(options: {
   maxTokens?: number;
   signal?: AbortSignal;
   fetcher?: typeof fetch;
-}): Promise<{ text: string; routedProvider?: string; routerAttempt?: number; requestId?: string; promptTokens?: number; completionTokens?: number; cost?: number }> {
+}): Promise<{ text: string; model?: string; routedProvider?: string; routerAttempt?: number; requestId?: string; promptTokens?: number; completionTokens?: number; cost?: number }> {
   const { prompt, responseSchema, apiKey, model = OPENROUTER_MODEL,
-    maxTokens = OPENROUTER_EVALUATION_MAX_TOKENS, signal, fetcher = fetch } = options;
+    maxTokens = model.endsWith(':free') ? 4_096 : OPENROUTER_EVALUATION_MAX_TOKENS, signal, fetcher = fetch } = options;
   if (!apiKey) throw new AIModelError('OPENROUTER_API_KEY não configurada.', 'credentials_error', false, 'provider');
   if (!/^[a-zA-Z0-9._:-]+\/[a-zA-Z0-9._:-]+$/.test(model))
     throw new AIModelError('Modelo não permitido.', 'request_configuration_error', false, 'global');
@@ -73,9 +78,6 @@ ${JSON.stringify(responseSchema)}`,
     throw new AIModelError('OpenRouter retornou um envelope JSON inválido.', 'response_parse_error', true);
   }
   if (!data.model) throw new AIModelError('OpenRouter não confirmou o modelo esperado.', 'incomplete_response', true);
-  if (data.model !== model) {
-    throw new AIModelError('OpenRouter retornou outro modelo.', 'request_configuration_error', false, 'global');
-  }
   const content = data.choices?.[0]?.message?.content;
   const text = typeof content === 'string' ? content : Array.isArray(content)
     ? content.map(part => part.text || '').join('') : '';
@@ -83,7 +85,7 @@ ${JSON.stringify(responseSchema)}`,
   const routedProvider = data.openrouter_metadata?.endpoints?.available?.find(endpoint => endpoint.selected)?.provider;
   const routerAttempt = data.openrouter_metadata?.attempt;
   return {
-    text, routedProvider, routerAttempt,
+    text, model: data.model, routedProvider, routerAttempt,
     requestId: response.headers.get('x-generation-id') || data.id,
     promptTokens: data.usage?.prompt_tokens,
     completionTokens: data.usage?.completion_tokens,

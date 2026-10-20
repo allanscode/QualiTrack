@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { Monitoria, User as UserType } from '../types';
+import { isChildTicketMonitoria } from '../lib/childTicketForm';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -121,7 +122,7 @@ export default function CommandPaletteModal({
           id: `mon-${m.id}`,
           category: 'Monitorias & Tickets',
           title: `Ticket #${m.ticket_id || m.display_id || 'S/N'} • ${agent}`,
-          subtitle: `Nota: ${m.score !== undefined ? `${m.score}%` : 'N/A'} — Status: ${m.status}`,
+          subtitle: `${isChildTicketMonitoria(m) ? (m.child_verdict === 'valido' ? 'Válido' : m.child_verdict === 'invalido' ? 'Inválido' : 'Chamado filho') : `Nota: ${m.score !== undefined && m.score !== null ? `${m.score}%` : 'N/A'}`} — Status: ${m.status}`,
           icon: Ticket,
           action: () => {
             window.dispatchEvent(

@@ -3,7 +3,7 @@ import { Monitoria, User } from '../types';
 import { isMockMode, mockDb, supabase } from '../lib/supabase';
 
 // Only fields used by App's notification menu are fetched on sign-in.
-const BASE_COLUMNS = 'id,ticket_id,status,evaluator_id,evaluated_id,score,created_at,updated_at,action_deadline_at,active';
+const BASE_COLUMNS = 'id,form_id,child_verdict,ticket_id,status,evaluator_id,evaluated_id,score,created_at,updated_at,action_deadline_at,active';
 
 export function useMonitoriaNotifications(user: User | null) {
   const [monitorias, setMonitorias] = useState<Monitoria[]>([]);

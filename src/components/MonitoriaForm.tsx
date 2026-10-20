@@ -405,7 +405,7 @@ export default function MonitoriaForm({
 
     const timer = setTimeout(async () => {
       try {
-        let existentes: { evaluated_name?: string; score?: number; status?: string }[] = [];
+        let existentes: { evaluated_name?: string; score?: number | null; status?: string; form_id?: string; child_verdict?: 'valido' | 'invalido' | null }[] = [];
         if (isMockMode) {
           const { data } = await mockDb.get('monitorias');
           existentes = (data || []).filter((m: any) =>
@@ -414,7 +414,7 @@ export default function MonitoriaForm({
         } else if (supabase) {
           let query = supabase
             .from('monitorias')
-            .select('evaluated_name, score, status')
+            .select('evaluated_name, score, status, form_id, child_verdict')
             .eq('ticket_id', ticketId)
             .eq('active', true);
           if (initialData?.id) query = query.neq('id', initialData.id);
@@ -427,7 +427,7 @@ export default function MonitoriaForm({
           lastWarnedTicketRef.current = ticketId;
           const resumo = existentes
             .slice(0, 3)
-            .map(m => `${m.evaluated_name || '—'} (${m.score ?? '—'}%)`)
+            .map(m => `${m.evaluated_name || '—'} (${isChildFormId(m.form_id) ? (m.child_verdict === 'valido' ? 'Válido' : m.child_verdict === 'invalido' ? 'Inválido' : 'Chamado filho') : `${m.score ?? '—'}%`})`)
             .join(', ');
           const resto = existentes.length > 3 ? ` e mais ${existentes.length - 3}` : '';
           toast.warning(
@@ -577,7 +577,7 @@ export default function MonitoriaForm({
     qualityFieldsToShow,
     onSaved: (savedMonitoriaId: string, savedStatus: MonitoriaStatus) => {
       clearDraft();
-      if (isChildFormId(header.form_id) && savedStatus === 'concluida' && childVerdict(scores, selectedForm) === 'valido') {
+      if (isChildFormId(header.form_id) && savedStatus === 'concluida') {
         setChildPublishModal({ monitoriaId: savedMonitoriaId, fromConclusion: true });
         return;
       }
@@ -1645,7 +1645,7 @@ export default function MonitoriaForm({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {aiEval?.score !== undefined && (
+                        {!isChildFormId(header.form_id) && aiEval?.score !== undefined && (
                           <div className="flex items-center gap-1.5">
                             <span className="text-[10px] font-bold text-brand-muted uppercase">Score IA:</span>
                             <Badge variant={aiEval.score >= 85 ? 'success' : aiEval.score >= 70 ? 'warning' : 'error'} className="font-mono font-bold">

@@ -212,6 +212,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           critical_error_observations: isChild ? {} : deps.criticalErrorObservations,
           selected_critical_errors: isChild ? [] : Object.keys(deps.criticalErrors).filter(id => deps.criticalErrors[id]),
           score: isChild ? null : deps.score,
+          child_verdict: isChild ? verdict : null,
           status: nextStatus,
           pj_review_required: requiresPjReview,
           resolution_type: nextStatus === 'concluida' ? 'human'

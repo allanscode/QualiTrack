@@ -106,7 +106,7 @@ import { calculateAIEvaluationScore, describeAICriticalScore } from '../utils/ai
 import { resolveTicketTeamId } from '../lib/ticketTeam';
 import { canAuditTickets } from '../lib/auditPermissions';
 import { getEvaluationOutcome } from '../lib/domainRules';
-import { childTicketForm } from '../lib/childTicketForm';
+import { CHILD_TICKET_FORM_ID, childTicketForm } from '../lib/childTicketForm';
 import HelpdeskSendModal from './HelpdeskSendModal';
 import ChildTicketMonitoriaAction from './ChildTicketMonitoriaAction';
 import ChildTicketReevaluateAction from './ChildTicketReevaluateAction';
@@ -1596,6 +1596,43 @@ export default function AuditingQueueView({
     });
   };
 
+  const handleStartManualChildAudit = async (ticket: AuditingQueueTicket) => {
+    if (!canAudit) return;
+    const savedDraft = drafts[ticket.ticket_id];
+    const detectedType = ticket.child_macro_type || childResultFor(ticket)?.detected_type;
+    const selectedChildForm = childTicketForm(forms, detectedType === 'desconhecido' ? undefined : detectedType)
+      || forms.find(form => form.id === CHILD_TICKET_FORM_ID && form.active !== false);
+    if (!selectedChildForm) {
+      toast.error('A ficha manual de chamados filhos não está disponível. Avise a Gestão da Qualidade.');
+      return;
+    }
+    let queueAssignment;
+    try {
+      queueAssignment = await beginAssignedWork(ticket, Boolean(ticket.already_audited || ticket.monitoria_id));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível abrir a avaliação manual.');
+      return;
+    }
+    const matchedAgent = agents.find(agent => agent.id === ticket.agent_id
+      || (ticket.agent_email && agent.email.toLowerCase() === ticket.agent_email.toLowerCase())
+      || (ticket.agent_name && agent.name.toLowerCase() === ticket.agent_name.toLowerCase()));
+    onStartAudit({
+      ticket_id: ticket.ticket_id,
+      ticket_subject: ticket.subject,
+      form_id: selectedChildForm.id,
+      evaluated_id: ticket.agent_id || savedDraft?.agent_id || matchedAgent?.id,
+      team_id: resolveTicketTeamId({ ...ticket, team_id: ticket.team_id || savedDraft?.team_id }, matchedAgent),
+      ticket_group_team_id: ticket.ticket_group_team_id,
+      group_name: ticket.group_name,
+      channel: normalizeChannel(ticket.channel || savedDraft?.channel),
+      ticket_date: toTicketDateInput(ticket.ticket_date),
+      satisfaction_result: 'Sem pesquisa',
+      ticket_fields: savedDraft?.result.ticket_fields || ticket.ticket_fields,
+      dialogue: savedDraft?.result.dialogue || ticket.dialogue,
+      queue_assignment: queueAssignment,
+    });
+  };
+
   // E-mails dos 5 agentes mais prioritários (mais tempo sem monitoria) —
   // usado só pra destacar visualmente esses tickets na fila Proativa, sem
   // depender de "sortear" um ticket específico (a fila agora é paginada;
@@ -1782,6 +1819,9 @@ export default function AuditingQueueView({
           <Badge variant={valid ? 'warning' : 'neutral'} size="xs">
             {valid ? 'Macro do filho pendente' : 'Monitoria do filho em revisão'}
           </Badge>
+          {canAudit && <Button size="sm" variant="outline" onClick={() => handleStartManualChildAudit(ticket)}>
+            <FileText className="w-3.5 h-3.5" /> Nova avaliação manual
+          </Button>}
           {ticket.monitoria_id && onOpenExistingMonitoria &&
             <Button size="sm" variant="outline" onClick={() => onOpenExistingMonitoria(ticket.monitoria_id!)}>
               <Eye className="w-3.5 h-3.5" /> Abrir monitoria
@@ -1906,12 +1946,15 @@ export default function AuditingQueueView({
         <Button
           size="sm"
           variant="outline"
-          onClick={() => handleStartManualAudit(ticket)}
+          onClick={() => activeQueue === 'filhos' || activeQueue === 'filhos_invalidos'
+            ? handleStartManualChildAudit(ticket) : handleStartManualAudit(ticket)}
           className="flex items-center gap-1 text-[11px] text-brand-muted hover:text-brand-primary"
-          title="Abrir monitoria manual no fluxo oficial 1-2-3-4"
+          title={activeQueue === 'filhos' || activeQueue === 'filhos_invalidos'
+            ? 'Abrir a ficha de chamados filhos para avaliação manual, sem IA'
+            : 'Abrir monitoria manual no fluxo oficial 1-2-3-4'}
         >
           <FileText className="w-3.5 h-3.5" />
-          <span>Auditar Manual</span>
+          <span>{activeQueue === 'filhos' || activeQueue === 'filhos_invalidos' ? 'Avaliar Filho Manualmente' : 'Auditar Manual'}</span>
         </Button>
         <Button
           size="sm"

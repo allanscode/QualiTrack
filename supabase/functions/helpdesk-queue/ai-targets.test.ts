@@ -11,7 +11,18 @@ describe('limites independentes da cadeia de IA', () => {
   });
 
   it.each(['', 'NaN', 'Infinity', '-1', '0'])('usa defaults seguros para configuração inválida %s', value => {
-    expect(buildAITargets(() => value).map(target => target.timeoutMs)).toEqual([60_000, 40_000]);
+    expect(buildAITargets(() => value).map(target => target.timeoutMs)).toEqual([120_000, 40_000]);
+  });
+
+  it('dá um limite de até 60s ao Poolside e mantém a cadeia gratuita dentro de 120s', () => {
+    const targets = buildAITargets(() => undefined, 'google/gemma-4-31b-it:free', true);
+    expect(targets.map(target => target.model)).toEqual([
+      'google/gemma-4-31b-it:free',
+      'poolside/laguna-s-2.1:free',
+      'minimax/minimax-m3.1-flash:free',
+    ]);
+    expect(targets.find(target => target.model === 'poolside/laguna-s-2.1:free')?.timeoutMs).toBe(60_000);
+    expect(targets.reduce((total, target) => total + (target.timeoutMs || 0), 0)).toBe(120_000);
   });
 
   it('aceita resposta do GLM após 30 segundos sem iniciar fallback', async () => {

@@ -88,9 +88,8 @@ export async function httpAIError(provider: AIProvider, model: string, response:
   if (response.status === 429) return new AIModelError(detail, 'rate_limit', true, 'attempt', 429);
   if (response.status === 408) return new AIModelError(detail, 'timeout', true, 'attempt', 408);
   if (response.status >= 500) return new AIModelError(detail, 'server_error', true, 'attempt', response.status);
-  if (response.status === 401 || response.status === 403) {
-    return new AIModelError(detail, 'credentials_error', false, 'provider', response.status);
-  }
+  if (response.status === 401) return new AIModelError(detail, 'credentials_error', false, 'provider', response.status);
+  if (response.status === 403) return new AIModelError(detail, 'request_configuration_error', true, 'attempt', response.status);
   if (response.status === 404) {
     return new AIModelError(detail, 'model_not_found', false, 'attempt', 404);
   }

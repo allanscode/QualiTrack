@@ -35,6 +35,8 @@ export async function listOpenRouterModels(): Promise<OpenRouterModelOption[]> {
     ...[
       'z-ai/glm-5.3-flash:free', 'google/gemma-4-31b-it:free',
       'google/gemma-4-26b-a4b-it:free', 'nvidia/nemotron-3.5-lightning:free',
+      'poolside/laguna-s-2.1:free', 'minimax/minimax-m3.1-flash:free',
+      'deepseek/deepseek-v4-flash-0731:free', 'xingchen-agi/xing4.0-29b-a4b:free',
       'nvidia/nemotron-3-nano-30b-a3b:free',
       'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
     ].map(id => ({ id, name: `${id} (mock)`, pricing: { prompt: '0', completion: '0' }, free: true })),

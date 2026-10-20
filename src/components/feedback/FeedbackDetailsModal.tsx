@@ -21,6 +21,7 @@ import { AgentFeedback, User, Team, Monitoria } from '../../types';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import { useDialogAccessibility } from '../../hooks/useDialogAccessibility';
+import { isChildTicketMonitoria } from '../../lib/childTicketForm';
 
 interface FeedbackDetailsModalProps {
   isOpen: boolean;
@@ -220,7 +221,7 @@ export default function FeedbackDetailsModal({
                 <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">Monitoria Vinculada:</span>
                 <span className="font-mono font-bold text-brand-accent">#{linkedMonitoria.ticket_id}</span>
                 <span className="text-brand-muted">•</span>
-                <span className="font-semibold text-brand-primary">Nota: {linkedMonitoria.score ?? '—'}%</span>
+                <span className="font-semibold text-brand-primary">{isChildTicketMonitoria(linkedMonitoria) ? (linkedMonitoria.child_verdict === 'valido' ? 'Válido' : linkedMonitoria.child_verdict === 'invalido' ? 'Inválido' : 'Chamado filho') : `Nota: ${linkedMonitoria.score ?? '—'}%`}</span>
               </div>
               <button
                 type="button"

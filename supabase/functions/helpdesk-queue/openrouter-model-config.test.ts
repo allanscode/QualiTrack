@@ -35,7 +35,9 @@ describe('OpenRouter model configuration', () => {
     expect(await configuredModel(db(null) as never)).toEqual({ modelId: OPENROUTER_MODEL, isFree: false });
     const chosen = await configuredModel(db('provider/text:free') as never);
     expect(chosen).toEqual({ modelId: 'provider/text:free', isFree: true });
-    expect(buildAITargets(() => undefined, chosen.modelId, chosen.isFree).map(target => target.model)).toEqual(['provider/text:free']);
+    expect(buildAITargets(() => undefined, chosen.modelId, chosen.isFree).map(target => target.model)).toEqual([
+      'provider/text:free', 'poolside/laguna-s-2.1:free', 'minimax/minimax-m3.1-flash:free', 'google/gemma-4-31b-it:free',
+    ]);
     expect(buildAITargets(() => undefined)[0].model).toBe(OPENROUTER_MODEL);
   });
 });

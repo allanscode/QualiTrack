@@ -1026,7 +1026,7 @@ serve(async (req) => {
         return jsonResponse({ error: 'Ticket e monitoria salva são obrigatórios.' }, 400);
       }
       const { data: savedMonitoria, error: monitoriaError } = await supabase.from('monitorias')
-        .select('id,ticket_id,form_id,score,answers,status,active,evaluator_id,evaluator_note,form_snapshot')
+        .select('id,ticket_id,form_id,score,child_verdict,answers,status,active,evaluator_id,evaluator_note,form_snapshot')
         .eq('id', monitoriaId).maybeSingle();
       if (monitoriaError) return jsonResponse({ error: 'Não foi possível conferir a monitoria salva.' }, 503);
       const publicationError = childPublicationError(
@@ -2748,7 +2748,7 @@ async function handleGenerateAuditorRecord(
         });
         return {
           value: parseAuditorRecordResponse(parseModelJSON(response.text)),
-          actualModel: target.model,
+          actualModel: response.model || target.model,
           routedProvider: response.routedProvider,
           routerAttempt: response.routerAttempt,
           requestId: response.requestId,
@@ -2992,7 +2992,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
         console.info(`[ai-timing] ${JSON.stringify({ job_id: payload.job_id, ticket_id, model: target.model, stage: 'provider_response_and_parse', provider_ms: providerMs, parsing_ms: Date.now() - parsingStarted })}`);
         return {
           value,
-          actualModel: target.model,
+          actualModel: response.model || target.model,
           routedProvider: response.routedProvider,
           routerAttempt: response.routerAttempt,
           requestId: response.requestId,
@@ -3338,7 +3338,7 @@ Analise os dados reais do ticket contra essas regras operacionais e gere o parec
         console.info(`[ai-timing] ${JSON.stringify({ job_id: payload.job_id, ticket_id, model: target.model, stage: 'provider_response_and_parse', provider_ms: providerMs, parsing_ms: Date.now() - parsingStarted })}`);
         return {
           value,
-          actualModel: target.model,
+          actualModel: response.model || target.model,
           routedProvider: response.routedProvider,
           routerAttempt: response.routerAttempt,
           requestId: response.requestId,

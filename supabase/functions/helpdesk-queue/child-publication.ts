@@ -12,6 +12,7 @@ export interface ChildPublicationMonitoria {
   ticket_id: string;
   form_id: string;
   score: number | null;
+  child_verdict?: 'valido' | 'invalido' | null;
   answers?: Record<string, string>;
   status: string;
   active: boolean;
@@ -35,16 +36,12 @@ export function childPublicationVerdict(
     ) {
     return null;
   }
-  if (CHILD_MACRO_FORM_IDS.has(monitoria.form_id)) {
-    const ids = monitoria.form_snapshot?.sections?.flatMap(section => section.questions?.map(question => question.id) || []) || [];
-    if (!ids.length) return null;
-    return ids.every(id => monitoria.answers?.[id] === 'SIM') ? 'conforme' : 'nao_conforme';
-  }
-  if (monitoria.score === null || !Number.isFinite(monitoria.score) || monitoria.score < 0 || monitoria.score > 100) return null;
-  if (monitoria.form_snapshot?.automation === 'child_ticket') {
-    return monitoria.form_snapshot?.child_ai_evaluation?.status === 'conforme' ? 'conforme' : null;
-  }
-  return monitoria.score >= 75 ? 'conforme' : 'nao_conforme';
+  const verdict = monitoria.child_verdict || monitoria.form_snapshot?.child_verdict;
+  if (verdict === 'valido') return 'conforme';
+  if (verdict === 'invalido') return 'nao_conforme';
+  const questionIds = monitoria.form_snapshot?.sections?.flatMap(section => section.questions?.map(question => question.id) || []) || [];
+  if (!questionIds.length || !monitoria.answers) return null;
+  return questionIds.every(id => monitoria.answers?.[id] === 'SIM') ? 'conforme' : 'nao_conforme';
 }
 
 export function childPublicationError(

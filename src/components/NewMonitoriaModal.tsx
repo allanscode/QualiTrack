@@ -38,7 +38,7 @@ import {
 } from '../lib/helpdeskQueue';
 import { fetchAIGuidelines } from '../lib/aiGuidelines';
 import { useDialogAccessibility } from '../hooks/useDialogAccessibility';
-import { childTicketForm, detectChildMacroType } from '../lib/childTicketForm';
+import { childTicketForm, detectChildMacroType, isChildTicketMonitoria } from '../lib/childTicketForm';
 
 interface NewMonitoriaModalProps {
   isOpen: boolean;
@@ -435,7 +435,7 @@ export default function NewMonitoriaModal({
                             Status: {m.status}
                           </Badge>
                           <span className={`text-xs font-black ${scoreColor}`}>
-                            Nota: {m.score}%
+                            {isChildTicketMonitoria(m) ? (m.child_verdict === 'valido' ? 'Válido' : m.child_verdict === 'invalido' ? 'Inválido' : 'Chamado filho') : `Nota: ${m.score}%`}
                           </span>
                         </div>
                       </div>

@@ -7,6 +7,7 @@ import { withDashboardTile } from '../DashboardTileLayout';
 import Badge from '../../ui/Badge';
 import MonitoriaIdBadge from '../../ui/MonitoriaIdBadge';
 import ActionDeadlineClock from '../../ui/ActionDeadlineClock';
+import { isChildTicketMonitoria } from '../../../lib/childTicketForm';
 import { Clock, ClipboardList, ChevronRight } from 'lucide-react';
 import { getStatusConfig } from '../../../lib/statusHelper';
 
@@ -87,6 +88,8 @@ function RecentAuditsTable({ monitorias, users, title = 'Monitorias Recentes', i
             {displayList.map((m) => {
               const config = getStatusConfig(m.status);
               const sc = m.score || 0;
+              const child = isChildTicketMonitoria(m);
+              const childVerdict = m.child_verdict || (m.form_snapshot as { child_verdict?: 'valido' | 'invalido' } | undefined)?.child_verdict;
               const level = getLevelForScore(sc);
               return (
                 <tr
@@ -107,7 +110,7 @@ function RecentAuditsTable({ monitorias, users, title = 'Monitorias Recentes', i
                   <td className="px-6 py-3.5 text-sm font-medium text-brand-muted">{getName(m.evaluated_id)}</td>
                   <td className="px-6 py-3.5">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${level.bgColor} ${level.color}`}>
-                      {sc.toFixed(2)}%
+                      {child ? (childVerdict === 'valido' ? 'Válido' : childVerdict === 'invalido' ? 'Inválido' : '—') : `${sc.toFixed(2)}%`}
                     </span>
                   </td>
                 <td className="px-6 py-3.5">

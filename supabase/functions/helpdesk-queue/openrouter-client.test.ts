@@ -57,10 +57,17 @@ describe('requisição OpenRouter', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('rejeita resposta de outro modelo', async () => {
+  it('registra o modelo realmente servido pelo roteador em vez de falhar o resultado', async () => {
     const fetcher = vi.fn(async () => Response.json({ model: 'outro/modelo', choices: [{ message: { content: '{}' } }] }));
     await expect(callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, fetcher }))
-      .rejects.toMatchObject({ reason: 'request_configuration_error' });
+      .resolves.toMatchObject({ text: '{}', model: 'outro/modelo' });
+  });
+
+  it('limita tokens de saída para chamadas gratuitas', async () => {
+    const fetcher = vi.fn(async () => Response.json({ model: 'poolside/laguna-s-2.1:free', choices: [{ message: { content: '{}' } }] }));
+    await callOpenRouter({ prompt: 'Avalie', responseSchema, apiKey: testKey, model: 'poolside/laguna-s-2.1:free', fetcher });
+    const body = JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.max_tokens).toBe(4_096);
   });
 
   it('envia o fallback pago pela mesma API e captura metadados de consumo', async () => {

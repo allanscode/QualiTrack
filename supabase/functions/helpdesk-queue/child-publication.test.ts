@@ -6,6 +6,7 @@ const saved: ChildPublicationMonitoria = {
   ticket_id: '177882',
   form_id: CHILD_TICKET_FORM_ID,
   score: 80,
+  child_verdict: 'valido',
   status: 'concluida',
   active: true,
   evaluator_id: 'auditor-1',
@@ -17,12 +18,13 @@ describe('publicação de chamados filhos', () => {
     expect(childPublicationError(null, '177882', 'auditor-1', 'qualidade')).toBeTruthy();
     expect(childPublicationError({ ...saved, ticket_id: '177883' }, '177882', 'auditor-1', 'qualidade')).toBeTruthy();
     expect(childPublicationError({ ...saved, form_id: 'outra-ficha' }, '177882', 'auditor-1', 'qualidade')).toBeTruthy();
-    expect(childPublicationError({ ...saved, score: 0, status: 'pendente_revisao' }, '177882', 'auditor-1', 'qualidade')).toBeTruthy();
+    expect(childPublicationError({ ...saved, child_verdict: null, status: 'pendente_revisao' }, '177882', 'auditor-1', 'qualidade')).toBeTruthy();
     expect(childPublicationError({ ...saved, status: 'aguardando_gestor_suporte' }, '177882', 'auditor-1', 'qualidade')).toBeTruthy();
     expect(childPublicationError({ ...saved, active: false }, '177882', 'auditor-1', 'qualidade')).toBeTruthy();
     expect(childPublicationError({
       ...saved,
       score: 0,
+      child_verdict: null,
       form_snapshot: { legacy_source: 'zendesk_child_note' },
     }, '177882', 'auditor-1', 'qualidade')).toBeTruthy();
   });
@@ -40,7 +42,8 @@ describe('publicação de chamados filhos', () => {
       ...saved,
       id: '5db70d8a-77fc-4dea-940a-e6eaf9b822c8',
       ticket_id: '179157',
-      score: 0,
+      score: 92,
+      child_verdict: 'invalido',
       evaluator_note: 'Texto padrão da macro alterado e sem evidências técnicas.',
     };
     expect(childPublicationError(concludedInvalid, '179157', 'auditor-1', 'qualidade')).toBeNull();

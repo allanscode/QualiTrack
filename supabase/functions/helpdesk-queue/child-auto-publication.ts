@@ -40,7 +40,7 @@ export async function processChildAutoPublication(
       return await response.json();
     };
     const { data, error } = await db.from('monitorias')
-      .select('id,ticket_id,form_id,score,answers,status,active,evaluator_id,evaluator_note,form_snapshot')
+      .select('id,ticket_id,form_id,score,child_verdict,answers,status,active,evaluator_id,evaluator_note,form_snapshot')
       .eq('id',work.monitoria_id).maybeSingle();
     if (error) throw error;
     const monitoria = data as Monitoria | null;

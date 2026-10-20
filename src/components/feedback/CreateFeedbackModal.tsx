@@ -27,6 +27,7 @@ import {
 import { User, Team, Monitoria } from '../../types';
 import Button from '../ui/Button';
 import { useDialogAccessibility } from '../../hooks/useDialogAccessibility';
+import { isChildTicketMonitoria } from '../../lib/childTicketForm';
 
 interface CreateFeedbackModalProps {
   isOpen: boolean;
@@ -578,7 +579,7 @@ export default function CreateFeedbackModal({
                   <option value="">Nenhuma (Alinhamento Geral / Sem chamado específico)</option>
                   {agentMonitorias.map(m => (
                     <option key={m.id} value={m.id}>
-                      Ticket #{m.ticket_id} — Nota: {m.score ?? '—'}% ({new Date(m.created_at).toLocaleDateString('pt-BR')})
+                      Ticket #{m.ticket_id} — {isChildTicketMonitoria(m) ? (m.child_verdict === 'valido' ? 'Válido' : m.child_verdict === 'invalido' ? 'Inválido' : 'Chamado filho') : `Nota: ${m.score ?? '—'}%`} ({new Date(m.created_at).toLocaleDateString('pt-BR')})
                     </option>
                   ))}
                 </select>

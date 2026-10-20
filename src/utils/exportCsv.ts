@@ -3,6 +3,7 @@ import { ptBR } from 'date-fns/locale';
 import { Monitoria, User, Team } from '../types';
 import { getStatusConfig } from '../lib/statusHelper';
 import { monitoriaTicketPresentation } from '../lib/monitoriaTicketPresentation';
+import { isChildTicketMonitoria } from '../lib/childTicketForm';
 
 export function escapeCsvCell(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -53,7 +54,7 @@ export function exportMonitoriasToCsv(
     'Atendente',
     'Equipe',
     'Auditor',
-    'Nota (%)',
+    'Nota (%) / Veredito',
     'Status',
     'Resolução',
     'Prazo Limite',
@@ -66,7 +67,9 @@ export function exportMonitoriasToCsv(
 
   const rows = monitorias.map(m => {
     const cfg = getStatusConfig(m.status);
-    const scoreText = m.score !== undefined && m.score !== null ? `${m.score}%` : 'N/A';
+    const scoreText = isChildTicketMonitoria(m)
+      ? (m.child_verdict === 'valido' ? 'Válido' : m.child_verdict === 'invalido' ? 'Inválido' : 'Pendente')
+      : m.score !== undefined && m.score !== null ? `${m.score}%` : 'N/A';
     const ticketDate = m.ticket_date ? format(new Date(m.ticket_date), 'dd/MM/yyyy', { locale: ptBR }) : '';
     const evalDate = m.created_at ? format(new Date(m.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '';
     const deadline = m.action_deadline_at ? format(new Date(m.action_deadline_at), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '';

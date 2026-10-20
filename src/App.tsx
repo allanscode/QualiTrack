@@ -33,6 +33,7 @@ import { fetchQueuePendingCounts, type QueueBadgeCounts } from './lib/helpdeskQu
 import { releaseQueueTicketAssignment, canManageQueueAssignments } from './lib/queueDistribution';
 import { getContestationNotifications } from './lib/contestationNotifications';
 import { canAuditTickets } from './lib/auditPermissions';
+import { isChildTicketMonitoria } from './lib/childTicketForm';
 import type { AdminSubTab } from './components/AdminPanel';
 
 export const QUEUE_TITLES: Record<QueueSubTab, string> = {
@@ -745,6 +746,7 @@ function MainApp({
       const myMonitorias = notificationMonitorias.filter(m => m.evaluated_id === userData.id);
       if (myMonitorias.length > 0) {
         const latest = myMonitorias[0];
+        const childVerdict = latest.child_verdict || (latest.form_snapshot as { child_verdict?: 'valido' | 'invalido' } | undefined)?.child_verdict;
         const timeStr = latest.created_at
           ? formatDate(new Date(latest.created_at), "dd/MM 'às' HH:mm")
           : 'Data não informada';
@@ -752,7 +754,9 @@ function MainApp({
           id: `eval-${latest.id}`,
           kind: 'new_monitoria',
           title: 'Nova Avaliação Disponível',
-          message: `Monitoria referente ao chamado #${latest.ticket_id} foi publicada com nota ${latest.score}%.`,
+          message: isChildTicketMonitoria(latest)
+            ? `Monitoria do chamado filho #${latest.ticket_id} foi publicada${childVerdict ? ` como ${childVerdict === 'valido' ? 'válido' : 'inválido'}` : ''}.`
+            : `Monitoria referente ao chamado #${latest.ticket_id} foi publicada com nota ${latest.score}%.`,
           time: timeStr,
           type: 'monitoria',
           iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',

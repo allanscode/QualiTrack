@@ -30,7 +30,7 @@ export type MonitoriaDataOptions = {
 };
 
 const CHILD_FORM_ID = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
-const LIST_COLUMNS = 'id,form_id,evaluator_id,evaluated_id,ticket_id,ticket_date,analysis_date,score,status,resolution_type,action_deadline_at,active,team_id,team_name,evaluator_name,evaluated_name,pj_reviewer_id,pj_review_kind,pj_review_required,history,created_at,updated_at';
+const LIST_COLUMNS = 'id,form_id,child_verdict,evaluator_id,evaluated_id,ticket_id,ticket_date,analysis_date,score,status,resolution_type,action_deadline_at,active,team_id,team_name,evaluator_name,evaluated_name,pj_reviewer_id,pj_review_kind,pj_review_required,history,created_at,updated_at';
 type SourceOffsets = { primary: number; reviewer: number };
 
 function compareMonitorias(a: Monitoria, b: Monitoria, field: MonitoriaSortField, direction: MonitoriaSortDirection) {

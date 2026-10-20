@@ -8,6 +8,7 @@ import Badge from './ui/Badge';
 import MonitoriaIdBadge from './ui/MonitoriaIdBadge';
 import ActionDeadlineClock from './ui/ActionDeadlineClock';
 import { isChildTicketMonitoria, legacyChildNoteVerdict } from '../lib/childTicketForm';
+import { childVerdict as getChildVerdict } from '../lib/childTicketForm';
 
 type Props = {
   monitoria: Monitoria;
@@ -23,6 +24,11 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
   const legacyVerdict = legacyChildNoteVerdict(m);
   const level = getLevelForScore(m.score || 0);
   const child = isChildTicketMonitoria(m);
+  const savedChildVerdict = m.child_verdict
+    || (m.form_snapshot as { child_verdict?: 'valido' | 'invalido' } | undefined)?.child_verdict;
+  const finalChildVerdict = child
+    ? savedChildVerdict || getChildVerdict(m.answers, m.form_snapshot)
+    : null;
   const scoreColor = !child && m.score != null ? level.color : 'text-brand-muted';
   const expired = m.status === 'concluida' && m.resolution_type === 'automatic';
   const latestAction = [...(m.history || [])]
@@ -48,6 +54,11 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
               {isChildTicketMonitoria(m) && (
                 <Badge variant="info" size="xs" className="shrink-0 text-[8px] uppercase tracking-wide" title="Monitoria de ticket filho">
                   Ticket filho
+                </Badge>
+              )}
+              {finalChildVerdict && (
+                <Badge variant={finalChildVerdict === 'valido' ? 'success' : 'error'} size="xs" className="shrink-0 text-[8px] uppercase tracking-wide">
+                  {finalChildVerdict === 'valido' ? 'Válido' : 'Inválido'}
                 </Badge>
               )}
               {legacyVerdict && (
@@ -98,7 +109,7 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
           <span className="shrink-0 text-right">
             <span className={`block text-sm sm:text-base font-black tabular-nums leading-tight ${scoreColor}`}
               title={legacyVerdict ? 'Nota original do parecer legado de 3 critérios' : undefined}>
-              {child ? 'Filho' : m.score != null ? `${m.score}%` : '—'}
+              {child ? (finalChildVerdict === 'valido' ? 'Válido' : finalChildVerdict === 'invalido' ? 'Inválido' : 'Filho') : m.score != null ? `${m.score}%` : '—'}
             </span>
             <span className="hidden sm:block text-[9px] font-semibold uppercase text-brand-muted">
               {format(new Date(m.created_at), 'dd MMM yyyy', { locale: ptBR })}

@@ -125,6 +125,7 @@ export interface Monitoria {
   ticket_subject?: string;
   ticket_group_name?: string;
   form_id: string;
+  child_verdict?: 'valido' | 'invalido' | null;
   evaluator_id: string;
   evaluated_id: string;
   ticket_id: string;
