@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMonitoriaSave } from './useMonitoriaSave';
+import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 
 const db = vi.hoisted(() => ({ insert: vi.fn(), update: vi.fn() }));
 vi.mock('../lib/supabase', () => ({
@@ -123,6 +124,35 @@ describe('useMonitoriaSave', () => {
       status: 'aguardando_gestor_suporte',
       pj_review_required: false,
     });
+  });
+
+  it.each([
+    [{ first: 'SIM', second: 'NAO', third: 'NA' }, 'invalido', 'aguardando_gestor_suporte'],
+    [{ first: 'SIM', second: 'SIM', third: 'NA' }, 'invalido', 'aguardando_gestor_suporte'],
+    [{ first: 'SIM', second: 'SIM', third: 'SIM' }, 'valido', 'concluida'],
+  ] as const)('preserva as respostas do ticket filho e encaminha o veredito %s', async (scores, verdict, status) => {
+    const onSaved = vi.fn();
+    db.insert.mockImplementation(() => ({ select: () => ({ single: async () => ({ data: { id: 'monitoria-filho' }, error: null }) }) }));
+    const deps = pjDeps(0, onSaved);
+    deps.header.form_id = CHILD_TICKET_FORM_ID;
+    deps.header.evaluator_note = 'Registro do auditor';
+    deps.scores = { ...scores };
+    deps.selectedForm = {
+      id: CHILD_TICKET_FORM_ID,
+      sections: [{ questions: [{ id: 'first' }, { id: 'second' }, { id: 'third' }] }],
+    } as never;
+
+    const { result } = renderHook(() => useMonitoriaSave(deps));
+    act(() => result.current.handleSave());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-filho', status));
+    const payload = db.insert.mock.calls[0][0][0];
+    expect(payload.answers).toEqual(scores);
+    expect(payload.child_verdict).toBe(verdict);
+    expect(payload.form_snapshot.child_verdict).toBe(verdict);
+    expect(payload.status).toBe(status);
+    expect(payload.score).toBeNull();
+    expect(payload.pj_review_required).toBe(false);
   });
 
   it.each([

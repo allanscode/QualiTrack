@@ -206,7 +206,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           satisfaction_record_text: deps.header.satisfaction_record_text,
           answers: isChild
             ? Object.fromEntries(deps.selectedForm!.sections.flatMap(section => section.questions.map(question =>
-                [question.id, deps.scores[question.id] === 'SIM' ? 'SIM' : 'NAO'] as const)))
+                [question.id, deps.scores[question.id]] as const)))
             : deps.scores,
           question_observations: deps.observations,
           critical_error_observations: isChild ? {} : deps.criticalErrorObservations,
