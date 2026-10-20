@@ -14,7 +14,7 @@ Secrets configurados no Supabase prevalecem sobre os defaults. Ao atualizar esse
 
 ### Limite de disparo das avaliações automáticas
 
-As filas de CSAT positivo e chamados filhos compartilham um limite de **um disparo de avaliação por janela móvel de 60 segundos**. A migração `20261015000003_automation_dispatch_rate_limit.sql` alterna os crons `qwp-positive-ai` (minutos pares) e `qwp-child-ai` (minutos ímpares). Antes de chamar a Edge Function, cada cron disputa a mesma linha em `_private.auto_monitoria_dispatch`. A atualização atômica impede dois disparos simultâneos e registra o último tipo e horário. As filas preservam os itens pendentes para os ciclos seguintes.
+As filas de CSAT positivo e chamados filhos compartilham um limite de **um disparo de avaliação por janela móvel de 60 segundos**. A migração `20261020145122_automation_dispatch_rate_limit.sql` alterna os crons `qwp-positive-ai` (minutos pares) e `qwp-child-ai` (minutos ímpares). Antes de chamar a Edge Function, cada cron disputa a mesma linha em `_private.auto_monitoria_dispatch`. A atualização atômica impede dois disparos simultâneos e registra o último tipo e horário. As filas preservam os itens pendentes para os ciclos seguintes.
 
 Esse limite controla os **disparos automáticos agendados** de `helpdesk-queue`; não limita avaliações manuais, retentativas de jobs já iniciados ou publicações no Zendesk. Para acompanhar a saúde do fluxo, compare em janelas de 24 horas: jobs iniciados, monitorias persistidas, filas `review_required`/`blocked`, publicações `sent`/`skipped`/`failed` e tickets elegíveis ainda sem ficha. Um job concluído pode exigir revisão humana e, portanto, não implica monitoria salva ou publicada.
 

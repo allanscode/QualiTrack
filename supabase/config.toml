@@ -63,6 +63,16 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/legacy-zendesk-closure-sync/index.ts"
 
+[functions.qwp-closure-window]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/qwp-closure-window/index.ts"
+
+[functions.zendesk-closure-policy-admin]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/zendesk-closure-policy-admin/index.ts"
+
 [functions.helpdesk-webhook]
 enabled = true
 # Zendesk authenticates with HELPDESK_WEBHOOK_SECRET inside the function.

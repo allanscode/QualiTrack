@@ -21,7 +21,9 @@ async function invoke<T>(action: string, model_id?: string): Promise<T> {
 
 export async function getAIModelConfig(): Promise<string> {
   if (!supabase) return getMockData<string>(MOCK_KEY)[0] || DEFAULT_AI_MODEL;
-  return (await invoke<{ model_id: string }>('get_ai_model_config')).model_id;
+  const { data, error } = await supabase.from('ai_model_config').select('model_id').eq('id', 'default').maybeSingle();
+  if (error) throw new Error('Não foi possível carregar o modelo salvo.');
+  return data?.model_id || DEFAULT_AI_MODEL;
 }
 
 export async function listOpenRouterModels(): Promise<OpenRouterModelOption[]> {
