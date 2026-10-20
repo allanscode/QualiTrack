@@ -33,12 +33,12 @@ describe('child intake security and durability', () => {
   it('captures closed child tickets independently of CSAT and persists the next page without a browser', async () => {
     const state=database(true);const execute=vi.fn();
     const fetcher=vi.fn(async()=>new Response(JSON.stringify({tickets:[
-      {id:123,status:'closed',subject:'Retido',satisfaction_rating:{score:'good'}},
+      {id:123,status:'closed',subject:'Retido',problem_id:168555,satisfaction_rating:{score:'good'}},
       {id:124,status:'solved',satisfaction_rating:{score:'bad'}},
     ],meta:{has_more:true},links:{next:`${origin}${path}?page=2`}}),{status:200}));
     expect(await processChildAI(state.db,key=>envValues[key],execute,fetcher)).toMatchObject({captured:2,processed:0});
     const catalog=state.writes.find(write=>write.table==='queue_ticket_catalog');
-    expect(catalog?.value).toEqual(expect.arrayContaining([expect.objectContaining({ticket_id:'123',queue_type:'filhos',ticket_snapshot:expect.objectContaining({status:'closed',automatic_child:true})})]));
+    expect(catalog?.value).toEqual(expect.arrayContaining([expect.objectContaining({ticket_id:'123',queue_type:'filhos',parent_ticket_id:'168555',ticket_snapshot:expect.objectContaining({status:'closed',automatic_child:true,parent_ticket_id:'168555'})})]));
     expect(state.writes).toContainEqual({table:'child_ai_config',value:expect.objectContaining({capture_cursor:`${origin}${path}?page=2`,capture_lease_until:null})});
     expect(execute).not.toHaveBeenCalled();
   });
@@ -54,8 +54,21 @@ describe('child intake security and durability', () => {
     expect(fetcher).not.toHaveBeenCalled();expect(execute).not.toHaveBeenCalled();expect(state.rpc).not.toHaveBeenCalled();
   });
 
-  it.each([['api', true], ['side_conversation', true], ['side_conversation', false]] as const)
-    ('prepares the fixed child form for %s and only executes after a durable reservation: %s', async (sourceChannel, reserved) => {
+  it.each([
+    ['api', true, 10, 'Technical analysis', [], [], '10'],
+    ['side_conversation', true, 10, 'Technical analysis', [], [], '10'],
+    ['side_conversation', false, 10, 'Technical analysis', [], [], '10'],
+    ['api', true, 10, 'Technical analysis do #171111',
+      [{ id: 2, title: 'ID Ticket Pai' }], [{ id: 2, value: '168555' }], '10'],
+    ['api', true, null, 'Technical analysis do #171111',
+      [{ id: 1, title: 'Other number' }, { id: 2, title: 'ID Ticket Pai' }],
+      [{ id: 1, value: '999999' }, { id: 2, value: '0168555' }], '168555'],
+    ['api', true, null, 'Technical analysis do #168555',
+      [{ id: 1, title: 'Other number' }], [{ id: 1, value: '999999' }], '168555'],
+    ['api', true, null, 'Technical analysis',
+      [{ id: 1, title: 'Other number' }], [{ id: 1, value: '999999' }], null],
+  ] as const)
+    ('prepares the child form for %s, reserved %s, parent %s, subject %s', async (sourceChannel, reserved, problemId, subject, definitions, customFields, expectedParentId) => {
     const payloads: Record<string, unknown>[] = [];
     const writes: Array<{ table: string; value: unknown }> = [];
     const rows: Record<string, unknown> = {
@@ -89,8 +102,8 @@ describe('child intake security and durability', () => {
       const url = String(input);
       const body = url.includes('comments.json')
         ? { comments: [{ id: 1, author_id: 7, created_at: '2026-10-07T12:00:00Z', body: 'Opening macro evidence', public: false }] }
-        : url.includes('ticket_fields.json') ? { ticket_fields: [] }
-        : { ticket: { id: 42, subject: 'Technical analysis', status: 'closed', created_at: '2026-10-07T12:00:00Z', assignee_id: 7, group_id: 8, problem_id: 10, tags: ['analise_tecnica'], via: { channel: sourceChannel } },
+        : url.includes('ticket_fields.json') ? { ticket_fields: definitions }
+        : { ticket: { id: 42, subject, status: 'closed', created_at: '2026-10-07T12:00:00Z', assignee_id: 7, group_id: 8, problem_id: problemId, custom_fields: customFields, tags: ['analise_tecnica'], via: { channel: sourceChannel } },
           users: [{ id: 7, name: 'Agent', email: 'agent@example.test', role: 'agent' }], groups: [{ id: 8, name: 'N2' }] };
       return new Response(JSON.stringify(body), { status: 200 });
     });
@@ -99,11 +112,12 @@ describe('child intake security and durability', () => {
     expect(result.processed).toBe(reserved ? 1 : 0);
     expect(execute).toHaveBeenCalledTimes(reserved ? 1 : 0);
     expect(payloads[0].p_payload).toMatchObject({
-      action: 'evaluate_child_ticket', ticket_id: '42', ticket_subject: 'Technical analysis',
+      action: 'evaluate_child_ticket', ticket_id: '42', parent_ticket_id: expectedParentId, ticket_subject: subject,
       draft_meta: { source_queue: 'filhos', form_id: '6c7d1e88-841b-4da9-9a66-9f1464ce8971', agent_id: 'agent', team_id: 'team', channel: 'Chat' },
-      ticket_fields: expect.arrayContaining([{ title: 'Chamado pai (problem_id)', value: '10' }]),
     });
-    expect(writes).toContainEqual({ table: 'child_ai_queue', value: expect.objectContaining({ ticket_snapshot: expect.objectContaining({ dialogue: expect.any(Array) }) }) });
+    if (problemId) expect(payloads[0].p_payload).toMatchObject({ ticket_fields: expect.arrayContaining([{ title: 'Chamado pai (problem_id)', value: '10' }]) });
+    expect(writes).toContainEqual({ table: 'child_ai_queue', value: expect.objectContaining({ ticket_snapshot: expect.objectContaining({ parent_ticket_id: expectedParentId, dialogue: expect.any(Array) }) }) });
+    expect(writes).toContainEqual({ table: 'queue_ticket_catalog', value: expect.objectContaining({ parent_ticket_id: expectedParentId, ticket_snapshot: expect.objectContaining({ parent_ticket_id: expectedParentId }) }) });
   });
 
 });

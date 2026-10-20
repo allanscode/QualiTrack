@@ -44,7 +44,31 @@ function childMacroType(ticket: ZendeskTicket): keyof typeof CHILD_AUTOMATION_FO
   return undefined;
 }
 
-function snapshot(ticket: ZendeskTicket, body: ZendeskBody, origin: string): Json {
+function normalizedTicketId(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const text = String(value).trim();
+  if (!/^\d+$/.test(text)) return null;
+  const id = Number(text);
+  return Number.isSafeInteger(id) && id > 0 ? String(id) : null;
+}
+
+function parentTicketId(ticket: ZendeskTicket, fieldDefinitions?: Map<number, NonNullable<ZendeskBody['ticket_fields']>[number]>): string | null {
+  const problemId = normalizedTicketId(ticket.problem_id);
+  if (problemId) return problemId;
+  if (fieldDefinitions) {
+    for (const field of ticket.custom_fields || []) {
+      const definition = fieldDefinitions.get(field.id);
+      if (definition?.active !== false && definition?.title.trim().replace(/\s+/g, ' ').toLowerCase() === 'id ticket pai') {
+        const fieldId = normalizedTicketId(field.value);
+        if (fieldId) return fieldId;
+      }
+    }
+  }
+  const subjectId = ticket.subject?.match(/#(\d+)(?!\d)/)?.[1];
+  return normalizedTicketId(subjectId);
+}
+
+function snapshot(ticket: ZendeskTicket, body: ZendeskBody, origin: string, resolvedParentId = parentTicketId(ticket)): Json {
   const agent = body.users?.find(user => user.id === ticket.assignee_id);
   const organization = body.organizations?.find(org => org.id === ticket.organization_id);
   return {
@@ -55,7 +79,7 @@ function snapshot(ticket: ZendeskTicket, body: ZendeskBody, origin: string): Jso
     group_name: body.groups?.find(group => group.id === ticket.group_id)?.name,
     organization_id: ticket.organization_id, organization_name: organization?.name,
     organization_tags: organization?.tags || [], tags: ticket.tags || [],
-    url: `${origin}/agent/tickets/${ticket.id}`, automatic_child: true,
+    url: `${origin}/agent/tickets/${ticket.id}`, automatic_child: true, parent_ticket_id: resolvedParentId,
   };
 }
 
@@ -111,6 +135,7 @@ export async function processChildAI(
       if (tickets.length) {
         await requireWrite(db.from('queue_ticket_catalog').upsert(tickets.map(ticket => ({
           ticket_id: String(ticket.id), queue_type: 'filhos', verified_at: new Date().toISOString(),
+          parent_ticket_id: parentTicketId(ticket),
           ticket_snapshot: snapshot(ticket, page, origin),
         })), { onConflict: 'ticket_id,queue_type' }));
         captured = tickets.length;
@@ -195,6 +220,7 @@ export async function processChildAI(
     }
     const fieldBody = await read(`${origin}/api/v2/ticket_fields.json`);
     const fieldDefinitions = new Map((fieldBody.ticket_fields || []).map(field => [field.id, field]));
+    const resolvedParentId = parentTicketId(ticket, fieldDefinitions);
     const ticketFields = (ticket.custom_fields || []).flatMap(field => {
       const definition = fieldDefinitions.get(field.id);
       if (!definition || definition.active === false || field.value === null || field.value === false || field.value === '') return [];
@@ -205,14 +231,14 @@ export async function processChildAI(
     ticketFields.push({ title: 'Destinatario (Para)', value: [ticketBody.groups?.find(group => group.id === ticket.group_id)?.name, agent.name].filter(Boolean).join(' / ') });
     if (ticket.problem_id) ticketFields.push({ title: 'Chamado pai (problem_id)', value: String(ticket.problem_id) });
 
-    const enriched = { ...work.ticket_snapshot, ...snapshot(ticket, { ...ticketBody, users: [agent], organizations: organization ? [organization] : [] }, origin),
+    const enriched = { ...work.ticket_snapshot, ...snapshot(ticket, { ...ticketBody, users: [agent], organizations: organization ? [organization] : [] }, origin, resolvedParentId),
       agent_name: user.name, agent_email: user.email, agent_id: user.id, team_id: user.primary_team_id,channel, child_macro_type: macroType,
       dialogue, ticket_fields: ticketFields };
     await requireWrite(db.from('child_ai_queue').update({ ticket_snapshot: enriched }).eq('ticket_id',work.ticket_id).eq('lease_id',work.lease_id));
-    await requireWrite(db.from('queue_ticket_catalog').upsert({ ticket_id: work.ticket_id,queue_type:'filhos',ticket_snapshot: enriched,
+    await requireWrite(db.from('queue_ticket_catalog').upsert({ ticket_id: work.ticket_id,queue_type:'filhos',parent_ticket_id:resolvedParentId,ticket_snapshot: enriched,
       verified_at: new Date().toISOString() },{onConflict:'ticket_id,queue_type'}));
     const payload: Json = {
-      action: 'evaluate_child_ticket',ticket_id:work.ticket_id,ticket_subject:ticket.subject,ticket_status:ticket.status,macro_type:macroType,form_criteria:form,dialogue,
+      action: 'evaluate_child_ticket',ticket_id:work.ticket_id,parent_ticket_id:resolvedParentId,ticket_subject:ticket.subject,ticket_status:ticket.status,macro_type:macroType,form_criteria:form,dialogue,
       agent_info:{name:user.name,email:user.email,team_name:team.name,channel},
       ticket_fields:ticketFields,
       draft_meta:{source_queue:'filhos',form_id:form.id,agent_id:user.id,agent_name:user.name,agent_email:user.email,
