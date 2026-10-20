@@ -21,6 +21,7 @@ import {
 } from './ai-fallback.ts';
 import { callOpenRouter, OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODELS } from './openrouter-client.ts';
 import { buildAITargets } from './ai-targets.ts';
+import { configuredModel, fetchTextModels, isFreeModel } from './openrouter-model-config.ts';
 import { retryAt } from './ai-retry.ts';
 import { processPositiveAI } from './positive-automation.ts';
 import { syncQueueViewAuditExclusions } from './audit-views.ts';
@@ -35,20 +36,24 @@ import { CHILD_AUDITED_TAG, literalSearchTerm, queueSearchQuery, ticketCanReceiv
 import { collectViewSearchPage } from './queue-view-search.ts';
 import { childViewConditionsWithAuditExclusion, hasPublishedChildMacro, hasPublishedChildMacroForMonitoria, hasPublishedInvalidChildMacro } from './child-view.ts';
 import { childMacroCustomFields, hasCriticalChildField, missingCustomFields } from './child-macro-fields.ts';
-import { childPublicationError, childPublicationText, type ChildPublicationMonitoria } from './child-publication.ts';
+import { childPublicationError, childPublicationText, childPublicationVerdict, type ChildPublicationMonitoria } from './child-publication.ts';
 import { attachQueuePublicationState, type QueueMonitoriaState, type QueuePublicationTicket } from './queue-publication.ts';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record.ts';
 import { previewWebpostoDivisions, type ZendeskMembership, type ZendeskMembershipGroup, type ZendeskMembershipUser } from './webposto-memberships.ts';
 import { checkMissingZendeskAccount } from './zendesk-account-check.ts';
+import { buildDeliveryDashboard, type CompletedMonitoria, type DeliveryEvidence } from './delivery-dashboard.ts';
 
 const corsHeaders = corsFor(Deno.env.get('FRONTEND_URL'));
 // GLM pago primeiro; Gemma e Gemini pagos entram em sequência se necessário.
-const AI_TARGETS: AIModelTarget[] = buildAITargets(name => Deno.env.get(name));
+async function getAITargets(supabase: SupabaseClient): Promise<AIModelTarget[]> {
+  const selected = await configuredModel(supabase);
+  return buildAITargets(name => Deno.env.get(name), selected.modelId, selected.isFree);
+}
 
 function phaseForAIModel(model: string): 'running_glm' | 'running_gemma' {
   if (model === OPENROUTER_MODEL) return 'running_glm';
   if (model === OPENROUTER_FALLBACK_MODELS[0]) return 'running_gemma';
-  throw new Error('Modelo de IA fora da cadeia configurada.');
+  return 'running_glm';
 }
 
 
@@ -153,8 +158,12 @@ const RequestSchema = z.object({
     'check_queue_updates',
     'fetch_queue_counts',
     'fetch_queue_reconciliation',
+    'fetch_delivery_dashboard',
     'fetch_dialogue',
     'evaluate_ai',
+    'get_ai_model_config',
+    'list_ai_models',
+    'set_ai_model_config',
     'evaluate_child_ticket',
     'generate_auditor_record',
     'cancel_ai_evaluation',
@@ -168,6 +177,7 @@ const RequestSchema = z.object({
   ]),
   queue_type: z.enum(['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos']).optional(),
   ticket_id: z.string().optional(),
+  model_id: z.string().max(200).optional(),
   monitoria_id: z.string().uuid().optional(),
   ticket_ids: z.array(z.string().regex(/^\d+$/)).max(100).optional(),
   job_id: z.string().uuid().optional(),
@@ -791,6 +801,81 @@ serve(async (req) => {
 
     const { action, queue_type, ticket_id } = parseResult.data;
 
+    if (action === 'fetch_delivery_dashboard') {
+      if (caller.role !== 'admin') return jsonResponse({ error: 'Somente administradores podem consultar os envios.' }, 403);
+      const limit = await supabase.rpc('consume_security_rate_limit', {
+        bucket_key: `helpdesk-queue:delivery-dashboard:${user.id}`, max_requests: 12, window_seconds: 60,
+      });
+      if (limit.error) return jsonResponse({ error: 'Limite de consultas indisponível.' }, 503);
+      if (!limit.data) return jsonResponse({ error: 'Muitas consultas. Aguarde um minuto.' }, 429);
+
+      const monitorias: CompletedMonitoria[] = [];
+      const pageSize = 1000;
+      let complete = false;
+      for (let page = 0; page < 500; page++) {
+        const { data, error } = await supabase.from('monitorias').select('id,concluded_at')
+          .eq('active', true)
+          .in('status', ['concluida', 'contestacao_aceita', 'contestacao_negada', 'finalizada_alterada'])
+          .order('id').range(page * pageSize, (page + 1) * pageSize - 1);
+        if (error) return jsonResponse({ error: 'Falha ao consultar monitorias concluídas.' }, 503);
+        monitorias.push(...(data || []));
+        if ((data || []).length < pageSize) { complete = true; break; }
+      }
+      if (!complete) return jsonResponse({ error: 'Volume de monitorias excede o limite do relatório.' }, 503);
+
+      const submissions: DeliveryEvidence[] = [];
+      const positives: DeliveryEvidence[] = [];
+      const children: DeliveryEvidence[] = [];
+      const ids = [...new Set(monitorias.map(row => row.id))];
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const batch = ids.slice(offset, offset + 100);
+        const [positiveResult, childResult, legacyChildResult] = await Promise.all([
+          supabase.from('positive_auto_publications').select('monitoria_id,status').in('monitoria_id', batch),
+          supabase.from('child_auto_publications').select('monitoria_id,status').in('monitoria_id', batch),
+          supabase.from('legacy_child_note_receipts').select('monitoria_id').in('monitoria_id', batch),
+        ]);
+        if (positiveResult.error || childResult.error || legacyChildResult.error)
+          return jsonResponse({ error: 'Falha ao consultar evidências de envio.' }, 503);
+        positives.push(...(positiveResult.data || []));
+        children.push(...(childResult.data || []));
+        children.push(...(legacyChildResult.data || []).map(row => ({ monitoria_id: row.monitoria_id, status: 'sent' })));
+        let submissionsComplete = false;
+        for (let page = 0; page < 100; page++) {
+          const { data, error } = await supabase.from('helpdesk_submissions')
+            .select('monitoria_id,status').eq('provider', 'zendesk').in('monitoria_id', batch)
+            .order('id').range(page * pageSize, (page + 1) * pageSize - 1);
+          if (error) return jsonResponse({ error: 'Falha ao consultar evidências de envio.' }, 503);
+          submissions.push(...(data || []));
+          if ((data || []).length < pageSize) { submissionsComplete = true; break; }
+        }
+        if (!submissionsComplete) return jsonResponse({ error: 'Volume de tentativas excede o limite do relatório.' }, 503);
+      }
+      return jsonResponse(buildDeliveryDashboard(monitorias, submissions, positives, children), 200);
+    }
+
+    if (action === 'get_ai_model_config' || action === 'list_ai_models' || action === 'set_ai_model_config') {
+      if (caller.role !== 'admin') return jsonResponse({ error: 'Somente administradores podem configurar o modelo.' }, 403);
+      const limit = await supabase.rpc('consume_security_rate_limit', {
+        bucket_key: `helpdesk-queue:model-config:${user.id}`, max_requests: 30, window_seconds: 60,
+      });
+      if (limit.error) return jsonResponse({ error: 'Limite de requisições indisponível.' }, 503);
+      if (!limit.data) return jsonResponse({ error: 'Muitas consultas ao catálogo. Aguarde um minuto.' }, 429);
+      if (action === 'get_ai_model_config') return jsonResponse({ model_id: (await configuredModel(supabase)).modelId }, 200);
+      let models;
+      try { models = await fetchTextModels(Deno.env.get('OPENROUTER_API_KEY') || ''); }
+      catch { return jsonResponse({ error: 'Catálogo OpenRouter indisponível.' }, 503); }
+      if (action === 'list_ai_models') return jsonResponse({ models: models.map(model => ({
+        id: model.id, name: model.name, pricing: model.pricing, free: isFreeModel(model),
+      })) }, 200);
+      const selected = models.find(model => model.id === parseResult.data.model_id);
+      if (!selected) return jsonResponse({ error: 'Modelo ausente do catálogo ou sem entrada/saída de texto.' }, 400);
+      const { error } = await supabase.from('ai_model_config').upsert({
+        id: 'default', model_id: selected.id, is_free: isFreeModel(selected), updated_at: new Date().toISOString(), updated_by: user.id,
+      });
+      if (error) return jsonResponse({ error: 'Não foi possível salvar o modelo.' }, 503);
+      return jsonResponse({ model_id: selected.id }, 200);
+    }
+
     if (!canRunQueueAction(caller.role as string, action)) {
       return jsonResponse({ error: 'Apenas a equipe de Qualidade pode auditar chamados.' }, 403);
     }
@@ -945,7 +1030,7 @@ serve(async (req) => {
       if (latestMonitoria?.id !== monitoriaId) {
         return jsonResponse({ error: 'Existe uma monitoria mais recente para este ticket. Confira o resultado atual antes do envio.' }, 409);
       }
-      const child_verdict = 'conforme';
+      const child_verdict = childPublicationVerdict(savedMonitoria as ChildPublicationMonitoria) || 'conforme';
       const { data: catalog, error: catalogError } = await supabase.from('queue_ticket_catalog')
         .select('queue_type').eq('ticket_id', ticket_id).in('queue_type', ['filhos', 'filhos_invalidos']).limit(1);
       if (catalogError) return jsonResponse({ error: 'Não foi possível conferir a origem do chamado filho.' }, 503);
@@ -959,9 +1044,11 @@ serve(async (req) => {
       const ticketResponse = await fetch(ticketUrl, { headers: zendeskHeaders, signal: AbortSignal.timeout(10000) });
       if (!ticketResponse.ok) return jsonResponse({ error: `Zendesk não encontrou o ticket (${ticketResponse.status}).` }, 502);
       const ticketBody = await ticketResponse.json();
-      if (['closed', 'archived'].includes(String(ticketBody.ticket?.status || '').toLowerCase())) {
-        return jsonResponse({ error: 'O ticket está fechado no Zendesk e não aceita comentários.' }, 409);
+      const ticketStatus = String(ticketBody.ticket?.status || '').toLowerCase();
+      if (ticketStatus === 'archived') {
+        return jsonResponse({ error: 'O ticket está arquivado no Zendesk e não aceita atualizações.' }, 409);
       }
+      const isClosedTicket = ticketStatus === 'closed';
 
       if (!Array.isArray(ticketBody.ticket?.tags)) {
         return jsonResponse({ error: 'Zendesk não retornou as tags atuais do ticket. Atualize e tente novamente.' }, 502);
@@ -979,6 +1066,17 @@ serve(async (req) => {
             .eq('ticket_id', ticket_id).eq('queue_type', row.queue_type);
           if (catalogUpdateError) console.error('[helpdesk-queue] Falha ao atualizar catálogo após macro:', catalogUpdateError);
         }
+        const { error: autoPubError } = await supabase.from('child_auto_publications')
+          .upsert({
+            monitoria_id: monitoriaId,
+            ticket_id: String(ticket_id).trim(),
+            status: 'sent',
+            lease_id: null,
+            lease_until: null,
+            last_error: null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'monitoria_id' });
+        if (autoPubError) console.error('[helpdesk-queue] Falha ao registrar publicação manual de filho:', autoPubError);
       };
       const updatedStamp = ticketBody.ticket?.updated_at;
       if (typeof updatedStamp !== 'string' || !updatedStamp) {
@@ -1012,9 +1110,9 @@ serve(async (req) => {
       );
       if (!commentsResponse.ok) return jsonResponse({ error: 'Não foi possível conferir envios anteriores no Zendesk. Nenhuma macro foi enviada.' }, 502);
       const commentsBody = await commentsResponse.json();
-      const alreadySentForMonitoria = hasPublishedChildMacroForMonitoria(commentsBody.comments, monitoriaId);
-      const correctsPreviousInvalid = hasPublishedInvalidChildMacro(commentsBody.comments);
-      const macroFields = childMacroCustomFields('conforme', hasCriticalChildField(ticketBody.ticket?.custom_fields));
+      const alreadySentForMonitoria = isClosedTicket || hasPublishedChildMacroForMonitoria(commentsBody.comments, monitoriaId, child_verdict);
+      const correctsPreviousInvalid = child_verdict === 'conforme' && hasPublishedInvalidChildMacro(commentsBody.comments);
+      const macroFields = childMacroCustomFields(child_verdict, child_verdict === 'conforme' && hasCriticalChildField(ticketBody.ticket?.custom_fields));
       if (alreadySentForMonitoria && currentTags.includes(CHILD_AUDITED_TAG)
         && missingCustomFields(ticketBody.ticket?.custom_fields, macroFields).length === 0) {
         await syncCatalog();
@@ -2622,7 +2720,7 @@ async function handleGenerateAuditorRecord(
 
   try {
     const chain = await runAIModelChain({
-      targets: AI_TARGETS,
+      targets: await getAITargets(supabase),
       signal,
       execute: async (target, _attempt, attemptSignal) => {
         const response = await callOpenRouter({
@@ -2850,7 +2948,7 @@ Siga esta ORDEM de raciocínio, sem pular etapas:
    já respondeu nos passos 1 e 2. NUNCA deixe "score" ou "summary" vazios/zerados: eles resumem o que você
    acabou de avaliar.`;
 
-  const aiTargets = AI_TARGETS;
+  const aiTargets = await getAITargets(supabase);
   const preparationMs = Date.now() - startTime;
   let pipelineAttempts: AIAttemptRecord[] = [];
   console.info(`[ai-retry] ${JSON.stringify({
@@ -3189,7 +3287,7 @@ O manual também trata de tags e campos obrigatórios, mas a ficha atual contém
 
 Analise os dados reais do ticket contra essas regras operacionais e gere o parecer estritamente no JSON do schema.`;
 
-  const aiTargets = AI_TARGETS;
+  const aiTargets = await getAITargets(supabase);
   const preparationMs = Date.now() - startTime;
   let pipelineAttempts: AIAttemptRecord[] = [];
   console.info(`[ai-retry] ${JSON.stringify({

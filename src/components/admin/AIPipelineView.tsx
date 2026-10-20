@@ -126,7 +126,7 @@ export default function AIPipelineView() {
 
         <div className="space-y-2 text-[11px] text-brand-muted">
           <p>
-            • <strong>Ordem dos modelos pagos:</strong> GLM 5.3 Flash → Gemma 4 31B → Gemini 3.8 Flash. A Edge Function usa uma chave OpenRouter armazenada em secret.
+            • <strong>Modelo principal:</strong> configurado em Automações por um administrador; Gemma 4 31B é a reserva para modelos pagos. A Edge Function usa uma chave OpenRouter armazenada em secret.
           </p>
           <p>
             • <strong>Resiliência:</strong> até duas tentativas por modelo, failover entre provedores disponíveis e reprocessamento posterior em falhas transitórias.

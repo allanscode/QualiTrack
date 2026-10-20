@@ -56,7 +56,7 @@ import { useMonitoriaSave } from '../hooks/useMonitoriaSave';
 import { useMonitoriaDraft } from '../hooks/useMonitoriaDraft';
 import { getEvaluationOutcome } from '../lib/domainRules';
 import { awaitsFinalPositiveDecision, canPublishSavedMonitoria } from '../lib/helpdeskPublicationGate';
-import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
+import { CHILD_TICKET_FORM_ID, legacyChildNoteVerdict } from '../lib/childTicketForm';
 import { isVerifiedTicketGroupPair } from '../lib/ticketTeam';
 import { getSavedZendeskTicketFields, normalizeZendeskTicketFields } from '../lib/monitoriaTicketFields';
 import Card from './ui/Card';
@@ -538,7 +538,7 @@ export default function MonitoriaForm({
     && canPublishSavedMonitoria(initialData)
     && !!header.ticket_id?.trim();
   const canPublishChild = isViewOnly && isChildEvaluation
-    && initialData?.status === 'concluida' && (initialData.score ?? 0) >= 75
+    && initialData?.status === 'concluida' && !legacyChildNoteVerdict(initialData)
     && ['admin', 'gestor_qualidade', 'qualidade'].includes(user?.role || '');
   // Sugestão de desfecho do preview baseada na regra de domínio estrita (WQ-22):
   // score >= 75% -> Válido (positiva), score < 75% -> Invalidado (negativa)

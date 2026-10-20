@@ -44,7 +44,7 @@ export default function ChildTicketPublishModal({ ticketId, monitoriaId, onClose
         </div>
         <p className="text-sm text-brand-muted">
           {state.kind === 'sending' ? 'Monitoria salva. Enviando o Registro do Auditor ao Zendesk...'
-            : state.kind === 'sent' ? 'Monitoria salva e macro de chamado filho válido confirmada no Zendesk.'
+            : state.kind === 'sent' ? 'Monitoria salva e macro de chamado filho confirmada no Zendesk.'
               : 'A monitoria foi salva no QWP. O envio ao Zendesk ficou pendente.'}
         </p>
         {state.kind === 'error' && <p role="alert" className="text-sm text-functional-error">{state.message}</p>}
