@@ -1,4 +1,5 @@
 import { isMockMode, supabase } from './supabase';
+import type { UserRole } from '../types';
 
 export const NOTIFICATION_KINDS = [
   { kind: 'contestation', label: 'Contestações', detail: 'Pareceres contestados que exigem análise.' },
@@ -16,36 +17,36 @@ export const NOTIFICATION_KINDS = [
 export type NotificationKind = typeof NOTIFICATION_KINDS[number]['kind'];
 export type NotificationPreferences = Partial<Record<NotificationKind, boolean>>;
 
-const mockKey = (userId: string) => `qualitrack-notification-preferences-${userId}`;
+const mockKey = (role: UserRole) => `qualitrack-notification-role-preferences-${role}`;
 
-export function readMockNotificationPreferences(userId: string): NotificationPreferences {
+export function readMockNotificationPreferences(role: UserRole): NotificationPreferences {
   try {
-    return JSON.parse(localStorage.getItem(mockKey(userId)) || '{}') as NotificationPreferences;
+    return JSON.parse(localStorage.getItem(mockKey(role)) || '{}') as NotificationPreferences;
   } catch {
     return {};
   }
 }
 
-export async function fetchNotificationPreferences(userId: string): Promise<NotificationPreferences> {
-  if (isMockMode || !supabase) return readMockNotificationPreferences(userId);
-  const { data, error } = await supabase.from('notification_preferences')
-    .select('kind,enabled').eq('user_id', userId);
+export async function fetchRoleNotificationPreferences(role: UserRole): Promise<NotificationPreferences> {
+  if (isMockMode || !supabase) return readMockNotificationPreferences(role);
+  const { data, error } = await supabase.from('notification_role_preferences')
+    .select('kind,enabled').eq('role', role);
   if (error) throw error;
   return Object.fromEntries((data || []).map(row => [row.kind, row.enabled])) as NotificationPreferences;
 }
 
-export async function saveNotificationPreference(
-  userId: string, kind: NotificationKind, enabled: boolean, changedBy: string,
+export async function saveRoleNotificationPreference(
+  role: UserRole, kind: NotificationKind, enabled: boolean, changedBy: string,
 ): Promise<void> {
   if (isMockMode || !supabase) {
-    localStorage.setItem(mockKey(userId), JSON.stringify({
-      ...readMockNotificationPreferences(userId), [kind]: enabled,
+    localStorage.setItem(mockKey(role), JSON.stringify({
+      ...readMockNotificationPreferences(role), [kind]: enabled,
     }));
   } else {
-    const { error } = await supabase.from('notification_preferences').upsert({
-      user_id: userId, kind, enabled, updated_by: changedBy, updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,kind' });
+    const { error } = await supabase.from('notification_role_preferences').upsert({
+      role, kind, enabled, updated_by: changedBy, updated_at: new Date().toISOString(),
+    }, { onConflict: 'role,kind' });
     if (error) throw error;
   }
-  window.dispatchEvent(new CustomEvent('qualitrack:notification-preferences-changed', { detail: { userId } }));
+  window.dispatchEvent(new CustomEvent('qualitrack:notification-preferences-changed', { detail: { role } }));
 }

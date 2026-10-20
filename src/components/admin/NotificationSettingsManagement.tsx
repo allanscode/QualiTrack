@@ -1,47 +1,41 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Bell, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bell } from 'lucide-react';
 import { toast } from 'sonner';
-import type { User } from '../../types';
+import type { User, UserRole } from '../../types';
+import { ROLE_LABELS } from '../../types';
 import {
-  NOTIFICATION_KINDS, fetchNotificationPreferences, saveNotificationPreference,
+  NOTIFICATION_KINDS, fetchRoleNotificationPreferences, saveRoleNotificationPreference,
   type NotificationKind, type NotificationPreferences,
 } from '../../lib/notificationPreferences';
 
-interface Props {
-  users: User[];
-  currentUser: User;
-}
+interface Props { currentUser: User; }
 
-export default function NotificationSettingsManagement({ users, currentUser }: Props) {
-  const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState(currentUser.id);
+const ROLES: UserRole[] = ['admin', 'gestor_suporte', 'gestor_qualidade', 'qualidade', 'suporte'];
+
+export default function NotificationSettingsManagement({ currentUser }: Props) {
+  const [selectedRole, setSelectedRole] = useState<UserRole>('qualidade');
   const [preferences, setPreferences] = useState<NotificationPreferences>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<NotificationKind | null>(null);
-  const selected = users.find(user => user.id === selectedId) || currentUser;
-  const filteredUsers = useMemo(() => users
-    .filter(user => `${user.name} ${user.email}`.toLocaleLowerCase('pt-BR')
-      .includes(search.toLocaleLowerCase('pt-BR')))
-    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')), [users, search]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    void fetchNotificationPreferences(selectedId)
+    void fetchRoleNotificationPreferences(selectedRole)
       .then(next => { if (active) setPreferences(next); })
-      .catch(() => { if (active) toast.error('Não foi possível carregar as notificações deste usuário.'); })
+      .catch(() => { if (active) toast.error('NÃ£o foi possÃ­vel carregar as notificaÃ§Ãµes deste cargo.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [selectedId]);
+  }, [selectedRole]);
 
   const setEnabled = async (kind: NotificationKind, enabled: boolean) => {
     setSaving(kind);
     try {
-      await saveNotificationPreference(selectedId, kind, enabled, currentUser.id);
+      await saveRoleNotificationPreference(selectedRole, kind, enabled, currentUser.id);
       setPreferences(previous => ({ ...previous, [kind]: enabled }));
-      toast.success('Preferência de notificação salva.');
+      toast.success('PreferÃªncia de notificaÃ§Ã£o salva para o cargo.');
     } catch {
-      toast.error('Não foi possível salvar a preferência.');
+      toast.error('NÃ£o foi possÃ­vel salvar a preferÃªncia.');
     } finally {
       setSaving(null);
     }
@@ -49,70 +43,49 @@ export default function NotificationSettingsManagement({ users, currentUser }: P
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-surface-border bg-surface-card p-5 shadow-premium">
+      <section className="rounded-2xl border border-surface-border bg-surface-card p-5 shadow-premium">
         <div className="flex items-start gap-3">
-          <Bell className="w-5 h-5 text-brand-accent mt-0.5" />
+          <Bell className="mt-0.5 h-5 w-5 text-brand-accent" />
           <div>
-            <h2 className="text-lg font-bold text-brand-primary">Notificações por usuário</h2>
-            <p className="text-sm text-brand-muted mt-1">
-              Escolha os avisos que cada pessoa vê no sino. As tarefas e os prazos continuam funcionando.
-              Chamados filhos só geram aviso quando a avaliação pede revisão humana.
-            </p>
+            <h2 className="text-lg font-bold text-brand-primary">NotificaÃ§Ãµes por cargo</h2>
+            <p className="mt-1 text-sm text-brand-muted">Cada configuraÃ§Ã£o vale para todas as pessoas com o cargo selecionado. As tarefas e os prazos continuam funcionando; chamados filhos sÃ³ geram aviso quando pedem revisÃ£o humana.</p>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(240px,300px)_1fr]">
-        <div className="rounded-2xl border border-surface-border bg-surface-card p-4 shadow-premium">
-          <label htmlFor="notification-user-search" className="uppercase tracking-widest text-[10px] font-black text-brand-muted">
-            Buscar pessoa
-          </label>
-          <div className="relative mt-2">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-brand-muted" />
-            <input id="notification-user-search" value={search} onChange={event => setSearch(event.target.value)}
-              placeholder="Nome ou e-mail"
-              className="w-full rounded-xl border border-surface-border bg-surface-subtle py-2 pl-9 pr-3 text-sm text-brand-primary" />
-          </div>
-          <div className="mt-3 max-h-[28rem] space-y-1 overflow-y-auto" aria-label="Usuários">
-            {filteredUsers.map(user => (
-              <button key={user.id} type="button" onClick={() => setSelectedId(user.id)}
-                aria-pressed={selectedId === user.id}
-                className={`w-full rounded-xl px-3 py-2 text-left transition-colors ${selectedId === user.id
-                  ? 'bg-brand-accent/10 text-brand-primary'
-                  : 'text-brand-muted hover:bg-surface-subtle hover:text-brand-primary'}`}>
-                <span className="block truncate text-sm font-semibold">{user.name}</span>
-                <span className="block truncate text-xs opacity-75">{user.email}</span>
-              </button>
+      <section className="rounded-2xl border border-surface-border bg-surface-card p-5 shadow-premium">
+        <label htmlFor="notification-role" className="block max-w-sm text-[10px] font-black uppercase tracking-widest text-brand-muted">
+          Configurar avisos para o cargo
+          <select id="notification-role" value={selectedRole} onChange={event => setSelectedRole(event.target.value as UserRole)}
+            className="mt-2 w-full rounded-xl border border-surface-border bg-surface-subtle px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-brand-primary">
+            {ROLES.map(role => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
+          </select>
+        </label>
+      </section>
+
+      <section className="rounded-2xl border border-surface-border bg-surface-card p-5 shadow-premium">
+        <div className="mb-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Avisos recebidos por todas as pessoas com o cargo</span>
+          <h3 className="mt-1 text-base font-bold text-brand-primary">{ROLE_LABELS[selectedRole]}</h3>
+        </div>
+        {loading ? <p className="text-sm text-brand-muted">Carregando preferÃªnciasâ€¦</p> : (
+          <div className="divide-y divide-surface-border">
+            {NOTIFICATION_KINDS.map(item => (
+              <label key={item.kind} className="flex cursor-pointer items-center justify-between gap-4 py-3">
+                <span>
+                  <span className="block text-sm font-semibold text-brand-primary">{item.label}</span>
+                  <span className="block text-xs text-brand-muted">{item.detail}</span>
+                </span>
+                <input type="checkbox" checked={preferences[item.kind] !== false}
+                  disabled={saving !== null}
+                  onChange={event => { void setEnabled(item.kind, event.target.checked); }}
+                  aria-label={`${item.label} para ${ROLE_LABELS[selectedRole]}`}
+                  className="h-4 w-4 shrink-0 accent-brand-accent" />
+              </label>
             ))}
-            {filteredUsers.length === 0 && <p className="p-3 text-sm text-brand-muted">Nenhuma pessoa encontrada.</p>}
           </div>
-        </div>
-
-        <div className="rounded-2xl border border-surface-border bg-surface-card p-5 shadow-premium">
-          <div className="mb-4">
-            <span className="uppercase tracking-widest text-[10px] font-black text-brand-muted">Avisos recebidos por</span>
-            <h3 className="text-base font-bold text-brand-primary">{selected.name}</h3>
-            <p className="text-xs text-brand-muted">{selected.email}</p>
-          </div>
-          {loading ? <p className="text-sm text-brand-muted">Carregando preferências…</p> : (
-            <div className="divide-y divide-surface-border">
-              {NOTIFICATION_KINDS.map(item => (
-                <label key={item.kind} className="flex items-center justify-between gap-4 py-3 cursor-pointer">
-                  <span>
-                    <span className="block text-sm font-semibold text-brand-primary">{item.label}</span>
-                    <span className="block text-xs text-brand-muted">{item.detail}</span>
-                  </span>
-                  <input type="checkbox" checked={preferences[item.kind] !== false}
-                    disabled={saving !== null}
-                    onChange={event => { void setEnabled(item.kind, event.target.checked); }}
-                    aria-label={`${item.label} para ${selected.name}`}
-                    className="h-4 w-4 shrink-0 accent-brand-accent" />
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+        )}
+      </section>
     </div>
   );
 }

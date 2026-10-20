@@ -222,7 +222,7 @@ export default function AdminPanel({ user: currentUser, initialSubTab }: AdminPa
           {activeSubTab === 'ia_hub' && <AIHubManagement currentUser={currentUser} />}
           {activeSubTab === 'emails' && <EmailConfigManagement />}
           {activeSubTab === 'notifications' && currentUser?.role === 'admin' && (
-            <NotificationSettingsManagement users={staticData.users} currentUser={currentUser} />
+            <NotificationSettingsManagement currentUser={currentUser} />
           )}
           {activeSubTab === 'removed_monitorias' && currentUser?.role === 'admin' && <RemovedMonitoriasManagement currentUser={currentUser} />}
           {activeSubTab === 'deliveries' && currentUser?.role === 'admin' && <DeliveryDashboard />}

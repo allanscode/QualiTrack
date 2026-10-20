@@ -123,6 +123,10 @@ function AppContent() {
     loadingPreferences,
     maintenanceNotice,
   } = useAuth();
+  const [adminMaintenanceAcknowledged, setAdminMaintenanceAcknowledged] = useState(false);
+  useEffect(() => {
+    setAdminMaintenanceAcknowledged(false);
+  }, [userData?.id, maintenanceNotice?.adminNotice]);
 
   // Alternar visibilidade da senha. Cada campo tem seu proprio estado para
   // que revelar um nao exponha os demais (ex.: na tela de nova senha, ver a
@@ -377,6 +381,13 @@ function AppContent() {
           </m.div>
         ) : maintenanceNotice?.active ? (
           <MaintenanceScreen expectedReturnAt={maintenanceNotice.expectedReturnAt} onLogout={() => void handleLogout()} />
+        ) : maintenanceNotice?.adminNotice && !adminMaintenanceAcknowledged ? (
+          <MaintenanceScreen
+            expectedReturnAt={maintenanceNotice.expectedReturnAt}
+            adminBypass
+            onContinue={() => setAdminMaintenanceAcknowledged(true)}
+            onLogout={() => void handleLogout()}
+          />
         ) : (
           <m.div
             key="app-main"
@@ -412,7 +423,12 @@ function AppContent() {
   );
 }
 
-function MaintenanceScreen({ expectedReturnAt, onLogout }: { expectedReturnAt: string | null; onLogout: () => void }) {
+function MaintenanceScreen({ expectedReturnAt, onLogout, adminBypass = false, onContinue }: {
+  expectedReturnAt: string | null;
+  onLogout: () => void;
+  adminBypass?: boolean;
+  onContinue?: () => void;
+}) {
   const returnLabel = expectedReturnAt
     ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(expectedReturnAt))
     : 'horário ainda não definido';
@@ -425,8 +441,11 @@ function MaintenanceScreen({ expectedReturnAt, onLogout }: { expectedReturnAt: s
         </div>
         <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-brand-accent">Qualidade WP</p>
         <h1 className="mb-3 text-2xl font-black">Sistema em manutenção</h1>
-        <p className="text-sm leading-6 text-brand-muted">Estamos realizando uma manutenção. Seu acesso será liberado automaticamente quando o período terminar.</p>
+        <p className="text-sm leading-6 text-brand-muted">{adminBypass
+          ? 'A manutenção está ativa para os cargos selecionados. Sua conta de administrador mantém acesso para acompanhar ou desativar a manutenção.'
+          : 'Estamos realizando uma manutenção. Seu acesso será liberado automaticamente quando o período terminar.'}</p>
         <p className="mt-6 rounded-xl bg-surface-subtle px-4 py-3 text-sm font-semibold">Previsão de retorno: {returnLabel}</p>
+        {adminBypass && <button type="button" onClick={onContinue} className="mt-6 rounded-lg bg-brand-accent px-5 py-2.5 text-sm font-bold text-white">Continuar como administrador</button>}
         <button type="button" onClick={onLogout} className="mt-6 rounded-lg border border-surface-border px-5 py-2.5 text-sm font-bold hover:bg-surface-subtle">Sair da conta</button>
       </section>
     </main>
@@ -451,7 +470,7 @@ function MainApp({
   const notificationMonitorias = useMonitoriaNotifications(userData);
   const { feedbacks } = useFeedbacks(userData);
   const queueEvents = useQueueEventNotifications(userData);
-  const notificationPreferences = useNotificationPreferences(userData?.id);
+  const notificationPreferences = useNotificationPreferences(userData?.role);
   const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
   const [isSettingsHovered, setIsSettingsHovered] = React.useState(false);
   const [focusMonitoriaTarget, setFocusMonitoriaTarget] = React.useState<{ monitoriaId?: string; ticketId?: string } | null>(null);

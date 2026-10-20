@@ -53,7 +53,7 @@ interface AuthContextType {
   theme: ReturnType<typeof useTheme>['theme'];
   setTheme: ReturnType<typeof useTheme>['setTheme'];
   loadingPreferences: boolean;
-  maintenanceNotice: { active: boolean; expectedReturnAt: string | null } | null | undefined;
+  maintenanceNotice: { active: boolean; expectedReturnAt: string | null; adminNotice?: boolean } | null | undefined;
 }
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
@@ -136,10 +136,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReconnecting, setIsReconnecting] = useState(false);
 
   const [loadingPreferences, setLoadingPreferences] = useState(false);
-  const [maintenanceNotice, setMaintenanceNotice] = useState<{ active: boolean; expectedReturnAt: string | null } | null | undefined>(undefined);
+  const [maintenanceNotice, setMaintenanceNotice] = useState<{ active: boolean; expectedReturnAt: string | null; adminNotice?: boolean } | null | undefined>(undefined);
 
   const refreshMaintenanceNotice = useCallback(async (role?: UserRole) => {
-    if (!role || role === 'admin') { setMaintenanceNotice(null); return; }
+    if (!role) { setMaintenanceNotice(null); return; }
     try {
       let row: { enabled?: boolean; blocked_roles?: string[]; expected_return_at?: string | null } | null = null;
       if (isMockMode) {
@@ -151,9 +151,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) throw error;
         row = data;
       }
-      const isActive = Boolean(row?.enabled && row.blocked_roles?.includes(role)
+      const isActive = Boolean(row?.enabled
         && (!row.expected_return_at || new Date(row.expected_return_at).getTime() > Date.now()));
-      setMaintenanceNotice(isActive ? { active: true, expectedReturnAt: row?.expected_return_at ?? null } : null);
+      if (isActive && role === 'admin') {
+        setMaintenanceNotice({ active: false, adminNotice: true, expectedReturnAt: row?.expected_return_at ?? null });
+      } else if (isActive && row?.blocked_roles?.includes(role)) {
+        setMaintenanceNotice({ active: true, expectedReturnAt: row?.expected_return_at ?? null });
+      } else {
+        setMaintenanceNotice(null);
+      }
     } catch (error) {
       // Falha de leitura não deve impedir autenticação; a política no banco continua protegida.
       console.warn('[Auth] Não foi possível consultar o modo de manutenção.');
