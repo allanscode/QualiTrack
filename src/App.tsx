@@ -118,8 +118,6 @@ function AppContent() {
     isReconnecting,
     isFormOpen,
     setIsFormOpen,
-    isSidebarOpen,
-    setIsSidebarOpen,
     loadingPreferences,
     maintenanceNotice,
   } = useAuth();
@@ -401,8 +399,6 @@ function AppContent() {
               <StaticDataProvider key={userCacheScope(userData)} user={userData}>
                 <PresenceProvider user={userData}>
                   <MainApp
-                    isSidebarOpen={isSidebarOpen}
-                    setIsSidebarOpen={setIsSidebarOpen}
                     currentUser={currentUser}
                     activeTab={activeTab}
                     setActiveTab={setActiveTab}
@@ -453,8 +449,6 @@ function MaintenanceScreen({ expectedReturnAt, onLogout, adminBypass = false, on
 }
 
 function MainApp({
-  isSidebarOpen,
-  setIsSidebarOpen,
   currentUser,
   activeTab,
   setActiveTab,
@@ -465,7 +459,7 @@ function MainApp({
   isSystemOnline,
   isReconnecting,
 }: any) {
-  const { theme } = useAuth();
+  const { theme, setTheme } = useAuth();
   const { users, teams, forms, refreshAll } = useStaticData();
   const notificationMonitorias = useMonitoriaNotifications(userData);
   const { feedbacks } = useFeedbacks(userData);
@@ -597,7 +591,6 @@ function MainApp({
   }, [dismissedStorageKey]);
 
   const [sidebarAccordion, setSidebarAccordion] = React.useState<'teams' | 'avatar' | 'appearance' | null>(null);
-  const [sidebarTextVisible, setSidebarTextVisible] = React.useState(isSidebarOpen);
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(activeTab === 'admin' || activeTab === 'custom_dashboard');
   const [isQueueModalOpen, setIsQueueModalOpen] = React.useState(false);
 
@@ -1105,36 +1098,15 @@ function MainApp({
     return () => window.removeEventListener('qualitrack:focus_monitoria', handleFocus);
   }, [activeTab, monitorias, userData?.role]);
 
-  const toggleSidebar = () => {
-    const willBeOpen = !isSidebarOpen;
-    if (!willBeOpen) {
-      setSidebarTextVisible(false);
-    }
-    setIsSidebarOpen(willBeOpen);
-  };
-
   const handleSettingsClick = () => {
-    if (!isSidebarOpen) {
-      toggleSidebar();
-      setIsSettingsOpen(true);
-    } else {
-      setIsSettingsOpen(!isSettingsOpen);
-    }
+    setIsQueueMenuOpen(false);
+    setIsSettingsOpen((open: boolean) => !open);
   };
 
   const handleQueueMenuClick = () => {
-    if (!isSidebarOpen) {
-      toggleSidebar();
-      setIsQueueMenuOpen(true);
-      setActiveTab('filas');
-    } else {
-      if (activeTab !== 'filas') {
-        setActiveTab('filas');
-        setIsQueueMenuOpen(true);
-      } else {
-        setIsQueueMenuOpen(!isQueueMenuOpen);
-      }
-    }
+    setIsSettingsOpen(false);
+    setActiveTab('filas');
+    setIsQueueMenuOpen((open: boolean) => !open);
   };
 
   const handleQueueSubTabClick = (subTab: QueueSubTab) => {
@@ -1143,6 +1115,7 @@ function MainApp({
     }
     setActiveQueueSubTab(subTab);
     setActiveTab('filas');
+    setIsQueueMenuOpen(false);
   };
 
   React.useEffect(() => {
@@ -1169,11 +1142,6 @@ function MainApp({
     document.addEventListener('click', handleOutsideClick, true);
     return () => document.removeEventListener('click', handleOutsideClick, true);
   }, [showTeamList]);
-
-  useEffect(() => {
-    setShowTeamList(false);
-    setShowNotifications(false);
-  }, [isSidebarOpen]);
 
   useEffect(() => {
     if (!showNotifications) return;
@@ -1314,7 +1282,7 @@ function MainApp({
                       className={`
                         w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
                         ${(activeTab === 'filas' && !isQueueMenuOpen)
-                          ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black font-extrabold')
+                          ? 'qt-active-nav-pill font-extrabold'
                           : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5 font-bold')}
                       `}
                     >
@@ -1411,7 +1379,7 @@ function MainApp({
                       className={`
                         w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
                         ${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen)
-                          ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black')
+                          ? 'qt-active-nav-pill'
                           : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5')}
                       `}
                     >
@@ -1480,9 +1448,17 @@ function MainApp({
                     <LogOut className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="flex items-center gap-2 py-2 text-xs text-current">
-                  <Monitor className="w-4 h-4" />
-                  Tema automático do sistema
+                <div className="space-y-2 py-1">
+                  <p className="text-[11px] font-bold">Aparência</p>
+                  <div className="grid grid-cols-3 gap-1 rounded-xl bg-black/10 p-1">
+                    {(['light', 'dark', 'system'] as const).map(option => (
+                      <button key={option} type="button" onClick={() => setTheme(option)} aria-pressed={theme === option}
+                        className={`flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold transition-colors ${theme === option ? 'bg-surface-card text-brand-primary shadow-sm' : 'text-current/70 hover:bg-white/10'}`}>
+                        {option === 'light' ? <Sun className="h-4 w-4" /> : option === 'dark' ? <Moon className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+                        {option === 'light' ? 'Claro' : option === 'dark' ? 'Escuro' : 'Sistema'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </m.aside>
@@ -1493,26 +1469,12 @@ function MainApp({
       {/* Desktop Sidebar */}
       <m.aside
         initial={false}
-        animate={{ width: isSidebarOpen ? 260 : 80 }}
+        animate={{ width: 80 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
-        onAnimationComplete={() => setSidebarTextVisible(isSidebarOpen)}
         style={sidebarStyle}
-        onClick={(e) => {
-          const target = e.target as HTMLElement;
-          if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('select') || target.closest('.interactive-sidebar-item')) {
-            return;
-          }
-          toggleSidebar();
-        }}
-        className={`${sidebarContrastClass} qt-sidebar-glass hidden md:flex flex-col relative z-20 border-r ${sidebarBorderClass} group/sidebar cursor-pointer`}
+        className={`${sidebarContrastClass} qt-sidebar-glass hidden md:flex flex-col flex-none relative z-20 h-screen w-20 border-r ${sidebarBorderClass} group/sidebar`}
       >
-        <div
-          onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
-          className="absolute -right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-surface-card border border-surface-border text-brand-primary flex items-center justify-center shadow-premium hover:scale-110 active:scale-95 transition-all opacity-0 group-hover/sidebar:opacity-100 z-30 cursor-pointer"
-        >
-          {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-        </div>
-        <div className="h-20 flex-shrink-0 flex items-center px-6 overflow-hidden">
+        <div className="h-20 flex-shrink-0 flex items-center justify-center overflow-hidden">
           <div
             className="flex items-center gap-3 whitespace-nowrap cursor-pointer interactive-sidebar-item"
             onClick={(e) => {
@@ -1521,37 +1483,33 @@ function MainApp({
             }}
             title="Ir para o Dashboard"
           >
-            {sidebarTextVisible ? (
+            <div className="w-9 h-9 flex items-center justify-center flex-shrink-0">
               <img
-                src={sidebarIsDark ? '/logo-dark.png' : '/logo-light.png'}
+                src={sidebarIsDark ? '/logo-icon-dark.png' : '/logo-icon-light.png'}
                 alt="Qualidade WP"
-                className="h-8 w-auto max-w-[170px] object-contain select-none transition-opacity duration-200"
+                className="h-8 w-auto max-w-[44px] object-contain select-none transition-opacity duration-200"
               />
-            ) : (
-              <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
-                <img
-                  src={sidebarIsDark ? '/logo-icon-dark.png' : '/logo-icon-light.png'}
-                  alt="Qualidade WP"
-                  className="h-7 w-auto max-w-[42px] object-contain select-none transition-opacity duration-200"
-                />
-              </div>
-            )}
+            </div>
           </div>
         </div>
 
-        <nav className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 space-y-1 py-4">
-          <NavItem isDark={sidebarIsDark} icon={AnimatedDashboardIcon} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
-          <NavItem isDark={sidebarIsDark} icon={AnimatedMonitoriasIcon} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
+        <nav className="flex-1 min-h-0 overflow-visible px-3 space-y-1 py-4">
+          <NavItem isDark={sidebarIsDark} icon={AnimatedDashboardIcon} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsQueueMenuOpen(false); setIsSettingsOpen(false); }} isOpen={false} />
+          <NavItem isDark={sidebarIsDark} icon={AnimatedMonitoriasIcon} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => { setActiveTab('monitorias'); setIsQueueMenuOpen(false); setIsSettingsOpen(false); }} isOpen={false} />
           {userData?.role !== 'suporte' && (
             <div className="space-y-1">
+              <div className="relative group/queue">
               <button
                 onClick={handleQueueMenuClick}
                 onMouseEnter={() => setIsQueueHovered(true)}
                 onMouseLeave={() => setIsQueueHovered(false)}
+                aria-label="Filas de Triagem"
+                aria-expanded={isQueueMenuOpen}
+                aria-controls="desktop-queue-flyout"
                 className={`
-                  w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
+                  w-full flex items-center justify-center px-0 h-11 rounded-full transition-all font-bold group relative text-left cursor-pointer
                   ${(activeTab === 'filas' && !isQueueMenuOpen)
-                    ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black font-extrabold')
+                    ? 'qt-active-nav-pill font-extrabold'
                     : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5 font-bold')}
                 `}
               >
@@ -1564,31 +1522,25 @@ function MainApp({
                 <div className={`${(activeTab === 'filas' && !isQueueMenuOpen) ? 'text-current' : (sidebarIsDark ? 'text-white/30 group-hover:text-white' : 'text-slate-700 group-hover:text-black')}`}>
                   <AnimatedLayersIcon isHovered={isQueueHovered} active={activeTab === 'filas' || isQueueMenuOpen} className="w-5 h-5" />
                 </div>
-                <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${sidebarTextVisible ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
-                  <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
-                    Filas de Triagem
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isQueueMenuOpen ? 'rotate-180' : ''}`} />
-                  </div>
-                </div>
+                {!isQueueMenuOpen && <span role="tooltip" className="qt-sidebar-tooltip">Filas de Triagem</span>}
               </button>
 
               <AnimatePresence initial={false}>
-                {isQueueMenuOpen && sidebarTextVisible && (
+                {isQueueMenuOpen && (
                   <m.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: "easeInOut" }}
-                    className="overflow-hidden pl-1 space-y-1"
+                    initial={{ opacity: 0, x: -8, scale: 0.98 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: -6, scale: 0.98 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                    id="desktop-queue-flyout"
+                    className="qt-sidebar-flyout absolute left-[calc(100%+0.75rem)] top-0 z-50 w-64 space-y-1 rounded-2xl border border-surface-border bg-surface-card p-2 shadow-premium backdrop-blur-xl"
                   >
                     {canManageQueueAssignments(userData?.role) && (
                       <QueueSubNavItem
                         label="Monitores na Triagem"
                         active={activeTab === 'filas' && activeQueueSubTab === 'monitores'}
                         onClick={() => handleQueueSubTabClick('monitores')}
-                        isOpen={sidebarTextVisible}
+                        isOpen={true}
                         isDark={sidebarIsDark}
                         colorType="monitores"
                       />
@@ -1597,7 +1549,7 @@ function MainApp({
                       label="CSAT Negativas"
                       active={activeTab === 'filas' && activeQueueSubTab === 'negativas'}
                       onClick={() => handleQueueSubTabClick('negativas')}
-                      isOpen={sidebarTextVisible}
+                      isOpen={true}
                       isDark={sidebarIsDark}
                       colorType="negativas"
                       badge={queueBadge('negativas')}
@@ -1607,7 +1559,7 @@ function MainApp({
                       label="Fila Proativa"
                       active={activeTab === 'filas' && activeQueueSubTab === 'proativas'}
                       onClick={() => handleQueueSubTabClick('proativas')}
-                      isOpen={sidebarTextVisible}
+                      isOpen={true}
                       isDark={sidebarIsDark}
                       colorType="proativas"
                       badge={queueBadge('proativas')}
@@ -1616,7 +1568,7 @@ function MainApp({
                       label="CSAT Positivas"
                       active={activeTab === 'filas' && activeQueueSubTab === 'positivas'}
                       onClick={() => handleQueueSubTabClick('positivas')}
-                      isOpen={sidebarTextVisible}
+                      isOpen={true}
                       isDark={sidebarIsDark}
                       colorType="positivas"
                       badge={queueBadge('positivas')}
@@ -1625,7 +1577,7 @@ function MainApp({
                       label="Chamados Filhos"
                       active={activeTab === 'filas' && activeQueueSubTab === 'filhos'}
                       onClick={() => handleQueueSubTabClick('filhos')}
-                      isOpen={sidebarTextVisible}
+                      isOpen={true}
                       isDark={sidebarIsDark}
                       colorType="filhos"
                       badge={queueBadge('filhos')}
@@ -1635,7 +1587,7 @@ function MainApp({
                       label="Filhos Inválidos"
                       active={activeTab === 'filas' && activeQueueSubTab === 'filhos_invalidos'}
                       onClick={() => handleQueueSubTabClick('filhos_invalidos')}
-                      isOpen={sidebarTextVisible}
+                      isOpen={true}
                       isDark={sidebarIsDark}
                       colorType="filhos_invalidos"
                       badge={queueBadge('filhos_invalidos')}
@@ -1643,18 +1595,23 @@ function MainApp({
                   </m.div>
                 )}
               </AnimatePresence>
+              </div>
             </div>
           )}
           {userData?.role === 'admin' ? (
             <div className="space-y-1">
+              <div className="relative group/settings">
               <button
                 onClick={handleSettingsClick}
                 onMouseEnter={() => setIsSettingsHovered(true)}
                 onMouseLeave={() => setIsSettingsHovered(false)}
+                aria-label="Configurações"
+                aria-expanded={isSettingsOpen}
+                aria-controls="desktop-settings-flyout"
                 className={`
-                  w-full flex items-center gap-3 px-4 h-11 rounded-xl transition-all font-bold group relative text-left cursor-pointer
+                  w-full flex items-center justify-center px-0 h-11 rounded-full transition-all font-bold group relative text-left cursor-pointer
                   ${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen)
-                    ? (sidebarIsDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black')
+                    ? 'qt-active-nav-pill'
                     : (sidebarIsDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5')}
                 `}
               >
@@ -1667,40 +1624,37 @@ function MainApp({
                 <div className={`${((activeTab === 'admin' || activeTab === 'custom_dashboard') && !isSettingsOpen) ? 'text-current' : (sidebarIsDark ? 'text-white/30 group-hover:text-white' : 'text-slate-700 group-hover:text-black')}`}>
                   <AnimatedSettingsIcon isHovered={isSettingsHovered} active={(activeTab === 'admin' || activeTab === 'custom_dashboard') || isSettingsOpen} className="w-5 h-5" />
                 </div>
-                <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${sidebarTextVisible ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
-                  <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
-                    Configurações
-                  </span>
-                  <ChevronDown className={`w-4 h-4 text-current transition-transform duration-200 ${isSettingsOpen ? 'rotate-180' : ''}`} />
-                </div>
+                {!isSettingsOpen && <span role="tooltip" className="qt-sidebar-tooltip">Configurações</span>}
               </button>
 
               <AnimatePresence initial={false}>
-                {isSettingsOpen && sidebarTextVisible && (
+                {isSettingsOpen && (
                   <m.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: "easeInOut" }}
-                    className="overflow-hidden pl-1 space-y-1"
+                    initial={{ opacity: 0, x: -8, scale: 0.98 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: -6, scale: 0.98 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                    id="desktop-settings-flyout"
+                    className="qt-sidebar-flyout absolute left-[calc(100%+0.75rem)] top-0 z-50 w-64 space-y-1 rounded-2xl border border-surface-border bg-surface-card p-2 shadow-premium backdrop-blur-xl"
                   >
                     <SubNavItem
                       label="Geral"
                       active={activeTab === 'admin'}
-                      onClick={() => setActiveTab('admin')}
-                      isOpen={sidebarTextVisible}
+                      onClick={() => { setActiveTab('admin'); setIsSettingsOpen(false); }}
+                      isOpen={true}
                       isDark={sidebarIsDark}
                     />
                     <SubNavItem
                       label="Customizar Dashboards"
                       active={activeTab === 'custom_dashboard'}
-                      onClick={() => setActiveTab('custom_dashboard')}
-                      isOpen={sidebarTextVisible}
+                      onClick={() => { setActiveTab('custom_dashboard'); setIsSettingsOpen(false); }}
+                      isOpen={true}
                       isDark={sidebarIsDark}
                     />
                   </m.div>
                 )}
               </AnimatePresence>
+              </div>
             </div>
           ) : ['gestor_qualidade', 'qualidade', 'gestor_suporte'].includes(userData?.role || '') ? (
             <NavItem
@@ -1709,37 +1663,18 @@ function MainApp({
               label="Configurações"
               active={activeTab === 'admin'}
               onClick={() => setActiveTab('admin')}
-              isOpen={sidebarTextVisible}
+              isOpen={false}
             />
           ) : null}
         </nav>
 
-        <div className="p-3 flex-shrink-0 border-t border-white/5 interactive-sidebar-item">
+        <div className="flex flex-shrink-0 justify-center border-t border-white/5 p-3">
           <div
-            className="flex items-center gap-3 p-2 rounded-xl bg-black/10 overflow-hidden"
-            title={`${isReconnecting ? 'Reconectando...' : isSystemOnline ? 'Sistema Online' : 'Sistema Offline'} — ${formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}`}
+            className="flex h-11 w-11 items-center justify-center rounded-xl bg-black/10"
+            title={`${isReconnecting ? 'Reconectando...' : isSystemOnline ? 'Sistema Online' : 'Sistema Offline'} ? ${formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}`}
+            aria-label={isReconnecting ? 'Reconectando' : isSystemOnline ? 'Sistema online' : 'Sistema offline'}
           >
-            <div className="w-9 h-9 rounded-lg bg-black/10 flex items-center justify-center flex-shrink-0 relative">
-              <div className={`w-2.5 h-2.5 rounded-full ${isSystemOnline ? 'bg-success animate-pulse' : 'bg-error'} ${isReconnecting ? 'animate-pulse' : ''}`} />
-            </div>
-
-            <div
-              className="flex-1 min-w-0 overflow-hidden"
-              style={{
-                opacity: sidebarTextVisible ? 1 : 0,
-                maxWidth: sidebarTextVisible ? undefined : 0,
-                transition: 'opacity 0.15s ease'
-              }}
-            >
-              <div className="flex items-center gap-1.5">
-                <span className={`text-[11px] font-bold tracking-normal leading-tight truncate ${isSystemOnline ? '' : 'text-error'}`}>
-                  {isReconnecting ? 'Reconectando...' : isSystemOnline ? 'Sistema Online' : 'Sistema Offline'}
-                </span>
-              </div>
-              <p className={`text-[10px] font-medium ${sidebarContrastSubtle} capitalize tracking-wider mt-0.5 leading-tight truncate`}>
-                {formatDate(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
-              </p>
-            </div>
+            <div className={`h-2.5 w-2.5 rounded-full ${isSystemOnline ? 'bg-success animate-pulse' : 'bg-error'} ${isReconnecting ? 'animate-pulse' : ''}`} />
           </div>
         </div>
       </m.aside>
@@ -1747,27 +1682,11 @@ function MainApp({
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-transparent">
         <header className="qt-topbar-glass px-3.5 sm:px-6 md:px-8 h-16 md:h-20 flex items-center gap-2.5 sm:gap-4 border-b border-surface-border/60 sticky top-0 z-20 transition-colors">
           <button
-            onClick={() => {
-              if (typeof window !== 'undefined' && window.innerWidth < 768) {
-                setIsMobileMenuOpen(prev => !prev);
-              } else {
-                toggleSidebar();
-              }
-            }}
-            className="sidebar-toggle-btn p-2 hover:bg-surface-subtle border border-surface-border/40 rounded-xl transition-all text-brand-muted hover:text-brand-primary shadow-xs flex-shrink-0 flex items-center justify-center w-10 h-10 cursor-pointer"
-            title={isSidebarOpen ? "Recolher Menu" : "Expandir Menu"}
+            onClick={() => setIsMobileMenuOpen((prev: boolean) => !prev)}
+            className="sidebar-toggle-btn md:hidden p-2 hover:bg-surface-subtle border border-surface-border/40 rounded-xl transition-all text-brand-muted hover:text-brand-primary shadow-xs flex-shrink-0 flex items-center justify-center w-10 h-10 cursor-pointer"
+            title="Abrir menu"
           >
-            <div className="md:hidden">
-              <Menu className="w-5 h-5" />
-            </div>
-            <div className="hidden md:flex items-center">
-              <Layout className="w-4 h-4 layout-icon" />
-              {isSidebarOpen ? (
-                <ChevronLeft className="w-4 h-4 arrow-icon" />
-              ) : (
-                <ChevronRight className="w-4 h-4 arrow-icon" />
-              )}
-            </div>
+            <Menu className="w-5 h-5" />
           </button>
 
           <div className="min-w-0 flex-1">
@@ -2075,9 +1994,15 @@ function MainApp({
                               className="overflow-hidden"
                             >
                               <div className="pb-2 px-2">
-                                <p className="py-2 text-xs text-brand-muted">
-                                  Acompanha automaticamente o tema claro ou escuro do seu dispositivo.
-                                </p>
+                                <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-subtle p-1">
+                                  {(['light', 'dark', 'system'] as const).map(option => (
+                                    <button key={option} type="button" onClick={() => setTheme(option)} aria-pressed={theme === option}
+                                      className={`flex flex-col items-center gap-1 rounded-lg px-1.5 py-2 text-[10px] font-semibold transition-colors ${theme === option ? 'bg-surface-card text-brand-primary shadow-sm' : 'text-brand-muted hover:text-brand-primary'}`}>
+                                      {option === 'light' ? <Sun className="h-4 w-4" /> : option === 'dark' ? <Moon className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+                                      {option === 'light' ? 'Claro' : option === 'dark' ? 'Escuro' : 'Sistema'}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             </m.div>
                           )}
@@ -2363,8 +2288,9 @@ function NavItem({ icon: IconComponent, label, active, onClick, isOpen, isDark, 
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      aria-label={label}
       className={`
-        w-full flex items-center gap-3 px-4 h-11 rounded-full transition-all font-bold group relative
+        w-full flex items-center ${isOpen ? 'gap-3 px-4' : 'justify-center px-0'} h-11 rounded-full transition-all font-bold group relative
         ${active
           ? 'qt-active-nav-pill font-extrabold'
           : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-800 hover:text-black hover:bg-black/5 font-bold')}
@@ -2395,6 +2321,7 @@ function NavItem({ icon: IconComponent, label, active, onClick, isOpen, isDark, 
           </span>
         )}
       </div>
+      {!isOpen && <span role="tooltip" className="qt-sidebar-tooltip">{label}</span>}
     </button>
   );
 }

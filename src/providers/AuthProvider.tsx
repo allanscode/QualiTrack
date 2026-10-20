@@ -3,7 +3,7 @@ import { readCaptchaToken } from '../components/ui/ProtectedAuthForm';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase, mockDb, upsertUserPreferences, isMockMode, assertSupabase, initialUrlHash, initialUrlSearch } from '../lib/supabase';
 import { User, UserRole, ROLE_LABELS, UserPreferences } from '../types';
-import { useTheme, resolveSystemTheme, applyThemeToDOM } from './ThemeProvider';
+import { useTheme } from './ThemeProvider';
 import { useSessionManager, lastDbThemeRef, ABSOLUTE_TIMEOUT_MS, IDLE_TIMEOUT_MS, MOCK_SESSION_KEY, LAST_ACTIVITY_KEY } from '../hooks/useSessionManager';
 import { sessionStartedAt, clearPrivateDrafts } from '../lib/sessionSecurity';
 import { queryClient } from '../lib/queryClient';
@@ -48,8 +48,6 @@ interface AuthContextType {
   setIsReconnecting: React.Dispatch<React.SetStateAction<boolean>>;
   isFormOpen: boolean;
   setIsFormOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  isSidebarOpen: boolean;
-  setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   theme: ReturnType<typeof useTheme>['theme'];
   setTheme: ReturnType<typeof useTheme>['setTheme'];
   loadingPreferences: boolean;
@@ -108,7 +106,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     return 'dashboard';
   });
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
 
@@ -208,8 +205,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setLoadingPreferences(true);
     try {
-      setTheme('system');
-      applyThemeToDOM(resolveSystemTheme());
       setAppReady(true);
 
       // Minimum loading time to avoid flash (500ms)
@@ -593,8 +588,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
           }
 
-          setTheme('system');
-          applyThemeToDOM(resolveSystemTheme());
           setAppReady(true);
 
           const enriched = await enrichUserWithTeamIds(user);
@@ -843,8 +836,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsReconnecting,
       isFormOpen,
       setIsFormOpen,
-      isSidebarOpen,
-      setIsSidebarOpen,
       theme,
       setTheme,
       loadingPreferences,

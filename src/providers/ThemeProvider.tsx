@@ -38,24 +38,27 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const theme: Theme = 'system';
-  const [resolvedTheme, setResolvedTheme] = useState(resolveSystemTheme);
-  // Compatibility for session restoration: old saved choices cannot override the OS.
-  const setTheme = useCallback<React.Dispatch<React.SetStateAction<Theme>>>(() => {
-    setResolvedTheme(resolveSystemTheme());
+  const [theme, setThemeState] = useState<Theme>(() => {
+    const saved = localStorage.getItem('qualitrack_theme');
+    return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
+  });
+  const [systemTheme, setSystemTheme] = useState(resolveSystemTheme);
+  const resolvedTheme = theme === 'system' ? systemTheme : theme;
+  const setTheme = useCallback<React.Dispatch<React.SetStateAction<Theme>>>((next) => {
+    setThemeState(current => typeof next === 'function' ? next(current) : next);
   }, []);
 
   useEffect(() => { applyThemeToDOM(resolvedTheme); }, [resolvedTheme]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const listener = () => setResolvedTheme(mediaQuery.matches ? 'dark' : 'light');
-    listener();
+    const listener = () => setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
+    setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
     mediaQuery.addEventListener('change', listener);
     return () => mediaQuery.removeEventListener('change', listener);
   }, []);
 
-  useEffect(() => { localStorage.setItem('qualitrack_theme', 'system'); }, []);
+  useEffect(() => { localStorage.setItem('qualitrack_theme', theme); }, [theme]);
   const value = useMemo(() => ({ theme, setTheme, resolvedTheme }), [setTheme, resolvedTheme]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
