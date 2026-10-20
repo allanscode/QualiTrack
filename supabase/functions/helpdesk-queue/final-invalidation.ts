@@ -6,6 +6,7 @@ type Work = { id: string; monitoria_id: string; ticket_id: string; lease_id: str
 type Ticket = { id?: number; status?: string; updated_at?: string; custom_fields?: unknown };
 type Monitoria = {
   id: string; ticket_id: string; active: boolean; status: string; score: number;
+  evaluator_id: string;
   satisfaction_result: string; evaluator_note: string | null;
   satisfaction_has_record: boolean; satisfaction_record_text: string | null;
 };
@@ -49,10 +50,11 @@ export async function processFinalPositiveInvalidation(
     return { enabled: true, processed: 1, ticket_id: work.ticket_id, status: result.data === true ? state : 'superseded' };
   };
   let writeStarted = false;
+  let publicationClaim: string | null = null;
   try {
     if (!/^\d+$/.test(work.ticket_id)) throw new SyncFailure('Número de ticket inválido.', 'blocked');
     const { data: row, error: rowError } = await db.from('monitorias')
-      .select('id,ticket_id,active,status,score,satisfaction_result,evaluator_note,satisfaction_has_record,satisfaction_record_text')
+      .select('id,ticket_id,active,status,score,evaluator_id,satisfaction_result,evaluator_note,satisfaction_has_record,satisfaction_record_text')
       .eq('id', work.monitoria_id).maybeSingle();
     if (rowError) throw new SyncFailure('Não foi possível consultar a monitoria final.', 'pending');
     const monitoria = row as Monitoria | null;
@@ -66,7 +68,7 @@ export async function processFinalPositiveInvalidation(
     }
     const { data: manualReceipt, error: receiptError } = await db.from('helpdesk_submissions')
       .select('id').eq('monitoria_id', work.monitoria_id)
-      .eq('status', 'sent').eq('outcome', 'negativa').limit(1).maybeSingle();
+      .eq('status', 'sent').limit(1).maybeSingle();
     if (receiptError) throw new SyncFailure('Não foi possível conferir publicações anteriores.', 'pending');
     const base = `https://${subdomain}.zendesk.com/api/v2/tickets/${work.ticket_id}`;
     const ticketUrl = `${base}.json`;
@@ -131,6 +133,14 @@ export async function processFinalPositiveInvalidation(
     if (alreadyPublished && missingCustomFields(ticket.custom_fields, fields).length === 0) {
       return await finish('applied', undefined, ticket.updated_at);
     }
+    if (!alreadyPublished) {
+      const claim = await db.rpc('claim_helpdesk_publication', {
+        p_monitoria: monitoria.id, p_caller: monitoria.evaluator_id, p_force: false,
+      });
+      if (claim.error) throw new SyncFailure('Outra publicação está em andamento; a conferência será repetida.', 'pending');
+      publicationClaim = typeof claim.data === 'string' ? claim.data : null;
+      if (!publicationClaim) alreadyPublished = true;
+    }
     const htmlBody = buildEvaluationHtml({
       outcome: 'negativa', evaluatorNote: monitoria.evaluator_note,
       satisfactionRecordText: monitoria.satisfaction_has_record ? monitoria.satisfaction_record_text : null,
@@ -145,17 +155,48 @@ export async function processFinalPositiveInvalidation(
     });
     if (update.status === 409) {
       writeStarted = false;
+      if (publicationClaim) {
+        const released = await db.rpc('release_helpdesk_publication_claim', {
+          p_monitoria: monitoria.id, p_claim: publicationClaim,
+        });
+        if (released.error || released.data !== true) {
+          throw new SyncFailure('Zendesk recusou a versão; a reserva não pôde ser liberada com segurança.', 'blocked');
+        }
+        publicationClaim = null;
+      }
       throw new SyncFailure('Ticket alterado ao publicar; nova conferência agendada.', 'pending');
     }
     if (!update.ok) throw new SyncFailure(`Zendesk recusou a decisão final (${update.status}).`, 'blocked');
     const updated = (await update.json() as { ticket?: Ticket }).ticket;
     verifyTicket(updated, work.ticket_id);
     if (missingCustomFields(updated.custom_fields, fields).length) {
+      if (publicationClaim) {
+        await db.rpc('finish_helpdesk_publication', {
+          p_monitoria: monitoria.id, p_claim: publicationClaim, p_ticket: work.ticket_id,
+          p_provider: 'zendesk', p_outcome: 'negativa', p_comment: null, p_success: false,
+        });
+        publicationClaim = null;
+      }
       return await finish('blocked', 'Comentário aceito, mas os campos da macro não foram confirmados.', updated.updated_at);
+    }
+    if (publicationClaim) {
+      const receipt = await db.rpc('finish_helpdesk_publication', {
+        p_monitoria: monitoria.id, p_claim: publicationClaim, p_ticket: work.ticket_id,
+        p_provider: 'zendesk', p_outcome: 'negativa',
+        p_comment: !alreadyPublished && !isClosed ? marker : `closed-fields:${work.ticket_id}`,
+        p_success: true,
+      });
+      if (receipt.error) throw new SyncFailure('Zendesk atualizado, mas o recibo não foi confirmado.', 'blocked');
     }
     return await finish('applied', undefined, updated.updated_at);
   } catch (error) {
-    const state = error instanceof SyncFailure ? error.state : writeStarted ? 'blocked' : 'pending';
+    if (publicationClaim) {
+      await db.rpc('finish_helpdesk_publication', {
+        p_monitoria: work.monitoria_id, p_claim: publicationClaim, p_ticket: work.ticket_id,
+        p_provider: 'zendesk', p_outcome: 'negativa', p_comment: null, p_success: false,
+      });
+    }
+    const state = publicationClaim ? 'blocked' : error instanceof SyncFailure ? error.state : writeStarted ? 'blocked' : 'pending';
     const message = error instanceof Error ? error.message : 'Falha na sincronização final.';
     return await finish(state, message);
   }

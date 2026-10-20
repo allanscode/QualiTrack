@@ -134,8 +134,16 @@ describe('positive auto-publication', () => {
     expect(stale.provider.publishEvaluation).not.toHaveBeenCalled();
   });
 
-  it('routes child forms to the child macro outbox', async () => {
-    const state = setup({ row: { form_id: '6c7d1e88-841b-4da9-9a66-9f1464ce896f' } });
+  it.each([
+    { form_id: '6c7d1e88-841b-4da9-9a66-9f1464ce896f' },
+    { form_id: '6c7d1e88-841b-4da9-9a66-9f1464ce8970' },
+    { form_id: '6c7d1e88-841b-4da9-9a66-9f1464ce8971' },
+    { form_id: '6c7d1e88-841b-4da9-9a66-9f1464ce8972' },
+    { form_id: '6c7d1e88-841b-4da9-9a66-9f1464ce8973' },
+    { form_snapshot: { ticket_kind: 'chamado_filho' } },
+    { form_snapshot: { automation: 'child_ticket' } },
+  ])('routes child verdicts away from the score-based publication path (%o)', async row => {
+    const state = setup({ row });
     expect(await processPositiveAutoPublication(state.db,state.provider)).toMatchObject({ status: 'skipped' });
     expect(state.provider.publishEvaluation).not.toHaveBeenCalled();
   });

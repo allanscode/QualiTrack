@@ -11,7 +11,7 @@ const env = (key: string) => envValues[key];
 const fields = childMacroCustomFields('nao_conforme');
 const ticket = { id: 123, status: 'solved', updated_at: '2026-10-07T12:00:00Z', custom_fields: [] };
 const monitoria = {
-  id: 'monitoria', ticket_id: '123', active: true, status: 'concluida', score: 0,
+  id: 'monitoria', ticket_id: '123', evaluator_id: 'auditor', active: true, status: 'concluida', score: 0,
   satisfaction_result: 'Positiva', evaluator_note: 'Erro crítico confirmado na solução.',
   satisfaction_has_record: true, satisfaction_record_text: 'Cliente elogiou o atendimento.',
 };
@@ -19,7 +19,9 @@ const response = (value: unknown, status = 200) => new Response(JSON.stringify(v
 function database(authorized = true, note = monitoria.evaluator_note, manualSent = false) {
   const rpc = vi.fn(async (name: string) => ({ error: null, data: name === 'claim_final_positive_invalidation'
     ? [{ id: 'work', monitoria_id: 'monitoria', ticket_id: '123', lease_id: 'lease' }]
-    : name === 'authorize_final_positive_invalidation' ? authorized : true }));
+    : name === 'authorize_final_positive_invalidation' ? authorized
+      : name === 'claim_helpdesk_publication' ? 'publish-claim'
+        : true }));
   const query = { select: vi.fn(() => query), eq: vi.fn(() => query),
     maybeSingle: vi.fn(async () => ({ data: { ...monitoria, evaluator_note: note }, error: null })) };
   const receipts = { select: vi.fn(() => receipts), eq: vi.fn(() => receipts),
@@ -61,6 +63,12 @@ describe('final positive invalidation worker', () => {
     expect(payload.ticket.comment).toMatchObject({ public: false, html_body: expect.stringContaining(monitoria.evaluator_note) });
     expect(payload.ticket.comment.html_body).toContain('Registro do Auditor da monitoria #monitoria');
     expect(rpc).toHaveBeenCalledWith('authorize_final_positive_invalidation', { p_id: 'work', p_lease_id: 'lease' });
+    expect(rpc).toHaveBeenCalledWith('claim_helpdesk_publication', {
+      p_monitoria: monitoria.id, p_caller: monitoria.evaluator_id, p_force: false,
+    });
+    expect(rpc).toHaveBeenCalledWith('finish_helpdesk_publication', expect.objectContaining({
+      p_monitoria: monitoria.id, p_claim: 'publish-claim', p_outcome: 'negativa', p_success: true,
+    }));
   });
   it('does not publish before manager decision is final', async () => {
     const { db } = database(false);
