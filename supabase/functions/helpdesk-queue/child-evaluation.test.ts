@@ -68,7 +68,7 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
     expect(evidence).toMatchObject({ creatorId: 71, initialAssigneeId: 71, initialGroupId: 900, selfAssigned: true });
     const corrected = reconcileChildOpeningRouting(routingFailure(), { ...evidence!, creatorGroupName: 'Atendimento' });
     expect(corrected.status).toBe('conforme');
-    expect(corrected.score).toBe(100);
+    expect(corrected).not.toHaveProperty('score');
     expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')).toMatchObject({
       answer: 'SIM', passed: true,
     });
@@ -86,7 +86,7 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
         ? { ...check, answer: 'SIM' as const, passed: true } : check) };
     const corrected = reconcileChildOpeningRouting(falsePositive, evidence);
     expect(corrected.status).toBe('nao_conforme');
-    expect(corrected.score).toBe(75);
+    expect(corrected).not.toHaveProperty('score');
     expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')).toMatchObject({
       answer: 'NAO', passed: false,
     });
@@ -115,7 +115,9 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
       check => check.question_id === 'child-creator-authorized')?.answer).toBe('NA');
     const unknown = { ...result, detected_type: 'desconhecido' };
     expect(reconcileChildOpeningRouting(unknown,
-      childCreationRoutingEvidence(creationAudit(71, 71)))).toBe(unknown);
+      childCreationRoutingEvidence(creationAudit(71, 71)))).toEqual(expect.objectContaining({ detected_type: 'desconhecido' }));
+    expect(reconcileChildOpeningRouting(unknown,
+      childCreationRoutingEvidence(creationAudit(71, 71)))).not.toHaveProperty('score');
     expect(childCreationRoutingEvidence({ audits: [{ author_id: -1, events: [] }] })).toBeNull();
   });
 
@@ -127,7 +129,7 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
     expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')?.answer).toBe('SIM');
     expect(corrected.checks.find(check => check.question_id === 'child-creator-authorized')?.answer).toBe('NAO');
     expect(corrected.status).toBe('nao_conforme');
-    expect(corrected.score).toBe(0);
+    expect(corrected).not.toHaveProperty('score');
   });
 
   it('pede revisão quando o grupo de origem não foi comprovado', () => {

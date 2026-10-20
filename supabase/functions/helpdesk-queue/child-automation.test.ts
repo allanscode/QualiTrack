@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
-import { CHILD_AUTOMATION_FORM_ID, processChildAI } from './child-automation';
+import { processChildAI } from './child-automation';
 describe('child intake security and durability', () => {
   const origin = 'https://example.zendesk.com';
   const path = '/api/v2/views/123/tickets.json';
@@ -62,7 +62,7 @@ describe('child intake security and durability', () => {
       child_ai_config: { enabled: true, auditor_id: 'auditor' },
       positive_ai_config: { max_evaluations: 5, executions_started: 4 },
       users: { id: 'agent', name: 'Agent', email: 'agent@example.test', primary_team_id: 'team' },
-      forms: { id: CHILD_AUTOMATION_FORM_ID, title: 'Child form', sections: [] },
+      forms: { id: '6c7d1e88-841b-4da9-9a66-9f1464ce8971', title: 'Child form', sections: [] },
       teams: { name: 'Support' },
     };
     const db = {
@@ -90,7 +90,7 @@ describe('child intake security and durability', () => {
       const body = url.includes('comments.json')
         ? { comments: [{ id: 1, author_id: 7, created_at: '2026-10-07T12:00:00Z', body: 'Opening macro evidence', public: false }] }
         : url.includes('ticket_fields.json') ? { ticket_fields: [] }
-        : { ticket: { id: 42, subject: 'Technical analysis', status: 'closed', created_at: '2026-10-07T12:00:00Z', assignee_id: 7, group_id: 8, problem_id: 10, via: { channel: sourceChannel } },
+        : { ticket: { id: 42, subject: 'Technical analysis', status: 'closed', created_at: '2026-10-07T12:00:00Z', assignee_id: 7, group_id: 8, problem_id: 10, tags: ['analise_tecnica'], via: { channel: sourceChannel } },
           users: [{ id: 7, name: 'Agent', email: 'agent@example.test', role: 'agent' }], groups: [{ id: 8, name: 'N2' }] };
       return new Response(JSON.stringify(body), { status: 200 });
     });
@@ -100,7 +100,7 @@ describe('child intake security and durability', () => {
     expect(execute).toHaveBeenCalledTimes(reserved ? 1 : 0);
     expect(payloads[0].p_payload).toMatchObject({
       action: 'evaluate_child_ticket', ticket_id: '42', ticket_subject: 'Technical analysis',
-      draft_meta: { source_queue: 'filhos', form_id: CHILD_AUTOMATION_FORM_ID, agent_id: 'agent', team_id: 'team', channel: 'Chat' },
+      draft_meta: { source_queue: 'filhos', form_id: '6c7d1e88-841b-4da9-9a66-9f1464ce8971', agent_id: 'agent', team_id: 'team', channel: 'Chat' },
       ticket_fields: expect.arrayContaining([{ title: 'Chamado pai (problem_id)', value: '10' }]),
     });
     expect(writes).toContainEqual({ table: 'child_ai_queue', value: expect.objectContaining({ ticket_snapshot: expect.objectContaining({ dialogue: expect.any(Array) }) }) });

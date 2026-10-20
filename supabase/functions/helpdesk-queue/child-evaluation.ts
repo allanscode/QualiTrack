@@ -57,14 +57,22 @@ export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
   evidence: ChildCreationRoutingEvidence | null,
   _sections?: Array<{ weight?: number; questions?: Array<{ id: string; is_critical?: boolean }> }>,
 ): T {
-  if (result.detected_type === 'desconhecido') return result;
+  if (result.detected_type === 'desconhecido') {
+    const withoutScore = { ...result };
+    delete withoutScore.score;
+    return withoutScore as T;
+  }
   const routing = result.checks.find(check => check.question_id === 'child-routing-correct');
   const creator = result.checks.find(check => check.question_id === 'child-creator-authorized');
   const expectedAnswer = evidence ? (evidence.selfAssigned ? 'SIM' : 'NAO') : null;
   const creatorAnswer: ChildAnswer = evidence?.selfAssigned && evidence.creatorGroupName
     ? (forbiddenChildCreatorGroup(evidence.creatorGroupName) ? 'NAO' : 'SIM') : 'NA';
   if ((!routing || !expectedAnswer || routing.answer === expectedAnswer)
-    && (!creator || creator.answer === creatorAnswer)) return result;
+    && (!creator || creator.answer === creatorAnswer)) {
+    const withoutScore = { ...result };
+    delete withoutScore.score;
+    return withoutScore as T;
+  }
 
   const checks = result.checks.map(check => check.question_id === 'child-routing-correct' && expectedAnswer && check.answer !== expectedAnswer
     ? { ...check, answer: expectedAnswer, passed: evidence!.selfAssigned,

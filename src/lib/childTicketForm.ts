@@ -43,7 +43,7 @@ export function childEvaluationFormPrefill(evaluation: ChildTicketAiEvaluation) 
   const answers: Record<string, 'SIM' | 'NAO' | 'NA'> = {};
   const question_observations: Record<string, string> = {};
   for (const check of evaluation.checks || []) {
-    const questionId = check.question_id
+    const questionId = check.question_id && Object.hasOwn(CHILD_QUESTION_RULES, check.question_id)
       ? check.question_id
       : Object.keys(CHILD_QUESTION_RULES).find(id => CHILD_QUESTION_RULES[id].some(rule => normalizeRule(rule) === normalizeRule(check.rule)));
     if (!questionId) continue;
@@ -86,5 +86,7 @@ export function childFormForReevaluation(initialData: Monitoria | undefined, for
   if (!shouldUseChildFormForReevaluation(initialData)) return undefined;
   const snapshot = initialData?.form_snapshot as { child_macro_type?: ChildTicketMacroType; child_ai_evaluation?: { detected_type?: ChildTicketMacroType } } | undefined;
   const macroType = snapshot?.child_macro_type || snapshot?.child_ai_evaluation?.detected_type;
-  return macroType ? childTicketForm(forms, macroType) : undefined;
+  if (macroType) return childTicketForm(forms, macroType);
+  // Older child monitorias predate macro-specific rubrics.
+  return forms.find(form => form.id === CHILD_TICKET_FORM_ID && form.active !== false);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChildTicketAiEvaluation, EvaluationForm, Monitoria } from '../types';
-import { CHILD_TICKET_FORM_ID, childEvaluationFormPrefill, childTicketForm, legacyChildNoteVerdict, shouldUseChildFormForReevaluation } from './childTicketForm';
+import { CHILD_FORM_IDS, CHILD_TICKET_FORM_ID, childEvaluationFormPrefill, childTicketForm, legacyChildNoteVerdict, shouldUseChildFormForReevaluation } from './childTicketForm';
 
 describe('ficha de ticket filho', () => {
   it('preenche resultados por ID e preserva NA sem converter em reprovação', () => {
@@ -33,8 +33,9 @@ describe('ficha de ticket filho', () => {
   const regular = { id: 'regular', active: true } as EvaluationForm;
 
   it('seleciona a rubrica própria para tickets filhos', () => {
-    expect(childTicketForm([regular, child])).toBe(child);
-    expect(childTicketForm([regular])).toBeUndefined();
+    const macroForm = { ...child, id: CHILD_FORM_IDS.nova_demanda };
+    expect(childTicketForm([regular, macroForm], 'nova_demanda')).toBe(macroForm);
+    expect(childTicketForm([regular, child], 'nova_demanda')).toBeUndefined();
   });
 
   it('corrige a ficha na reavaliação de monitoria antiga de filho', () => {
