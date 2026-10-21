@@ -30,3 +30,4 @@ The first migration did not select candidates because localized history text was
 - **4** automatically completed deadline monitorias had their normal scores recalculated. They remain concluded; all recalculated scores are below 75%, so their negative verdict remains.
 - Human decisions, manager-edited records, and contestations were preserved.
 - The private audit table records all 303 previous zero scores and their recalculated scores.
+- Migration `20261021002000` corrected the new history text to plain Portuguese without changing scores or decisions.
