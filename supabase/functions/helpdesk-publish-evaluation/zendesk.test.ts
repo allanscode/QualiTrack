@@ -13,6 +13,12 @@ describe('Zendesk publication eligibility', () => {
     expect(result.reason).toMatch(/fechado/i);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('allows a solved ticket through the follow-up eligibility path', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ticket: { status: 'solved' } }), { status: 200 })));
+    const provider = new ZendeskProvider({ subdomain: 'example', email: 'agent@example.com', apiToken: 'test' });
+    expect(await provider.checkPublicationEligibility('456', { allowFollowUp: true })).toEqual({ eligible: true });
+  });
 });
 
 describe('Zendesk final verdict publication', () => {
@@ -68,6 +74,21 @@ describe('Zendesk final verdict publication', () => {
 
     await expect(provider.publishEvaluation({ ticketId: '178984', outcome: 'positiva', htmlBody: '<p>Test</p>' }))
       .resolves.toMatchObject({ externalCommentId: '91' });
+    expect(writes).toBe(2);
+  });
+
+  it('does not report success when Zendesk ignores the fields after repair', async () => {
+    let writes = 0;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        writes++;
+        return response({ status: 'solved', updated_at: `2026-10-06T10:00:0${writes}Z`, custom_fields: [], tags });
+      }
+      return response({ status: 'solved', updated_at: '2026-10-06T10:00:00Z', custom_fields: [], tags: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(provider.publishEvaluation({ ticketId: '123', outcome: 'positiva', htmlBody: '<p>Test</p>' }))
+      .rejects.toThrow(/não confirmou os campos/i);
     expect(writes).toBe(2);
   });
 
