@@ -1,4 +1,3 @@
-import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useState } from 'react';
 
 /**
@@ -7,36 +6,50 @@ import { useCallback, useEffect, useState } from 'react';
  * the observer root can miss the point where a chart is brought into view.
  */
 export function useChartRevealAnimation() {
-  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const [node, setNode] = useState<HTMLElement | null>(null);
   const [isInView, setIsInView] = useState(false);
-  const reduceMotion = useReducedMotion();
 
-  const ref = useCallback((node: HTMLDivElement | null) => {
+  const ref = useCallback((node: HTMLElement | null) => {
     setNode(node);
   }, []);
 
   useEffect(() => {
     if (!node || isInView) return;
 
-    if (typeof IntersectionObserver === 'undefined') {
-      setIsInView(true);
-      return;
-    }
-
     const scrollRoot = node.closest('[data-dashboard-scroll-root]');
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry?.isIntersecting || entry.intersectionRatio < 0.12) return;
+    const revealIfVisible = () => {
+      const target = node.getBoundingClientRect();
+      const root = scrollRoot?.getBoundingClientRect();
+      const top = root ? root.top + (scrollRoot?.clientTop || 0) : 0;
+      const left = root ? root.left + (scrollRoot?.clientLeft || 0) : 0;
+      const bottom = root ? top + (scrollRoot?.clientHeight || 0) : window.innerHeight;
+      const right = root ? left + (scrollRoot?.clientWidth || 0) : window.innerWidth;
+      const visibleWidth = Math.max(0, Math.min(target.right, right) - Math.max(target.left, left));
+      const visibleHeight = Math.max(0, Math.min(target.bottom, bottom) - Math.max(target.top, top));
+      const area = Math.max(1, target.width * target.height);
+      if ((visibleWidth * visibleHeight) / area < 0.12) return;
       setIsInView(true);
-      observer.disconnect();
-    }, {
-      root: scrollRoot,
-      threshold: [0, 0.12],
-      rootMargin: '0px 0px -4% 0px',
-    });
+    };
 
-    observer.observe(node);
-    return () => observer.disconnect();
+    // The dashboard scrolls inside an overflow element. Checking its geometry
+    // on both scroll sources avoids relying on the browser's viewport observer
+    // when cards are portaled into their dashboard slots.
+    revealIfVisible();
+    const onScroll = () => requestAnimationFrame(revealIfVisible);
+    scrollRoot?.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onScroll);
+    resizeObserver?.observe(node);
+    if (scrollRoot) resizeObserver?.observe(scrollRoot);
+
+    return () => {
+      scrollRoot?.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      resizeObserver?.disconnect();
+    };
   }, [isInView, node]);
 
-  return { ref, animateChart: isInView && !reduceMotion };
+  return { ref, animateChart: isInView };
 }

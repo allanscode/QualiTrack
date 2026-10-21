@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Info } from 'lucide-react';
 import Card from '../../ui/Card';
-import { m, AnimatePresence, useInView, useMotionValue, useTransform, animate } from 'motion/react';
+import { m, AnimatePresence, useMotionValue, useTransform, animate } from 'motion/react';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { usePresence } from '../../../providers/PresenceProvider';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { toast } from 'sonner';
 import { User } from '../../../types';
 import { withDashboardTile } from '../DashboardTileLayout';
+import { useChartRevealAnimation } from './useChartRevealAnimation';
 
 interface StatCardProps {
   title: string;
@@ -89,13 +90,12 @@ function AnimatedNumber({ value }: { value: string | number }) {
     suffix = source.slice(match.index + token.length);
     fractionDigits = Math.min((normalized.split('.')[1] || '').length, 2);
   }
-  const ref = React.useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true, amount: 0.4 });
+  const { ref, animateChart } = useChartRevealAnimation();
   const motionValue = useMotionValue(0);
   const rounded = useTransform(motionValue, current => current.toLocaleString('pt-BR', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }));
-  React.useEffect(() => { if (isInView && numeric !== null) { const controls = animate(motionValue, numeric, { duration: 0.9, ease: 'easeOut' }); return controls.stop; } }, [isInView, numeric, motionValue]);
+  React.useEffect(() => { if (animateChart && numeric !== null) { const controls = animate(motionValue, numeric, { duration: 0.9, ease: 'easeOut' }); return controls.stop; } }, [animateChart, numeric, motionValue]);
   if (numeric === null) return <>{value}</>;
-  return <span ref={ref}>{prefix}<m.span>{rounded}</m.span>{suffix}</span>;
+  return <span ref={ref}>{prefix}{animateChart ? <m.span>{rounded}</m.span> : numeric.toLocaleString('pt-BR', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })}{suffix}</span>;
 }
 
 function StatCard({

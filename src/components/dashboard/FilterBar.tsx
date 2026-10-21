@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Calendar, X, RefreshCw, FileText, Layers } from 'lucide-react';
+import { Calendar, X, RefreshCw, FileText, Layers, List, ChevronDown } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
 import CustomSelect from '../ui/CustomSelect';
 import CustomDatepicker from '../ui/CustomDatepicker';
@@ -22,6 +22,22 @@ export default function FilterBar() {
   const hiddenActions = config.dashboardHiddenActions?.[dashboardRole] || [];
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isRootCauseOpen, setIsRootCauseOpen] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isActionsOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (event.target instanceof Node && !actionsMenuRef.current?.contains(event.target)) setIsActionsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsActionsOpen(false); };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isActionsOpen]);
 
   const defaults = useMemo(() => ({
     ...getPresetDateRange('mes'),
@@ -138,7 +154,7 @@ export default function FilterBar() {
             <button
               type="button"
               onClick={() => setIsRootCauseOpen(true)}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface-bg/70 px-3 text-xs font-bold text-brand-primary transition-all hover:border-brand-highlight/40 hover:bg-brand-highlight/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-highlight/30 active:scale-[0.98] cursor-pointer"
+              className="hidden inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface-bg/70 px-3 text-xs font-bold text-brand-primary transition-all hover:border-brand-highlight/40 hover:bg-brand-highlight/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-highlight/30 active:scale-[0.98] cursor-pointer"
               title="Indicadores das avaliações filtradas e comparação de notas antes e depois do feedback"
             >
               <Layers className="w-4 h-4 shrink-0 text-brand-highlight" />
@@ -149,7 +165,7 @@ export default function FilterBar() {
             <button
               type="button"
               onClick={() => setIsReportOpen(true)}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface-bg/70 px-3 text-xs font-bold text-brand-primary transition-all hover:border-brand-accent/40 hover:bg-brand-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/30 active:scale-[0.98] cursor-pointer"
+              className="hidden inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface-bg/70 px-3 text-xs font-bold text-brand-primary transition-all hover:border-brand-accent/40 hover:bg-brand-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/30 active:scale-[0.98] cursor-pointer"
               title="Gerar e imprimir relatório executivo consolidado em PDF para reunião e envio a gestores"
             >
               <FileText className="w-4 h-4 shrink-0 text-brand-accent" />
@@ -162,12 +178,57 @@ export default function FilterBar() {
           type="button"
           onClick={refresh}
           disabled={loading || refreshing || !!refreshCooldownRemaining}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-brand-accent/25 bg-brand-accent/10 px-3 text-xs font-bold text-brand-primary shadow-sm transition-all hover:border-brand-accent/40 hover:bg-brand-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+          className="hidden inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-brand-accent/25 bg-brand-accent/10 px-3 text-xs font-bold text-brand-primary shadow-sm transition-all hover:border-brand-accent/40 hover:bg-brand-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           <span className="whitespace-nowrap">{refreshing ? 'Atualizando dados' : 'Atualizar dados'}</span>
           {!refreshing && refreshCooldownRemaining && <span className="rounded-md bg-surface-subtle px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-brand-muted">{refreshCooldownRemaining}</span>}
         </button>
+        <div className="relative" ref={actionsMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsActionsOpen(open => !open)}
+            aria-haspopup="menu"
+            aria-expanded={isActionsOpen}
+            aria-label="Abrir ações do dashboard"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-brand-accent/25 bg-brand-accent/10 px-3 text-xs font-bold text-brand-primary shadow-sm transition-all hover:border-brand-accent/40 hover:bg-brand-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/30 active:scale-[0.98] cursor-pointer"
+          >
+            <List className="size-4 text-brand-accent" />
+            <span>Ações</span>
+            <ChevronDown className={`size-3.5 text-brand-muted transition-transform ${isActionsOpen ? 'rotate-180' : ''}`} />
+          </button>
+          <AnimatePresence>
+            {isActionsOpen && (
+              <m.div
+                role="menu"
+                aria-label="Ações do dashboard"
+                initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+                className="absolute right-0 top-full z-50 mt-2 w-64 origin-top-right rounded-2xl border border-surface-border bg-surface-card p-1.5 shadow-2xl"
+              >
+                <p className="px-3 pb-1.5 pt-2 text-[9px] font-black uppercase tracking-[0.16em] text-brand-muted">Ações do painel</p>
+                {user?.role !== 'suporte' && !hiddenActions.includes('root_cause') && (
+                  <button type="button" role="menuitem" onClick={() => { setIsActionsOpen(false); setIsRootCauseOpen(true); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-brand-primary transition-colors hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-highlight/10 text-brand-highlight"><Layers className="size-4" /></span>
+                    <span className="min-w-0 flex-1"><span className="block">Análise das monitorias</span><span className="mt-0.5 block text-[10px] font-medium text-brand-muted">Notas e resultados filtrados</span></span>
+                  </button>
+                )}
+                {user?.role !== 'suporte' && !hiddenActions.includes('executive_report') && (
+                  <button type="button" role="menuitem" onClick={() => { setIsActionsOpen(false); setIsReportOpen(true); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-brand-primary transition-colors hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-accent/10 text-brand-accent"><FileText className="size-4" /></span>
+                    <span className="min-w-0 flex-1"><span className="block">Relatório executivo</span><span className="mt-0.5 block text-[10px] font-medium text-brand-muted">Gerar e imprimir relatório</span></span>
+                  </button>
+                )}
+                <button type="button" role="menuitem" onClick={() => { setIsActionsOpen(false); void refresh(); }} disabled={loading || refreshing || !!refreshCooldownRemaining} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-brand-primary transition-colors hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent disabled:cursor-not-allowed disabled:opacity-50">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-accent/10 text-brand-accent"><RefreshCw className={`size-4 ${refreshing ? 'animate-spin' : ''}`} /></span>
+                  <span className="min-w-0 flex-1"><span className="block">{refreshing ? 'Atualizando dados' : 'Atualizar dados'}</span><span className="mt-0.5 block text-[10px] font-medium text-brand-muted">{refreshing ? 'Buscando informações recentes' : refreshCooldownRemaining ? `Disponível em ${refreshCooldownRemaining}` : 'Sincronizar indicadores'}</span></span>
+                </button>
+              </m.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       <div className="bg-surface-card rounded-2xl sm:rounded-3xl border border-surface-border shadow-premium p-3.5 sm:p-5">

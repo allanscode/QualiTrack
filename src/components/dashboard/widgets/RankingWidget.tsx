@@ -6,6 +6,8 @@ import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
 import { m, AnimatePresence } from 'motion/react';
+import { useChartRevealAnimation } from './useChartRevealAnimation';
+import { AnimatedNumber } from './AnimatedNumber';
 
 export interface RankingItem {
   id: string;
@@ -68,6 +70,7 @@ function RankingWidget({
   const { getLevelForScore, config, saveConfig } = useQualityConfig();
   const [isHovered, setIsHovered] = useState(false);
   const [tempSub, setTempSub] = useState('');
+  const rankingReveal = useChartRevealAnimation();
 
   const isMelhoresSuporte = title === 'Melhores Suporte';
   const isSupportOffender = title === 'Maiores Ofensores';
@@ -230,14 +233,14 @@ function RankingWidget({
         </div>
       )}
 
-      <div className="flex-1 space-y-1 overflow-visible pr-0.5 no-scrollbar">
+      <div ref={rankingReveal.ref} className="flex-1 space-y-1 overflow-visible pr-0.5 no-scrollbar">
         {data.map((item, index) => {
           const level = item.score !== undefined ? getLevelForScore(isSupportRanking ? (item.rawScore ?? item.score) : item.score) : { color: 'text-brand-primary', label: '' };
           const isCount = type === 'count';
           const displayScore = isSupportOffender ? (item.badness ?? item.score ?? 0) : (item.score ?? 0);
 
           return (
-        <div
+        <m.div
           key={item.id}
           onClick={onItemClick ? () => onItemClick(item) : undefined}
           onKeyDown={onItemClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onItemClick(item); } } : undefined}
@@ -248,6 +251,9 @@ function RankingWidget({
           role={onItemClick ? 'button' : undefined}
           aria-label={onItemClick ? `Ver monitorias de ${item.name}` : undefined}
           aria-describedby={`tooltip-${myUniqueId}-row-${index}`}
+          initial={{ opacity: 0, y: 8 }}
+          animate={rankingReveal.animateChart ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+          transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1], delay: rankingReveal.animateChart ? index * 0.07 : 0 }}
         >
           <div
             id={`tooltip-${myUniqueId}-row-${index}`}
@@ -299,7 +305,7 @@ function RankingWidget({
                 </p>
                 {!isCount && (
                   <p className="text-[9px] font-semibold text-slate-800 dark:text-slate-400 mt-0.5 truncate">
-                    {item.count} mon.{item.rawScore !== undefined && ` · Média ${item.rawScore.toFixed(1)}%`}
+                    <AnimatedNumber value={item.count} active={rankingReveal.animateChart} /> mon.{item.rawScore !== undefined && <> · Média <AnimatedNumber value={item.rawScore} active={rankingReveal.animateChart} decimals={1} suffix="%" /></>}
                   </p>
                 )}
               </div>
@@ -308,7 +314,7 @@ function RankingWidget({
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <div className="text-right">
                   <div className={`text-xs font-bold ${isCount ? 'text-brand-primary' : level.color}`}>
-                    {isCount ? `${item.count} Vol.` : `${displayScore.toFixed(1)}%`}
+                    {isCount ? <AnimatedNumber value={item.count} active={rankingReveal.animateChart} suffix=" Vol." /> : <AnimatedNumber value={displayScore} active={rankingReveal.animateChart} decimals={1} suffix="%" />}
                     {item.rawScore !== undefined && <span className="block text-[9px] font-medium text-brand-muted">{isSupportOffender ? 'perdas' : 'índice'}</span>}
                   </div>
                 </div>
@@ -316,7 +322,7 @@ function RankingWidget({
                   <ChevronRight className="w-3.5 h-3.5 text-brand-muted opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:text-brand-accent transition-all flex-shrink-0" />
                 )}
               </div>
-            </div>
+            </m.div>
           );
         })}
         {data.length === 0 && (
