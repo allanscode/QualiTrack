@@ -162,7 +162,6 @@ export default function MonitoriaList({
 
   const focusOnMonitoria = useCallback((targetId: string) => {
     filters.setTab('todas');
-    filters.setStatusFilter('active');
     filters.setAuditorFilter('');
     filters.setSuporteFilter('');
     filters.setTeamFilter('');

@@ -8,7 +8,6 @@ import { useQualityConfig } from '../../lib/useQualityConfig';
 import { DASHBOARD_WIDGETS, orderedWidgets, widgetId } from '../../lib/dashboardLayout';
 import type { DashboardRole, DashboardWidgetDefinition, DashboardWidgetType } from '../../lib/dashboardLayout';
 import type { DashboardLayoutEditor } from '../../hooks/useDashboardLayoutEditor';
-import { m, useReducedMotion } from 'motion/react';
 
 interface LayoutContextValue {
   role: DashboardRole;
@@ -97,9 +96,6 @@ function Slot({ item, index, count, registerSlot, editor }: {
       data-dashboard-compact={compactChart ? 'true' : undefined}
       draggable={Boolean(editor && !editor.saving)}
       className={`min-w-0 flex flex-col ${editor ? 'rounded-2xl transition-shadow cursor-grab active:cursor-grabbing' : ''} ${dropTarget ? 'ring-2 ring-brand-accent ring-offset-2 ring-offset-surface-bg' : ''} ${editor?.draggedId === item.id ? 'opacity-45' : ''}`}
-      initial={reduceMotion ? false : { opacity: 0, y: 20, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.55, delay: reduceMotion ? 0 : Math.min(index * 0.08, 0.64), ease: [0.16, 1, 0.3, 1] }}
     >
       {editor && (
         <div className="mb-2 flex min-h-9 items-center gap-1 rounded-xl border border-surface-border bg-surface-card px-2 text-brand-muted shadow-sm">
