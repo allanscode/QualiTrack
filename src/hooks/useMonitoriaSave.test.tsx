@@ -115,16 +115,57 @@ describe('useMonitoriaSave', () => {
       ...pjDeps(60, onSaved),
       initialData: {
         id: 'monitoria-pj', status: 'em_contestacao', score: 55,
-        action_deadline_at: deadline, history: [], pj_review_required: true,
+        evaluator_note: 'Registro anterior.', action_deadline_at: deadline, history: [], pj_review_required: true,
       },
       isReevaluating, isAdminEdit,
     } as unknown as Parameters<typeof useMonitoriaSave>[0];
     deps.header.reevaluation_justification = 'Justificativa da reavaliação';
+    deps.header.evaluator_note = 'Registro revisado para o resultado atual.';
     const { result } = renderHook(() => useMonitoriaSave(deps));
     act(() => result.current.handleSave());
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', isAdminEdit ? 'em_contestacao' : 'aguardando_gestor_suporte'));
     expect(db.update.mock.calls[0][0].action_deadline_at).toBe(deadline);
     if (isAdminEdit) expect(db.update.mock.calls[0][0].history[0].note).toContain('Critério “pergunta”');
+  });
+
+  it('impede salvar uma ficha com novo score e Registro do Auditor antigo', () => {
+    const onSaved = vi.fn();
+    db.update.mockImplementation(() => ({ eq: async () => ({ error: null }) }));
+    const deps = {
+      ...pjDeps(60, onSaved),
+      initialData: {
+        id: 'monitoria-pj', status: 'em_contestacao', score: 55,
+        evaluator_note: 'Registro antigo com o resultado anterior.', history: [],
+      },
+      isAdminEdit: true,
+    } as unknown as Parameters<typeof useMonitoriaSave>[0];
+    deps.header.evaluator_note = 'Registro antigo com o resultado anterior.';
+
+    const { result } = renderHook(() => useMonitoriaSave(deps));
+    act(() => result.current.handleSave());
+
+    expect(db.update).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('permite salvar o novo score depois de atualizar o Registro do Auditor', async () => {
+    const onSaved = vi.fn();
+    db.update.mockImplementation(() => ({ eq: async () => ({ error: null }) }));
+    const deps = {
+      ...pjDeps(60, onSaved),
+      initialData: {
+        id: 'monitoria-pj', status: 'em_contestacao', score: 55,
+        evaluator_note: 'Registro antigo com o resultado anterior.', history: [],
+      },
+      isAdminEdit: true,
+    } as unknown as Parameters<typeof useMonitoriaSave>[0];
+    deps.header.evaluator_note = 'Registro atualizado para o novo resultado.';
+
+    const { result } = renderHook(() => useMonitoriaSave(deps));
+    act(() => result.current.handleSave());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', 'em_contestacao'));
+    expect(db.update.mock.calls[0][0].evaluator_note).toBe('Registro atualizado para o novo resultado.');
   });
 });

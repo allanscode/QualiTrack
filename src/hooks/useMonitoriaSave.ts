@@ -115,6 +115,13 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
     const evaluationChanged = isChild
       ? Object.keys({ ...deps.initialData?.answers, ...deps.scores }).some(key => deps.initialData?.answers?.[key] !== deps.scores[key])
       : Number(deps.initialData?.score) !== Number(deps.score);
+    const currentAuditorRecord = String(deps.header.evaluator_note || '').trim();
+    const previousAuditorRecord = String(deps.initialData?.evaluator_note || '').trim();
+    if (deps.initialData && evaluationChanged && !deps.isQualityContestReview
+      && (!currentAuditorRecord || currentAuditorRecord === previousAuditorRecord)) {
+      toast.error('A ficha alterou o resultado. Atualize o Registro do Auditor antes de salvar para que ele corresponda ao novo cálculo.');
+      return;
+    }
     if (deps.isQualityContestReview && !evaluationChanged) {
       toast.error('Ajuste as respostas da ficha para recalcular o score antes de concluir.');
       return;
