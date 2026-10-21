@@ -138,6 +138,15 @@ export default function InPlaceMonitoriaModal({
       <div className="flex flex-col h-full overflow-hidden">
         {/* Header */}
         <header className="flex items-start gap-3 border-b border-surface-border p-4 sm:items-center sm:p-6 bg-surface-card shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Voltar para a tela anterior"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-surface-border px-2.5 py-2 text-xs font-bold text-brand-muted transition-colors hover:bg-surface-subtle hover:text-brand-primary"
+          >
+            <ArrowLeft className="size-4" />
+            <span className="hidden sm:inline">Voltar</span>
+          </button>
           <span className={`flex size-10 shrink-0 items-center justify-center rounded-2xl ${VARIANT_ICON_CONTAINER[cfg.variant]}`}>
             <cfg.icon className="size-5" />
           </span>
@@ -183,7 +192,7 @@ export default function InPlaceMonitoriaModal({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/25 dark:bg-black/40 p-0 sm:p-6 backdrop-blur-md animate-fade-in"
+        className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/25 dark:bg-black/40 p-0 sm:p-6 backdrop-blur-md animate-fade-in"
         onMouseDown={e => {
           if (e.target === e.currentTarget && !viewingMonitoria && !actionModal) {
             onClose();

@@ -13,35 +13,13 @@ export type AnswerValue = 'SIM' | 'NAO' | 'NA';
  * 
  * @param form Snapshot do formulário de avaliação aplicado
  * @param answers Objeto com as respostas para cada ID de questão
- * @param criticalErrors Objeto opcional com os erros críticos selecionados (sistema legado/antigo)
  * @returns Score final arredondado para duas casas decimais, variando de 0 a 100
  */
 export function calculateQualityScore(
   form: EvaluationForm | undefined | null,
-  answers: Record<string, AnswerValue>,
-  criticalErrors?: Record<string, boolean>
+  answers: Record<string, AnswerValue>
 ): number {
   if (!form || !form.sections || form.sections.length === 0) {
-    return 0;
-  }
-
-  // 1. Validar se ocorreu qualquer falha crítica
-  // A. Novas questões marcadas como is_critical com resposta "NAO"
-  let anyCriticalFailed = false;
-  form.sections.forEach((section) => {
-    section.questions.forEach((q) => {
-      if (q.is_critical && answers[q.id] === 'NAO') {
-        anyCriticalFailed = true;
-      }
-    });
-  });
-
-  // B. Lista legada de erros críticos marcada como verdadeira
-  if (criticalErrors && Object.values(criticalErrors).some((v) => v)) {
-    anyCriticalFailed = true;
-  }
-
-  if (anyCriticalFailed) {
     return 0;
   }
 

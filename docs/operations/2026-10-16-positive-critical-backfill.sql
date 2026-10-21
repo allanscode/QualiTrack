@@ -1,6 +1,6 @@
 -- One-time production backfill. Execute only after the route and auditor-record
 -- migrations are applied. The transaction aborts if any candidate fails to
--- become a saved, manager-pending monitoria with a zero score.
+-- become a saved, manager-pending monitoria with its normal weighted score.
 BEGIN;
 SELECT set_config('request.jwt.claim.role', 'service_role', true);
 
@@ -53,7 +53,7 @@ BEGIN
     JOIN public.monitorias m ON m.id = q.monitoria_id
     WHERE q.ticket_id = item.ticket_id AND q.status = 'completed';
     IF saved.id IS NULL OR saved.status <> 'pendente_revisao'
-      OR saved.score <> 0 OR saved.pj_review_required IS TRUE
+      OR saved.score IS NULL OR saved.pj_review_required IS TRUE
       OR saved.review_route <> 'standard_manager'
       OR saved.evaluator_note IS DISTINCT FROM btrim(item.summary) THEN
       RAISE EXCEPTION 'Resultado inesperado; transação cancelada para ticket %', item.ticket_id;

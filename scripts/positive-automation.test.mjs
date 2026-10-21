@@ -172,7 +172,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       await reset();
       await complete(await begin('103'), { q1: 'SIM' });
       assert.equal((await state('103')).status, 'review_required');
-      assert.match((await state('103')).last_error, /todos os critérios/);
+      assert.match((await state('103')).last_error, /todos os crit[ée]rios/);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n, 0);
     });
 
@@ -180,7 +180,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       await reset();
       await complete(await begin('104'), { q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' }, { suggested_critical_errors: { critical: true } });
       assert.equal((await state('104')).status, 'completed');
-      assert.equal(Number((await state('104')).score), 0);
+      assert.equal(Number((await state('104')).score), 100);
       assert.equal((await db.query("SELECT status FROM monitorias WHERE ticket_id='104'")).rows[0].status, 'pendente_revisao');
     });
 
@@ -197,7 +197,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       const saved = (await db.query("SELECT id,evaluated_id,status,score,form_snapshot FROM monitorias WHERE ticket_id='109'")).rows[0];
       assert.equal(saved.evaluated_id, id(5));
       assert.equal(saved.status, 'pendente_revisao');
-      assert.equal(Number(saved.score), 0);
+      assert.equal(Number(saved.score), 100);
       assert.equal(saved.form_snapshot.review_route, 'standard_manager');
       await db.exec("SET request.jwt.claim.role='authenticated'");
       await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [id(5)]);
@@ -218,7 +218,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
         { suggested_critical_errors: { critical: true } }, pjPayload.draft_meta);
       const saved = (await db.query("SELECT id,status,score,pj_review_required,form_snapshot FROM monitorias WHERE ticket_id='108'")).rows[0];
       assert.equal(saved.status, 'pendente_revisao');
-      assert.equal(Number(saved.score), 0);
+      assert.equal(Number(saved.score), 100);
       assert.equal(saved.pj_review_required, false);
       assert.equal(saved.form_snapshot.review_route, 'standard_manager');
       await db.query("UPDATE monitorias SET status='em_contestacao' WHERE id=$1", [saved.id]);
@@ -263,7 +263,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       const row = await state('450');
       assert.equal(row.status, 'review_required');
       assert.equal(Number(row.score), 75);
-      assert.match(row.last_error, /Evidência externa pendente/);
+      assert.match(row.last_error, /Evidencia externa pendente/);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM monitorias')).rows[0].n, 0);
     });
 
@@ -292,7 +292,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       assert.equal(row.form_snapshot.ai_evaluation.summary, 'Parecer da IA');
     });
 
-    await t.test('converte parecer histórico com erro crítico para o gestor sem publicar no Zendesk', async () => {
+    await t.test('converte parecer histórico com ponto crítico para o gestor sem zerar a nota nem publicar no Zendesk', async () => {
       await reset();
       const criticalForm = {
         ...form,
@@ -318,7 +318,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       const row = (await db.query(`SELECT m.status,m.score,m.pj_review_required,m.evaluator_note,
         m.form_snapshot->>'review_route' AS route FROM monitorias m WHERE ticket_id='206'`)).rows[0];
       assert.equal(row.status, 'pendente_revisao');
-      assert.equal(Number(row.score), 0);
+      assert.equal(Number(row.score), 100);
       assert.equal(row.pj_review_required, false);
       assert.equal(row.route, 'standard_manager');
       assert.match(row.evaluator_note, /erro crítico comprovado/);

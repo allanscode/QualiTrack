@@ -1677,7 +1677,7 @@ export default function AuditingQueueView({
           {Number.isFinite(calculatedScore) ? `${calculatedScore.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%` : 'Nota indisponível'}
         </span>
         {criticalScore && <span className="w-full text-xs text-brand-muted">
-          <span className="font-semibold">Critérios: {criticalScore.criteriaScore.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% · Nota final zerada por erro crítico apontado pela IA.</span>
+          <span className="font-semibold">Pontuação normal: {criticalScore.criteriaScore.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%. A IA marcou pontos de atenção para revisão humana, sem zerar a nota.</span>
           {criticalScore.reasons.map((reason, index) => <span key={index} className="mt-1 block">{reason}</span>)}
         </span>}
       </span>
@@ -2990,6 +2990,7 @@ export default function AuditingQueueView({
                             ticket={{ ...ticket, child_evaluation: evaluation }}
                             onOpen={onOpenExistingMonitoria}
                             onStart={canAudit && evaluation ? () => { void handleStartChildAudit(ticket); } : undefined}
+                            onStartManual={canAudit ? () => { void handleStartManualChildAudit(ticket); } : undefined}
                             loading={isEvaluatingTicket(ticket.ticket_id)}
                           />
                           {(canAudit || evaluation) && <Button
@@ -3127,6 +3128,7 @@ export default function AuditingQueueView({
                             ticket={{ ...ticket, child_evaluation: evaluation }}
                             onOpen={onOpenExistingMonitoria}
                             onStart={canAudit && evaluation ? () => { void handleStartChildAudit(ticket); } : undefined}
+                            onStartManual={canAudit ? () => { void handleStartManualChildAudit(ticket); } : undefined}
                             loading={isEvaluatingTicket(ticket.ticket_id)}
                           />
                           {(canAudit || evaluation) && <Button
@@ -3638,6 +3640,7 @@ export default function AuditingQueueView({
                     ticket={{ ...childPreviewTicket, child_evaluation: childAiEvaluation }}
                     loading={loadingChildAi}
                     onStart={() => { void handleStartChildAudit(childPreviewTicket); }}
+                    onStartManual={() => { void handleStartManualChildAudit(childPreviewTicket); }}
                     onOpen={onOpenExistingMonitoria ? id => {
                       handleCloseChildPreview();
                       onOpenExistingMonitoria(id);

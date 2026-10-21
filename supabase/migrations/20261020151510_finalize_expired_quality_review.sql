@@ -26,12 +26,12 @@ BEGIN
     END IF;
 
     UPDATE public.monitorias SET status='concluida',
-      score=CASE WHEN quality_turn THEN 100 ELSE item.score END,
+      score=item.score,
       resolution_type='automatic',concluded_at=now(),updated_at=now(),
       history=coalesce(history,'[]'::jsonb)||jsonb_build_array(jsonb_build_object(
         'action','Finalização Automática (Prazo)','by_id','system','by_name','Sistema Automático','at',now(),
-        'note',CASE WHEN quality_turn THEN 'Monitoria aprovada automaticamente (nota 100%) por perda de prazo da Equipe de Qualidade.'
-          ELSE 'Monitoria aprovada automaticamente por perda de prazo da Equipe de Suporte.' END))
+        'note',CASE WHEN quality_turn THEN 'Monitoria concluída automaticamente por perda de prazo da Equipe de Qualidade. A pontuação e as respostas da ficha foram preservadas.'
+          ELSE 'Monitoria concluída automaticamente por perda de prazo da Equipe de Suporte. A pontuação e as respostas da ficha foram preservadas.' END))
       WHERE id=item.id;
 
     IF item.pj_review_required THEN
@@ -49,6 +49,9 @@ GRANT EXECUTE ON FUNCTION public.process_action_deadline_timeouts() TO service_r
 DO $$
 DECLARE v_id uuid := 'c315a981-c56f-4efd-8081-90981015edb5'::uuid; v_count integer;
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.monitorias WHERE id=v_id) THEN
+    RETURN;
+  END IF;
   PERFORM set_config('app.positive_ai_timeout',v_id::text,true);
   UPDATE public.monitorias
   SET status='concluida', score=100, resolution_type='automatic',

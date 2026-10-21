@@ -89,6 +89,14 @@ export async function processChildAutoPublication(
     const alreadySent = isClosed || hasPublishedChildMacroForMonitoria(comments,monitoria.id,verdict);
     const correctsPreviousInvalid = !isClosed && verdict === 'conforme' && hasPublishedInvalidChildMacro(comments);
     const fields = childMacroCustomFields(verdict,verdict === 'conforme' && hasCriticalChildField(ticket.custom_fields));
+    const positive = verdict === 'conforme';
+    const verdictTags = new Set(['positiva', 'negativa', 'analisado_qa', CHILD_AUDITED_TAG]);
+    const nextTags = [...new Set([
+      ...ticket.tags.filter(tag => !verdictTags.has(tag)),
+      positive ? 'positiva' : 'negativa',
+      'analisado_qa',
+      CHILD_AUDITED_TAG,
+    ])];
     const verdictLabel = verdict === 'conforme' ? 'VÁLIDO' : 'INVÁLIDO';
     let confirmed = ticket;
     if (!alreadySent || missingCustomFields(ticket.custom_fields,fields).length) {
@@ -97,7 +105,7 @@ export async function processChildAutoPublication(
       const response = await fetcher(ticketUrl, { method:'PUT',headers,signal:AbortSignal.timeout(20000),
         body:JSON.stringify({ticket:{
           ...(alreadySent ? {} : {comment:{body:`[QualidadeWP · Chamado filho ${verdictLabel}]\n\n${commentText}`,public:false}}),
-          custom_fields:fields,safe_update:true,updated_stamp:ticket.updated_at,
+          custom_fields:fields,tags:nextTags,safe_update:true,updated_stamp:ticket.updated_at,
         }}),
       });
       if (!response.ok) throw new Error(`Zendesk recusou a macro do chamado filho (${response.status}).`);
@@ -112,21 +120,24 @@ export async function processChildAutoPublication(
       }
     }
     if (!confirmed?.updated_at || !Array.isArray(confirmed.tags)) throw new Error('Zendesk não confirmou a versão e as tags atuais.');
-    if (!confirmed.tags.includes(CHILD_AUDITED_TAG)) {
+    if (nextTags.some(tag => !confirmed!.tags!.includes(tag))
+      || confirmed.tags.some(tag => verdictTags.has(tag) && !nextTags.includes(tag))) {
       ticketWriteStarted = true;
       const tagged = await fetcher(ticketUrl,{method:'PUT',headers,signal:AbortSignal.timeout(20000),
-        body:JSON.stringify({ticket:{tags:[...new Set([...confirmed.tags,CHILD_AUDITED_TAG])],
+        body:JSON.stringify({ticket:{tags:[...new Set([...confirmed.tags.filter(tag => !verdictTags.has(tag)), ...nextTags.filter(tag => verdictTags.has(tag))])],
           safe_update:true,updated_stamp:confirmed.updated_at}})});
       if (!tagged.ok) throw new Error(`Zendesk recusou a tag de saída da fila (${tagged.status}).`);
       confirmed = (await tagged.json()).ticket;
-      if (!Array.isArray(confirmed?.tags) || !confirmed.tags.includes(CHILD_AUDITED_TAG)) {
+      if (!Array.isArray(confirmed?.tags) || nextTags.some(tag => !confirmed!.tags!.includes(tag))
+        || confirmed.tags.some(tag => verdictTags.has(tag) && !nextTags.includes(tag))) {
         throw new Error('Zendesk não confirmou a tag de saída da fila.');
       }
     }
     const verified = (await read(ticketUrl)).ticket;
     const verifiedComments = isClosed ? [] : (await read(`${base}/tickets/${work.ticket_id}/comments.json?sort_order=desc&per_page=100`)).comments;
     if (missingCustomFields(verified?.custom_fields,fields).length
-      || !verified?.tags?.includes(CHILD_AUDITED_TAG)
+      || nextTags.some(tag => !verified?.tags?.includes(tag))
+      || verified?.tags?.some(tag => verdictTags.has(tag) && !nextTags.includes(tag))
       || (!isClosed && (!Array.isArray(verifiedComments)
         || !hasPublishedChildMacroForMonitoria(verifiedComments,monitoria.id,verdict)))) {
       throw new Error('Zendesk não confirmou comentário, campos e tag da macro.');

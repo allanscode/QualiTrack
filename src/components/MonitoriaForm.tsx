@@ -1450,7 +1450,7 @@ export default function MonitoriaForm({
 
               {!isChildFormId(header.form_id) && selectedForm.critical_errors && selectedForm.critical_errors.length > 0 && (
                 <div className="pt-10 border-t border-error/10">
-                  <h3 className="text-sm font-black text-error flex items-center gap-1.5 mb-4 uppercase tracking-wider"><AlertOctagon className="w-4 h-4" /> Itens Fatais (Erros Críticos)</h3>
+                  <h3 className="text-sm font-black text-error flex items-center gap-1.5 mb-4 uppercase tracking-wider"><AlertOctagon className="w-4 h-4" /> Pontos de Atenção para Revisão</h3>
                   <div className="grid grid-cols-1 gap-3">
                     {(selectedForm.critical_errors || []).map(ce => (
                       <div key={ce.id} className="space-y-2">
@@ -1459,7 +1459,7 @@ export default function MonitoriaForm({
                           <span className="text-[11px] font-black text-brand-primary uppercase tracking-wider">{ce.text}</span>
                         </label>
                         {criticalErrors[ce.id] && (
-                          <textarea rows={2} value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Justificativa técnica obrigatória para a aplicação deste erro crítico..." className="w-full border border-error/20 rounded-lg p-3 text-xs font-medium focus:border-error focus:outline-none bg-error/5 resize-y break-words whitespace-pre-wrap min-h-[60px]" disabled={isViewOnly} />
+                          <textarea rows={2} value={criticalErrorObservations[ce.id] || ''} onChange={e => !isViewOnly && setCriticalErrorObservations({...criticalErrorObservations, [ce.id]: e.target.value})} placeholder="Registre as evidências para revisão humana..." className="w-full border border-error/20 rounded-lg p-3 text-xs font-medium focus:border-error focus:outline-none bg-error/5 resize-y break-words whitespace-pre-wrap min-h-[60px]" disabled={isViewOnly} />
                         )}
                       </div>
                     ))}

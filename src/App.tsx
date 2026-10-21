@@ -466,6 +466,7 @@ function MainApp({
   const queueEvents = useQueueEventNotifications(userData);
   const notificationPreferences = useNotificationPreferences(userData?.role);
   const [formPrefillData, setFormPrefillData] = React.useState<any>(undefined);
+  const [formReturnTab, setFormReturnTab] = React.useState(activeTab);
   const [isSettingsHovered, setIsSettingsHovered] = React.useState(false);
   const [focusMonitoriaTarget, setFocusMonitoriaTarget] = React.useState<{ monitoriaId?: string; ticketId?: string } | null>(null);
   const [inPlaceMonitoriaId, setInPlaceMonitoriaId] = React.useState<string | null>(null);
@@ -485,6 +486,7 @@ function MainApp({
 
   const handleStartAuditFromQueue = (prefill: any) => {
     if (!canAuditTickets(userData?.role)) return;
+    setFormReturnTab(activeTab);
     // O agente pode ter sido criado agora mesmo (conta provisória) pela
     // Edge Function de triagem — se ainda não está no cache local de
     // usuários, atualiza para que o formulário já abra com o nome
@@ -544,6 +546,7 @@ function MainApp({
 
   const handleOpenNewMonitoria = () => {
     if (!canAuditTickets(userData?.role)) return;
+    setFormReturnTab(activeTab);
     setIsNewMonitoriaModalOpen(true);
   };
 
@@ -1167,7 +1170,7 @@ function MainApp({
             initialData={formPrefillData}
             onCancel={handleCancelMonitoriaForm}
             // O id da monitoria salva não é usado aqui; a lista recarrega ao trocar de aba.
-            onSaved={() => { setIsFormOpen(false); setFormPrefillData(undefined); setActiveTab('monitorias'); }}
+            onSaved={() => { setIsFormOpen(false); setFormPrefillData(undefined); setActiveTab(formReturnTab); }}
           />
         )}
       </AnimatePresence>

@@ -69,6 +69,21 @@ describe('IA de chamados filhos', () => {
     mocks.evaluateChildTicketWithAI.mockResolvedValue(result);
     mocks.startNewChild.mockResolvedValue({ ticket_id: '179525', queue_type: 'filhos', assigned_to: 'admin', status: 'in_progress' });
   });
+
+  it.each(['filhos', 'filhos_invalidos'] as const)('disponibiliza avaliação manual no card da fila %s', async activeSubTab => {
+    const onStartAudit = vi.fn();
+    const form: EvaluationForm = {
+      id: CHILD_TICKET_FORM_ID, title: 'Ficha única de filhos', description: '', team_id: '', active: true,
+      sections: [], createdBy: 'admin', created_at: '2026-10-07T00:00:00Z',
+    };
+    mocks.fetchQueueTickets.mockResolvedValue({ tickets: [ticket('7331')], hasMore: false });
+    renderQueue({ activeSubTab, forms: [form], onStartAudit });
+    fireEvent.click(await screen.findByRole('button', { name: 'Avaliar Filho Manualmente' }));
+    await waitFor(() => expect(onStartAudit).toHaveBeenCalledTimes(1));
+    expect(onStartAudit.mock.calls[0][0].form_id).toBe(CHILD_TICKET_FORM_ID);
+    expect(onStartAudit.mock.calls[0][0].ticket_id).toBe('7331');
+    expect(mocks.evaluateChildTicketWithAI).not.toHaveBeenCalled();
+  });
   afterEach(cleanup);
 
   it.each(['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos'] as const)('filtra monitorias salvas sem ocultar pareceres de IA em %s', async activeSubTab => {

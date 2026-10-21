@@ -60,10 +60,15 @@ export class ZendeskProvider implements HelpdeskProvider {
       if (!response.ok) throw new Error(`Zendesk retornou ${response.status} na conferência do envio.`);
       return await response.json();
     };
-    const current = input.allowFollowUp ? (await read(url)).ticket : null;
+    const current = (await read(url)).ticket;
     const closed = String(current?.status || '').toLowerCase() === 'closed';
-    if (closed && !input.allowFollowUp) throw new Error('Ticket fechado não aceita atualização direta.');
     if (String(current?.status || '').toLowerCase() === 'archived') throw new Error('Ticket arquivado não aceita publicação automática.');
+    const verdictTags = new Set(['positiva', 'negativa', 'analisado_qa']);
+    const tags = [...new Set([
+      ...(Array.isArray(current?.tags) ? current.tags : []).filter((tag: string) => !verdictTags.has(tag)),
+      input.outcome,
+      'analisado_qa',
+    ])];
     const marker = input.htmlBody.match(/Monitoria QWP #[0-9a-f-]{36}/i)?.[0];
     const payload = {
       ticket: {
@@ -74,6 +79,7 @@ export class ZendeskProvider implements HelpdeskProvider {
           },
         }),
         custom_fields: customFields,
+        tags,
         ...(typeof current?.updated_at === 'string'
           ? { safe_update: true, updated_stamp: current.updated_at }
           : {}),
@@ -111,7 +117,7 @@ export class ZendeskProvider implements HelpdeskProvider {
         method: 'PUT',
         headers,
         body: JSON.stringify({ ticket: {
-          custom_fields: customFields, safe_update: true, updated_stamp: updatedStamp,
+          custom_fields: customFields, tags, safe_update: true, updated_stamp: updatedStamp,
         } }),
         signal: AbortSignal.timeout(20000),
       });
@@ -135,6 +141,10 @@ export class ZendeskProvider implements HelpdeskProvider {
       || !verifiedTicket.custom_fields.some((item: { id: number; value: unknown }) =>
         item.id === field.id && item.value === field.value))) {
       throw new Error('Zendesk não confirmou os campos da macro após o envio.');
+    }
+    if (!Array.isArray(verifiedTicket?.tags) || tags.some(tag => !verifiedTicket.tags.includes(tag))
+      || verifiedTicket.tags.some((tag: string) => verdictTags.has(tag) && !tags.includes(tag))) {
+      throw new Error('Zendesk nÃ£o confirmou as tags do veredito apÃ³s o envio.');
     }
     if (closed) {
       return { externalCommentId: `closed-fields:${input.ticketId}` };

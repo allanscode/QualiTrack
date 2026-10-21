@@ -101,23 +101,23 @@ describe('calculateQualityScore', () => {
     });
   });
 
-  describe('Erro crítico → score = 0%', () => {
-    it('deve retornar 0 quando questão is_critical respondida NAO', () => {
+  describe('Marcadores críticos não alteram a pontuação normal', () => {
+    it('calcula pelos pesos da ficha mesmo quando uma questão crítica recebe NAO', () => {
       const form = createMockForm();
       const score = calculateQualityScore(form, answers({ q1: 'SIM', q2: 'NAO', q3: 'SIM', q4: 'SIM' }));
-      expect(score).toBe(0);
+      expect(score).toBe(75);
     });
 
-    it('deve retornar 0 quando criticalErrors legacy marcado', () => {
+    it('não aplica penalidade por erro crítico legado selecionado', () => {
       const form = createMockForm();
-      const score = calculateQualityScore(form, answers({ q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' }), { ce1: true });
-      expect(score).toBe(0);
+      const score = calculateQualityScore(form, answers({ q1: 'SIM', q2: 'SIM', q3: 'SIM', q4: 'SIM' }));
+      expect(score).toBe(100);
     });
 
-    it('deve retornar 0 quando múltiplos erros críticos', () => {
+    it('mantém a proporção normal quando há mais de uma resposta negativa', () => {
       const form = createMockForm();
       const score = calculateQualityScore(form, answers({ q1: 'NAO', q2: 'NAO', q3: 'SIM', q4: 'SIM' }));
-      expect(score).toBe(0);
+      expect(score).toBe(50);
     });
 
     it('NÃO deve zerar se questão crítica respondida SIM', () => {

@@ -16,6 +16,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 import type { HelpdeskProvider, PublishResult } from './types.ts';
 import { buildEditedCommentHtml, buildEvaluationHtml } from './template.ts';
+import { qualityFinalizationNote } from './final-decision.ts';
 import { ZendeskProvider } from './zendesk.ts';
 import { publicationAccess } from './access.ts';
 import { canPublishMonitoriaStatus } from './publication-status.ts';
@@ -286,11 +287,12 @@ serve(async (req: Request) => {
       && Array.isArray(monitoria.history)
       && monitoria.history.some((entry: { action?: string }) =>
         /Monitoria Reavaliada|Monitoria aprovada pelo Gestor/i.test(entry?.action || ''));
+    const managerConclusion = qualityFinalizationNote(monitoria.history);
     const generatedHtml = buildEvaluationHtml({
       outcome: resolvedOutcome,
-      evaluatorNote: finalDecision
+      evaluatorNote: managerConclusion || (finalDecision
         ? `Após reavaliação, a monitoria foi concluída com nota ${rawScore.toFixed(2).replace('.', ',')}%. O ticket foi validado; esta decisão substitui o apontamento anterior.`
-        : monitoria.evaluator_note ?? null,
+        : monitoria.evaluator_note ?? null),
       satisfactionRecordText: monitoria.satisfaction_has_record
         ? monitoria.satisfaction_record_text ?? null
         : null,
