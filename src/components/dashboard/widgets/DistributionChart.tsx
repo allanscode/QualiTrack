@@ -14,6 +14,7 @@ import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useChartRevealAnimation } from './useChartRevealAnimation';
+import { AnimatedNumber } from './AnimatedNumber';
 
 const CustomTooltip = ({ active, payload, total }: any) => {
   if (!active || !payload?.length) return null;
@@ -134,7 +135,7 @@ function DistributionChart({
         dominantBaseline="central"
         className="text-[9px] font-black drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] select-none pointer-events-none"
       >
-        {`${(percent * 100).toFixed(0)}%`}
+        <AnimatedNumber value={percent * 100} active={animateChart} suffix="%" />
       </text>
     );
   };
@@ -237,13 +238,13 @@ function DistributionChart({
         {data.length > 0 ? (
           <div className="flex-1 min-h-0 flex flex-row items-center justify-between gap-2">
             <div ref={chartRevealRef} className="w-[120px] @min-[380px]:w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer key={animateChart ? 'chart-visible' : 'chart-waiting'} width="100%" height="100%">
                 {renderChart()}
               </ResponsiveContainer>
               {/* Totalizador Central no Miolo da Rosca */}
               <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
                 <span className="text-base sm:text-lg font-black text-brand-primary leading-none tracking-tight">
-                  {total}
+                  <AnimatedNumber value={total} active={animateChart} />
                 </span>
                 <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-muted mt-0.5">
                   Total

@@ -8,6 +8,8 @@ import StatCard from '../widgets/StatCard';
 import TrendChart from '../widgets/TrendChart';
 import RankingWidget from '../widgets/RankingWidget';
 import DistributionChart from '../widgets/DistributionChart';
+import { useChartRevealAnimation } from '../widgets/useChartRevealAnimation';
+import { AnimatedNumber } from '../widgets/AnimatedNumber';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
 import ManagerDecisionHistoryTable from '../widgets/ManagerDecisionHistoryTable';
 import CriticalErrorsTable from '../widgets/CriticalErrorsTable';
@@ -260,6 +262,7 @@ export default function SupportManagerDashboard({
   activeEditingId,
   setActiveEditingId
 }: SupportManagerDashboardProps) {
+  const gradeDistributionReveal = useChartRevealAnimation();
   let dashboardData: any = {
     user: null,
     monitorias: [],
@@ -654,7 +657,7 @@ export default function SupportManagerDashboard({
         dominantBaseline="central"
         className="text-[9px] font-black drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] select-none pointer-events-none"
       >
-        {`${(percent * 100).toFixed(0)}%`}
+        <AnimatedNumber value={percent * 100} active={gradeDistributionReveal.animateChart} suffix="%" />
       </text>
     );
   };
@@ -1156,8 +1159,8 @@ export default function SupportManagerDashboard({
               <div className="flex-1 flex flex-col min-h-0">
                 {gradeDistribution.length > 0 ? (
                   <div className="flex-1 min-h-0 flex flex-row items-center justify-between gap-2">
-                    <div className="w-[120px] @min-[380px]:w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
+                    <div ref={gradeDistributionReveal.ref} className="w-[120px] @min-[380px]:w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
+                      <ResponsiveContainer key={gradeDistributionReveal.animateChart ? 'chart-visible' : 'chart-waiting'} width="100%" height="100%">
                         <PieChart>
                           <Tooltip content={<CustomTooltipCurva />} wrapperStyle={{ zIndex: 30 }} />
                           <Pie
@@ -1170,6 +1173,9 @@ export default function SupportManagerDashboard({
                             dataKey="value"
                             label={renderDonutSliceLabel}
                             labelLine={false}
+                            isAnimationActive={gradeDistributionReveal.animateChart}
+                            animationDuration={900}
+                            animationEasing="ease-out"
                           >
                             {gradeDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1180,7 +1186,7 @@ export default function SupportManagerDashboard({
                       {/* Totalizador Central */}
                       <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
                         <span className="text-base font-black text-brand-primary leading-none tracking-tight">
-                          {gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0)}
+                          <AnimatedNumber value={gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0)} active={gradeDistributionReveal.animateChart} />
                         </span>
                         <span className="text-[8px] font-black uppercase tracking-widest text-brand-muted mt-0.5">
                           Total
@@ -1200,7 +1206,7 @@ export default function SupportManagerDashboard({
                                 <span className="min-w-0 break-words uppercase font-black leading-tight" title={entry.name}>{entry.name.split(' (')[0]}</span>
                               </div>
                               <span className="text-brand-primary whitespace-nowrap font-black shrink-0">
-                                {entry.value} ({percent}%)
+                                <AnimatedNumber value={entry.value} active={gradeDistributionReveal.animateChart} /> (<AnimatedNumber value={Number(percent)} active={gradeDistributionReveal.animateChart} decimals={1} suffix="%" />)
                               </span>
                             </div>
                             <div className="w-full h-1 bg-surface-subtle rounded-full overflow-hidden">

@@ -2039,7 +2039,7 @@ function MainApp({
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto px-3.5 sm:px-6 md:px-8 pb-24 md:pb-8 pt-4 md:pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
+        <div data-dashboard-scroll-root className="flex-1 overflow-auto px-3.5 sm:px-6 md:px-8 pb-24 md:pb-8 pt-4 md:pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
           <React.Suspense fallback={<PageSkeleton dashboard={activeTab === 'dashboard'} />}>
             {activeTab === 'dashboard' && (
               <div className="animate-fade-in">

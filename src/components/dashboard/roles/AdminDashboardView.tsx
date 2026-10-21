@@ -15,6 +15,8 @@ import AgentEvaluationVolumeTable from '../widgets/AgentEvaluationVolumeTable';
 import AuditorEvaluationVolumeTable from '../widgets/AuditorEvaluationVolumeTable';
 import PositiveEvaluationExceptionsTable from '../widgets/PositiveEvaluationExceptionsTable';
 import DistributionChart from '../widgets/DistributionChart';
+import { useChartRevealAnimation } from '../widgets/useChartRevealAnimation';
+import { AnimatedNumber } from '../widgets/AnimatedNumber';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity, PieChart as PieChartIcon, ClipboardCheck, Award, Clock, ChevronRight } from 'lucide-react';
@@ -320,6 +322,8 @@ export default function AdminDashboardView({
   activeEditingId,
   setActiveEditingId
 }: AdminDashboardViewProps) {
+  const groupDistributionReveal = useChartRevealAnimation();
+  const gradeDistributionReveal = useChartRevealAnimation();
   let dashboardData: any = {
     user: null,
     monitorias: [],
@@ -778,7 +782,7 @@ export default function AdminDashboardView({
     );
   };
 
-  const renderDonutSliceLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+  const renderDonutSliceLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any, active: boolean) => {
     if (!percent || percent < 0.08) return null;
     const RADIAN = Math.PI / 180;
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -794,7 +798,7 @@ export default function AdminDashboardView({
         dominantBaseline="central"
         className="text-[9px] font-black drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] select-none pointer-events-none"
       >
-        {`${(percent * 100).toFixed(0)}%`}
+        <AnimatedNumber value={percent * 100} active={active} suffix="%" />
       </text>
     );
   };
@@ -1176,8 +1180,8 @@ export default function AdminDashboardView({
               <div className="flex-1 flex flex-col min-h-0">
                 {teamMonitoriaDistribution.length > 0 ? (
                   <div className="flex-1 min-h-0 flex flex-row items-center justify-between gap-2">
-                    <div className="w-[120px] @min-[380px]:w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
+                    <div ref={groupDistributionReveal.ref} className="w-[120px] @min-[380px]:w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
+                      <ResponsiveContainer key={groupDistributionReveal.animateChart ? 'chart-visible' : 'chart-waiting'} width="100%" height="100%">
                         <PieChart>
                           <Tooltip content={<CustomTooltipMedia />} wrapperStyle={{ zIndex: 30 }} />
                           <Pie
@@ -1188,8 +1192,11 @@ export default function AdminDashboardView({
                             outerRadius={54}
                             paddingAngle={3}
                             dataKey="value"
-                            label={renderDonutSliceLabel}
+                            label={(props) => renderDonutSliceLabel(props, groupDistributionReveal.animateChart)}
                             labelLine={false}
+                            isAnimationActive={groupDistributionReveal.animateChart}
+                            animationDuration={900}
+                            animationEasing="ease-out"
                           >
                             {teamMonitoriaDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1200,7 +1207,7 @@ export default function AdminDashboardView({
                       {/* Totalizador Central */}
                       <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
                         <span className="text-base font-black text-brand-primary leading-none tracking-tight">
-                          {teamMonitoriaDistribution.reduce((acc: number, item: any) => acc + item.value, 0)}
+                          <AnimatedNumber value={teamMonitoriaDistribution.reduce((acc: number, item: any) => acc + item.value, 0)} active={groupDistributionReveal.animateChart} />
                         </span>
                         <span className="text-[8px] font-black uppercase tracking-widest text-brand-muted mt-0.5">
                           Total
@@ -1220,7 +1227,7 @@ export default function AdminDashboardView({
                                 <span className="min-w-0 break-words uppercase font-black leading-tight" title={entry.name}>{entry.name}</span>
                               </div>
                               <span className="text-brand-primary whitespace-nowrap font-black shrink-0">
-                                {entry.value} ({percent}%)
+                                <AnimatedNumber value={entry.value} active={groupDistributionReveal.animateChart} /> (<AnimatedNumber value={Number(percent)} active={groupDistributionReveal.animateChart} decimals={1} suffix="%" />)
                               </span>
                             </div>
                             <div className="w-full h-1 bg-surface-subtle rounded-full overflow-hidden">
@@ -1318,8 +1325,8 @@ export default function AdminDashboardView({
               <div className="flex-1 flex flex-col min-h-0">
                 {gradeDistribution.length > 0 ? (
                   <div className="flex-1 min-h-0 flex flex-row items-center justify-between gap-2">
-                    <div className="w-[120px] @min-[380px]:w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
+                    <div ref={gradeDistributionReveal.ref} className="w-[120px] @min-[380px]:w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
+                      <ResponsiveContainer key={gradeDistributionReveal.animateChart ? 'chart-visible' : 'chart-waiting'} width="100%" height="100%">
                         <PieChart>
                           <Tooltip content={<CustomTooltipCurva />} wrapperStyle={{ zIndex: 30 }} />
                           <Pie
@@ -1330,8 +1337,11 @@ export default function AdminDashboardView({
                             outerRadius={54}
                             paddingAngle={3}
                             dataKey="value"
-                            label={renderDonutSliceLabel}
+                            label={(props) => renderDonutSliceLabel(props, gradeDistributionReveal.animateChart)}
                             labelLine={false}
+                            isAnimationActive={gradeDistributionReveal.animateChart}
+                            animationDuration={900}
+                            animationEasing="ease-out"
                           >
                             {gradeDistribution.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1342,7 +1352,7 @@ export default function AdminDashboardView({
                       {/* Totalizador Central */}
                       <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
                         <span className="text-base font-black text-brand-primary leading-none tracking-tight">
-                          {gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0)}
+                          <AnimatedNumber value={gradeDistribution.reduce((acc: number, item: any) => acc + item.value, 0)} active={gradeDistributionReveal.animateChart} />
                         </span>
                         <span className="text-[8px] font-black uppercase tracking-widest text-brand-muted mt-0.5">
                           Total
@@ -1362,7 +1372,7 @@ export default function AdminDashboardView({
                                 <span className="min-w-0 break-words uppercase font-black leading-tight" title={entry.name}>{entry.name.split(' (')[0]}</span>
                               </div>
                               <span className="text-brand-primary whitespace-nowrap font-black shrink-0">
-                                {entry.value} ({percent}%)
+                                <AnimatedNumber value={entry.value} active={gradeDistributionReveal.animateChart} /> (<AnimatedNumber value={Number(percent)} active={gradeDistributionReveal.animateChart} decimals={1} suffix="%" />)
                               </span>
                             </div>
                             <div className="w-full h-1 bg-surface-subtle rounded-full overflow-hidden">

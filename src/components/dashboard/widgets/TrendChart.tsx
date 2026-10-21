@@ -202,7 +202,7 @@ function TrendChart({
           </div>
         )}
         <div ref={chartRevealRef} className="flex-1 min-h-[150px] print:h-[220px]" style={{ minWidth: 0, minHeight: 150 }}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer key={animateChart ? 'chart-visible' : 'chart-waiting'} width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
               <defs>
                 {dataKeys.map(dk => (

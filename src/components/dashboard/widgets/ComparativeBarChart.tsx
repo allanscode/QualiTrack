@@ -177,7 +177,7 @@ function ComparativeBarChart({
         )
       )}
       <div ref={chartRevealRef} className="flex-1 min-h-[150px]" style={{ minWidth: 0, minHeight: 150 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer key={animateChart ? 'chart-visible' : 'chart-waiting'} width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }} barGap={4} barSize={20}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />
             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--brand-muted)', fontWeight: 700 }} dy={8} />

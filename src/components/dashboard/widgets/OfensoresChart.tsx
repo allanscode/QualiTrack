@@ -297,7 +297,7 @@ function OfensoresChart({
                 </div>
               ) : (
                 <div ref={offendersReveal.ref} className="flex-1 min-h-[180px] print:h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={offendersReveal.animateChart ? 'chart-visible' : 'chart-waiting'} width="100%" height="100%">
                     <BarChart
                       data={ofensores}
                       layout="vertical"
@@ -385,7 +385,7 @@ function OfensoresChart({
                 </div>
               ) : (
                 <div ref={positiveReveal.ref} className="flex-1 min-h-[180px] print:h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={positiveReveal.animateChart ? 'chart-visible' : 'chart-waiting'} width="100%" height="100%">
                     <BarChart
                       data={acertos}
                       layout="vertical"
@@ -463,7 +463,7 @@ function OfensoresChart({
           <Header />
 
           <div ref={compactReveal.ref} className="flex-1 min-h-0" style={{ minWidth: 0, minHeight: 150 }}>
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer key={compactReveal.animateChart ? 'chart-visible' : 'chart-waiting'} width="100%" height="100%">
               <BarChart
                 data={ofensores}
                 layout="vertical"
