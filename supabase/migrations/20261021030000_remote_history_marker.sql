@@ -1,0 +1,3 @@
+-- The production migration history contains this version with statements=NULL.
+-- This marker preserves local/remote version alignment without reapplying SQL.
+-- Do not add application SQL here unless the original migration is recovered.
