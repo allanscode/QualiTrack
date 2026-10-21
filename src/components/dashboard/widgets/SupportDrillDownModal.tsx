@@ -112,7 +112,8 @@ export function SupportDrillDownContent({
         })
       );
     }
-    onClose();
+    // Preserve the drilldown behind the monitoria details. Closing the details
+    // returns to this list with its existing search and scroll position.
   };
 
   return createPortal(

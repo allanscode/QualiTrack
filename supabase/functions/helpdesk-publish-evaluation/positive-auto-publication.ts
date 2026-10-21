@@ -1,6 +1,7 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 import type { HelpdeskProvider } from './types.ts';
 import { buildEvaluationHtml } from './template.ts';
+import { qualityFinalizationNote } from './final-decision.ts';
 
 type Publication = { monitoria_id: string; ticket_id: string; lease_id: string; source: 'positive_csat' | 'final_decision' | 'final_verdict' };
 type Monitoria = {
@@ -8,6 +9,7 @@ type Monitoria = {
   form_id: string; form_snapshot: { automation?: string; ticket_kind?: string } | null;
   evaluator_id: string; evaluator_note: string | null; satisfaction_result: string | null;
   satisfaction_has_record: boolean; satisfaction_record_text: string | null;
+  history: unknown;
 };
 const CHILD_FORM_IDS = new Set([
   '6c7d1e88-841b-4da9-9a66-9f1464ce896f',
@@ -34,7 +36,7 @@ export async function processPositiveAutoPublication(db: SupabaseClient, provide
   let outcome: 'positiva' | 'negativa' = 'positiva';
   try {
     const { data, error } = await db.from('monitorias')
-      .select('id,ticket_id,active,status,score,form_id,evaluator_id,evaluator_note,satisfaction_result,satisfaction_has_record,satisfaction_record_text,form_snapshot')
+      .select('id,ticket_id,active,status,score,form_id,evaluator_id,evaluator_note,satisfaction_result,satisfaction_has_record,satisfaction_record_text,form_snapshot,history')
       .eq('id',work.monitoria_id).maybeSingle();
     if (error) throw error;
     const monitoria = data as Monitoria | null;
@@ -82,8 +84,9 @@ export async function processPositiveAutoPublication(db: SupabaseClient, provide
     }
     publicationClaim = claimed.data as string;
     const finalDecision = work.source !== 'positive_csat';
+    const managerConclusion = qualityFinalizationNote(monitoria.history);
     const htmlBody = buildEvaluationHtml({
-      outcome, evaluatorNote: monitoria.evaluator_note,
+      outcome, evaluatorNote: managerConclusion || monitoria.evaluator_note,
       satisfactionRecordText: monitoria.satisfaction_has_record ? monitoria.satisfaction_record_text : null,
     });
     const { externalCommentId, externalTicketId } = await provider.publishEvaluation({

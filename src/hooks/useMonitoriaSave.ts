@@ -131,19 +131,34 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
         const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
         const selectedTeam = deps.teams.find(t => t.id === managementTeamId);
         const isPositive = isChild ? verdict === 'valido' : isEvaluationValid(deps.score);
-        const requiresPjReview = !isChild && (deps.initialData?.pj_review_required === true
-          || (selectedTeam?.requires_pj_review === true && !isPositive));
+        const qualityManagerFinalizesValidScore = deps.isAdminEdit
+          && ['gestor_qualidade', 'admin'].includes(deps.user?.role || '')
+          && !!deps.initialData
+          && ['pendente_revisao', 'aguardando_gestor_suporte'].includes(deps.initialData.status)
+          && isPositive
+          && Number(deps.initialData.score) !== Number(deps.score);
+        const requiresPjReview = !isChild && (qualityManagerFinalizesValidScore
+          ? false
+          : deps.initialData?.pj_review_required === true
+            || (selectedTeam?.requires_pj_review === true && !isPositive));
+        if (qualityManagerFinalizesValidScore) {
+          historyNote = `${historyNote || 'Ajuste de nota'} | Conclusão pela Gestão da Qualidade: nota final >=75%, sem nova aprovação do Gestor de Suporte`;
+        }
         const reopensPjReview = deps.isAdminEdit && deps.initialData?.status === 'concluida'
           && deps.initialData.pj_review_required !== true && requiresPjReview;
         let nextStatus: MonitoriaStatus;
         if (deps.isAdminEdit) {
           nextStatus = reopensPjReview ? 'pendente_revisao'
-            : (deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao'));
+            : (qualityManagerFinalizesValidScore
+              ? 'concluida'
+              : (deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao')));
         } else {
           nextStatus = isPositive && !requiresPjReview ? 'concluida' : 'aguardando_gestor_suporte';
         }
 
-        const historyAction = deps.isAdminEdit
+        const historyAction = qualityManagerFinalizesValidScore
+          ? 'Veredito final ajustado pela Gestão da Qualidade (nota >=75%)'
+          : deps.isAdminEdit
           ? 'Edição pelo Administrador'
           : deps.isReevaluating
             ? (requiresPjReview ? 'Monitoria Reavaliada (Aguardando gestor PJ)'
