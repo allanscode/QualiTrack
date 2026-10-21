@@ -1,27 +1,32 @@
-# Conciliação QWP / Zendesk — 20/10/2026
+# QWP / Zendesk reconciliation - 20/10/2026
 
-A conclusão final ativa do QWP foi tratada como fonte oficial. Foram comparadas 183 monitorias finais e seus tickets do Zendesk.
+The final active QWP decision was treated as the source of truth. We compared 183 final monitorias and their Zendesk tickets.
 
-- **143 tickets** foram verificados no Zendesk com campo de avaliação, marcador de análise, tags de veredito e tag de filho alinhados ao QWP.
-- **40 tickets** permanecem divergentes. Todos estão em solved; o QWP registra
-egativa e o Zendesk ainda mostra positiva.
-- A API do Zendesk recusou a atualização desses 40 com HTTP 422: o campo obrigatório **Categoria** (ID 40618174555540) está vazio e o Zendesk o exige para atualizar tickets resolvidos. O valor não foi inferido, nem alterei Categoria, status, comentários ou outros campos.
-- Os PUTs tentados enviaram apenas campos de avaliação e tags, sem comment ou status. Conflitos e rate limits foram tratados reconsultando os tickets; o estado final foi verificado novamente por GET.
-- Tickets bloqueados: 183659, 183792, 183990, 184811, 184905, 185126, 185756, 185934, 186114, 186129, 186362, 186368, 186467, 186472, 186493, 186549, 186573, 186806, 187011, 187019, 187021, 187027, 187053, 187079, 187126, 187132, 187166, 187195, 187212, 187219, 187256, 187264, 187269, 187345, 187391, 187401, 187413, 187440, 187467, 187707.
+- **143 tickets** were verified with the evaluation field and verdict tags aligned to QWP.
+- **40 tickets** remain divergent. Every one is `solved`; QWP says `negativa` while Zendesk still says `positiva`.
+- Zendesk rejected updates for these 40 with HTTP 422 because required field **Categoria** (ID `40618174555540`) is blank. Zendesk requires it to update solved tickets. We did not infer or modify Category, status, comments, or other ticket data.
+- Every attempted update sent only evaluation fields and tags, with no `comment` or `status`. Final state was re-read from Zendesk.
+- The blocked ticket IDs and each ticket's final values are in the CSV evidence below.
 
-Arquivos de evidência:
+Evidence files:
 
-- 2026-10-20-qwp-zendesk-final-verification.csv: estado final lido diretamente no Zendesk, comparado com o veredito QWP.
-- 2026-10-20-qwp-zendesk-correction-results.csv: resultado por ticket e exceção Zendesk.
-- 2026-10-20-qwp-zendesk-divergences.csv: comparação inicial e resultado QWP esperado.
+- `2026-10-20-qwp-zendesk-final-verification.csv`: final Zendesk state compared with the QWP verdict.
+- `2026-10-20-qwp-zendesk-correction-results.csv`: per-ticket correction result and blocking exception.
+- `2026-10-20-qwp-zendesk-divergences.csv`: initial comparison and expected QWP verdict.
 
-## Correções de código aplicadas
+## Code changes
 
-- Publicadores padrão e de chamados filhos atualizam o campo de avaliação e as tags positiva/
-egativa, nalisado_qa e, para filhos, qwp_filho_avaliado, removendo o marcador de veredito oposto.
-- Tickets fechados recebem apenas campos e tags; os publicadores não enviam comentário nem status.
-- Fichas regulares com marcador antigo de filho voltam ao cálculo normal; erros críticos deixam de zerar score automaticamente e passam a exigir revisão humana.
-- Fila de filhos ganhou a ação de avaliação manual.
-- Migrações 20261020220000 e 20261020230000 foram aplicadas no banco de produção.
+- Standard and child publishers now align the evaluation field and tags `positiva`/`negativa`, `analisado_qa`, and `qwp_filho_avaliado` for children. They remove the opposite verdict tag.
+- Closed tickets receive only field and tag updates; publishers omit comments and status.
+- Regular forms with a stale child marker use normal score calculation. Critical errors no longer zero scores automatically and instead require human review.
+- The child queue has a manual evaluation action.
+- Migrations `20261020220000` and `20261020230000` were applied to production.
 
-Para concluir os 40 casos bloqueados, será necessário decidir o valor de Categoria a partir da tag categoria_* já existente, ou ajustar a regra obrigatória no Zendesk. Nenhuma dessas alterações foi feita nesta reconciliação.
+## Critical-error score reconciliation
+
+The first migration did not select candidates because localized history text was encoded differently from the stored history. The complementary migration `20261021001000` selected the untouched cohorts by status, source, resolution, and history shape:
+
+- **299** positive-CSAT AI monitorias still awaiting human review had their normal scores recalculated. They remain pending with answers, evidence, and critical-error records intact.
+- **4** automatically completed deadline monitorias had their normal scores recalculated. They remain concluded; all recalculated scores are below 75%, so their negative verdict remains.
+- Human decisions, manager-edited records, and contestations were preserved.
+- The private audit table records all 303 previous zero scores and their recalculated scores.
