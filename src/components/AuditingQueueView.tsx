@@ -2001,38 +2001,54 @@ export default function AuditingQueueView({
   const renderChildQueueActions = (ticket: AuditingQueueTicket, evaluation?: ChildTicketAiEvaluation) => {
     const evaluating = isEvaluatingTicket(ticket.ticket_id);
     const hasSavedMonitoria = Boolean(ticket.monitoria_id && onOpenExistingMonitoria);
-    const canStartNewForm = canAudit && Boolean(evaluation);
+    const hasAiDraft = Boolean(drafts[ticket.ticket_id] || ticket.saved_ai_draft);
+    const shouldVerifyEvaluation = canAudit && Boolean(evaluation)
+      && (!hasSavedMonitoria || hasAiDraft);
 
     return (
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-surface-border pt-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {hasSavedMonitoria ? (
-            <Button size="sm" variant="primary" onClick={() => onOpenExistingMonitoria?.(ticket.monitoria_id!)}>
-              <Eye className="h-3.5 w-3.5" /> Ver monitoria existente
+          {ticket.saved_ai_draft && !drafts[ticket.ticket_id] ? (
+            <Badge variant="warning" size="xs">Carregando rascunho IA...</Badge>
+          ) : shouldVerifyEvaluation ? (
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={evaluating}
+              onClick={() => { void handleStartChildAudit(ticket); }}
+              className="h-9 bg-emerald-600 px-3 text-white shadow-xs hover:bg-emerald-700"
+              title="Abrir a ficha oficial e conferir as respostas sugeridas pela IA"
+            >
+              <CheckSquare className="h-3.5 w-3.5" /> Verificar Avaliação
             </Button>
-          ) : canStartNewForm ? (
-            <Button size="sm" variant="primary" disabled={evaluating} onClick={() => { void handleStartChildAudit(ticket); }}>
-              <FileText className="h-3.5 w-3.5" /> Abrir ficha de monitoria
+          ) : hasSavedMonitoria ? (
+            <Button size="sm" variant="outline" onClick={() => onOpenExistingMonitoria?.(ticket.monitoria_id!)}>
+              <Eye className="h-3.5 w-3.5" /> Ver monitoria existente
             </Button>
           ) : canAudit ? (
             <Button size="sm" variant="primary" disabled={evaluating} onClick={() => setChildGuidelineModalTicket(ticket)}>
-              {evaluating ? <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} /> : <><Bot className="h-3.5 w-3.5" /> Conferir com IA</>}
+              {evaluating ? <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} /> : <><Bot className="h-3.5 w-3.5" /> Avaliar com IA</>}
             </Button>
           ) : null}
+          {shouldVerifyEvaluation && hasSavedMonitoria && ticket.monitoria_id && (
+            <Button size="sm" variant="outline" onClick={() => onOpenExistingMonitoria?.(ticket.monitoria_id!)}>
+              <Eye className="h-3.5 w-3.5" /> Ver monitoria existente
+            </Button>
+          )}
           {aiFeedback[ticket.ticket_id] && <span className="max-w-64 text-xs font-normal text-brand-muted" role="status">{aiFeedback[ticket.ticket_id]}</span>}
         </div>
 
         {(canAudit || evaluation || hasSavedMonitoria) && (
-          <details className="group w-full shrink-0 sm:w-auto">
+          <details className="group relative shrink-0">
             <summary role="button" className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg border border-surface-border px-3 text-xs font-semibold text-brand-muted transition-colors hover:bg-surface-subtle hover:text-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-highlight [&::-webkit-details-marker]:hidden">
               Mais ações
               <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
             </summary>
-            <div className="mt-1.5 flex w-full flex-col gap-1 rounded-xl border border-surface-border bg-surface-card p-1.5 shadow-premium sm:min-w-52">
+            <div className="absolute right-0 top-full z-[80] mt-1.5 flex w-56 max-w-[calc(100vw-2rem)] flex-col gap-1 rounded-xl border border-surface-border bg-surface-card p-1.5 shadow-premium">
               {evaluation && <Button size="sm" variant="ghost" className="justify-start" onClick={() => setChildPreviewTicket(ticket)}>
                 <Bot className="h-3.5 w-3.5" /> Ver Parecer IA
               </Button>}
-              {canStartNewForm && hasSavedMonitoria && <Button size="sm" variant="ghost" className="justify-start" disabled={evaluating} onClick={() => { void handleStartChildAudit(ticket); }}>
+              {hasSavedMonitoria && evaluation && <Button size="sm" variant="ghost" className="justify-start" disabled={evaluating} onClick={() => { void handleStartChildAudit(ticket); }}>
                 <FileText className="h-3.5 w-3.5" /> Abrir nova ficha com IA
               </Button>}
               {canAudit && <Button size="sm" variant="ghost" className="justify-start" disabled={evaluating} onClick={() => { void handleStartManualChildAudit(ticket); }}>

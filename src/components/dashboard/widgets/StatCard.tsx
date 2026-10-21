@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
 import Card from '../../ui/Card';
 import { m, AnimatePresence, useMotionValue, useTransform, animate } from 'motion/react';
@@ -345,7 +346,7 @@ function StatCard({
       </Card>
 
       <AnimatePresence>
-        {showOnlineModal && (
+        {showOnlineModal && createPortal((
           <div className="fixed inset-0 flex items-center justify-center z-[999]" onClick={() => setShowOnlineModal(false)}>
             {/* Backdrop */}
             <m.div
@@ -361,7 +362,10 @@ function StatCard({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-              className="relative w-full max-w-md mx-4 bg-surface-card border border-surface-border rounded-3xl shadow-2xl p-6 overflow-hidden z-10"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="online-users-modal-title"
+              className="relative flex max-h-[min(80dvh,36rem)] w-[calc(100vw-2rem)] max-w-md flex-col bg-surface-card border border-surface-border rounded-3xl shadow-2xl p-5 sm:p-6 overflow-hidden z-10"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -371,7 +375,7 @@ function StatCard({
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                   </div>
-                  <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">
+                  <h3 id="online-users-modal-title" className="text-sm font-black text-brand-primary uppercase tracking-widest">
                     Usuários Conectados ({displayedOnlineUsers.length})
                   </h3>
                 </div>
@@ -386,7 +390,7 @@ function StatCard({
               </div>
 
               {/* List */}
-              <div className="max-h-80 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              <div className="min-h-0 flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                 {displayedOnlineUsers.length === 0 ? (
                   <div className="text-xs text-brand-muted py-6 text-center font-semibold">
                     Nenhum usuário ativo no momento
@@ -427,7 +431,7 @@ function StatCard({
               </div>
             </m.div>
           </div>
-        )}
+        ), document.body)}
       </AnimatePresence>
     </>
   );

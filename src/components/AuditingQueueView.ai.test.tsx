@@ -85,6 +85,21 @@ describe('IA de chamados filhos', () => {
     expect(onStartAudit.mock.calls[0][0].ticket_id).toBe('7331');
     expect(mocks.evaluateChildTicketWithAI).not.toHaveBeenCalled();
   });
+  it('exibe verificação verde para avaliação de IA e mantém Mais ações flutuante', async () => {
+    mocks.fetchQueueTickets.mockResolvedValue({
+      tickets: [{ ...ticket('7332'), child_evaluation: result }],
+      hasMore: false,
+    });
+    renderQueue();
+
+    const verifyButton = await screen.findByRole('button', { name: 'Verificar Avaliação' });
+    expect(verifyButton.className).toContain('bg-emerald-600');
+
+    fireEvent.click(screen.getByText(/Mais/));
+    const reportButton = await screen.findByRole('button', { name: 'Ver Parecer IA' });
+    expect(reportButton.parentElement?.className).toContain('absolute');
+  });
+
   afterEach(cleanup);
 
   it.each(['negativas', 'proativas', 'positivas', 'filhos', 'filhos_invalidos'] as const)('filtra monitorias salvas sem ocultar pareceres de IA em %s', async activeSubTab => {
@@ -178,7 +193,7 @@ describe('IA de chamados filhos', () => {
     let finish!: (evaluation: ChildTicketAiEvaluation) => void;
     mocks.evaluateChildTicketWithAI.mockImplementation(() => new Promise<ChildTicketAiEvaluation>(resolve => { finish = resolve; }));
     renderQueue();
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Conferir com IA' }))[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Avaliar com IA' }))[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Iniciar Auditoria com IA' }));
     await waitFor(() => expect(mocks.evaluateChildTicketWithAI).toHaveBeenCalledTimes(1));
     const close = screen.getByRole('button', { name: /^Continuar em segundo plano$/ });
@@ -282,7 +297,7 @@ describe('revisão automática persistida dos filhos', () => {
     const onStartAudit = vi.fn();
     renderQueue({ activeSubTab: 'filhos', currentUserId: 'admin', currentUserRole: 'qualidade', forms: [childForm], onStartAudit });
     expect(await screen.findByText('Revisão necessária · abaixo de 75%')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Abrir ficha de monitoria' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar Avaliação' }));
     await waitFor(() => expect(onStartAudit).toHaveBeenCalledTimes(1));
     const prefill = onStartAudit.mock.calls[0][0];
     expect(prefill).toMatchObject({ ticket_id: '777', form_id: CHILD_TICKET_FORM_ID, evaluated_id: 'agent',
@@ -304,6 +319,6 @@ describe('revisão automática persistida dos filhos', () => {
       ticket_snapshot: { ...childDraft.ticket_snapshot!, status: 'closed' },
     }]);
     renderQueue({ activeSubTab: 'filhos', currentUserId: 'admin', currentUserRole: 'qualidade', forms: [childForm] });
-    expect(await screen.findByRole('button', { name: 'Abrir ficha de monitoria' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Verificar Avaliação' })).toBeInTheDocument();
   });
 });
