@@ -209,6 +209,7 @@ describe('useMonitoriaSave', () => {
       },
       isAdminEdit: true,
       auditorRecordRegenerated: true,
+      qualityDecisionNote: 'Ficha corrigida e contestação aprovada.',
     } as unknown as Parameters<typeof useMonitoriaSave>[0];
     deps.header.evaluator_note = 'New AI record for the updated result.';
 
@@ -222,6 +223,72 @@ describe('useMonitoriaSave', () => {
       resolution_type: 'human',
       action_deadline_at: null,
     });
-    expect(db.update.mock.calls[0][0].history[0].action).toContain('Contesta');
+    expect(db.update.mock.calls[0][0].history.at(-1).action).toContain('Contesta');
+  });
+
+  it('concludes an already corrected child contest with a regenerated Auditor Record and the manager decision', async () => {
+    const onSaved = vi.fn();
+    db.update.mockImplementation(() => ({ eq: async () => ({ error: null }) }));
+    const deps = {
+      ...pjDeps(0, onSaved),
+      user: { id: 'quality-manager', name: 'Quality Manager', role: 'gestor_qualidade' },
+      header: {
+        ...pjDeps(0, onSaved).header,
+        form_id: '6c7d1e88-841b-4da9-9a66-9f1464ce896f',
+        evaluator_note: 'New AI record for the valid child ticket.',
+      },
+      selectedForm: { id: '6c7d1e88-841b-4da9-9a66-9f1464ce896f', sections: [{ questions: [{ id: 'pergunta' }] }] },
+      initialData: {
+        id: 'monitoria-189065', status: 'aguardando_gestor_qualidade', score: null,
+        evaluator_note: 'Old record.', answers: { pergunta: 'SIM' }, contestation_result: 'pending',
+        _qualityDecisionNote: 'O chamado pai foi considerado na avaliação; ficha validada.',
+        history: [
+          { action: 'Contestação realizada pelo Gestor de Suporte', at: '2026-10-21T15:54:00Z', by_id: 'support', by_name: 'Support' },
+          { action: 'Edição pelo Administrador', at: '2026-10-21T16:05:00Z', by_id: 'quality-manager', by_name: 'Quality Manager', note: 'Critério alterado: NAO → SIM' },
+        ],
+      },
+      scores: { pergunta: 'SIM' },
+      isAdminEdit: true,
+      isQualityContestReview: true,
+      auditorRecordRegenerated: true,
+      qualityDecisionNote: 'O chamado pai foi considerado na avaliação; ficha validada.',
+    } as unknown as Parameters<typeof useMonitoriaSave>[0];
+
+    const { result } = renderHook(() => useMonitoriaSave(deps));
+    act(() => result.current.handleSave());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-189065', 'concluida'));
+    const payload = db.update.mock.calls[0][0];
+    expect(payload).toMatchObject({ status: 'concluida', contestation_result: 'approved', child_verdict: 'valido' });
+    expect(payload.history.at(-1).note).toBe('O chamado pai foi considerado na avaliação; ficha validada.');
+  });
+
+  it.each([
+    ['child ticket', '6c7d1e88-841b-4da9-9a66-9f1464ce896f', null, 0],
+    ['regular ticket', 'form-1', 60, 80],
+  ])('records a new completion event when editing a concluded %s to a valid result', async (_label, formId, oldScore, newScore) => {
+    const onSaved = vi.fn();
+    db.update.mockImplementation(() => ({ eq: async () => ({ error: null }) }));
+    const base = pjDeps(newScore, onSaved);
+    const deps = {
+      ...base,
+      user: { id: 'quality-manager', name: 'Quality Manager', role: 'gestor_qualidade' },
+      header: { ...base.header, form_id: formId, evaluator_note: 'Updated Auditor Record.' },
+      selectedForm: { id: formId, sections: [{ questions: [{ id: 'pergunta' }] }] },
+      initialData: {
+        id: 'monitoria-editada', status: 'concluida', score: oldScore,
+        evaluator_note: 'Old Auditor Record.', answers: { pergunta: 'NAO' }, history: [],
+      },
+      scores: { pergunta: 'SIM' },
+      isAdminEdit: true,
+    } as unknown as Parameters<typeof useMonitoriaSave>[0];
+
+    const { result } = renderHook(() => useMonitoriaSave(deps));
+    act(() => result.current.handleSave());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-editada', 'concluida'));
+    const payload = db.update.mock.calls[0][0];
+    expect(payload.history.at(-1).action).toBe('Monitoria concluída com veredito válido após revisão');
+    expect(payload.status).toBe('concluida');
   });
 });

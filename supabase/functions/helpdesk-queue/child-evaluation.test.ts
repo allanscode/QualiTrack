@@ -139,4 +139,34 @@ describe('destinatário de Nova Demanda no histórico de abertura', () => {
     expect(corrected.checks.find(check => check.question_id === 'child-creator-authorized')?.answer).toBe('NA');
     expect(corrected.status).toBe('atencao');
   });
+
+  it('aprova o direcionamento de Apoio Análise Técnica ao outro agente N2', () => {
+    const result = { ...routingFailure(), detected_type: 'apoio_tecnico' };
+    const evidence = { ...childCreationRoutingEvidence(creationAudit(71, 72))!,
+      initialAssigneeGroupName: 'Análise Técnica - Revenda' };
+    const corrected = reconcileChildOpeningRouting(result, evidence);
+    expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')).toMatchObject({ answer: 'SIM', passed: true });
+    expect(corrected.checks.find(check => check.question_id === 'child-creator-authorized')).toMatchObject({ answer: 'NA', passed: false });
+    expect(corrected.summary).toContain('direcionamento ao agente de Análise Técnica está correto');
+  });
+
+  it('pede conferência quando a equipe do agente de apoio não é comprovada', () => {
+    const result = { ...routingFailure(), detected_type: 'apoio_tecnico' };
+    const corrected = reconcileChildOpeningRouting(result, childCreationRoutingEvidence(creationAudit(71, 72)));
+    expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')).toMatchObject({ answer: 'NA', passed: false });
+  });
+
+  it('não confunde autoatribuição com o fluxo de apoio técnico', () => {
+    const result = { ...evaluation(), detected_type: 'apoio_tecnico' };
+    const evidence = { ...childCreationRoutingEvidence(creationAudit(71, 71))!, creatorGroupName: 'Atendimento' };
+    const corrected = reconcileChildOpeningRouting(result, evidence);
+    expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')).toMatchObject({ answer: 'NAO', passed: false });
+  });
+
+  it('reprova um destinatário de apoio comprovadamente fora da Análise Técnica', () => {
+    const result = { ...evaluation(), detected_type: 'apoio_tecnico' };
+    const evidence = { ...childCreationRoutingEvidence(creationAudit(71, 72))!, initialAssigneeGroupName: 'Financeiro' };
+    const corrected = reconcileChildOpeningRouting(result, evidence);
+    expect(corrected.checks.find(check => check.question_id === 'child-routing-correct')).toMatchObject({ answer: 'NAO', passed: false });
+  });
 });

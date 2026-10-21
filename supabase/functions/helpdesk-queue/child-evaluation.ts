@@ -11,6 +11,7 @@ export interface ChildCreationRoutingEvidence {
   initialGroupId: number | null;
   selfAssigned: boolean;
   creatorGroupName?: string;
+  initialAssigneeGroupName?: string;
 }
 
 export function forbiddenChildCreatorGroup(groupName: string | undefined): boolean {
@@ -64,10 +65,18 @@ export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
   }
   const routing = result.checks.find(check => check.question_id === 'child-routing-correct');
   const creator = result.checks.find(check => check.question_id === 'child-creator-authorized');
-  const expectedAnswer = evidence ? (evidence.selfAssigned ? 'SIM' : 'NAO') : null;
+  const isSpecialistSupport = result.detected_type === 'apoio_tecnico';
+  const specialistSupport = isSpecialistSupport && evidence && !evidence.selfAssigned;
+  const specialistGroupConfirmed = specialistSupport
+    && /\banalise tecnica\b/.test((evidence.initialAssigneeGroupName || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
+  const expectedAnswer: ChildAnswer | null = !evidence ? null
+    : isSpecialistSupport
+      ? evidence.selfAssigned ? 'NAO' : specialistGroupConfirmed ? 'SIM'
+        : evidence.initialAssigneeGroupName ? 'NAO' : 'NA'
+      : evidence.selfAssigned ? 'SIM' : 'NAO';
   const creatorAnswer: ChildAnswer = evidence?.selfAssigned && evidence.creatorGroupName
     ? (forbiddenChildCreatorGroup(evidence.creatorGroupName) ? 'NAO' : 'SIM') : 'NA';
-  if ((!routing || !expectedAnswer || routing.answer === expectedAnswer)
+  if (!isSpecialistSupport && (!routing || !expectedAnswer || routing.answer === expectedAnswer)
     && (!creator || creator.answer === creatorAnswer)) {
     const withoutScore = { ...result };
     delete withoutScore.score;
@@ -75,8 +84,16 @@ export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
   }
 
   const checks = result.checks.map(check => check.question_id === 'child-routing-correct' && expectedAnswer && check.answer !== expectedAnswer
-    ? { ...check, answer: expectedAnswer, passed: evidence!.selfAssigned,
-      details: evidence!.selfAssigned
+    ? { ...check, answer: expectedAnswer, passed: expectedAnswer === 'SIM',
+      details: isSpecialistSupport && evidence!.selfAssigned
+        ? 'Para Apoio Análise Técnica, o atendente deve abrir o filho e atribuí-lo a outro agente da equipe técnica que prestou apoio; a autoatribuição não atende a essa regra.'
+        : specialistSupport && specialistGroupConfirmed
+        ? `O histórico de abertura confirma que o atendente criou o filho e o atribuiu ao agente de ${evidence!.initialAssigneeGroupName} que prestou apoio técnico. Esse direcionamento é o esperado para Apoio Análise Técnica.`
+        : specialistSupport && !evidence!.initialAssigneeGroupName
+        ? 'O filho foi atribuído a outro agente na abertura, como esperado para apoio técnico, mas a equipe desse agente não foi confirmada. Confira se ele pertence à Análise Técnica.'
+        : specialistSupport
+        ? `O destinatário inicial pertence à equipe ${evidence!.initialAssigneeGroupName}, não à Análise Técnica exigida para esta macro.`
+        : evidence!.selfAssigned
         ? 'O histórico de criação do Zendesk confirma que o chamado filho foi atribuído inicialmente ao agente que o abriu. O grupo técnico é o destino do ticket pai; a equipe exibida junto ao nome do agente não torna o filho irregular.'
         : 'O histórico de criação do Zendesk mostra que o destinatário inicial do chamado filho era outro usuário, diferente do agente que o abriu.' }
     : check.question_id === 'child-creator-authorized' && check.answer !== creatorAnswer
@@ -92,6 +109,12 @@ export function reconcileChildOpeningRouting<T extends ChildEvaluation>(
   const otherFailures = checks.filter(check => check.question_id !== 'child-routing-correct' && check.answer === 'NAO');
   const summary = creatorAnswer === 'NAO'
     ? `O chamado filho foi criado pela equipe ${evidence!.creatorGroupName}, o que viola o Manual de ticket filho e exige invalidação após conferência do auditor.`
+    : isSpecialistSupport && evidence?.selfAssigned
+    ? 'Em Apoio Análise Técnica, o filho deve ser atribuído a outro agente da equipe técnica que prestou o apoio.'
+    : specialistSupport && specialistGroupConfirmed
+    ? status === 'conforme'
+      ? 'O chamado de Apoio Análise Técnica foi atribuído ao agente técnico que apoiou o atendente; os demais critérios estão conformes.'
+      : 'O direcionamento ao agente de Análise Técnica está correto. Confira os demais critérios e a equipe de origem do chamado.'
     : evidence?.selfAssigned
     ? status === 'conforme'
       ? 'A atribuição inicial do chamado filho ao próprio agente está correta e os demais critérios da abertura estão conformes.'

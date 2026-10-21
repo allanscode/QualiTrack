@@ -89,8 +89,8 @@ export async function extractGuidelineFileContent(file: File): Promise<string> {
 
 export const DEFAULT_CHILD_TICKET_GUIDELINE: AIEvaluationGuideline = {
   id: 'guideline-child-tickets-pop-v1',
-  title: 'Manual de ticket filho — versão 1.4',
-  content: `# Manual de ticket filho — versão 1.4
+  title: 'Manual de ticket filho — versão 1.5',
+  content: `# Manual de ticket filho — versão 1.5
 
 ## 1. Visão Geral e Objetivo
 Este manual normatiza a criação de chamados filhos (Side Conversations) abertos a partir de tickets do Zendesk na operação WebPosto. A ficha atual de abertura avalia assunto, texto da macro e direcionamento; o manual também estabelece governança de tags e campos obrigatórios.
@@ -107,7 +107,7 @@ Este manual normatiza a criação de chamados filhos (Side Conversations) aberto
 
 3. **Apoio Análise Técnica:**
    - Utilizado quando é solicitada consultoria ou apoio pontual de um especialista técnico N2 sem transferir a titularidade do chamado.
-   - Direcionamento: O filho inicia no nome do agente que o abriu; pode ser encaminhado depois ao Analista Técnico N2 que prestou a consultoria.
+   - Direcionamento: O atendente abre o filho e o atribui diretamente a outro agente da equipe de Análise Técnica que prestou a consultoria. Não exija autoatribuição nesta macro.
 
 4. **Proatividade:**
    - Utilizado para registrar contato proativo com o cliente. O filho inicia atribuído ao agente que realizou o contato e o campo "Tipo de Ticket" deve ser Proatividade.
@@ -118,17 +118,17 @@ Este manual normatiza a criação de chamados filhos (Side Conversations) aberto
 - **Regra 2: Preservação do Texto da Macro com Enriquecimento:**
   O texto-base da macro deve ser mantido. Um resumo claro e específico da demanda, ainda que breve, deve permitir a continuidade do atendimento. Versões, acessos, identificadores, testes e logs são exemplos condicionados à pertinência e à disponibilidade; campos opcionais vazios não reprovam por si só. Não exija senhas ou credenciais no relato.
 - **Regra 3: Direcionamento Correto ("Para"):**
-  Todo chamado filho inicia atribuído ao agente que o abriu. Em Análise Técnica, o ticket pai vai para o grupo especialista; o filho pode ser encaminhado depois, com rastreabilidade. A equipe mostrada junto ao nome do agente não invalida a autoatribuição.
+  Em Apoio Análise Técnica, o atendente abre o filho e atribui a outro agente da equipe de Análise Técnica que prestou o apoio. Nas demais macros, o filho inicia atribuído ao agente que o abriu. Em Enviar para Análise Técnica, o ticket pai vai para o grupo especialista. A equipe mostrada junto ao nome do agente não altera a identidade do destinatário.
 - **Regra 4: Tags e campos obrigatórios:**
   Preserve as tags criadas pelas macros e mantenha os campos obrigatórios preenchidos conforme o tipo de chamado. A ficha atual não possui critério específico para pontuar tags.
 - **Regra 5: Equipe criadora autorizada (crítica):**
   A equipe de Análise Técnica ou de Análise de Correções não pode criar tickets filhos. Se o histórico de abertura comprovar que o criador pertencia a uma dessas equipes, a abertura é não conforme e pode ser invalidada, ainda que o filho tenha sido autoatribuído. Verifique a equipe do criador na abertura; grupo atual, destino do pai ou nome da macro isolados não provam a infração. Sem evidência suficiente, exija conferência humana.
 `,
-  file_name: 'Manual_de_ticket_filho_v1.4.md',
+  file_name: 'Manual_de_ticket_filho_v1.5.md',
   file_path: '',
   active: true,
   created_at: '2026-09-01T00:00:00Z',
-  updated_at: '2026-10-09T00:00:00Z',
+  updated_at: '2026-10-21T00:00:00Z',
 };
 
 export async function fetchAIGuidelines(): Promise<AIEvaluationGuideline[]> {

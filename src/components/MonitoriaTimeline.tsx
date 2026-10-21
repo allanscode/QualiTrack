@@ -62,7 +62,11 @@ export default function MonitoriaTimeline({ monitoria, user, users }: Props) {
             : resolveTimelineActor(entry.by_id, entry.by_name, users, user?.role);
           const normalizedAction = normalizeTimelineText(entry.action);
           const actor = users.find(item => item.id === entry.by_id);
-          const displayAction = actor?.role === 'gestor_qualidade'
+          const reviewedAfterContestation = /edição pelo administrador|edição pela gestão da qualidade/i.test(normalizedAction)
+            && history.slice(0, index).some(previous => /contestação realizada pelo gestor de suporte/i.test(normalizeTimelineText(previous.action)));
+          const displayAction = reviewedAfterContestation
+            ? 'Revisão da ficha na etapa da Qualidade'
+            : actor?.role === 'gestor_qualidade'
             && /edição pelo administrador/i.test(normalizedAction)
             ? 'Edição pela Gestão da Qualidade'
             : normalizedAction;
@@ -82,7 +86,12 @@ export default function MonitoriaTimeline({ monitoria, user, users }: Props) {
                   </time>
                 </div>
                 <p className="mt-1 pl-[22px] text-[11px] font-medium text-brand-muted">{actorName}</p>
-                {entry.note && <TimelineNote text={normalizeTimelineText(entry.note)} variant={event.variant} />}
+                {entry.note && (
+                  <div>
+                    {reviewedAfterContestation && <span className="mt-2 block text-[10px] font-bold uppercase tracking-wide text-brand-muted">Alterações técnicas da ficha</span>}
+                    <TimelineNote text={normalizeTimelineText(entry.note)} variant={event.variant} />
+                  </div>
+                )}
                 {entry.attachments && entry.attachments.length > 0 && (
                   <div className="mt-2 min-w-0"><ActionAttachmentsViewer attachments={entry.attachments} compact /></div>
                 )}

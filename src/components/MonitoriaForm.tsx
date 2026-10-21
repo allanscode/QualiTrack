@@ -531,8 +531,18 @@ export default function MonitoriaForm({
   const [helpdeskModal, setHelpdeskModal] = useState<{ monitoriaId: string; fromConclusion: boolean } | null>(null);
   const [childPublishModal, setChildPublishModal] = useState<{ monitoriaId: string; fromConclusion: boolean } | null>(null);
   const [generatingAuditorRecord, setGeneratingAuditorRecord] = useState(false);
+  const [qualityDecisionNote, setQualityDecisionNote] = useState(
+    (initialData as (Monitoria & { _qualityDecisionNote?: string }) | undefined)?._qualityDecisionNote || '',
+  );
   const [auditorRecordFingerprint, setAuditorRecordFingerprint] = useState('');
-  const currentAuditorInputFingerprint = JSON.stringify({ scores, observations, criticalErrors, criticalErrorObservations });
+  const sortedEntries = <T,>(values: Record<string, T>) => Object.entries(values).sort(([left], [right]) => left.localeCompare(right));
+  const currentAuditorInputFingerprint = JSON.stringify({
+    formId: header.form_id,
+    scores: sortedEntries(scores),
+    observations: sortedEntries(observations),
+    criticalErrors: sortedEntries(criticalErrors),
+    criticalErrorObservations: sortedEntries(criticalErrorObservations),
+  });
 
   const canSendToHelpdesk = isViewOnly
     && !isChildEvaluation
@@ -565,6 +575,7 @@ export default function MonitoriaForm({
     isReevaluating,
     isAdminEdit,
     isQualityContestReview,
+    qualityDecisionNote,
     auditorRecordRegenerated: auditorRecordFingerprint === currentAuditorInputFingerprint,
     header,
     scores,
@@ -620,7 +631,7 @@ export default function MonitoriaForm({
         selected && !!criticalErrorObservations[id]?.trim(),
       );
 
-    if (!hasCurrentObservation && !isQualityContestReview) {
+    if (!hasCurrentObservation && !isAdminEdit) {
       toast.error('Adicione ao menos uma observação na etapa de Avaliação antes de gerar o registro.');
       return;
     }
@@ -1656,9 +1667,23 @@ export default function MonitoriaForm({
                 </div>
               )}
               <div className="space-y-4">
+                {isAdminEdit && initialData?.status === 'aguardando_gestor_qualidade' && (
+                  <div className="space-y-2">
+                    <label htmlFor="quality-decision-note" className="text-[10px] font-black uppercase text-brand-muted tracking-widest">
+                      Decisão da Gestão da Qualidade *
+                    </label>
+                    <textarea
+                      id="quality-decision-note"
+                      value={qualityDecisionNote}
+                      onChange={event => setQualityDecisionNote(event.target.value)}
+                      className="w-full min-h-24 rounded-xl border border-surface-border bg-surface-card p-4 text-xs text-brand-primary focus:border-brand-accent focus:outline-none"
+                      placeholder="Explique a revisão da ficha e a decisão final"
+                    />
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center justify-between gap-3 px-1">
                   <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest">Registro do Auditor</p>
-                  {!isViewOnly && !isReevaluating && (!isChildFormId(header.form_id) || isQualityContestReview) && (
+                  {!isViewOnly && !isReevaluating && (!isChildFormId(header.form_id) || isAdminEdit) && (
                     <Button
                       type="button"
                       size="sm"

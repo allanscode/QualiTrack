@@ -1,8 +1,8 @@
 # Manual de Avaliação de Tickets Filhos (QA / QualiTrack)
 ## Guia Operacional de Conformidade, Auditoria e Validação de Macros do Zendesk
 
-> **Versão:** 1.4 — Atualização Outubro / 2026
-> **Referência Técnica:** Manual de ticket filho (versão 1.4)
+> **Versão:** 1.5 — Atualização Outubro / 2026
+> **Referência Técnica:** Manual de ticket filho (versão 1.5)
 > **Plataforma:** Zendesk Support & Side Conversations (Conversas Paralelas)  
 > **Público-Alvo:** Monitores de Qualidade (QA), Supervisores de Suporte e Analistas de Atendimento  
 
@@ -81,19 +81,19 @@ flowchart TD
 
 ### Quesito 3: Direcionamento Correto do Campo "Para" (Side Conversation Assignee / Grupo)
 
-* **Regra de Roteamento:** O chamado filho deve iniciar atribuído ao agente que o abriu. No escalonamento para Análise Técnica, o chamado pai segue para o grupo especialista correspondente; o filho pode ser encaminhado depois, mantendo a rastreabilidade da abertura. O grupo exibido ao lado do nome de um agente não significa que o filho tenha sido atribuído diretamente ao grupo.
+* **Regra de Roteamento:** Em Apoio Análise Técnica, o atendente abre o chamado filho e o atribui a outro agente da equipe de Análise Técnica que prestou o apoio. Nas demais macros, o filho inicia atribuído ao agente que o abriu. No escalonamento para Análise Técnica, o chamado pai segue para o grupo especialista correspondente. O grupo exibido ao lado do nome de um agente não significa que o filho tenha sido atribuído diretamente ao grupo.
 
 | Tipo de Demanda / Macro | O que selecionar no campo "Para"? | Motivo Operacional | Erro Crítico a Evitar |
 | :--- | :--- | :--- | :--- |
 | **🛠 Enviar para Análise Técnica** *(Cliente Final, Revenda, Fiscal, Contábil, Correções, Dev)* | **O agente que abriu o filho** | O pai segue para o grupo técnico especialista, podendo ter um agente atribuído. O filho registra a atividade do agente de origem e pode ser encaminhado depois. | Confundir o grupo de destino do pai com o destinatário inicial do filho. |
 | **🆕 Registrar Nova Demanda** *(Geral ou Mais Pagamentos)* | **O PRÓPRIO ANALISTA (Você mesmo / Auto-atribuição)** | O atendente que identificou a demanda fica responsável pelo acompanhamento do ciclo de vida até a entrega. | Atribuir para terceiros ou deixar sem atribuição. |
-| **👐 Apoio Análise Técnica** | **O agente que abriu o filho** | O apoio técnico N2 pode recebê-lo posteriormente quando o fluxo justificar. | Perder a rastreabilidade de quem solicitou o apoio. |
+| **👐 Apoio Análise Técnica** | **Outro agente da Análise Técnica que prestou o apoio** | O atendente abre o filho e direciona ao especialista apoiador, preservando a autoria de quem pediu ajuda. | Reprovar a ausência de autoatribuição ou atribuir a agente fora da equipe técnica. |
 | **⚡ Operação Mais Pagamentos** | **O agente que abriu o filho** | A operação e a marca são específicas; o fluxo do pai deve ser verificado separadamente. | Confundir a equipe de operação com o destinatário inicial do filho. |
 
 * **Critério de Avaliação do QA:**
-  * **Conforme:** O histórico de abertura mostra o próprio agente como destinatário inicial do filho; o fluxo do pai segue a demanda quando houver evidência disponível.
+  * **Conforme:** O histórico de abertura mostra o próprio agente como destinatário inicial nas macros comuns. Em Apoio Análise Técnica, mostra outro agente da equipe técnica como destinatário inicial.
   * **Não Conforme (Reprovado):**
-    - Chamado filho inicialmente atribuído a outro usuário, sem justificativa ou rastreabilidade do agente que o abriu.
+    - Chamado filho inicialmente atribuído a outro usuário fora da regra da macro, sem justificativa ou rastreabilidade do agente que o abriu.
     - Ticket pai comprovadamente encaminhado ao grupo especialista incorreto.
 
 ---
@@ -136,7 +136,7 @@ Ao auditar um chamado na fila de **Triagem de Chamados Filhos**, execute o segui
 
 - [ ] **1. Assunto:** O título da abertura corresponde à macro, considerando prefixo e ID do pai? Se o ticket foi resolvido, a mudança automática de assunto pela macro de resolvido foi aceita?
 - [ ] **2. Texto:** A mensagem estrutural da macro foi mantida? Há um resumo claro da demanda que permita continuá-la, com dados técnicos apenas quando pertinentes?
-- [ ] **3. Destinatário ("Para"):** O filho foi atribuído inicialmente ao agente que o abriu? Em Análise Técnica, o pai foi encaminhado ao grupo especialista correto quando houver evidência?
+- [ ] **3. Destinatário ("Para"):** Nas macros comuns, o filho foi atribuído ao agente que o abriu? Em Apoio Análise Técnica, foi atribuído a outro agente da equipe técnica que prestou o apoio? No escalonamento, o pai seguiu ao grupo especialista quando houver evidência?
 - [ ] **4. Chamado Pai Vinculado:** O ID do chamado pai (`parent_ticket_id` / `problem_id`) foi capturado e validado corretamente?
 - [ ] **5. Equipe Criadora:** O histórico de abertura confirma que o criador não pertencia à Análise Técnica nem à Análise de Correções? Se não houver prova, encaminhe para conferência humana.
 

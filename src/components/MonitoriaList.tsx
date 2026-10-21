@@ -688,6 +688,10 @@ export default function MonitoriaList({
                     noteLabel = 'Justificativa da Contestação';
                     notePlaceholder = 'Descreva detalhadamente a justificativa para contestar a avaliação (obrigatório)...';
                     noteRequired = true;
+                  } else if (isQualityContestApproval) {
+                    noteLabel = 'Decisão da Gestão da Qualidade';
+                    notePlaceholder = 'Explique a aprovação e a correção realizada na ficha...';
+                    noteRequired = true;
                   } else if ((user?.role === 'gestor_qualidade' || user?.role === 'admin')
                     && actionModal.type === 'aprovar' && currentSt === 'pendente_revisao') {
                     noteLabel = 'Conclusão da Gestão da Qualidade';
@@ -704,7 +708,7 @@ export default function MonitoriaList({
                   }
 
                   const showNoteField = (
-                    (actionModal.type === 'aprovar' && !isQualityContestApproval) ||
+                    actionModal.type === 'aprovar' ||
                     actionModal.type === 'aceitar' ||
                     actionModal.type === 'reabrir' ||
                     actionModal.type === 'contestar' ||
@@ -986,6 +990,10 @@ export default function MonitoriaList({
                                 setActionModal(null);
                                 void load();
                                 toast.info('A etapa da monitoria foi atualizada. Confira o status antes de decidir.');
+                                return;
+                              }
+                              if (!actionNote.trim()) {
+                                toast.error('Registre a decisão da Gestão da Qualidade antes de continuar.');
                                 return;
                               }
                               setViewingMonitoria({ ...current, _qualityContestReview: true, _qualityDecisionNote: actionNote.trim() } as Monitoria);

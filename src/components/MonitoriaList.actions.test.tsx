@@ -85,6 +85,8 @@ describe('MonitoriaList actions', () => {
     fixture.status = 'aguardando_gestor_qualidade';
     render(<ListWithSelectedMonitoria />);
     fireEvent.click(await screen.findByRole('button', { name: 'Aprovar' }));
+    fireEvent.change(screen.getByPlaceholderText(/Explique a aprovação/), { target: { value: 'A ficha foi corrigida e aprovada.' } });
+    expect(screen.getByPlaceholderText(/Explique a aprovação/)).toHaveValue('A ficha foi corrigida e aprovada.');
     fireEvent.click(screen.getByRole('button', { name: /Confirmar/ }));
     expect(await screen.findByText(/Ficha/)).toBeInTheDocument();
     expect(updateMonitoria).not.toHaveBeenCalled();

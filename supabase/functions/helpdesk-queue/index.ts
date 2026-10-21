@@ -3119,7 +3119,7 @@ async function loadChildCreationRoutingEvidence(ticketId: string): Promise<Child
     );
     if (!response.ok) return null;
     const evidence = childCreationRoutingEvidence(await response.json());
-    if (!evidence?.selfAssigned || !evidence.initialGroupId) return evidence;
+    if (!evidence?.initialGroupId) return evidence;
     const groupResponse = await fetch(`https://${subdomain}.zendesk.com/api/v2/groups/${evidence.initialGroupId}.json`, {
       headers: { Authorization: `Basic ${btoa(`${email}/token:${token}`)}`, Accept: 'application/json' },
       signal: AbortSignal.timeout(10_000),
@@ -3127,7 +3127,8 @@ async function loadChildCreationRoutingEvidence(ticketId: string): Promise<Child
     if (!groupResponse.ok) return evidence;
     const group = (await groupResponse.json())?.group;
     return group?.id === evidence.initialGroupId && typeof group.name === 'string'
-      ? { ...evidence, creatorGroupName: group.name } : evidence;
+      ? { ...evidence, initialAssigneeGroupName: group.name,
+          ...(evidence.selfAssigned ? { creatorGroupName: group.name } : {}) } : evidence;
   } catch {
     return null;
   }
@@ -3165,7 +3166,7 @@ async function handleEvaluateChildTicket(
   }
   const routingEvidence = await loadChildCreationRoutingEvidence(ticket_id);
   const routingEvidenceText = routingEvidence
-    ? `Criador do chamado filho no histórico de abertura: Zendesk ID ${routingEvidence.creatorId}.\nDestinatário (Para) escolhido na abertura: Zendesk ID ${routingEvidence.initialAssigneeId}.\nGrupo associado ao destinatário na abertura: ${routingEvidence.initialGroupId ?? 'não informado'}.\nAutoatribuição na abertura: ${routingEvidence.selfAssigned ? 'SIM, IDs iguais' : 'NÃO, IDs diferentes'}.\nEquipe criadora comprovada na abertura: ${routingEvidence.creatorGroupName || 'não confirmada'}.`
+    ? `Criador do chamado filho no histórico de abertura: Zendesk ID ${routingEvidence.creatorId}.\nDestinatário (Para) escolhido na abertura: Zendesk ID ${routingEvidence.initialAssigneeId}.\nGrupo associado ao destinatário na abertura: ${routingEvidence.initialAssigneeGroupName || routingEvidence.initialGroupId || 'não informado'}.\nAutoatribuição na abertura: ${routingEvidence.selfAssigned ? 'SIM, IDs iguais' : 'NÃO, IDs diferentes'}.\nEquipe criadora comprovada na abertura: ${routingEvidence.creatorGroupName || 'não confirmada'}.`
     : 'Histórico de criação indisponível; não presuma que o grupo exibido ao lado do nome indique destinatário incorreto.';
 
   const responseSchema = {
@@ -3213,7 +3214,7 @@ async function handleEvaluateChildTicket(
   };
 
   const prompt = `Você é um auditor sênior de qualidade da WebPosto especialista em auditoria de Chamados Filhos (Side Conversations do Zendesk).
-Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base no manual vigente abaixo. Em caso de conflito com uma regra resumida neste prompt, o manual vigente prevalece.
+Sua função é verificar a CONFORMIDADE DE ABERTURA do chamado filho com base no manual vigente abaixo. A regra atualizada de Apoio Análise Técnica na seção 3 deste prompt prevalece sobre qualquer instrução anterior de autoatribuição dessa macro no manual; nos demais pontos, o manual vigente prevalece.
 
 MANUAL VIGENTE: ${childGuideline.title}
 ${childGuideline.content}
@@ -3263,13 +3264,14 @@ O monitor de qualidade avalia OBRIGATORIAMENTE os seguintes quesitos fundamentai
   * O Zendesk exibe grupo e analista juntos ("Grupo / Nome"). O grupo é a equipe do analista; sua presença NÃO significa que o chamado foi atribuído ao grupo em vez da pessoa.
   * Para verificar a autoatribuição, compare os IDs do criador e do destinatário no HISTÓRICO DE ABERTURA abaixo. Se forem iguais, marque o direcionamento SIM, independentemente do nome do grupo.
 - "Apoio Análise Técnica":
-  * O chamado filho inicia atribuído ao agente que o abriu; o apoio técnico N2 pode recebê-lo depois, quando o fluxo justificar.
+  * O atendente abre o chamado filho e o atribui ao OUTRO agente da Análise Técnica que prestou o apoio. IDs diferentes de criador e destinatário são esperados nesta macro.
+  * Marque direcionamento SIM se o histórico confirma o outro agente e o grupo de Análise Técnica; se o grupo do destinatário não puder ser comprovado, marque NA e peça conferência humana. Não reprove pela ausência de autoatribuição.
 - "Proatividade":
   * O chamado filho inicia atribuído ao agente que realizou o contato proativo.
 - "Mais Pagamentos":
   * A operação e a marca podem ser Mais Pagamentos; isso não altera a regra de que o FILHO inicia no nome do agente que o abriu. Verifique separadamente o fluxo do PAI quando houver dados.
 - Check "Direcionamento Correto ('Para')" deve validar essa correspondência com rigor.
- - Para TODAS as macros de chamado filho identificadas, compare no histórico de abertura os IDs do criador e do destinatário inicial. Se forem iguais, o direcionamento inicial do FILHO está conforme; não exija que o filho tenha sido atribuído ao grupo técnico.
+ - Compare no histórico de abertura os IDs do criador e do destinatário inicial. Autoatribuição é conforme para as demais macros; em Apoio Análise Técnica o destinatário esperado é OUTRO agente da equipe de Análise Técnica.
  - Avalie o encaminhamento do ticket PAI somente se houver dados do pai. Se o pai não puder ser verificado, marque o vínculo como NA e não transforme a autoatribuição correta do filho em falha.
 
 =============================================================================

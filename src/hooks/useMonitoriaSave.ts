@@ -15,6 +15,7 @@ interface SaveHookDeps {
   isReevaluating: boolean;
   isAdminEdit: boolean;
   isQualityContestReview: boolean;
+  qualityDecisionNote?: string;
   auditorRecordRegenerated: boolean;
   header: Record<string, any>;
   scores: Record<string, 'SIM' | 'NAO' | 'NA'>;
@@ -118,6 +119,22 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
     const evaluationChanged = isChild
       ? Object.keys({ ...deps.initialData?.answers, ...deps.scores }).some(key => deps.initialData?.answers?.[key] !== deps.scores[key])
       : Number(deps.initialData?.score) !== Number(deps.score);
+    const priorQualityCorrection = (() => {
+      const history = deps.initialData?.history || [];
+      const lastContestation = history.reduce((index, entry, currentIndex) =>
+        /contestação realizada pelo gestor de suporte|contestação.*gestor de suporte/i.test(entry.action)
+          ? currentIndex : index, -1);
+      return lastContestation >= 0 && history.slice(lastContestation + 1).some(entry =>
+        /edição pelo administrador|edição pela gestão da qualidade|ficha revisada pela gestão da qualidade/i.test(entry.action)
+        && /critério|score:|erro crítico|nota/i.test(entry.note || '')
+      );
+    })();
+    const alreadyCorrectedAndValid = priorQualityCorrection
+      && (isChild ? childVerdict(deps.scores, deps.selectedForm) === 'valido' : isEvaluationValid(deps.score));
+    if ((deps.isQualityContestReview || isQualityManagerContestationEdit) && !deps.qualityDecisionNote?.trim()) {
+      toast.error('Registre a decisão da Gestão da Qualidade antes de concluir.');
+      return;
+    }
     const currentAuditorRecord = String(deps.header.evaluator_note || '').trim();
     const previousAuditorRecord = String(deps.initialData?.evaluator_note || '').trim();
     if (deps.initialData && evaluationChanged && !deps.isQualityContestReview
@@ -125,7 +142,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
       toast.error('A ficha alterou o resultado. Atualize o Registro do Auditor antes de salvar para que ele corresponda ao novo cálculo.');
       return;
     }
-    if ((deps.isQualityContestReview || isQualityManagerContestationEdit) && !evaluationChanged) {
+    if ((deps.isQualityContestReview || isQualityManagerContestationEdit) && !evaluationChanged && !alreadyCorrectedAndValid) {
       toast.error('Ajuste as respostas da ficha para recalcular o score antes de concluir.');
       return;
     }
@@ -179,20 +196,26 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
         const evaluatedUser = deps.allUsers.find(u => u.id === deps.header.evaluated_id);
         const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
         const isPositive = isChild ? verdict === 'valido' : isEvaluationValid(deps.score);
+        const wasPositive = deps.initialData
+          ? isChild
+            ? childVerdict(deps.initialData.answers || {}, deps.selectedForm) === 'valido'
+            : isEvaluationValid(Number(deps.initialData.score))
+          : false;
+        const outcomeUpgraded = deps.isAdminEdit && !!deps.initialData && !wasPositive && isPositive;
         const qualityManagerFinalizesValidScore = deps.isAdminEdit
           && ['gestor_qualidade', 'admin'].includes(deps.user?.role || '')
           && !!deps.initialData
           && ['pendente_revisao', 'aguardando_gestor_suporte'].includes(deps.initialData.status)
           && isPositive
-          && Number(deps.initialData.score) !== Number(deps.score);
+          && outcomeUpgraded;
         const qualityManagerFinalizesContest = (deps.isQualityContestReview || isQualityManagerContestationEdit)
           && ['gestor_qualidade', 'admin'].includes(deps.user?.role || '')
           && deps.initialData?.status === 'aguardando_gestor_qualidade'
-          && evaluationChanged
+          && (evaluationChanged || alreadyCorrectedAndValid)
           && isPositive;
         const requiresPjReview = false;
         if (qualityManagerFinalizesValidScore) {
-          historyNote = `${historyNote || 'Ajuste de nota'} | Conclusão pela Gestão da Qualidade: nota final >=75%, sem nova aprovação do Gestor de Suporte`;
+          historyNote = `${historyNote || 'Ajuste da ficha'} | Conclusão pela Gestão da Qualidade: ${isChild ? 'todos os critérios válidos' : 'nota final >=75%'}, sem nova aprovação do Gestor de Suporte`;
         }
         let nextStatus: MonitoriaStatus;
         if (deps.isAdminEdit) {
@@ -206,7 +229,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
         const historyAction = qualityManagerFinalizesContest
           ? 'Contesta\u00E7\u00E3o aprovada e monitoria conclu\u00EDda pela Gest\u00E3o da Qualidade'
           : qualityManagerFinalizesValidScore
-          ? 'Veredito final ajustado pela Gestão da Qualidade (nota >=75%)'
+          ? (isChild ? 'Veredito válido e monitoria concluída pela Gestão da Qualidade' : 'Monitoria concluída pela Gestão da Qualidade (nota >=75%)')
           : deps.isAdminEdit && deps.user?.role === 'gestor_qualidade'
           ? 'Edição pela Gestão da Qualidade'
           : deps.isAdminEdit
@@ -215,13 +238,26 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
             ? (isPositive ? 'Monitoria Reavaliada (Concluida)' : 'Monitoria Reavaliada (Procedente)')
             : (nextStatus === 'concluida' ? 'Monitoria Criada e Concluída' : 'Monitoria Criada e encaminhada ao Gestor de Suporte');
 
+        const qualityDecisionNote = deps.qualityDecisionNote?.trim();
         const historyEntry: MonitoriaHistoryEntry = {
           action: historyAction,
           by_id: currentUser.id,
           by_name: currentUser.name,
           at: nowTs,
-          note: [historyNote, qualityManagerFinalizesContest ? (deps.initialData as (Monitoria & { _qualityDecisionNote?: string }) | undefined)?._qualityDecisionNote : ''].filter(Boolean).join(' | ') || undefined
+          note: qualityManagerFinalizesContest ? qualityDecisionNote : historyNote
         };
+        const historyEntries: MonitoriaHistoryEntry[] = qualityManagerFinalizesContest && historyNote
+          ? [{ action: 'Alterações da ficha pela Gestão da Qualidade', by_id: currentUser.id, by_name: currentUser.name, at: nowTs, note: historyNote }, historyEntry]
+          : [historyEntry];
+        if (outcomeUpgraded && nextStatus === 'concluida' && !qualityManagerFinalizesContest && !qualityManagerFinalizesValidScore) {
+          historyEntries.push({
+            action: 'Monitoria concluída com veredito válido após revisão',
+            by_id: currentUser.id,
+            by_name: currentUser.name,
+            at: nowTs,
+            note: isChild ? 'Todos os critérios do chamado filho estão válidos.' : `Nota final: ${deps.score}%.`,
+          });
+        }
 
         // Existing monitorias retain their saved deadline. The new policy only
         // applies to the first save of a pending monitoria on a new ticket.
@@ -303,7 +339,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
                 || (deps.initialData as any)?.form_snapshot?.child_ai_evaluation,
             } : {}),
           },
-          history: [...(deps.initialData?.history || []), historyEntry],
+          history: [...(deps.initialData?.history || []), ...historyEntries],
           action_deadline_at: nextStatus === 'concluida'
             ? null
             : (deps.initialData?.action_deadline_at || getDeadline()),
