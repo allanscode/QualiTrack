@@ -151,8 +151,7 @@ function DistributionChart({
           dataKey="value"
           label={renderCustomLabel}
           labelLine={false}
-          isAnimationActive={!shouldReduceMotion}
-          animationDuration={850}
+          isAnimationActive={!shouldReduceMotion} animationDuration={900} animationEasing="ease-out"
         >
           {data.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={entry.color} />

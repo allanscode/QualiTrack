@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Info } from 'lucide-react';
 import Card from '../../ui/Card';
-import { animate, m, AnimatePresence, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
+import { m, AnimatePresence, useInView, useMotionValue, useTransform, animate } from 'motion/react';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { usePresence } from '../../../providers/PresenceProvider';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
@@ -61,38 +61,41 @@ const ROLE_LABELS: Record<string, string> = {
   suporte: 'Agente de Atendimento',
 };
 
-function AnimatedMetricValue({ value }: { value: string | number }) {
-  const raw = String(value);
-  const match = raw.match(/^([^\d-]*)(-?\d+(?:\.\d+)?)(.*)$/);
-  const reduceMotion = useReducedMotion();
-  const parsed = match ? Number(match[2]) : null;
-  const count = useMotionValue(0);
-  const precision = match?.[2].includes('.') ? match[2].split('.')[1].length : 0;
-  const display = useTransform(count, current => {
-    const formatted = current.toLocaleString('pt-BR', { minimumFractionDigits: precision, maximumFractionDigits: precision });
-    return `${match?.[1] || ''}${formatted}${match?.[3] || ''}`;
-  });
-
-  useEffect(() => {
-    if (parsed === null || reduceMotion) {
-      count.set(parsed ?? 0);
-      return;
-    }
-    count.set(0);
-    const controls = animate(count, parsed, { duration: 1.15, ease: [0.16, 1, 0.3, 1] });
-    return () => controls.stop();
-  }, [count, parsed, reduceMotion]);
-
-  if (parsed === null) return <>{value}</>;
-  return <m.span>{display}</m.span>;
-}
-
 function getIconBg(accent: string): string {
   if (BG_MAP[accent]) return BG_MAP[accent];
   if (accent.startsWith('text-level-')) {
     return accent.replace('text-level-', 'bg-level-');
   }
   return 'bg-slate-100 dark:bg-white/[0.04]';
+}
+
+function AnimatedNumber({ value }: { value: string | number }) {
+  const source = String(value);
+  const match = /-?\d[\d.,]*/.exec(source);
+  let numeric: number | null = typeof value === 'number' ? value : null;
+  let prefix = '';
+  let suffix = '';
+  let fractionDigits = 0;
+  if (typeof value !== 'number' && match) {
+    const token = match[0];
+    let normalized = token;
+    if (token.includes(',') && token.includes('.')) {
+      const decimalSeparator = token.lastIndexOf(',') > token.lastIndexOf('.') ? ',' : '.';
+      normalized = token.split(decimalSeparator === ',' ? '.' : ',').join('').replace(decimalSeparator, '.');
+    } else if (token.includes(',')) normalized = token.replace(',', '.');
+    else if (/^\d{1,3}(?:\.\d{3})+$/.test(token)) normalized = token.replace(/\./g, '');
+    numeric = Number.isFinite(Number(normalized)) ? Number(normalized) : null;
+    prefix = source.slice(0, match.index);
+    suffix = source.slice(match.index + token.length);
+    fractionDigits = Math.min((normalized.split('.')[1] || '').length, 2);
+  }
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const isInView = useInView(ref, { once: true, amount: 0.4 });
+  const motionValue = useMotionValue(0);
+  const rounded = useTransform(motionValue, current => current.toLocaleString('pt-BR', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }));
+  React.useEffect(() => { if (isInView && numeric !== null) { const controls = animate(motionValue, numeric, { duration: 0.9, ease: 'easeOut' }); return controls.stop; } }, [isInView, numeric, motionValue]);
+  if (numeric === null) return <>{value}</>;
+  return <span ref={ref}>{prefix}<m.span>{rounded}</m.span>{suffix}</span>;
 }
 
 function StatCard({
@@ -259,7 +262,7 @@ function StatCard({
 
   return (
     <>
-      <Card onClick={onClick} padding="none" className={`qt-metric-card px-5 py-4 flex flex-col justify-between min-h-[100px] relative z-10 hover:z-30 transition-all duration-200 ${onClick ? 'cursor-pointer active:scale-[0.99]' : ''}`}>
+      <Card onClick={onClick} padding="none" className={`px-5 py-4 flex flex-col justify-between min-h-[100px] relative z-10 hover:z-30 transition-all duration-200 ${onClick ? 'cursor-pointer active:scale-[0.99]' : ''}`}>
         <div className="flex items-center gap-3 mb-3 min-w-0">
         <div
           onClick={canEdit ? handleEditClick : undefined}
@@ -320,7 +323,7 @@ function StatCard({
               isOnlineUsersCard ? 'cursor-pointer hover:opacity-80' : ''
             }`}
           >
-            <AnimatedMetricValue value={value} />
+            <AnimatedNumber value={value} />
           </p>
           {badge}
           {comparisonDelta && (

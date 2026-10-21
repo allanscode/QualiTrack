@@ -7,11 +7,11 @@ interface MonitoriaIdBadgeProps {
 }
 
 export default function MonitoriaIdBadge({ displayId, id, className = '' }: MonitoriaIdBadgeProps) {
-  const number = displayId || id?.slice(0, 8) || 'S/N';
+  const number = displayId == null ? 'S/N' : String(displayId).padStart(6, '0');
 
   return (
     <Badge variant="info" size="xs" className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${className}`}>
-      Mon. #{number}
+      Monitoria #{number}
     </Badge>
   );
 }

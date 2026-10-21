@@ -119,7 +119,6 @@ interface ZendeskDivisionPreview {
 
 export default function TeamsManagement({ teams, groups, teamGroups, users, loadData, currentUser }: TeamsManagementProps) {
   const isReadOnly = currentUser?.role === 'gestor_suporte';
-  const canConfigurePj = currentUser?.role === 'admin' || currentUser?.role === 'gestor_qualidade';
   const [view, setView] = useState<'teams' | 'groups'>('teams');
 
   const userAllowedTeamIds = useMemo(() => {
@@ -352,14 +351,14 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
     const executeWithRetry = async (retryCount = 0): Promise<void> => {
       try {
         if (!supabase) {
-          const payload = { name: editingTeam.name, sigla: editingTeam.sigla?.toUpperCase(), description: editingTeam.description || '', icon: editingTeam.icon || 'Shield', active: true, kind: 'team' as const, parent_team_id: editingTeam.parent_team_id || null, requires_pj_review: editingTeam.requires_pj_review === true };
+          const payload = { name: editingTeam.name, sigla: editingTeam.sigla?.toUpperCase(), description: editingTeam.description || '', icon: editingTeam.icon || 'Shield', active: true, kind: 'team' as const, parent_team_id: editingTeam.parent_team_id || null };
           if (editingTeam.id) await mockDb.update('teams', editingTeam.id, payload);
           else await mockDb.insert('teams', payload);
           return;
         }
 
         await supabase.auth.getSession();
-        const payload = { name: editingTeam.name, sigla: editingTeam.sigla?.toUpperCase(), description: editingTeam.description || '', icon: editingTeam.icon || 'Shield', active: true, kind: 'team' as const, parent_team_id: editingTeam.parent_team_id || null, requires_pj_review: editingTeam.requires_pj_review === true };
+        const payload = { name: editingTeam.name, sigla: editingTeam.sigla?.toUpperCase(), description: editingTeam.description || '', icon: editingTeam.icon || 'Shield', active: true, kind: 'team' as const, parent_team_id: editingTeam.parent_team_id || null };
 
         const operation = (async () => {
           const { error } = await supabase.from('teams').upsert([{ ...(editingTeam.id ? { id: editingTeam.id } : {}), ...payload }]);
@@ -640,14 +639,6 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
           : 'Os grupos vêm do Zendesk e podem ser atendidos por várias equipes.'}</p>
       </div>
 
-      {view === 'teams' && canConfigurePj && teams.some(team => team.requires_pj_review) && (
-        <section className="rounded-2xl border border-surface-border bg-surface-card px-4 py-4 sm:px-5" aria-labelledby="pj-review-settings-title">
-          <div className="max-w-xl space-y-1">
-            <h3 id="pj-review-settings-title" className="text-sm font-bold text-brand-primary">Fluxo das equipes PJ</h3>
-            <p className="text-xs leading-relaxed text-brand-muted">Notas abaixo de 75%: a aprovação ou contestação do gestor PJ segue diretamente para a Gestão da Qualidade. Notas a partir de 75% são concluídas diretamente.</p>
-          </div>
-        </section>
-      )}
       <div className="flex gap-1 border-b border-surface-border" role="tablist" aria-label="Organização do atendimento">
         <button type="button" role="tab" aria-selected={view === 'teams'} onClick={() => setView('teams')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === 'teams' ? 'border-brand-primary text-brand-primary' : 'border-transparent text-brand-muted hover:text-brand-primary'}`}>
@@ -917,7 +908,6 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                   <div className="min-w-0">
                     <div className="flex flex-col gap-0.5">
                       <h4 className="font-black text-[11px] text-brand-primary uppercase tracking-tight leading-tight break-words">{t.name}</h4>
-                      {t.requires_pj_review && <span className="w-fit rounded-md bg-brand-accent/10 px-1.5 py-0.5 text-[9px] font-semibold text-brand-primary">Revisão PJ abaixo de 75%</span>}
                       {t.approval_manager_id && <span className="text-[10px] text-brand-muted">Aprovação: {users.find(user => user.id === t.approval_manager_id)?.name || 'gestor designado'}</span>}
                       {t.parent_team_id && <span className="text-[10px] text-brand-muted">{parentTeam ? `Subequipe de ${parentTeam.name}` : 'Subequipe'}</span>}
                       {t.sigla && <span className="w-fit px-1 py-0.5 rounded-md bg-surface-subtle text-[7px] font-black text-brand-muted border border-surface-border">{t.sigla}</span>}
@@ -1051,15 +1041,6 @@ export default function TeamsManagement({ teams, groups, teamGroups, users, load
                     <p className="text-xs text-brand-muted">Agrupa a equipe no painel. Cada gestor continua vendo apenas seus próprios agentes.</p>
                   </div>
 
-                  {canConfigurePj && (
-                    <label className="flex items-start gap-3 rounded-xl border border-surface-border bg-surface-subtle p-3 text-xs text-brand-primary">
-                      <input type="checkbox" checked={editingTeam.requires_pj_review === true}
-                        onChange={event => setEditingTeam({ ...editingTeam, requires_pj_review: event.target.checked })}
-                        className="mt-0.5 size-4 accent-brand-primary" />
-                      <span><strong className="block">Usar fluxo de aprovação PJ</strong>
-                        O gestor encaminha aprovação ou contestação ao revisor antes da decisão final da Qualidade.</span>
-                    </label>
-                  )}
                   
                   <div className="flex flex-col">
                     <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5 ml-0.5 block">Sigla</label>

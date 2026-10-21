@@ -6,7 +6,7 @@ import { MonitoriaRow } from './MonitoriaRow';
 vi.mock('./ui/ActionDeadlineClock', () => ({ default: () => null }));
 
 const monitoria = {
-  id: 'm-1', form_id: 'regular', evaluator_id: 'auditor', evaluated_id: 'agente',
+  id: 'm-1', display_id: 42, form_id: 'regular', evaluator_id: 'auditor', evaluated_id: 'agente',
   ticket_id: '173388', channel: 'Email', ticket_date: '2026-10-05', analysis_date: '2026-10-06',
   satisfaction_result: null, satisfaction_has_record: false, answers: {}, score: 76.25,
   status: 'concluida', history: [], created_at: '2026-10-06T12:00:00Z', updated_at: '2026-10-06T12:00:00Z',
@@ -20,7 +20,7 @@ function row(item: Monitoria) {
 describe('identificação de ticket filho na lista', () => {
   it('mostra o selo depois do número para monitoria antiga marcada como filho', () => {
     row({ ...monitoria, form_snapshot: { ticket_kind: 'chamado_filho' } as unknown as Monitoria['form_snapshot'] });
-    expect(screen.getByText('Mon. #m-1')).toHaveClass('rounded-full');
+    expect(screen.getByText('Monitoria #000042')).toHaveClass('rounded-full');
     expect(screen.getByText('173388').nextElementSibling).toHaveTextContent('Ticket filho');
   });
 

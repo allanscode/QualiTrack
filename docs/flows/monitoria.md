@@ -4,9 +4,11 @@
 
 O fluxo de monitoria é o core do QualiTrack. Cobre desde a criação até a conclusão, passando por contestações multi-nível, com prazos de ação automatizados.
 
-Nas equipes PJ, monitorias com nota igual ou superior a 75% são concluídas diretamente. Com nota inferior a 75%, o gestor PJ envia aprovação ou contestação com justificativa diretamente ao Gestor da Qualidade, responsável pela decisão final. A interface exibe as duas etapas e registra os pareceres no histórico. A rota é aplicada pelo banco, inclusive quando alguém chama a API diretamente. A etapa inicial do gestor PJ não é concluída pelo cron; depois que o gestor encaminha a monitoria à Gestão da Qualidade, o vencimento do prazo dessa etapa conclui automaticamente a monitoria com nota 100%.
+Todas as equipes seguem um único fluxo de monitoria. Não existe etapa separada de revisor PJ. A nota, contestação e permissões determinam as etapas padrão de agente, gestor de suporte e Gestão da Qualidade. Notas finais iguais ou acima de 75% podem ser concluídas pela Gestão da Qualidade; abaixo de 75%, a monitoria segue a fila padrão de revisão. Os campos `pj_review_*`, `teams.requires_pj_review` e a view do revisor PJ permanecem no banco apenas para compatibilidade com dados antigos e não devem abrir etapas novas.
 
 Na aprovação final pela Gestão da Qualidade, a tela mostra o veredito e o Registro do Auditor antes da confirmação. Depois de salvar a decisão, publica a macro correspondente no Zendesk e grava o recibo. Uma publicação anterior da mesma monitoria é reconhecida para evitar duplicidade. Se o Zendesk falhar, a monitoria permanece concluída e a Gestão da Qualidade recebe o erro e pode conferir o envio no detalhe da monitoria.
+
+Se a Gestão da Qualidade (incluindo o perfil administrador) corrigir a nota de uma monitoria pendente para 75% ou mais, a decisão é final: o QWP conclui a monitoria sem encaminhá-la novamente ao Gestor de Suporte. A conclusão fica registrada no histórico e a fila automática de vereditos publica no Zendesk o resultado calculado pela nota final. Para essa publicação, o comentário identifica a conclusão da Gestão da Qualidade e não reaproveita o Registro do Auditor como se fosse a decisão final.
 
 ### Chamados filhos
 

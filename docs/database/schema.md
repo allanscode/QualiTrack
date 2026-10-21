@@ -54,6 +54,7 @@ erDiagram
 
     MONITORIAS {
         uuid id PK
+        bigint display_id UK "Protocolo sequencial visível (000001+)"
         text ticket_id
         uuid evaluator_id FK
         text evaluator_name

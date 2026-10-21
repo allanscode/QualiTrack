@@ -1,7 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMonitoriaSave } from './useMonitoriaSave';
-import { CHILD_TICKET_FORM_ID } from '../lib/childTicketForm';
 
 const db = vi.hoisted(() => ({ insert: vi.fn(), update: vi.fn() }));
 vi.mock('../lib/supabase', () => ({
@@ -83,14 +82,14 @@ describe('useMonitoriaSave', () => {
     const payload = db.insert.mock.calls[0][0][0];
     expect(payload).toMatchObject({
       status: 'concluida', team_id: 'equipe-pj', team_name: 'PJ Bruno',
-      ticket_group_team_id: 'grupo-revenda', pj_review_required: false,
+      ticket_group_team_id: 'grupo-revenda',
       resolution_type: 'human',
     });
     expect(payload.history[0].action).toBe('Monitoria Criada e Concluída');
     expect(payload.action_deadline_at).toBeNull();
   });
 
-  it('encaminha uma monitoria PJ abaixo de 75 para a revisão do gestor', async () => {
+  it('usa a fila padrão do gestor para nota abaixo de 75 e não cria etapa PJ', async () => {
     const onSaved = vi.fn();
     db.insert.mockImplementation(() => ({ select: () => ({ single: async () => ({ data: { id: 'monitoria-pj' }, error: null }) }) }));
     const { result } = renderHook(() => useMonitoriaSave(pjDeps(74.99, onSaved)));
@@ -99,60 +98,10 @@ describe('useMonitoriaSave', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', 'aguardando_gestor_suporte'));
     const payload = db.insert.mock.calls[0][0][0];
     expect(payload.status).toBe('aguardando_gestor_suporte');
-    expect(payload.pj_review_required).toBe(true);
+    expect(payload).not.toHaveProperty('pj_review_required');
     expect(payload.resolution_type).toBeNull();
     expect(payload.history[0].action).toBe('Monitoria Criada e encaminhada ao Gestor de Suporte');
     expect(payload.action_deadline_at).toBeTruthy();
-  });
-
-  it('não encaminha ticket filho para revisão PJ por não possuir score', async () => {
-    const onSaved = vi.fn();
-    db.insert.mockImplementation(() => ({ select: () => ({ single: async () => ({ data: { id: 'monitoria-filho' }, error: null }) }) }));
-    const deps = pjDeps(0, onSaved);
-    deps.header.form_id = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
-    deps.scores = { 'child-question': 'NAO' };
-    deps.selectedForm = { id: deps.header.form_id, sections: [{ questions: [{ id: 'child-question' }] }] } as never;
-
-    const { result } = renderHook(() => useMonitoriaSave(deps));
-    act(() => result.current.handleSave());
-
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-filho', 'aguardando_gestor_suporte'));
-    const payload = db.insert.mock.calls[0][0][0];
-    expect(payload).toMatchObject({
-      score: null,
-      child_verdict: 'invalido',
-      status: 'aguardando_gestor_suporte',
-      pj_review_required: false,
-    });
-  });
-
-  it.each([
-    [{ first: 'SIM', second: 'NAO', third: 'NA' }, 'invalido', 'aguardando_gestor_suporte'],
-    [{ first: 'SIM', second: 'SIM', third: 'NA' }, 'invalido', 'aguardando_gestor_suporte'],
-    [{ first: 'SIM', second: 'SIM', third: 'SIM' }, 'valido', 'concluida'],
-  ] as const)('preserva as respostas do ticket filho e encaminha o veredito %s', async (scores, verdict, status) => {
-    const onSaved = vi.fn();
-    db.insert.mockImplementation(() => ({ select: () => ({ single: async () => ({ data: { id: 'monitoria-filho' }, error: null }) }) }));
-    const deps = pjDeps(0, onSaved);
-    deps.header.form_id = CHILD_TICKET_FORM_ID;
-    deps.header.evaluator_note = 'Registro do auditor';
-    deps.scores = { ...scores };
-    deps.selectedForm = {
-      id: CHILD_TICKET_FORM_ID,
-      sections: [{ questions: [{ id: 'first' }, { id: 'second' }, { id: 'third' }] }],
-    } as never;
-
-    const { result } = renderHook(() => useMonitoriaSave(deps));
-    act(() => result.current.handleSave());
-
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-filho', status));
-    const payload = db.insert.mock.calls[0][0][0];
-    expect(payload.answers).toEqual(scores);
-    expect(payload.child_verdict).toBe(verdict);
-    expect(payload.form_snapshot.child_verdict).toBe(verdict);
-    expect(payload.status).toBe(status);
-    expect(payload.score).toBeNull();
-    expect(payload.pj_review_required).toBe(false);
   });
 
   it.each([

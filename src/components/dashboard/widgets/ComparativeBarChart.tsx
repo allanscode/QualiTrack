@@ -6,7 +6,7 @@ import { BarChart3 } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
-import { m, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 
 interface DataKey {
   key: string;
@@ -36,6 +36,7 @@ function ComparativeBarChart({
   setActiveEditingId
 }: ComparativeBarChartProps) {
   const { config, saveConfig } = useQualityConfig();
+  const shouldReduceMotion = useReducedMotion();
   const [isHovered, setIsHovered] = useState(false);
   const [tempSub, setTempSub] = useState('');
 
@@ -206,7 +207,7 @@ function ComparativeBarChart({
               wrapperStyle={{ fontSize: '10px', fontWeight: 700, color: 'var(--brand-muted)', paddingTop: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
             />
             {dataKeys.map(dk => (
-              <Bar key={dk.key} dataKey={dk.key} name={dk.name} fill={dk.color} radius={[4, 4, 0, 0]} />
+              <Bar key={dk.key} dataKey={dk.key} name={dk.name} fill={dk.color} radius={[4, 4, 0, 0]} isAnimationActive={!shouldReduceMotion} animationDuration={900} animationEasing="ease-out" />
             ))}
           </BarChart>
         </ResponsiveContainer>

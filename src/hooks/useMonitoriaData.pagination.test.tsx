@@ -65,12 +65,9 @@ beforeEach(() => {
   state.ranges = [];
 });
 
-it('sorts score across all server pages and resets the reviewer merge when direction changes', async () => {
+it('sorts scores from the authorized support view without querying the legacy reviewer view', async () => {
   state.sources.vw_monitorias_suporte = Array.from({ length: 60 }, (_, index) => ({
-    ...row('own', index, index), score: index * 2,
-  }));
-  state.sources.vw_monitorias_pj_reviewer = Array.from({ length: 60 }, (_, index) => ({
-    ...row('review', index, index), score: index * 2 + 1,
+    ...row('own', index, index), score: index,
   }));
   const user = { id: 'agent', role: 'suporte', active: true } as User;
   const hook = renderHook(({ page, direction }) => useMonitoriaData(user, 'monitorias', {
@@ -79,10 +76,15 @@ it('sorts score across all server pages and resets the reviewer merge when direc
   await waitFor(() => expect(hook.result.current.monitorias.map(item => item.score)).toEqual(Array.from({ length: 50 }, (_, index) => index)));
   hook.rerender({ page: 1, direction: 'asc' });
   await waitFor(() => expect(hook.result.current.monitorias[0]?.score).toBe(50));
-  expect(hook.result.current.monitorias[49]?.score).toBe(99);
+  expect(hook.result.current.monitorias).toHaveLength(10);
   hook.rerender({ page: 0, direction: 'desc' });
-  await waitFor(() => expect(hook.result.current.monitorias[0]?.score).toBe(119));
-  expect(hook.result.current.monitorias[49]?.score).toBe(70);
+  await waitFor(() => expect(hook.result.current.monitorias[0]?.score).toBe(59));
+  expect(hook.result.current.monitorias[49]?.score).toBe(10);
+  expect(state.ranges).toEqual([
+    { source: 'vw_monitorias_suporte', from: 0, to: 49 },
+    { source: 'vw_monitorias_suporte', from: 50, to: 99 },
+    { source: 'vw_monitorias_suporte', from: 0, to: 49 },
+  ]);
 });
 afterEach(cleanup);
 
@@ -103,51 +105,17 @@ it('requests only the current 50 rows for a single-source monitoria list', async
   ]);
 });
 
-it('merges reviewer rows in order with bounded requests on every page', async () => {
-  state.sources.vw_monitorias_suporte = Array.from({ length: 70 }, (_, index) => row('own', index, 140 - index * 2));
-  state.sources.vw_monitorias_pj_reviewer = Array.from({ length: 70 }, (_, index) => row('review', index, 139 - index * 2));
-  const expected = [...state.sources.vw_monitorias_suporte, ...state.sources.vw_monitorias_pj_reviewer]
-    .sort((a, b) => b.created_at.localeCompare(a.created_at)).map(item => item.id);
-  const user = { id: 'agent', role: 'suporte', active: true } as User;
-  const hook = renderHook(({ page }) => useMonitoriaData(user, 'monitorias', { page }), { initialProps: { page: 0 } });
-  await waitFor(() => expect(hook.result.current.monitorias).toHaveLength(50));
-  expect(hook.result.current.monitorias.map(item => item.id)).toEqual(expected.slice(0, 50));
-  hook.rerender({ page: 1 });
-  await waitFor(() => expect(hook.result.current.monitorias[0]?.id).toBe(expected[50]));
-  expect(hook.result.current.monitorias.map(item => item.id)).toEqual(expected.slice(50, 100));
-  hook.rerender({ page: 2 });
-  await waitFor(() => expect(hook.result.current.monitorias[0]?.id).toBe(expected[100]));
-  expect(hook.result.current.monitorias.map(item => item.id)).toEqual(expected.slice(100, 140));
-  expect(hook.result.current.total).toBe(140);
-  expect(state.ranges).toEqual([
-    { source: 'vw_monitorias_suporte', from: 0, to: 49 },
-    { source: 'vw_monitorias_pj_reviewer', from: 0, to: 49 },
-    { source: 'vw_monitorias_suporte', from: 25, to: 74 },
-    { source: 'vw_monitorias_pj_reviewer', from: 25, to: 74 },
-    { source: 'vw_monitorias_suporte', from: 50, to: 99 },
-    { source: 'vw_monitorias_pj_reviewer', from: 50, to: 99 },
-  ]);
-});
-
-it('continues at the correct source offsets when one source dominates the first page', async () => {
+it('paginates support-manager monitorias from the assigned teams only', async () => {
   state.sources.monitorias = Array.from({ length: 70 }, (_, index) => row('team', index, 140 - index));
-  state.sources.vw_monitorias_pj_reviewer = Array.from({ length: 70 }, (_, index) => row('review', index, 70 - index));
   const user = { id: 'manager', role: 'gestor_suporte', active: true, team_ids: ['team-1'] } as User;
   const hook = renderHook(({ page }) => useMonitoriaData(user, 'monitorias', { page }), { initialProps: { page: 0 } });
   await waitFor(() => expect(hook.result.current.monitorias).toHaveLength(50));
   expect(hook.result.current.monitorias[49]?.id).toBe('team-49');
   hook.rerender({ page: 1 });
   await waitFor(() => expect(hook.result.current.monitorias[0]?.id).toBe('team-50'));
-  expect(hook.result.current.monitorias[49]?.id).toBe('review-29');
-  hook.rerender({ page: 2 });
-  await waitFor(() => expect(hook.result.current.monitorias[0]?.id).toBe('review-30'));
-  expect(hook.result.current.monitorias).toHaveLength(40);
+  expect(hook.result.current.monitorias).toHaveLength(20);
   expect(state.ranges).toEqual([
     { source: 'monitorias', from: 0, to: 49 },
-    { source: 'vw_monitorias_pj_reviewer', from: 0, to: 49 },
     { source: 'monitorias', from: 50, to: 99 },
-    { source: 'vw_monitorias_pj_reviewer', from: 0, to: 49 },
-    { source: 'monitorias', from: 70, to: 119 },
-    { source: 'vw_monitorias_pj_reviewer', from: 30, to: 79 },
   ]);
 });

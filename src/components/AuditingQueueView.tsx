@@ -117,7 +117,7 @@ const MONITORIA_STAGE_LABELS: Record<string, string> = {
   pendente_revisao: 'Em revisão',
   em_contestacao: 'Em contestação',
   aguardando_gestor_suporte: 'Aguardando gestor de suporte',
-  aguardando_revisao_pj: 'Aguardando revisão PJ',
+  aguardando_revisao_pj: 'Aguardando gestor de suporte',
   aguardando_gestor_qualidade: 'Aguardando gestor de qualidade',
   concluida: 'Concluída',
   contestacao_aceita: 'Contestação aceita',
@@ -2009,7 +2009,8 @@ export default function AuditingQueueView({
   const handleStartChildAudit = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
     const savedDraft = drafts[ticket.ticket_id];
-    const selectedChildForm = childTicketForm(forms);
+    const selectedChildForm = childTicketForm(forms)
+      || forms.find(form => form.id === CHILD_TICKET_FORM_ID && form.active !== false);
     if (!selectedChildForm) {
       toast.error('A ficha única de chamados filhos não está disponível. Avise a Gestão da Qualidade.');
       return;

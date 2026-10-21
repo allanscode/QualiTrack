@@ -4,7 +4,6 @@ import { CheckCircle2, XCircle, RotateCcw, Trash2, Pencil, AlertTriangle, Eye, P
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 import MonitoriaTimeline from './MonitoriaTimeline';
 import Button from './ui/Button';
-import PjReviewFlow from './PjReviewFlow';
 import { isChildTicketMonitoria, legacyChildNoteVerdict } from '../lib/childTicketForm';
 
 type Props = {
@@ -20,7 +19,6 @@ type Props = {
 export default function MonitoriaDetails({ monitoria: m, user, users, teams = [], onView, onAction, onSendToHelpdesk }: Props) {
   const setViewingMonitoria = onView;
   const setActionModal = onAction;
-  const isPj = Boolean(m.pj_review_required || m.pj_review_kind);
   const legacyVerdict = legacyChildNoteVerdict(m);
   const approvalManagerId = teams.find(team => team.id === m.team_id)?.approval_manager_id;
   const canActAsTeamManager = user?.role === 'gestor_suporte' && (!approvalManagerId || approvalManagerId === user.id);
@@ -37,7 +35,6 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                   )}
                 </div>
               )}
-              {isPj && <PjReviewFlow monitoria={m} />}
               <MonitoriaTimeline monitoria={m} user={user} users={users} />
 
               <div className="space-y-4 pb-2">

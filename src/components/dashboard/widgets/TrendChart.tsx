@@ -229,8 +229,7 @@ function TrendChart({
                   fill={`url(#color-${dk.key})`}
                   dot={data.length === 1 ? { r: 4, strokeWidth: 0, fill: dk.color } : false}
                   activeDot={{ r: 5, strokeWidth: 0, fill: dk.color }}
-                  isAnimationActive={!shouldReduceMotion}
-                  animationDuration={850}
+                  isAnimationActive={!shouldReduceMotion} animationDuration={900} animationEasing="ease-out"
                 />
               ))}
             </AreaChart>

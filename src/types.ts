@@ -151,6 +151,7 @@ export interface Monitoria {
   team_id?: string;
   /** Grupo original do ticket; team_id identifica a equipe gestora. */
   ticket_group_team_id?: string;
+  /** Campos legados mantidos apenas para leitura histórica; não controlam mais o fluxo. */
   pj_reviewer_id?: string | null;
   pj_review_kind?: 'approval' | 'contestation' | null;
   pj_review_decision?: 'approved' | 'rejected' | null;
@@ -193,7 +194,7 @@ export interface Team {
   zendesk_group_id?: number | null;
   /** Organiza subequipes no painel sem ampliar as permissões dos gestores. */
   parent_team_id?: string | null;
-  /** Exige parecer do revisor PJ antes da decisão final da Qualidade. */
+  /** Legado: mantido para leitura de dados antigos; novo fluxo não consulta este campo. */
   requires_pj_review?: boolean;
   /** Gestor designado para aprovar monitorias desta equipe; null permite os gestores vinculados. */
   approval_manager_id?: string | null;

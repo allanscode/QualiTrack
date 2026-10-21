@@ -29,8 +29,8 @@ export type MonitoriaDataOptions = {
 };
 
 const CHILD_FORM_ID = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
-const LIST_COLUMNS = 'id,form_id,child_verdict,evaluator_id,evaluated_id,ticket_id,ticket_date,analysis_date,score,status,resolution_type,action_deadline_at,active,team_id,team_name,evaluator_name,evaluated_name,pj_reviewer_id,pj_review_kind,pj_review_required,history,created_at,updated_at';
-type SourceOffsets = { primary: number; reviewer: number };
+const LIST_COLUMNS = 'id,display_id,form_id,child_verdict,evaluator_id,evaluated_id,ticket_id,ticket_date,analysis_date,score,status,resolution_type,action_deadline_at,active,team_id,team_name,evaluator_name,evaluated_name,history,created_at,updated_at';
+
 
 function compareMonitorias(a: Monitoria, b: Monitoria, field: MonitoriaSortField, direction: MonitoriaSortDirection) {
   const left = a[field];
@@ -43,24 +43,6 @@ function compareMonitorias(a: Monitoria, b: Monitoria, field: MonitoriaSortField
     if (comparison) return direction === 'asc' ? comparison : -comparison;
   }
   return (field === 'created_at' ? 0 : b.created_at.localeCompare(a.created_at)) || b.id.localeCompare(a.id);
-}
-
-function mergeSourcePage(primary: Monitoria[], reviewer: Monitoria[], pageSize: number, field: MonitoriaSortField, direction: MonitoriaSortDirection) {
-  const rows: Monitoria[] = [];
-  const seen = new Set<string>();
-  let primaryUsed = 0;
-  let reviewerUsed = 0;
-  while (rows.length < pageSize && (primaryUsed < primary.length || reviewerUsed < reviewer.length)) {
-    const nextPrimary = primary[primaryUsed];
-    const nextReviewer = reviewer[reviewerUsed];
-    const usePrimary = !nextReviewer || (nextPrimary && compareMonitorias(nextPrimary, nextReviewer, field, direction) <= 0);
-    const row = usePrimary ? primary[primaryUsed++] : reviewer[reviewerUsed++];
-    if (!seen.has(row.id)) {
-      rows.push(row);
-      seen.add(row.id);
-    }
-  }
-  return { rows, primaryUsed, reviewerUsed };
 }
 
 function matchesFilters(row: Monitoria, filters: MonitoriaListFilters) {
@@ -130,13 +112,6 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
   const enabledRef = useRef(enabled);
   const filtersRef = useRef(filters);
   const loadedOnceRef = useRef(cache.initial !== undefined);
-  const cursorIdentity = `${scope}:${pageSize}:${filterKey}`;
-  const cursorsRef = useRef<{ identity: string; pages: Map<number, SourceOffsets> }>({
-    identity: cursorIdentity, pages: new Map([[0, { primary: 0, reviewer: 0 }]]),
-  });
-  if (cursorsRef.current.identity !== cursorIdentity) {
-    cursorsRef.current = { identity: cursorIdentity, pages: new Map([[0, { primary: 0, reviewer: 0 }]]) };
-  }
   userRef.current = user;
   enabledRef.current = enabled;
   filtersRef.current = filters;
@@ -163,8 +138,8 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
       if (isMockMode) {
         const { data } = await mockDb.get('monitorias');
         const all = ((data || []) as Monitoria[]).filter(row => {
-          if (currentUser.role === 'suporte' && row.evaluated_id !== currentUser.id && row.pj_reviewer_id !== currentUser.id) return false;
-          if (currentUser.role === 'gestor_suporte' && !currentUser.team_ids?.includes(row.team_id || '') && row.pj_reviewer_id !== currentUser.id) return false;
+          if (currentUser.role === 'suporte' && row.evaluated_id !== currentUser.id) return false;
+          if (currentUser.role === 'gestor_suporte' && !currentUser.team_ids?.includes(row.team_id || '')) return false;
           return matchesFilters(row, currentFilters);
         }).sort((a, b) => compareMonitorias(a, b, sortField, sortDirection));
         count = all.length;
@@ -183,45 +158,10 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
           if (sortField !== 'created_at') query = query.order('created_at', { ascending: false });
           return query.order('id', { ascending: false });
         };
-        const hasReviewer = isSuporte || currentUser.role === 'gestor_suporte';
-        if (!hasReviewer) {
-          const result = await makeQuery(source).range(page * pageSize, (page + 1) * pageSize - 1);
-          if (result.error) throw result.error;
-          rows = (result.data || []) as Monitoria[];
-          count = result.count || 0;
-        } else {
-          // The reviewer view adds cases outside the user's own/team list. Remember
-          // how many rows each source contributed so both requests stay bounded.
-          const pages = cursorsRef.current.pages;
-          let nextPage = page;
-          while (!pages.has(nextPage)) nextPage--;
-          for (; nextPage <= page; nextPage++) {
-            const offsets = pages.get(nextPage)!;
-            let reviewerQuery = makeQuery('vw_monitorias_pj_reviewer').eq('pj_reviewer_id', currentUser.id);
-            if (isSuporte) reviewerQuery = reviewerQuery.neq('evaluated_id', currentUser.id);
-            if (currentUser.role === 'gestor_suporte' && currentUser.team_ids?.length) {
-              reviewerQuery = reviewerQuery.or(`team_id.is.null,team_id.not.in.(${currentUser.team_ids.join(',')})`);
-            }
-            const results = await Promise.all([
-              makeQuery(source).range(offsets.primary, offsets.primary + pageSize - 1),
-              reviewerQuery.range(offsets.reviewer, offsets.reviewer + pageSize - 1),
-            ]);
-            const failure = results.find(item => item.error)?.error;
-            if (failure) throw failure;
-            if (!cache.isCurrent()) return;
-            const merged = mergeSourcePage(
-              (results[0].data || []) as Monitoria[],
-              (results[1].data || []) as Monitoria[], pageSize, sortField, sortDirection,
-            );
-            for (const laterPage of pages.keys()) if (laterPage > nextPage) pages.delete(laterPage);
-            pages.set(nextPage + 1, {
-              primary: offsets.primary + merged.primaryUsed,
-              reviewer: offsets.reviewer + merged.reviewerUsed,
-            });
-            rows = merged.rows;
-            count = (results[0].count || 0) + (results[1].count || 0);
-          }
-        }
+        const result = await makeQuery(source).range(page * pageSize, (page + 1) * pageSize - 1);
+        if (result.error) throw result.error;
+        rows = (result.data || []) as Monitoria[];
+        count = result.count || 0;
       }
       if (!cache.isCurrent()) return;
       cache.write({ rows, total: count });
@@ -263,21 +203,17 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
     if (isMockMode) {
       const { data } = await mockDb.get('monitorias');
       return ((data || []) as Monitoria[]).find(row => row.id === id &&
-        (currentUser.role !== 'suporte' || row.evaluated_id === currentUser.id || row.pj_reviewer_id === currentUser.id) &&
-        (currentUser.role !== 'gestor_suporte' || currentUser.team_ids?.includes(row.team_id || '') || row.pj_reviewer_id === currentUser.id)) || null;
+        (currentUser.role !== 'suporte' || row.evaluated_id === currentUser.id) &&
+        (currentUser.role !== 'gestor_suporte' || currentUser.team_ids?.includes(row.team_id || ''))) || null;
     }
-    const sources = currentUser.role === 'suporte'
-      ? ['vw_monitorias_suporte', 'vw_monitorias_pj_reviewer']
-      : currentUser.role === 'gestor_suporte' ? ['monitorias', 'vw_monitorias_pj_reviewer'] : ['monitorias'];
-    for (const source of sources) {
-      let query = supabase!.from(source).select('*').eq('id', id);
-      if (source === 'monitorias' && currentUser.role === 'gestor_suporte') {
-        query = currentUser.team_ids?.length ? query.in('team_id', currentUser.team_ids) : query.eq('team_id', '00000000-0000-0000-0000-000000000000');
-      }
-      const { data, error } = await query.maybeSingle();
-      if (error) throw error;
-      if (data) return { ...(data as Monitoria), history: (data as Monitoria).history || [], answers: (data as Monitoria).answers || {} };
+    const source = currentUser.role === 'suporte' ? 'vw_monitorias_suporte' : 'monitorias';
+    let query = supabase!.from(source).select('*').eq('id', id);
+    if (source === 'monitorias' && currentUser.role === 'gestor_suporte') {
+      query = currentUser.team_ids?.length ? query.in('team_id', currentUser.team_ids) : query.eq('team_id', '00000000-0000-0000-0000-000000000000');
     }
+    const { data, error } = await query.maybeSingle();
+    if (error) throw error;
+    if (data) return { ...(data as Monitoria), history: (data as Monitoria).history || [], answers: (data as Monitoria).answers || {} };
     return null;
   }, []);
 
@@ -290,14 +226,9 @@ export function useMonitoriaData(user: User | null, activeTab?: string, options:
       return ids.map(id => byId.get(id)).filter((row): row is Monitoria => Boolean(row));
     }
     const source = currentUser.role === 'suporte' ? 'vw_monitorias_suporte' : 'monitorias';
-    const requests = [supabase!.from(source).select('*').in('id', ids)];
-    if (currentUser.role === 'suporte' || currentUser.role === 'gestor_suporte') {
-      requests.push(supabase!.from('vw_monitorias_pj_reviewer').select('*').in('id', ids));
-    }
-    const results = await Promise.all(requests);
-    const failure = results.find(result => result.error)?.error;
-    if (failure) throw failure;
-    const byId = new Map(results.flatMap(result => (result.data || []) as Monitoria[]).map(row => [row.id, row]));
+    const { data, error } = await supabase!.from(source).select('*').in('id', ids);
+    if (error) throw error;
+    const byId = new Map(((data || []) as Monitoria[]).map(row => [row.id, row]));
     return ids.map(id => byId.get(id)).filter((row): row is Monitoria => Boolean(row));
   }, []);
 

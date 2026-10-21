@@ -20,7 +20,6 @@ import {
   ArrowLeftRight,
   ArrowUp,
   ArrowDown,
-  SlidersHorizontal,
   RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -93,7 +92,6 @@ export default function MonitoriaList({
 
   const [monitoriaViewMode, setMonitoriaViewMode] = useState<'avaliacoes' | 'feedbacks'>(initialSubTab === 'avaliacoes' ? 'avaliacoes' : 'feedbacks');
   const [feedbackViewMode, setFeedbackViewMode] = useState<'feedback' | 'one_on_one'>(initialSubTab === 'one_on_one' ? 'one_on_one' : 'feedback');
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const feedbacksState = useFeedbacks(user);
 
   const pendingFeedbacksCount = useMemo(() => {
@@ -166,6 +164,7 @@ export default function MonitoriaList({
 
   const focusOnMonitoria = useCallback((targetId: string) => {
     filters.setTab('todas');
+    filters.setStatusFilter('active');
     filters.setAuditorFilter('');
     filters.setSuporteFilter('');
     filters.setTeamFilter('');
@@ -274,45 +273,28 @@ export default function MonitoriaList({
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [staticData.users]);
 
-  const advancedFilterCount = [
-    filters.teamFilter,
-    filters.suporteFilter,
-    filters.auditorFilter,
-    filters.ticketKindFilter !== 'all',
-    filters.dateType !== 'analysis',
-    filters.sortField !== 'created_at',
-    filters.sortDirection !== 'desc',
-  ].filter(Boolean).length;
-
   return (
     <div className="space-y-6 animate-fade-in pb-8">
       {/* Navegação Superior de Subabas de Monitorias: Avaliações | Feedbacks | 1:1 & PDI */}
       <div role="tablist" aria-label="Áreas de monitoria" className="flex w-full max-w-xl items-center gap-1 rounded-2xl border border-surface-border bg-surface-card p-1.5 shadow-premium">
-        <button type="button" role="tab" aria-selected={monitoriaViewMode === 'avaliacoes'} onClick={() => setMonitoriaViewMode('avaliacoes')} className={`relative flex-1 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${monitoriaViewMode === 'avaliacoes' ? 'text-brand-on-primary' : 'text-brand-muted hover:text-brand-primary'}`}>
-          {monitoriaViewMode === 'avaliacoes' && <m.span layoutId="monitoria-main-tab" className="absolute inset-0 rounded-xl bg-brand-primary" transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }} />}
-          <span className="relative inline-flex items-center gap-2"><FileText className="size-4" />Avaliações<span className="rounded-full bg-black/15 px-1.5 py-0.5 text-[10px] tabular-nums">{total}</span></span>
-        </button>
-        <button type="button" role="tab" aria-selected={monitoriaViewMode === 'feedbacks'} onClick={() => setMonitoriaViewMode('feedbacks')} className={`relative flex-1 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${monitoriaViewMode === 'feedbacks' ? 'text-brand-on-primary' : 'text-brand-muted hover:text-brand-primary'}`}>
-          {monitoriaViewMode === 'feedbacks' && <m.span layoutId="monitoria-main-tab" className="absolute inset-0 rounded-xl bg-brand-primary" transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }} />}
-          <span className="relative inline-flex items-center gap-2"><MessageSquare className="size-4" />Feedbacks<span className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${pendingFeedbacksCount + pendingOneOnOneCount ? 'bg-amber-500/20 text-amber-500' : 'bg-black/15'}`}>{pendingFeedbacksCount + pendingOneOnOneCount || feedbacksState.feedbacks.length}</span></span>
-        </button>
+        {([{ id: 'avaliacoes', label: 'Avaliações', icon: FileText, count: total }, { id: 'feedbacks', label: 'Feedbacks', icon: MessageSquare, count: pendingFeedbacksCount + pendingOneOnOneCount }] as const).map(({ id, label, icon: Icon, count }) => (
+          <button key={id} type="button" role="tab" aria-selected={monitoriaViewMode === id} onClick={() => setMonitoriaViewMode(id)} className={`relative flex-1 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${monitoriaViewMode === id ? 'text-brand-on-primary' : 'text-brand-muted hover:text-brand-primary'}`}>
+            {monitoriaViewMode === id && <m.span layoutId="monitoria-main-tab" className="absolute inset-0 rounded-xl bg-brand-primary" transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }} />}
+            <span className="relative inline-flex items-center gap-2"><Icon className="size-4" />{label}<span className="rounded-full bg-black/15 px-1.5 py-0.5 text-[10px] tabular-nums">{count}</span></span>
+          </button>
+        ))}
       </div>
 
-      {monitoriaViewMode === 'feedbacks' && (
-        <div role="tablist" aria-label="Tipo de feedback" className="inline-flex max-w-full items-center gap-1 rounded-xl border border-surface-border bg-surface-subtle/60 p-1">
-          {([
-            { id: 'feedback', label: 'Feedbacks Operacionais', icon: MessageSquare, count: pendingFeedbacksCount },
-            { id: 'one_on_one', label: 'Alinhamento Mensal', icon: Award, count: pendingOneOnOneCount },
-          ] as const).map(({ id, label, icon: Icon, count }) => (
-            <button key={id} type="button" role="tab" aria-selected={feedbackViewMode === id} onClick={() => setFeedbackViewMode(id)} className={`relative rounded-lg px-3.5 py-2 text-[11px] font-bold transition-colors ${feedbackViewMode === id ? 'text-brand-primary' : 'text-brand-muted hover:text-brand-primary'}`}>
-              {feedbackViewMode === id && <m.span layoutId="monitoria-feedback-tab" className="absolute inset-0 rounded-lg border border-surface-border bg-surface-card shadow-xs" transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }} />}
-              <span className="relative inline-flex items-center gap-2"><Icon className="size-3.5" />{label}{count > 0 && <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">{count}</span>}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {monitoriaViewMode === 'feedbacks' && <div role="tablist" aria-label="Tipo de acompanhamento" className="inline-flex max-w-full items-center gap-1 rounded-xl border border-surface-border bg-surface-subtle/60 p-1">
+        {([{ id: 'feedback', label: 'Feedbacks Operacionais', icon: MessageSquare, count: pendingFeedbacksCount }, { id: 'one_on_one', label: 'Alinhamento Mensal', icon: Award, count: pendingOneOnOneCount }] as const).map(({ id, label, icon: Icon, count }) => (
+          <button key={id} type="button" role="tab" aria-selected={feedbackViewMode === id} onClick={() => setFeedbackViewMode(id)} className={`relative rounded-lg px-3.5 py-2 text-[11px] font-bold transition-colors ${feedbackViewMode === id ? 'text-brand-primary' : 'text-brand-muted hover:text-brand-primary'}`}>
+            {feedbackViewMode === id && <m.span layoutId="monitoria-feedback-tab" className="absolute inset-0 rounded-lg bg-surface-card shadow-sm" transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }} />}
+            <span className="relative inline-flex items-center gap-2"><Icon className="size-3.5" />{label}<span className="rounded-full bg-brand-primary/10 px-1.5 py-0.5 text-[10px] tabular-nums">{count}</span></span>
+          </button>
+        ))}
+      </div>}
 
-      {monitoriaViewMode === 'feedbacks' && (
+      {monitoriaViewMode === 'feedbacks' && feedbackViewMode === 'feedback' && (
         <FeedbacksSubtabView
           currentUser={user}
           users={maskedUsers}
@@ -326,62 +308,178 @@ export default function MonitoriaList({
           onCreateFeedback={feedbacksState.createFeedback}
           onAcknowledgeFeedback={feedbacksState.acknowledgeFeedback}
           onCompleteFeedback={feedbacksState.completeFeedback}
-          mode={feedbackViewMode}
+          mode="feedback"
         />
       )}
+
+      {monitoriaViewMode === 'feedbacks' && feedbackViewMode === 'one_on_one' && (
+        <FeedbacksSubtabView
+          currentUser={user}
+          users={maskedUsers}
+          teams={staticData.teams}
+          monitorias={monitorias}
+          feedbacks={feedbacksState.feedbacks}
+          loading={feedbacksState.loading}
+          refreshing={feedbacksState.refreshing}
+          error={feedbacksState.error}
+          onRefresh={feedbacksState.refreshFeedbacks}
+          onCreateFeedback={feedbacksState.createFeedback}
+          onAcknowledgeFeedback={feedbacksState.acknowledgeFeedback}
+          onCompleteFeedback={feedbacksState.completeFeedback}
+          mode="one_on_one"
+        />
+      )}
+
       {monitoriaViewMode === 'avaliacoes' && (
         <>
           {/* Block 1: Filters & Status Joined */}
           <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card rounded-3xl">
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-          <div className="space-y-3">
-            <div className="grid gap-3 xl:grid-cols-[minmax(240px,1fr)_minmax(420px,1.55fr)]">
-              <form className="flex h-9 min-w-0 gap-2" onSubmit={event => { event.preventDefault(); filters.setSearch(searchInput.trim()); }}>
-                <div className="relative min-w-0 flex-1">
-                  <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-brand-muted" aria-hidden="true" />
-                  <input type="search" aria-label="Buscar monitoria por ticket" placeholder="Número do ticket..." value={searchInput} onChange={event => setSearchInput(event.target.value)} className="h-full w-full rounded-lg border border-surface-border bg-surface-bg pl-9 pr-3 text-xs font-semibold text-brand-primary placeholder:text-brand-muted/70 outline-none transition-colors focus:border-brand-accent" />
-                </div>
-                <Button type="submit" size="sm" variant="outline" className="h-9 shrink-0">Pesquisar</Button>
-              </form>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full">
+            {/* Busca (col-span-12 lg:col-span-4) */}
+            <form
+              className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-1 flex h-9 gap-2"
+              onSubmit={event => {
+                event.preventDefault();
+                filters.setSearch(searchInput.trim());
+              }}
+            >
+              <div className="relative min-w-0 flex-1">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" aria-hidden="true" />
+                <input
+                  type="search"
+                  aria-label="Buscar monitoria por ticket"
+                  placeholder="Número do ticket..."
+                  value={searchInput}
+                  onChange={event => setSearchInput(event.target.value)}
+                  className="w-full h-full bg-surface-card border border-surface-border rounded-lg pl-9 pr-3 text-[10px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent transition-all outline-none shadow-sm"
+                />
+              </div>
+              <Button type="submit" size="sm" variant="outline" className="h-9 shrink-0">Pesquisar</Button>
+            </form>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <CustomDatepicker value={filters.startDate} onChange={(value: string) => filters.setStartDate(value)} placeholder="Data inicial" size="sm" />
-                <span className="shrink-0 text-[10px] font-semibold text-brand-muted">até</span>
-                <CustomDatepicker value={filters.endDate} onChange={(value: string) => filters.setEndDate(value)} placeholder="Data final" size="sm" />
-                <button type="button" aria-expanded={showAdvancedFilters} onClick={() => setShowAdvancedFilters(open => !open)} className={`inline-flex h-8 items-center gap-2 rounded-lg border px-3 text-[11px] font-bold transition-colors ${showAdvancedFilters || advancedFilterCount ? 'border-brand-accent/40 bg-brand-accent/10 text-brand-accent' : 'border-surface-border text-brand-muted hover:bg-surface-subtle hover:text-brand-primary'}`}>
-                  <SlidersHorizontal className="size-3.5" />Filtros{advancedFilterCount > 0 && <span className="rounded-full bg-brand-accent px-1.5 py-0.5 text-[9px] text-white">{advancedFilterCount}</span>}
-                </button>
-                <Button size="sm" variant="outline" icon={<Download className="size-3.5" />} onClick={async () => {
+            {/* Grupo Datas (col-span-12 lg:col-span-4) */}
+            <div className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-2 flex flex-col min-[360px]:flex-row items-center gap-2 w-full">
+              <CustomDatepicker
+                value={filters.startDate}
+                onChange={(val: string) => filters.setStartDate(val)}
+                placeholder="Data inicial"
+                size="sm"
+              />
+              <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest shrink-0">até</span>
+              <CustomDatepicker
+                value={filters.endDate}
+                onChange={(val: string) => filters.setEndDate(val)}
+                placeholder="Data final"
+                size="sm"
+              />
+            </div>
+
+            {/* Bloco de Apoio (Direita - col-span-12 lg:col-span-8) */}
+            <div className="col-span-12 lg:col-span-8 lg:col-start-5 lg:row-start-1 lg:row-span-2 flex flex-wrap items-center gap-2 w-full self-end">
+              {/* Dropdowns */}
+              <CustomSelect
+                value={filters.teamFilter}
+                onChange={val => filters.setTeamFilter(val)}
+                options={[{ value: '', label: 'Todas Equipes' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
+                size="sm"
+              />
+
+              {user?.role !== 'suporte' && (
+                <CustomSelect
+                  value={filters.suporteFilter}
+                  onChange={val => filters.setSuporteFilter(val)}
+                  options={[{ value: '', label: 'Agentes' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
+                  size="sm"
+                />
+              )}
+
+              {['admin', 'gestor_qualidade'].includes(user?.role || '') && (
+                <CustomSelect
+                  value={filters.auditorFilter}
+                  onChange={val => filters.setAuditorFilter(val)}
+                  options={[{ value: '', label: 'Monitores' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
+                  size="sm"
+                />
+              )}
+
+              <CustomSelect
+                value={filters.ticketKindFilter}
+                onChange={val => filters.setTicketKindFilter(val as 'all' | 'child' | 'service')}
+                options={[{ value: 'all', label: 'Todos os tickets' }, { value: 'child', label: 'Tickets filhos' }, { value: 'service', label: 'Atendimentos' }]}
+                size="sm"
+              />
+
+              <div className="flex items-center gap-1" role="group" aria-label="Ordenação das monitorias">
+                <CustomSelect
+                  value={filters.sortField}
+                  onChange={value => filters.setSortField(value as MonitoriaSortField)}
+                  options={[
+                    { value: 'created_at', label: 'Criação' },
+                    { value: 'score', label: 'Nota' },
+                    { value: 'action_deadline_at', label: 'Prazo de ação' },
+                  ]}
+                  aria-label="Ordenar por"
+                  size="sm"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 shrink-0"
+                  aria-label={filters.sortDirection === 'desc' ? 'Ordem decrescente; mudar para crescente' : 'Ordem crescente; mudar para decrescente'}
+                  title={filters.sortDirection === 'desc' ? 'Ordem decrescente' : 'Ordem crescente'}
+                  aria-pressed={filters.sortDirection === 'asc'}
+                  onClick={() => filters.setSortDirection(current => current === 'desc' ? 'asc' : 'desc')}
+                >
+                  {filters.sortDirection === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                </Button>
+              </div>
+
+              {/* Botão Exportar CSV */}
+              <Button
+                size="sm"
+                variant="outline"
+                icon={<Download className="w-3.5 h-3.5" />}
+                onClick={async () => {
                   try {
                     const rows = await fetchExportRows(filtered.map(row => row.id));
                     const success = exportMonitoriasToCsv(rows, 'monitorias_qualitrack', staticData.users, staticData.teams);
                     if (success) toast.success(`${rows.length} monitorias desta página exportadas para CSV!`);
                     else toast.error('Nenhuma monitoria para exportar.');
                   } catch (error) {
-                    console.error('[Monitorias] Falha ao exportar:', error);
+                    console.error('[Monitorias] Falha ao exportar CSV:', error);
                     toast.error('Não foi possível exportar as monitorias.');
                   }
-                }} className="h-8 shrink-0 text-[10px] font-black uppercase tracking-wide text-brand-muted hover:text-brand-primary">Exportar CSV</Button>
-                {filters.hasActiveFilters && <button type="button" onClick={filters.clearFilters} className="inline-flex size-8 items-center justify-center rounded-full text-functional-error transition-colors hover:bg-functional-error/10" title="Limpar filtros" aria-label="Limpar filtros"><X className="size-3.5" /></button>}
-              </div>
-            </div>
+                }}
+                className="h-8 text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-brand-primary shrink-0"
+                title="Exportar registros desta página para CSV (compatível com Excel)"
+              >
+                Exportar CSV
+              </Button>
 
-            <AnimatePresence initial={false}>
-              {showAdvancedFilters && <m.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }} className="overflow-hidden">
-                <div className="grid gap-2 border-t border-surface-border/70 pt-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                  <CustomSelect value={filters.teamFilter} onChange={filters.setTeamFilter} options={[{ value: '', label: 'Todas as equipes' }, ...activeTeams.map(team => ({ value: team.id, label: team.name }))]} size="sm" />
-                  {user?.role !== 'suporte' && <CustomSelect value={filters.suporteFilter} onChange={filters.setSuporteFilter} options={[{ value: '', label: 'Todos os agentes' }, ...activeSuportes.map(agent => ({ value: agent.id, label: agent.name }))]} size="sm" />}
-                  {['admin', 'gestor_qualidade'].includes(user?.role || '') && <CustomSelect value={filters.auditorFilter} onChange={filters.setAuditorFilter} options={[{ value: '', label: 'Todos os monitores' }, ...activeAuditors.map(auditor => ({ value: auditor.id, label: auditor.name }))]} size="sm" />}
-                  <CustomSelect value={filters.ticketKindFilter} onChange={value => filters.setTicketKindFilter(value as 'all' | 'child' | 'service')} options={[{ value: 'all', label: 'Todos os tickets' }, { value: 'child', label: 'Tickets filhos' }, { value: 'service', label: 'Atendimentos' }]} size="sm" />
-                  <CustomSelect value={filters.dateType} onChange={value => filters.setDateType(value as 'analysis' | 'ticket')} options={[{ value: 'analysis', label: 'Data da monitoria' }, { value: 'ticket', label: 'Data do ticket' }]} size="sm" />
-                  <div className="flex min-w-0 gap-1">
-                    <CustomSelect value={filters.sortField} onChange={value => filters.setSortField(value as MonitoriaSortField)} options={[{ value: 'created_at', label: 'Ordenar: criação' }, { value: 'score', label: 'Ordenar: nota' }, { value: 'action_deadline_at', label: 'Ordenar: prazo' }]} size="sm" />
-                    <Button size="sm" variant="outline" className="h-8 shrink-0" aria-label={filters.sortDirection === 'desc' ? 'Ordem decrescente; mudar para crescente' : 'Ordem crescente; mudar para decrescente'} aria-pressed={filters.sortDirection === 'asc'} onClick={() => filters.setSortDirection(current => current === 'desc' ? 'asc' : 'desc')}>{filters.sortDirection === 'desc' ? <ArrowDown className="size-4" /> : <ArrowUp className="size-4" />}</Button>
-                  </div>
-                </div>
-              </m.div>}
-            </AnimatePresence>
+              {/* Clear button — animated clean button pushed to the right */}
+              <AnimatePresence>
+                {filters.hasActiveFilters && (
+                  <m.div
+                    initial={{ width: 0, opacity: 0 }}
+                    animate={{ width: 28, opacity: 1 }}
+                    exit={{ width: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                    className="overflow-hidden flex-shrink-0 flex items-center justify-center ml-auto"
+                  >
+                    <button
+                      onClick={filters.clearFilters}
+                      className="w-7 h-7 rounded-full bg-functional-error/10 text-functional-error hover:bg-functional-error hover:text-white transition-all flex items-center justify-center shadow-sm cursor-pointer"
+                      title="Limpar Filtros"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </m.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
+
           {/* Status Tabs (Unified inside) — Tamanho extra compacto para caber harmoniosamente na tela */}
           <div className="pt-2.5 border-t border-surface-border/50 flex items-center gap-1 overflow-x-auto no-scrollbar pb-0.5">
             {[
@@ -532,7 +630,6 @@ export default function MonitoriaList({
                 {(() => {
                   const m = selectedDetail?.id === actionModal.id ? selectedDetail : monitorias.find(item => item.id === actionModal.id);
                   const currentSt = m?.status || 'pendente_revisao';
-                  const isPjAction = Boolean(m?.pj_review_required || m?.pj_review_kind);
                   const isStepChange = actionModal.type === 'alterar_etapa' || actionModal.type === 'avancar_etapa' || actionModal.type === 'retroceder_etapa';
                   const prev = getPreviousStage(currentSt);
                   const next = getNextStage(currentSt);
@@ -549,7 +646,7 @@ export default function MonitoriaList({
                     actionModal.type === 'solicitar_reavaliacao' ? 'Solicitar Reavaliação' :
                     actionModal.type === 'manter'
                       ? (m?.status === 'aguardando_gestor_qualidade' ? 'Negar e devolver ao Suporte' : 'Recusar Contestação') :
-                    actionModal.type === 'escalar' ? (isPjAction ? 'Enviar contestação à Qualidade' : 'Escalar para Gestão Qualidade') :
+                    actionModal.type === 'escalar' ? 'Escalar para GestÃ£o Qualidade' :
                     actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
                     actionModal.type === 'excluir' ? 'Excluir Monitoria' :
                     'Confirmar Ação';

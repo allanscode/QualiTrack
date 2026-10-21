@@ -124,8 +124,7 @@ const INITIAL_DATA: {
   teams: [
     { id: 'team-alpha', name: 'Equipe Alpha', sigla: 'ALF', active: true, description: 'Equipe de atendimento Alpha' },
     { id: 'team-beta', name: 'Equipe Beta', sigla: 'BET', active: true, description: 'Equipe de atendimento Beta' },
-    { id: 'team-pj-bruno', name: 'PJ Bruno', sigla: 'PJ', kind: 'team', requires_pj_review: true,
-      active: true, description: 'Equipe de atendimento PJ' },
+    { id: 'team-pj-bruno', name: 'PJ Bruno', sigla: 'PJ', kind: 'team', active: true, description: 'Equipe de atendimento PJ' },
     { id: 'group-cliente-final', name: 'Cliente Final', kind: 'group', zendesk_group_id: 1, active: true },
   ],
   team_groups: [
@@ -317,7 +316,7 @@ const INITIAL_DATA: {
       satisfaction_result: 'Sem pesquisa', satisfaction_has_record: false,
       ticket_date: new Date().toISOString().slice(0, 10),
       analysis_date: new Date().toISOString().slice(0, 10),
-      score: 62, status: 'pendente_revisao', pj_review_required: true, answers: {},
+      score: 62, status: 'pendente_revisao', answers: {},
       history: [{ action: 'Monitoria Criada', by_id: EVALUATOR_ID,
         by_name: 'Maria Auditora', at: new Date().toISOString() }],
       created_at: new Date().toISOString(), updated_at: new Date().toISOString()
@@ -424,7 +423,6 @@ if (typeof window !== 'undefined' && !import.meta.env.VITE_SUPABASE_URL) {
       monitorias = monitorias.map(m => {
         if (
           m.active !== false && 
-          !m.pj_review_required &&
           m.status !== 'concluida' && 
           m.action_deadline_at && 
           m.action_deadline_at < nowStr
