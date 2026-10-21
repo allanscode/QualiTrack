@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { MonitoriaStatus, User } from '../types';
 
-export type MonitoriaSortField = 'created_at' | 'score' | 'action_deadline_at';
+export type MonitoriaSortField = 'created_at' | 'score' | 'action_deadline_at' | 'display_id' | 'ticket_id' | 'evaluated_name' | 'team_name' | 'evaluator_name' | 'status' | 'form_id';
 export type MonitoriaSortDirection = 'asc' | 'desc';
 
 const DEFAULT_START_DATE = () => new Date(Date.now() - 30 * 24 * 3600000).toISOString().split('T')[0];
@@ -17,7 +17,7 @@ export function useMonitoriaFilters() {
   const [dateType, setDateType] = useState<'analysis' | 'ticket'>('analysis');
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
   const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
-  const [sortField, setSortField] = useState<MonitoriaSortField>('created_at');
+  const [sortField, setSortField] = useState<MonitoriaSortField>('display_id');
   const [sortDirection, setSortDirection] = useState<MonitoriaSortDirection>('desc');
 
   const hasActiveFilters = useMemo(() => {

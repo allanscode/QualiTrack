@@ -838,4 +838,14 @@ html.dark body {
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard-tile-grid > [data-dashboard-featured="true"] .qt-metric-card::after { animation: none; }
+  .dashboard-progress-indicator { animation-duration: 3s; }
+}
+
+@keyframes dashboard-progress {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(340%); }
+}
+
+.dashboard-progress-indicator {
+  animation: dashboard-progress 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }

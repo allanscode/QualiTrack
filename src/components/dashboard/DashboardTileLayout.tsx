@@ -2,6 +2,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import { createPortal } from 'react-dom';
 import type { ComponentType, ReactNode } from 'react';
 import { ArrowDown, ArrowUp, EyeOff, GripVertical } from 'lucide-react';
+import { m, useReducedMotion } from 'motion/react';
 import { DashboardStateContext } from './DashboardContext';
 import { useQualityConfig } from '../../lib/useQualityConfig';
 import { DASHBOARD_WIDGETS, orderedWidgets, widgetId } from '../../lib/dashboardLayout';
@@ -85,6 +86,10 @@ function Slot({ item, index, count, registerSlot, editor }: {
   return (
     <m.div
       ref={rootRef}
+      initial={reduceMotion ? false : { opacity: 0, y: 10, filter: 'blur(2px)' }}
+      whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+      viewport={{ once: true, amount: 0.12 }}
+      transition={reduceMotion ? { duration: 0 } : { duration: 0.38, ease: [0.16, 1, 0.3, 1], delay: (index % 4) * 0.055 }}
       data-dashboard-slot={item.id}
       data-dashboard-kind={kind}
       data-dashboard-featured={item.type === 'StatCard' && index === 0 ? 'true' : undefined}

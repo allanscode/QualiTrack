@@ -286,7 +286,7 @@ serve(async (req: Request) => {
       && monitoria.satisfaction_result === 'Positiva' && rawScore >= 75
       && Array.isArray(monitoria.history)
       && monitoria.history.some((entry: { action?: string }) =>
-        /Monitoria Reavaliada|Monitoria aprovada pelo Gestor/i.test(entry?.action || ''));
+        /Monitoria Reavaliada|Monitoria aprovada pelo Gestor|Monitoria aprovada e concluída pela Gestão da Qualidade/i.test(entry?.action || ''));
     const managerConclusion = qualityFinalizationNote(monitoria.history);
     const generatedHtml = buildEvaluationHtml({
       outcome: resolvedOutcome,

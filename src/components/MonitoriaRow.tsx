@@ -17,9 +17,10 @@ type Props = {
   getName: (id: string, isEvaluator?: boolean, snapshotName?: string) => string;
   getLevelForScore: (score: number) => { color: string };
   onOpen: (id: string) => void;
+  displayMode?: 'table' | 'card';
 };
 
-export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForScore, onOpen }: Props) {
+export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForScore, onOpen, displayMode = 'card' }: Props) {
   const config = getStatusConfig(m.status);
   const legacyVerdict = legacyChildNoteVerdict(m);
   const level = getLevelForScore(m.score || 0);
@@ -37,7 +38,33 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
   const lastUpdatedAt = !Number.isNaN(Date.parse(m.updated_at)) ? m.updated_at : latestAction?.at || m.created_at;
   return (
     <div style={style} id={`monitoria-${m.id}`} className="border-b border-surface-border/50 last:border-b-0">
-      <div className="flex min-h-[68px] sm:min-h-[72px] items-center gap-2 p-2 sm:gap-3 sm:px-4 sm:py-2.5 hover:bg-surface-subtle/60 transition-colors">
+      {displayMode === 'table' && <div role="row" className="hidden min-w-[1120px] min-h-[64px] grid-cols-[142px_145px_112px_minmax(140px,1.1fr)_minmax(120px,0.9fr)_minmax(145px,1fr)_110px_125px_34px] items-center gap-2 px-4 text-xs transition-colors hover:bg-surface-subtle/60 lg:grid">
+        <span role="cell" className="flex min-w-0 flex-col items-start gap-1">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-brand-muted"><config.icon className="size-3.5" />{config.shortLabel}</span>
+          <Badge variant={config.variant} size="xs" className="max-w-full truncate">{expired ? 'Concluída sist.' : config.label}</Badge>
+        </span>
+        <span role="cell" className="min-w-0">
+          <button type="button" onClick={() => onOpen(m.id)} aria-label={`Abrir detalhes da monitoria ${m.display_id || m.ticket_id}`} className="rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent">
+            <MonitoriaIdBadge displayId={m.display_id} id={m.id} />
+          </button>
+        </span>
+        <span role="cell" className="min-w-0 font-mono font-semibold tabular-nums text-brand-primary">
+          {m.ticket_id || 'S/N'}
+        </span>
+        <span role="cell" className="min-w-0 truncate" title={m.evaluated_name || undefined}>{getName(m.evaluated_id, false, m.evaluated_name)}</span>
+        <span role="cell" className="min-w-0 truncate" title={m.team_name || undefined}>{m.team_name || teams.find(team => team.id === m.team_id)?.name || 'N/A'}</span>
+        <span role="cell" className="min-w-0 truncate" title={m.evaluator_name || undefined}>{getName(m.evaluator_id, true, m.evaluator_name)}</span>
+        <span role="cell"><Badge variant={child ? 'info' : 'neutral'} size="xs">{child ? 'Ticket filho' : 'Atendimento'}</Badge></span>
+        <span role="cell" className="min-w-0">
+          {child && finalChildVerdict ? <Badge variant={finalChildVerdict === 'valido' ? 'success' : 'error'} size="xs">{finalChildVerdict === 'valido' ? 'Válido' : 'Inválido'}</Badge>
+            : child ? <span className="text-brand-muted">Pendente</span>
+              : <span className={`font-bold tabular-nums ${scoreColor}`} title={legacyVerdict ? 'Nota original do parecer legado' : undefined}>{m.score != null ? `${m.score}%` : '—'}</span>}
+        </span>
+        <span role="cell" className="flex justify-end">
+          {m.ticket_id && <a href={`https://webposto.zendesk.com/agent/tickets/${m.ticket_id.trim()}`} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ticket ${m.ticket_id} no Zendesk`} className="rounded-md p-1.5 text-brand-muted hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"><ExternalLink className="size-3.5" /></a>}
+        </span>
+      </div>}
+      <div className={`flex min-h-[68px] sm:min-h-[72px] items-center gap-2 p-2 sm:gap-3 sm:px-4 sm:py-2.5 hover:bg-surface-subtle/60 transition-colors ${displayMode === 'table' ? 'lg:hidden' : ''}`}>
         <button
           type="button"
           onClick={() => onOpen(m.id)}
