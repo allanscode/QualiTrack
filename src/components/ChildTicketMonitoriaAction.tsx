@@ -13,8 +13,7 @@ interface Props {
 export default function ChildTicketMonitoriaAction({ ticket, onOpen, onStart, onStartManual, loading }: Props) {
   if (ticket.already_audited || ticket.monitoria_id) {
     return (
-      <div className="flex flex-col items-end gap-1.5">
-        <span className="text-xs text-brand-muted">Este ticket já tem uma monitoria salva.</span>
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
         {ticket.monitoria_id && onOpen ? (
           <Button size="sm" variant="outline" onClick={() => onOpen(ticket.monitoria_id!)}>
             <FileText className="h-4 w-4" /> Ver monitoria existente
@@ -25,7 +24,7 @@ export default function ChildTicketMonitoriaAction({ ticket, onOpen, onStart, on
             <Button size="sm" variant="primary" disabled={loading} onClick={onStart}>
               <Check className="h-4 w-4" /> Abrir nova ficha com IA
             </Button>
-            <span className="max-w-xs text-right text-xs text-brand-muted">A ficha anterior será preservada. Revise a nova antes de salvar.</span>
+            <span className="basis-full text-right text-[11px] text-brand-muted">A ficha anterior será preservada; revise a nova antes de salvar.</span>
           </>
         )}
         {onStartManual && (

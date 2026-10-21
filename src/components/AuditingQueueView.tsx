@@ -2352,7 +2352,7 @@ export default function AuditingQueueView({
         <>
 
       {/* 2. Barra Superior da Fila — Toolbar Compacta e Coesa */}
-      <div className="sticky top-0 z-30 flex flex-wrap md:flex-nowrap items-center gap-2 p-2 rounded-xl bg-surface-card/95 backdrop-blur-md border border-surface-border shadow-premium-sm transition-all">
+      <div className="sticky top-0 z-40 isolate flex flex-wrap md:flex-nowrap items-center gap-2.5 p-2.5 rounded-2xl bg-surface-card border border-surface-border shadow-premium transition-shadow">
         {/* Campo de Busca (elemento de maior largura) */}
         <div className="relative flex-1 min-w-[200px] max-w-none sm:max-w-md">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
@@ -2617,12 +2617,9 @@ export default function AuditingQueueView({
       )}
 
       {hasQueueUpdates && (
-        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-accent/30 bg-brand-accent/10 px-3 py-2 text-xs text-brand-primary">
-          <span>Há novidades na fila. Atualize para ver os chamados mais recentes.</span>
-          <button type="button" onClick={refreshQueue} disabled={loading}
-            className="font-bold text-brand-accent hover:underline disabled:opacity-50">
-            Atualizar agora
-          </button>
+        <div role="status" className="flex items-center gap-2 rounded-xl border border-brand-accent/25 bg-brand-accent/8 px-3 py-2 text-xs text-brand-primary">
+          <Activity className="h-3.5 w-3.5 shrink-0 text-brand-accent" aria-hidden="true" />
+          <span>Há novos chamados. Use <strong>Atualizar</strong> na barra fixa para sincronizar a fila.</span>
         </div>
       )}
 
@@ -2976,7 +2973,7 @@ export default function AuditingQueueView({
                           {renderTicketResolution(ticket)}
                         </div>
 
-                        <div className="flex min-w-0 flex-col items-end gap-1.5" role="status" aria-live="polite">
+                        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5" role="status" aria-live="polite">
                           <ChildTicketMonitoriaAction
                             ticket={{ ...ticket, child_evaluation: evaluation }}
                             onOpen={onOpenExistingMonitoria}
@@ -3114,7 +3111,7 @@ export default function AuditingQueueView({
                           {renderTicketResolution(ticket)}
                         </div>
 
-                        <div className="flex min-w-0 flex-col items-end gap-1.5" role="status" aria-live="polite">
+                        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5" role="status" aria-live="polite">
                           <ChildTicketMonitoriaAction
                             ticket={{ ...ticket, child_evaluation: evaluation }}
                             onOpen={onOpenExistingMonitoria}

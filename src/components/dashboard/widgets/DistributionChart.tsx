@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useChartRevealAnimation } from './useChartRevealAnimation';
 import { AnimatedNumber } from './AnimatedNumber';
+import { AnimatedProgressBar } from './AnimatedProgressBar';
 
 const CustomTooltip = ({ active, payload, total }: any) => {
   if (!active || !payload?.length) return null;
@@ -266,11 +267,8 @@ function DistributionChart({
                       </span>
                     </div>
                     {/* Barra de Proporção Colorida */}
-                    <div className="w-full h-1 bg-surface-subtle rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-300"
-                        style={{ width: `${percent}%`, backgroundColor: entry.color }}
-                      />
+                    <div className="w-full h-1 rounded-full">
+                      <AnimatedProgressBar value={Number(percent)} active={animateChart} color={entry.color} delayMs={index * 70} />
                     </div>
                   </div>
                 );

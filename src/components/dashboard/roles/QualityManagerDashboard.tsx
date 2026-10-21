@@ -17,6 +17,7 @@ import PositiveEvaluationExceptionsTable from '../widgets/PositiveEvaluationExce
 import DistributionChart from '../widgets/DistributionChart';
 import { useChartRevealAnimation } from '../widgets/useChartRevealAnimation';
 import { AnimatedNumber } from '../widgets/AnimatedNumber';
+import { AnimatedProgressBar } from '../widgets/AnimatedProgressBar';
 import Card from '../../ui/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Target, AlertTriangle, TrendingUp, CheckCircle2, XCircle, Users, History, Activity, PieChart as PieChartIcon, ClipboardCheck, Award, Clock, ChevronRight } from 'lucide-react';
@@ -1251,11 +1252,8 @@ export default function QualityManagerDashboard({
                                 <AnimatedNumber value={entry.value} active={groupDistributionReveal.animateChart} /> (<AnimatedNumber value={Number(percent)} active={groupDistributionReveal.animateChart} decimals={1} suffix="%" />)
                               </span>
                             </div>
-                            <div className="w-full h-1 bg-surface-subtle rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-300"
-                                style={{ width: `${percent}%`, backgroundColor: entry.color }}
-                              />
+                            <div className="w-full h-1 rounded-full">
+                              <AnimatedProgressBar value={Number(percent)} active={groupDistributionReveal.animateChart} color={entry.color} delayMs={index * 70} />
                             </div>
                           </div>
                         );
@@ -1396,11 +1394,8 @@ export default function QualityManagerDashboard({
                                 <AnimatedNumber value={entry.value} active={gradeDistributionReveal.animateChart} /> (<AnimatedNumber value={Number(percent)} active={gradeDistributionReveal.animateChart} decimals={1} suffix="%" />)
                               </span>
                             </div>
-                            <div className="w-full h-1 bg-surface-subtle rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-300"
-                                style={{ width: `${percent}%`, backgroundColor: entry.color }}
-                              />
+                            <div className="w-full h-1 rounded-full">
+                              <AnimatedProgressBar value={Number(percent)} active={gradeDistributionReveal.animateChart} color={entry.color} delayMs={index * 70} />
                             </div>
                           </div>
                         );
