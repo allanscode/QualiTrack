@@ -6,18 +6,16 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { initSentry } from './lib/sentry.ts';
 import { LazyMotion, domAnimation } from 'motion/react';
 import { isMockMode } from './lib/supabase.ts';
+import { recoverFromChunkLoadError } from './utils/chunkRecovery.ts';
 
 // Initialize Sentry early
 initSentry();
 
 // Auto-recuperação de chunks desatualizados após novos deploys na nuvem
 window.addEventListener('vite:preloadError', (event) => {
-  const hasRefreshed = sessionStorage.getItem('vite-preload-refreshed') === 'true';
-  if (!hasRefreshed) {
-    sessionStorage.setItem('vite-preload-refreshed', 'true');
-    event.preventDefault();
-    window.location.reload();
-  }
+  event.preventDefault();
+  const preloadError = (event as Event & { payload?: unknown }).payload;
+  recoverFromChunkLoadError(preloadError ?? new TypeError('Failed to fetch dynamically imported module'));
 });
 
 // Production guard: warn if running in mock mode

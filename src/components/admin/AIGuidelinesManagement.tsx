@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
+import { isChunkLoadError, recoverFromChunkLoadError } from '../../utils/chunkRecovery';
 import { diffWordsWithSpace } from 'diff';
 import TextDiff from '../ui/TextDiff';
 import { AIEvaluationGuideline, GuidelineVersion, User } from '../../types';
@@ -193,6 +194,12 @@ export default function AIGuidelinesManagement({ currentUser }: AIGuidelinesMana
       }
     } catch (e: any) {
       console.error('Erro ao extrair texto do arquivo:', e);
+      if (isChunkLoadError(e)) {
+        if (!recoverFromChunkLoadError(e)) {
+          toast.error('O visualizador do documento ficou desatualizado. Atualize a página e selecione o arquivo novamente.');
+        }
+        return;
+      }
       toast.error(e.message || 'Falha ao processar o arquivo. Verifique o formato e tente novamente.');
       setFile(null);
     } finally {

@@ -63,7 +63,7 @@ describe('MonitoriaList actions', () => {
 
   it('busca somente após Pesquisar e mantém o campo montado durante a consulta', async () => {
     const view = render(<MonitoriaList user={admin} activeTab="monitorias" />);
-    const input = screen.getByRole('searchbox', { name: 'Buscar monitoria por ticket' });
+    const input = screen.getByRole('searchbox', { name: 'Buscar monitoria' });
     fireEvent.change(input, { target: { value: '178524' } });
     expect(input).toHaveValue('178524');
     expect(observedSearch.mock.calls.at(-1)?.[0]).toBe('');
@@ -71,7 +71,7 @@ describe('MonitoriaList actions', () => {
     await waitFor(() => expect(observedSearch.mock.calls.at(-1)?.[0]).toBe('178524'));
     fixture.loading = true;
     view.rerender(<MonitoriaList user={admin} activeTab="monitorias" />);
-    expect(screen.getByRole('searchbox', { name: 'Buscar monitoria por ticket' })).toHaveValue('178524');
+    expect(screen.getByRole('searchbox', { name: 'Buscar monitoria' })).toHaveValue('178524');
     expect(screen.getByText('Buscando monitorias...')).toBeInTheDocument();
   });
 

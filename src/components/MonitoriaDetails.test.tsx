@@ -1,10 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import MonitoriaDetails from './MonitoriaDetails';
-import type { Monitoria, User } from '../types';
+import type { Monitoria, Team, User } from '../types';
 
 const monitoria = {
   id: 'monitoria-1',
+  team_id: 'team-1',
   ticket_id: '99022',
   status: 'pendente_revisao',
   created_at: '2026-09-25T15:05:00.000Z',
@@ -18,10 +19,11 @@ const monitoria = {
 } as Monitoria;
 
 const supportUser = { id: 'agente-1', role: 'suporte', name: 'Jo?o Suporte' } as User;
-const managerUser = { id: 'manager-1', role: 'gestor_suporte', name: 'Gestor Suporte' } as User;
+const managerUser = { id: 'manager-1', role: 'gestor_suporte', name: 'Gestor Suporte', team_ids: ['team-1'] } as User;
 
 function renderDetails(user: User) {
-  return render(<MonitoriaDetails monitoria={monitoria} user={user} users={[supportUser, managerUser]} onView={vi.fn()} onAction={vi.fn()} />);
+  const team = { id: 'team-1', name: 'Revenda', approval_manager_id: 'manager-1' } as Team;
+  return render(<MonitoriaDetails monitoria={monitoria} user={user} users={[supportUser, managerUser]} teams={[team]} onView={vi.fn()} onAction={vi.fn()} />);
 }
 
 describe('MonitoriaDetails', () => {
