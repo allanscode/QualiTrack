@@ -22,6 +22,6 @@ describe('getManagerDecisionHistory', () => {
       { action: 'Contestação realizada', by_id: 'support-manager', by_name: 'Gestor PJ', at: '2026-10-02T12:00:00Z' },
       { action: 'Monitoria aprovada pelo Gestor Qualidade', by_id: 'quality-manager', by_name: 'Qualidade', at: '2026-10-03T12:00:00Z' },
     ] } as Monitoria;
-    expect(getManagerDecisionHistory([legacy], users).map(item => item.kind)).toEqual(['contestation']);
+    expect(getManagerDecisionHistory([legacy], users).map(item => item.kind)).toEqual(['approval', 'contestation']);
   });
 });
