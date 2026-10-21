@@ -1174,7 +1174,7 @@ export default function SupportManagerDashboard({
                             dataKey="value"
                             label={renderDonutSliceLabel}
                             labelLine={false}
-                            isAnimationActive={gradeDistributionReveal.animateChart && !gradeDistributionReveal.reduceMotion}
+                            isAnimationActive={gradeDistributionReveal.animateChart}
                             animationDuration={900}
                             animationEasing="ease-out"
                           >

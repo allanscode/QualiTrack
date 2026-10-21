@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useReducedMotion } from 'motion/react';
 
 /**
  * Reveals each chart once, when its plot enters the app's actual scrolling area.
@@ -9,7 +8,6 @@ import { useReducedMotion } from 'motion/react';
 export function useChartRevealAnimation() {
   const [node, setNode] = useState<HTMLElement | null>(null);
   const [isInView, setIsInView] = useState(false);
-  const reduceMotion = useReducedMotion();
 
   const ref = useCallback((node: HTMLElement | null) => {
     setNode(node);
@@ -53,5 +51,5 @@ export function useChartRevealAnimation() {
     };
   }, [isInView, node]);
 
-  return { ref, animateChart: isInView, reduceMotion: Boolean(reduceMotion) };
+  return { ref, animateChart: isInView };
 }

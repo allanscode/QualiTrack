@@ -55,7 +55,7 @@ function TrendChart({
   const [tempSub, setTempSub] = useState('');
 
   const shouldReduceMotion = useReducedMotion();
-  const { ref: chartRevealRef, animateChart, reduceMotion } = useChartRevealAnimation();
+  const { ref: chartRevealRef, animateChart } = useChartRevealAnimation();
 
   let dashboardContext = null;
   let editingContext = null;
@@ -231,7 +231,7 @@ function TrendChart({
                   fill={`url(#color-${dk.key})`}
                   dot={data.length === 1 ? { r: 4, strokeWidth: 0, fill: dk.color } : false}
                   activeDot={{ r: 5, strokeWidth: 0, fill: dk.color }}
-                  isAnimationActive={animateChart && !reduceMotion} animationDuration={900} animationEasing="ease-out"
+                  isAnimationActive={animateChart} animationDuration={900} animationEasing="ease-out"
                 />
               ))}
             </AreaChart>

@@ -621,6 +621,29 @@ function MainApp({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
+    if (!isQueueMenuOpen && !isSettingsOpen) return;
+
+    const closeFlyoutsOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-sidebar-flyout-root="true"]')) return;
+      setIsQueueMenuOpen(false);
+      setIsSettingsOpen(false);
+    };
+    const closeFlyoutsOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setIsQueueMenuOpen(false);
+      setIsSettingsOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeFlyoutsOnOutsidePointer);
+    document.addEventListener('keydown', closeFlyoutsOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeFlyoutsOnOutsidePointer);
+      document.removeEventListener('keydown', closeFlyoutsOnEscape);
+    };
+  }, [isQueueMenuOpen, isSettingsOpen]);
+
+  React.useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [activeTab, isFormOpen]);
 
@@ -1297,7 +1320,7 @@ function MainApp({
                   isOpen={true}
                 />
                 {userData?.role !== 'suporte' && (
-                  <div className="space-y-1">
+                  <div data-sidebar-flyout-root="true" className="space-y-1">
                     <button
                       onClick={() => setIsQueueMenuOpen(!isQueueMenuOpen)}
                       className={`
@@ -1394,7 +1417,7 @@ function MainApp({
 
                 {/* Configurações (Admin / Gestores) */}
                 {userData?.role === 'admin' ? (
-                  <div className="space-y-1">
+                  <div data-sidebar-flyout-root="true" className="space-y-1">
                     <button
                       onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                       className={`
@@ -1511,7 +1534,7 @@ function MainApp({
           <NavItem isDark={sidebarIsDark} icon={AnimatedMonitoriasIcon} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => { setActiveTab('monitorias'); setIsQueueMenuOpen(false); setIsSettingsOpen(false); }} isOpen={false} />
           <NavItem isDark={sidebarIsDark} icon={MessageSquare} label="Feedbacks" active={activeTab === 'feedbacks'} onClick={() => { setActiveTab('feedbacks'); setIsQueueMenuOpen(false); setIsSettingsOpen(false); }} isOpen={false} />
           {userData?.role !== 'suporte' && (
-            <div className="relative group/queue space-y-1">
+            <div data-sidebar-flyout-root="true" className="relative group/queue space-y-1">
               <button
                 onClick={handleQueueMenuClick}
                 onMouseEnter={() => setIsQueueHovered(true)}
@@ -1612,7 +1635,7 @@ function MainApp({
             </div>
           )}
           {userData?.role === 'admin' ? (
-            <div className="relative group/settings space-y-1">
+            <div data-sidebar-flyout-root="true" className="relative group/settings space-y-1">
               <button
                 onClick={handleSettingsClick}
                 onMouseEnter={() => setIsSettingsHovered(true)}

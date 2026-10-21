@@ -33,7 +33,7 @@ export function AnimatedProgressBar({ value, active, color, delayMs = 0 }: Anima
   return (
     <div className="h-full w-full overflow-hidden rounded-full bg-surface-subtle" aria-hidden="true">
       <div
-        className="h-full rounded-full transition-[width] duration-1000 ease-out motion-reduce:transition-none"
+        className="h-full rounded-full transition-[width] duration-1000 ease-out"
         style={{
           width: isRevealed ? `${percentage}%` : '0%',
           backgroundColor: color,
