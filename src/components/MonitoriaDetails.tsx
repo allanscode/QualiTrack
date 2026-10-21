@@ -21,7 +21,10 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
   const setActionModal = onAction;
   const legacyVerdict = legacyChildNoteVerdict(m);
   const approvalManagerId = teams.find(team => team.id === m.team_id)?.approval_manager_id;
-  const canActAsTeamManager = user?.role === 'gestor_suporte' && (!approvalManagerId || approvalManagerId === user.id);
+  const hasTeamMembership = Boolean(m.team_id && user?.team_ids?.includes(m.team_id));
+  const canActAsTeamManager = user?.role === 'gestor_suporte'
+    && hasTeamMembership
+    && (!approvalManagerId || approvalManagerId === user.id);
   const managerContestationRound = (m.history || []).filter(entry =>
     /contestaç[aã]o realizada pelo gestor de suporte|gestor pj encaminhou contestaç[aã]o/i.test(entry.action)).length;
   return (

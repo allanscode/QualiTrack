@@ -32,8 +32,8 @@ interface AuthContextType {
   setResetEmail: React.Dispatch<React.SetStateAction<string>>;
   isExistingRequest: boolean;
   setIsExistingRequest: React.Dispatch<React.SetStateAction<boolean>>;
-  activeTab: 'dashboard' | 'monitorias' | 'admin' | 'custom_dashboard';
-  setActiveTab: React.Dispatch<React.SetStateAction<'dashboard' | 'monitorias' | 'admin' | 'custom_dashboard'>>;
+  activeTab: 'dashboard' | 'monitorias' | 'feedbacks' | 'admin' | 'custom_dashboard';
+  setActiveTab: React.Dispatch<React.SetStateAction<'dashboard' | 'monitorias' | 'feedbacks' | 'admin' | 'custom_dashboard'>>;
   handleLogin: (e: React.FormEvent) => Promise<void>;
   handleLogout: (options?: { silent?: boolean; message?: string }) => Promise<void>;
   handleForgotPassword: (e: React.FormEvent) => Promise<void>;
@@ -97,13 +97,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { appReadyRef.current = appReady; }, [appReady]);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'monitorias' | 'admin' | 'custom_dashboard'>(() => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'monitorias' | 'feedbacks' | 'admin' | 'custom_dashboard'>(() => {
     const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
-    if (hash === 'dashboard' || hash === 'monitorias' || hash === 'admin' || hash === 'custom_dashboard') {
+    if (hash === 'dashboard' || hash === 'monitorias' || hash === 'feedbacks' || hash === 'admin' || hash === 'custom_dashboard') {
       return hash as any;
     }
     const saved = typeof window !== 'undefined' ? localStorage.getItem('qualitrack_active_tab') : null;
-    if (saved === 'dashboard' || saved === 'monitorias' || saved === 'admin' || saved === 'custom_dashboard') {
+    if (saved === 'dashboard' || saved === 'monitorias' || saved === 'feedbacks' || saved === 'admin' || saved === 'custom_dashboard') {
       return saved as any;
     }
     return 'dashboard';

@@ -57,4 +57,35 @@ describe('useMonitoriaActions: fluxo único de gestor e qualidade', () => {
 
     expect(db.update.mock.calls[0][2].action_deadline_at).toBe(deadline);
   });
+
+  it('permite à Gestão da Qualidade concluir diretamente uma monitoria válida pendente', async () => {
+    const qualityManager = { id: 'gestor-qualidade', name: 'Gestora de Qualidade', role: 'gestor_qualidade' } as User;
+    const validPending = { ...monitoria, pj_review_required: false, score: 75 };
+    const { result } = renderHook(() => useMonitoriaActions(qualityManager, [validPending], config, vi.fn(), teams));
+    act(() => {
+      result.current.setActionModal({ id: validPending.id, type: 'aprovar' });
+      result.current.setActionNote('Conclusão final da Gestão da Qualidade.');
+    });
+
+    await act(async () => { await result.current.handleAction(); });
+
+    const payload = db.update.mock.calls[0][2];
+    expect(payload.status).toBe('concluida');
+    expect(payload.resolution_type).toBe('human');
+    expect(payload.history[0].action).toContain('Gestão da Qualidade');
+    expect(payload.history[0].note).toBe('Conclusão final da Gestão da Qualidade.');
+  });
+
+  it('requires a Quality conclusion before direct approval of a pending evaluation', async () => {
+    const qualityManager = { id: 'gestor-qualidade', name: 'Gestora de Qualidade', role: 'gestor_qualidade' } as User;
+    const validPending = { ...monitoria, pj_review_required: false, score: 75 };
+    const { result } = renderHook(() => useMonitoriaActions(qualityManager, [validPending], config, vi.fn(), teams));
+    act(() => result.current.setActionModal({ id: validPending.id, type: 'aprovar' }));
+
+    let success = true;
+    await act(async () => { success = await result.current.handleAction(); });
+
+    expect(success).toBe(false);
+    expect(db.update).not.toHaveBeenCalled();
+  });
 });

@@ -834,7 +834,7 @@ function MainApp({
           type: 'monitoria',
           iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
           icon: <MessageSquare className="w-3.5 h-3.5" />,
-          targetTab: 'dashboard',
+          targetTab: 'feedbacks',
           read: readNotificationIds.has(notifId),
         });
       });
@@ -1310,6 +1310,14 @@ function MainApp({
                   onClick={() => { setActiveTab('monitorias'); setIsMobileMenuOpen(false); }}
                   isOpen={true}
                 />
+                <NavItem
+                  isDark={sidebarIsDark}
+                  icon={MessageSquare}
+                  label="Feedbacks"
+                  active={activeTab === 'feedbacks'}
+                  onClick={() => { setActiveTab('feedbacks'); setIsMobileMenuOpen(false); }}
+                  isOpen={true}
+                />
                 {userData?.role !== 'suporte' && (
                   <div className="space-y-1">
                     <button
@@ -1545,6 +1553,7 @@ function MainApp({
         <nav className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 space-y-1 py-4">
           <NavItem isDark={sidebarIsDark} icon={AnimatedDashboardIcon} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={sidebarTextVisible} />
           <NavItem isDark={sidebarIsDark} icon={AnimatedMonitoriasIcon} label="Monitorias" active={activeTab === 'monitorias'} onClick={() => setActiveTab('monitorias')} isOpen={sidebarTextVisible} />
+          <NavItem isDark={sidebarIsDark} icon={MessageSquare} label="Feedbacks" active={activeTab === 'feedbacks'} onClick={() => setActiveTab('feedbacks')} isOpen={sidebarTextVisible} />
           {userData?.role !== 'suporte' && (
             <div className="space-y-1">
               <button
@@ -1780,6 +1789,8 @@ function MainApp({
                   ? `Olá, ${userData?.name.split(' ')[0]}! 👋`
                   : activeTab === 'monitorias'
                   ? 'Gestão de Monitorias'
+                  : activeTab === 'feedbacks'
+                  ? 'Feedbacks'
                   : activeTab === 'filas'
                   ? (QUEUE_TITLES[activeQueueSubTab] || 'Filas de Triagem')
                   : 'Configurações do Sistema'}
@@ -1793,6 +1804,8 @@ function MainApp({
                     : 'Visão executiva da performance e KPIs globais')
                   : activeTab === 'monitorias'
                   ? 'Fluxo de auditoria, contestações e reavaliações'
+                  : activeTab === 'feedbacks'
+                  ? 'Feedbacks pontuais e alinhamentos mensais'
                   : activeTab === 'filas'
                   ? (QUEUE_SUBTITLES[activeQueueSubTab] || 'Triagem inteligente de chamados do Zendesk')
                   : 'Parâmetros de qualidade, usuários, equipes e inteligência artificial'}
@@ -2111,7 +2124,7 @@ function MainApp({
                 <DashboardMain user={userData} activeTab={activeTab} />
               </div>
             )}
-            {activeTab === 'monitorias' && (
+            {(activeTab === 'monitorias' || activeTab === 'feedbacks') && (
               <div className="animate-fade-in">
                 <MonitoriaList
                   user={userData}

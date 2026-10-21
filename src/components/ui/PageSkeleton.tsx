@@ -1,14 +1,14 @@
 import React from 'react';
-import { LoaderCircle } from 'lucide-react';
-
 export function PageSkeleton({ dashboard = false }: { dashboard?: boolean }) {
   const block = dashboard ? 'dashboard-skeleton-block rounded-lg bg-brand-muted/15' : 'rounded-lg bg-brand-muted/15 motion-safe:animate-pulse';
   return (
     <div role="status" aria-label={dashboard ? 'Carregando dashboard' : 'Carregando página'} className="space-y-6">
       <span className="sr-only">Carregando dados…</span>
-      {dashboard && <div className="flex items-center gap-3 text-brand-muted">
-        <LoaderCircle className="dashboard-loading-icon size-4" aria-hidden="true" />
+      {dashboard && <div className="space-y-2.5 text-brand-muted">
         <span className="text-sm font-medium">Carregando indicadores do dashboard…</span>
+        <div className="h-1 w-full overflow-hidden rounded-full bg-surface-subtle" aria-hidden="true">
+          <div className="dashboard-progress-indicator h-full w-1/3 rounded-full bg-brand-accent" />
+        </div>
       </div>}
       <div aria-hidden="true" className="space-y-6">
         <div className="flex flex-wrap gap-3 rounded-2xl border border-surface-border bg-surface-card p-5">

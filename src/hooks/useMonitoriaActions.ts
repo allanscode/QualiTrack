@@ -222,6 +222,13 @@ export function useMonitoriaActions(
       }
     }
 
+    if ((user.role === 'gestor_qualidade' || user.role === 'admin')
+      && type === 'aprovar' && monitoria.status === 'pendente_revisao' && !trimmedNote) {
+      toast.error('Registre a conclusão da Gestão da Qualidade antes de aprovar.');
+      setSubmitting(false);
+      return false;
+    }
+
     // Validação para alteração de etapa administrativa
     const isStepChange = type === 'alterar_etapa' || type === 'avancar_etapa' || type === 'retroceder_etapa';
     if (isStepChange) {
@@ -269,8 +276,10 @@ export function useMonitoriaActions(
       ? `Contestação realizada pelo Gestor de Suporte (${isSecondContestation ? 'decisão definitiva' : 'primeira decisão'})`
       : type === 'manter' && monitoria.status === 'aguardando_gestor_qualidade'
       ? 'Primeira contestação negada pela Gestão da Qualidade; retorno ao Gestor de Suporte'
-      : user.role === 'gestor_qualidade' && type === 'aprovar'
-      ? 'Contestação validada pela Gestão da Qualidade; decisão final'
+      : (user.role === 'gestor_qualidade' || user.role === 'admin') && type === 'aprovar'
+      ? monitoria.status === 'aguardando_gestor_qualidade'
+        ? 'Contestação validada pela Gestão da Qualidade; decisão final'
+        : 'Monitoria aprovada e concluída pela Gestão da Qualidade'
       : isStepChange
       ? (isAdvance ? `Etapa avançada administrativamente (${monitoria.status} ➔ ${nextStatus})` : `Etapa revertida administrativamente (${monitoria.status} ➔ ${nextStatus})`)
       : (actionDescriptions[type] || 'Ação realizada');

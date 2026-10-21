@@ -11,7 +11,6 @@ import {
   X,
   Paperclip,
   Loader2,
-  FileText,
   Download,
   MessageSquare,
   Award,
@@ -20,7 +19,9 @@ import {
   ArrowLeftRight,
   ArrowUp,
   ArrowDown,
-  RotateCcw
+  RotateCcw,
+  SlidersHorizontal,
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadActionAttachment } from '../lib/monitoriaAttachments';
@@ -52,12 +53,13 @@ type VirtualRowProps = {
   getName: (id: string, isEvaluator?: boolean, snapshotName?: string) => string;
   getLevelForScore: (score: number) => { color: string };
   onOpen: (id: string) => void;
+  displayMode: 'table' | 'card';
 };
 
-function VirtualMonitoriaRow({ index, style, monitorias, teams, getName, getLevelForScore, onOpen }: VirtualRowProps & { index: number; style: React.CSSProperties; ariaAttributes?: unknown }) {
+function VirtualMonitoriaRow({ index, style, monitorias, teams, getName, getLevelForScore, onOpen, displayMode }: VirtualRowProps & { index: number; style: React.CSSProperties; ariaAttributes?: unknown }) {
   const m = monitorias[index];
   if (!m) return null;
-  return <MonitoriaRow monitoria={m} style={style} teams={teams} getName={getName} getLevelForScore={getLevelForScore} onOpen={onOpen} />;
+  return <MonitoriaRow monitoria={m} style={style} teams={teams} getName={getName} getLevelForScore={getLevelForScore} onOpen={onOpen} displayMode={displayMode} />;
 }
 
 interface MonitoriaListProps {
@@ -90,29 +92,25 @@ export default function MonitoriaList({
     return staticData.users;
   }, [staticData.users, user?.role]);
 
-  const [monitoriaViewMode, setMonitoriaViewMode] = useState<'avaliacoes' | 'feedbacks'>(initialSubTab === 'avaliacoes' ? 'avaliacoes' : 'feedbacks');
   const [feedbackViewMode, setFeedbackViewMode] = useState<'feedback' | 'one_on_one'>(initialSubTab === 'one_on_one' ? 'one_on_one' : 'feedback');
+  const isFeedbackPage = activeTab === 'feedbacks';
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const feedbacksState = useFeedbacks(user);
 
-  const pendingFeedbacksCount = useMemo(() => {
-    return feedbacksState.feedbacks.filter(f => {
-      const isOneOnOne = f.title.startsWith('[1:1]') || f.title.toLowerCase().includes('1:1');
-      return !isOneOnOne && f.status === 'pendente_ciencia';
-    }).length;
-  }, [feedbacksState.feedbacks]);
-
-  const pendingOneOnOneCount = useMemo(() => {
-    return feedbacksState.feedbacks.filter(f => {
-      const isOneOnOne = f.title.startsWith('[1:1]') || f.title.toLowerCase().includes('1:1');
-      return isOneOnOne && f.status === 'pendente_ciencia';
-    }).length;
-  }, [feedbacksState.feedbacks]);
-
   const filters = useMonitoriaFilters();
+  const sortByColumn = useCallback((field: MonitoriaSortField) => {
+    if (filters.sortField === field) {
+      filters.setSortDirection(current => current === 'asc' ? 'desc' : 'asc');
+      return;
+    }
+    filters.setSortField(field);
+    filters.setSortDirection('asc');
+  }, [filters.sortField, filters.setSortDirection, filters.setSortField]);
   const [page, setPage] = useState(0);
   const { monitorias, loading, total, load, fetchDetail, fetchExportRows } = useMonitoriaData(user, activeTab, {
     page,
     pageSize: 50,
+    enabled: !isFeedbackPage,
     filters: {
       tab: filters.tab, search: filters.search,
       teamFilter: filters.teamFilter, suporteFilter: filters.suporteFilter,
@@ -276,25 +274,16 @@ export default function MonitoriaList({
   return (
     <div className="space-y-6 animate-fade-in pb-8">
       {/* Navegação Superior de Subabas de Monitorias: Avaliações | Feedbacks | 1:1 & PDI */}
-      <div role="tablist" aria-label="Áreas de monitoria" className="flex w-full max-w-xl items-center gap-1 rounded-2xl border border-surface-border bg-surface-card p-1.5 shadow-premium">
-        {([{ id: 'avaliacoes', label: 'Avaliações', icon: FileText, count: total }, { id: 'feedbacks', label: 'Feedbacks', icon: MessageSquare, count: pendingFeedbacksCount + pendingOneOnOneCount }] as const).map(({ id, label, icon: Icon, count }) => (
-          <button key={id} type="button" role="tab" aria-selected={monitoriaViewMode === id} onClick={() => setMonitoriaViewMode(id)} className={`relative flex-1 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${monitoriaViewMode === id ? 'text-brand-on-primary' : 'text-brand-muted hover:text-brand-primary'}`}>
-            {monitoriaViewMode === id && <m.span layoutId="monitoria-main-tab" className="absolute inset-0 rounded-xl bg-brand-primary" transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }} />}
-            <span className="relative inline-flex items-center gap-2"><Icon className="size-4" />{label}<span className="rounded-full bg-black/15 px-1.5 py-0.5 text-[10px] tabular-nums">{count}</span></span>
-          </button>
-        ))}
-      </div>
-
-      {monitoriaViewMode === 'feedbacks' && <div role="tablist" aria-label="Tipo de acompanhamento" className="inline-flex max-w-full items-center gap-1 rounded-xl border border-surface-border bg-surface-subtle/60 p-1">
-        {([{ id: 'feedback', label: 'Feedbacks Operacionais', icon: MessageSquare, count: pendingFeedbacksCount }, { id: 'one_on_one', label: 'Alinhamento Mensal', icon: Award, count: pendingOneOnOneCount }] as const).map(({ id, label, icon: Icon, count }) => (
+      {isFeedbackPage && <div role="tablist" aria-label="Tipo de feedback" className="inline-flex max-w-full items-center gap-1 rounded-xl border border-surface-border bg-surface-card p-1 shadow-sm">
+        {([{ id: 'feedback', label: 'Pontuais', icon: MessageSquare }, { id: 'one_on_one', label: 'Alinhamento Mensal', icon: Award }] as const).map(({ id, label, icon: Icon }) => (
           <button key={id} type="button" role="tab" aria-selected={feedbackViewMode === id} onClick={() => setFeedbackViewMode(id)} className={`relative rounded-lg px-3.5 py-2 text-[11px] font-bold transition-colors ${feedbackViewMode === id ? 'text-brand-primary' : 'text-brand-muted hover:text-brand-primary'}`}>
             {feedbackViewMode === id && <m.span layoutId="monitoria-feedback-tab" className="absolute inset-0 rounded-lg bg-surface-card shadow-sm" transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }} />}
-            <span className="relative inline-flex items-center gap-2"><Icon className="size-3.5" />{label}<span className="rounded-full bg-brand-primary/10 px-1.5 py-0.5 text-[10px] tabular-nums">{count}</span></span>
+            <span className="relative inline-flex items-center gap-2"><Icon className="size-3.5" />{label}</span>
           </button>
         ))}
       </div>}
 
-      {monitoriaViewMode === 'feedbacks' && feedbackViewMode === 'feedback' && (
+      {isFeedbackPage && feedbackViewMode === 'feedback' && (
         <FeedbacksSubtabView
           currentUser={user}
           users={maskedUsers}
@@ -312,7 +301,7 @@ export default function MonitoriaList({
         />
       )}
 
-      {monitoriaViewMode === 'feedbacks' && feedbackViewMode === 'one_on_one' && (
+      {isFeedbackPage && feedbackViewMode === 'one_on_one' && (
         <FeedbacksSubtabView
           currentUser={user}
           users={maskedUsers}
@@ -330,155 +319,139 @@ export default function MonitoriaList({
         />
       )}
 
-      {monitoriaViewMode === 'avaliacoes' && (
+      {!isFeedbackPage && (
         <>
           {/* Block 1: Filters & Status Joined */}
           <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card rounded-3xl">
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full">
-            {/* Busca (col-span-12 lg:col-span-4) */}
-            <form
-              className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-1 flex h-9 gap-2"
-              onSubmit={event => {
-                event.preventDefault();
-                filters.setSearch(searchInput.trim());
-              }}
-            >
-              <div className="relative min-w-0 flex-1">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" aria-hidden="true" />
-                <input
-                  type="search"
-                  aria-label="Buscar monitoria por ticket"
-                  placeholder="Número do ticket..."
-                  value={searchInput}
-                  onChange={event => setSearchInput(event.target.value)}
-                  className="w-full h-full bg-surface-card border border-surface-border rounded-lg pl-9 pr-3 text-[10px] font-bold text-brand-primary placeholder:text-brand-muted/60 focus:border-brand-accent transition-all outline-none shadow-sm"
-                />
-              </div>
-              <Button type="submit" size="sm" variant="outline" className="h-9 shrink-0">Pesquisar</Button>
-            </form>
-
-            {/* Grupo Datas (col-span-12 lg:col-span-4) */}
-            <div className="col-span-12 lg:col-span-4 lg:col-start-1 lg:row-start-2 flex flex-col min-[360px]:flex-row items-center gap-2 w-full">
-              <CustomDatepicker
-                value={filters.startDate}
-                onChange={(val: string) => filters.setStartDate(val)}
-                placeholder="Data inicial"
-                size="sm"
-              />
-              <span className="text-brand-muted/30 font-black text-[9px] uppercase tracking-widest shrink-0">até</span>
-              <CustomDatepicker
-                value={filters.endDate}
-                onChange={(val: string) => filters.setEndDate(val)}
-                placeholder="Data final"
-                size="sm"
+          <form
+            className="flex flex-col gap-3 lg:flex-row lg:items-center"
+            onSubmit={event => {
+              event.preventDefault();
+              filters.setSearch(searchInput.trim());
+            }}
+          >
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-brand-muted" aria-hidden="true" />
+              <input
+                type="search"
+                aria-label="Buscar monitoria"
+                placeholder="Buscar por monitoria, ticket, agente ou equipe"
+                value={searchInput}
+                onChange={event => setSearchInput(event.target.value)}
+                className="h-10 w-full rounded-xl border border-surface-border bg-surface-bg pl-10 pr-3 text-sm text-brand-primary placeholder:text-brand-muted/70 focus-visible:border-brand-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/20"
               />
             </div>
-
-            {/* Bloco de Apoio (Direita - col-span-12 lg:col-span-8) */}
-            <div className="col-span-12 lg:col-span-8 lg:col-start-5 lg:row-start-1 lg:row-span-2 flex flex-wrap items-center gap-2 w-full self-end">
-              {/* Dropdowns */}
-              <CustomSelect
-                value={filters.teamFilter}
-                onChange={val => filters.setTeamFilter(val)}
-                options={[{ value: '', label: 'Todas Equipes' }, ...activeTeams.map(t => ({ value: t.id, label: t.name }))]}
-                size="sm"
-              />
-
-              {user?.role !== 'suporte' && (
-                <CustomSelect
-                  value={filters.suporteFilter}
-                  onChange={val => filters.setSuporteFilter(val)}
-                  options={[{ value: '', label: 'Agentes' }, ...activeSuportes.map(s => ({ value: s.id, label: s.name }))]}
-                  size="sm"
-                />
-              )}
-
-              {['admin', 'gestor_qualidade'].includes(user?.role || '') && (
-                <CustomSelect
-                  value={filters.auditorFilter}
-                  onChange={val => filters.setAuditorFilter(val)}
-                  options={[{ value: '', label: 'Monitores' }, ...activeAuditors.map(a => ({ value: a.id, label: a.name }))]}
-                  size="sm"
-                />
-              )}
-
-              <CustomSelect
-                value={filters.ticketKindFilter}
-                onChange={val => filters.setTicketKindFilter(val as 'all' | 'child' | 'service')}
-                options={[{ value: 'all', label: 'Todos os tickets' }, { value: 'child', label: 'Tickets filhos' }, { value: 'service', label: 'Atendimentos' }]}
-                size="sm"
-              />
-
-              <div className="flex items-center gap-1" role="group" aria-label="Ordenação das monitorias">
-                <CustomSelect
-                  value={filters.sortField}
-                  onChange={value => filters.setSortField(value as MonitoriaSortField)}
-                  options={[
-                    { value: 'created_at', label: 'Criação' },
-                    { value: 'score', label: 'Nota' },
-                    { value: 'action_deadline_at', label: 'Prazo de ação' },
-                  ]}
-                  aria-label="Ordenar por"
-                  size="sm"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 shrink-0"
-                  aria-label={filters.sortDirection === 'desc' ? 'Ordem decrescente; mudar para crescente' : 'Ordem crescente; mudar para decrescente'}
-                  title={filters.sortDirection === 'desc' ? 'Ordem decrescente' : 'Ordem crescente'}
-                  aria-pressed={filters.sortDirection === 'asc'}
-                  onClick={() => filters.setSortDirection(current => current === 'desc' ? 'asc' : 'desc')}
-                >
-                  {filters.sortDirection === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-                </Button>
-              </div>
-
-              {/* Botão Exportar CSV */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="submit" size="sm" variant="primary" className="h-10 px-4">Pesquisar</Button>
               <Button
+                type="button"
                 size="sm"
                 variant="outline"
-                icon={<Download className="w-3.5 h-3.5" />}
+                className="h-10"
+                aria-expanded={showAdvancedFilters}
+                onClick={() => setShowAdvancedFilters(open => !open)}
+              >
+                <SlidersHorizontal className="mr-2 size-4" />
+                Filtros
+                {filters.hasActiveFilters && <span className="ml-2 rounded-full bg-brand-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-accent">Ativos</span>}
+                <ChevronDown className={`ml-2 size-4 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                icon={<Download className="size-4" />}
                 onClick={async () => {
                   try {
                     const rows = await fetchExportRows(filtered.map(row => row.id));
                     const success = exportMonitoriasToCsv(rows, 'monitorias_qualitrack', staticData.users, staticData.teams);
-                    if (success) toast.success(`${rows.length} monitorias desta página exportadas para CSV!`);
+                    if (success) toast.success(`${rows.length} monitorias desta p?gina exportadas para CSV!`);
                     else toast.error('Nenhuma monitoria para exportar.');
                   } catch (error) {
                     console.error('[Monitorias] Falha ao exportar CSV:', error);
-                    toast.error('Não foi possível exportar as monitorias.');
+                    toast.error('N?o foi poss?vel exportar as monitorias.');
                   }
                 }}
-                className="h-8 text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-brand-primary shrink-0"
-                title="Exportar registros desta página para CSV (compatível com Excel)"
               >
-                Exportar CSV
+                Exportar
               </Button>
-
-              {/* Clear button — animated clean button pushed to the right */}
-              <AnimatePresence>
-                {filters.hasActiveFilters && (
-                  <m.div
-                    initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: 28, opacity: 1 }}
-                    exit={{ width: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: "easeInOut" }}
-                    className="overflow-hidden flex-shrink-0 flex items-center justify-center ml-auto"
-                  >
-                    <button
-                      onClick={filters.clearFilters}
-                      className="w-7 h-7 rounded-full bg-functional-error/10 text-functional-error hover:bg-functional-error hover:text-white transition-all flex items-center justify-center shadow-sm cursor-pointer"
-                      title="Limpar Filtros"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </m.div>
-                )}
-              </AnimatePresence>
+              {filters.hasActiveFilters && <Button type="button" size="sm" variant="ghost" onClick={filters.clearFilters}>Limpar filtros</Button>}
             </div>
-          </div>
+          </form>
+
+          <AnimatePresence initial={false}>
+            {showAdvancedFilters && <m.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="overflow-hidden"
+            >
+              <div className="grid gap-3 border-t border-surface-border/70 pt-4 sm:grid-cols-2 xl:grid-cols-4">
+                <CustomSelect
+                  value={filters.teamFilter}
+                  onChange={val => filters.setTeamFilter(val)}
+                  options={[{ value: '', label: 'Todas as equipes' }, ...activeTeams.map(team => ({ value: team.id, label: team.name }))]}
+                  size="sm"
+                />
+                {user?.role !== 'suporte' && <CustomSelect
+                  value={filters.suporteFilter}
+                  onChange={val => filters.setSuporteFilter(val)}
+                  options={[{ value: '', label: 'Todos os agentes' }, ...activeSuportes.map(support => ({ value: support.id, label: support.name }))]}
+                  size="sm"
+                />}
+                {['admin', 'gestor_qualidade'].includes(user?.role || '') && <CustomSelect
+                  value={filters.auditorFilter}
+                  onChange={val => filters.setAuditorFilter(val)}
+                  options={[{ value: '', label: 'Todos os monitores' }, ...activeAuditors.map(auditor => ({ value: auditor.id, label: auditor.name }))]}
+                  size="sm"
+                />}
+                <CustomSelect
+                  value={filters.ticketKindFilter}
+                  onChange={val => filters.setTicketKindFilter(val as 'all' | 'child' | 'service')}
+                  options={[{ value: 'all', label: 'Todos os tipos' }, { value: 'child', label: 'Ticket filho' }, { value: 'service', label: 'Atendimento' }]}
+                  size="sm"
+                />
+                <CustomSelect
+                  value={filters.dateType}
+                  onChange={val => filters.setDateType(val as 'analysis' | 'ticket')}
+                  options={[{ value: 'analysis', label: 'Data da monitoria' }, { value: 'ticket', label: 'Data do ticket' }]}
+                  size="sm"
+                />
+                <CustomDatepicker value={filters.startDate} onChange={(value: string) => filters.setStartDate(value)} placeholder="Data inicial" size="sm" />
+                <CustomDatepicker value={filters.endDate} onChange={(value: string) => filters.setEndDate(value)} placeholder="Data final" size="sm" />
+                <div className="flex gap-2">
+                  <CustomSelect
+                    value={filters.sortField}
+                    onChange={value => filters.setSortField(value as MonitoriaSortField)}
+                    options={[
+                      { value: 'display_id', label: 'Ordenar: monitoria' },
+                      { value: 'ticket_id', label: 'Ordenar: ticket' },
+                      { value: 'evaluated_name', label: 'Ordenar: agente' },
+                      { value: 'team_name', label: 'Ordenar: equipe' },
+                      { value: 'evaluator_name', label: 'Ordenar: monitor' },
+                      { value: 'form_id', label: 'Ordenar: tipo' },
+                      { value: 'score', label: 'Ordenar: avalia??o' },
+                      { value: 'status', label: 'Ordenar: status' },
+                    ]}
+                    aria-label="Ordenar monitorias por"
+                    size="sm"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-label={filters.sortDirection === 'asc' ? 'Ordem crescente; mudar para decrescente' : 'Ordem decrescente; mudar para crescente'}
+                    title={filters.sortDirection === 'asc' ? 'Ordem crescente' : 'Ordem decrescente'}
+                    onClick={() => filters.setSortDirection(current => current === 'asc' ? 'desc' : 'asc')}
+                  >
+                    {filters.sortDirection === 'asc' ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
+                  </Button>
+                </div>
+              </div>
+            </m.div>}
+          </AnimatePresence>
 
           {/* Status Tabs (Unified inside) — Tamanho extra compacto para caber harmoniosamente na tela */}
           <div className="pt-2.5 border-t border-surface-border/50 flex items-center gap-1 overflow-x-auto no-scrollbar pb-0.5">
@@ -521,7 +494,24 @@ export default function MonitoriaList({
 
       {/* Block 2: The List */}
       <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card overflow-hidden">
-        <div>
+        <div role="table" aria-label="Monitorias" className="overflow-x-auto">
+            <div role="rowgroup" className="hidden min-w-[1120px] border-b border-surface-border bg-surface-subtle/45 lg:block">
+              <div role="row" className="grid min-h-11 grid-cols-[142px_145px_112px_minmax(140px,1.1fr)_minmax(120px,0.9fr)_minmax(145px,1fr)_110px_125px_34px] items-center gap-2 px-4 text-[10px] font-bold uppercase tracking-wide text-brand-muted">
+                {([
+                  ['Status', 'status'], ['Monitoria', 'display_id'], ['Ticket', 'ticket_id'], ['Agente', 'evaluated_name'],
+                  ['Equipe', 'team_name'], ['Monitor de qualidade', 'evaluator_name'], ['Tipo', 'form_id'], ['Avaliação', 'score'],
+                ] as const).map(([label, field]) => (
+                  <div key={field} role="columnheader" className="min-w-0">
+                    <button type="button" onClick={() => sortByColumn(field)} className="inline-flex max-w-full items-center gap-1.5 rounded-md text-left hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent" aria-label={`Ordenar por ${label}, atualmente ${filters.sortField === field ? filters.sortDirection === 'asc' ? 'crescente' : 'decrescente' : 'sem ordenação'}`}>
+                      <span className="truncate">{label}</span>
+                      {filters.sortField === field ? filters.sortDirection === 'asc' ? <ArrowUp className="size-3.5 shrink-0" /> : <ArrowDown className="size-3.5 shrink-0" /> : <ArrowDown className="size-3.5 shrink-0 opacity-20" />}
+                    </button>
+                  </div>
+                ))}
+                <span role="columnheader" className="sr-only">Ações</span>
+              </div>
+            </div>
+          <div role="rowgroup">
           {loading ? (
             <div role="status" className="flex min-h-32 items-center justify-center gap-2 text-sm text-brand-muted">
               <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden="true" />
@@ -533,12 +523,12 @@ export default function MonitoriaList({
                 rowComponent={VirtualMonitoriaRow}
                 rowCount={filtered.length}
                 rowHeight={72}
-                rowProps={{ monitorias: filtered, teams: staticData.teams, getName, getLevelForScore, onOpen: openDetails }}
+                rowProps={{ monitorias: filtered, teams: staticData.teams, getName, getLevelForScore, onOpen: openDetails, displayMode: 'table' }}
                 overscanCount={5}
-                style={{ height: 600, width: '100%' }}
+                style={{ height: 600, width: 'max(100%, 1120px)' }}
               />
             ) : filtered.map(m => (
-              <MonitoriaRow key={m.id} monitoria={m} teams={staticData.teams} getName={getName} getLevelForScore={getLevelForScore} onOpen={openDetails} />
+              <MonitoriaRow key={m.id} monitoria={m} teams={staticData.teams} getName={getName} getLevelForScore={getLevelForScore} onOpen={openDetails} displayMode="table" />
             ))
           ) : (
             <div className="py-20 px-4 text-center bg-surface-bg/10">
@@ -576,6 +566,7 @@ export default function MonitoriaList({
               </div>
             </div>
           )}
+          </div>
         </div>
       </Card>
       <div className="flex items-center justify-between gap-3 text-xs text-brand-muted">
@@ -666,6 +657,11 @@ export default function MonitoriaList({
                   } else if (isSupportManager && isContestation) {
                     noteLabel = 'Justificativa da Contestação';
                     notePlaceholder = 'Descreva detalhadamente a justificativa para contestar a avaliação (obrigatório)...';
+                    noteRequired = true;
+                  } else if ((user?.role === 'gestor_qualidade' || user?.role === 'admin')
+                    && actionModal.type === 'aprovar' && currentSt === 'pendente_revisao') {
+                    noteLabel = 'Conclusão da Gestão da Qualidade';
+                    notePlaceholder = 'Registre a conclusão final que será enviada ao Zendesk (obrigatório)...';
                     noteRequired = true;
                   } else if (isStepChange) {
                     noteLabel = 'Observação da Gestão (Opcional)';
