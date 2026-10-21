@@ -48,7 +48,8 @@ export function childPublicationVerdict(
   if (verdict === 'invalido') return 'nao_conforme';
   const questionIds = monitoria.form_snapshot?.sections?.flatMap(section => section.questions?.map(question => question.id) || []) || [];
   if (!questionIds.length || !monitoria.answers) return null;
-  return questionIds.every(id => monitoria.answers?.[id] === 'SIM') ? 'conforme' : 'nao_conforme';
+  if (questionIds.some(id => !['SIM', 'NAO', 'NA'].includes(monitoria.answers?.[id] || ''))) return null;
+  return questionIds.some(id => monitoria.answers?.[id] === 'NAO') ? 'nao_conforme' : 'conforme';
 }
 
 export function childPublicationError(

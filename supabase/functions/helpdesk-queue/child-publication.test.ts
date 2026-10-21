@@ -62,4 +62,17 @@ describe('publicação de chamados filhos', () => {
     expect(childPublicationVerdict(legacyChild)).toBe('nao_conforme');
     expect(childPublicationError(legacyChild, '177882', 'auditor-1', 'qualidade')).toBeNull();
   });
+
+  it('deriva o veredito das respostas: NA não reprova, NAO reprova e resposta ausente fica indefinida', () => {
+    const ids = ['q1', 'q2', 'q3'];
+    const withAnswers = (answers: Record<string, 'SIM' | 'NAO' | 'NA'>): ChildPublicationMonitoria => ({
+      ...saved,
+      child_verdict: null,
+      answers,
+      form_snapshot: { sections: [{ questions: ids.map(id => ({ id })) }] },
+    } as unknown as ChildPublicationMonitoria);
+    expect(childPublicationVerdict(withAnswers({ q1: 'SIM', q2: 'NA', q3: 'SIM' }))).toBe('conforme');
+    expect(childPublicationVerdict(withAnswers({ q1: 'SIM', q2: 'NAO', q3: 'NA' }))).toBe('nao_conforme');
+    expect(childPublicationVerdict(withAnswers({ q1: 'SIM', q2: 'SIM' }))).toBeNull();
+  });
 });

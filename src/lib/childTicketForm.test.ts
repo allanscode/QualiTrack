@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { ChildTicketAiEvaluation, EvaluationForm, Monitoria } from '../types';
-import { CHILD_FORM_IDS, CHILD_TICKET_FORM_ID, childEvaluationFormPrefill, childTicketForm, isChildTicketMonitoria, legacyChildNoteVerdict, shouldUseChildFormForReevaluation } from './childTicketForm';
+import { CHILD_FORM_IDS, CHILD_TICKET_FORM_ID, childEvaluationFormPrefill, childTicketForm, childVerdict, isChildTicketMonitoria, legacyChildNoteVerdict, shouldUseChildFormForReevaluation } from './childTicketForm';
 
 describe('ficha de ticket filho', () => {
+  it('childVerdict trata NA como não reprovação e exige todas as respostas', () => {
+    const form = { sections: [{ questions: [{ id: 'a' }, { id: 'b' }] }] } as unknown as EvaluationForm;
+    expect(childVerdict({ a: 'SIM', b: 'NA' }, form)).toBe('valido');
+    expect(childVerdict({ a: 'NAO', b: 'NA' }, form)).toBe('invalido');
+    expect(childVerdict({ a: 'SIM' } as Record<string, 'SIM'>, form)).toBeNull();
+  });
+
   it('preenche resultados por ID e preserva NA sem converter em reprovação', () => {
     const mapped = childEvaluationFormPrefill({
       detected_type: 'analise_tecnica', status: 'atencao', score: 50,

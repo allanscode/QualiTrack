@@ -23,8 +23,9 @@ export function detectChildMacroType(tags: readonly string[], subject: string): 
 
 export function childVerdict(answers: Record<string, 'SIM' | 'NAO' | 'NA'>, form: EvaluationForm | undefined): 'valido' | 'invalido' | null {
   const questions = form?.sections?.flatMap(section => section.questions) || [];
-  if (!questions.length) return null;
-  return questions.every(question => answers[question.id] === 'SIM') ? 'valido' : 'invalido';
+  if (!questions.length || questions.some(question => !['SIM', 'NAO', 'NA'].includes(answers[question.id]))) return null;
+  // NA registra falta de evidência ou critério não aplicável; somente NAO é reprovação.
+  return questions.some(question => answers[question.id] === 'NAO') ? 'invalido' : 'valido';
 }
 
 const CHILD_QUESTION_RULES: Record<string, string[]> = {
