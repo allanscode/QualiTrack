@@ -91,6 +91,17 @@ describe('MonitoriaList actions', () => {
     expect(publishEvaluation).not.toHaveBeenCalled();
   });
 
+  it('does not reopen review when the quality decision was completed while its dialog was open', async () => {
+    fixture.status = 'aguardando_gestor_qualidade';
+    render(<ListWithSelectedMonitoria />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Aprovar' }));
+    fixture.status = 'concluida';
+    fireEvent.click(screen.getByRole('button', { name: /Confirmar/ }));
+    await waitFor(() => expect(screen.queryByText(/Ficha de avaliação/)).not.toBeInTheDocument());
+    expect(updateMonitoria).not.toHaveBeenCalled();
+    expect(publishEvaluation).not.toHaveBeenCalled();
+  });
+
   it('permite conferir o envio de uma monitoria já concluída', async () => {
     fixture.status = 'concluida';
     render(<ListWithSelectedMonitoria />);

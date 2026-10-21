@@ -32,6 +32,19 @@ describe('MonitoriaTimeline', () => {
     expect(screen.queryByText('Auditor')).not.toBeInTheDocument();
   });
 
+  it('shows the quality role for legacy administrator-labeled edits by a quality manager', () => {
+    const admin = { id: 'admin-1', role: 'admin', name: 'Admin' } as User;
+    const qualityManager = { id: 'quality-1', role: 'gestor_qualidade', name: 'Allan' } as User;
+    const edited = {
+      ...monitoria,
+      history: [{ action: 'Edi\u00E7\u00E3o pelo Administrador', by_id: 'quality-1', by_name: 'Allan', at: '2026-10-06T14:00:00Z' }],
+    } as Monitoria;
+    render(<MonitoriaTimeline monitoria={edited} user={admin} users={[admin, qualityManager]} />);
+
+    expect(screen.getByText('Edi\u00E7\u00E3o pela Gest\u00E3o da Qualidade')).toBeInTheDocument();
+    expect(screen.queryByText('Edi\u00E7\u00E3o pelo Administrador')).not.toBeInTheDocument();
+  });
+
   it('mostra conclusão automática quando o histórico não contém evento terminal', () => {
     const user = { id: 'admin-1', role: 'admin', name: 'Admin' } as User;
     render(<MonitoriaTimeline monitoria={{ ...monitoria, status: 'concluida', resolution_type: 'automatic', history: [] }} user={user} users={[user]} />);

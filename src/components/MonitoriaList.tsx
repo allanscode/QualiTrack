@@ -962,7 +962,33 @@ export default function MonitoriaList({
                               && currentSt === 'aguardando_gestor_qualidade'
                               && (user?.role === 'gestor_qualidade' || user?.role === 'admin')
                               && m) {
-                              setViewingMonitoria({ ...m, _qualityContestReview: true, _qualityDecisionNote: actionNote.trim() } as Monitoria);
+                              // Os detalhes podem ficar abertos enquanto uma ação ou atualização em tempo real
+                              // conclui a contestação. Consulte o estado persistido antes de abrir outra revisão.
+                              const latest = await fetchDetail(m.id).catch(error => {
+                                console.error('[Monitorias] Falha ao confirmar etapa antes da decisão:', error);
+                                return null;
+                              });
+                              if (!latest) {
+                                toast.error('Não foi possível confirmar o status atual. Atualize a lista e tente novamente.');
+                                return;
+                              }
+                              const current = latest;
+                              if (['concluida', 'finalizada_alterada', 'contestacao_aceita', 'contestacao_negada'].includes(current.status)) {
+                                setSelectedDetail(current);
+                                setActionModal(null);
+                                closeDetails();
+                                void load();
+                                toast.info('Esta monitoria já foi concluída. A decisão não precisa ser repetida.');
+                                return;
+                              }
+                              if (current.status !== 'aguardando_gestor_qualidade') {
+                                setSelectedDetail(current);
+                                setActionModal(null);
+                                void load();
+                                toast.info('A etapa da monitoria foi atualizada. Confira o status antes de decidir.');
+                                return;
+                              }
+                              setViewingMonitoria({ ...current, _qualityContestReview: true, _qualityDecisionNote: actionNote.trim() } as Monitoria);
                               setActionModal(null);
                               return;
                             }

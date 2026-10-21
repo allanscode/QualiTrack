@@ -706,9 +706,6 @@ export default function MonitoriaForm({
 
   return createPortal(
       <div className="fixed inset-0 z-[9999] bg-black/25 dark:bg-black/40 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden animate-fade-in" onMouseDown={event => { if (event.target === event.currentTarget) onCancel(); }}>
-      {isQualityContestReview && <div role="status" className="fixed left-1/2 top-2 z-[10000] w-[min(94vw,850px)] -translate-x-1/2 rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-brand-primary shadow-xl">
-        Revisão final da contestação: ajuste as respostas para recalcular o score e gere um novo Registro do Auditor com IA antes de salvar.
-      </div>}
       <m.div
         initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 10 }}
         animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
@@ -733,7 +730,7 @@ export default function MonitoriaForm({
               </div>
               {isViewOnly && (
                 <p className="hidden sm:block text-[11px] text-brand-muted mt-0.5 max-w-md leading-relaxed truncate">
-                  {user?.role === 'admin' || user?.role === 'gestor_qualidade'
+                  {user?.role === 'admin'
                     ? 'Modo somente leitura. Para retificar critérios ou notas, use o botão "Habilitar Edição".'
                     : 'Monitorias salvas são somente leitura.'}
                 </p>
@@ -788,7 +785,7 @@ export default function MonitoriaForm({
               </span>
             )}
 
-            {isViewOnly && (user?.role === 'admin' || user?.role === 'gestor_qualidade') && (
+            {isViewOnly && user?.role === 'admin' && (
               <Button
                 size="sm"
                 variant="outline"
@@ -809,6 +806,12 @@ export default function MonitoriaForm({
 
         {/* Form Content */}
         <div ref={contentRef} className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6 space-y-6 no-scrollbar min-h-0">
+          {isQualityContestReview && (
+            <div role="status" className="flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm leading-relaxed text-brand-primary">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden="true" />
+              <p>Revisão final da contestação: ajuste a ficha e gere um novo Registro do Auditor com IA antes de salvar.</p>
+            </div>
+          )}
           {/* Banner de Rascunho Encontrado */}
           {hasDraft && draftData && (
             <div className="p-3.5 rounded-2xl bg-brand-primary/10 border border-brand-primary/30 flex items-center justify-between gap-3 text-xs shadow-xs animate-fade-in">

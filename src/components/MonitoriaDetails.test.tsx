@@ -42,6 +42,28 @@ describe('MonitoriaDetails', () => {
     expect(screen.getByRole('button', { name: /Contestar e enviar/ })).toBeInTheDocument();
   });
 
+  it('shows quality decisions without administrator controls during a contestation', () => {
+    const qualityManager = { id: 'quality-1', role: 'gestor_qualidade', name: 'Gestor Qualidade' } as User;
+    const contested = {
+      ...monitoria,
+      status: 'aguardando_gestor_qualidade',
+      history: [{
+        action: 'Contestacao realizada pelo Gestor de Suporte (primeira decisao da Qualidade)',
+        by_id: 'manager-1', by_name: 'Gestor Suporte', at: '2026-09-25T16:00:00.000Z',
+      }],
+    } as Monitoria;
+    const team = { id: 'team-1', name: 'Revenda', approval_manager_id: 'manager-1' } as Team;
+
+    render(<MonitoriaDetails monitoria={contested} user={qualityManager} users={[supportUser, managerUser, qualityManager]} teams={[team]} onView={vi.fn()} onAction={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Negar e devolver ao Suporte' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Editar AvaliaÃ§Ã£o' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Alterar Etapa' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reabrir Monitoria' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Excluir' })).not.toBeInTheDocument();
+  });
+
   it('allows administrator to execute governance and workflow actions across different stages', () => {
     const adminUser = { id: 'admin-1', role: 'admin', name: 'Admin Master' } as User;
 

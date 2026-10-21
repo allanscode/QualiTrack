@@ -119,7 +119,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                     </Button>
                   )}
 
-                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
+                  {user?.role === 'admin' && m.active !== false && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -214,8 +214,8 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                     </>
                   )}
 
-                  {/* Controles de Etapa e Fluxo — Exclusivos de Administrador e Gestor de Qualidade */}
-                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (() => {
+                  {/* Edição manual de etapa e reabertura são controles administrativos. */}
+                  {user?.role === 'admin' && m.active !== false && (() => {
                     const prevStage = getPreviousStage(m.status);
                     const nextStage = getNextStage(m.status);
                     const isClosed = ['concluida', 'finalizada_alterada', 'contestacao_aceita', 'contestacao_negada'].includes(m.status);
@@ -275,11 +275,8 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
                     );
                   })()}
 
-                  {/* Excluir é soft-delete (active=false via UPDATE, não DELETE
-                      real) — governado por monitorias_update_policy, que já
-                      autoriza admin e gestor_qualidade. Alinhando a UI ao que
-                      o banco já permitia. */}
-                  {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && m.active !== false && (
+                  {/* Exclusão e manutenção administrativa ficam restritas ao admin. */}
+                  {user?.role === 'admin' && m.active !== false && (
                     <Button
                       variant="ghost"
                       size="sm"

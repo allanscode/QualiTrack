@@ -26,8 +26,9 @@ vi.mock('../lib/useQualityConfig', () => ({
 vi.mock('./MonitoriaForm', () => ({ default: () => <div>Ficha de avaliação</div> }));
 
 const admin = { id: 'admin-1', role: 'admin', name: 'Administrador' } as User;
+const supportManager = { id: 'manager-1', role: 'gestor_suporte', name: 'Gestor de Atendimento', team_ids: ['team-1'] } as User;
 const monitoria = {
-  id: 'monitoria-1', display_id: 5786, ticket_id: '167240', status: 'reavaliacao_solicitada',
+  id: 'monitoria-1', display_id: 5786, ticket_id: '167240', team_id: 'team-1', status: 'reavaliacao_solicitada',
   active: true, created_at: '2026-09-22T11:14:00.000Z', updated_at: '2026-09-25T15:21:00.000Z',
   evaluator_id: 'auditor-1', evaluated_id: 'agente-1', score: 50,
   history: [{ action: 'Contestação realizada', by_id: 'admin-1', by_name: 'Administrador', at: '2026-09-25T15:21:00.000Z' }],
@@ -51,6 +52,30 @@ describe('InPlaceMonitoriaModal actions', () => {
     fireEvent.click(await screen.findByRole('button', { name: button }));
     expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar Ação' }));
+    await waitFor(() => expect(updateMonitoria).toHaveBeenCalled());
+  });
+
+  it('shows the support manager approval dialog above the in-place monitoria details', async () => {
+    const awaitingManager = { ...monitoria, status: 'aguardando_gestor_suporte' } as Monitoria;
+    getMonitorias.mockResolvedValue({ data: [awaitingManager] });
+    render(
+      <InPlaceMonitoriaModal
+        monitoriaId={monitoria.id}
+        user={supportManager}
+        users={[supportManager]}
+        teams={[{ id: 'team-1', name: 'Contábil', approval_manager_id: supportManager.id, active: true }]}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Aprovar e concluir' }));
+
+    const actionHeading = await screen.findByRole('heading', { name: 'Aprovação e Aceite' });
+    expect(actionHeading.closest('[role="dialog"]')?.parentElement).toHaveClass('z-[120]');
+    fireEvent.change(screen.getByPlaceholderText('Descreva a a\u00E7\u00E3o corretiva aplicada ao colaborador...'), {
+      target: { value: 'A\u00E7\u00E3o corretiva realizada.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar A\u00E7\u00E3o' }));
     await waitFor(() => expect(updateMonitoria).toHaveBeenCalled());
   });
 });

@@ -218,7 +218,7 @@ export default function InPlaceMonitoriaModal({
       <AnimatePresence>
         {actionModal && (
           <div
-            className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center overflow-y-auto bg-black/30 dark:bg-black/50 p-0 sm:p-6 backdrop-blur-md"
+            className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center overflow-y-auto bg-black/30 dark:bg-black/50 p-0 sm:p-6 backdrop-blur-md"
             onMouseDown={event => {
               if (event.target === event.currentTarget) setActionModal(null);
             }}

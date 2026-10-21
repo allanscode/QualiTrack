@@ -108,7 +108,10 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
       toast.error('Informe a justificativa da reavaliação.');
       return;
     }
-    if (deps.isQualityContestReview && !deps.auditorRecordRegenerated) {
+    const isQualityManagerContestationEdit = deps.isAdminEdit
+      && ['gestor_qualidade', 'admin'].includes(deps.user?.role || '')
+      && deps.initialData?.status === 'aguardando_gestor_qualidade';
+    if ((deps.isQualityContestReview || isQualityManagerContestationEdit) && !deps.auditorRecordRegenerated) {
       toast.error('Gere um novo Registro do Auditor com IA antes de concluir a contestação.');
       return;
     }
@@ -122,7 +125,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
       toast.error('A ficha alterou o resultado. Atualize o Registro do Auditor antes de salvar para que ele corresponda ao novo cálculo.');
       return;
     }
-    if (deps.isQualityContestReview && !evaluationChanged) {
+    if ((deps.isQualityContestReview || isQualityManagerContestationEdit) && !evaluationChanged) {
       toast.error('Ajuste as respostas da ficha para recalcular o score antes de concluir.');
       return;
     }
@@ -182,9 +185,11 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           && ['pendente_revisao', 'aguardando_gestor_suporte'].includes(deps.initialData.status)
           && isPositive
           && Number(deps.initialData.score) !== Number(deps.score);
-        const qualityManagerFinalizesContest = deps.isQualityContestReview
+        const qualityManagerFinalizesContest = (deps.isQualityContestReview || isQualityManagerContestationEdit)
           && ['gestor_qualidade', 'admin'].includes(deps.user?.role || '')
-          && deps.initialData?.status === 'aguardando_gestor_qualidade';
+          && deps.initialData?.status === 'aguardando_gestor_qualidade'
+          && evaluationChanged
+          && isPositive;
         const requiresPjReview = false;
         if (qualityManagerFinalizesValidScore) {
           historyNote = `${historyNote || 'Ajuste de nota'} | Conclusão pela Gestão da Qualidade: nota final >=75%, sem nova aprovação do Gestor de Suporte`;
@@ -202,6 +207,8 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           ? 'Contesta\u00E7\u00E3o aprovada e monitoria conclu\u00EDda pela Gest\u00E3o da Qualidade'
           : qualityManagerFinalizesValidScore
           ? 'Veredito final ajustado pela Gestão da Qualidade (nota >=75%)'
+          : deps.isAdminEdit && deps.user?.role === 'gestor_qualidade'
+          ? 'Edição pela Gestão da Qualidade'
           : deps.isAdminEdit
           ? 'Edição pelo Administrador'
           : deps.isReevaluating

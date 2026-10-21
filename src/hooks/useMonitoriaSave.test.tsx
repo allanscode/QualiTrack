@@ -168,4 +168,60 @@ describe('useMonitoriaSave', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', 'em_contestacao'));
     expect(db.update.mock.calls[0][0].evaluator_note).toBe('Registro atualizado para o novo resultado.');
   });
+
+  it('registra edição feita por gestor de qualidade com a autoria funcional correta', async () => {
+    const onSaved = vi.fn();
+    db.update.mockImplementation(() => ({ eq: async () => ({ error: null }) }));
+    const deps = {
+      ...pjDeps(60, onSaved),
+      user: { id: 'allan-id', name: 'Allan Simões de Amorim', role: 'gestor_qualidade' },
+      initialData: {
+        id: 'monitoria-pj', status: 'em_contestacao', score: 60,
+        evaluator_note: 'Registro anterior.', action_deadline_at: null,
+        history: [], answers: { pergunta: 'NÃO' },
+      },
+      isAdminEdit: true,
+    } as unknown as Parameters<typeof useMonitoriaSave>[0];
+    deps.scores.pergunta = 'SIM';
+    deps.header.evaluator_note = 'Registro atualizado após revisão de qualidade.';
+
+    const { result } = renderHook(() => useMonitoriaSave(deps));
+    act(() => result.current.handleSave());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', 'em_contestacao'));
+    expect(db.update.mock.calls[0][0].history[0]).toMatchObject({
+      action: 'Edição pela Gestão da Qualidade',
+      by_id: 'allan-id',
+      by_name: 'Allan Simões de Amorim',
+    });
+  });
+
+  it('concludes a quality contest after the quality manager makes the score valid', async () => {
+    const onSaved = vi.fn();
+    db.update.mockImplementation(() => ({ eq: async () => ({ error: null }) }));
+    const deps = {
+      ...pjDeps(80, onSaved),
+      user: { id: 'quality-manager', name: 'Quality Manager', role: 'gestor_qualidade' },
+      initialData: {
+        id: 'monitoria-contestada', status: 'aguardando_gestor_qualidade', score: 60,
+        evaluator_note: 'Previous record.', action_deadline_at: null,
+        history: [], answers: { pergunta: 'NAO' }, contestation_result: 'pending',
+      },
+      isAdminEdit: true,
+      auditorRecordRegenerated: true,
+    } as unknown as Parameters<typeof useMonitoriaSave>[0];
+    deps.header.evaluator_note = 'New AI record for the updated result.';
+
+    const { result } = renderHook(() => useMonitoriaSave(deps));
+    act(() => result.current.handleSave());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-contestada', 'concluida'));
+    expect(db.update.mock.calls[0][0]).toMatchObject({
+      status: 'concluida',
+      contestation_result: 'approved',
+      resolution_type: 'human',
+      action_deadline_at: null,
+    });
+    expect(db.update.mock.calls[0][0].history[0].action).toContain('Contesta');
+  });
 });

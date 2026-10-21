@@ -60,6 +60,12 @@ export default function MonitoriaTimeline({ monitoria, user, users }: Props) {
           const actorName = (user?.role === 'suporte' || user?.role === 'gestor_suporte') && !users.some(actor => actor.id === entry.by_id)
             ? 'Equipe de Qualidade'
             : resolveTimelineActor(entry.by_id, entry.by_name, users, user?.role);
+          const normalizedAction = normalizeTimelineText(entry.action);
+          const actor = users.find(item => item.id === entry.by_id);
+          const displayAction = actor?.role === 'gestor_qualidade'
+            && /edição pelo administrador/i.test(normalizedAction)
+            ? 'Edição pela Gestão da Qualidade'
+            : normalizedAction;
 
           return (
             <li key={`${entry.at}-${entry.action}-${index}`} className="relative min-w-0 pb-4 pl-7 last:pb-0">
@@ -69,7 +75,7 @@ export default function MonitoriaTimeline({ monitoria, user, users }: Props) {
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-1">
                   <div className="flex min-w-0 items-start gap-2">
                     <EventIcon className={`mt-0.5 size-3.5 shrink-0 ${color}`} aria-hidden="true" />
-                    <strong className="min-w-0 text-xs leading-snug text-brand-primary">{normalizeTimelineText(entry.action)}</strong>
+                    <strong className="min-w-0 text-xs leading-snug text-brand-primary">{displayAction}</strong>
                   </div>
                   <time className="shrink-0 text-[11px] tabular-nums text-brand-muted" dateTime={entry.at}>
                     {formatTimelineDateTime(entry.at, monitoria.created_at)}
