@@ -5,6 +5,7 @@ The final active QWP decision was treated as the source of truth. We compared 18
 - **143 tickets** were verified with the evaluation field and verdict tags aligned to QWP.
 - **40 tickets** remain divergent. Every one is `solved`; QWP says `negativa` while Zendesk still says `positiva`.
 - Zendesk rejected updates for these 40 with HTTP 422 because required field **Categoria** (ID `40618174555540`) is blank. Zendesk requires it to update solved tickets. We did not infer or modify Category, status, comments, or other ticket data.
+- In a read-only check, 38 of the 40 have exactly one existing `categoria_*` tag matching an option in Zendesk's Categoria field. Tickets `183990` and `187027` have no category tag, so no value can be derived for them.
 - Every attempted update sent only evaluation fields and tags, with no `comment` or `status`. Final state was re-read from Zendesk.
 - The blocked ticket IDs and each ticket's final values are in the CSV evidence below.
 
@@ -13,6 +14,7 @@ Evidence files:
 - `2026-10-20-qwp-zendesk-final-verification.csv`: final Zendesk state compared with the QWP verdict.
 - `2026-10-20-qwp-zendesk-correction-results.csv`: per-ticket correction result and blocking exception.
 - `2026-10-20-qwp-zendesk-divergences.csv`: initial comparison and expected QWP verdict.
+- `2026-10-20-zendesk-required-category.csv`: the 40 blockers and whether their existing category tag matches an allowed field option.
 
 ## Code changes
 
