@@ -13,6 +13,7 @@ import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
+import { useChartRevealAnimation } from './useChartRevealAnimation';
 
 const CustomTooltip = ({ active, payload, total }: any) => {
   if (!active || !payload?.length) return null;
@@ -50,6 +51,7 @@ function DistributionChart({
   const [tempSub, setTempSub] = useState('');
 
   const shouldReduceMotion = useReducedMotion();
+  const { ref: chartRevealRef, animateChart } = useChartRevealAnimation();
 
   let dashboardContext = null;
   let editingContext = null;
@@ -151,7 +153,8 @@ function DistributionChart({
           dataKey="value"
           label={renderCustomLabel}
           labelLine={false}
-          isAnimationActive={!shouldReduceMotion} animationDuration={900} animationEasing="ease-out"
+          key={animateChart ? 'visible' : 'waiting'}
+          isAnimationActive={animateChart} animationDuration={900} animationEasing="ease-out"
         >
           {data.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={entry.color} />
@@ -233,7 +236,7 @@ function DistributionChart({
         )}
         {data.length > 0 ? (
           <div className="flex-1 min-h-0 flex flex-row items-center justify-between gap-2">
-            <div className="w-[120px] @min-[380px]:w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
+            <div ref={chartRevealRef} className="w-[120px] @min-[380px]:w-[140px] h-[160px] shrink-0 relative flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 {renderChart()}
               </ResponsiveContainer>

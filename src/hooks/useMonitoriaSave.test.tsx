@@ -125,5 +125,6 @@ describe('useMonitoriaSave', () => {
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith('monitoria-pj', isAdminEdit ? 'em_contestacao' : 'aguardando_gestor_suporte'));
     expect(db.update.mock.calls[0][0].action_deadline_at).toBe(deadline);
+    if (isAdminEdit) expect(db.update.mock.calls[0][0].history[0].note).toContain('Critério “pergunta”');
   });
 });

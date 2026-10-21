@@ -124,6 +124,32 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           if (deps.header.ticket_id !== deps.initialData.ticket_id) changes.push(`Ticket: ${deps.initialData.ticket_id} → ${deps.header.ticket_id}`);
           if (deps.header.ticket_date !== deps.initialData.ticket_date) changes.push(`Data do ticket: ${deps.initialData.ticket_date} → ${deps.header.ticket_date}`);
           if (!isChild && deps.score !== deps.initialData.score) changes.push(`Score: ${deps.initialData.score}% → ${deps.score}%`);
+          const criterionChanges: string[] = [];
+          for (const section of deps.selectedForm?.sections || []) {
+            for (const question of section.questions) {
+              const oldAnswer = deps.initialData.answers?.[question.id];
+              const newAnswer = deps.scores[question.id];
+              const oldObservation = deps.initialData.question_observations?.[question.id] || '';
+              const newObservation = deps.observations[question.id] || '';
+              if (oldAnswer === newAnswer && oldObservation === newObservation) continue;
+              const describe = (answer: string | undefined, observation: string) =>
+                `${answer || 'sem resposta'}${observation.trim() ? ` · ${observation.trim().slice(0, 120)}` : ''}`;
+              const criterionLabel = `${section.title ? `${section.title}: ` : ''}${question.text || question.id}`.slice(0, 100);
+              criterionChanges.push(`Critério “${criterionLabel}”: ${describe(oldAnswer, oldObservation)} → ${describe(newAnswer, newObservation)}`);
+            }
+          }
+          for (const question of deps.selectedForm?.critical_errors || []) {
+            const oldSelected = (deps.initialData.selected_critical_errors || []).includes(question.id);
+            const newSelected = Boolean(deps.criticalErrors[question.id]);
+            const oldObservation = deps.initialData.critical_error_observations?.[question.id] || '';
+            const newObservation = deps.criticalErrorObservations[question.id] || '';
+            if (oldSelected === newSelected && oldObservation === newObservation) continue;
+            const describe = (selected: boolean, observation: string) =>
+              `${selected ? 'marcado' : 'desmarcado'}${observation.trim() ? ` · ${observation.trim().slice(0, 120)}` : ''}`;
+            criterionChanges.push(`Erro crítico “${(question.text || question.id).slice(0, 100)}”: ${describe(oldSelected, oldObservation)} → ${describe(newSelected, newObservation)}`);
+          }
+          changes.push(...criterionChanges.slice(0, 16));
+          if (criterionChanges.length > 16) changes.push(`Mais ${criterionChanges.length - 16} alterações de critérios`);
           historyNote = changes.length > 0 ? changes.join(' | ') : 'Edição administrativa';
         }
 

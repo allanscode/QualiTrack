@@ -622,6 +622,32 @@ export default function MonitoriaForm({
 
     setGeneratingAuditorRecord(true);
     try {
+      const previous = initialData;
+      const formatCriterionState = (answer: string | undefined, observation: string | undefined) =>
+        [answer ? `Resposta: ${answer}` : 'Sem resposta', observation?.trim() ? `Observação: ${observation.trim()}` : 'Sem observação'].join(' · ');
+      const changedCriteria = selectedForm.sections.flatMap(section => section.questions
+        .filter(question => previous && (
+          previous.answers?.[question.id] !== scores[question.id]
+          || (previous.question_observations?.[question.id] || '') !== (observations[question.id] || '')
+        ))
+        .map(question => ({
+          criterion: `${section.title}: ${question.text}`,
+          before: formatCriterionState(previous?.answers?.[question.id], previous?.question_observations?.[question.id]),
+          after: formatCriterionState(scores[question.id], observations[question.id]),
+        })));
+      const changedCriticalErrors = (selectedForm.critical_errors || [])
+        .filter(question => previous && (
+          (previous.selected_critical_errors || []).includes(question.id) !== Boolean(criticalErrors[question.id])
+          || (previous.critical_error_observations?.[question.id] || '') !== (criticalErrorObservations[question.id] || '')
+        ))
+        .map(question => ({
+          criterion: `Erro crítico: ${question.text}`,
+          before: formatCriterionState(
+            (previous?.selected_critical_errors || []).includes(question.id) ? 'Selecionado' : 'Não selecionado',
+            previous?.critical_error_observations?.[question.id],
+          ),
+          after: formatCriterionState(criticalErrors[question.id] ? 'Selecionado' : 'Não selecionado', criticalErrorObservations[question.id]),
+        }));
       const record = await generateAuditorRecordWithAI({
         ticketId: header.ticket_id.trim(),
         form: selectedForm,
@@ -630,6 +656,8 @@ export default function MonitoriaForm({
         observations,
         criticalErrors,
         criticalErrorObservations,
+        previousNote: header.evaluator_note,
+        changedCriteria: [...changedCriteria, ...changedCriticalErrors].slice(0, 200),
       });
       setHeader(prev => ({ ...prev, evaluator_note: record }));
       toast.success('Novo Registro do Auditor gerado com as observações atuais.');

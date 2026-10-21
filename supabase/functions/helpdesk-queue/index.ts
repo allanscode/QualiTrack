@@ -234,6 +234,10 @@ const RequestSchema = z.object({
     observations: z.record(z.string().max(5000)),
     critical_errors: z.record(z.boolean()),
     critical_error_observations: z.record(z.string().max(5000)),
+    previous_note: z.string().max(3000).optional(),
+    changed_criteria: z.array(z.object({
+      criterion: z.string().max(500), before: z.string().max(3000), after: z.string().max(3000),
+    })).max(200).optional(),
   }).optional(),
   dialogue: z.array(z.record(z.unknown())).max(500).optional(),
   dialogue_text: z.string().max(250_000).optional(),
@@ -2712,6 +2716,14 @@ async function handleGenerateAuditorRecord(
     observations: sanitizedObservations,
     criticalErrors: evaluation_context.critical_errors,
     criticalErrorObservations: sanitizedCriticalObservations,
+    previousNote: evaluation_context.previous_note
+      ? sanitizeMessageBody(evaluation_context.previous_note).slice(0, 3000)
+      : undefined,
+    changedCriteria: (evaluation_context.changed_criteria || []).map(change => ({
+      criterion: sanitizeMessageBody(change.criterion).slice(0, 500),
+      before: sanitizeMessageBody(change.before).slice(0, 3000),
+      after: sanitizeMessageBody(change.after).slice(0, 3000),
+    })),
   });
   const responseSchema = {
     type: 'object',

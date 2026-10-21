@@ -6,7 +6,8 @@ import { BarChart3 } from 'lucide-react';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
-import { m, AnimatePresence, useReducedMotion } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
+import { useChartRevealAnimation } from './useChartRevealAnimation';
 
 interface DataKey {
   key: string;
@@ -36,7 +37,7 @@ function ComparativeBarChart({
   setActiveEditingId
 }: ComparativeBarChartProps) {
   const { config, saveConfig } = useQualityConfig();
-  const shouldReduceMotion = useReducedMotion();
+  const { ref: chartRevealRef, animateChart } = useChartRevealAnimation();
   const [isHovered, setIsHovered] = useState(false);
   const [tempSub, setTempSub] = useState('');
 
@@ -175,7 +176,7 @@ function ComparativeBarChart({
           </div>
         )
       )}
-      <div className="flex-1 min-h-[150px]" style={{ minWidth: 0, minHeight: 150 }}>
+      <div ref={chartRevealRef} className="flex-1 min-h-[150px]" style={{ minWidth: 0, minHeight: 150 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }} barGap={4} barSize={20}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />
@@ -207,7 +208,7 @@ function ComparativeBarChart({
               wrapperStyle={{ fontSize: '10px', fontWeight: 700, color: 'var(--brand-muted)', paddingTop: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
             />
             {dataKeys.map(dk => (
-              <Bar key={dk.key} dataKey={dk.key} name={dk.name} fill={dk.color} radius={[4, 4, 0, 0]} isAnimationActive={!shouldReduceMotion} animationDuration={900} animationEasing="ease-out" />
+              <Bar key={`${dk.key}-${animateChart ? 'visible' : 'waiting'}`} dataKey={dk.key} name={dk.name} fill={dk.color} radius={[4, 4, 0, 0]} isAnimationActive={animateChart} animationDuration={900} animationEasing="ease-out" />
             ))}
           </BarChart>
         </ResponsiveContainer>

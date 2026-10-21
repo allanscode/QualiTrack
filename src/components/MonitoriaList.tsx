@@ -19,6 +19,7 @@ import {
   ArrowLeftRight,
   ArrowUp,
   ArrowDown,
+  ExternalLink,
   RotateCcw,
   SlidersHorizontal,
   FileText
@@ -45,7 +46,7 @@ import { MonitoriaRow } from './MonitoriaRow';
 import MonitoriaDetails from './MonitoriaDetails';
 import HelpdeskSendModal from './HelpdeskSendModal';
 import { publishEvaluationToHelpdesk } from '../lib/helpdesk';
-import { isChildTicketMonitoria } from '../lib/childTicketForm';
+import { childVerdict, isChildTicketMonitoria } from '../lib/childTicketForm';
 
 type VirtualRowProps = {
   monitorias: Monitoria[];
@@ -588,6 +589,12 @@ export default function MonitoriaList({
               if (detailLoading) return <div className="p-6 text-brand-primary" role="status">Carregando ficha...</div>;
               if (!m) return <div className="p-6 text-brand-primary">Monitoria não encontrada.</div>;
               const cfg = getStatusConfig(m.status);
+              const isChildTicket = isChildTicketMonitoria(m);
+              const hasSavedChildAnswers = Object.keys(m.answers || {}).length > 0;
+              const snapshotChildVerdict = (m.form_snapshot as { child_verdict?: 'valido' | 'invalido' } | undefined)?.child_verdict;
+              const verdict = isChildTicket
+                ? (hasSavedChildAnswers ? childVerdict(m.answers || {}, m.form_snapshot) : null) || m.child_verdict || snapshotChildVerdict
+                : null;
               return <>
                 <header className="flex items-start gap-3 border-b border-surface-border p-4 sm:items-center sm:p-6">
                   <span className={`flex size-10 shrink-0 items-center justify-center rounded-2xl ${VARIANT_ICON_CONTAINER[cfg.variant]}`}><cfg.icon className="size-5" /></span>
@@ -595,6 +602,7 @@ export default function MonitoriaList({
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 id="monitoria-detail-title" className="text-base font-black text-brand-primary">Ticket #{m.ticket_id || 'S/N'}</h2>
                       <MonitoriaIdBadge displayId={m.display_id} id={m.id} />
+                      {isChildTicket && verdict && <Badge variant={verdict === 'valido' ? 'success' : 'error'} size="xs">{verdict === 'valido' ? 'Válido' : 'Inválido'}</Badge>}
                     </div>
                     <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-brand-primary/80">
                       <span>Agente: {getName(m.evaluated_id, false, m.evaluated_name)}</span>
@@ -603,6 +611,7 @@ export default function MonitoriaList({
                     </p>
                   </div>
                   <Badge variant={cfg.variant} size="xs" className="hidden shrink-0 sm:inline-flex">{cfg.shortLabel}</Badge>
+                  {m.ticket_id && <a href={`https://webposto.zendesk.com/agent/tickets/${m.ticket_id.trim()}`} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ticket ${m.ticket_id} no Zendesk`} title="Abrir no Zendesk" className="shrink-0 rounded-lg border border-surface-border p-2 text-brand-muted hover:bg-surface-subtle hover:text-brand-primary focus-visible:ring-2 focus-visible:ring-brand-accent"><ExternalLink className="size-4" /></a>}
                   <button ref={detailCloseRef} type="button" onClick={closeDetails} aria-label="Fechar detalhes" className="shrink-0 rounded-xl p-2 text-brand-primary hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-brand-accent"><X className="size-5" /></button>
                 </header>
                 <div className="min-h-0 overflow-y-auto p-4 sm:p-6 pb-safe">
@@ -959,7 +968,15 @@ export default function MonitoriaList({
           user={user}
           initialData={viewingMonitoria}
           onCancel={() => setViewingMonitoria(null)}
-          onSaved={() => { setViewingMonitoria(null); load(); }}
+          onSaved={() => {
+            setViewingMonitoria(null);
+            void load();
+            if (selectedId) {
+              void fetchDetail(selectedId).then(detail => {
+                if (detail) setSelectedDetail(detail);
+              }).catch(error => console.error('[Monitorias] Falha ao atualizar detalhe após edição:', error));
+            }
+          }}
         />
       )}
 

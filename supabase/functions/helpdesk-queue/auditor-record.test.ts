@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { buildAuditorRecordPrompt, parseAuditorRecordResponse } from './auditor-record';
 
 describe('geração do registro do auditor', () => {
+  it('usa registro anterior e mudanças antes/depois para atualizar apenas os pontos afetados', () => {
+    const prompt = buildAuditorRecordPrompt({
+      ticketId: '171370', score: 80, sections: [], answers: {}, observations: {},
+      criticalErrors: {}, criticalErrorObservations: {},
+      previousNote: 'O agente não registrou a solução.',
+      changedCriteria: [{ criterion: 'Registro da solução', before: 'Resposta: NAO', after: 'Resposta: SIM · Observação: solução registrada' }],
+    });
+
+    expect(prompt).toContain('O agente não registrou a solução.');
+    expect(prompt).toContain('Resposta: NAO');
+    expect(prompt).toContain('Resposta: SIM');
+    expect(prompt).toContain('registro anterior como contexto histórico');
+  });
+
   it('usa somente observações atuais não vazias e inclui erros críticos selecionados', () => {
     const prompt = buildAuditorRecordPrompt({
       ticketId: '171370',

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronRight, ExternalLink, History, Shield, Tag, User as UserIcon } from 'lucide-react';
+import { ChevronRight, History, Shield, Tag, User as UserIcon } from 'lucide-react';
 import { Monitoria, Team } from '../types';
 import { getStatusConfig, VARIANT_ICON_CONTAINER } from '../lib/statusHelper';
 import Badge from './ui/Badge';
@@ -61,7 +61,7 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
               : <span className={`font-bold tabular-nums ${scoreColor}`} title={legacyVerdict ? 'Nota original do parecer legado' : undefined}>{m.score != null ? `${m.score}%` : '—'}</span>}
         </span>
         <span role="cell" className="flex justify-end">
-          {m.ticket_id && <a href={`https://webposto.zendesk.com/agent/tickets/${m.ticket_id.trim()}`} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ticket ${m.ticket_id} no Zendesk`} className="rounded-md p-1.5 text-brand-muted hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"><ExternalLink className="size-3.5" /></a>}
+          <button type="button" onClick={() => onOpen(m.id)} aria-label={`Abrir monitoria ${m.display_id || m.ticket_id}`} title="Abrir monitoria" className="rounded-md p-1.5 text-brand-muted hover:bg-surface-subtle hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"><ChevronRight className="size-4" /></button>
         </span>
       </div>}
       <div className={`flex min-h-[68px] sm:min-h-[72px] items-center gap-2 p-2 sm:gap-3 sm:px-4 sm:py-2.5 hover:bg-surface-subtle/60 transition-colors ${displayMode === 'table' ? 'lg:hidden' : ''}`}>
@@ -144,17 +144,6 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
           </span>
           <ChevronRight className="size-4 shrink-0 text-brand-muted" />
         </button>
-        {m.ticket_id && (
-          <a
-            href={`https://webposto.zendesk.com/agent/tickets/${m.ticket_id.trim()}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Abrir ticket ${m.ticket_id} no Zendesk`}
-            className="hidden sm:inline-flex rounded-lg p-1.5 text-brand-muted hover:text-brand-primary focus-visible:ring-2 focus-visible:ring-brand-accent transition-colors"
-          >
-            <ExternalLink className="size-3.5" />
-          </a>
-        )}
       </div>
     </div>
   );

@@ -445,6 +445,8 @@ export interface AuditorRecordGenerationInput {
   observations: Record<string, string>;
   criticalErrors: Record<string, boolean>;
   criticalErrorObservations: Record<string, string>;
+  previousNote?: string;
+  changedCriteria?: Array<{ criterion: string; before: string; after: string }>;
 }
 
 export async function generateAuditorRecordWithAI(
@@ -468,6 +470,8 @@ export async function generateAuditorRecordWithAI(
         observations: input.observations,
         critical_errors: input.criticalErrors,
         critical_error_observations: input.criticalErrorObservations,
+        previous_note: input.previousNote,
+        changed_criteria: input.changedCriteria,
       },
     },
   });

@@ -7,6 +7,7 @@ import { useDashboard, useEditing } from '../DashboardContext';
 import { toast } from 'sonner';
 import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { withDashboardTile } from '../DashboardTileLayout';
+import { useChartRevealAnimation } from './useChartRevealAnimation';
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -54,6 +55,7 @@ function TrendChart({
   const [tempSub, setTempSub] = useState('');
 
   const shouldReduceMotion = useReducedMotion();
+  const { ref: chartRevealRef, animateChart } = useChartRevealAnimation();
 
   let dashboardContext = null;
   let editingContext = null;
@@ -199,7 +201,7 @@ function TrendChart({
             </div>
           </div>
         )}
-        <div className="flex-1 min-h-[150px] print:h-[220px]" style={{ minWidth: 0, minHeight: 150 }}>
+        <div ref={chartRevealRef} className="flex-1 min-h-[150px] print:h-[220px]" style={{ minWidth: 0, minHeight: 150 }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
               <defs>
@@ -219,7 +221,7 @@ function TrendChart({
               />
               {dataKeys.map(dk => (
                 <Area
-                  key={dk.key}
+                  key={`${dk.key}-${animateChart ? 'visible' : 'waiting'}`}
                   type="monotone"
                   dataKey={dk.key}
                   name={dk.name}
@@ -229,7 +231,7 @@ function TrendChart({
                   fill={`url(#color-${dk.key})`}
                   dot={data.length === 1 ? { r: 4, strokeWidth: 0, fill: dk.color } : false}
                   activeDot={{ r: 5, strokeWidth: 0, fill: dk.color }}
-                  isAnimationActive={!shouldReduceMotion} animationDuration={900} animationEasing="ease-out"
+                  isAnimationActive={animateChart} animationDuration={900} animationEasing="ease-out"
                 />
               ))}
             </AreaChart>
