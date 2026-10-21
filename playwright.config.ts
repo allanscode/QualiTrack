@@ -2,7 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 60_000,
+  // A primeira navegação compila o módulo no Vite (~50s a frio); 60s estourava sob carga.
+  timeout: 120_000,
   fullyParallel: false,
   reporter: 'line',
   use: {

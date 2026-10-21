@@ -8,7 +8,7 @@ for (const dark of [false, true]) {
       await page.goto(`/tests/e2e/fixtures/page-skeleton.html${dark ? '?dark' : ''}`);
       await expect(page.getByRole('status', { name: 'Carregando dashboard' })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-      expect(await page.locator('[aria-hidden] .rounded-lg').first().evaluate(node => getComputedStyle(node).animationName)).toBe('none');
+      expect(await page.locator('[aria-hidden] .rounded-lg').first().evaluate(node => getComputedStyle(node).animationName)).toBe('dashboard-loading-breathe');
       await page.screenshot({ path: testInfo.outputPath('skeleton.png'), fullPage: true });
     });
   }
