@@ -268,7 +268,7 @@ export default function CreateFeedbackModal({
           oneOnOneMood.trim() ? `• Clima & Motivação do Atendente:\n${oneOnOneMood.trim()}` : null,
         ].filter(Boolean).join('\n\n');
 
-        payloadStrengths = strengthsSection || 'Alinhamento 1:1 realizado com foco no desenvolvimento contínuo.';
+        payloadStrengths = strengthsSection || 'Alinhamento mensal realizado com foco no desenvolvimento contínuo.';
         payloadImprovements = oneOnOneImprovements.trim();
 
         const planSection = [
@@ -373,7 +373,7 @@ export default function CreateFeedbackModal({
                 id="create-feedback-title"
                 className="text-sm sm:text-base font-black text-brand-primary uppercase tracking-wider truncate"
               >
-                {isOneOnOne ? 'Novo Alinhamento Mensal 1:1 & PDI' : 'Novo Feedback Operacional'}
+                {isOneOnOne ? 'Novo Alinhamento Mensal & PDI' : 'Novo Feedback Operacional'}
               </h2>
               <p
                 id="create-feedback-subtitle"
@@ -757,7 +757,7 @@ export default function CreateFeedbackModal({
                   htmlFor="oneonone-title-input"
                   className="block text-[10px] font-black uppercase tracking-wider text-brand-muted mb-1.5"
                 >
-                  Título do Alinhamento 1:1 *
+                  Título do Alinhamento Mensal *
                 </label>
                 <input
                   id="oneonone-title-input"
@@ -913,7 +913,7 @@ export default function CreateFeedbackModal({
               {submitting
                 ? 'Salvando...'
                 : isOneOnOne
-                ? 'Salvar Alinhamento 1:1 & PDI'
+                ? 'Salvar Alinhamento Mensal & PDI'
                 : feedbackTone === 'positive'
                 ? 'Registrar Feedback Positivo'
                 : 'Registrar Feedback Operacional'}

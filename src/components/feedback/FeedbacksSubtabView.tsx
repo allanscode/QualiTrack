@@ -132,7 +132,7 @@ export default function FeedbacksSubtabView({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base sm:text-lg font-black text-brand-primary tracking-tight">
-                  {mode === 'one_on_one' ? 'Alinhamentos Mensais 1:1 & PDI' : 'Feedbacks Operacionais'}
+                  {mode === 'one_on_one' ? 'Alinhamento Mensal & PDI' : 'Feedbacks Operacionais'}
                 </h2>
                 {pendingCount > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
@@ -172,7 +172,7 @@ export default function FeedbacksSubtabView({
                 icon={<Plus className="w-4 h-4" />}
                 className="text-xs font-bold shrink-0"
               >
-                {mode === 'one_on_one' ? 'Novo Alinhamento 1:1' : 'Novo Feedback'}
+                {mode === 'one_on_one' ? 'Novo Alinhamento Mensal' : 'Novo Feedback'}
               </Button>
             )}
           </div>
@@ -184,7 +184,7 @@ export default function FeedbacksSubtabView({
             <div className="flex items-center gap-2.5 text-amber-800 dark:text-amber-300 font-semibold min-w-0">
               <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
               <span>
-                Você possui {pendingCount} {mode === 'one_on_one' ? 'alinhamento 1:1' : 'feedback'} aguardando sua leitura e confirmação de ciência digital.
+                Você possui {pendingCount} {mode === 'one_on_one' ? 'alinhamento mensal' : 'feedback'} aguardando sua leitura e confirmação de ciência digital.
               </span>
             </div>
             <button
@@ -238,7 +238,7 @@ export default function FeedbacksSubtabView({
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder={mode === 'one_on_one' ? 'Buscar alinhamento 1:1 por título, atendente ou plano de ação...' : 'Buscar feedback por assunto, colaborador ou orientações...'}
+              placeholder={mode === 'one_on_one' ? 'Buscar alinhamento mensal por título, atendente ou plano de ação...' : 'Buscar feedback por assunto, colaborador ou orientações...'}
               className="w-full pl-9 pr-4 py-2 bg-surface-subtle border border-surface-border rounded-xl text-xs text-brand-primary placeholder:text-brand-muted focus:outline-none focus:border-brand-accent transition-colors"
             />
           </div>
@@ -326,7 +326,7 @@ export default function FeedbacksSubtabView({
               {mode === 'one_on_one' ? <Award className="w-7 h-7 opacity-40" /> : <MessageSquare className="w-7 h-7 opacity-40" />}
             </div>
             <p className="text-xs font-black uppercase tracking-wider text-brand-primary">
-              Nenhum {mode === 'one_on_one' ? 'alinhamento 1:1' : 'feedback'} encontrado
+              Nenhum {mode === 'one_on_one' ? 'alinhamento mensal' : 'feedback'} encontrado
             </p>
             <p className="text-[11px] text-brand-muted mt-1 max-w-sm mx-auto">
               {isAgent

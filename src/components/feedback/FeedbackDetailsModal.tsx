@@ -151,7 +151,7 @@ export default function FeedbackDetailsModal({
               )}
               {isOneOnOne && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                  Sessão 1:1
+                  Alinhamento mensal
                 </span>
               )}
               <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">
@@ -313,7 +313,7 @@ export default function FeedbackDetailsModal({
                   {feedback.deadline_date && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 dark:text-purple-300">
                       <Calendar className="w-3 h-3 shrink-0" />
-                      Próximo 1:1: {new Date(feedback.deadline_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      Próximo alinhamento: {new Date(feedback.deadline_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                     </span>
                   )}
                 </div>

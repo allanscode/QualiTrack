@@ -10,7 +10,6 @@ import type { MonitoriaSortDirection, MonitoriaSortField } from './useMonitoriaF
 export type MonitoriaListFilters = {
   tab?: string;
   search?: string;
-  statusFilter?: 'active' | 'removed';
   teamFilter?: string;
   suporteFilter?: string;
   auditorFilter?: string;
@@ -65,7 +64,7 @@ function mergeSourcePage(primary: Monitoria[], reviewer: Monitoria[], pageSize: 
 }
 
 function matchesFilters(row: Monitoria, filters: MonitoriaListFilters) {
-  if ((filters.statusFilter || 'active') === 'active' ? row.active === false : row.active !== false) return false;
+  if (row.active === false) return false;
   if (filters.tab === 'pendente_revisao' && !['pendente_revisao', 'contestacao_negada'].includes(row.status)) return false;
   if (filters.tab === 'expiradas_prazo' && !(row.status === 'concluida' && row.resolution_type === 'automatic')) return false;
   if (filters.tab === 'concluida' && !(row.status === 'concluida' && row.resolution_type !== 'automatic')) return false;
@@ -87,7 +86,7 @@ function matchesFilters(row: Monitoria, filters: MonitoriaListFilters) {
 }
 
 function applyQueryFilters(query: any, filters: MonitoriaListFilters) {
-  query = query.eq('active', (filters.statusFilter || 'active') === 'active');
+  query = query.eq('active', true);
   if (filters.tab === 'pendente_revisao') query = query.in('status', ['pendente_revisao', 'contestacao_negada']);
   else if (filters.tab === 'expiradas_prazo') query = query.eq('status', 'concluida').eq('resolution_type', 'automatic');
   else if (filters.tab === 'concluida') query = query.eq('status', 'concluida').or('resolution_type.is.null,resolution_type.neq.automatic');

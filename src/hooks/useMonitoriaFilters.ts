@@ -10,7 +10,6 @@ const DEFAULT_END_DATE = () => new Date().toISOString().split('T')[0];
 export function useMonitoriaFilters() {
   const [tab, setTab] = useState<MonitoriaStatus | 'todas' | 'expiradas_prazo'>('todas');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'active' | 'removed'>('active');
   const [teamFilter, setTeamFilter] = useState<string>('');
   const [suporteFilter, setSuporteFilter] = useState<string>('');
   const [auditorFilter, setAuditorFilter] = useState<string>('');
@@ -24,8 +23,8 @@ export function useMonitoriaFilters() {
   const hasActiveFilters = useMemo(() => {
     const isDefaultDate = startDate === DEFAULT_START_DATE() &&
       endDate === DEFAULT_END_DATE();
-    return search !== '' || teamFilter !== '' || suporteFilter !== '' || auditorFilter !== '' || ticketKindFilter !== 'all' || !isDefaultDate || statusFilter !== 'active';
-  }, [search, teamFilter, suporteFilter, auditorFilter, ticketKindFilter, startDate, endDate, statusFilter]);
+    return search !== '' || teamFilter !== '' || suporteFilter !== '' || auditorFilter !== '' || ticketKindFilter !== 'all' || !isDefaultDate;
+  }, [search, teamFilter, suporteFilter, auditorFilter, ticketKindFilter, startDate, endDate]);
 
   const clearFilters = () => {
     setSearch('');
@@ -33,16 +32,17 @@ export function useMonitoriaFilters() {
     setSuporteFilter('');
     setAuditorFilter('');
     setTicketKindFilter('all');
-    setStatusFilter('active');
+    setDateType('analysis');
     setStartDate(DEFAULT_START_DATE());
     setEndDate(DEFAULT_END_DATE());
+    setSortField('created_at');
+    setSortDirection('desc');
     setTab('todas');
   };
 
   return {
     tab, setTab,
     search, setSearch,
-    statusFilter, setStatusFilter,
     teamFilter, setTeamFilter,
     suporteFilter, setSuporteFilter,
     auditorFilter, setAuditorFilter,
