@@ -12,16 +12,16 @@ export function PageSkeleton({ dashboard = false }: { dashboard?: boolean }) {
       </div>}
       <div aria-hidden="true" className="space-y-6">
         <div className="flex flex-wrap gap-3 rounded-2xl border border-surface-border bg-surface-card p-5">
-          {[0, 1, 2, 3].map(i => <div key={i} className={`${block} h-10 w-32`} />)}
+          {[0, 1, 2, 3].map(i => <div key={i} className={`${block} h-10 w-32 ${dashboard ? 'dashboard-skeleton-card' : ''}`} style={dashboard ? { animationDelay: `${i * 70}ms` } : undefined} />)}
         </div>
         {dashboard && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }, (_, i) => <div key={i} className="rounded-2xl border border-surface-border bg-surface-card p-5 space-y-5">
+          {Array.from({ length: 8 }, (_, i) => <div key={i} className={`rounded-2xl border border-surface-border bg-surface-card p-5 space-y-5 ${dashboard ? 'dashboard-skeleton-card' : ''}`} style={dashboard ? { animationDelay: `${i * 75}ms` } : undefined}>
             <div className={`${block} h-4 w-2/3`} />
             <div className={`${block} h-8 w-1/2`} />
           </div>)}
         </div>}
         <div className={`grid gap-4 ${dashboard ? 'lg:grid-cols-2' : ''}`}>
-          {Array.from({ length: dashboard ? 2 : 5 }, (_, i) => <div key={i} className={`rounded-2xl border border-surface-border bg-surface-card p-5 ${dashboard ? 'h-64' : 'h-20'}`}>
+          {Array.from({ length: dashboard ? 2 : 5 }, (_, i) => <div key={i} className={`rounded-2xl border border-surface-border bg-surface-card p-5 ${dashboard ? 'h-64 dashboard-skeleton-card' : 'h-20'}`} style={dashboard ? { animationDelay: `${i * 90}ms` } : undefined}>
             <div className={`${block} h-4 w-1/3`} />
             {dashboard && <div className={`${block} mt-6 h-36 w-full`} />}
           </div>)}

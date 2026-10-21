@@ -90,7 +90,8 @@ export default function MonitoriaList({
     return staticData.users;
   }, [staticData.users, user?.role]);
 
-  const [monitoriaViewMode, setMonitoriaViewMode] = useState<'avaliacoes' | 'feedbacks' | 'one_on_one'>(initialSubTab);
+  const [monitoriaViewMode, setMonitoriaViewMode] = useState<'avaliacoes' | 'feedbacks'>(initialSubTab === 'avaliacoes' ? 'avaliacoes' : 'feedbacks');
+  const [feedbackViewMode, setFeedbackViewMode] = useState<'feedback' | 'one_on_one'>(initialSubTab === 'one_on_one' ? 'one_on_one' : 'feedback');
   const feedbacksState = useFeedbacks(user);
 
   const pendingFeedbacksCount = useMemo(() => {
@@ -113,14 +114,14 @@ export default function MonitoriaList({
     page,
     pageSize: 50,
     filters: {
-      tab: filters.tab, search: filters.search, statusFilter: filters.statusFilter,
+      tab: filters.tab, search: filters.search,
       teamFilter: filters.teamFilter, suporteFilter: filters.suporteFilter,
       auditorFilter: filters.auditorFilter, ticketKindFilter: filters.ticketKindFilter,
       dateType: filters.dateType, startDate: filters.startDate, endDate: filters.endDate,
       sortField: filters.sortField, sortDirection: filters.sortDirection,
     },
   });
-  useEffect(() => { setPage(0); }, [filters.tab, filters.search, filters.statusFilter, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.ticketKindFilter, filters.dateType, filters.startDate, filters.endDate, filters.sortField, filters.sortDirection]);
+  useEffect(() => { setPage(0); }, [filters.tab, filters.search, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.ticketKindFilter, filters.dateType, filters.startDate, filters.endDate, filters.sortField, filters.sortDirection]);
   const [selectedDetail, setSelectedDetail] = useState<Monitoria | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const {
@@ -275,75 +276,25 @@ export default function MonitoriaList({
   return (
     <div className="space-y-6 animate-fade-in pb-8">
       {/* Navegação Superior de Subabas de Monitorias: Avaliações | Feedbacks | 1:1 & PDI */}
-      <div className="flex items-center gap-1 sm:gap-2 p-1.5 bg-surface-card border border-surface-border rounded-2xl shadow-premium overflow-x-auto no-scrollbar">
-        <button
-          type="button"
-          onClick={() => setMonitoriaViewMode('avaliacoes')}
-          className={`flex-1 min-w-0 py-2.5 px-1 sm:min-w-[140px] sm:px-4 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-2 whitespace-nowrap cursor-pointer ${
-            monitoriaViewMode === 'avaliacoes'
-              ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-          }`}
-        >
-          <FileText className="hidden sm:block w-4 h-4" />
-          <span>Avaliações</span>
-          <span className={`hidden sm:inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
-            monitoriaViewMode === 'avaliacoes' ? 'bg-black/20 text-brand-on-primary' : 'bg-surface-subtle text-brand-muted'
-          }`}>
-            {total}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setMonitoriaViewMode('feedbacks')}
-          className={`flex-1 min-w-0 py-2.5 px-1 sm:min-w-[140px] sm:px-4 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-2 whitespace-nowrap cursor-pointer ${
-            monitoriaViewMode === 'feedbacks'
-              ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-          }`}
-        >
-          <MessageSquare className="hidden sm:block w-4 h-4" />
-          <span>Feedbacks</span>
-          {pendingFeedbacksCount > 0 ? (
-            <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
-              <span className="sm:hidden">{pendingFeedbacksCount}</span><span className="hidden sm:inline">{pendingFeedbacksCount} pendente{pendingFeedbacksCount !== 1 ? 's' : ''}</span>
-            </span>
-          ) : (
-            <span className={`hidden sm:inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
-              monitoriaViewMode === 'feedbacks' ? 'bg-black/20 text-brand-on-primary' : 'bg-surface-subtle text-brand-muted'
-            }`}>
-              {feedbacksState.feedbacks.filter(f => !f.title.startsWith('[1:1]') && !f.title.toLowerCase().includes('1:1')).length}
-            </span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setMonitoriaViewMode('one_on_one')}
-          className={`flex-1 min-w-0 py-2.5 px-1 sm:min-w-[140px] sm:px-4 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-2 whitespace-nowrap cursor-pointer ${
-            monitoriaViewMode === 'one_on_one'
-              ? 'bg-brand-primary text-brand-on-primary shadow-xs font-black'
-              : 'text-brand-muted hover:text-brand-primary hover:bg-surface-subtle'
-          }`}
-        >
-          <Award className="hidden sm:block w-4 h-4" />
-          <span>1:1 & PDI</span>
-          {pendingOneOnOneCount > 0 ? (
-            <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
-              <span className="sm:hidden">{pendingOneOnOneCount}</span><span className="hidden sm:inline">{pendingOneOnOneCount} pendente{pendingOneOnOneCount !== 1 ? 's' : ''}</span>
-            </span>
-          ) : (
-            <span className={`hidden sm:inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
-              monitoriaViewMode === 'one_on_one' ? 'bg-black/20 text-brand-on-primary' : 'bg-surface-subtle text-brand-muted'
-            }`}>
-              {feedbacksState.feedbacks.filter(f => f.title.startsWith('[1:1]') || f.title.toLowerCase().includes('1:1')).length}
-            </span>
-          )}
-        </button>
+      <div role="tablist" aria-label="Áreas de monitoria" className="flex w-full max-w-xl items-center gap-1 rounded-2xl border border-surface-border bg-surface-card p-1.5 shadow-premium">
+        {([{ id: 'avaliacoes', label: 'Avaliações', icon: FileText, count: total }, { id: 'feedbacks', label: 'Feedbacks', icon: MessageSquare, count: pendingFeedbacksCount + pendingOneOnOneCount }] as const).map(({ id, label, icon: Icon, count }) => (
+          <button key={id} type="button" role="tab" aria-selected={monitoriaViewMode === id} onClick={() => setMonitoriaViewMode(id)} className={`relative flex-1 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${monitoriaViewMode === id ? 'text-brand-on-primary' : 'text-brand-muted hover:text-brand-primary'}`}>
+            {monitoriaViewMode === id && <m.span layoutId="monitoria-main-tab" className="absolute inset-0 rounded-xl bg-brand-primary" transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }} />}
+            <span className="relative inline-flex items-center gap-2"><Icon className="size-4" />{label}<span className="rounded-full bg-black/15 px-1.5 py-0.5 text-[10px] tabular-nums">{count}</span></span>
+          </button>
+        ))}
       </div>
 
-      {monitoriaViewMode === 'feedbacks' && (
+      {monitoriaViewMode === 'feedbacks' && <div role="tablist" aria-label="Tipo de acompanhamento" className="inline-flex max-w-full items-center gap-1 rounded-xl border border-surface-border bg-surface-subtle/60 p-1">
+        {([{ id: 'feedback', label: 'Feedbacks Operacionais', icon: MessageSquare, count: pendingFeedbacksCount }, { id: 'one_on_one', label: 'Alinhamento Mensal', icon: Award, count: pendingOneOnOneCount }] as const).map(({ id, label, icon: Icon, count }) => (
+          <button key={id} type="button" role="tab" aria-selected={feedbackViewMode === id} onClick={() => setFeedbackViewMode(id)} className={`relative rounded-lg px-3.5 py-2 text-[11px] font-bold transition-colors ${feedbackViewMode === id ? 'text-brand-primary' : 'text-brand-muted hover:text-brand-primary'}`}>
+            {feedbackViewMode === id && <m.span layoutId="monitoria-feedback-tab" className="absolute inset-0 rounded-lg bg-surface-card shadow-sm" transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }} />}
+            <span className="relative inline-flex items-center gap-2"><Icon className="size-3.5" />{label}<span className="rounded-full bg-brand-primary/10 px-1.5 py-0.5 text-[10px] tabular-nums">{count}</span></span>
+          </button>
+        ))}
+      </div>}
+
+      {monitoriaViewMode === 'feedbacks' && feedbackViewMode === 'feedback' && (
         <FeedbacksSubtabView
           currentUser={user}
           users={maskedUsers}
@@ -361,7 +312,7 @@ export default function MonitoriaList({
         />
       )}
 
-      {monitoriaViewMode === 'one_on_one' && (
+      {monitoriaViewMode === 'feedbacks' && feedbackViewMode === 'one_on_one' && (
         <FeedbacksSubtabView
           currentUser={user}
           users={maskedUsers}
@@ -458,19 +409,6 @@ export default function MonitoriaList({
                 options={[{ value: 'all', label: 'Todos os tickets' }, { value: 'child', label: 'Tickets filhos' }, { value: 'service', label: 'Atendimentos' }]}
                 size="sm"
               />
-
-              {/* Administradores podem restaurar registros removidos em Administração > Monitorias removidas. */}
-              {(user?.role === 'admin' || user?.role === 'gestor_qualidade') && (
-                <CustomSelect
-                  value={filters.statusFilter}
-                  onChange={val => filters.setStatusFilter(val as any)}
-                  options={[
-                    { value: 'active', label: 'Ativas' },
-                    { value: 'removed', label: 'Removidas' }
-                  ]}
-                  size="sm"
-                />
-              )}
 
               <div className="flex items-center gap-1" role="group" aria-label="Ordenação das monitorias">
                 <CustomSelect
@@ -692,7 +630,6 @@ export default function MonitoriaList({
                 {(() => {
                   const m = selectedDetail?.id === actionModal.id ? selectedDetail : monitorias.find(item => item.id === actionModal.id);
                   const currentSt = m?.status || 'pendente_revisao';
-                  const isPjAction = Boolean(m?.pj_review_required || m?.pj_review_kind);
                   const isStepChange = actionModal.type === 'alterar_etapa' || actionModal.type === 'avancar_etapa' || actionModal.type === 'retroceder_etapa';
                   const prev = getPreviousStage(currentSt);
                   const next = getNextStage(currentSt);
@@ -709,7 +646,7 @@ export default function MonitoriaList({
                     actionModal.type === 'solicitar_reavaliacao' ? 'Solicitar Reavaliação' :
                     actionModal.type === 'manter'
                       ? (m?.status === 'aguardando_gestor_qualidade' ? 'Negar e devolver ao Suporte' : 'Recusar Contestação') :
-                    actionModal.type === 'escalar' ? (isPjAction ? 'Enviar contestação à Qualidade' : 'Escalar para Gestão Qualidade') :
+                    actionModal.type === 'escalar' ? 'Escalar para GestÃ£o Qualidade' :
                     actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
                     actionModal.type === 'excluir' ? 'Excluir Monitoria' :
                     'Confirmar Ação';

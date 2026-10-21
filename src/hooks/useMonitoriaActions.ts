@@ -59,8 +59,6 @@ export function getPreviousStage(current: MonitoriaStatus): MonitoriaStatus | nu
     case 'reavaliacao_solicitada':
     case 'aguardando_gestor_qualidade':
       return 'aguardando_gestor_suporte';
-    case 'aguardando_revisao_pj':
-      return 'aguardando_gestor_suporte';
     case 'aguardando_gestor_suporte':
       return 'pendente_revisao';
     case 'em_contestacao':
@@ -79,7 +77,7 @@ export function getNextStage(current: MonitoriaStatus): MonitoriaStatus | null {
     case 'aguardando_gestor_suporte':
       return 'aguardando_gestor_qualidade';
     case 'aguardando_revisao_pj':
-      return 'aguardando_gestor_qualidade';
+      return 'aguardando_gestor_suporte';
     case 'aguardando_gestor_qualidade':
     case 'reavaliacao_solicitada':
       return 'concluida';
@@ -90,6 +88,7 @@ export function getNextStage(current: MonitoriaStatus): MonitoriaStatus | null {
 
 export function getStageLabel(status: MonitoriaStatus | null | undefined): string {
   if (!status) return '';
+  if (status === 'aguardando_revisao_pj') return 'GestÃ£o Suporte';
   const item = STAGES_FLOW.find(s => s.status === status);
   return item ? item.label : status;
 }
@@ -108,7 +107,6 @@ const getDeadlineHours = (status: MonitoriaStatus, actionDeadline: any): number 
     case 'em_contestacao':
     case 'reavaliacao_solicitada': return actionDeadline?.auditor_reevaluation || 25;
     case 'aguardando_gestor_suporte': return actionDeadline?.manager_support || 25;
-    case 'aguardando_revisao_pj': return actionDeadline?.manager_support || 25;
     case 'aguardando_gestor_qualidade': return actionDeadline?.manager_quality || 25;
     default: return 25;
   }
@@ -118,7 +116,6 @@ const STAGE_ORDER: Record<string, number> = {
   'pendente_revisao': 1,
   'em_contestacao': 2,
   'aguardando_gestor_suporte': 3,
-  'aguardando_revisao_pj': 4,
   'aguardando_gestor_qualidade': 5,
   'reavaliacao_solicitada': 5,
   'concluida': 6,
@@ -173,7 +170,6 @@ export function useMonitoriaActions(
     }
 
     const trimmedNote = actionNote.trim();
-    const isPj = Boolean(monitoria.pj_review_required || monitoria.pj_review_kind);
     const contestations = monitoria.history?.filter(entry =>
       /contestaç[aã]o realizada pelo gestor de suporte|gestor pj encaminhou contestaç[aã]o/i.test(entry.action)) || [];
     const isSecondContestation = contestations.length >= 2;
@@ -320,18 +316,9 @@ export function useMonitoriaActions(
           : { action_deadline_at: null }),
         ...(nextStatus === 'concluida' ? { resolution_type: 'human' } : {}),
         ...((type === 'aprovar' || type === 'aceitar')
-          && !(isPj && monitoria.status === 'aguardando_gestor_qualidade')
           ? { corrective_action: finalNote } : {}),
         ...(type === 'contestar' || type === 'escalar' || type === 'solicitar_reavaliacao' ? { contestation_reason: finalNote } : {}),
         ...(combinedAttachments.length > 0 ? { action_attachments: combinedAttachments } : {}),
-        ...(isPj && user.role === 'gestor_suporte' && isManagerDecision ? {
-          pj_reviewer_id: null,
-          pj_review_kind: type === 'contestar' || type === 'escalar' ? 'contestation' : monitoria.pj_review_kind,
-          pj_review_decision: null,
-          pj_review_note: null,
-          pj_reviewed_at: null,
-          ...(type === 'contestar' || type === 'escalar' ? { contestation_result: 'pending' } : {}),
-        } : {}),
         ...(type === 'contestar' || type === 'escalar' ? { contestation_result: 'pending' } : {}),
         ...(type === 'manter' || type === 'invalidar' ? { contestation_result: 'rejected' } : {}),
         ...(finalQualityDecision && type === 'aprovar' ? { contestation_result: 'approved' } : {}),

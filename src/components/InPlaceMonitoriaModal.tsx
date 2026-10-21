@@ -50,14 +50,7 @@ export default function InPlaceMonitoriaModal({
           .eq('id', monitoriaId)
           .maybeSingle();
         if (error) throw error;
-        if (!data && (user?.role === 'suporte' || user?.role === 'gestor_suporte')) {
-          const reviewerResult = await supabase.from('vw_monitorias_pj_reviewer')
-            .select('*').eq('id', monitoriaId).maybeSingle();
-          if (reviewerResult.error) throw reviewerResult.error;
-          setMonitoria(reviewerResult.data);
-        } else {
-          setMonitoria(data);
-        }
+        setMonitoria(data);
       }
     } catch (e) {
       console.error('Erro ao carregar monitoria in-place:', e);
@@ -241,7 +234,6 @@ export default function InPlaceMonitoriaModal({
               <Card className="w-full shadow-2xl border-t sm:border border-surface-border bg-surface-card rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 pb-safe">
                 {(() => {
                   const currentSt = monitoria?.status || 'pendente_revisao';
-                  const isPjAction = Boolean(monitoria?.pj_review_required || monitoria?.pj_review_kind);
                   const isStepChange = actionModal.type === 'alterar_etapa' || actionModal.type === 'avancar_etapa' || actionModal.type === 'retroceder_etapa';
                   const prev = getPreviousStage(currentSt);
                   const next = getNextStage(currentSt);
@@ -256,7 +248,7 @@ export default function InPlaceMonitoriaModal({
                     actionModal.type === 'contestar' ? 'Contestar Avaliação' :
                     actionModal.type === 'solicitar_reavaliacao' ? 'Solicitar Reavaliação' :
                     actionModal.type === 'manter' ? 'Recusar Reavaliação' :
-                    actionModal.type === 'escalar' ? (isPjAction ? 'Enviar contestação à Qualidade' : 'Escalar para Gestão Qualidade') :
+                    actionModal.type === 'escalar' ? 'Escalar para GestÃ£o Qualidade' :
                     actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
                     actionModal.type === 'excluir' ? 'Excluir Monitoria' :
                     'Confirmar Ação';

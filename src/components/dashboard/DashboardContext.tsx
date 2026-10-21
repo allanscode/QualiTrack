@@ -61,7 +61,7 @@ export interface DashboardAggregates {
 // Dashboard widgets use these fields for their visible rows and drilldowns.
 // Keep the projection explicit so new large columns are never fetched by default.
 const DASHBOARD_MONITORIA_COLUMNS = [
-  'id', 'form_id', 'child_verdict', 'evaluator_id', 'evaluated_id', 'evaluator_name',
+  'id', 'display_id', 'form_id', 'child_verdict', 'evaluator_id', 'evaluated_id', 'evaluator_name',
   'evaluated_name', 'team_id', 'team_name', 'ticket_group_team_id',
   'form_name', 'ticket_id', 'channel', 'ticket_date', 'analysis_date',
   'satisfaction_result', 'satisfaction_has_record', 'satisfaction_record_text',
@@ -71,26 +71,23 @@ const DASHBOARD_MONITORIA_COLUMNS = [
   'critical_error_observations', 'selected_critical_errors',
   'client_contact_log', 'client_contact_success', 'client_contact_channel',
   'form_snapshot', 'contestation_reason', 'corrective_action',
-  'action_attachments', 'pj_reviewer_id', 'pj_review_kind',
-  'pj_review_decision', 'pj_review_note', 'pj_reviewed_at',
-  'pj_review_required',
+  'action_attachments',
 ].join(',');
 
 // Trends and pending actions span the whole history, but need only small fields.
 const DASHBOARD_SUMMARY_COLUMNS = [
-  'id', 'form_id', 'child_verdict', 'evaluator_id', 'evaluated_id', 'evaluator_name',
+  'id', 'display_id', 'form_id', 'child_verdict', 'evaluator_id', 'evaluated_id', 'evaluator_name',
   'evaluated_name', 'team_id', 'team_name', 'ticket_group_team_id',
   'form_name', 'ticket_id', 'channel', 'ticket_date', 'analysis_date',
   'satisfaction_result', 'score', 'status', 'resolution_type',
   'contestation_result', 'action_deadline_at', 'active', 'created_at',
-  'updated_at', 'pj_reviewer_id', 'pj_review_kind', 'pj_review_decision',
-  'pj_reviewed_at', 'pj_review_required',
+  'updated_at',
 ].join(',');
 
 // Admin and quality dashboards use history for trends, rankings, average and
 // SLA alerts. Their period drilldowns come from the separate detail query.
 const DASHBOARD_METRICS_COLUMNS = [
-  'id', 'form_id', 'child_verdict', 'evaluator_id', 'evaluated_id', 'team_id',
+  'id', 'display_id', 'form_id', 'child_verdict', 'evaluator_id', 'evaluated_id', 'team_id',
   'ticket_group_team_id', 'channel', 'score', 'status',
   'action_deadline_at', 'active', 'created_at',
 ].join(',');

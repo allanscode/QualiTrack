@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Info } from 'lucide-react';
 import Card from '../../ui/Card';
-import { m, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence, useInView, useMotionValue, useTransform, animate } from 'motion/react';
 import { useDashboard, useEditing } from '../DashboardContext';
 import { usePresence } from '../../../providers/PresenceProvider';
 import { useQualityConfig } from '../../../lib/useQualityConfig';
@@ -67,6 +67,35 @@ function getIconBg(accent: string): string {
     return accent.replace('text-level-', 'bg-level-');
   }
   return 'bg-slate-100 dark:bg-white/[0.04]';
+}
+
+function AnimatedNumber({ value }: { value: string | number }) {
+  const source = String(value);
+  const match = /-?\d[\d.,]*/.exec(source);
+  let numeric: number | null = typeof value === 'number' ? value : null;
+  let prefix = '';
+  let suffix = '';
+  let fractionDigits = 0;
+  if (typeof value !== 'number' && match) {
+    const token = match[0];
+    let normalized = token;
+    if (token.includes(',') && token.includes('.')) {
+      const decimalSeparator = token.lastIndexOf(',') > token.lastIndexOf('.') ? ',' : '.';
+      normalized = token.split(decimalSeparator === ',' ? '.' : ',').join('').replace(decimalSeparator, '.');
+    } else if (token.includes(',')) normalized = token.replace(',', '.');
+    else if (/^\d{1,3}(?:\.\d{3})+$/.test(token)) normalized = token.replace(/\./g, '');
+    numeric = Number.isFinite(Number(normalized)) ? Number(normalized) : null;
+    prefix = source.slice(0, match.index);
+    suffix = source.slice(match.index + token.length);
+    fractionDigits = Math.min((normalized.split('.')[1] || '').length, 2);
+  }
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const isInView = useInView(ref, { once: true, amount: 0.4 });
+  const motionValue = useMotionValue(0);
+  const rounded = useTransform(motionValue, current => current.toLocaleString('pt-BR', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }));
+  React.useEffect(() => { if (isInView && numeric !== null) { const controls = animate(motionValue, numeric, { duration: 0.9, ease: 'easeOut' }); return controls.stop; } }, [isInView, numeric, motionValue]);
+  if (numeric === null) return <>{value}</>;
+  return <span ref={ref}>{prefix}<m.span>{rounded}</m.span>{suffix}</span>;
 }
 
 function StatCard({
@@ -294,7 +323,7 @@ function StatCard({
               isOnlineUsersCard ? 'cursor-pointer hover:opacity-80' : ''
             }`}
           >
-            {value}
+            <AnimatedNumber value={value} />
           </p>
           {badge}
           {comparisonDelta && (

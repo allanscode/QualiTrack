@@ -129,7 +129,6 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
 
         const evaluatedUser = deps.allUsers.find(u => u.id === deps.header.evaluated_id);
         const managementTeamId = evaluatedUser?.primary_team_id || deps.header.team_id;
-        const selectedTeam = deps.teams.find(t => t.id === managementTeamId);
         const isPositive = isChild ? verdict === 'valido' : isEvaluationValid(deps.score);
         const qualityManagerFinalizesValidScore = deps.isAdminEdit
           && ['gestor_qualidade', 'admin'].includes(deps.user?.role || '')
@@ -137,21 +136,15 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           && ['pendente_revisao', 'aguardando_gestor_suporte'].includes(deps.initialData.status)
           && isPositive
           && Number(deps.initialData.score) !== Number(deps.score);
-        const requiresPjReview = !isChild && (qualityManagerFinalizesValidScore
-          ? false
-          : deps.initialData?.pj_review_required === true
-            || (selectedTeam?.requires_pj_review === true && !isPositive));
+        const requiresPjReview = false;
         if (qualityManagerFinalizesValidScore) {
           historyNote = `${historyNote || 'Ajuste de nota'} | Conclusão pela Gestão da Qualidade: nota final >=75%, sem nova aprovação do Gestor de Suporte`;
         }
-        const reopensPjReview = deps.isAdminEdit && deps.initialData?.status === 'concluida'
-          && deps.initialData.pj_review_required !== true && requiresPjReview;
         let nextStatus: MonitoriaStatus;
         if (deps.isAdminEdit) {
-          nextStatus = reopensPjReview ? 'pendente_revisao'
-            : (qualityManagerFinalizesValidScore
-              ? 'concluida'
-              : (deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao')));
+          nextStatus = qualityManagerFinalizesValidScore
+            ? 'concluida'
+            : (deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao'));
         } else {
           nextStatus = isPositive && !requiresPjReview ? 'concluida' : 'aguardando_gestor_suporte';
         }
@@ -161,8 +154,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           : deps.isAdminEdit
           ? 'Edição pelo Administrador'
           : deps.isReevaluating
-            ? (requiresPjReview ? 'Monitoria Reavaliada (Aguardando gestor PJ)'
-              : (isPositive ? 'Monitoria Reavaliada (Concluída)' : 'Monitoria Reavaliada (Procedente)'))
+            ? (isPositive ? 'Monitoria Reavaliada (Concluida)' : 'Monitoria Reavaliada (Procedente)')
             : (nextStatus === 'concluida' ? 'Monitoria Criada e Concluída' : 'Monitoria Criada e encaminhada ao Gestor de Suporte');
 
         const historyEntry: MonitoriaHistoryEntry = {
@@ -229,9 +221,8 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           score: isChild ? null : deps.score,
           child_verdict: isChild ? verdict : null,
           status: nextStatus,
-          pj_review_required: requiresPjReview,
           resolution_type: nextStatus === 'concluida' ? 'human'
-            : (reopensPjReview ? null : (deps.initialData?.resolution_type || null)),
+            : (deps.initialData?.resolution_type || null),
           evaluator_note: deps.header.evaluator_note,
           client_contact_log: deps.header.satisfaction_result === 'Negativa' ? deps.header.client_contact_log : '',
           client_contact_channel: deps.header.satisfaction_result === 'Negativa' ? (deps.header.client_contact_channel || []) : [],
@@ -260,7 +251,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           evaluator_name: currentUser.name,
           evaluated_name: evaluatedUser?.name || '',
           form_name: selectedFormObj?.title || '',
-          team_name: selectedTeam?.name || '',
+          team_name: deps.teams.find(team => team.id === managementTeamId)?.name || '',
           updated_at: nowTs,
           dissatisfaction_answers: filteredDissatisfactionAnswers,
           applied_config: deps.qualityConfig as unknown as Record<string, unknown>,

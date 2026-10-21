@@ -25,11 +25,11 @@ As filas de filhos e filhos inválidos permitem avaliar em lote os tickets selec
 
 Ao lançar a monitoria, o parecer preenche as respostas, justificativas por critério e observação geral da ficha própria, preservando respostas humanas já existentes. Novas análises retornam os seis critérios identificados por `question_id`; evidência insuficiente é indicada explicitamente por `NA`. Pareceres antigos com três verificações preenchem somente os critérios correspondentes, deixando os demais para revisão. O preenchimento não salva nem publica a monitoria automaticamente.
 
-### Fluxo de monitorias PJ
+### Fluxo único de monitorias
 
-Quando `teams.requires_pj_review` está ativo e a nota é inferior a 75%, a sequência obrigatória é **Gestor PJ → Gestor da Qualidade**. O gestor encaminha aprovação ou contestação justificada por `act_on_monitoria_as_support_manager`; o status passa diretamente a `aguardando_gestor_qualidade`. `pj_review_kind` registra o tipo de parecer. A Qualidade toma a decisão final e resolve `contestation_result` quando houver contestação. Os campos e a função do antigo revisor PJ permanecem apenas para preservar o histórico; novas monitorias não entram em `aguardando_revisao_pj`.
+Todas as equipes usam a mesma sequência de revisão e decisão. A classificação comercial da equipe (PJ, CLT, revenda ou cliente final) não adiciona uma etapa de aprovação. Notas finais iguais ou superiores a 75% podem ser concluídas diretamente pela Gestão da Qualidade; notas inferiores seguem para o gestor de suporte conforme as regras comuns, com eventual contestação decidida pela Qualidade.
 
-O revisor, cujo papel no cadastro é `suporte`, lê apenas casos atribuídos a ele pela view `vw_monitorias_pj_reviewer`, que oculta a identidade do auditor. A view normal `vw_monitorias_suporte` continua limitada às monitorias do próprio atendente. A RLS e os triggers impedem mudanças diretas do parecer ou saltos entre etapas. `process_action_deadline_timeouts` ignora equipes PJ para não substituir as decisões humanas.
+`teams.requires_pj_review`, `monitorias.pj_review_*`, `pj_review_settings`, `vw_monitorias_pj_reviewer` e as funções antigas de parecer PJ são estruturas legadas. Devem permanecer para compatibilidade e auditoria histórica, sem controlar o encaminhamento, conceder visibilidade adicional ou aparecer como etapa ativa no produto. O status legado `aguardando_revisao_pj` é normalizado para `aguardando_gestor_suporte`.
 
 ```typescript
 interface Monitoria {
@@ -210,7 +210,7 @@ A automação captura os tickets da view de pesquisas positivas em uma fila pers
 - A nota é calculada pelas respostas e pelos pesos da ficha; o valor declarado pelo modelo não autoriza a conclusão sozinho.
 - O auditor é configurado no ambiente. O histórico identifica explicitamente a execução automática pela IA.
 - O processamento é independente da publicação de comentários no Zendesk.
-- Se o gestor não decidir no prazo, uma monitoria criada pela fila Positivas com IA é concluída com a nota vigente, inclusive em equipe PJ. As demais monitorias PJ mantêm a exigência de decisão humana.
+- Se o gestor não decidir no prazo, uma monitoria criada pela fila Positivas com IA é concluída com a nota vigente, sob a mesma regra em todas as equipes.
 
 A configuração inicial permanece desabilitada até a definição do auditor e das credenciais do ambiente. No staging, o responsável escolhido é Gabriel Dias Di Napoli, com perfil de Qualidade. Os rascunhos positivos salvos continuam acessíveis mesmo quando o Zendesk está indisponível.
 
@@ -220,7 +220,7 @@ Um erro crítico confirmado zera a nota final, conforme a regra da ficha. A fila
 
 ## Prazo de Ação / Deadlines
 
-O ambiente clonado precisa manter o job `process-action-deadline-timeouts` no `pg_cron`, executando `SELECT public.process_action_deadline_timeouts()` a cada cinco minutos. A migração `20261007000005` garante a coluna `concluded_at` também nos bancos legados. Monitorias PJ exigem aprovação específica, exceto monitorias da fila Positivas com IA que ainda aguardam o primeiro parecer do gestor quando o prazo vence.
+O ambiente clonado precisa manter o job `process-action-deadline-timeouts` no `pg_cron`, executando `SELECT public.process_action_deadline_timeouts()` a cada cinco minutos. A migração `20261007000005` garante a coluna `concluded_at` também nos bancos legados. O prazo aplica as mesmas regras às equipes; não existe exceção de etapa PJ.
 
 ## Positivas invalidadas e Zendesk
 

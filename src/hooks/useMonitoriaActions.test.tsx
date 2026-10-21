@@ -18,16 +18,16 @@ const config = {
   businessHours: { start: '08:00', end: '18:00', days: [1, 2, 3, 4, 5], holidays: [] },
 };
 
-describe('useMonitoriaActions: encaminhamento PJ', () => {
+describe('useMonitoriaActions: fluxo único de gestor e qualidade', () => {
   beforeEach(() => {
     db.update.mockReset();
     db.update.mockResolvedValue({ data: null, error: null });
   });
 
   it.each([
-    ['aceitar', 'concluida', undefined, undefined],
-    ['contestar', 'aguardando_gestor_qualidade', 'contestation', 'pending'],
-  ] as const)('registra %s pelo gestor PJ sem revisor intermediário', async (action, status, kind, resultStatus) => {
+    ['aceitar', 'concluida', undefined],
+    ['contestar', 'aguardando_gestor_qualidade', 'pending'],
+  ] as const)('registra %s pelo gestor de suporte sem criar etapa de revisor', async (action, status, resultStatus) => {
     const load = vi.fn();
     const { result } = renderHook(() => useMonitoriaActions(manager, [monitoria], config, load, teams));
     act(() => {
@@ -37,23 +37,21 @@ describe('useMonitoriaActions: encaminhamento PJ', () => {
     await act(async () => { await result.current.handleAction(); });
 
     await waitFor(() => expect(load).toHaveBeenCalledOnce());
-    expect(db.update).toHaveBeenCalledWith('monitorias', monitoria.id, expect.objectContaining({
-      status,
-      pj_reviewer_id: null,
-      pj_review_kind: kind,
-    }));
+    expect(db.update).toHaveBeenCalledWith('monitorias', monitoria.id, expect.objectContaining({ status }));
     const payload = db.update.mock.calls[0][2];
+    expect(payload).not.toHaveProperty('pj_reviewer_id');
+    expect(payload).not.toHaveProperty('pj_review_kind');
     expect(payload.contestation_result).toBe(resultStatus);
     expect(payload.history[0].action).toContain(action === 'contestar' ? 'Gestor de Suporte' : 'Monitoria aceita');
   });
 
-  it('mantém a data limite ao enviar o parecer PJ para a Qualidade', async () => {
+  it('mantém a data limite ao escalar uma contestação para a Qualidade', async () => {
     const deadline = '2026-10-15T15:00:00.000Z';
     const current = { ...monitoria, action_deadline_at: deadline };
     const { result } = renderHook(() => useMonitoriaActions(manager, [current], config, vi.fn(), teams));
     act(() => {
       result.current.setActionModal({ id: current.id, type: 'contestar' });
-      result.current.setActionNote('Parecer justificado do gestor PJ');
+      result.current.setActionNote('Justificativa do gestor de suporte');
     });
     await act(async () => { await result.current.handleAction(); });
 
