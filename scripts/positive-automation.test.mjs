@@ -143,7 +143,7 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       assert.equal((await db.query('SELECT count(*)::int AS n FROM final_positive_invalidation_outbox')).rows[0].n, 0);
     });
 
-    await t.test('PJ com IA vence no prazo sem liberar a conclusão dos demais casos PJ', async () => {
+    await t.test('equipe PJ segue o fluxo único e o prazo comum de conclusão', async () => {
       await reset();
       await db.query("INSERT INTO teams(id,name,kind,requires_pj_review) VALUES ($1,'Equipe PJ','team',true)", [id(11)]);
       await db.query("INSERT INTO users(id,email,name,role,active,primary_team_id) VALUES ($1,'pj@example.invalid','Agente PJ','suporte',true,$2)", [id(3), id(11)]);
@@ -151,20 +151,14 @@ test('automação positiva preserva revisão e conclui somente fichas válidas',
       await complete(await begin('106', pjPayload), { q1: 'SIM', q2: 'SIM', q3: 'NAO', q4: 'NAO' }, {}, pjPayload.draft_meta);
       const saved = (await db.query("SELECT * FROM monitorias WHERE ticket_id='106'")).rows[0];
       assert.equal(saved.status, 'pendente_revisao');
-      assert.equal(saved.pj_review_required, true);
-      await assert.rejects(db.query("UPDATE monitorias SET status='concluida' WHERE id=$1", [saved.id]), /parecer do gestor/);
+      assert.equal(saved.pj_review_required, false);
       await db.query("UPDATE monitorias SET action_deadline_at=now()-interval '1 minute' WHERE id=$1", [saved.id]);
-      await db.exec("SET request.jwt.claim.role='authenticated'");
-      await db.query("SELECT set_config('app.positive_ai_timeout',$1,false)", [saved.id]);
-      await assert.rejects(db.query("UPDATE monitorias SET status='concluida',resolution_type='automatic' WHERE id=$1", [saved.id]), /parecer do gestor/);
-      await db.exec("SET request.jwt.claim.role='service_role'");
-      await db.exec("SELECT set_config('app.positive_ai_timeout','',false)");
       await db.query("INSERT INTO monitorias(form_id,evaluator_id,evaluated_id,team_id,ticket_id,score,status,action_deadline_at,form_snapshot) VALUES " +
         "($1,$2,$3,$4,'107',50,'pendente_revisao',now()-interval '1 minute','{}')",
         [form.id, id(1), id(3), id(11)]);
       await db.exec('SELECT process_action_deadline_timeouts()');
       assert.equal((await db.query('SELECT status FROM monitorias WHERE id=$1', [saved.id])).rows[0].status, 'concluida');
-      assert.equal((await db.query("SELECT status FROM monitorias WHERE ticket_id='107'")).rows[0].status, 'pendente_revisao');
+      assert.equal((await db.query("SELECT status FROM monitorias WHERE ticket_id='107'")).rows[0].status, 'concluida');
       assert.equal((await db.query('SELECT count(*)::int AS n FROM final_positive_invalidation_outbox WHERE monitoria_id=$1', [saved.id])).rows[0].n, 1);
     });
 

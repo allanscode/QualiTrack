@@ -1,4 +1,16 @@
 import type { Monitoria } from '@/src/types';
+import { normalizeTimelineText } from './timeline';
+
+/** Counts manager-originated rounds in both current and legacy history text. */
+export function isManagerContestationRound(action: string): boolean {
+  const normalized = normalizeTimelineText(action).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /^contesta.*o realizada pelo gestor de suporte/.test(normalized)
+    || /^gestor pj encaminhou contesta/.test(normalized);
+}
+
+export function countManagerContestationRounds(history: Monitoria['history']): number {
+  return (history || []).filter(entry => isManagerContestationRound(entry.action)).length;
+}
 
 const APPROVAL_KEYWORDS = ['procedente', 'aceita', 'reavaliada', 'alterada', 'alterado'];
 const REJECTION_KEYWORDS = ['improcedente', 'mantida', 'negada', 'recusada'];

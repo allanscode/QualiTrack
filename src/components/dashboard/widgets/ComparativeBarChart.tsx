@@ -37,7 +37,7 @@ function ComparativeBarChart({
   setActiveEditingId
 }: ComparativeBarChartProps) {
   const { config, saveConfig } = useQualityConfig();
-  const { ref: chartRevealRef, animateChart } = useChartRevealAnimation();
+  const { ref: chartRevealRef, animateChart, reduceMotion } = useChartRevealAnimation();
   const [isHovered, setIsHovered] = useState(false);
   const [tempSub, setTempSub] = useState('');
 
@@ -208,7 +208,7 @@ function ComparativeBarChart({
               wrapperStyle={{ fontSize: '10px', fontWeight: 700, color: 'var(--brand-muted)', paddingTop: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
             />
             {dataKeys.map(dk => (
-              <Bar key={`${dk.key}-${animateChart ? 'visible' : 'waiting'}`} dataKey={dk.key} name={dk.name} fill={dk.color} radius={[4, 4, 0, 0]} isAnimationActive={animateChart} animationDuration={900} animationEasing="ease-out" />
+              <Bar key={`${dk.key}-${animateChart ? 'visible' : 'waiting'}`} dataKey={dk.key} name={dk.name} fill={dk.color} radius={[4, 4, 0, 0]} isAnimationActive={animateChart && !reduceMotion} animationDuration={900} animationEasing="ease-out" />
             ))}
           </BarChart>
         </ResponsiveContainer>

@@ -335,7 +335,7 @@ function OfensoresChart({
                         }}
                         cursor={false}
                       />
-                      <Bar key={offendersReveal.animateChart ? 'offenders-visible' : 'offenders-waiting'} dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={12} isAnimationActive={offendersReveal.animateChart} animationDuration={900} animationEasing="ease-out">
+                      <Bar key={offendersReveal.animateChart ? 'offenders-visible' : 'offenders-waiting'} dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={12} isAnimationActive={offendersReveal.animateChart && !offendersReveal.reduceMotion} animationDuration={900} animationEasing="ease-out">
                         {ofensores.map((entry, index) => {
                           const p = chartPalette();
                           const baseColor = p.ruim; // vermelho
@@ -423,7 +423,7 @@ function OfensoresChart({
                         }}
                         cursor={false}
                       />
-                      <Bar key={positiveReveal.animateChart ? 'positive-visible' : 'positive-waiting'} dataKey="simCount" radius={[0, 4, 4, 0]} maxBarSize={12} isAnimationActive={positiveReveal.animateChart} animationDuration={900} animationEasing="ease-out">
+                      <Bar key={positiveReveal.animateChart ? 'positive-visible' : 'positive-waiting'} dataKey="simCount" radius={[0, 4, 4, 0]} maxBarSize={12} isAnimationActive={positiveReveal.animateChart && !positiveReveal.reduceMotion} animationDuration={900} animationEasing="ease-out">
                         {acertos.map((entry, index) => {
                           const p = chartPalette();
                           const baseColor = p.excelente; // verde
@@ -489,7 +489,7 @@ function OfensoresChart({
                   className="print:fill-slate-950"
                 />
                 <Tooltip content={<CustomTooltip />} cursor={false} />
-                <Bar key={compactReveal.animateChart ? 'compact-visible' : 'compact-waiting'} dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={compactReveal.animateChart} animationDuration={900} animationEasing="ease-out">
+                <Bar key={compactReveal.animateChart ? 'compact-visible' : 'compact-waiting'} dataKey="naoCount" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={compactReveal.animateChart && !compactReveal.reduceMotion} animationDuration={900} animationEasing="ease-out">
                   {ofensores.map((entry, index) => {
                     const p = chartPalette();
                     const baseColor = p.ruim;

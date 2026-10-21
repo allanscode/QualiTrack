@@ -75,6 +75,12 @@ describe('MonitoriaList actions', () => {
     expect(screen.getByText('Buscando monitorias...')).toBeInTheDocument();
   });
 
+  it('abre a monitoria ao clicar em qualquer parte da linha da tabela', async () => {
+    render(<MonitoriaList user={admin} activeTab="monitorias" />);
+    fireEvent.click(await screen.findByRole('row', { name: 'Abrir monitoria 5786' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
   it('routes final quality approval to ficha review before saving', async () => {
     fixture.status = 'aguardando_gestor_qualidade';
     render(<ListWithSelectedMonitoria />);

@@ -504,8 +504,8 @@ export default function MonitoriaList({
       {/* Block 2: The List */}
       <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card overflow-hidden">
         <div role="table" aria-label="Monitorias" className="overflow-x-auto">
-            <div role="rowgroup" className="hidden min-w-[1440px] border-b border-surface-border bg-surface-subtle/45 lg:block">
-              <div role="row" className="grid min-h-11 grid-cols-[142px_145px_100px_minmax(120px,1fr)_minmax(110px,.8fr)_minmax(130px,1fr)_95px_105px_145px_145px_34px] items-center gap-2 px-4 text-[10px] font-bold uppercase tracking-wide text-brand-muted">
+            <div role="rowgroup" className="hidden min-w-[1160px] border-b border-surface-border bg-surface-subtle/45 lg:block">
+              <div role="row" className="grid min-h-11 grid-cols-[110px_130px_76px_minmax(110px,1fr)_minmax(90px,.8fr)_minmax(110px,1fr)_85px_80px_105px_120px_24px] items-center gap-1.5 px-4 text-[10px] font-bold uppercase tracking-wide text-brand-muted">
                 {([
                   ['Status', 'status'], ['Monitoria', 'display_id'], ['Ticket', 'ticket_id'], ['Agente', 'evaluated_name'],
                   ['Equipe', 'team_name'], ['Monitor de qualidade', 'evaluator_name'], ['Tipo', 'form_id'], ['Avaliação', 'score'],
@@ -517,7 +517,7 @@ export default function MonitoriaList({
                     </button>
                   </div>
                 ))}
-                {([['Criada em', 'created_at'], ['Prazo', 'action_deadline_at']] as const).map(([label, field]) => (
+                {([['Criada em', 'created_at'], ['Prazo SLA', 'action_deadline_at']] as const).map(([label, field]) => (
                   <div key={field} role="columnheader" className="min-w-0">
                     <button type="button" onClick={() => sortByColumn(field)} className="inline-flex items-center gap-1.5 rounded-md text-left hover:text-brand-primary">
                       {label}{filters.sortField === field ? filters.sortDirection === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" /> : <ArrowDown className="size-3.5 opacity-20" />}
@@ -541,7 +541,7 @@ export default function MonitoriaList({
                 rowHeight={72}
                 rowProps={{ monitorias: filtered, teams: staticData.teams, getName, getLevelForScore, onOpen: openDetails, displayMode: 'table' }}
                 overscanCount={5}
-                style={{ height: 600, width: 'max(100%, 1440px)' }}
+                style={{ height: 600, width: 'max(100%, 1160px)' }}
               />
             ) : filtered.map(m => (
               <MonitoriaRow key={m.id} monitoria={m} teams={staticData.teams} getName={getName} getLevelForScore={getLevelForScore} onOpen={openDetails} displayMode="table" />
@@ -671,6 +671,9 @@ export default function MonitoriaList({
                   const isContestation = actionModal.type === 'contestar';
                   const isQualityContestApproval = actionModal.type === 'aprovar'
                     && currentSt === 'aguardando_gestor_qualidade'
+                    && (user?.role === 'gestor_qualidade' || user?.role === 'admin');
+                  const isQualityContestDecision = currentSt === 'aguardando_gestor_qualidade'
+                    && ['aprovar', 'manter', 'invalidar'].includes(actionModal.type)
                     && (user?.role === 'gestor_qualidade' || user?.role === 'admin');
 
                   let noteLabel = 'Justificativa / Motivo (Opcional)';
@@ -880,8 +883,8 @@ export default function MonitoriaList({
                         </div>
                       )}
 
-                      {/* Suporte a Anexos (WQ-22) */}
-                      <div className="mb-6">
+                      {/* Anexos só são aceitos no fluxo que pode gravá-los com segurança. */}
+                      {!isQualityContestDecision && <div className="mb-6">
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-[10px] font-black text-brand-muted uppercase tracking-widest ml-1">
                             Anexos (opcional)
@@ -941,7 +944,7 @@ export default function MonitoriaList({
                             ))}
                           </div>
                         )}
-                      </div>
+                      </div>}
 
                       <div className="flex gap-3">
                         <Button

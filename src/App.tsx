@@ -1172,7 +1172,7 @@ function MainApp({
   const teamNames = userTeams.map(t => t.name).join(', ');
 
   return (
-    <div className="h-screen w-full flex bg-surface-bg text-brand-primary font-sans overflow-hidden">
+    <div className="h-screen w-full flex bg-surface-bg text-brand-primary font-sans overflow-clip">
       <AnimatePresence>
         {isFormOpen && (
           <MonitoriaForm
@@ -1693,7 +1693,7 @@ function MainApp({
         </div>
       </m.aside>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-surface-bg">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-clip bg-surface-bg">
         <header className="px-3.5 sm:px-6 md:px-8 h-16 md:h-20 flex items-center gap-2.5 sm:gap-4 border-b border-surface-border/60 bg-surface-bg/85 backdrop-blur-md sticky top-0 z-20 transition-colors">
           <button
             onClick={() => setIsMobileMenuOpen(prev => !prev)}
@@ -2039,7 +2039,7 @@ function MainApp({
           </div>
         </header>
 
-        <div data-dashboard-scroll-root className="flex-1 overflow-auto px-3.5 sm:px-6 md:px-8 pb-24 md:pb-8 pt-4 md:pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
+        <div data-dashboard-scroll-root className="flex-1 min-h-0 overflow-auto px-3.5 sm:px-6 md:px-8 pb-24 md:pb-8 pt-4 md:pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>
           <React.Suspense fallback={<PageSkeleton dashboard={activeTab === 'dashboard'} />}>
             {activeTab === 'dashboard' && (
               <div className="animate-fade-in">

@@ -78,6 +78,7 @@ describe('IA de chamados filhos', () => {
     };
     mocks.fetchQueueTickets.mockResolvedValue({ tickets: [ticket('7331')], hasMore: false });
     renderQueue({ activeSubTab, forms: [form], onStartAudit });
+    fireEvent.click(await screen.findByRole('button', { name: 'Mais ações' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Avaliar Filho Manualmente' }));
     await waitFor(() => expect(onStartAudit).toHaveBeenCalledTimes(1));
     expect(onStartAudit.mock.calls[0][0].form_id).toBe(CHILD_TICKET_FORM_ID);
@@ -106,6 +107,7 @@ describe('IA de chamados filhos', () => {
   it.each(['filhos', 'filhos_invalidos'] as const)('permite reavaliar o parecer diretamente no card em %s', async activeSubTab => {
     mocks.fetchQueueTickets.mockResolvedValue({ tickets: [{ ...ticket('701'), child_evaluation: result }], hasMore: false });
     renderQueue({ activeSubTab });
+    fireEvent.click(await screen.findByRole('button', { name: 'Mais ações' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Reavaliar com IA' }, { timeout: 5000 }));
     expect(mocks.evaluateChildTicketWithAI).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Iniciar Auditoria com IA' }));
@@ -124,6 +126,7 @@ describe('IA de chamados filhos', () => {
     };
     mocks.fetchQueueTickets.mockResolvedValue({ tickets: [{ ...ticket('179525'), already_audited: true, monitoria_id: 'old', child_evaluation: evaluation }], hasMore: false });
     renderQueue({ activeSubTab, forms: [form], onStartAudit });
+    fireEvent.click(await screen.findByRole('button', { name: 'Mais ações' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Ver Parecer IA' }, { timeout: 5000 }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Abrir nova ficha com IA' }).at(-1)!);
     await waitFor(() => expect(onStartAudit).toHaveBeenCalledTimes(1));
@@ -145,6 +148,7 @@ describe('IA de chamados filhos', () => {
       nextCursor: null, hasMore: false,
     });
     renderQueue({ activeSubTab, onOpenExistingMonitoria, onStartAudit });
+    fireEvent.click(await screen.findByRole('button', { name: 'Mais ações' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Ver monitoria existente' }, { timeout: 5000 }));
     expect(onOpenExistingMonitoria).toHaveBeenCalledWith('existing-monitoria');
     fireEvent.click(screen.getByRole('button', { name: 'Ver Parecer IA' }));
@@ -165,6 +169,7 @@ describe('IA de chamados filhos', () => {
     await waitFor(() => expect(mocks.completeAIJob).toHaveBeenCalledWith('102', 'job-102', result));
     expect(mocks.evaluateChildTicketWithAI).toHaveBeenCalledTimes(1);
     expect(mocks.claimAIJob).toHaveBeenCalledWith('102', 'chamado_filho', 'admin');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Mais ações' })[1]);
     fireEvent.click(await screen.findByRole('button', { name: 'Ver Parecer IA' }));
     expect(await screen.findByText(result.summary)).toBeInTheDocument();
   });
@@ -182,6 +187,7 @@ describe('IA de chamados filhos', () => {
     expect(screen.queryByRole('button', { name: /^Continuar em segundo plano$/ })).not.toBeInTheDocument();
     expect(mocks.cancelAIJob).not.toHaveBeenCalled();
     await act(async () => { finish(result); });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Mais ações' })[0]);
     fireEvent.click(await screen.findByRole('button', { name: 'Ver Parecer IA' }));
     expect(await screen.findByText(result.summary)).toBeInTheDocument();
   });
@@ -197,6 +203,7 @@ describe('IA de chamados filhos', () => {
     await act(async () => { finishFirst(result); });
     await waitFor(() => expect(mocks.completeAIJob).toHaveBeenCalledTimes(2), { timeout: 3000 });
     expect(mocks.evaluateChildTicketWithAI).toHaveBeenCalledTimes(2);
+    for (const menu of screen.getAllByRole('button', { name: 'Mais ações' })) fireEvent.click(menu);
     expect(await screen.findAllByRole('button', { name: 'Ver Parecer IA' })).toHaveLength(2);
     expect(mocks.cancelAIJob).not.toHaveBeenCalled();
   });

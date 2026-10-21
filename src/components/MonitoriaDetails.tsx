@@ -5,6 +5,7 @@ import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 import MonitoriaTimeline from './MonitoriaTimeline';
 import Button from './ui/Button';
 import { isChildTicketMonitoria, legacyChildNoteVerdict } from '../lib/childTicketForm';
+import { countManagerContestationRounds } from '../lib/contestation';
 
 type Props = {
   monitoria: Monitoria;
@@ -25,8 +26,7 @@ export default function MonitoriaDetails({ monitoria: m, user, users, teams = []
   const canActAsTeamManager = user?.role === 'gestor_suporte'
     && hasTeamMembership
     && (!approvalManagerId || approvalManagerId === user.id);
-  const managerContestationRound = (m.history || []).filter(entry =>
-    /contestaç[aã]o realizada pelo gestor de suporte|gestor pj encaminhou contestaç[aã]o/i.test(entry.action)).length;
+  const managerContestationRound = countManagerContestationRounds(m.history);
   return (
     <div className="space-y-5">
               {legacyVerdict && (

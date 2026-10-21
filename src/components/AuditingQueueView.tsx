@@ -1998,6 +1998,59 @@ export default function AuditingQueueView({
     }
   };
 
+  const renderChildQueueActions = (ticket: AuditingQueueTicket, evaluation?: ChildTicketAiEvaluation) => {
+    const evaluating = isEvaluatingTicket(ticket.ticket_id);
+    const hasSavedMonitoria = Boolean(ticket.monitoria_id && onOpenExistingMonitoria);
+    const canStartNewForm = canAudit && Boolean(evaluation);
+
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-surface-border pt-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {hasSavedMonitoria ? (
+            <Button size="sm" variant="primary" onClick={() => onOpenExistingMonitoria?.(ticket.monitoria_id!)}>
+              <Eye className="h-3.5 w-3.5" /> Ver monitoria existente
+            </Button>
+          ) : canStartNewForm ? (
+            <Button size="sm" variant="primary" disabled={evaluating} onClick={() => { void handleStartChildAudit(ticket); }}>
+              <FileText className="h-3.5 w-3.5" /> Abrir ficha de monitoria
+            </Button>
+          ) : canAudit ? (
+            <Button size="sm" variant="primary" disabled={evaluating} onClick={() => setChildGuidelineModalTicket(ticket)}>
+              {evaluating ? <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} /> : <><Bot className="h-3.5 w-3.5" /> Conferir com IA</>}
+            </Button>
+          ) : null}
+          {aiFeedback[ticket.ticket_id] && <span className="max-w-64 text-xs font-normal text-brand-muted" role="status">{aiFeedback[ticket.ticket_id]}</span>}
+        </div>
+
+        {(canAudit || evaluation || hasSavedMonitoria) && (
+          <details className="group w-full shrink-0 sm:w-auto">
+            <summary role="button" className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg border border-surface-border px-3 text-xs font-semibold text-brand-muted transition-colors hover:bg-surface-subtle hover:text-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-highlight [&::-webkit-details-marker]:hidden">
+              Mais ações
+              <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="mt-1.5 flex w-full flex-col gap-1 rounded-xl border border-surface-border bg-surface-card p-1.5 shadow-premium sm:min-w-52">
+              {evaluation && <Button size="sm" variant="ghost" className="justify-start" onClick={() => setChildPreviewTicket(ticket)}>
+                <Bot className="h-3.5 w-3.5" /> Ver Parecer IA
+              </Button>}
+              {canStartNewForm && hasSavedMonitoria && <Button size="sm" variant="ghost" className="justify-start" disabled={evaluating} onClick={() => { void handleStartChildAudit(ticket); }}>
+                <FileText className="h-3.5 w-3.5" /> Abrir nova ficha com IA
+              </Button>}
+              {canAudit && <Button size="sm" variant="ghost" className="justify-start" disabled={evaluating} onClick={() => { void handleStartManualChildAudit(ticket); }}>
+                <FileText className="h-3.5 w-3.5" /> Avaliar Filho Manualmente
+              </Button>}
+              {evaluation && <ChildTicketReevaluateAction
+                ticket={{ ...ticket, child_evaluation: evaluation }}
+                loading={evaluating}
+                onReevaluate={canAudit ? () => setChildGuidelineModalTicket(ticket) : undefined}
+              />}
+              {renderCancelAIAction(ticket.ticket_id)}
+            </div>
+          </details>
+        )}
+      </div>
+    );
+  };
+
   const handleStartChildAudit = async (ticket: AuditingQueueTicket) => {
     if (!canAudit) return;
     const savedDraft = drafts[ticket.ticket_id];
@@ -2352,7 +2405,7 @@ export default function AuditingQueueView({
         <>
 
       {/* 2. Barra Superior da Fila — Toolbar Compacta e Coesa */}
-      <div className="sticky top-0 z-40 isolate flex flex-wrap md:flex-nowrap items-center gap-2.5 p-2.5 rounded-2xl bg-surface-card border border-surface-border shadow-premium transition-shadow">
+      <div className="sticky top-0 z-40 isolate flex flex-wrap items-center gap-2.5 p-2.5 rounded-2xl bg-surface-card border border-surface-border shadow-premium transition-shadow">
         {/* Campo de Busca (elemento de maior largura) */}
         <div className="relative flex-1 min-w-[200px] max-w-none sm:max-w-md">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
@@ -2388,7 +2441,7 @@ export default function AuditingQueueView({
         )}
 
         {/* Dropdown Compacto de Filtros (Todos, Com Rascunho IA, Sem Rascunho) */}
-        <div className="relative shrink-0" ref={filterDropdownRef}>
+        <div className={`relative shrink-0 ${isFilterDropdownOpen ? 'basis-full order-last' : ''}`} ref={filterDropdownRef}>
           <button
             type="button"
             onClick={() => setIsFilterDropdownOpen(prev => !prev)}
@@ -2408,7 +2461,7 @@ export default function AuditingQueueView({
           {isFilterDropdownOpen && (
             <div
               role="menu"
-              className="absolute top-full left-0 mt-1.5 z-30 min-w-[240px] p-1.5 rounded-xl bg-surface-card border border-surface-border shadow-xl backdrop-blur-md animate-fade-in"
+              className="relative z-10 mt-2 w-full max-w-sm p-1.5 rounded-xl bg-surface-card border border-surface-border shadow-premium animate-fade-in"
             >
               <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
                 Status de Rascunho
@@ -2563,19 +2616,19 @@ export default function AuditingQueueView({
 
       {currentUserRole !== 'gestor_suporte' && (reconciliation || reconciliationLoading || reconciliationError) && (
         <section aria-label="Conciliação da fila com o Zendesk"
-          className="rounded-xl border border-surface-border bg-surface-card px-4 py-3 text-brand-primary">
+          className="rounded-xl border border-surface-border bg-surface-card px-4 py-2.5 text-brand-primary">
           {reconciliation ? (
             <>
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-                <span><strong className="tabular-nums text-base">{reconciliation.zendesk_view_count}</strong> na view do Zendesk</span>
-                <span><strong className="tabular-nums text-base">{reconciliation.without_monitoria_count}</strong> sem monitoria na view</span>
-                <span><strong className="tabular-nums text-base">{reconciliation.monitored_count}</strong> já têm monitoria</span>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+                <span><strong className="tabular-nums text-sm">{reconciliation.zendesk_view_count}</strong> na fila Zendesk</span>
+                <span><strong className="tabular-nums text-sm">{reconciliation.without_monitoria_count}</strong> sem monitoria</span>
+                <span><strong className="tabular-nums text-sm">{reconciliation.monitored_count}</strong> monitorados</span>
                 {reconciliationLoading && <span className="text-brand-muted">Atualizando…</span>}
               </div>
               {reconciliation.monitored_count > 0 && (
                 <details className="mt-2 border-t border-surface-border pt-2 text-xs">
                   <summary className="cursor-pointer font-semibold text-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-highlight">
-                    Ver tickets que já têm monitoria e a etapa de cada um
+                    Ver monitorias existentes
                   </summary>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {Object.entries(reconciliation.monitoria_statuses).map(([status, count]) => (
@@ -2598,9 +2651,6 @@ export default function AuditingQueueView({
                   </ul>
                 </details>
               )}
-              <p className="mt-2 text-[11px] text-brand-muted">
-                A distribuição entre monitores e os filtros do QWP podem mostrar menos cards que a view.
-              </p>
             </>
           ) : reconciliationLoading ? (
             <p className="text-xs text-brand-muted">Conferindo os tickets da view com as monitorias salvas…</p>
@@ -2914,7 +2964,7 @@ export default function AuditingQueueView({
                   const evaluation = childResultFor(ticket);
 
                   return (
-                    <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-brand-highlight/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
+                    <Card key={ticket.ticket_id} className={`flex h-full flex-col gap-3 p-4 transition-colors hover:border-brand-highlight/40 ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-brand-highlight/40 border-brand-highlight/50 bg-brand-highlight/3' : ''}`}>
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
                           {canAudit ? <input
                             type="checkbox"
@@ -2942,72 +2992,25 @@ export default function AuditingQueueView({
                                 <ExternalLink className="w-2.5 h-2.5" />
                                 <span>Zendesk</span>
                               </a>
-                              {getSpecializedTeamInfo(ticket).label && (
-                                <Badge variant="warning" size="xs" className="text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shadow-2xs" title={`Atendimento da equipe ${getSpecializedTeamInfo(ticket).label}`}>
-                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-500 shrink-0" />
-                                  <span>{getSpecializedTeamInfo(ticket).label}</span>
-                                </Badge>
-                              )}
-                              {isValidated && (
-                                <Badge variant="success" size="xs" className="text-[9px]">
-                                  Validado
-                                </Badge>
-                              )}
                             </div>
-                            <h4 className="text-xs font-bold text-brand-primary mt-1 line-clamp-1">
+                            <h4 className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-brand-primary">
                               {ticket.subject}
                             </h4>
                           </div>
 
-                        <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-1.5">
+                        <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-t border-surface-border pt-2 text-[11px] font-medium text-brand-muted">
+                          {renderAgentInfo(ticket)}
+                          {renderTicketResolution(ticket)}
+                          {getSpecializedTeamInfo(ticket).label && <Badge variant="warning" size="xs">{getSpecializedTeamInfo(ticket).label}</Badge>}
                           {renderAssignedMonitorBadge(ticket)}
                           {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
                           {evaluation && getChildStatusBadge(evaluation.status)}
+                          {!evaluation && isValidated && <Badge variant="success" size="xs">Validado</Badge>}
                           {renderScoreBadge(ticket)}
                         </div>
                       </div>
 
-                      <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
-                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                          {renderAgentInfo(ticket)}
-                          {renderTicketResolution(ticket)}
-                        </div>
-
-                        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5" role="status" aria-live="polite">
-                          <ChildTicketMonitoriaAction
-                            ticket={{ ...ticket, child_evaluation: evaluation }}
-                            onOpen={onOpenExistingMonitoria}
-                            onStart={canAudit && evaluation ? () => { void handleStartChildAudit(ticket); } : undefined}
-                            onStartManual={canAudit ? () => { void handleStartManualChildAudit(ticket); } : undefined}
-                            loading={isEvaluatingTicket(ticket.ticket_id)}
-                          />
-                          {(canAudit || evaluation) && <Button
-                            size="sm"
-                            variant={isValidated ? "outline" : "primary"}
-                            onClick={() => {
-                              if (evaluation || isEvaluatingTicket(ticket.ticket_id)) {
-                                setChildPreviewTicket(ticket);
-                              } else {
-                                setChildGuidelineModalTicket(ticket);
-                              }
-                            }}
-                            className="flex items-center gap-1.5 text-xs font-bold"
-                          >
-                            {isEvaluatingTicket(ticket.ticket_id) ? (
-                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
-                            ) : (
-                              <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
-                            )}
-                          </Button>}
-                          <ChildTicketReevaluateAction
-                            ticket={{ ...ticket, child_evaluation: evaluation }}
-                            loading={isEvaluatingTicket(ticket.ticket_id)}
-                            onReevaluate={canAudit ? () => setChildGuidelineModalTicket(ticket) : undefined}
-                          />
-                          {renderCancelAIAction(ticket.ticket_id)}
-                          {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
-                        </div>
-                      </div>
+                      {renderChildQueueActions(ticket, evaluation)}
                     </Card>
                   );
                 })}
@@ -3055,7 +3058,7 @@ export default function AuditingQueueView({
                   const evaluation = childResultFor(ticket);
 
                   return (
-                    <Card key={ticket.ticket_id} className={`grid h-full grid-rows-[auto_1fr_auto] gap-3 p-4 hover:border-functional-error/40 transition-all ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-functional-error/40 border-functional-error/50 bg-functional-error/3' : ''}`}>
+                    <Card key={ticket.ticket_id} className={`flex h-full flex-col gap-3 p-4 transition-colors hover:border-functional-error/40 ${selectedTicketIds.has(ticket.ticket_id) ? 'ring-2 ring-functional-error/40 border-functional-error/50 bg-functional-error/3' : ''}`}>
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-2">
                           {canAudit ? <input
                             type="checkbox"
@@ -3098,54 +3101,17 @@ export default function AuditingQueueView({
                             </h4>
                           </div>
 
-                        <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-1.5">
+                        <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-t border-surface-border pt-2 text-[11px] font-medium text-brand-muted">
+                          {renderAgentInfo(ticket)}
+                          {renderTicketResolution(ticket)}
+                          {getSpecializedTeamInfo(ticket).label && <Badge variant="warning" size="xs">{getSpecializedTeamInfo(ticket).label}</Badge>}
                           {renderAssignedMonitorBadge(ticket)}
                           {ticket.child_macro_type && getMacroBadge(ticket.child_macro_type)}
                           {evaluation && getChildStatusBadge(evaluation.status)}
+                          {!evaluation && isValidated && <Badge variant="success" size="xs">Validado</Badge>}
                         </div>
                       </div>
-
-                      <div className="row-start-3 flex flex-col items-stretch gap-2 border-t border-surface-border pt-2.5 text-[10px] font-bold text-brand-muted">
-                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                          {renderAgentInfo(ticket)}
-                          {renderTicketResolution(ticket)}
-                        </div>
-
-                        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5" role="status" aria-live="polite">
-                          <ChildTicketMonitoriaAction
-                            ticket={{ ...ticket, child_evaluation: evaluation }}
-                            onOpen={onOpenExistingMonitoria}
-                            onStart={canAudit && evaluation ? () => { void handleStartChildAudit(ticket); } : undefined}
-                            onStartManual={canAudit ? () => { void handleStartManualChildAudit(ticket); } : undefined}
-                            loading={isEvaluatingTicket(ticket.ticket_id)}
-                          />
-                          {(canAudit || evaluation) && <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              if (evaluation || isEvaluatingTicket(ticket.ticket_id)) {
-                                setChildPreviewTicket(ticket);
-                              } else {
-                                setChildGuidelineModalTicket(ticket);
-                              }
-                            }}
-                            className="flex items-center gap-1.5 text-xs font-bold"
-                          >
-                            {isEvaluatingTicket(ticket.ticket_id) ? (
-                              <QueueAIProgress step={ticketProgressStep(ticket.ticket_id)} waiting={aiJobs[ticket.ticket_id]?.phase === 'retry_pending'} fallback={aiJobs[ticket.ticket_id]?.phase === 'running_gemma' || aiJobs[ticket.ticket_id]?.phase === 'fallback_gemini'} />
-                            ) : (
-                              <><Bot className="w-3.5 h-3.5" /><span>{evaluation ? 'Ver Parecer IA' : 'Conferir com IA'}</span></>
-                            )}
-                          </Button>}
-                          <ChildTicketReevaluateAction
-                            ticket={{ ...ticket, child_evaluation: evaluation }}
-                            loading={isEvaluatingTicket(ticket.ticket_id)}
-                            onReevaluate={canAudit ? () => setChildGuidelineModalTicket(ticket) : undefined}
-                          />
-                          {renderCancelAIAction(ticket.ticket_id)}
-                          {aiFeedback[ticket.ticket_id] && <span className="max-w-56 text-right text-[10px] text-brand-muted">{aiFeedback[ticket.ticket_id]}</span>}
-                        </div>
-                      </div>
+                      {renderChildQueueActions(ticket, evaluation)}
                     </Card>
                   );
                 })}

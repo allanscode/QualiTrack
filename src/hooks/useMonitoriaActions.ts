@@ -3,6 +3,8 @@ import { supabase, mockDb } from '../lib/supabase';
 import { Monitoria, MonitoriaStatus, MonitoriaHistoryEntry, User, ActionAttachment, Team } from '../types';
 import { addBusinessHours } from '../lib/businessHours';
 import { toast } from 'sonner';
+import { countManagerContestationRounds } from '../lib/contestation';
+import { normalizeTimelineText } from '../lib/timeline';
 
 export type ActionType =
   | 'aceitar'
@@ -170,9 +172,7 @@ export function useMonitoriaActions(
     }
 
     const trimmedNote = actionNote.trim();
-    const contestations = monitoria.history?.filter(entry =>
-      /contestaç[aã]o realizada pelo gestor de suporte|gestor pj encaminhou contestaç[aã]o/i.test(entry.action)) || [];
-    const isSecondContestation = contestations.length >= 2;
+    const isSecondContestation = countManagerContestationRounds(monitoria.history) >= 2;
     const isManagerDecision = ['aceitar', 'aprovar', 'contestar', 'escalar'].includes(type);
 
     const approvingTeam = teams.find(team => team.id === monitoria.team_id);
@@ -371,7 +371,7 @@ export function useMonitoriaActions(
       load();
       return true;
     } catch (e: any) {
-      toast.error('Erro: ' + e.message);
+      toast.error('Erro: ' + normalizeTimelineText(e instanceof Error ? e.message : String(e)));
       return false;
     } finally { setSubmitting(false); }
   };

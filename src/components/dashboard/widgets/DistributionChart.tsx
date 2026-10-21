@@ -53,7 +53,7 @@ function DistributionChart({
   const [tempSub, setTempSub] = useState('');
 
   const shouldReduceMotion = useReducedMotion();
-  const { ref: chartRevealRef, animateChart } = useChartRevealAnimation();
+  const { ref: chartRevealRef, animateChart, reduceMotion } = useChartRevealAnimation();
 
   let dashboardContext = null;
   let editingContext = null;
@@ -156,7 +156,7 @@ function DistributionChart({
           label={renderCustomLabel}
           labelLine={false}
           key={animateChart ? 'visible' : 'waiting'}
-          isAnimationActive={animateChart} animationDuration={900} animationEasing="ease-out"
+          isAnimationActive={animateChart && !reduceMotion} animationDuration={900} animationEasing="ease-out"
         >
           {data.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={entry.color} />

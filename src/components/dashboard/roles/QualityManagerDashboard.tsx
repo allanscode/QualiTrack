@@ -1216,7 +1216,7 @@ export default function QualityManagerDashboard({
                             dataKey="value"
                             label={(props) => renderDonutSliceLabel(props, groupDistributionReveal.animateChart)}
                             labelLine={false}
-                            isAnimationActive={groupDistributionReveal.animateChart}
+                            isAnimationActive={groupDistributionReveal.animateChart && !groupDistributionReveal.reduceMotion}
                             animationDuration={900}
                             animationEasing="ease-out"
                           >
@@ -1358,7 +1358,7 @@ export default function QualityManagerDashboard({
                             dataKey="value"
                             label={(props) => renderDonutSliceLabel(props, gradeDistributionReveal.animateChart)}
                             labelLine={false}
-                            isAnimationActive={gradeDistributionReveal.animateChart}
+                            isAnimationActive={gradeDistributionReveal.animateChart && !gradeDistributionReveal.reduceMotion}
                             animationDuration={900}
                             animationEasing="ease-out"
                           >

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useReducedMotion } from 'motion/react';
 
 interface AnimatedNumberProps {
   value: number;
@@ -10,10 +11,12 @@ interface AnimatedNumberProps {
 /** Count chart totals and labels from zero as their chart is revealed. */
 export function AnimatedNumber({ value, active, decimals = 0, suffix = '' }: AnimatedNumberProps) {
   const [current, setCurrent] = useState(0);
+  const reduceMotion = useReducedMotion();
+  const shouldAnimate = active && !reduceMotion;
 
   useEffect(() => {
-    if (!active) {
-      setCurrent(0);
+    if (!shouldAnimate) {
+      setCurrent(value);
       return;
     }
 
@@ -28,8 +31,8 @@ export function AnimatedNumber({ value, active, decimals = 0, suffix = '' }: Ani
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [active, value]);
+  }, [shouldAnimate, value]);
 
-  const displayed = active ? current : value;
+  const displayed = shouldAnimate ? current : value;
   return <>{displayed.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}{suffix}</>;
 }
