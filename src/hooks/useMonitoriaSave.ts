@@ -14,6 +14,8 @@ interface SaveHookDeps {
   ticketGroupTeamId?: string;
   isReevaluating: boolean;
   isAdminEdit: boolean;
+  isQualityContestReview: boolean;
+  auditorRecordRegenerated: boolean;
   header: Record<string, any>;
   scores: Record<string, 'SIM' | 'NAO' | 'NA'>;
   observations: Record<string, string>;
@@ -97,6 +99,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
   const handleSave = () => {
     if (!deps.user) return;
     const currentUser = deps.user;
+    const isChild = isChildFormId(deps.header.form_id);
     if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
     // Os campos extras de qualidade foram removidos da tela de monitoria, então
     // não há mais validação de preenchimento aqui. (Os campos de cliente, na
@@ -105,7 +108,17 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
       toast.error('Informe a justificativa da reavaliação.');
       return;
     }
-    const isChild = isChildFormId(deps.header.form_id);
+    if (deps.isQualityContestReview && !deps.auditorRecordRegenerated) {
+      toast.error('Gere um novo Registro do Auditor com IA antes de concluir a contestação.');
+      return;
+    }
+    const evaluationChanged = isChild
+      ? Object.keys({ ...deps.initialData?.answers, ...deps.scores }).some(key => deps.initialData?.answers?.[key] !== deps.scores[key])
+      : Number(deps.initialData?.score) !== Number(deps.score);
+    if (deps.isQualityContestReview && !evaluationChanged) {
+      toast.error('Ajuste as respostas da ficha para recalcular o score antes de concluir.');
+      return;
+    }
     const verdict = isChild ? childVerdict(deps.scores, deps.selectedForm) : null;
     if (isChild && !verdict) { toast.error('Responda todos os critérios do chamado filho.'); return; }
     if (isChild && verdict === 'valido' && !deps.header.evaluator_note?.trim()) {
@@ -162,20 +175,25 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           && ['pendente_revisao', 'aguardando_gestor_suporte'].includes(deps.initialData.status)
           && isPositive
           && Number(deps.initialData.score) !== Number(deps.score);
+        const qualityManagerFinalizesContest = deps.isQualityContestReview
+          && ['gestor_qualidade', 'admin'].includes(deps.user?.role || '')
+          && deps.initialData?.status === 'aguardando_gestor_qualidade';
         const requiresPjReview = false;
         if (qualityManagerFinalizesValidScore) {
           historyNote = `${historyNote || 'Ajuste de nota'} | Conclusão pela Gestão da Qualidade: nota final >=75%, sem nova aprovação do Gestor de Suporte`;
         }
         let nextStatus: MonitoriaStatus;
         if (deps.isAdminEdit) {
-          nextStatus = qualityManagerFinalizesValidScore
+          nextStatus = qualityManagerFinalizesValidScore || qualityManagerFinalizesContest
             ? 'concluida'
             : (deps.initialData?.status || (isPositive ? 'concluida' : 'pendente_revisao'));
         } else {
           nextStatus = isPositive && !requiresPjReview ? 'concluida' : 'aguardando_gestor_suporte';
         }
 
-        const historyAction = qualityManagerFinalizesValidScore
+        const historyAction = qualityManagerFinalizesContest
+          ? 'Contesta\u00E7\u00E3o aprovada e monitoria conclu\u00EDda pela Gest\u00E3o da Qualidade'
+          : qualityManagerFinalizesValidScore
           ? 'Veredito final ajustado pela Gestão da Qualidade (nota >=75%)'
           : deps.isAdminEdit
           ? 'Edição pelo Administrador'
@@ -188,7 +206,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           by_id: currentUser.id,
           by_name: currentUser.name,
           at: nowTs,
-          note: historyNote
+          note: [historyNote, qualityManagerFinalizesContest ? (deps.initialData as (Monitoria & { _qualityDecisionNote?: string }) | undefined)?._qualityDecisionNote : ''].filter(Boolean).join(' | ') || undefined
         };
 
         // Existing monitorias retain their saved deadline. The new policy only
@@ -247,6 +265,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           score: isChild ? null : deps.score,
           child_verdict: isChild ? verdict : null,
           status: nextStatus,
+          contestation_result: qualityManagerFinalizesContest ? 'approved' : deps.initialData?.contestation_result,
           resolution_type: nextStatus === 'concluida' ? 'human'
             : (deps.initialData?.resolution_type || null),
           evaluator_note: deps.header.evaluator_note,
@@ -274,7 +293,7 @@ export function useMonitoriaSave(deps: SaveHookDeps) {
           action_deadline_at: nextStatus === 'concluida'
             ? null
             : (deps.initialData?.action_deadline_at || getDeadline()),
-          evaluator_name: currentUser.name,
+          evaluator_name: deps.isAdminEdit ? deps.initialData?.evaluator_name || currentUser.name : currentUser.name,
           evaluated_name: evaluatedUser?.name || '',
           form_name: selectedFormObj?.title || '',
           team_name: deps.teams.find(team => team.id === managementTeamId)?.name || '',

@@ -18,6 +18,10 @@ export type MonitoriaListFilters = {
   dateType?: 'analysis' | 'ticket';
   startDate?: string;
   endDate?: string;
+  createdStartDate?: string;
+  createdEndDate?: string;
+  deadlineStartDate?: string;
+  deadlineEndDate?: string;
   sortField?: MonitoriaSortField;
   sortDirection?: MonitoriaSortDirection;
 };
@@ -60,6 +64,10 @@ function matchesFilters(row: Monitoria, filters: MonitoriaListFilters) {
   const date = filters.dateType === 'ticket' ? row.ticket_date : row.analysis_date || row.created_at;
   if (filters.startDate && (!date || date < filters.startDate)) return false;
   if (filters.endDate && (!date || date > `${filters.endDate}T23:59:59`)) return false;
+  if (filters.createdStartDate && Date.parse(row.created_at) < Date.parse(`${filters.createdStartDate}T00:00:00-03:00`)) return false;
+  if (filters.createdEndDate && Date.parse(row.created_at) > Date.parse(`${filters.createdEndDate}T23:59:59.999-03:00`)) return false;
+  if (filters.deadlineStartDate && (!row.action_deadline_at || Date.parse(row.action_deadline_at) < Date.parse(`${filters.deadlineStartDate}T00:00:00-03:00`))) return false;
+  if (filters.deadlineEndDate && (!row.action_deadline_at || Date.parse(row.action_deadline_at) > Date.parse(`${filters.deadlineEndDate}T23:59:59.999-03:00`))) return false;
   if (filters.search) {
     const term = filters.search.toLocaleLowerCase('pt-BR');
     if (![row.ticket_id, String(row.display_id || ''), row.team_name, row.evaluated_name, row.evaluator_name, row.evaluator_note]
@@ -81,7 +89,11 @@ function applyQueryFilters(query: any, filters: MonitoriaListFilters) {
   if (filters.ticketKindFilter === 'service') query = query.or(`form_id.is.null,form_id.neq.${CHILD_FORM_ID}`);
   const dateColumn = filters.dateType === 'ticket' ? 'ticket_date' : 'analysis_date';
   if (filters.startDate) query = query.gte(dateColumn, filters.startDate);
-  if (filters.endDate) query = query.lte(dateColumn, filters.endDate);
+  if (filters.endDate) query = query.lte(dateColumn, `${filters.endDate}T23:59:59.999`);
+  if (filters.createdStartDate) query = query.gte('created_at', `${filters.createdStartDate}T00:00:00-03:00`);
+  if (filters.createdEndDate) query = query.lte('created_at', `${filters.createdEndDate}T23:59:59.999-03:00`);
+  if (filters.deadlineStartDate) query = query.gte('action_deadline_at', `${filters.deadlineStartDate}T00:00:00-03:00`);
+  if (filters.deadlineEndDate) query = query.lte('action_deadline_at', `${filters.deadlineEndDate}T23:59:59.999-03:00`);
   if (filters.search) {
     const term = filters.search.trim().replace(/[^\p{L}\p{N}\s-]/gu, '');
     if (term) {

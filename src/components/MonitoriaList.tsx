@@ -117,10 +117,12 @@ export default function MonitoriaList({
       teamFilter: filters.teamFilter, suporteFilter: filters.suporteFilter,
       auditorFilter: filters.auditorFilter, ticketKindFilter: filters.ticketKindFilter,
       dateType: filters.dateType, startDate: filters.startDate, endDate: filters.endDate,
+      createdStartDate: filters.createdStartDate, createdEndDate: filters.createdEndDate,
+      deadlineStartDate: filters.deadlineStartDate, deadlineEndDate: filters.deadlineEndDate,
       sortField: filters.sortField, sortDirection: filters.sortDirection,
     },
   });
-  useEffect(() => { setPage(0); }, [filters.tab, filters.search, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.ticketKindFilter, filters.dateType, filters.startDate, filters.endDate, filters.sortField, filters.sortDirection]);
+  useEffect(() => { setPage(0); }, [filters.tab, filters.search, filters.teamFilter, filters.suporteFilter, filters.auditorFilter, filters.ticketKindFilter, filters.dateType, filters.startDate, filters.endDate, filters.createdStartDate, filters.createdEndDate, filters.deadlineStartDate, filters.deadlineEndDate, filters.sortField, filters.sortDirection]);
   const [selectedDetail, setSelectedDetail] = useState<Monitoria | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const {
@@ -422,6 +424,10 @@ export default function MonitoriaList({
                 />
                 <CustomDatepicker value={filters.startDate} onChange={(value: string) => filters.setStartDate(value)} placeholder="Data inicial" size="sm" />
                 <CustomDatepicker value={filters.endDate} onChange={(value: string) => filters.setEndDate(value)} placeholder="Data final" size="sm" />
+                <CustomDatepicker value={filters.createdStartDate} onChange={filters.setCreatedStartDate} placeholder="Criação a partir de" size="sm" />
+                <CustomDatepicker value={filters.createdEndDate} onChange={filters.setCreatedEndDate} placeholder="Criação até" size="sm" />
+                <CustomDatepicker value={filters.deadlineStartDate} onChange={filters.setDeadlineStartDate} placeholder="Prazo a partir de" size="sm" />
+                <CustomDatepicker value={filters.deadlineEndDate} onChange={filters.setDeadlineEndDate} placeholder="Prazo até" size="sm" />
                 <div className="flex gap-2">
                   <CustomSelect
                     value={filters.sortField}
@@ -435,6 +441,8 @@ export default function MonitoriaList({
                       { value: 'form_id', label: 'Ordenar: tipo' },
                       { value: 'score', label: 'Ordenar: avalia??o' },
                       { value: 'status', label: 'Ordenar: status' },
+                      { value: 'created_at', label: 'Ordenar: criação' },
+                      { value: 'action_deadline_at', label: 'Ordenar: prazo' },
                     ]}
                     aria-label="Ordenar monitorias por"
                     size="sm"
@@ -496,8 +504,8 @@ export default function MonitoriaList({
       {/* Block 2: The List */}
       <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card overflow-hidden">
         <div role="table" aria-label="Monitorias" className="overflow-x-auto">
-            <div role="rowgroup" className="hidden min-w-[1120px] border-b border-surface-border bg-surface-subtle/45 lg:block">
-              <div role="row" className="grid min-h-11 grid-cols-[142px_145px_112px_minmax(140px,1.1fr)_minmax(120px,0.9fr)_minmax(145px,1fr)_110px_125px_34px] items-center gap-2 px-4 text-[10px] font-bold uppercase tracking-wide text-brand-muted">
+            <div role="rowgroup" className="hidden min-w-[1440px] border-b border-surface-border bg-surface-subtle/45 lg:block">
+              <div role="row" className="grid min-h-11 grid-cols-[142px_145px_100px_minmax(120px,1fr)_minmax(110px,.8fr)_minmax(130px,1fr)_95px_105px_145px_145px_34px] items-center gap-2 px-4 text-[10px] font-bold uppercase tracking-wide text-brand-muted">
                 {([
                   ['Status', 'status'], ['Monitoria', 'display_id'], ['Ticket', 'ticket_id'], ['Agente', 'evaluated_name'],
                   ['Equipe', 'team_name'], ['Monitor de qualidade', 'evaluator_name'], ['Tipo', 'form_id'], ['Avaliação', 'score'],
@@ -506,6 +514,13 @@ export default function MonitoriaList({
                     <button type="button" onClick={() => sortByColumn(field)} className="inline-flex max-w-full items-center gap-1.5 rounded-md text-left hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent" aria-label={`Ordenar por ${label}, atualmente ${filters.sortField === field ? filters.sortDirection === 'asc' ? 'crescente' : 'decrescente' : 'sem ordenação'}`}>
                       <span className="truncate">{label}</span>
                       {filters.sortField === field ? filters.sortDirection === 'asc' ? <ArrowUp className="size-3.5 shrink-0" /> : <ArrowDown className="size-3.5 shrink-0" /> : <ArrowDown className="size-3.5 shrink-0 opacity-20" />}
+                    </button>
+                  </div>
+                ))}
+                {([['Criada em', 'created_at'], ['Prazo', 'action_deadline_at']] as const).map(([label, field]) => (
+                  <div key={field} role="columnheader" className="min-w-0">
+                    <button type="button" onClick={() => sortByColumn(field)} className="inline-flex items-center gap-1.5 rounded-md text-left hover:text-brand-primary">
+                      {label}{filters.sortField === field ? filters.sortDirection === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" /> : <ArrowDown className="size-3.5 opacity-20" />}
                     </button>
                   </div>
                 ))}
@@ -526,7 +541,7 @@ export default function MonitoriaList({
                 rowHeight={72}
                 rowProps={{ monitorias: filtered, teams: staticData.teams, getName, getLevelForScore, onOpen: openDetails, displayMode: 'table' }}
                 overscanCount={5}
-                style={{ height: 600, width: 'max(100%, 1120px)' }}
+                style={{ height: 600, width: 'max(100%, 1440px)' }}
               />
             ) : filtered.map(m => (
               <MonitoriaRow key={m.id} monitoria={m} teams={staticData.teams} getName={getName} getLevelForScore={getLevelForScore} onOpen={openDetails} displayMode="table" />
@@ -654,6 +669,9 @@ export default function MonitoriaList({
                   const isSupportManager = user?.role === 'gestor_suporte';
                   const isApproval = actionModal.type === 'aprovar' || actionModal.type === 'aceitar';
                   const isContestation = actionModal.type === 'contestar';
+                  const isQualityContestApproval = actionModal.type === 'aprovar'
+                    && currentSt === 'aguardando_gestor_qualidade'
+                    && (user?.role === 'gestor_qualidade' || user?.role === 'admin');
 
                   let noteLabel = 'Justificativa / Motivo (Opcional)';
                   let notePlaceholder = 'Descreva os detalhes desta ação...';
@@ -683,7 +701,7 @@ export default function MonitoriaList({
                   }
 
                   const showNoteField = (
-                    actionModal.type === 'aprovar' ||
+                    (actionModal.type === 'aprovar' && !isQualityContestApproval) ||
                     actionModal.type === 'aceitar' ||
                     actionModal.type === 'reabrir' ||
                     actionModal.type === 'contestar' ||
@@ -728,6 +746,10 @@ export default function MonitoriaList({
                           ? 'A monitoria será reativada no fluxo de trabalho e retornará para a etapa indicada.'
                           : `Você está prestes a realizar a ação de ${modalTitle.toLowerCase()} nesta monitoria. Esta operação ficará registrada no histórico.`}
                       </p>
+
+                      {isQualityContestApproval && <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-relaxed text-brand-primary">
+                        A ficha será aberta para revisão obrigatória. Ajuste o score e gere um novo Registro do Auditor com IA. Ao salvar, você revisará o veredito e confirmará o envio ao Zendesk.
+                      </div>}
 
                       {/* Bloco de Reabertura */}
                       {actionModal.type === 'reabrir' && (
@@ -850,7 +872,7 @@ export default function MonitoriaList({
                       )}
 
                       {actionModal.type === 'aprovar' && (user?.role === 'gestor_qualidade' || user?.role === 'admin')
-                        && m && !isChildTicketMonitoria(m) && (
+                        && !isQualityContestApproval && m && !isChildTicketMonitoria(m) && (
                         <div className="mb-4 rounded-xl border border-brand-accent/30 bg-brand-accent/5 p-3 text-xs text-brand-primary">
                           <p className="font-bold">Ao aprovar, o sistema enviará ao Zendesk como {m.score >= 75 ? 'Ticket Válido' : 'Ticket Invalidado'} se esta monitoria ainda não tiver sido publicada.</p>
                           <p className="mt-2 font-semibold">Registro do Auditor</p>
@@ -933,6 +955,14 @@ export default function MonitoriaList({
                           variant="primary"
                           className="flex-1 h-11 font-black uppercase text-[10px] tracking-widest"
                           onClick={async () => {
+                            if (actionModal.type === 'aprovar'
+                              && currentSt === 'aguardando_gestor_qualidade'
+                              && (user?.role === 'gestor_qualidade' || user?.role === 'admin')
+                              && m) {
+                              setViewingMonitoria({ ...m, _qualityContestReview: true, _qualityDecisionNote: actionNote.trim() } as Monitoria);
+                              setActionModal(null);
+                              return;
+                            }
                             const terminalMonitoria = ['aprovar', 'aceitar', 'invalidar'].includes(actionModal.type)
                               && (user?.role === 'gestor_qualidade' || user?.role === 'admin' || user?.role === 'gestor_suporte')
                               && m && !isChildTicketMonitoria(m) ? m : null;

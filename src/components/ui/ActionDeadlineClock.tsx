@@ -18,7 +18,8 @@ export default function ActionDeadlineClock({ actionDeadlineAt, status, zendeskC
 
   const isFinalStatus = [
     'concluida',
-    'finalizada_alterada'
+    'finalizada_alterada',
+    'contestacao_aceita',
   ].includes(status);
 
   useEffect(() => {

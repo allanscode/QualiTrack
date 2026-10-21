@@ -9,7 +9,7 @@ import RankingWidget from '../widgets/RankingWidget';
 import SupportDrillDownModal from '../widgets/SupportDrillDownModal';
 import OfensoresChart from '../widgets/OfensoresChart';
 import RecentAuditsTable from '../widgets/RecentAuditsTable';
-import ManagerDecisionHistoryTable from '../widgets/ManagerDecisionHistoryTable';
+import SystemActionHistoryTable from '../widgets/SystemActionHistoryTable';
 import CriticalErrorsTable from '../widgets/CriticalErrorsTable';
 import AgentEvaluationVolumeTable from '../widgets/AgentEvaluationVolumeTable';
 import AuditorEvaluationVolumeTable from '../widgets/AuditorEvaluationVolumeTable';
@@ -1633,7 +1633,7 @@ export default function QualityManagerDashboard({
         users={isCustomizing ? mockUsersList : users}
         title="Últimas Auditorias do Sistema"
       />
-      <ManagerDecisionHistoryTable monitorias={monitorias} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />
+      <SystemActionHistoryTable monitorias={allMonitorias} users={users} profile="gestor_qualidade" />
       <CriticalErrorsTable monitorias={monitorias} forms={forms} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />
       <AgentEvaluationVolumeTable monitorias={monitorias} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />
       <AuditorEvaluationVolumeTable monitorias={monitorias} users={users} profile="gestor_qualidade" isCustomizing={isCustomizing} />

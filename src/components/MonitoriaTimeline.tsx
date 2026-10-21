@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import { History } from 'lucide-react';
 import type { Monitoria, User } from '../types';
 import { getHistoryEventConfig, getStatusConfig, VARIANT_TEXT_CLASS, type StatusConfig } from '../lib/statusHelper';
-import { formatTimelineDateTime, resolveTimelineActor } from '../lib/timeline';
+import { formatTimelineDateTime, normalizeTimelineText, resolveTimelineActor } from '../lib/timeline';
 import ActionAttachmentsViewer from './ActionAttachmentsViewer';
 
 const NOTE_ACCENT_CLASS: Record<StatusConfig['variant'], string> = {
@@ -42,8 +42,10 @@ type Props = { monitoria: Monitoria; user: User | null; users: User[] };
 
 export default function MonitoriaTimeline({ monitoria, user, users }: Props) {
   const history = monitoria.history || [];
-  if (history.length === 0) return null;
-  const showCurrentStage = !['concluida', 'finalizada_alterada'].includes(monitoria.status);
+  const terminal = ['concluida', 'finalizada_alterada', 'contestacao_aceita'].includes(monitoria.status);
+  const hasTerminalEvent = history.some(entry => /conclu|finaliz|aceit|valid|expirad|prazo|decis.{0,3}final/i.test(entry.action));
+  const showCurrentStage = !terminal;
+  if (history.length === 0 && !terminal) return null;
 
   return (
     <section className="min-w-0 pb-4" aria-labelledby={`timeline-${monitoria.id}`}>
@@ -67,14 +69,14 @@ export default function MonitoriaTimeline({ monitoria, user, users }: Props) {
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-1">
                   <div className="flex min-w-0 items-start gap-2">
                     <EventIcon className={`mt-0.5 size-3.5 shrink-0 ${color}`} aria-hidden="true" />
-                    <strong className="min-w-0 text-xs leading-snug text-brand-primary">{entry.action}</strong>
+                    <strong className="min-w-0 text-xs leading-snug text-brand-primary">{normalizeTimelineText(entry.action)}</strong>
                   </div>
                   <time className="shrink-0 text-[11px] tabular-nums text-brand-muted" dateTime={entry.at}>
                     {formatTimelineDateTime(entry.at, monitoria.created_at)}
                   </time>
                 </div>
                 <p className="mt-1 pl-[22px] text-[11px] font-medium text-brand-muted">{actorName}</p>
-                {entry.note && <TimelineNote text={entry.note} variant={event.variant} />}
+                {entry.note && <TimelineNote text={normalizeTimelineText(entry.note)} variant={event.variant} />}
                 {entry.attachments && entry.attachments.length > 0 && (
                   <div className="mt-2 min-w-0"><ActionAttachmentsViewer attachments={entry.attachments} compact /></div>
                 )}
@@ -82,6 +84,25 @@ export default function MonitoriaTimeline({ monitoria, user, users }: Props) {
             </li>
           );
         })}
+        {terminal && !hasTerminalEvent && (() => {
+          const label = monitoria.resolution_type === 'automatic'
+            ? 'Monitoria concluída automaticamente por expiração do prazo'
+            : monitoria.status === 'contestacao_aceita'
+              ? 'Contestação aceita e monitoria concluída'
+              : monitoria.status === 'contestacao_negada'
+                ? 'Contestação negada e monitoria concluída'
+                : 'Monitoria concluída';
+          const at = monitoria.concluded_at || monitoria.finished_at || monitoria.updated_at;
+          return (
+            <li className="relative min-w-0 pl-7">
+              <span aria-hidden="true" className="absolute left-0 top-1 size-3 rounded-full border-2 border-current bg-surface-bg text-success" />
+              <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                <strong className="min-w-0 text-xs leading-snug text-success">{label}</strong>
+                <time className="shrink-0 text-[11px] tabular-nums text-brand-muted" dateTime={at}>{formatTimelineDateTime(at, monitoria.created_at)}</time>
+              </div>
+            </li>
+          );
+        })()}
         {showCurrentStage && (() => {
           const stage = getStatusConfig(monitoria.status);
           const StageIcon = stage.icon;

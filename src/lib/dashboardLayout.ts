@@ -50,7 +50,7 @@ function widget(type: DashboardWidgetType, title: string): DashboardWidgetDefini
 const c = (title: string) => widget('StatCard', title);
 const chart = (type: Exclude<DashboardWidgetType, 'StatCard' | 'RecentAuditsTable'>, title: string) => widget(type, title);
 const table = (title: string) => widget('RecentAuditsTable', title);
-const managerHistory = widget('ManagerDecisionHistoryTable', 'Decisões dos Gestores de Atendimento');
+const managerHistory = widget('ManagerDecisionHistoryTable', 'Hist\u00F3rico de a\u00E7\u00F5es do sistema');
 const criticalErrors = widget('CriticalErrorsTable', 'Erros Críticos por Agente');
 const evaluationVolume = widget('AgentEvaluationVolumeTable', 'Avalia\u00e7\u00f5es por Agente');
 const auditorVolume = widget('AuditorEvaluationVolumeTable', 'Monitorias por Monitor');

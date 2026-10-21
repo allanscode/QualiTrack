@@ -93,9 +93,10 @@ export default function MonitoriaForm({
   // id) — dados de pré-preenchimento vindos da Central de Filas (ticket_id,
   // sugestões da IA etc.) não têm id ainda e precisam continuar editáveis.
   const [isEditModeOverride, setIsEditModeOverride] = useState(false);
-  const isViewOnly = !!(initialData as any)?.id && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit && !isEditModeOverride;
+  const isViewOnly = !!(initialData as any)?.id && !(initialData as any)?._reevaluate && !(initialData as any)?._adminEdit && !(initialData as any)?._qualityContestReview && !isEditModeOverride;
   const isReevaluating = !!(initialData as any)?._reevaluate;
-  const isAdminEdit = !!(initialData as any)?._adminEdit || isEditModeOverride;
+  const isQualityContestReview = !!(initialData as any)?._qualityContestReview;
+  const isAdminEdit = !!(initialData as any)?._adminEdit || isQualityContestReview || isEditModeOverride;
 
   const initialAiEval: AIEvaluationResult | undefined =
     (initialData as any)?.aiEvaluation ||
@@ -530,6 +531,8 @@ export default function MonitoriaForm({
   const [helpdeskModal, setHelpdeskModal] = useState<{ monitoriaId: string; fromConclusion: boolean } | null>(null);
   const [childPublishModal, setChildPublishModal] = useState<{ monitoriaId: string; fromConclusion: boolean } | null>(null);
   const [generatingAuditorRecord, setGeneratingAuditorRecord] = useState(false);
+  const [auditorRecordFingerprint, setAuditorRecordFingerprint] = useState('');
+  const currentAuditorInputFingerprint = JSON.stringify({ scores, observations, criticalErrors, criticalErrorObservations });
 
   const canSendToHelpdesk = isViewOnly
     && !isChildEvaluation
@@ -561,6 +564,8 @@ export default function MonitoriaForm({
     initialData,
     isReevaluating,
     isAdminEdit,
+    isQualityContestReview,
+    auditorRecordRegenerated: auditorRecordFingerprint === currentAuditorInputFingerprint,
     header,
     scores,
     observations,
@@ -590,7 +595,7 @@ export default function MonitoriaForm({
       const shouldAutoSend = /^\d+$/.test(ticketIdTrimmed)
         && !isChildFormId(header.form_id)
         && canPublishSavedMonitoria(publicationContext)
-        && !isAdminEdit
+        && (!isAdminEdit || isQualityContestReview)
         && !isReevaluating;
 
       if (shouldAutoSend) {
@@ -615,7 +620,7 @@ export default function MonitoriaForm({
         selected && !!criticalErrorObservations[id]?.trim(),
       );
 
-    if (!hasCurrentObservation) {
+    if (!hasCurrentObservation && !isQualityContestReview) {
       toast.error('Adicione ao menos uma observação na etapa de Avaliação antes de gerar o registro.');
       return;
     }
@@ -660,6 +665,7 @@ export default function MonitoriaForm({
         changedCriteria: [...changedCriteria, ...changedCriticalErrors].slice(0, 200),
       });
       setHeader(prev => ({ ...prev, evaluator_note: record }));
+      setAuditorRecordFingerprint(currentAuditorInputFingerprint);
       toast.success('Novo Registro do Auditor gerado com as observações atuais.');
     } catch (error: any) {
       console.error('[MonitoriaForm] Falha ao gerar Registro do Auditor:', error);
@@ -699,7 +705,10 @@ export default function MonitoriaForm({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/25 dark:bg-black/40 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden animate-fade-in" onMouseDown={event => { if (event.target === event.currentTarget) onCancel(); }}>
+      <div className="fixed inset-0 z-[9999] bg-black/25 dark:bg-black/40 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden animate-fade-in" onMouseDown={event => { if (event.target === event.currentTarget) onCancel(); }}>
+      {isQualityContestReview && <div role="status" className="fixed left-1/2 top-2 z-[10000] w-[min(94vw,850px)] -translate-x-1/2 rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-brand-primary shadow-xl">
+        Revisão final da contestação: ajuste as respostas para recalcular o score e gere um novo Registro do Auditor com IA antes de salvar.
+      </div>}
       <m.div
         initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 10 }}
         animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
@@ -1646,7 +1655,7 @@ export default function MonitoriaForm({
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 px-1">
                   <p className="text-[10px] font-black uppercase text-brand-muted tracking-widest">Registro do Auditor</p>
-                  {!isViewOnly && !isReevaluating && !isChildFormId(header.form_id) && (
+                  {!isViewOnly && !isReevaluating && (!isChildFormId(header.form_id) || isQualityContestReview) && (
                     <Button
                       type="button"
                       size="sm"

@@ -6,6 +6,23 @@
 
 const SAO_PAULO_TZ = 'America/Sao_Paulo';
 
+const MOJIBAKE_REPAIRS: Array<[string, string]> = [
+  ['\u00C3\u0192\u00C2\u00A7', '\u00E7'], ['\u00C3\u0192\u00C2\u00A3', '\u00E3'],
+  ['\u00C3\u0192\u00C2\u00A1', '\u00E1'], ['\u00C3\u0192\u00C2\u00A9', '\u00E9'],
+  ['\u00C3\u0192\u00C2\u00AD', '\u00ED'], ['\u00C3\u0192\u00C2\u00B3', '\u00F3'],
+  ['\u00C3\u0192\u00C2\u00BA', '\u00FA'], ['\u00C3\u0192\u00C2\u00AA', '\u00EA'],
+  ['\u00C3\u0192\u00C2\u00B4', '\u00F4'], ['\u00C3\u0192\u00C2\u00B5', '\u00F5'],
+  ['\u00C3\u00A7', '\u00E7'], ['\u00C3\u00A3', '\u00E3'], ['\u00C3\u00A1', '\u00E1'],
+  ['\u00C3\u00A9', '\u00E9'], ['\u00C3\u00AD', '\u00ED'], ['\u00C3\u00B3', '\u00F3'],
+  ['\u00C3\u00BA', '\u00FA'], ['\u00C3\u00AA', '\u00EA'], ['\u00C3\u00B4', '\u00F4'],
+  ['\u00C3\u00B5', '\u00F5'], ['\u00C2\u00B7', '\u00B7'], ['\u00E2\u2020\u2019', '\u2192'],
+  ['\u00E2\u20AC\u201D', '\u2014'], ['\u00E2\u20AC\u201C', '\u2013'],
+];
+
+export function normalizeTimelineText(value: string): string {
+  return MOJIBAKE_REPAIRS.reduce((text, [broken, fixed]) => text.split(broken).join(fixed), value);
+}
+
 const timelineDateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
   timeZone: SAO_PAULO_TZ,
   day: '2-digit',

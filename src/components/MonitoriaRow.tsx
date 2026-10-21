@@ -38,7 +38,7 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
   const lastUpdatedAt = !Number.isNaN(Date.parse(m.updated_at)) ? m.updated_at : latestAction?.at || m.created_at;
   return (
     <div style={style} id={`monitoria-${m.id}`} className="border-b border-surface-border/50 last:border-b-0">
-      {displayMode === 'table' && <div role="row" className="hidden min-w-[1120px] min-h-[64px] grid-cols-[142px_145px_112px_minmax(140px,1.1fr)_minmax(120px,0.9fr)_minmax(145px,1fr)_110px_125px_34px] items-center gap-2 px-4 text-xs transition-colors hover:bg-surface-subtle/60 lg:grid">
+      {displayMode === 'table' && <div role="row" className="hidden min-w-[1440px] min-h-[64px] grid-cols-[142px_145px_100px_minmax(120px,1fr)_minmax(110px,.8fr)_minmax(130px,1fr)_95px_105px_145px_145px_34px] items-center gap-2 px-4 text-xs transition-colors hover:bg-surface-subtle/60 lg:grid">
         <span role="cell" className="flex min-w-0 flex-col items-start gap-1">
           <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-brand-muted"><config.icon className="size-3.5" />{config.shortLabel}</span>
           <Badge variant={config.variant} size="xs" className="max-w-full truncate">{expired ? 'Concluída sist.' : config.label}</Badge>
@@ -59,6 +59,14 @@ export function MonitoriaRow({ monitoria: m, style, teams, getName, getLevelForS
           {child && finalChildVerdict ? <Badge variant={finalChildVerdict === 'valido' ? 'success' : 'error'} size="xs">{finalChildVerdict === 'valido' ? 'Válido' : 'Inválido'}</Badge>
             : child ? <span className="text-brand-muted">Pendente</span>
               : <span className={`font-bold tabular-nums ${scoreColor}`} title={legacyVerdict ? 'Nota original do parecer legado' : undefined}>{m.score != null ? `${m.score}%` : '—'}</span>}
+        </span>
+        <span role="cell" className="min-w-0 text-[10px] leading-tight tabular-nums text-brand-muted" title={format(new Date(m.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}>
+          {format(new Date(m.created_at), 'dd/MM/yyyy', { locale: ptBR })}<br />{format(new Date(m.created_at), 'HH:mm', { locale: ptBR })}
+        </span>
+        <span role="cell" className="min-w-0">
+          {m.active !== false && m.action_deadline_at
+            ? <ActionDeadlineClock actionDeadlineAt={m.action_deadline_at} status={m.status} zendeskClosure={Boolean(legacyVerdict && m.status !== 'concluida')} />
+            : <span className="text-[10px] text-brand-muted">{m.status === 'concluida' ? 'Concluída' : '—'}</span>}
         </span>
         <span role="cell" className="flex justify-end">
           <button type="button" onClick={() => onOpen(m.id)} aria-label={`Abrir monitoria ${m.display_id || m.ticket_id}`} title="Abrir monitoria" className="rounded-md p-1.5 text-brand-muted hover:bg-surface-subtle hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"><ChevronRight className="size-4" /></button>

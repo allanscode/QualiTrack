@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { formatTimelineDateTime, resolveTimelineActor } from './timeline';
+import { formatTimelineDateTime, normalizeTimelineText, resolveTimelineActor } from './timeline';
+
+describe('normalizeTimelineText', () => {
+  it('repairs mojibake in legacy contestation events', () => {
+    expect(normalizeTimelineText('Contesta\u00C3\u00A7\u00C3\u00A3o aceita')).toBe('Contesta\u00E7\u00E3o aceita');
+  });
+});
 
 describe('formatTimelineDateTime (WQ-23)', () => {
   it('deve formatar data e hora completas no formato esperado (DD/MM/YYYY às HH:mm)', () => {

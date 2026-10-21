@@ -47,7 +47,7 @@ export default function ManagerDecisionHistoryTable({ monitorias, users, profile
   const visible = filtered.slice(currentPage * 10, (currentPage + 1) * 10);
 
   return (
-    <DashboardTile type="ManagerDecisionHistoryTable" title="Decisões dos Gestores de Atendimento" profile={profile}>
+    <DashboardTile type="ManagerDecisionHistoryTable" title={'Hist\u00F3rico de a\u00E7\u00F5es do sistema'} profile={profile}>
       <Card padding="none" className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border px-5 py-4">
           <div className="flex items-center gap-3">

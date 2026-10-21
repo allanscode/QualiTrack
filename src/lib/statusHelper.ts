@@ -97,12 +97,11 @@ export const STATUS_CONFIGS: Record<MonitoriaStatus | 'expiradas_prazo', StatusC
 export function getHistoryEventConfig(action: string): { variant: StatusConfig['variant']; icon: LucideIcon } {
   const a = (action || '').toLowerCase();
 
-  if (/negad|removid|recusad|reprovad|reprovou|improcedente/.test(a)) {
-    return { variant: 'error', icon: XCircle };
-  }
-  if (/aceit|aprovad|aprovou|procedente|conclu/.test(a)) {
+  if (/contesta.{0,24}(aceit|valid)|(?:aceit|valid).{0,24}contesta|procedente|aprovad|aprovou/.test(a)) {
     return { variant: 'success', icon: CheckCircle2 };
   }
+  if (/negad|removid|recusad|reprovad|reprovou|improcedente/.test(a)) return { variant: 'error', icon: XCircle };
+  if (/aceit|conclu|finaliz|expirad/.test(a)) return { variant: 'success', icon: CheckCircle2 };
   if (/contesta|escalad|devolvid|solicitad|mantid|reabert|reavalia/.test(a)) {
     return { variant: 'warning', icon: AlertTriangle };
   }

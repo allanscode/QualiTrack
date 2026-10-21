@@ -18,14 +18,18 @@ export function useMonitoriaFilters() {
   const [dateType, setDateType] = useState<'analysis' | 'ticket'>('analysis');
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
   const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
+  const [createdStartDate, setCreatedStartDate] = useState('');
+  const [createdEndDate, setCreatedEndDate] = useState('');
+  const [deadlineStartDate, setDeadlineStartDate] = useState('');
+  const [deadlineEndDate, setDeadlineEndDate] = useState('');
   const [sortField, setSortField] = useState<MonitoriaSortField>('display_id');
   const [sortDirection, setSortDirection] = useState<MonitoriaSortDirection>('desc');
 
   const hasActiveFilters = useMemo(() => {
     const isDefaultDate = startDate === DEFAULT_START_DATE() &&
       endDate === DEFAULT_END_DATE();
-    return search !== '' || teamFilter !== '' || suporteFilter !== '' || auditorFilter !== '' || ticketKindFilter !== 'all' || !isDefaultDate || statusFilter !== 'active';
-  }, [search, teamFilter, suporteFilter, auditorFilter, ticketKindFilter, startDate, endDate, statusFilter]);
+    return search !== '' || teamFilter !== '' || suporteFilter !== '' || auditorFilter !== '' || ticketKindFilter !== 'all' || !isDefaultDate || statusFilter !== 'active' || !!createdStartDate || !!createdEndDate || !!deadlineStartDate || !!deadlineEndDate;
+  }, [search, teamFilter, suporteFilter, auditorFilter, ticketKindFilter, startDate, endDate, statusFilter, createdStartDate, createdEndDate, deadlineStartDate, deadlineEndDate]);
 
   const clearFilters = () => {
     setSearch('');
@@ -36,6 +40,7 @@ export function useMonitoriaFilters() {
     setStatusFilter('active');
     setStartDate(DEFAULT_START_DATE());
     setEndDate(DEFAULT_END_DATE());
+    setCreatedStartDate(''); setCreatedEndDate(''); setDeadlineStartDate(''); setDeadlineEndDate('');
     setTab('todas');
   };
 
@@ -50,6 +55,8 @@ export function useMonitoriaFilters() {
     dateType, setDateType,
     startDate, setStartDate,
     endDate, setEndDate,
+    createdStartDate, setCreatedStartDate, createdEndDate, setCreatedEndDate,
+    deadlineStartDate, setDeadlineStartDate, deadlineEndDate, setDeadlineEndDate,
     sortField, setSortField,
     sortDirection, setSortDirection,
     hasActiveFilters,

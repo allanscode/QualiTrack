@@ -75,16 +75,14 @@ describe('MonitoriaList actions', () => {
     expect(screen.getByText('Buscando monitorias...')).toBeInTheDocument();
   });
 
-  it('envia o registro ao Zendesk depois da aprovação final pela Qualidade', async () => {
+  it('routes final quality approval to ficha review before saving', async () => {
     fixture.status = 'aguardando_gestor_qualidade';
     render(<ListWithSelectedMonitoria />);
     fireEvent.click(await screen.findByRole('button', { name: 'Aprovar' }));
-    expect(await screen.findByText('Registro do Auditor')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Ação' }));
-    await waitFor(() => expect(updateMonitoria).toHaveBeenCalledWith(
-      'monitorias', 'monitoria-1', expect.objectContaining({ status: 'concluida' })
-    ));
-    await waitFor(() => expect(publishEvaluation).toHaveBeenCalledWith('monitoria-1'));
+    fireEvent.click(screen.getByRole('button', { name: /Confirmar/ }));
+    expect(await screen.findByText(/Ficha/)).toBeInTheDocument();
+    expect(updateMonitoria).not.toHaveBeenCalled();
+    expect(publishEvaluation).not.toHaveBeenCalled();
   });
 
   it('permite conferir o envio de uma monitoria já concluída', async () => {

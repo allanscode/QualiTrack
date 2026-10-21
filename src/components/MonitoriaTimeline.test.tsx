@@ -31,4 +31,10 @@ describe('MonitoriaTimeline', () => {
     expect(screen.getByText('Equipe de Qualidade')).toBeInTheDocument();
     expect(screen.queryByText('Auditor')).not.toBeInTheDocument();
   });
+
+  it('mostra conclusão automática quando o histórico não contém evento terminal', () => {
+    const user = { id: 'admin-1', role: 'admin', name: 'Admin' } as User;
+    render(<MonitoriaTimeline monitoria={{ ...monitoria, status: 'concluida', resolution_type: 'automatic', history: [] }} user={user} users={[user]} />);
+    expect(screen.getByText(/Monitoria conclu/)).toBeInTheDocument();
+  });
 });
