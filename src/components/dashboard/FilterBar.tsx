@@ -148,42 +148,6 @@ export default function FilterBar() {
             Limpar Filtros
           </button>
         )}
-        {user?.role !== 'suporte' && (
-          <>
-            {!hiddenActions.includes('root_cause') && (
-            <button
-              type="button"
-              onClick={() => setIsRootCauseOpen(true)}
-              className="hidden inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface-bg/70 px-3 text-xs font-bold text-brand-primary transition-all hover:border-brand-highlight/40 hover:bg-brand-highlight/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-highlight/30 active:scale-[0.98] cursor-pointer"
-              title="Indicadores das avaliações filtradas e comparação de notas antes e depois do feedback"
-            >
-              <Layers className="w-4 h-4 shrink-0 text-brand-highlight" />
-              <span className="whitespace-nowrap">Análise das monitorias</span>
-            </button>
-            )}
-            {!hiddenActions.includes('executive_report') && (
-            <button
-              type="button"
-              onClick={() => setIsReportOpen(true)}
-              className="hidden inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface-bg/70 px-3 text-xs font-bold text-brand-primary transition-all hover:border-brand-accent/40 hover:bg-brand-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/30 active:scale-[0.98] cursor-pointer"
-              title="Gerar e imprimir relatório executivo consolidado em PDF para reunião e envio a gestores"
-            >
-              <FileText className="w-4 h-4 shrink-0 text-brand-accent" />
-              <span className="whitespace-nowrap">Relatório executivo</span>
-            </button>
-            )}
-          </>
-        )}
-        <button
-          type="button"
-          onClick={refresh}
-          disabled={loading || refreshing || !!refreshCooldownRemaining}
-          className="hidden inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-brand-accent/25 bg-brand-accent/10 px-3 text-xs font-bold text-brand-primary shadow-sm transition-all hover:border-brand-accent/40 hover:bg-brand-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          <span className="whitespace-nowrap">{refreshing ? 'Atualizando dados' : 'Atualizar dados'}</span>
-          {!refreshing && refreshCooldownRemaining && <span className="rounded-md bg-surface-subtle px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-brand-muted">{refreshCooldownRemaining}</span>}
-        </button>
         <div className="relative" ref={actionsMenuRef}>
           <button
             type="button"
