@@ -729,6 +729,48 @@ serve(async (req) => {
       const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
       return jsonResponse(await processChildAutoPublication(workerClient,key=>Deno.env.get(key),fetch),200);
     }
+    if (workerBody?.action === 'inspect_child_auto_publication') {
+      if (req.headers.get('apikey') !== secretApiKey()) {
+        return jsonResponse({ error: 'Worker não autorizado.' }, 403);
+      }
+      const ticketId = String(workerBody.ticket_id ?? '');
+      const monitoriaId = String(workerBody.monitoria_id ?? '');
+      if (!/^\d{1,20}$/.test(ticketId) || !/^[0-9a-f-]{36}$/i.test(monitoriaId)) {
+        return jsonResponse({ error: 'Identificadores inválidos.' }, 400);
+      }
+      const subdomain = Deno.env.get('ZENDESK_SUBDOMAIN');
+      const email = Deno.env.get('ZENDESK_EMAIL');
+      const token = Deno.env.get('ZENDESK_API_TOKEN');
+      if (!subdomain || !email || !token) return jsonResponse({ error: 'Zendesk não configurado.' }, 500);
+      const workerClient = createClient(Deno.env.get('SUPABASE_URL')!, secretApiKey());
+      const { data: monitoria, error: monitoriaError } = await workerClient.from('monitorias')
+        .select('id,ticket_id,form_id,score,child_verdict,answers,status,active,evaluator_id,evaluator_note,form_snapshot')
+        .eq('id', monitoriaId).eq('ticket_id', ticketId).maybeSingle();
+      if (monitoriaError || !monitoria) return jsonResponse({ error: 'Monitoria não encontrada.' }, 404);
+      const verdict = childPublicationVerdict(monitoria as ChildPublicationMonitoria);
+      if (!verdict) return jsonResponse({ error: 'Veredito indisponível.' }, 409);
+      const headers = { Authorization: `Basic ${btoa(`${email}/token:${token}`)}`, Accept: 'application/json' };
+      const base = `https://${subdomain}.zendesk.com/api/v2/tickets/${ticketId}`;
+      const [ticketResponse, commentsResponse] = await Promise.all([
+        fetch(`${base}.json`, { headers, signal: AbortSignal.timeout(15000) }),
+        fetch(`${base}/comments.json?sort_order=desc&per_page=100`, { headers, signal: AbortSignal.timeout(15000) }),
+      ]);
+      if (!ticketResponse.ok || !commentsResponse.ok) {
+        return jsonResponse({ error: 'Falha na consulta ao Zendesk.', ticket_status: ticketResponse.status,
+          comments_status: commentsResponse.status }, 502);
+      }
+      const ticket = (await ticketResponse.json()).ticket;
+      const comments = (await commentsResponse.json()).comments;
+      const requiredFields = childMacroCustomFields(verdict,
+        verdict === 'conforme' && hasCriticalChildField(ticket?.custom_fields));
+      return jsonResponse({ ticket_id: ticketId, monitoria_id: monitoriaId, verdict,
+        comment_present: hasPublishedChildMacroForMonitoria(comments, monitoriaId, verdict),
+        fields_present: missingCustomFields(ticket?.custom_fields, requiredFields).length === 0,
+        tags: Array.isArray(ticket?.tags) ? ticket.tags.filter((tag: string) =>
+          ['positiva', 'negativa', 'analisado_qa', CHILD_AUDITED_TAG].includes(tag)) : null,
+        ticket_status: ticket?.status ?? null,
+      }, 200);
+    }
     if (workerBody?.action === 'process_ai_retries') {
       if (req.headers.get('apikey') !== secretApiKey()) {
         return jsonResponse({ error: 'Worker não autorizado.' }, 403);
