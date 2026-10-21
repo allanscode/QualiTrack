@@ -2393,13 +2393,7 @@ function NavItem({ icon: IconComponent, label, active, onClick, isOpen, isDark, 
         />
       )}
       <div className={`${active ? 'text-current' : (isDark ? 'text-white/30 group-hover:text-white' : 'text-slate-700 group-hover:text-black')}`}>
-        {typeof IconComponent === 'function' ? (
-          <IconComponent isHovered={isHovered} active={active} className="w-5 h-5" />
-        ) : React.isValidElement(IconComponent) ? (
-          React.cloneElement(IconComponent as React.ReactElement<any>, { isHovered, active })
-        ) : (
-          IconComponent
-        )}
+        {React.createElement(IconComponent, { isHovered, active, className: 'w-5 h-5' })}
       </div>
       <div className={`flex-1 flex items-center justify-between overflow-hidden transition-all duration-300 ${isOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0'}`}>
         <span className="text-sm tracking-tight whitespace-nowrap block pl-1">
