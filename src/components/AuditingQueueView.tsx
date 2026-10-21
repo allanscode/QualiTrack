@@ -2421,7 +2421,7 @@ export default function AuditingQueueView({
         <>
 
       {/* 2. Barra Superior da Fila — Toolbar Compacta e Coesa */}
-      <div className="sticky top-0 z-40 isolate flex flex-wrap items-center gap-2.5 p-2.5 rounded-2xl bg-surface-card border border-surface-border shadow-premium transition-shadow">
+      <div className="relative flex flex-wrap items-center gap-2.5 p-2.5 rounded-2xl bg-surface-card border border-surface-border shadow-premium transition-shadow">
         {/* Campo de Busca (elemento de maior largura) */}
         <div className="relative flex-1 min-w-[200px] max-w-none sm:max-w-md">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />

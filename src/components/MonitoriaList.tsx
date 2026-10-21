@@ -325,7 +325,7 @@ export default function MonitoriaList({
       {!isFeedbackPage && (
         <>
           {/* Block 1: Filters & Status Joined */}
-          <Card padding="none" className="sticky top-0 z-40 isolate border border-surface-border shadow-premium bg-surface-card/95 backdrop-blur-md rounded-2xl sm:rounded-3xl">
+          <Card padding="none" className="border border-surface-border shadow-premium bg-surface-card/95 rounded-2xl sm:rounded-3xl">
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           <form
             className="flex flex-col gap-3 lg:flex-row lg:items-center"

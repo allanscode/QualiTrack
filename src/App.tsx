@@ -1730,9 +1730,9 @@ function MainApp({
           <m.div
             key={`header-title-${activeTab}`}
             className="min-w-0 flex-1 [will-change:clip-path]"
-            initial={activeTab === 'dashboard' ? { opacity: 1, clipPath: 'inset(0 100% 0 0)' } : false}
-            animate={{ opacity: 1, clipPath: 'inset(0 0% 0 0)' }}
-            transition={{ duration: 0.82, ease: [0.65, 0, 0.35, 1] }}
+            initial={activeTab === 'dashboard' ? { opacity: 1, clipPath: 'polygon(0 0, 0 0, -18% 100%, -18% 100%)' } : false}
+            animate={{ opacity: 1, clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)' }}
+            transition={{ duration: 0.92, ease: [0.65, 0, 0.35, 1] }}
           >
             <div className="flex flex-col">
               <h2 className="text-base sm:text-xl font-bold text-brand-primary tracking-tight leading-snug truncate">
@@ -1767,9 +1767,9 @@ function MainApp({
           <m.div
             key={`header-actions-${activeTab}`}
             className="flex items-center gap-2 sm:gap-4 [will-change:clip-path]"
-            initial={activeTab === 'dashboard' ? { opacity: 1, clipPath: 'inset(0 100% 0 0)' } : false}
-            animate={{ opacity: 1, clipPath: 'inset(0 0% 0 0)' }}
-            transition={{ duration: 1.05, delay: 0.12, ease: [0.65, 0, 0.35, 1] }}
+            initial={activeTab === 'dashboard' ? { opacity: 1, clipPath: 'polygon(0 0, 0 0, -18% 100%, -18% 100%)' } : false}
+            animate={{ opacity: 1, clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)' }}
+            transition={{ duration: 1.08, delay: 0.12, ease: [0.65, 0, 0.35, 1] }}
           >
             {(userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') && (
               <button
