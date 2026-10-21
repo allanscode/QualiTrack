@@ -1704,7 +1704,13 @@ function MainApp({
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="min-w-0 flex-1">
+          <m.div
+            key={`header-title-${activeTab}`}
+            className="min-w-0 flex-1"
+            initial={activeTab === 'dashboard' ? { opacity: 0, scale: 0.96, y: 8, filter: 'blur(14px)' } : false}
+            animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+            transition={{ duration: 0.68, ease: [0.22, 1, 0.36, 1] }}
+          >
             <div className="flex flex-col">
               <h2 className="text-base sm:text-xl font-bold text-brand-primary tracking-tight leading-snug truncate">
                 {activeTab === 'dashboard'
@@ -1733,9 +1739,15 @@ function MainApp({
                   : 'Parâmetros de qualidade, usuários, equipes e inteligência artificial'}
               </p>
             </div>
-          </div>
+          </m.div>
 
-          <div className="flex items-center gap-2 sm:gap-4">
+          <m.div
+            key={`header-actions-${activeTab}`}
+            className="flex items-center gap-2 sm:gap-4"
+            initial={activeTab === 'dashboard' ? { opacity: 0, scale: 0.93, y: 7, filter: 'blur(16px)' } : false}
+            animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+            transition={{ duration: 0.72, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          >
             {(userData?.role === 'qualidade' || userData?.role === 'gestor_qualidade' || userData?.role === 'admin') && (
               <button
                 onClick={handleOpenNewMonitoria}
@@ -2036,7 +2048,7 @@ function MainApp({
                 )}
               </AnimatePresence>
             </div>
-          </div>
+          </m.div>
         </header>
 
         <div data-dashboard-scroll-root className="flex-1 min-h-0 overflow-auto px-3.5 sm:px-6 md:px-8 pb-24 md:pb-8 pt-4 md:pt-6 min-w-0" style={{ scrollbarGutter: 'stable' }}>

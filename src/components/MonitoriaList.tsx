@@ -661,7 +661,7 @@ export default function MonitoriaList({
                     actionModal.type === 'solicitar_reavaliacao' ? 'Solicitar Reavaliação' :
                     actionModal.type === 'manter'
                       ? (m?.status === 'aguardando_gestor_qualidade' ? 'Negar e devolver ao Suporte' : 'Recusar Contestação') :
-                    actionModal.type === 'escalar' ? 'Escalar para GestÃ£o Qualidade' :
+                    actionModal.type === 'escalar' ? 'Escalar para Gestão Qualidade' :
                     actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
                     actionModal.type === 'excluir' ? 'Excluir Monitoria' :
                     'Confirmar Ação';

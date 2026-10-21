@@ -248,7 +248,7 @@ export default function InPlaceMonitoriaModal({
                     actionModal.type === 'contestar' ? 'Contestar Avaliação' :
                     actionModal.type === 'solicitar_reavaliacao' ? 'Solicitar Reavaliação' :
                     actionModal.type === 'manter' ? 'Recusar Reavaliação' :
-                    actionModal.type === 'escalar' ? 'Escalar para GestÃ£o Qualidade' :
+                    actionModal.type === 'escalar' ? 'Escalar para Gestão Qualidade' :
                     actionModal.type === 'recusar_agente' ? 'Apelo ao Gestor' :
                     actionModal.type === 'excluir' ? 'Excluir Monitoria' :
                     'Confirmar Ação';

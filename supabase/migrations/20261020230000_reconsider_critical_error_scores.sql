@@ -145,7 +145,7 @@ WITH eligible AS (
     AND jsonb_array_length(m.history) = 1
     AND m.history->0->>'action' IN (
       'Monitoria Criada e encaminhada ao Gestor de Suporte',
-      'Monitoria Criada e ConcluÃ­da'
+      'Monitoria Criada e Concluída'
     )
 ), per_section AS (
   SELECT e.id, coalesce((section->>'weight')::numeric,0) section_weight,

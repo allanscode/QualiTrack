@@ -23,7 +23,7 @@ export default function NotificationSettingsManagement({ currentUser }: Props) {
     setLoading(true);
     void fetchRoleNotificationPreferences(selectedRole)
       .then(next => { if (active) setPreferences(next); })
-      .catch(() => { if (active) toast.error('NÃ£o foi possÃ­vel carregar as notificaÃ§Ãµes deste cargo.'); })
+      .catch(() => { if (active) toast.error('Não foi possível carregar as notificações deste cargo.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [selectedRole]);
@@ -33,9 +33,9 @@ export default function NotificationSettingsManagement({ currentUser }: Props) {
     try {
       await saveRoleNotificationPreference(selectedRole, kind, enabled, currentUser.id);
       setPreferences(previous => ({ ...previous, [kind]: enabled }));
-      toast.success('PreferÃªncia de notificaÃ§Ã£o salva para o cargo.');
+      toast.success('Preferência de notificação salva para o cargo.');
     } catch {
-      toast.error('NÃ£o foi possÃ­vel salvar a preferÃªncia.');
+      toast.error('Não foi possível salvar a preferência.');
     } finally {
       setSaving(null);
     }
@@ -47,8 +47,8 @@ export default function NotificationSettingsManagement({ currentUser }: Props) {
         <div className="flex items-start gap-3">
           <Bell className="mt-0.5 h-5 w-5 text-brand-accent" />
           <div>
-            <h2 className="text-lg font-bold text-brand-primary">NotificaÃ§Ãµes por cargo</h2>
-            <p className="mt-1 text-sm text-brand-muted">Cada configuraÃ§Ã£o vale para todas as pessoas com o cargo selecionado. As tarefas e os prazos continuam funcionando; chamados filhos sÃ³ geram aviso quando pedem revisÃ£o humana.</p>
+            <h2 className="text-lg font-bold text-brand-primary">Notificações por cargo</h2>
+            <p className="mt-1 text-sm text-brand-muted">Cada configuração vale para todas as pessoas com o cargo selecionado. As tarefas e os prazos continuam funcionando; chamados filhos só geram aviso quando pedem revisão humana.</p>
           </div>
         </div>
       </section>
@@ -68,7 +68,7 @@ export default function NotificationSettingsManagement({ currentUser }: Props) {
           <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Avisos recebidos por todas as pessoas com o cargo</span>
           <h3 className="mt-1 text-base font-bold text-brand-primary">{ROLE_LABELS[selectedRole]}</h3>
         </div>
-        {loading ? <p className="text-sm text-brand-muted">Carregando preferÃªnciasâ€¦</p> : (
+        {loading ? <p className="text-sm text-brand-muted">Carregando preferências…</p> : (
           <div className="divide-y divide-surface-border">
             {NOTIFICATION_KINDS.map(item => (
               <label key={item.kind} className="flex cursor-pointer items-center justify-between gap-4 py-3">

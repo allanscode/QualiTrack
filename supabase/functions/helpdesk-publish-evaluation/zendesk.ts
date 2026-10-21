@@ -144,7 +144,7 @@ export class ZendeskProvider implements HelpdeskProvider {
     }
     if (!Array.isArray(verifiedTicket?.tags) || tags.some(tag => !verifiedTicket.tags.includes(tag))
       || verifiedTicket.tags.some((tag: string) => verdictTags.has(tag) && !tags.includes(tag))) {
-      throw new Error('Zendesk nÃ£o confirmou as tags do veredito apÃ³s o envio.');
+      throw new Error('Zendesk não confirmou as tags do veredito após o envio.');
     }
     if (closed) {
       return { externalCommentId: `closed-fields:${input.ticketId}` };

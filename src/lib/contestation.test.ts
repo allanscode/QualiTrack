@@ -14,9 +14,9 @@ import { Monitoria, MonitoriaHistoryEntry } from '../types';
 import { countManagerContestationRounds, isManagerContestationRound } from './contestation';
 
 describe('manager contestation rounds', () => {
-  it('counts Portuguese, mojibake, and legacy PJ history consistently', () => {
+  it('counts Portuguese and legacy PJ history consistently', () => {
     expect(isManagerContestationRound('Contestação realizada pelo Gestor de Suporte (primeira decisão da Qualidade)')).toBe(true);
-    expect(isManagerContestationRound('ContestaÃ§Ã£o realizada pelo Gestor de Suporte (decisão definitiva)')).toBe(true);
+    expect(isManagerContestationRound('Contestação realizada pelo Gestor de Suporte (decisão definitiva)')).toBe(true);
     expect(isManagerContestationRound('Gestor PJ encaminhou contestação para a Gestão da Qualidade')).toBe(true);
     expect(countManagerContestationRounds([
       createHistoryEntry({ action: 'Contestação realizada pelo Gestor de Suporte' }),

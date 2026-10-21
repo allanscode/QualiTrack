@@ -90,7 +90,7 @@ export function getNextStage(current: MonitoriaStatus): MonitoriaStatus | null {
 
 export function getStageLabel(status: MonitoriaStatus | null | undefined): string {
   if (!status) return '';
-  if (status === 'aguardando_revisao_pj') return 'GestÃ£o Suporte';
+  if (status === 'aguardando_revisao_pj') return 'Gestão Suporte';
   const item = STAGES_FLOW.find(s => s.status === status);
   return item ? item.label : status;
 }
