@@ -51,4 +51,15 @@ describe('publicação de chamados filhos', () => {
     expect(childPublicationText(concludedInvalid)).toContain('Chamado filho inválido.');
     expect(childPublicationText(concludedInvalid)).toContain(concludedInvalid.evaluator_note!);
   });
+
+  it('recognizes legacy child tickets from their snapshot with an obsolete form id', () => {
+    const legacyChild: ChildPublicationMonitoria = {
+      ...saved,
+      form_id: 'legacy-revenda-form',
+      child_verdict: 'invalido',
+      form_snapshot: { ticket_kind: 'chamado_filho' },
+    };
+    expect(childPublicationVerdict(legacyChild)).toBe('nao_conforme');
+    expect(childPublicationError(legacyChild, '177882', 'auditor-1', 'qualidade')).toBeNull();
+  });
 });

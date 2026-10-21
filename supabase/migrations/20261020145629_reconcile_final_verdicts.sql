@@ -47,8 +47,10 @@ BEGIN
   )
   SELECT count(*) INTO v_candidates FROM mismatches;
 
-  IF v_candidates <> 2 THEN
-    RAISE EXCEPTION 'Esperados 2 vereditos divergentes para reconciliação; encontrados %.', v_candidates;
+  -- Production has the two original rows. Clean installs and test databases
+  -- have neither row, so an empty reconciliation is a valid no-op.
+  IF v_candidates NOT IN (0, 2) THEN
+    RAISE EXCEPTION 'Esperados zero ou dois vereditos divergentes para reconciliação; encontrados %.', v_candidates;
   END IF;
 
   WITH latest AS (
@@ -100,8 +102,8 @@ BEGIN
     '291befd8-42e7-4b12-b2f9-dfdb3cff5086'::uuid
   ) AND status IN ('pending', 'processing', 'sent');
 
-  IF v_ready <> 2 THEN
-    RAISE EXCEPTION 'A fila de reconciliação não contém os 2 tickets esperados; encontrados %.', v_ready;
+  IF v_ready <> v_candidates THEN
+    RAISE EXCEPTION 'A fila de reconciliação não corresponde aos candidatos; esperados %, encontrados %.', v_candidates, v_ready;
   END IF;
 END $$;
 

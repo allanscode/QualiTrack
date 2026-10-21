@@ -61,6 +61,11 @@ test('clean Supabase install: exact generated SQL, no demo data, approved system
       for (const row of rows) {
         assert.equal(row.relrowsecurity,true,row.relname);
         if (row.relname === 'forms') continue;
+        if (row.relname === 'system_maintenance') {
+          const singleton = (await db.query('SELECT id,enabled,blocked_roles,expected_duration_minutes FROM public.system_maintenance')).rows;
+          assert.deepEqual(singleton, [{ id: 1, enabled: false, blocked_roles: [], expected_duration_minutes: 60 }]);
+          continue;
+        }
         assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.${row.relname}`)).rows[0].n,0,row.relname);
       }
       const childForms = (await db.query(`SELECT id::text, title, created_by, active,
@@ -72,7 +77,8 @@ test('clean Supabase install: exact generated SQL, no demo data, approved system
         '6c7d1e88-841b-4da9-9a66-9f1464ce8972',
         '6c7d1e88-841b-4da9-9a66-9f1464ce8973',
       ]);
-      assert.ok(childForms.every(form => form.created_by === null && form.active && form.section_count === 3));
+      assert.ok(childForms.every((form, index) => form.created_by === null
+        && form.active === (index === 0) && form.section_count === 3), JSON.stringify(childForms));
       assert.equal((await db.query('SELECT count(*)::int AS n FROM auth.users')).rows[0].n,0);
       assert.equal((await db.query("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name IN ('password','reset_token','team_ids','team_id')")).rows[0].n,0);
       assert.ok(manifest.every(x => /^[a-f0-9]{64}$/.test(x.sha256)));

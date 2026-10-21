@@ -11,11 +11,10 @@ export function calculateAIEvaluationScore(
   return calculateQualityScore(
     form,
     evaluation.suggested_answers,
-    evaluation.suggested_critical_errors,
   );
 }
 
-/** Explains disqualification without changing the official final score. */
+/** Explains critical evidence for human review without applying an automatic score penalty. */
 export function describeAICriticalScore(evaluation: AIEvaluationResult, form: EvaluationForm | undefined) {
   if (!form) return undefined;
   const questions = [...form.sections.flatMap(section => section.questions), ...(form.critical_errors || [])];
@@ -24,7 +23,7 @@ export function describeAICriticalScore(evaluation: AIEvaluationResult, form: Ev
   if (!critical.length) return undefined;
   const criteriaScore = calculateQualityScore({ ...form, sections: form.sections.map(section => ({
     ...section, questions: section.questions.map(question => ({ ...question, is_critical: false })),
-  })) }, evaluation.suggested_answers, {});
+  })) }, evaluation.suggested_answers);
   return {
     criteriaScore,
     reasons: critical.map(question => evaluation.suggested_observations?.[question.id] || question.text),

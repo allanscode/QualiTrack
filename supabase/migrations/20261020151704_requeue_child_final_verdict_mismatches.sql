@@ -7,6 +7,13 @@ BEGIN;
 DO $$
 DECLARE v_count integer;
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.monitorias WHERE id IN (
+    '7433ef7a-7bea-441e-bae2-b0eac9aea6f8'::uuid,
+    '28773365-5def-4bd3-9d90-1ce9620bff2d'::uuid,
+    '371ccd86-4817-4c9d-8e89-7481a6c4eb71'::uuid
+  )) THEN
+    RETURN;
+  END IF;
   IF (SELECT count(*) FROM public.monitorias
       WHERE (id,ticket_id,active,status) IN (
         ('7433ef7a-7bea-441e-bae2-b0eac9aea6f8'::uuid,'180134',true,'concluida'),

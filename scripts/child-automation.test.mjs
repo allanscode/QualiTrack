@@ -65,7 +65,7 @@ test('legacy child jobs are queued for a fresh evaluation without losing their o
     await db.exec('UPDATE child_ai_config SET enabled=true');
     const claim=(await db.query('SELECT * FROM claim_child_ai_work()')).rows[0];
     assert.equal(claim.ticket_id,ticketId);
-    const formId='6c7d1e88-841b-4da9-9a66-9f1464ce8971';
+    const formId='6c7d1e88-841b-4da9-9a66-9f1464ce896f';
     const form=(await db.query('SELECT to_jsonb(f) AS value FROM forms f WHERE id=$1',[formId])).rows[0].value;
     const payload={action:'evaluate_child_ticket',dialogue:[{id:'comment',body:'Evidence'}],
       draft_meta:{form_id:formId,agent_id:id(2),team_id:id(10),source_queue:'filhos',
@@ -109,7 +109,7 @@ test('automatic child and positive dispatches share a one-per-minute database ga
 
 test('child automation persists reviews, computes the fixed form and shares the budget', async t => {
   const db = await createDatabase();
-  const formId = '6c7d1e88-841b-4da9-9a66-9f1464ce8971';
+  const formId = '6c7d1e88-841b-4da9-9a66-9f1464ce896f';
   const payload = { action:'evaluate_child_ticket', dialogue:[{id:'comment',body:'Opening macro evidence'}],
     draft_meta:{form_id:formId,agent_id:id(2),team_id:id(10),source_queue:'filhos',
       agent_name:'Agent',agent_email:'agent@example.invalid',channel:'Chat',guideline_ids:[]} };

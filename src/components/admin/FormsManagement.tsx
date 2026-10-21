@@ -646,11 +646,11 @@ export default function FormsManagement({ currentUser, teams, loadData }: FormsM
                       <div>
                         <h4 className="text-sm font-black text-error uppercase tracking-widest flex items-center gap-2">
                           <AlertOctagon className="w-5 h-5" />
-                          Erros Críticos (Zeradores)
+                          Pontos de Atenção para Revisão
                         </h4>
-                        <p className="text-[10px] font-bold text-brand-muted dark:text-brand-muted/80 uppercase mt-1">Itens que, se marcados como 'NÃO', zeram automaticamente a monitoria.</p>
+                        <p className="text-[10px] font-bold text-brand-muted dark:text-brand-muted/80 uppercase mt-1">Sinalizam itens para análise humana. Não zeram nem alteram a pontuação.</p>
                       </div>
-                      <Button variant="outline" size="sm" onClick={addCriticalError} icon={<Plus className="w-4 h-4" />} className="border-error text-error hover:bg-level-ruim hover:border-error">Novo Erro Crítico</Button>
+                      <Button variant="outline" size="sm" onClick={addCriticalError} icon={<Plus className="w-4 h-4" />} className="border-error text-error hover:bg-level-ruim hover:border-error">Novo Ponto de Atenção</Button>
                     </div>
 
                     <div className="grid grid-cols-1 gap-4">

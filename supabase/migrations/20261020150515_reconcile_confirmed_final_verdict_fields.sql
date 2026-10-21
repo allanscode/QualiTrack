@@ -18,6 +18,9 @@ BEGIN
       AND ticket_id='185573' AND active IS TRUE
       AND status IN ('concluida','finalizada_alterada') AND score >= 75
   ) THEN
+    IF NOT EXISTS (SELECT 1 FROM public.monitorias WHERE ticket_id IN ('180231','185573')) THEN
+      RETURN;
+    END IF;
     RAISE EXCEPTION 'A decisão final positiva dos dois tickets mudou; reconciliação cancelada.';
   END IF;
 

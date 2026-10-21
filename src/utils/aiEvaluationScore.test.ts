@@ -23,10 +23,10 @@ const evaluation = {
 } satisfies AIEvaluationResult;
 
 describe('calculateAIEvaluationScore', () => {
-  it('explains a zero caused by critical errors without replacing the official grade', () => {
+  it('retains critical evidence without deducting it from the normal score', () => {
     const criticalForm = { ...form, critical_errors: [{ id: 'critical', text: 'Registro da solução', type: 'yes_no_na' as const, is_critical: true }] };
     const result = { ...evaluation, suggested_critical_errors: { critical: true }, suggested_observations: { critical: 'Descrição insuficiente' } };
-    expect(calculateAIEvaluationScore(result, criticalForm)).toBe(0);
+    expect(calculateAIEvaluationScore(result, criticalForm)).toBe(70);
     expect(describeAICriticalScore(result, criticalForm)).toEqual({ criteriaScore: 70, reasons: ['Descrição insuficiente'] });
     expect(describeAICriticalScore(evaluation, form)).toBeUndefined();
   });

@@ -59,7 +59,7 @@ export function useMonitoriaFormState(
     return forms.find(f => f.id === header.form_id);
   }, [initialData, forms, header.form_id]);
 
-  const score = isChildFormId(selectedForm?.id) ? 0 : calculateQualityScore(selectedForm, scores, criticalErrors);
+  const score = isChildFormId(selectedForm?.id) ? 0 : calculateQualityScore(selectedForm, scores);
 
   const clientFieldsToShow = useMemo(() => {
     return dissatisfactionFields.filter(f =>
